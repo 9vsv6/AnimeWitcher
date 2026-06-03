@@ -171,6 +171,11 @@ class PlayerState {
   final List<SubtitleFile> externalSubtitles;
   final bool showNextEpisodeOverlay;
   final String? nextEpisodeTitle;
+  final String? nextEpisodePosterUrl;
+  final double? nextEpisodeRating;
+  final int? nextEpisodeNumber;
+  final int? nextEpisodeSeason;
+  final int? nextEpisodeRuntime;
   final bool isAdaptiveBufferingActive;
   final bool showEpisodeList;
 
@@ -215,6 +220,11 @@ class PlayerState {
     this.externalSubtitles = const [],
     this.showNextEpisodeOverlay = false,
     this.nextEpisodeTitle,
+    this.nextEpisodePosterUrl,
+    this.nextEpisodeRating,
+    this.nextEpisodeNumber,
+    this.nextEpisodeSeason,
+    this.nextEpisodeRuntime,
     this.isAdaptiveBufferingActive = false,
     this.showEpisodeList = false,
     this.showSourcesPanel = false,
@@ -272,6 +282,11 @@ class PlayerState {
     List<SubtitleFile>? externalSubtitles,
     bool? showNextEpisodeOverlay,
     String? nextEpisodeTitle,
+    String? nextEpisodePosterUrl,
+    double? nextEpisodeRating,
+    int? nextEpisodeNumber,
+    int? nextEpisodeSeason,
+    int? nextEpisodeRuntime,
     bool? isAdaptiveBufferingActive,
     bool? showEpisodeList,
     bool? showSourcesPanel,
@@ -308,6 +323,12 @@ class PlayerState {
       showNextEpisodeOverlay:
           showNextEpisodeOverlay ?? this.showNextEpisodeOverlay,
       nextEpisodeTitle: nextEpisodeTitle ?? this.nextEpisodeTitle,
+      nextEpisodePosterUrl:
+          nextEpisodePosterUrl ?? this.nextEpisodePosterUrl,
+      nextEpisodeRating: nextEpisodeRating ?? this.nextEpisodeRating,
+      nextEpisodeNumber: nextEpisodeNumber ?? this.nextEpisodeNumber,
+      nextEpisodeSeason: nextEpisodeSeason ?? this.nextEpisodeSeason,
+      nextEpisodeRuntime: nextEpisodeRuntime ?? this.nextEpisodeRuntime,
       isAdaptiveBufferingActive:
           isAdaptiveBufferingActive ?? this.isAdaptiveBufferingActive,
       showEpisodeList: showEpisodeList ?? this.showEpisodeList,
@@ -538,6 +559,7 @@ class PlayerController extends Notifier<PlayerState> {
   bool _staleUrlReResolveAttempted = false;
   bool _suppressNextEpisodeDetection = false;
   bool _isNextEpisodeOverlayForced = false;
+  bool _userDismissedOverlay = false;
   bool _manualSelectionPending = false;
   // Audio tracks that have already failed with decode errors for the current
   // stream. When one track fails, we try the next one before source-switching.
@@ -664,6 +686,7 @@ class PlayerController extends Notifier<PlayerState> {
 
   int _beginSourceSession({bool resetAttempts = false}) {
     final nextSessionId = state.sourceSessionId + 1;
+    _userDismissedOverlay = false;
     state = state.copyWith(
       sourceSessionId: nextSessionId,
       currentAttemptIndex: null,
@@ -1263,10 +1286,15 @@ class PlayerController extends Notifier<PlayerState> {
           }
           if (currentIndex != null && currentIndex != -1 && currentIndex < _item.episodes!.length - 1) {
             final next = _item.episodes![currentIndex + 1];
-            if (!state.showNextEpisodeOverlay) {
+            if (!_userDismissedOverlay && !state.showNextEpisodeOverlay) {
               state = state.copyWith(
                 showNextEpisodeOverlay: true,
                 nextEpisodeTitle: next.name,
+                nextEpisodePosterUrl: next.posterUrl,
+                nextEpisodeRating: next.rating,
+                nextEpisodeNumber: next.episode,
+                nextEpisodeSeason: next.season,
+                nextEpisodeRuntime: next.runtime,
               );
             }
             // Ensure it persists if video completes and resets position
@@ -1289,6 +1317,7 @@ class PlayerController extends Notifier<PlayerState> {
         _item.contentType != MultimediaContentType.anime) {
       return;
     }
+    if (_userDismissedOverlay) return;
 
     int? currentIndex;
     if (_episode != null) {
@@ -1305,6 +1334,11 @@ class PlayerController extends Notifier<PlayerState> {
       state = state.copyWith(
         showNextEpisodeOverlay: true,
         nextEpisodeTitle: next.name,
+        nextEpisodePosterUrl: next.posterUrl,
+        nextEpisodeRating: next.rating,
+        nextEpisodeNumber: next.episode,
+        nextEpisodeSeason: next.season,
+        nextEpisodeRuntime: next.runtime,
       );
     }
   }
@@ -1777,10 +1811,15 @@ class PlayerController extends Notifier<PlayerState> {
               currentIndex != -1 &&
               currentIndex < _item.episodes!.length - 1) {
             final next = _item.episodes![currentIndex + 1];
-            if (!state.showNextEpisodeOverlay) {
+            if (!_userDismissedOverlay && !state.showNextEpisodeOverlay) {
               state = state.copyWith(
                 showNextEpisodeOverlay: true,
                 nextEpisodeTitle: next.name,
+                nextEpisodePosterUrl: next.posterUrl,
+                nextEpisodeRating: next.rating,
+                nextEpisodeNumber: next.episode,
+                nextEpisodeSeason: next.season,
+                nextEpisodeRuntime: next.runtime,
               );
             }
             // Ensure it persists if video completes and resets position
@@ -3155,7 +3194,10 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<void> playNextEpisode() async {
-    if (_item.contentType != MultimediaContentType.series) return;
+    if (_item.contentType != MultimediaContentType.series &&
+        _item.contentType != MultimediaContentType.anime) {
+      return;
+    }
 
     int? currentIndex;
     if (_episode != null) {
@@ -3214,6 +3256,7 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   void dismissNextEpisodeOverlay() {
+    _userDismissedOverlay = true;
     state = state.copyWith(showNextEpisodeOverlay: false);
   }
 

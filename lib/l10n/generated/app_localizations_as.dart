@@ -478,6 +478,9 @@ class AppLocalizationsAs extends AppLocalizations {
   String get playNow => 'এতিয়াই চাওক';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'ডাউনলোড মচিবনে?';
 
   @override

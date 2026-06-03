@@ -465,7 +465,7 @@ class PlayerBottomSheets {
                                 ),
                               ),
                             ),
-                             IconButton(
+                            IconButton(
                               onPressed: () => Navigator.pop(ctx),
                               icon: const Icon(Icons.close),
                               color: HotstarPlayerStyle.secondaryText,
@@ -570,11 +570,7 @@ class PlayerBottomSheets {
     required VoidCallback? onPressed,
     bool compact = false,
   }) {
-    return _SpeedStepButton(
-      icon: icon,
-      onPressed: onPressed,
-      compact: compact,
-    );
+    return _SpeedStepButton(icon: icon, onPressed: onPressed, compact: compact);
   }
 
   static Widget _fullscreenShell({
@@ -2114,8 +2110,9 @@ class _HotstarOptionRowState extends State<_HotstarOptionRow> {
                             ? HotstarPlayerStyle.primaryText
                             : HotstarPlayerStyle.mutedText,
                         fontSize: isCompact ? 15 : 18,
-                        fontWeight:
-                            widget.selected ? FontWeight.w800 : FontWeight.w700,
+                        fontWeight: widget.selected
+                            ? FontWeight.w800
+                            : FontWeight.w700,
                       ),
                       children: [
                         if (widget.metadata != null &&
@@ -2178,18 +2175,14 @@ class _SpeedPresetChipState extends State<_SpeedPresetChip> {
           child: AnimatedContainer(
             duration: HotstarPlayerStyle.fastMotionDuration,
             width: widget.isCompact ? 76 : 104,
-            padding: EdgeInsets.symmetric(
-              vertical: widget.isCompact ? 10 : 14,
-            ),
+            padding: EdgeInsets.symmetric(vertical: widget.isCompact ? 10 : 14),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: widget.isSelected
-                  ? HotstarPlayerStyle.accent.withValues(
-                      alpha: 0.22,
-                    )
+                  ? HotstarPlayerStyle.accent.withValues(alpha: 0.22)
                   : (showHighlight
-                      ? Colors.white.withValues(alpha: 0.12)
-                      : Colors.white.withValues(alpha: 0.06)),
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : Colors.white.withValues(alpha: 0.06)),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
                 color: _isFocused
@@ -2200,8 +2193,9 @@ class _SpeedPresetChipState extends State<_SpeedPresetChip> {
               boxShadow: _isFocused
                   ? [
                       BoxShadow(
-                        color:
-                            HotstarPlayerStyle.accent.withValues(alpha: 0.25),
+                        color: HotstarPlayerStyle.accent.withValues(
+                          alpha: 0.25,
+                        ),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),

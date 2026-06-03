@@ -473,6 +473,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get playNow => 'נגן עכשיו';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'למחוק הורדה?';
 
   @override

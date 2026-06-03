@@ -475,6 +475,9 @@ class AppLocalizationsPl extends AppLocalizations {
   String get playNow => 'Odtwórz teraz';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Usunąć pobrany plik?';
 
   @override

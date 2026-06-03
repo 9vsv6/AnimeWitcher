@@ -480,6 +480,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get playNow => 'Смотреть сейчас';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Удалить загрузку?';
 
   @override

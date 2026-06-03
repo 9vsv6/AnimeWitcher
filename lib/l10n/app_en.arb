@@ -210,6 +210,7 @@
   "noDescription": "No description available.",
   "videoAlreadyDownloadedPrompt": "This video is already downloaded. What would you like to do?",
   "playNow": "Play Now",
+  "upNext": "Up Next",
   "deleteDownloadPrompt": "Delete Download?",
   "deleteDownloadConfirmation": "Are you sure you want to delete this file? This cannot be undone.",
   "no": "No",

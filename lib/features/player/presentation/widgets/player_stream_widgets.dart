@@ -391,7 +391,12 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                 clipBehavior: Clip.none,
                 children: [
                   ?bufferWidget,
-                  ..._buildSkipMarkers(width, durationMs, skipSegments, canSeek),
+                  ..._buildSkipMarkers(
+                    width,
+                    durationMs,
+                    skipSegments,
+                    canSeek,
+                  ),
                   _buildSlider(
                     durationMs: durationMs,
                     displayValue: displayValue,
@@ -399,8 +404,12 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                     onSeekEnd: onSeekEnd,
                   ),
                   if (_dragValue != null)
-                    _buildScrubTooltip(width, displayValue, durationMs,
-                        displayDuration),
+                    _buildScrubTooltip(
+                      width,
+                      displayValue,
+                      durationMs,
+                      displayDuration,
+                    ),
                 ],
               );
             },
@@ -412,9 +421,8 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
 
   /// Overlay-radius inset the slider track reserves on each side, so markers and
   /// the tooltip line up with the actual track rather than the full width.
-  double _trackInset(bool canSeek) => canSeek
-      ? (_dragValue != null || _scrubFocused ? 16.0 : 10.0)
-      : 0.0;
+  double _trackInset(bool canSeek) =>
+      canSeek ? (_dragValue != null || _scrubFocused ? 16.0 : 10.0) : 0.0;
 
   List<Widget> _buildSkipMarkers(
     double width,
@@ -432,7 +440,8 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
           Positioned(
             left:
                 inset +
-                trackWidth * (seg.startTime * 1000 / durationMs).clamp(0.0, 1.0),
+                trackWidth *
+                    (seg.startTime * 1000 / durationMs).clamp(0.0, 1.0),
             width:
                 trackWidth *
                 ((seg.endTime * 1000 / durationMs).clamp(0.0, 1.0) -
@@ -488,9 +497,7 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
         focusNode: _scrubFocusNode,
         onArrowUp: widget.onArrowUp,
         onArrowDown: widget.onArrowDown,
-        onChanged: canSeek
-            ? (val) => setState(() => _dragValue = val)
-            : null,
+        onChanged: canSeek ? (val) => setState(() => _dragValue = val) : null,
         onChangeStart: canSeek
             ? (val) {
                 widget.onSeekStart?.call();

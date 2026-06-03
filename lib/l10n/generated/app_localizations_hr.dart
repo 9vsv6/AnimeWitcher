@@ -477,6 +477,9 @@ class AppLocalizationsHr extends AppLocalizations {
   String get playNow => 'Gledaj sada';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Izbrisati preuzimanje?';
 
   @override

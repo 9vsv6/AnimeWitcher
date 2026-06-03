@@ -478,6 +478,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get playNow => 'Přehrát nyní';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Smazat stažení?';
 
   @override

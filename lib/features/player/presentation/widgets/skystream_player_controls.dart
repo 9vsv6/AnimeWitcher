@@ -205,6 +205,7 @@ class SkyStreamPlayerControlsState
       widget.player.stream.playing.listen((val) {
         final oldPlaying = _isPlaying;
         _isPlaying = val; // Update local cache
+        if (mounted) setState(() {}); // Sync isPlaying to overlays (next ep countdown)
         if (val) {
           _startHideTimer();
         } else {
@@ -666,6 +667,7 @@ class SkyStreamPlayerControlsState
     final playing = state == vv.VideoControllerPlaybackState.playing;
     if (playing != _isPlaying) {
       _isPlaying = playing;
+      if (mounted) setState(() {}); // Sync isPlaying to overlays (next ep countdown)
       if (playing) {
         _startHideTimer();
       } else {
@@ -894,6 +896,21 @@ class SkyStreamPlayerControlsState
     final nextEpTitle = ref.watch(
       playerControllerProvider.select((s) => s.nextEpisodeTitle),
     );
+    final nextEpPosterUrl = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodePosterUrl),
+    );
+    final nextEpRating = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeRating),
+    );
+    final nextEpNumber = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeNumber),
+    );
+    final nextEpSeason = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeSeason),
+    );
+    final nextEpRuntime = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeRuntime),
+    );
     final resumePromptPosition = ref.watch(
       playerControllerProvider.select((s) => s.resumePromptPosition),
     );
@@ -1090,7 +1107,10 @@ class SkyStreamPlayerControlsState
                             ),
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
-                                maxWidth: (size.width * 0.36).clamp(240.0, 360.0),
+                                maxWidth: (size.width * 0.36).clamp(
+                                  240.0,
+                                  360.0,
+                                ),
                               ),
                               child: TorrentInfoWidget(status: torrentStatus),
                             ),
@@ -1116,7 +1136,7 @@ class SkyStreamPlayerControlsState
                     isTv: _isTv,
                   ),
 
-                // Next Episode Button (Persistent when triggered)
+                // Next Episode Card (Persistent when triggered)
                 if (resumePromptPosition == null &&
                     resumePromptPercentage == null &&
                     showNextEpOverlay &&
@@ -1124,6 +1144,11 @@ class SkyStreamPlayerControlsState
                   NextEpisodeOverlay(
                     focusNode: _nextEpFocusNode,
                     nextEpisodeTitle: nextEpTitle,
+                    nextEpisodePosterUrl: nextEpPosterUrl,
+                    nextEpisodeRating: nextEpRating,
+                    nextEpisodeNumber: nextEpNumber,
+                    nextEpisodeSeason: nextEpSeason,
+                    nextEpisodeRuntime: nextEpRuntime,
                     onPlayNext: () => ref
                         .read(playerControllerProvider.notifier)
                         .playNextEpisode(),
@@ -1131,6 +1156,7 @@ class SkyStreamPlayerControlsState
                         .read(playerControllerProvider.notifier)
                         .dismissNextEpisodeOverlay(),
                     isTv: _isTv,
+                    isPlaying: _isPlaying,
                   ),
 
                 // Skip Segment Overlay (Skip Intro / Skip Recap / Skip Outro)
@@ -1460,16 +1486,24 @@ class SkyStreamPlayerControlsState
                       focusNode: _scrubFocusNode,
                       onArrowUp: () {
                         final resumePromptPosition = ref.read(
-                          playerControllerProvider.select((s) => s.resumePromptPosition),
+                          playerControllerProvider.select(
+                            (s) => s.resumePromptPosition,
+                          ),
                         );
                         final resumePromptPercentage = ref.read(
-                          playerControllerProvider.select((s) => s.resumePromptPercentage),
+                          playerControllerProvider.select(
+                            (s) => s.resumePromptPercentage,
+                          ),
                         );
                         final showNextEpOverlay = ref.read(
-                          playerControllerProvider.select((s) => s.showNextEpisodeOverlay),
+                          playerControllerProvider.select(
+                            (s) => s.showNextEpisodeOverlay,
+                          ),
                         );
                         final nextEpTitle = ref.read(
-                          playerControllerProvider.select((s) => s.nextEpisodeTitle),
+                          playerControllerProvider.select(
+                            (s) => s.nextEpisodeTitle,
+                          ),
                         );
 
                         if (resumePromptPosition != null ||
