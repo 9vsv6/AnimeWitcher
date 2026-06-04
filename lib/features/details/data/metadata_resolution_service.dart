@@ -15,21 +15,33 @@ class MetadataResolutionService {
   Future<MultimediaItem> enrichWithIds(MultimediaItem item) async {
     // If it already has both, skip
     if (item.tmdbId != null && item.imdbId != null) {
-      if (kDebugMode) debugPrint('MetadataResolutionService: Both tmdbId (${item.tmdbId}) and imdbId (${item.imdbId}) already present for ${item.title}. Skipping resolution.');
+      if (kDebugMode)
+        debugPrint(
+          'MetadataResolutionService: Both tmdbId (${item.tmdbId}) and imdbId (${item.imdbId}) already present for ${item.title}. Skipping resolution.',
+        );
       return item;
     }
 
     // We only resolve if we have a title
     if (item.title.isEmpty) {
-      if (kDebugMode) debugPrint('MetadataResolutionService: Title is empty. Cannot resolve IDs.');
+      if (kDebugMode)
+        debugPrint(
+          'MetadataResolutionService: Title is empty. Cannot resolve IDs.',
+        );
       return item;
     }
 
-    if (kDebugMode) debugPrint('MetadataResolutionService: Resolving IDs for ${item.title}. Current tmdbId: ${item.tmdbId}, imdbId: ${item.imdbId}');
+    if (kDebugMode)
+      debugPrint(
+        'MetadataResolutionService: Resolving IDs for ${item.title}. Current tmdbId: ${item.tmdbId}, imdbId: ${item.imdbId}',
+      );
 
     // Fast path: If we already have tmdbId, just fetch the extra details to get imdbId
     if (item.tmdbId != null && item.imdbId == null) {
-      if (kDebugMode) debugPrint('MetadataResolutionService: We have tmdbId (${item.tmdbId}), skipping multiSearch. Fetching extra details directly.');
+      if (kDebugMode)
+        debugPrint(
+          'MetadataResolutionService: We have tmdbId (${item.tmdbId}), skipping multiSearch. Fetching extra details directly.',
+        );
       String? imdbId;
       if (item.contentType == MultimediaContentType.movie) {
         final extra = await _tmdbService.getMovieExtra(item.tmdbId!);
@@ -42,9 +54,12 @@ class MetadataResolutionService {
           imdbId = _extractImdbId(extra);
         }
       }
-      
+
       final enriched = item.copyWith(imdbId: imdbId ?? item.imdbId);
-      if (kDebugMode) debugPrint('MetadataResolutionService: Fast path resolution complete. Final item: tmdbId: ${enriched.tmdbId}, imdbId: ${enriched.imdbId}');
+      if (kDebugMode)
+        debugPrint(
+          'MetadataResolutionService: Fast path resolution complete. Final item: tmdbId: ${enriched.tmdbId}, imdbId: ${enriched.imdbId}',
+        );
       return enriched;
     }
 
@@ -57,17 +72,26 @@ class MetadataResolutionService {
 
     final results = await _tmdbService.multiSearch(query: query);
 
-    if (kDebugMode) debugPrint('MetadataResolutionService: multiSearch returned ${results.length} results.');
+    if (kDebugMode)
+      debugPrint(
+        'MetadataResolutionService: multiSearch returned ${results.length} results.',
+      );
 
     if (results.isNotEmpty) {
       final bestMatch = _findBestMatch(item, results);
       if (bestMatch != null) {
-        if (kDebugMode) debugPrint('MetadataResolutionService: Found best match: ${bestMatch.title} (tmdbId: ${bestMatch.tmdbId}, imdbId: ${bestMatch.imdbId})');
+        if (kDebugMode)
+          debugPrint(
+            'MetadataResolutionService: Found best match: ${bestMatch.title} (tmdbId: ${bestMatch.tmdbId}, imdbId: ${bestMatch.imdbId})',
+          );
         String? imdbId = bestMatch.imdbId;
         final int? tmdbId = bestMatch.tmdbId;
 
         if (tmdbId != null && imdbId == null) {
-          if (kDebugMode) debugPrint('MetadataResolutionService: imdbId is missing, fetching extra details for tmdbId: $tmdbId (type: ${bestMatch.contentType})');
+          if (kDebugMode)
+            debugPrint(
+              'MetadataResolutionService: imdbId is missing, fetching extra details for tmdbId: $tmdbId (type: ${bestMatch.contentType})',
+            );
           if (bestMatch.contentType == MultimediaContentType.movie) {
             final extra = await _tmdbService.getMovieExtra(tmdbId);
             if (extra != null) {
@@ -79,20 +103,32 @@ class MetadataResolutionService {
               imdbId = _extractImdbId(extra);
             }
           }
-          if (kDebugMode) debugPrint('MetadataResolutionService: Fetched extra details. Found imdbId: $imdbId');
+          if (kDebugMode)
+            debugPrint(
+              'MetadataResolutionService: Fetched extra details. Found imdbId: $imdbId',
+            );
         }
 
         final enriched = item.copyWith(
           tmdbId: tmdbId ?? item.tmdbId,
           imdbId: imdbId ?? item.imdbId,
         );
-        if (kDebugMode) debugPrint('MetadataResolutionService: Resolution complete. Final item: tmdbId: ${enriched.tmdbId}, imdbId: ${enriched.imdbId}');
+        if (kDebugMode)
+          debugPrint(
+            'MetadataResolutionService: Resolution complete. Final item: tmdbId: ${enriched.tmdbId}, imdbId: ${enriched.imdbId}',
+          );
         return enriched;
       } else {
-        if (kDebugMode) debugPrint('MetadataResolutionService: Could not find a best match among the results.');
+        if (kDebugMode)
+          debugPrint(
+            'MetadataResolutionService: Could not find a best match among the results.',
+          );
       }
     } else {
-      if (kDebugMode) debugPrint('MetadataResolutionService: No results found for query: $query');
+      if (kDebugMode)
+        debugPrint(
+          'MetadataResolutionService: No results found for query: $query',
+        );
     }
 
     return item;

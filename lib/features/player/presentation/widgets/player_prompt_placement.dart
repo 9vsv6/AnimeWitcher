@@ -34,7 +34,9 @@ class PlayerPromptPlacement extends StatelessWidget {
   static double _bottomOffset(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.shortestSide < 600;
-    final chromeHeight = isCompact ? 60.0 : HotstarPlayerStyle.bottomChromeHeight;
+    final chromeHeight = isCompact
+        ? 60.0
+        : HotstarPlayerStyle.bottomChromeHeight;
     final padding = MediaQuery.viewPaddingOf(context);
     return chromeHeight + _gapAboveChrome + padding.bottom;
   }

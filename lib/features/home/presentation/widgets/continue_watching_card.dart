@@ -413,7 +413,10 @@ class ContinueWatchingCard extends ConsumerWidget {
               color: Colors.black.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
-                focusNode: FocusNode(canRequestFocus: false, skipTraversal: true),
+                focusNode: FocusNode(
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                ),
                 borderRadius: BorderRadius.circular(12),
                 onTap: () {
                   ref

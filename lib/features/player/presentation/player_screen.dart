@@ -124,18 +124,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // Phase 8: Initialize video_view engine (ExoPlayer on Android, AVPlayer on iOS/macOS)
     _videoViewController = vv.VideoController(autoPlay: true);
 
-    _settingsSub = ref.listenManual<AsyncValue<PlayerSettings>>(playerSettingsProvider, (
-      _,
-      next,
-    ) {
-      final settings = next.asData?.value;
-      if (settings == null) return;
-      if (settings.defaultResizeMode == "Zoom") {
-        _videoFit.value = BoxFit.cover;
-      } else if (settings.defaultResizeMode == "Stretch") {
-        _videoFit.value = BoxFit.fill;
-      }
-    }, fireImmediately: true);
+    _settingsSub = ref.listenManual<AsyncValue<PlayerSettings>>(
+      playerSettingsProvider,
+      (_, next) {
+        final settings = next.asData?.value;
+        if (settings == null) return;
+        if (settings.defaultResizeMode == "Zoom") {
+          _videoFit.value = BoxFit.cover;
+        } else if (settings.defaultResizeMode == "Stretch") {
+          _videoFit.value = BoxFit.fill;
+        }
+      },
+      fireImmediately: true,
+    );
 
     _playerController = ref.read(playerControllerProvider.notifier);
 
@@ -292,9 +293,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // no PopScope-back, so Escape is its dismissal key.
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.escape) {
-      return _consumeBack()
-          ? KeyEventResult.handled
-          : KeyEventResult.ignored;
+      return _consumeBack() ? KeyEventResult.handled : KeyEventResult.ignored;
     }
 
     // Space-hold → 2× speed (non-TV). Only when no control is focused, so
@@ -460,6 +459,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         now.difference(_lastBackAt!) < const Duration(milliseconds: 200)) {
       // Near-instant duplicate delivery of the same physical press — swallow
       // it. Short enough not to eat an intentional fast double-press.
+      return true;
+    }
+    if (_controlsKeyFinal.currentState?.isFullscreen == true) {
+      _lastBackAt = now;
+      unawaited(_controlsKeyFinal.currentState?.toggleFullscreen());
       return true;
     }
     final s = ref.read(playerControllerProvider);
@@ -697,6 +701,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           subtitle: ref
                               .read(playerControllerProvider)
                               .streamSubtitle,
+                          backdropUrl: widget.item.backdropImageUrl,
+                          logoUrl: widget.item.logoUrl,
                           onResize: _updateResizeMode,
                           onBackPointer: _handleBack,
                           onRequestRootFocus: () =>

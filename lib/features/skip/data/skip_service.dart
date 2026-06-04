@@ -3,7 +3,7 @@ abstract class SkipService {
   String get name;
 
   /// Fetch skip segments for a specific episode
-  /// 
+  ///
   /// The [tmdbId], [imdbId], or [anilistId] can be used depending on the service.
   Future<List<SkipSegment>> getSkipSegments({
     int? tmdbId,
@@ -68,10 +68,8 @@ class SkipSegment {
       if (end - start < 1.0) continue;
       // Filter out unknown segments to avoid random "Skip" buttons
       if (seg.type == SkipType.unknown) continue;
-      
-      cleaned.add(
-        SkipSegment(startTime: start, endTime: end, type: seg.type),
-      );
+
+      cleaned.add(SkipSegment(startTime: start, endTime: end, type: seg.type));
     }
     cleaned.sort((a, b) => a.startTime.compareTo(b.startTime));
     return cleaned;

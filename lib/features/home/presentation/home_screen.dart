@@ -787,11 +787,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   child: Center(
                                     child: ListTile(
                                       title: Text(l10n.none),
-                                      leading: const Radio<String?>(value: null),
+                                      leading: const Radio<String?>(
+                                        value: null,
+                                      ),
                                       autofocus: index == targetIndex,
                                       onTap: () {
                                         ref
-                                            .read(activeProviderProvider.notifier)
+                                            .read(
+                                              activeProviderProvider.notifier,
+                                            )
                                             .set(null);
                                         Navigator.pop(context);
                                         ref.invalidate(homeDataProvider);
@@ -806,13 +810,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       ? index - 1
                                       : index];
                               final isDebug = p.isDebug;
-                              final isSubprovider = p.packageName.contains('::');
+                              final isSubprovider = p.packageName.contains(
+                                '::',
+                              );
                               String pluginTag = '';
                               if (isSubprovider) {
-                                final parentPackageName = p.packageName.substring(
-                                  0,
-                                  p.packageName.indexOf('::'),
-                                );
+                                final parentPackageName = p.packageName
+                                    .substring(0, p.packageName.indexOf('::'));
                                 final plugin = installedPlugins
                                     .cast<ExtensionPlugin?>()
                                     .firstWhere(
@@ -850,9 +854,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                               color: Theme.of(
                                                 context,
                                               ).colorScheme.secondaryContainer,
-                                              borderRadius: BorderRadius.circular(
-                                                4,
-                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                             ),
                                             child: Text(
                                               pluginTag,
@@ -877,9 +880,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                             ),
                                             decoration: BoxDecoration(
                                               color: Colors.red,
-                                              borderRadius: BorderRadius.circular(
-                                                4,
-                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                             ),
                                             child: Text(
                                               l10n.debug,
@@ -893,7 +895,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                         ],
                                       ],
                                     ),
-                                    leading: Radio<String?>(value: p.packageName),
+                                    leading: Radio<String?>(
+                                      value: p.packageName,
+                                    ),
                                     onTap: () {
                                       ref
                                           .read(activeProviderProvider.notifier)

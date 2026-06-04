@@ -41,7 +41,7 @@ class SyncManager {
     }
 
     final ids = Map<String, String>.from(item.syncData ?? {});
-    
+
     // We primarily use Simkl for resolving cross-platform IDs because its API is the most comprehensive
     try {
       final simkl = _services.whereType<SimklService>().first;
@@ -50,7 +50,7 @@ class SyncManager {
     } catch (e) {
       // Ignore
     }
-    
+
     _cachedIds = ids;
     _cachedItemUrl = item.url;
     return _cachedIds!;
@@ -66,7 +66,8 @@ class SyncManager {
     if (item.contentType == MultimediaContentType.livestream) {
       return true;
     }
-    final hasNoIds = item.imdbId == null &&
+    final hasNoIds =
+        item.imdbId == null &&
         item.tmdbId == null &&
         (item.syncData == null || item.syncData!.isEmpty);
     return hasNoIds;
@@ -80,7 +81,7 @@ class SyncManager {
     if (active.isEmpty) return;
 
     final resolvedIds = await _resolveIds(item);
-    
+
     for (final service in active) {
       try {
         await service.markWatched(item, episode, resolvedIds: resolvedIds);
@@ -91,17 +92,26 @@ class SyncManager {
   }
 
   /// Scrobble start event
-  Future<void> scrobbleStart(MultimediaItem item, Episode? episode, double progress) async {
+  Future<void> scrobbleStart(
+    MultimediaItem item,
+    Episode? episode,
+    double progress,
+  ) async {
     if (_shouldSkipSync(item)) return;
 
     final active = await getActiveServices();
     if (active.isEmpty) return;
 
     final resolvedIds = await _resolveIds(item);
-    
+
     for (final service in active) {
       try {
-        await service.scrobbleStart(item, episode, progress, resolvedIds: resolvedIds);
+        await service.scrobbleStart(
+          item,
+          episode,
+          progress,
+          resolvedIds: resolvedIds,
+        );
       } catch (e) {
         // Ignore failure
       }
@@ -109,17 +119,26 @@ class SyncManager {
   }
 
   /// Scrobble pause event
-  Future<void> scrobblePause(MultimediaItem item, Episode? episode, double progress) async {
+  Future<void> scrobblePause(
+    MultimediaItem item,
+    Episode? episode,
+    double progress,
+  ) async {
     if (_shouldSkipSync(item)) return;
 
     final active = await getActiveServices();
     if (active.isEmpty) return;
 
     final resolvedIds = await _resolveIds(item);
-    
+
     for (final service in active) {
       try {
-        await service.scrobblePause(item, episode, progress, resolvedIds: resolvedIds);
+        await service.scrobblePause(
+          item,
+          episode,
+          progress,
+          resolvedIds: resolvedIds,
+        );
       } catch (e) {
         // Ignore failure
       }
@@ -127,17 +146,26 @@ class SyncManager {
   }
 
   /// Scrobble stop event
-  Future<void> scrobbleStop(MultimediaItem item, Episode? episode, double progress) async {
+  Future<void> scrobbleStop(
+    MultimediaItem item,
+    Episode? episode,
+    double progress,
+  ) async {
     if (_shouldSkipSync(item)) return;
 
     final active = await getActiveServices();
     if (active.isEmpty) return;
 
     final resolvedIds = await _resolveIds(item);
-    
+
     for (final service in active) {
       try {
-        await service.scrobbleStop(item, episode, progress, resolvedIds: resolvedIds);
+        await service.scrobbleStop(
+          item,
+          episode,
+          progress,
+          resolvedIds: resolvedIds,
+        );
       } catch (e) {
         // Ignore failure
       }
@@ -152,7 +180,7 @@ class SyncManager {
     if (active.isEmpty) return;
 
     final resolvedIds = await _resolveIds(item);
-    
+
     for (final service in active) {
       try {
         await service.addToPlanToWatch(item, resolvedIds: resolvedIds);
@@ -169,7 +197,9 @@ class SyncManager {
     bool success = false;
     for (final service in active) {
       try {
-        final removed = await service.removePlaybackProgress(item.id.toString());
+        final removed = await service.removePlaybackProgress(
+          item.id.toString(),
+        );
         if (removed) success = true;
       } catch (e) {
         // Ignore failure
@@ -198,7 +228,7 @@ Future<List<SyncProgressItem>> syncedProgress(Ref ref) async {
   if (activeServices.isEmpty) return [];
 
   final List<SyncProgressItem> syncedItems = [];
-  
+
   for (final service in activeServices) {
     try {
       final items = await service.pullPlaybackProgress();
@@ -211,25 +241,31 @@ Future<List<SyncProgressItem>> syncedProgress(Ref ref) async {
   if (syncedItems.isEmpty) return [];
 
   final localHistory = storage.getWatchHistory();
-  
+
   final filteredItems = syncedItems.where((syncItem) {
-    final localMatch = localHistory.firstWhere((local) {
-      final localTmdb = local.item.tmdbId?.toString();
-      final localImdb = local.item.imdbId;
-      
-      if (syncItem.tmdbId != null && localTmdb == syncItem.tmdbId) return true;
-      if (syncItem.imdbId != null && localImdb == syncItem.imdbId) return true;
-      if (local.item.title.toLowerCase() == syncItem.title.toLowerCase()) return true;
-      
-      return false;
-    }, orElse: () => HistoryItem(
+    final localMatch = localHistory.firstWhere(
+      (local) {
+        final localTmdb = local.item.tmdbId?.toString();
+        final localImdb = local.item.imdbId;
+
+        if (syncItem.tmdbId != null && localTmdb == syncItem.tmdbId)
+          return true;
+        if (syncItem.imdbId != null && localImdb == syncItem.imdbId)
+          return true;
+        if (local.item.title.toLowerCase() == syncItem.title.toLowerCase())
+          return true;
+
+        return false;
+      },
+      orElse: () => HistoryItem(
         item: MultimediaItem(title: '', url: '', posterUrl: ''),
         position: 0,
         duration: 0,
         timestamp: 0,
-    ));
+      ),
+    );
 
-    if (localMatch.item.url.isEmpty) return true; 
+    if (localMatch.item.url.isEmpty) return true;
 
     final localDate = DateTime.fromMillisecondsSinceEpoch(localMatch.timestamp);
     if (localDate.isBefore(syncItem.pausedAt)) {
@@ -258,21 +294,24 @@ Future<List<SyncProgressItem>> syncedProgress(Ref ref) async {
   final Map<String, SyncProgressItem> uniqueItems = {};
   for (final item in filteredItems) {
     final key = item.tmdbId ?? item.imdbId ?? item.title;
-    if (!uniqueItems.containsKey(key) || item.pausedAt.isAfter(uniqueItems[key]!.pausedAt)) {
+    if (!uniqueItems.containsKey(key) ||
+        item.pausedAt.isAfter(uniqueItems[key]!.pausedAt)) {
       uniqueItems[key] = item;
     }
   }
 
   final result = uniqueItems.values.toList();
   result.sort((a, b) => b.pausedAt.compareTo(a.pausedAt));
-  
+
   // Fetch TMDB posters concurrently
   final tmdbService = ref.read(tmdbServiceProvider);
   final enrichedResult = await Future.wait(
     result.map((item) async {
       if (item.tmdbId == null) return item;
       try {
-        final mediaType = item.type == MultimediaContentType.series ? 'tv' : 'movie';
+        final mediaType = item.type == MultimediaContentType.series
+            ? 'tv'
+            : 'movie';
         final details = await tmdbService.getDetailsForCarousel(
           int.parse(item.tmdbId!),
           mediaType,

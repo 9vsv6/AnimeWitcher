@@ -52,6 +52,8 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   /// subtree). This is the single mechanism that keeps D-pad alive after the
   /// controls auto-hide — replacing the old `primaryFocus.unfocus()` dance.
   final VoidCallback? onRequestRootFocus;
+  final String? backdropUrl;
+  final String? logoUrl;
 
   const SkyStreamPlayerControls({
     super.key,
@@ -69,6 +71,8 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
     this.onResize,
     this.onVisibilityChanged,
     this.onRequestRootFocus,
+    this.backdropUrl,
+    this.logoUrl,
     this.isLoading = false,
   });
 
@@ -111,6 +115,7 @@ class SkyStreamPlayerControlsState
   Offset? _tapPosition;
   Duration _animDuration = HotstarPlayerStyle.controlFadeDuration;
   bool _isFullscreen = false;
+  bool get isFullscreen => _isFullscreen;
   // The single focus anchor: when the chrome (re)appears on TV we move focus
   // here (the bottom-row play/pause). Directional traversal handles every
   // other movement between controls — no other requestFocus calls exist.
@@ -205,7 +210,8 @@ class SkyStreamPlayerControlsState
       widget.player.stream.playing.listen((val) {
         final oldPlaying = _isPlaying;
         _isPlaying = val; // Update local cache
-        if (mounted) setState(() {}); // Sync isPlaying to overlays (next ep countdown)
+        if (mounted)
+          setState(() {}); // Sync isPlaying to overlays (next ep countdown)
         if (val) {
           _startHideTimer();
         } else {
@@ -667,7 +673,8 @@ class SkyStreamPlayerControlsState
     final playing = state == vv.VideoControllerPlaybackState.playing;
     if (playing != _isPlaying) {
       _isPlaying = playing;
-      if (mounted) setState(() {}); // Sync isPlaying to overlays (next ep countdown)
+      if (mounted)
+        setState(() {}); // Sync isPlaying to overlays (next ep countdown)
       if (playing) {
         _startHideTimer();
       } else {
@@ -1558,6 +1565,8 @@ class SkyStreamPlayerControlsState
       onBack: widget.onBackPointer ?? () => context.pop(),
       phase: phase,
       sourceAttempts: sourceAttempts,
+      backdropUrl: widget.backdropUrl,
+      logoUrl: widget.logoUrl,
       isTv: _isTv,
       onSkip: canSkip
           ? () =>

@@ -400,9 +400,7 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
 
   Future<void> setDefaultPlaybackSpeed(double speed) async {
     await _repository.setPlayerSetting('player_default_speed', speed);
-    state = AsyncData(
-      state.requireValue.copyWith(defaultPlaybackSpeed: speed),
-    );
+    state = AsyncData(state.requireValue.copyWith(defaultPlaybackSpeed: speed));
   }
 
   Future<void> setOpenSubtitlesCredentials(

@@ -63,12 +63,13 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
       duration: const Duration(milliseconds: 400),
     )..forward();
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0.12, 0.0),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0.12, 0.0), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -187,9 +188,9 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
             child: AnimatedBuilder(
               animation: _countdownController,
               builder: (context, _) {
-                final remaining = _countdownSecs -
-                    (_countdownController.value * _countdownSecs)
-                        .round();
+                final remaining =
+                    _countdownSecs -
+                    (_countdownController.value * _countdownSecs).round();
                 return ClipRRect(
                   borderRadius: borderRadius,
                   child: Column(
@@ -260,8 +261,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               ),
             ),
             const Spacer(),
-            if (remaining <= 3 && remaining > 0)
-              _buildPulseDot(),
+            if (remaining <= 3 && remaining > 0) _buildPulseDot(),
           ],
         ),
       ),
@@ -322,10 +322,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               top: 6,
               right: 6,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.65),
                   borderRadius: BorderRadius.circular(4),
@@ -421,10 +418,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                       ),
                     ),
                   ),
-                if (hasRating) ...[
-                  const Spacer(),
-                  _buildRating(isCompact),
-                ],
+                if (hasRating) ...[const Spacer(), _buildRating(isCompact)],
               ],
             ),
             const SizedBox(height: 4),
@@ -459,8 +453,8 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
           final color = i < fullStars
               ? const Color(0xFFFFC107)
               : i == fullStars && halfStar
-                  ? const Color(0xFFFFC107)
-                  : Colors.white.withValues(alpha: 0.25);
+              ? const Color(0xFFFFC107)
+              : Colors.white.withValues(alpha: 0.25);
           if (i < fullStars) {
             icon = Icons.star_rounded;
           } else if (i == fullStars && halfStar) {

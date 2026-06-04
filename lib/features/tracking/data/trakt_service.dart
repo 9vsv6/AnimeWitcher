@@ -98,19 +98,27 @@ class TraktService implements TrackingService {
           );
 
           final data = tokenResponse.data;
-          if (tokenResponse.statusCode == 200 && data is Map && data['access_token'] != null) {
+          if (tokenResponse.statusCode == 200 &&
+              data is Map &&
+              data['access_token'] != null) {
             _accessToken = data['access_token'].toString();
             await _storage.write(_kAccessTokenKey, _accessToken!);
             talker.debug('TraktService: Login successful!');
             return true;
           }
         } on DioException catch (e) {
-          if (e.response?.statusCode != 400) { // 400 = authorization_pending
-            talker.debug('TraktService: Polling error: ${e.response?.statusCode} ${e.message}');
-            if (e.response?.statusCode == 404 || e.response?.statusCode == 409 || e.response?.statusCode == 410 || e.response?.statusCode == 418) {
-               // 404 Not Found, 409 Already Used, 410 Expired, 418 Denied
-               talker.debug('TraktService: Terminal error, stopping polling.');
-               return false;
+          if (e.response?.statusCode != 400) {
+            // 400 = authorization_pending
+            talker.debug(
+              'TraktService: Polling error: ${e.response?.statusCode} ${e.message}',
+            );
+            if (e.response?.statusCode == 404 ||
+                e.response?.statusCode == 409 ||
+                e.response?.statusCode == 410 ||
+                e.response?.statusCode == 418) {
+              // 404 Not Found, 409 Already Used, 410 Expired, 418 Denied
+              talker.debug('TraktService: Terminal error, stopping polling.');
+              return false;
             }
           }
         }
@@ -134,19 +142,23 @@ class TraktService implements TrackingService {
   @override
   Future<List<MultimediaItem>> search(String query) async {
     if (_accessToken == null) return [];
-    
+
     // Search implementation
     return [];
   }
 
   @override
   Future<Map<String, String>> syncIds(MultimediaItem item) async {
-    // Trakt uses IMDB and TMDB directly in scrobbling, so we don't strictly need 
+    // Trakt uses IMDB and TMDB directly in scrobbling, so we don't strictly need
     // a separate ID resolution unless we want the Trakt slug.
     return {};
   }
 
-  Map<String, dynamic> _buildScrobblePayload(MultimediaItem item, Episode? episode, double progress) {
+  Map<String, dynamic> _buildScrobblePayload(
+    MultimediaItem item,
+    Episode? episode,
+    double progress,
+  ) {
     final payload = <String, dynamic>{
       'progress': progress * 100,
       'app_version': '1.0',
@@ -158,14 +170,14 @@ class TraktService implements TrackingService {
         'ids': {
           if (item.tmdbId != null) 'tmdb': item.tmdbId,
           if (item.imdbId != null) 'imdb': item.imdbId,
-        }
+        },
       };
     } else {
       payload['show'] = {
         'ids': {
           if (item.tmdbId != null) 'tmdb': item.tmdbId,
           if (item.imdbId != null) 'imdb': item.imdbId,
-        }
+        },
       };
       if (episode != null) {
         payload['episode'] = {
@@ -177,7 +189,12 @@ class TraktService implements TrackingService {
     return payload;
   }
 
-  Future<bool> _scrobble(String action, MultimediaItem item, Episode? episode, double progress) async {
+  Future<bool> _scrobble(
+    String action,
+    MultimediaItem item,
+    Episode? episode,
+    double progress,
+  ) async {
     if (_accessToken == null) return false;
     if (item.tmdbId == null && item.imdbId == null) {
       talker.debug('TraktService: Cannot scrobble, no TMDB/IMDB ID available');
@@ -198,7 +215,9 @@ class TraktService implements TrackingService {
           },
         ),
       );
-      talker.debug('TraktService: Scrobble $action success: ${response.statusCode}');
+      talker.debug(
+        'TraktService: Scrobble $action success: ${response.statusCode}',
+      );
       return response.statusCode == 201 || response.statusCode == 200;
     } catch (e) {
       talker.error('TraktService: Scrobble $action failed', e);
@@ -207,32 +226,59 @@ class TraktService implements TrackingService {
   }
 
   @override
-  Future<bool> markWatched(MultimediaItem item, Episode? episode, {Map<String, String>? resolvedIds}) async {
+  Future<bool> markWatched(
+    MultimediaItem item,
+    Episode? episode, {
+    Map<String, String>? resolvedIds,
+  }) async {
     if (_accessToken == null) return false;
     if (item.tmdbId == null && item.imdbId == null) return false;
-    
+
     // We can use scrobble stop with progress >= 85 to mark as watched.
     // Trakt automatically marks it watched if progress >= 80.
-    return _scrobble('stop', item, episode, 1.0); // Send 100% to ensure it's marked
+    return _scrobble(
+      'stop',
+      item,
+      episode,
+      1.0,
+    ); // Send 100% to ensure it's marked
   }
 
   @override
-  Future<bool> scrobbleStart(MultimediaItem item, Episode? episode, double progress, {Map<String, String>? resolvedIds}) async {
+  Future<bool> scrobbleStart(
+    MultimediaItem item,
+    Episode? episode,
+    double progress, {
+    Map<String, String>? resolvedIds,
+  }) async {
     return _scrobble('start', item, episode, progress);
   }
 
   @override
-  Future<bool> scrobblePause(MultimediaItem item, Episode? episode, double progress, {Map<String, String>? resolvedIds}) async {
+  Future<bool> scrobblePause(
+    MultimediaItem item,
+    Episode? episode,
+    double progress, {
+    Map<String, String>? resolvedIds,
+  }) async {
     return _scrobble('pause', item, episode, progress);
   }
 
   @override
-  Future<bool> scrobbleStop(MultimediaItem item, Episode? episode, double progress, {Map<String, String>? resolvedIds}) async {
+  Future<bool> scrobbleStop(
+    MultimediaItem item,
+    Episode? episode,
+    double progress, {
+    Map<String, String>? resolvedIds,
+  }) async {
     return _scrobble('stop', item, episode, progress);
   }
 
   @override
-  Future<bool> addToPlanToWatch(MultimediaItem item, {Map<String, String>? resolvedIds}) async {
+  Future<bool> addToPlanToWatch(
+    MultimediaItem item, {
+    Map<String, String>? resolvedIds,
+  }) async {
     if (_accessToken == null) return false;
     if (item.tmdbId == null && item.imdbId == null) return false;
 
@@ -244,8 +290,8 @@ class TraktService implements TrackingService {
             'ids': {
               if (item.tmdbId != null) 'tmdb': item.tmdbId,
               if (item.imdbId != null) 'imdb': item.imdbId,
-            }
-          }
+            },
+          },
         ];
       } else {
         payload['shows'] = [
@@ -253,8 +299,8 @@ class TraktService implements TrackingService {
             'ids': {
               if (item.tmdbId != null) 'tmdb': item.tmdbId,
               if (item.imdbId != null) 'imdb': item.imdbId,
-            }
-          }
+            },
+          },
         ];
       }
 
@@ -297,7 +343,11 @@ class TraktService implements TrackingService {
 
       if (response.statusCode == 200 && response.data is List) {
         final items = response.data as List;
-        return items.map((json) => SyncProgressItem.fromJson(json as Map<String, dynamic>)).toList();
+        return items
+            .map(
+              (json) => SyncProgressItem.fromJson(json as Map<String, dynamic>),
+            )
+            .toList();
       }
     } catch (e) {
       talker.error('TraktService: Pull playback progress failed', e);

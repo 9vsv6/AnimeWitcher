@@ -55,7 +55,9 @@ class CloudflareBypass {
   /// Composite key for cache buckets — keeps the map shape unchanged while
   /// making the scope explicit.
   static String _scopeKey(String? callerId, String host) {
-    final scope = (callerId == null || callerId.isEmpty) ? '_global_' : callerId;
+    final scope = (callerId == null || callerId.isEmpty)
+        ? '_global_'
+        : callerId;
     return '$scope::$host';
   }
 

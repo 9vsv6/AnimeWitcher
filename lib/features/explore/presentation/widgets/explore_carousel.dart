@@ -769,7 +769,8 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
       fit: BoxFit.contain,
       alignment: Alignment.bottomCenter,
       placeholder: (context, url) => const SizedBox(height: 140, width: 300),
-      errorWidget: (context, url, error) => _buildTitleFallback(title, isDesktop: isDesktop),
+      errorWidget: (context, url, error) =>
+          _buildTitleFallback(title, isDesktop: isDesktop),
     );
   }
 

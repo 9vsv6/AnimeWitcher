@@ -47,9 +47,7 @@ class _ExtensionsSyncBridgeState extends ConsumerState<ExtensionsSyncBridge> {
           final latest = ref
               .read(extensionsControllerProvider)
               .installedPlugins;
-          ref
-              .read(extensionManagerProvider.notifier)
-              .syncFromPlugins(latest);
+          ref.read(extensionManagerProvider.notifier).syncFromPlugins(latest);
         });
       }
     });

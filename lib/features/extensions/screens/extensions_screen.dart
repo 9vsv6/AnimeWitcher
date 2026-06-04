@@ -81,7 +81,9 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                     )
                     .toList();
                 final hasInstalledOnly = installedOnlyPlugins.isNotEmpty;
-                final isEmpty = state.repositories.isEmpty && state.installedPlugins.isEmpty;
+                final isEmpty =
+                    state.repositories.isEmpty &&
+                    state.installedPlugins.isEmpty;
 
                 int currentIndex = 0;
 
@@ -118,7 +120,8 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                 }
 
                 // 4. Repositories
-                if (index >= currentIndex && index < currentIndex + state.repositories.length) {
+                if (index >= currentIndex &&
+                    index < currentIndex + state.repositories.length) {
                   final repoIndex = index - currentIndex;
                   final repo = state.repositories[repoIndex];
                   final plugins = state.availablePlugins[repo.url] ?? [];
@@ -316,7 +319,8 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
     final hasInstalledOnly = state.installedPlugins.any(
       (p) => !p.isDebug && !allAvailablePackageNames.contains(p.packageName),
     );
-    final isEmpty = state.repositories.isEmpty && state.installedPlugins.isEmpty;
+    final isEmpty =
+        state.repositories.isEmpty && state.installedPlugins.isEmpty;
 
     return (hasDebug ? 1 : 0) +
         (hasInstalledOnly ? 1 : 0) +

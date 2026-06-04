@@ -91,19 +91,13 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
     final codeWidget = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          '2. Enter the following code:',
-          textAlign: TextAlign.center,
-        ),
+        const Text('2. Enter the following code:', textAlign: TextAlign.center),
         const SizedBox(height: 8),
         InkWell(
           onTap: () => _copyToClipboard(isManual: true),
           borderRadius: BorderRadius.circular(8),
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             decoration: BoxDecoration(
               color: theme.colorScheme.secondaryContainer,
               borderRadius: BorderRadius.circular(8),
@@ -120,10 +114,7 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Icon(
-                  Icons.copy,
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
+                Icon(Icons.copy, color: theme.colorScheme.onSecondaryContainer),
               ],
             ),
           ),

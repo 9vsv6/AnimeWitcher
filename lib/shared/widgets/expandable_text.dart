@@ -85,8 +85,7 @@ class _ExpandableTextState extends State<ExpandableText> {
               // the toggle.
               FocusableActionDetector(
                 mouseCursor: SystemMouseCursors.click,
-                onShowFocusHighlight: (v) =>
-                    setState(() => _toggleFocused = v),
+                onShowFocusHighlight: (v) => setState(() => _toggleFocused = v),
                 actions: <Type, Action<Intent>>{
                   ActivateIntent: CallbackAction<ActivateIntent>(
                     onInvoke: (_) {

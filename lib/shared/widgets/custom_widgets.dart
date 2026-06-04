@@ -338,8 +338,7 @@ class _CustomButtonState extends State<CustomButton> {
   late final VoidCallback _focusListener;
   // Tracks whether focus was last driven by keyboard/D-pad (traditional) vs a
   // touch tap, so the focus ring only appears for directional navigation.
-  FocusHighlightMode _highlightMode =
-      FocusManager.instance.highlightMode;
+  FocusHighlightMode _highlightMode = FocusManager.instance.highlightMode;
 
   @override
   void initState() {

@@ -241,9 +241,7 @@ class MultimediaItem {
         (json['media_type'] as String?) ??
         (json['title'] != null ? 'movie' : 'tv');
     final title = _unescape.convert(
-      (json['title'] as String?) ??
-          (json['name'] as String?) ??
-          'Unknown',
+      (json['title'] as String?) ?? (json['name'] as String?) ?? 'Unknown',
     );
     final date =
         (json['release_date'] as String?) ??
@@ -422,10 +420,7 @@ class MultimediaItem {
           provider == other.provider &&
           tmdbId == other.tmdbId &&
           imdbId == other.imdbId &&
-          const MapEquality<String, String>().equals(
-            syncData,
-            other.syncData,
-          );
+          const MapEquality<String, String>().equals(syncData, other.syncData);
 
   @override
   int get hashCode =>

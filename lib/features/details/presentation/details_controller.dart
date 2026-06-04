@@ -225,11 +225,14 @@ class DetailsController extends _$DetailsController {
   Future<void> _resolveMetadataInBackground(MultimediaItem withProvider) async {
     try {
       if (kDebugMode) {
-        debugPrint('DetailsController: Fetching missing IDs in background for ${withProvider.title}...');
+        debugPrint(
+          'DetailsController: Fetching missing IDs in background for ${withProvider.title}...',
+        );
       }
       MultimediaItem enrichedItem = withProvider;
 
-      final hasAnyWesternId = withProvider.tmdbId != null || withProvider.imdbId != null;
+      final hasAnyWesternId =
+          withProvider.tmdbId != null || withProvider.imdbId != null;
 
       try {
         if (!hasAnyWesternId) {
@@ -237,27 +240,41 @@ class DetailsController extends _$DetailsController {
               .read(metadataResolutionServiceProvider)
               .enrichWithIds(withProvider);
           if (kDebugMode) {
-            debugPrint('DetailsController: Background resolution result -> tmdbId: ${enrichedItem.tmdbId}, imdbId: ${enrichedItem.imdbId}');
+            debugPrint(
+              'DetailsController: Background resolution result -> tmdbId: ${enrichedItem.tmdbId}, imdbId: ${enrichedItem.imdbId}',
+            );
           }
         } else {
           if (kDebugMode) {
-            debugPrint('DetailsController: Bypassed TMDB resolution (tmdbId or imdbId already provided by scraper)');
+            debugPrint(
+              'DetailsController: Bypassed TMDB resolution (tmdbId or imdbId already provided by scraper)',
+            );
           }
         }
       } catch (e) {
-        if (kDebugMode) debugPrint('DetailsController: TMDB metadata resolution failed, but continuing: $e');
+        if (kDebugMode)
+          debugPrint(
+            'DetailsController: TMDB metadata resolution failed, but continuing: $e',
+          );
       }
 
       // Pre-fetch Simkl / AniList tracking IDs
       MultimediaItem finalItem = enrichedItem;
       try {
-        final isAnime = enrichedItem.contentType == MultimediaContentType.anime ||
+        final isAnime =
+            enrichedItem.contentType == MultimediaContentType.anime ||
             enrichedItem.syncData?['anilistId'] != null ||
             enrichedItem.syncData?['anilist_id'] != null ||
-            (enrichedItem.tags != null && enrichedItem.tags!.any((t) => t.toLowerCase() == 'anime' || t.toLowerCase() == 'animation'));
+            (enrichedItem.tags != null &&
+                enrichedItem.tags!.any(
+                  (t) =>
+                      t.toLowerCase() == 'anime' ||
+                      t.toLowerCase() == 'animation',
+                ));
 
         if (isAnime) {
-          final hasAnilistId = enrichedItem.syncData?['anilist'] != null ||
+          final hasAnilistId =
+              enrichedItem.syncData?['anilist'] != null ||
               enrichedItem.syncData?['anilistId'] != null ||
               enrichedItem.syncData?['anilist_id'] != null;
 
@@ -265,23 +282,32 @@ class DetailsController extends _$DetailsController {
             final simkl = ref.read(simklServiceProvider);
             final resolved = await simkl.syncIds(enrichedItem);
             if (resolved.isNotEmpty) {
-              final newSyncData = Map<String, String>.from(enrichedItem.syncData ?? {});
+              final newSyncData = Map<String, String>.from(
+                enrichedItem.syncData ?? {},
+              );
               newSyncData.addAll(resolved);
               finalItem = enrichedItem.copyWith(syncData: newSyncData);
-              if (kDebugMode) debugPrint('DetailsController: Fetched Simkl IDs: $resolved');
+              if (kDebugMode)
+                debugPrint('DetailsController: Fetched Simkl IDs: $resolved');
             }
           } else {
-            if (kDebugMode) debugPrint('DetailsController: Bypassed Simkl fetch (AniList ID already provided by scraper)');
+            if (kDebugMode)
+              debugPrint(
+                'DetailsController: Bypassed Simkl fetch (AniList ID already provided by scraper)',
+              );
           }
         }
       } catch (e) {
-        if (kDebugMode) debugPrint('DetailsController: Failed to fetch Simkl IDs in background: $e');
+        if (kDebugMode)
+          debugPrint(
+            'DetailsController: Failed to fetch Simkl IDs in background: $e',
+          );
       }
 
       if (!ref.mounted) return;
 
-      if (finalItem.tmdbId != withProvider.tmdbId || 
-          finalItem.imdbId != withProvider.imdbId || 
+      if (finalItem.tmdbId != withProvider.tmdbId ||
+          finalItem.imdbId != withProvider.imdbId ||
           finalItem.syncData != withProvider.syncData) {
         // preserve the episodes from the current state just in case
         final currentDetails = state.details.asData?.value;
@@ -298,7 +324,10 @@ class DetailsController extends _$DetailsController {
         }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('DetailsController: Background metadata resolution failed: $e');
+      if (kDebugMode)
+        debugPrint(
+          'DetailsController: Background metadata resolution failed: $e',
+        );
     }
   }
 

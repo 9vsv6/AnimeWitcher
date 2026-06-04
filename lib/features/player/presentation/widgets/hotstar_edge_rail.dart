@@ -57,12 +57,9 @@ class HotstarEdgeRail extends StatelessWidget {
                         child: Container(color: Colors.white),
                       ),
                       if (isBoosted)
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: FractionallySizedBox(
-                            heightFactor: (value - 1.0).clamp(0.0, 1.0),
-                            child: Container(color: Colors.orange),
-                          ),
+                        FractionallySizedBox(
+                          heightFactor: (value - 1.0).clamp(0.0, 1.0),
+                          child: Container(color: Colors.orange),
                         ),
                     ],
                   ),

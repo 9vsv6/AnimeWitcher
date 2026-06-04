@@ -49,9 +49,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
   bool _isWidescreenForScroll() {
     final profile = ref.read(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv == true || context.isTv;
-    return isTv ||
-        profile?.isLargeScreen == true ||
-        context.isTabletOrLarger;
+    return isTv || profile?.isLargeScreen == true || context.isTabletOrLarger;
   }
 
   void _onScroll() {
@@ -90,7 +88,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     // Use profile?.isLargeScreen so this matches AppScaffold's sidebar
     // decision even when the ExploreScreen's context width is narrowed
     // by the sidebar (e.g. iPad portrait).
-    final isWidescreen = isTv || profile?.isLargeScreen == true || context.isTabletOrLarger;
+    final isWidescreen =
+        isTv || profile?.isLargeScreen == true || context.isTabletOrLarger;
 
     if (isWidescreen) {
       return Scaffold(
@@ -235,9 +234,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 : null,
           ),
         ),
-        Expanded(
-          child: _buildScrollView(context),
-        ),
+        Expanded(child: _buildScrollView(context)),
       ],
     );
   }
@@ -408,7 +405,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     final heroHeight = size.height * 0.60;
     final isDesktop =
         size.width > LayoutConstants.exploreCarouselDesktopBreakpoint;
-    
+
     if (isDesktop) {
       return Padding(
         padding: const EdgeInsets.symmetric(
@@ -455,44 +452,44 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 : LayoutConstants.spacingMd,
             LayoutConstants.spacingSm,
           ),
-            child: ShimmerPlaceholder.rectangular(
-              width: 150,
-              height: 24,
-              borderRadius: 4,
-            ),
+          child: ShimmerPlaceholder.rectangular(
+            width: 150,
+            height: 24,
+            borderRadius: 4,
           ),
-          const SizedBox(height: LayoutConstants.spacingMd),
-          // List Placeholder
-          SizedBox(
-            height: listHeight,
-            child: ListView.separated(
-              padding: EdgeInsets.symmetric(
-                horizontal: isDesktop
-                    ? LayoutConstants.dashboardContentPadding
-                    : LayoutConstants.spacingMd,
-              ),
-              scrollDirection: Axis.horizontal,
-              itemCount: 10,
-              separatorBuilder: (_, _) => SizedBox(
-                width: isDesktop
-                    ? LayoutConstants.spacingLg
-                    : LayoutConstants.spacingSm,
-              ),
-              itemBuilder: (context, index) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ShimmerPlaceholder.rectangular(
-                      width: cardWidth,
-                      height: imageHeight,
-                      borderRadius: 12,
-                    ),
-                  ],
-                );
-              },
+        ),
+        const SizedBox(height: LayoutConstants.spacingMd),
+        // List Placeholder
+        SizedBox(
+          height: listHeight,
+          child: ListView.separated(
+            padding: EdgeInsets.symmetric(
+              horizontal: isDesktop
+                  ? LayoutConstants.dashboardContentPadding
+                  : LayoutConstants.spacingMd,
             ),
+            scrollDirection: Axis.horizontal,
+            itemCount: 10,
+            separatorBuilder: (_, _) => SizedBox(
+              width: isDesktop
+                  ? LayoutConstants.spacingLg
+                  : LayoutConstants.spacingSm,
+            ),
+            itemBuilder: (context, index) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShimmerPlaceholder.rectangular(
+                    width: cardWidth,
+                    height: imageHeight,
+                    borderRadius: 12,
+                  ),
+                ],
+              );
+            },
           ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 }

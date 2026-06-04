@@ -323,8 +323,7 @@ class PlayerState {
       showNextEpisodeOverlay:
           showNextEpisodeOverlay ?? this.showNextEpisodeOverlay,
       nextEpisodeTitle: nextEpisodeTitle ?? this.nextEpisodeTitle,
-      nextEpisodePosterUrl:
-          nextEpisodePosterUrl ?? this.nextEpisodePosterUrl,
+      nextEpisodePosterUrl: nextEpisodePosterUrl ?? this.nextEpisodePosterUrl,
       nextEpisodeRating: nextEpisodeRating ?? this.nextEpisodeRating,
       nextEpisodeNumber: nextEpisodeNumber ?? this.nextEpisodeNumber,
       nextEpisodeSeason: nextEpisodeSeason ?? this.nextEpisodeSeason,
@@ -972,7 +971,8 @@ class PlayerController extends Notifier<PlayerState> {
         if (kDebugMode) debugPrint('IntroDB error: $e');
       }
     } else {
-      if (kDebugMode) debugPrint('IntroDB integration is disabled in settings.');
+      if (kDebugMode)
+        debugPrint('IntroDB integration is disabled in settings.');
     }
 
     if (_isDisposed) return;
@@ -1027,7 +1027,8 @@ class PlayerController extends Notifier<PlayerState> {
           if (kDebugMode) debugPrint('AnimeSkip error: $e');
         }
       } else {
-        if (kDebugMode) debugPrint('AnimeSkip integration is disabled in settings.');
+        if (kDebugMode)
+          debugPrint('AnimeSkip integration is disabled in settings.');
       }
     } else {
       if (kDebugMode) {
@@ -1280,11 +1281,17 @@ class PlayerController extends Notifier<PlayerState> {
         if (remainingSecs <= 15.0) {
           int? currentIndex;
           if (_episode != null) {
-            currentIndex = _item.episodes?.indexWhere((e) => e.url == _episode!.url);
+            currentIndex = _item.episodes?.indexWhere(
+              (e) => e.url == _episode!.url,
+            );
           } else {
-            currentIndex = _item.episodes?.indexWhere((e) => e.url == _videoUrl);
+            currentIndex = _item.episodes?.indexWhere(
+              (e) => e.url == _videoUrl,
+            );
           }
-          if (currentIndex != null && currentIndex != -1 && currentIndex < _item.episodes!.length - 1) {
+          if (currentIndex != null &&
+              currentIndex != -1 &&
+              currentIndex < _item.episodes!.length - 1) {
             final next = _item.episodes![currentIndex + 1];
             if (!_userDismissedOverlay && !state.showNextEpisodeOverlay) {
               state = state.copyWith(
@@ -1600,9 +1607,7 @@ class PlayerController extends Notifier<PlayerState> {
               'current source with software decoding.',
             );
           }
-          unawaited(
-            changeStream(state.currentStream!, resetPosition: true),
-          );
+          unawaited(changeStream(state.currentStream!, resetPosition: true));
           return;
         }
 
@@ -1653,9 +1658,7 @@ class PlayerController extends Notifier<PlayerState> {
             kind: PlaybackUiPhaseKind.switchingSource,
             detail: "Refreshing stream...",
           );
-          unawaited(
-            changeStream(state.currentStream!, resetPosition: false),
-          );
+          unawaited(changeStream(state.currentStream!, resetPosition: false));
           return;
         }
 
@@ -1850,7 +1853,6 @@ class PlayerController extends Notifier<PlayerState> {
     // playback naturally completes (H-PLAYER-7). The position listener
     // self-heals once `remainingSecs > 15`, but inside the narrow
     // last-15s window during a retry it would otherwise stay stuck.
-
 
     final sourceSessionId = forceNewSourceSession
         ? _beginSourceSession(resetAttempts: true)
@@ -3320,7 +3322,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     _userAddedExternalSubtitles.clear();
     _resetPerEpisodeState();
-    
+
     unawaited(_fetchAndLogSkipSegments());
 
     state = state.copyWith(
