@@ -403,13 +403,7 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                     canSeek: canSeek,
                     onSeekEnd: onSeekEnd,
                   ),
-                  if (_dragValue != null)
-                    _buildScrubTooltip(
-                      width,
-                      displayValue,
-                      durationMs,
-                      displayDuration,
-                    ),
+
                 ],
               );
             },
@@ -515,51 +509,6 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
     );
   }
 
-  Widget _buildScrubTooltip(
-    double width,
-    double displayValue,
-    double durationMs,
-    Duration displayDuration,
-  ) {
-    const tooltipWidth = 76.0;
-    final scrubPercent = durationMs > 0
-        ? (displayValue / durationMs).clamp(0.0, 1.0).toDouble()
-        : 0.0;
-    final maxLeft = width > tooltipWidth ? width - tooltipWidth : 0.0;
-    final left = (width * scrubPercent - tooltipWidth / 2)
-        .clamp(0.0, maxLeft)
-        .toDouble();
-    return Align(
-      alignment: Alignment(
-        width > 0 ? (left / width * 2 - 1).clamp(-1.0, 1.0) : 0.0,
-        -3.5, // above the centered track
-      ),
-      child: IgnorePointer(
-        child: SizedBox(
-          width: tooltipWidth,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.82),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                _formatDuration(displayDuration),
-                maxLines: 1,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class PlayerPlayPauseButton extends StatelessWidget {
