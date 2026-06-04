@@ -420,7 +420,7 @@ class _SourceAttemptListState extends State<_SourceAttemptList> {
       constraints: const BoxConstraints(maxHeight: 220),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
+          color: Colors.black.withValues(alpha: 0.35),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
@@ -444,9 +444,9 @@ class _SourceAttemptRow extends StatelessWidget {
     final highlight = attempt.isCurrent;
 
     return Material(
-      color: highlight
-          ? Colors.white.withValues(alpha: 0.07)
-          : Colors.transparent,
+        color: highlight
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.transparent,
       child: SizedBox(
         height: 46,
         child: Padding(
