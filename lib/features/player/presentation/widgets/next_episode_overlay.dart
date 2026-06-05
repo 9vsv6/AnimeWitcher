@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -171,8 +172,6 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
     final isCompact = size.shortestSide < 600;
     final cardWidth = isCompact ? 280.0 : (widget.isTv ? 440.0 : 360.0);
     final thumbHeight = cardWidth * 9 / 16;
-    final radius = isCompact ? 10.0 : 12.0;
-    final borderRadius = BorderRadius.circular(radius);
 
     return PlayerPromptPlacement(
       isTv: widget.isTv,
@@ -185,102 +184,104 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
           position: _slideAnimation,
           child: SizedBox(
             width: cardWidth,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(l10n, isCompact),
+                _buildThumbnail(thumbHeight, cardWidth),
+                _buildInfo(isCompact),
+                _buildButtons(isCompact, l10n),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(AppLocalizations l10n, bool isCompact) {
+    final textStyle = TextStyle(
+      color: Colors.white.withValues(alpha: 0.5),
+      fontSize: isCompact ? 10 : 11,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.2,
+      shadows: const [Shadow(color: Colors.black38, blurRadius: 1)],
+    );
+    final upNextStyle = TextStyle(
+      color: const Color(0xFFE50914),
+      fontSize: isCompact ? 10 : 11,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.2,
+      shadows: const [Shadow(color: Colors.black38, blurRadius: 1)],
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        isCompact ? 12 : 16,
+        isCompact ? 8 : 10,
+        isCompact ? 12 : 16,
+        isCompact ? 8 : 10,
+      ),
+      child: Row(
+        children: [
+          Text(l10n.upNext.toUpperCase(), style: upNextStyle),
+          const SizedBox(width: 6),
+          Container(
+            width: 3,
+            height: 3,
+            decoration: const BoxDecoration(
+              color: Color(0x80FFFFFF),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
             child: AnimatedBuilder(
               animation: _countdownController,
               builder: (context, _) {
                 final remaining =
                     _countdownSecs -
                     (_countdownController.value * _countdownSecs).round();
-                return ClipRRect(
-                  borderRadius: borderRadius,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildHeader(l10n, isCompact, remaining),
-                      _buildThumbnail(thumbHeight, cardWidth),
-                      _buildInfo(isCompact),
-                      _buildButtons(isCompact, l10n),
-                    ],
-                  ),
+                return Row(
+                  children: [
+                    Text(
+                      '${remaining}s',
+                      style: textStyle.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const Spacer(),
+                    if (remaining <= 3 && remaining > 0) _buildPulseDot(),
+                  ],
                 );
               },
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(AppLocalizations l10n, bool isCompact, int remaining) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.80),
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.white.withValues(alpha: 0.06),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          isCompact ? 12 : 16,
-          isCompact ? 8 : 10,
-          isCompact ? 12 : 16,
-          isCompact ? 8 : 10,
-        ),
-        child: Row(
-          children: [
-            Text(
-              l10n.upNext.toUpperCase(),
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: isCompact ? 10 : 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              width: 3,
-              height: 3,
-              decoration: const BoxDecoration(
-                color: Color(0x80FFFFFF),
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '${remaining}s',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: isCompact ? 10 : 11,
-                fontWeight: FontWeight.w600,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-            const Spacer(),
-            if (remaining <= 3 && remaining > 0) _buildPulseDot(),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildPulseDot() {
-    return Container(
-      width: 6,
-      height: 6,
-      decoration: BoxDecoration(
-        color: HotstarPlayerStyle.accent,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: HotstarPlayerStyle.accent.withValues(alpha: 0.5),
-            blurRadius: 4,
-          ),
-        ],
+    final phase = (_countdownController.value - 0.8) / 0.2;
+    final pulse = (math.sin(phase * 4 * math.pi) + 1) / 2;
+    final scale = 0.6 + pulse * 0.4;
+    return Transform.scale(
+      scale: scale,
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE50914),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFE50914).withValues(alpha: 0.5),
+              blurRadius: 4,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -289,77 +290,108 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
     final imageUrl = widget.nextEpisodePosterUrl?.isNotEmpty == true
         ? widget.nextEpisodePosterUrl!
         : null;
+    final radius = height < 100 ? 8.0 : 12.0;
 
     return SizedBox(
       height: height,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (imageUrl != null)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              memCacheWidth: (cardWidth * 2).round(),
-              memCacheHeight: (height * 2).round(),
-              errorWidget: (context, url, error) =>
-                  const ThumbnailErrorPlaceholder(),
-              placeholder: (context, url) => Container(
-                color: Colors.white.withValues(alpha: 0.05),
-                child: const Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              ),
-            )
-          else
-            const ThumbnailErrorPlaceholder(),
-          if (widget.nextEpisodeRuntime != null &&
-              widget.nextEpisodeRuntime! >= 60)
-            Positioned(
-              top: 6,
-              right: 6,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.65),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  _formatRuntime(widget.nextEpisodeRuntime),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(radius),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: height * 0.35,
-            child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.85),
-                      Colors.black.withValues(alpha: 0.5),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.4, 1.0],
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (imageUrl != null)
+                CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  memCacheWidth: (cardWidth * 2).round(),
+                  memCacheHeight: (height * 2).round(),
+                  errorWidget: (context, url, error) =>
+                      const ThumbnailErrorPlaceholder(),
+                  placeholder: (context, url) => Container(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                const ThumbnailErrorPlaceholder(),
+              if (widget.nextEpisodeRuntime != null &&
+                  widget.nextEpisodeRuntime! >= 60)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _formatRuntime(widget.nextEpisodeRuntime),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: height * 0.35,
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.85),
+                          Colors.black.withValues(alpha: 0.5),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.4, 1.0],
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(radius),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -375,72 +407,62 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
         : '';
     final badge = [seasonStr, epStr].where((s) => s.isNotEmpty).join(' ');
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.80),
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.white.withValues(alpha: 0.06),
-            width: 0.5,
-          ),
-        ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        isCompact ? 12 : 16,
+        isCompact ? 10 : 12,
+        isCompact ? 12 : 16,
+        isCompact ? 8 : 10,
       ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          isCompact ? 12 : 16,
-          isCompact ? 10 : 12,
-          isCompact ? 12 : 16,
-          isCompact ? 8 : 10,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                if (badge.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: HotstarPlayerStyle.accent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text(
-                      badge,
-                      style: TextStyle(
-                        color: HotstarPlayerStyle.accent,
-                        fontSize: isCompact ? 10 : 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              if (badge.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE50914),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    badge,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isCompact ? 10 : 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                if (hasRating) ...[const Spacer(), _buildRating(isCompact)],
-              ],
+                ),
+              if (hasRating) ...[const Spacer(), _buildRating(isCompact)],
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.nextEpisodeTitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: isCompact ? 13 : 14,
+              fontWeight: FontWeight.w600,
+              height: 1.3,
+              shadows: const [Shadow(color: Colors.black54, blurRadius: 6)],
             ),
-            const SizedBox(height: 4),
-            Text(
-              widget.nextEpisodeTitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: isCompact ? 13 : 14,
-                fontWeight: FontWeight.w600,
-                height: 1.3,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildRating(bool isCompact) {
-    final rating = widget.nextEpisodeRating!;
+    final rating = widget.nextEpisodeRating ?? 0.0;
     final fullStars = rating ~/ 2;
     final halfStar = rating % 2 >= 1;
     final numeric = rating.toStringAsFixed(1);
@@ -454,7 +476,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               ? const Color(0xFFFFC107)
               : i == fullStars && halfStar
               ? const Color(0xFFFFC107)
-              : Colors.white.withValues(alpha: 0.25);
+              : Colors.white.withValues(alpha: 0.35);
           if (i < fullStars) {
             icon = Icons.star_rounded;
           } else if (i == fullStars && halfStar) {
@@ -489,47 +511,37 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
   }
 
   Widget _buildButtons(bool isCompact, AppLocalizations l10n) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.80),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(isCompact ? 10 : 12),
-          bottomRight: Radius.circular(isCompact ? 10 : 12),
-        ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        isCompact ? 12 : 16,
+        isCompact ? 8 : 10,
+        isCompact ? 12 : 16,
+        isCompact ? 8 : 10,
       ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          isCompact ? 12 : 16,
-          isCompact ? 8 : 10,
-          isCompact ? 12 : 16,
-          isCompact ? 8 : 10,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _PlayNowButton(
-                onPressed: _handlePressed,
-                onDismiss: _handleDismiss,
-                isTv: widget.isTv,
-                isCompact: isCompact,
-                label: l10n.playNow,
-                isCompleted: _completed,
-                focusNode: widget.focusNode,
-              ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _PlayNowButton(
+              onPressed: _handlePressed,
+              isTv: widget.isTv,
+              isCompact: isCompact,
+              label: l10n.playNow,
+              isCompleted: _completed,
+              focusNode: widget.focusNode,
             ),
-            SizedBox(width: isCompact ? 8 : 10),
-            Expanded(
-              child: _CancelButton(
-                onPressed: _handleDismiss,
-                isTv: widget.isTv,
-                isCompact: isCompact,
-                label: MaterialLocalizations.of(context).closeButtonTooltip,
-                isCompleted: _completed,
-                focusNode: _cancelFocusNode,
-              ),
+          ),
+          SizedBox(width: isCompact ? 8 : 10),
+          Expanded(
+            child: _CancelButton(
+              onPressed: _handleDismiss,
+              isTv: widget.isTv,
+              isCompact: isCompact,
+              label: MaterialLocalizations.of(context).closeButtonTooltip,
+              isCompleted: _completed,
+              focusNode: _cancelFocusNode,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -537,7 +549,6 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
 
 class _PlayNowButton extends StatefulWidget {
   final VoidCallback onPressed;
-  final VoidCallback onDismiss;
   final bool isTv;
   final bool isCompact;
   final String label;
@@ -546,7 +557,6 @@ class _PlayNowButton extends StatefulWidget {
 
   const _PlayNowButton({
     required this.onPressed,
-    required this.onDismiss,
     required this.isTv,
     required this.isCompact,
     required this.label,
@@ -561,6 +571,9 @@ class _PlayNowButton extends StatefulWidget {
 class _PlayNowButtonState extends State<_PlayNowButton> {
   FocusNode? _focusNode;
   bool _isFocused = false;
+  bool _isHovered = false;
+
+  bool get _isActive => _isFocused || _isHovered;
 
   @override
   void initState() {
@@ -582,7 +595,7 @@ class _PlayNowButtonState extends State<_PlayNowButton> {
   @override
   Widget build(BuildContext context) {
     final button = AnimatedScale(
-      scale: _isFocused ? 1.03 : 1.0,
+      scale: _isActive ? 1.03 : 1.0,
       duration: const Duration(milliseconds: 150),
       child: Container(
         height: widget.isCompact ? 36 : 40,
@@ -590,25 +603,19 @@ class _PlayNowButtonState extends State<_PlayNowButton> {
           color: HotstarPlayerStyle.accent.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 10),
           border: Border.all(
-            color: _isFocused
-                ? HotstarPlayerStyle.accent
-                : HotstarPlayerStyle.accent.withValues(alpha: 0.5),
-            width: _isFocused ? 1.5 : 1,
+            color: HotstarPlayerStyle.accent,
+            width: _isActive ? 1.5 : 1,
           ),
-          boxShadow: _isFocused
-              ? [
-                  BoxShadow(
-                    color: HotstarPlayerStyle.accent.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.isCompleted ? null : widget.onPressed,
+            onHover: widget.isTv
+                ? null
+                : (v) {
+                    if (mounted) setState(() => _isHovered = v);
+                  },
             borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 10),
             splashColor: Colors.white.withValues(alpha: 0.15),
             highlightColor: Colors.white.withValues(alpha: 0.05),
@@ -649,11 +656,6 @@ class _PlayNowButtonState extends State<_PlayNowButton> {
             widget.onPressed();
             return KeyEventResult.handled;
           }
-          if (key == LogicalKeyboardKey.escape ||
-              key == LogicalKeyboardKey.goBack) {
-            widget.onDismiss();
-            return KeyEventResult.handled;
-          }
           return KeyEventResult.ignored;
         },
         child: button,
@@ -687,6 +689,9 @@ class _CancelButton extends StatefulWidget {
 class _CancelButtonState extends State<_CancelButton> {
   FocusNode? _focusNode;
   bool _isFocused = false;
+  bool _isHovered = false;
+
+  bool get _isActive => _isFocused || _isHovered;
 
   @override
   void initState() {
@@ -708,24 +713,31 @@ class _CancelButtonState extends State<_CancelButton> {
   @override
   Widget build(BuildContext context) {
     final button = AnimatedScale(
-      scale: _isFocused ? 1.03 : 1.0,
+      scale: _isActive ? 1.03 : 1.0,
       duration: const Duration(milliseconds: 150),
       child: Container(
         height: widget.isCompact ? 36 : 40,
         decoration: BoxDecoration(
-          color: Colors.transparent,
+          color: _isActive
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 10),
           border: Border.all(
-            color: _isFocused
-                ? Colors.white.withValues(alpha: 0.4)
-                : Colors.white.withValues(alpha: 0.15),
-            width: _isFocused ? 1.5 : 1,
+            color: _isActive
+                ? const Color(0xFFE50914)
+                : const Color(0xFFE50914).withValues(alpha: 0.5),
+            width: _isActive ? 1.5 : 1,
           ),
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.isCompleted ? null : widget.onPressed,
+            onHover: widget.isTv
+                ? null
+                : (v) {
+                    if (mounted) setState(() => _isHovered = v);
+                  },
             borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 10),
             splashColor: Colors.white.withValues(alpha: 0.1),
             highlightColor: Colors.white.withValues(alpha: 0.03),
@@ -734,14 +746,14 @@ class _CancelButtonState extends State<_CancelButton> {
               children: [
                 Icon(
                   Icons.close_rounded,
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: const Color(0xFFE50914),
                   size: widget.isCompact ? 16 : 18,
                 ),
                 SizedBox(width: widget.isCompact ? 4 : 6),
                 Text(
-                  'Cancel',
+                  widget.label,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: const Color(0xFFE50914),
                     fontSize: widget.isCompact ? 12 : 13,
                     fontWeight: FontWeight.w600,
                   ),

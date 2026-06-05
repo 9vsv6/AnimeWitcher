@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -88,7 +88,7 @@ class PlayerLoadingOverlay extends StatelessWidget {
               left: 16,
               child: Container(
                 decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
                 child: CustomButton(
@@ -444,9 +444,9 @@ class _SourceAttemptRow extends StatelessWidget {
     final highlight = attempt.isCurrent;
 
     return Material(
-        color: highlight
-            ? Colors.white.withValues(alpha: 0.08)
-            : Colors.transparent,
+      color: highlight
+          ? Colors.white.withValues(alpha: 0.08)
+          : Colors.transparent,
       child: SizedBox(
         height: 46,
         child: Padding(
@@ -546,6 +546,3 @@ class _SourceAttemptRow extends StatelessWidget {
     }
   }
 }
-
-
-

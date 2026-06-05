@@ -403,7 +403,6 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                     canSeek: canSeek,
                     onSeekEnd: onSeekEnd,
                   ),
-
                 ],
               );
             },
@@ -508,7 +507,6 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
       ),
     );
   }
-
 }
 
 class PlayerPlayPauseButton extends StatelessWidget {
