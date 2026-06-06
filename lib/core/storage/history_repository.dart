@@ -13,6 +13,7 @@ class HistoryItem {
   final int? season;
   final int? episode;
   final String? episodeTitle;
+  final String? episodePosterUrl;
   final int timestamp;
 
   HistoryItem({
@@ -24,6 +25,7 @@ class HistoryItem {
     this.season,
     this.episode,
     this.episodeTitle,
+    this.episodePosterUrl,
     required this.timestamp,
   });
 
@@ -53,6 +55,7 @@ class HistoryItem {
       season: map['season'] as int?,
       episode: map['episode'] as int?,
       episodeTitle: map['episodeTitle'] as String?,
+      episodePosterUrl: map['episodePosterUrl'] as String?,
       timestamp: (map['timestamp'] as int?) ?? 0,
     );
   }
@@ -77,6 +80,7 @@ class HistoryRepository {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodePosterUrl,
   }) async {
     await _storageService.saveProgress(
       item,
@@ -87,6 +91,7 @@ class HistoryRepository {
       season: season,
       episode: episode,
       episodeTitle: episodeTitle,
+      episodePosterUrl: episodePosterUrl,
     );
   }
 

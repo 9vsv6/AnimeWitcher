@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:skystream/features/library/presentation/history_provider.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 
-import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
+import 'package:skystream/core/utils/layout_constants.dart';
 import '../../../../core/extensions/extension_manager.dart';
 import '../../../../shared/widgets/loading_dialog.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
@@ -94,6 +94,19 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     return null;
   }
 
+  String _formatDuration(int milliseconds) {
+    if (milliseconds <= 0) return '00:00';
+    final d = Duration(milliseconds: milliseconds);
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) {
+      if (m > 0) return '${h}h ${m}m';
+      return '${h}h';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.historyItem.item;
@@ -103,137 +116,136 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
             1.0,
           )
         : 0.0;
-    final int percentage = (progress * 100).toInt();
 
-    final providers = ref.watch(extensionManagerProvider);
-    final providerObj = (item.provider != null)
-        ? providers.where((p) => p.packageName == item.provider).firstOrNull
-        : null;
-    final providerName = providerObj?.name ?? item.provider;
-
-    final bannerUrl = AppImageFallbacks.poster(
-      item.backdropImageUrl,
-      label: item.title,
-    );
     final isLivestream = item.contentType == MultimediaContentType.livestream;
     final isSeries = item.contentType == MultimediaContentType.series;
+    final isAnime = item.contentType == MultimediaContentType.anime;
+    final hasEpisodes = isSeries || isAnime;
 
-    final scrimColors = [
-      Colors.transparent,
-      Colors.black.withValues(alpha: 0.05),
-      Colors.black.withValues(alpha: 0.55),
-      Colors.black.withValues(alpha: _isHovered ? 0.90 : 0.82),
-    ];
+    final imageUrl = hasEpisodes
+        ? (widget.historyItem.episodePosterUrl ?? item.backdropImageUrl)
+        : item.backdropImageUrl;
+    final bannerUrl = AppImageFallbacks.poster(
+      imageUrl,
+      label: item.title,
+    );
 
-    return CardsWrapper(
-      onTap: () async {
-        if (isLivestream) {
-          bool dialogDismissed = false;
-          bool canceled = false;
-          unawaited(
-            LoadingDialog.show(
-              context,
-              message: AppLocalizations.of(context)!.refreshingLiveStream,
-              onCancel: () {
-                canceled = true;
-                dialogDismissed = true;
-              },
-            ),
-          );
-          final refreshedItem = await _resolveFreshLiveItem(ref, item);
-          if (!context.mounted || canceled) return;
+    final episodeLabel = hasEpisodes &&
+            widget.historyItem.season != null &&
+            widget.historyItem.episode != null &&
+            (widget.historyItem.season! > 0 ||
+                widget.historyItem.episode! > 0)
+        ? "S${widget.historyItem.season} E${widget.historyItem.episode}${widget.historyItem.episodeTitle != null && widget.historyItem.episodeTitle!.isNotEmpty && !widget.historyItem.episodeTitle!.startsWith("Episode") ? " - ${widget.historyItem.episodeTitle}" : ""}"
+        : null;
 
-          if (!dialogDismissed) {
-            Navigator.of(context, rootNavigator: true).pop();
-            dialogDismissed = true;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: () async {
+          if (isLivestream) {
+            bool dialogDismissed = false;
+            bool canceled = false;
+            unawaited(
+              LoadingDialog.show(
+                context,
+                message: AppLocalizations.of(context)!.refreshingLiveStream,
+                onCancel: () {
+                  canceled = true;
+                  dialogDismissed = true;
+                },
+              ),
+            );
+            final refreshedItem = await _resolveFreshLiveItem(ref, item);
+            if (!context.mounted || canceled) return;
+
+            if (!dialogDismissed) {
+              Navigator.of(context, rootNavigator: true).pop();
+              dialogDismissed = true;
+            }
+
+            final liveItem = refreshedItem ?? item;
+            if (!context.mounted || canceled) return;
+
+            unawaited(
+              PlayerRoute(
+                $extra: PlayerRouteExtra(item: liveItem, videoUrl: liveItem.url),
+              ).push<void>(context),
+            );
+            unawaited(
+              ref.read(watchHistoryProvider.notifier).removeFromHistory(item.url),
+            );
+            return;
           }
 
-          final liveItem = refreshedItem ?? item;
-          if (!context.mounted || canceled) return;
-
           unawaited(
-            PlayerRoute(
-              $extra: PlayerRouteExtra(item: liveItem, videoUrl: liveItem.url),
+            DetailsRoute(
+              $extra: DetailsRouteExtra(item: item, autoPlay: true),
             ).push<void>(context),
           );
-          unawaited(
-            ref.read(watchHistoryProvider.notifier).removeFromHistory(item.url),
-          );
-          return;
-        }
-
-        unawaited(
-          DetailsRoute(
-            $extra: DetailsRouteExtra(item: item, autoPlay: true),
-          ).push<void>(context),
-        );
-      },
-      onLongPress: () {
-        showModalBottomSheet<void>(
-          context: context,
-          builder: (context) => Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.title, style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: Text(AppLocalizations.of(context)!.viewDetails),
-                  onTap: () {
-                    Navigator.pop(context);
-                    unawaited(
-                      DetailsRoute(
-                        $extra: DetailsRouteExtra(item: item),
-                      ).push<void>(context),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: Icon(
-                    Icons.delete_outline,
-                    color: Theme.of(context).colorScheme.error,
+        },
+        onLongPress: () {
+          showModalBottomSheet<void>(
+            context: context,
+            builder: (context) => Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.title, style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: Text(AppLocalizations.of(context)!.viewDetails),
+                    onTap: () {
+                      Navigator.pop(context);
+                      unawaited(
+                        DetailsRoute(
+                          $extra: DetailsRouteExtra(item: item),
+                        ).push<void>(context),
+                      );
+                    },
                   ),
-                  title: Text(
-                    AppLocalizations.of(context)!.removeFromHistory,
-                    style: TextStyle(
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline,
                       color: Theme.of(context).colorScheme.error,
                     ),
+                    title: Text(
+                      AppLocalizations.of(context)!.removeFromHistory,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    onTap: () {
+                      ref
+                          .read(watchHistoryProvider.notifier)
+                          .removeFromHistory(item.url);
+                      Navigator.pop(context);
+                      ref
+                          .read(notificationServiceProvider)
+                          .showSuccess(
+                            AppLocalizations.of(
+                              context,
+                            )!.removedFromHistory(item.title),
+                          );
+                    },
                   ),
-                  onTap: () {
-                    ref
-                        .read(watchHistoryProvider.notifier)
-                        .removeFromHistory(item.url);
-                    Navigator.pop(context);
-                    ref
-                        .read(notificationServiceProvider)
-                        .showSuccess(
-                          AppLocalizations.of(
-                            context,
-                          )!.removedFromHistory(item.title),
-                        );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.close),
-                  title: Text(AppLocalizations.of(context)!.cancel),
-                  onTap: () => Navigator.pop(context),
-                ),
-              ],
+                  ListTile(
+                    leading: const Icon(Icons.close),
+                    title: Text(AppLocalizations.of(context)!.cancel),
+                    onTap: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
+          );
+        },
         child: SizedBox(
           width: widget.width,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(LayoutConstants.radiusLg),
             child: Stack(
               children: [
                 // Banner background
@@ -251,257 +263,146 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                   ),
                 ),
 
-                // Gradient scrim
+                // Dark overlay (full card) — 40% at rest, 60% on hover
                 Positioned.fill(
                   child: IgnorePointer(
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: scrimColors,
-                          stops: const [0.0, 0.3, 0.65, 1.0],
-                        ),
+                      color: Colors.black.withValues(
+                        alpha: _isHovered ? 0.60 : 0.40,
                       ),
                     ),
                   ),
                 ),
 
-                // Play button overlay (centre)
-                if (!isLivestream)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: AnimatedOpacity(
-                        opacity: _isHovered ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: AnimatedScale(
-                          scale: _isHovered ? 1.0 : 0.85,
-                          duration: const Duration(milliseconds: 200),
-                          child: Center(
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.75),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Bottom info + progress section
+                // Bottom scrim gradient (from-black/80 to transparent)
                 Positioned(
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Title
-                            Text(
-                              item.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: widget.isLarge ? 14 : 13,
-                                fontWeight: FontWeight.bold,
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black.withValues(
-                                      alpha: _isHovered ? 0.6 : 0.4,
-                                    ),
-                                    blurRadius: _isHovered ? 6 : 4,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            // Badges
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: [
-                                if (item.provider != null &&
-                                    item.provider!.isNotEmpty)
-                                  _buildBadge(
-                                    providerName!,
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer,
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.onPrimaryContainer,
-                                  ),
-                                if (!isLivestream)
-                                  _buildBadge(
-                                    item.contentType.name.toUpperCase(),
-                                    Colors.white.withValues(alpha: 0.1),
-                                    Colors.white60,
-                                  ),
-                              ],
-                            ),
-                            // Series episode info
-                            if (isSeries &&
-                                widget.historyItem.season != null &&
-                                widget.historyItem.episode != null &&
-                                (widget.historyItem.season! > 0 ||
-                                    widget.historyItem.episode! > 0)) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                "S${widget.historyItem.season} E${widget.historyItem.episode}${widget.historyItem.episodeTitle != null && widget.historyItem.episodeTitle!.isNotEmpty && !widget.historyItem.episodeTitle!.startsWith("Episode") ? " - ${widget.historyItem.episodeTitle}" : ""}",
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            // Livestream indicator
-                            if (isLivestream) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    AppLocalizations.of(context)!.live,
-                                    style: const TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                const Spacer(),
-                                AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 200),
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(
-                                      alpha: _isHovered ? 0.7 : 0.5,
-                                    ),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  child: Text('$percentage%'),
-                                ),
-                              ],
-                            ),
-                          ],
+                  height: 64,
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Colors.black87, Colors.transparent],
                         ),
                       ),
-                      // Progress bar
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeInOut,
-                        height: _isHovered ? 4 : 3,
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          backgroundColor: Colors.white.withValues(alpha: 0.12),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
 
-                // Close button
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: Material(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      focusNode: FocusNode(
-                        canRequestFocus: false,
-                        skipTraversal: true,
+                // Duration badge (bottom-right)
+                if (!isLivestream)
+                  Positioned(
+                    bottom: 10,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () {
-                        ref
-                            .read(watchHistoryProvider.notifier)
-                            .removeFromHistory(item.url);
-                        ref
-                            .read(notificationServiceProvider)
-                            .showSuccess(
-                              AppLocalizations.of(
-                                context,
-                              )!.removedFromHistory(item.title),
-                            );
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.close,
-                          size: 16,
-                          color: Colors.white70,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.70),
+                        borderRadius: BorderRadius.circular(
+                          LayoutConstants.radiusMd,
                         ),
                       ),
+                      child: Text(
+                        '${_formatDuration(widget.historyItem.position)} / ${_formatDuration(widget.historyItem.duration)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Progress bar (bottom edge)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: SizedBox(
+                    height: 4,
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: Colors.transparent,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Bottom info column
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (hasEpisodes || isLivestream) ...[
+                          Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                        ],
+                        if (isLivestream)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.20),
+                              borderRadius: BorderRadius.circular(
+                                LayoutConstants.radiusSm,
+                              ),
+                            ),
+                            child: const Text(
+                              'LIVE',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          )
+                        else
+                          Text(
+                            episodeLabel ?? item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBadge(String label, Color bg, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 9,
-          color: textColor,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
         ),
       ),
     );

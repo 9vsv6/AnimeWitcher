@@ -336,6 +336,7 @@ class StorageService {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodePosterUrl,
   }) async {
     final entry = {
       'title': item.title,
@@ -354,6 +355,7 @@ class StorageService {
       'season': season,
       'episode': episode,
       'episodeTitle': episodeTitle,
+      'episodePosterUrl': episodePosterUrl,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
 

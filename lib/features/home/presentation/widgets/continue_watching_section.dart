@@ -82,47 +82,62 @@ class _ContinueWatchingSectionState
                   ],
                 ),
               ),
-              TextButton.icon(
-                onPressed: () {
-                  final l10n = AppLocalizations.of(context)!;
-                  showDialog<void>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text(l10n.clearAllHistory),
-                      content: Text(l10n.confirmClearHistory),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(l10n.cancel),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            ref
-                                .read(watchHistoryProvider.notifier)
-                                .clearAllHistory();
-                            Navigator.pop(context);
-                            ref
-                                .read(notificationServiceProvider)
-                                .showSuccess(l10n.watchHistoryCleared);
-                          },
-                          child: Text(
-                            l10n.clearAll,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(LayoutConstants.radiusMd),
+                  hoverColor: Colors.red.withValues(alpha: 0.15),
+                  onTap: () {
+                    final l10n = AppLocalizations.of(context)!;
+                    showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(l10n.clearAllHistory),
+                        content: Text(l10n.confirmClearHistory),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(l10n.cancel),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              ref
+                                  .read(watchHistoryProvider.notifier)
+                                  .clearAllHistory();
+                              Navigator.pop(context);
+                              ref
+                                  .read(notificationServiceProvider)
+                                  .showSuccess(l10n.watchHistoryCleared);
+                            },
+                            child: Text(
+                              l10n.clearAll,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                             ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Text(
+                          AppLocalizations.of(context)!.clearAll,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
-                  );
-                },
-                icon: const Icon(Icons.delete_sweep, size: 18),
-                label: Text(AppLocalizations.of(context)!.clearAll),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
                 ),
               ),
             ],
@@ -135,7 +150,7 @@ class _ContinueWatchingSectionState
             showButtons: isLarge, // Show nav buttons on desktop and TV
             child: Builder(
               builder: (context) {
-                final double spacing = isLarge ? 24.0 : 12.0;
+                const double spacing = 16.0;
                 return ListView.builder(
                   controller: _scrollController,
                   padding: EdgeInsets.symmetric(

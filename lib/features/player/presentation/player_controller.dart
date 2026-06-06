@@ -3434,6 +3434,7 @@ class PlayerController extends Notifier<PlayerState> {
                 season: nextEpisode.season,
                 episode: nextEpisode.episode,
                 episodeTitle: nextEpisode.name,
+                episodePosterUrl: nextEpisode.posterUrl,
               );
               return;
             } else {
@@ -3467,6 +3468,7 @@ class PlayerController extends Notifier<PlayerState> {
                 season: currentEpisode?.season,
                 episode: currentEpisode?.episode,
                 episodeTitle: currentEpisode?.name,
+                episodePosterUrl: currentEpisode?.posterUrl,
               );
         }
       }
