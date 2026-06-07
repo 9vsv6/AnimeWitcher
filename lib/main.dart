@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // LogicalKeyboardKey, KeyDownEvent
 import 'package:flutter/foundation.dart'; // For kReleaseMode
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
@@ -282,6 +283,26 @@ class _MyAppState extends ConsumerState<MyApp> {
     return 'Updated $count extensions: $namesPart';
   }
 
+  Future<void> _toggleFullscreen() async {
+    if (!(Platform.isMacOS || Platform.isWindows || Platform.isLinux)) return;
+    try {
+      final isFull = await windowManager.isFullScreen();
+      if (!isFull) {
+        if (Platform.isWindows || Platform.isLinux) {
+          await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+        }
+        await windowManager.setFullScreen(true);
+      } else {
+        await windowManager.setFullScreen(false);
+        if (Platform.isWindows || Platform.isLinux) {
+          await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('_toggleFullscreen: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(appThemeModeProvider);
@@ -368,7 +389,18 @@ class _MyAppState extends ConsumerState<MyApp> {
           },
         );
 
-        return DpadNavigator(child: materialApp);
+        return Focus(
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent &&
+                event.logicalKey == LogicalKeyboardKey.f11) {
+              _toggleFullscreen();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: DpadNavigator(child: materialApp),
+        );
       },
     );
   }

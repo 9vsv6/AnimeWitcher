@@ -125,16 +125,13 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     final imageUrl = hasEpisodes
         ? (widget.historyItem.episodePosterUrl ?? item.backdropImageUrl)
         : item.backdropImageUrl;
-    final bannerUrl = AppImageFallbacks.poster(
-      imageUrl,
-      label: item.title,
-    );
+    final bannerUrl = AppImageFallbacks.poster(imageUrl, label: item.title);
 
-    final episodeLabel = hasEpisodes &&
+    final episodeLabel =
+        hasEpisodes &&
             widget.historyItem.season != null &&
             widget.historyItem.episode != null &&
-            (widget.historyItem.season! > 0 ||
-                widget.historyItem.episode! > 0)
+            (widget.historyItem.season! > 0 || widget.historyItem.episode! > 0)
         ? "S${widget.historyItem.season} E${widget.historyItem.episode}${widget.historyItem.episodeTitle != null && widget.historyItem.episodeTitle!.isNotEmpty && !widget.historyItem.episodeTitle!.startsWith("Episode") ? " - ${widget.historyItem.episodeTitle}" : ""}"
         : null;
 
@@ -169,11 +166,16 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
 
             unawaited(
               PlayerRoute(
-                $extra: PlayerRouteExtra(item: liveItem, videoUrl: liveItem.url),
+                $extra: PlayerRouteExtra(
+                  item: liveItem,
+                  videoUrl: liveItem.url,
+                ),
               ).push<void>(context),
             );
             unawaited(
-              ref.read(watchHistoryProvider.notifier).removeFromHistory(item.url),
+              ref
+                  .read(watchHistoryProvider.notifier)
+                  .removeFromHistory(item.url),
             );
             return;
           }
@@ -193,7 +195,10 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.title, style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    item.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 8),
                   ListTile(
                     leading: const Icon(Icons.info_outline),

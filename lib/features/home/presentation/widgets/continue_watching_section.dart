@@ -13,11 +13,13 @@ import 'package:skystream/core/services/notification_service.dart';
 class ContinueWatchingSection extends ConsumerStatefulWidget {
   final String title;
   final List<HistoryItem> items;
+  final double? topPadding;
 
   const ContinueWatchingSection({
     super.key,
     required this.title,
     required this.items,
+    this.topPadding,
   });
 
   @override
@@ -50,7 +52,7 @@ class _ContinueWatchingSectionState
         Padding(
           padding: EdgeInsets.fromLTRB(
             isLarge ? LayoutConstants.dashboardContentPadding : 16,
-            24,
+            widget.topPadding ?? 24,
             isLarge ? LayoutConstants.dashboardContentPadding : 16,
             12,
           ),
@@ -121,11 +123,18 @@ class _ContinueWatchingSectionState
                     );
                   },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                        const Icon(
+                          Icons.delete_outline,
+                          size: 16,
+                          color: Colors.red,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           AppLocalizations.of(context)!.clearAll,

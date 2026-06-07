@@ -1,5 +1,5 @@
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/router/app_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -14,15 +14,26 @@ import '../../../../core/providers/device_info_provider.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 
+/// Lightweight controller for the hero carousel.
+/// API-compatible with the old CarouselSliderController (nextPage/previousPage).
+class HeroCarouselController {
+  VoidCallback? onNextPage;
+  VoidCallback? onPreviousPage;
+
+  void nextPage({Duration? duration, Curve? curve}) => onNextPage?.call();
+  void previousPage({Duration? duration, Curve? curve}) =>
+      onPreviousPage?.call();
+}
+
 class ExploreCarousel extends ConsumerStatefulWidget {
   final List<MultimediaItem> movies;
   final ScrollController? scrollController;
   final void Function(MultimediaItem)? onTap;
   final VoidCallback? onNavigateUp;
 
-  /// Called once after initState with the internal [CarouselSliderController]
+  /// Called once after initState with the internal [HeroCarouselController]
   /// so the parent can drive prev/next from an external UI (e.g. header arrows).
-  final void Function(CarouselSliderController controller)? onControllerReady;
+  final void Function(HeroCarouselController controller)? onControllerReady;
 
   const ExploreCarousel({
     super.key,
@@ -43,33 +54,116 @@ class _CarouselUpIntent extends Intent {
   const _CarouselUpIntent();
 }
 
-class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
+class _CarouselPrevIntent extends Intent {
+  const _CarouselPrevIntent();
+}
+
+class _CarouselNextIntent extends Intent {
+  const _CarouselNextIntent();
+}
+
+class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
+    with TickerProviderStateMixin {
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
-  final CarouselSliderController _carouselController =
-      CarouselSliderController();
+  final HeroCarouselController _heroCarouselController =
+      HeroCarouselController();
   final ValueNotifier<double> _scrollOffset = ValueNotifier(0.0);
   // Single anchor focus node so the carousel acts as ONE focus target on TV/
   // keyboard. Otherwise each slide is independently focusable and pages cause
   // focus to drop into the next row when slides unmount.
   final FocusNode _carouselFocusNode = FocusNode(debugLabel: 'carousel_anchor');
-  bool _isCarouselHovered = false;
   bool _isFocusHighlighted = false;
   // True while the carousel occupies any visible viewport. Drives autoPlay
-  // so the 15s slide loop pauses when the user scrolls past it — eliminates
+  // so the 5s slide loop pauses when the user scrolls past it — eliminates
   // off-screen frame work and the resulting battery / raster drain.
   bool _isVisibleOnScreen = true;
+
+  // Crossfade + scale transition
+  late final AnimationController _transitionController;
+  late final Animation<double> _transitionAnimation;
+  int _currentSlide = 0;
+  int? _previousSlide;
+  bool _isTransitioning = false;
+
+  // Progress bar fill — also serves as the auto-advance timer (5s).
+  late final AnimationController _fillController;
 
   @override
   void initState() {
     super.initState();
+
+    _transitionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _transitionAnimation = CurvedAnimation(
+      parent: _transitionController,
+      curve: Curves.fastOutSlowIn,
+    );
+    _transitionController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() {
+          _isTransitioning = false;
+          _previousSlide = null;
+        });
+      }
+    });
+
+    _fillController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    );
+    _fillController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        _goToNextSlide();
+      }
+    });
+
+    _heroCarouselController.onNextPage = _goToNextSlide;
+    _heroCarouselController.onPreviousPage = _goToPreviousSlide;
+
     widget.scrollController?.addListener(_onParentScroll);
     // Expose the internal controller to the parent so header arrows can
     // drive carousel navigation. Deferred to post-frame to avoid calling
     // setState on an ancestor while the widget tree is still building.
     if (widget.onControllerReady != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        widget.onControllerReady!(_carouselController);
+        widget.onControllerReady!(_heroCarouselController);
       });
+    }
+
+    _fillController.forward();
+  }
+
+  void _goToNextSlide() {
+    if (widget.movies.length <= 1) return;
+    final next = (_currentSlide + 1) % widget.movies.length;
+    _startTransitionTo(next);
+  }
+
+  void _goToPreviousSlide() {
+    if (widget.movies.length <= 1) return;
+    final prev =
+        (_currentSlide - 1 + widget.movies.length) % widget.movies.length;
+    _startTransitionTo(prev);
+  }
+
+  void _startTransitionTo(int nextIndex) {
+    if (_isTransitioning || nextIndex == _currentSlide || !mounted) return;
+    setState(() {
+      _previousSlide = _currentSlide;
+      _currentSlide = nextIndex;
+      _isTransitioning = true;
+    });
+    _currentIndexNotifier.value = nextIndex;
+    _transitionController.forward(from: 0.0);
+    _restartFill();
+  }
+
+  void _restartFill() {
+    _fillController.reset();
+    if (_isVisibleOnScreen) {
+      _fillController.forward();
     }
   }
 
@@ -89,7 +183,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
   }
 
   void _activateCurrent() {
-    final movie = widget.movies[_currentIndexNotifier.value];
+    final movie = widget.movies[_currentSlide];
     if (widget.onTap != null) {
       widget.onTap!(movie);
     } else {
@@ -99,6 +193,8 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
 
   @override
   void dispose() {
+    _transitionController.dispose();
+    _fillController.dispose();
     widget.scrollController?.removeListener(_onParentScroll);
     _scrollOffset.dispose();
     _currentIndexNotifier.dispose();
@@ -120,7 +216,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
 
     return VisibilityDetector(
       key: const Key('explore-carousel-visibility'),
-      // Visibility is still tracked — but only to gate the 15s autoPlay
+      // Visibility is still tracked — but only to gate the 5s auto-advance
       // timer (so we don't fire page transitions for an audience that
       // isn't watching). Parallax offset updates ignore this flag; see
       // [_onParentScroll] for the rationale.
@@ -128,6 +224,11 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
         final visible = info.visibleFraction > 0.1;
         if (visible != _isVisibleOnScreen && mounted) {
           setState(() => _isVisibleOnScreen = visible);
+          if (visible) {
+            _fillController.forward();
+          } else {
+            _fillController.stop();
+          }
         }
       },
       child: FocusableActionDetector(
@@ -151,6 +252,10 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
           SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
           SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
           SingleActivator(LogicalKeyboardKey.arrowUp): _CarouselUpIntent(),
+          SingleActivator(LogicalKeyboardKey.arrowLeft):
+              _CarouselPrevIntent(),
+          SingleActivator(LogicalKeyboardKey.arrowRight):
+              _CarouselNextIntent(),
         },
         actions: <Type, Action<Intent>>{
           ActivateIntent: CallbackAction<ActivateIntent>(
@@ -165,135 +270,54 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
               return null;
             },
           ),
+          _CarouselPrevIntent: CallbackAction<_CarouselPrevIntent>(
+            onInvoke: (_) {
+              _goToPreviousSlide();
+              return null;
+            },
+          ),
+          _CarouselNextIntent: CallbackAction<_CarouselNextIntent>(
+            onInvoke: (_) {
+              _goToNextSlide();
+              return null;
+            },
+          ),
         },
         onShowFocusHighlight: (show) =>
             setState(() => _isFocusHighlighted = show),
         child: isDesktop
-            ? MouseRegion(
-                onEnter: (_) => setState(() => _isCarouselHovered = true),
-                onExit: (_) => setState(() => _isCarouselHovered = false),
+            ? RepaintBoundary(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: LayoutConstants.dashboardContentPadding,
-                    vertical: LayoutConstants.spacingSm,
+                  padding: const EdgeInsets.fromLTRB(
+                    LayoutConstants.dashboardContentPadding,
+                    LayoutConstants.spacingSm,
+                    LayoutConstants.dashboardContentPadding,
+                    0,
                   ),
-                  child: AnimatedScale(
-                    scale: _isCarouselHovered ? 1.01 : 1.0,
+                  child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: _isFocusHighlighted
-                            ? Border.all(
-                                color: Theme.of(context).colorScheme.primary,
-                                width: 2.5,
-                              )
-                            : null,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      border: _isFocusHighlighted
+                          ? Border.all(
+                              color: Theme.of(context).colorScheme.primary,
+                              width: 2.5,
+                            )
+                          : null,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: SizedBox(
+                        height: heroHeight,
+                        child: _buildCarouselStack(
+                          heroHeight,
+                          isDesktop: isDesktop || isTv,
+                        ),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: SizedBox(
-                          height: heroHeight,
-                          child: Stack(
-                            children: [
-                              CarouselSlider.builder(
-                                carouselController: _carouselController,
-                                itemCount: widget.movies.length,
-                                options: CarouselOptions(
-                                  height: heroHeight,
-                                  viewportFraction: 1.0,
-                                  autoPlay: _isVisibleOnScreen,
-                                  autoPlayInterval: const Duration(seconds: 15),
-                                  autoPlayAnimationDuration: const Duration(
-                                    milliseconds: 1000,
-                                  ),
-                                  autoPlayCurve: Curves.fastOutSlowIn,
-                                  enableInfiniteScroll: !isTv,
-                                  scrollPhysics: const BouncingScrollPhysics(),
-                                  onPageChanged: (index, reason) {
-                                    _currentIndexNotifier.value = index;
-                                  },
-                                ),
-                                itemBuilder: (context, index, realIndex) {
-                                  final movie = widget.movies[index];
-                                  // Slides are visual only — the carousel anchor handles focus.
-                                  return ExcludeFocus(
-                                    child: _buildCarouselItem(
-                                      context,
-                                      movie,
-                                      heroHeight,
-                                      index,
-                                      isDesktop: isDesktop || isTv,
-                                    ),
-                                  );
-                                },
-                              ),
-
-                              // Animated Pagination Dots — isolated in a
-                              // RepaintBoundary so the 300ms dot animations don't
-                              // force re-rastering the backdrop image + gradient.
-                              Positioned(
-                                bottom: 20,
-                                left: 0,
-                                right: 0,
-                                child: RepaintBoundary(
-                                  child: ValueListenableBuilder<int>(
-                                    valueListenable: _currentIndexNotifier,
-                                    builder: (context, currentIndex, _) {
-                                      return Wrap(
-                                        alignment: WrapAlignment.center,
-                                        children: widget.movies
-                                            .asMap()
-                                            .entries
-                                            .map((entry) {
-                                              return AnimatedContainer(
-                                                duration: const Duration(
-                                                  milliseconds: 300,
-                                                ),
-                                                width: currentIndex == entry.key
-                                                    ? 24.0
-                                                    : 8.0,
-                                                height: 8.0,
-                                                margin:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 4.0,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurface
-                                                      .withValues(
-                                                        alpha:
-                                                            currentIndex ==
-                                                                entry.key
-                                                            ? 0.9
-                                                            : 0.3,
-                                                      ),
-                                                ),
-                                              );
-                                            })
-                                            .toList(),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-
-                              // Desktop left/right nav buttons removed.
-                              // Navigation is driven by the header bar arrows.
-                            ],
-                          ),
-                        ), // SizedBox
-                      ), // ClipRRect
-                    ), // AnimatedContainer
-                  ), // AnimatedScale
-                ), // Padding
-                // MouseRegion
-              ) // Padding (mobile fallback) — see below
+                    ),
+                  ),
+                ),
+              )
             : Padding(
                 padding: EdgeInsets.zero,
                 child: AnimatedContainer(
@@ -308,89 +332,123 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                   ),
                   child: SizedBox(
                     height: heroHeight,
-                    child: Stack(
-                      children: [
-                        CarouselSlider.builder(
-                          carouselController: _carouselController,
-                          itemCount: widget.movies.length,
-                          options: CarouselOptions(
-                            height: heroHeight,
-                            viewportFraction: 1.0,
-                            autoPlay: _isVisibleOnScreen,
-                            autoPlayInterval: const Duration(seconds: 15),
-                            autoPlayAnimationDuration: const Duration(
-                              milliseconds: 1000,
-                            ),
-                            autoPlayCurve: Curves.fastOutSlowIn,
-                            enableInfiniteScroll: !isTv,
-                            scrollPhysics: const BouncingScrollPhysics(),
-                            onPageChanged: (index, reason) {
-                              _currentIndexNotifier.value = index;
-                            },
-                          ),
-                          itemBuilder: (context, index, realIndex) {
-                            final movie = widget.movies[index];
-                            return ExcludeFocus(
-                              child: _buildCarouselItem(
-                                context,
-                                movie,
-                                heroHeight,
-                                index,
-                                isDesktop: isDesktop || isTv,
-                              ),
-                            );
-                          },
-                        ),
-                        // Animated Pagination Dots — isolated in RepaintBoundary.
-                        Positioned(
-                          bottom: 20,
-                          left: 0,
-                          right: 0,
-                          child: RepaintBoundary(
-                            child: ValueListenableBuilder<int>(
-                              valueListenable: _currentIndexNotifier,
-                              builder: (context, currentIndex, _) {
-                                return Wrap(
-                                  alignment: WrapAlignment.center,
-                                  children: widget.movies.asMap().entries.map((
-                                    entry,
-                                  ) {
-                                    return AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 300,
-                                      ),
-                                      width: currentIndex == entry.key
-                                          ? 24.0
-                                          : 8.0,
-                                      height: 8.0,
-                                      margin: const EdgeInsets.symmetric(
-                                        horizontal: 4.0,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(4),
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(
-                                              alpha: currentIndex == entry.key
-                                                  ? 0.9
-                                                  : 0.3,
-                                            ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: _buildCarouselStack(
+                      heroHeight,
+                      isDesktop: isDesktop || isTv,
                     ),
                   ),
-                ), // AnimatedContainer
+                ),
               ),
-      ), // FocusableActionDetector
-    ); // VisibilityDetector
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Custom carousel with crossfade + scale transition
+  // Entry: scale 0.8→1, opacity 0→1  |  Exit: scale 1→1.2, opacity 1→0  |  400ms
+  // ---------------------------------------------------------------------------
+
+  Widget _buildCarouselStack(double height, {required bool isDesktop}) {
+    return Stack(
+      children: [
+        // Previous slide (exiting) — only during transition
+        if (_isTransitioning && _previousSlide != null)
+          AnimatedBuilder(
+            animation: _transitionAnimation,
+            builder: (context, _) {
+              final t = _transitionAnimation.value;
+              return Opacity(
+                opacity: 1.0 - t,
+                child: Transform.scale(
+                  scale: 1.0 + 0.2 * t,
+                  child: _buildSlideForIndex(
+                    height,
+                    _previousSlide!,
+                    isDesktop: isDesktop,
+                  ),
+                ),
+              );
+            },
+          ),
+
+        // Current slide (entering or static)
+        _isTransitioning
+            ? AnimatedBuilder(
+                animation: _transitionAnimation,
+                builder: (context, _) {
+                  final t = _transitionAnimation.value;
+                  return Opacity(
+                    opacity: t,
+                    child: Transform.scale(
+                      scale: 0.8 + 0.2 * t,
+                      child: _buildSlideForIndex(
+                        height,
+                        _currentSlide,
+                        isDesktop: isDesktop,
+                      ),
+                    ),
+                  );
+                },
+              )
+            : _buildSlideForIndex(
+                height,
+                _currentSlide,
+                isDesktop: isDesktop,
+              ),
+
+        // Progress bar indicators
+        if (widget.movies.length > 1)
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: RepaintBoundary(
+              child: _buildProgressIndicators(),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildProgressIndicators() {
+    return ValueListenableBuilder<int>(
+      valueListenable: _currentIndexNotifier,
+      builder: (context, currentIndex, _) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (final entry in widget.movies.asMap().entries)
+              _ProgressDot(
+                key: ValueKey('hcd_${entry.key}'),
+                isActive: currentIndex == entry.key,
+                fillController: _fillController,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSlideForIndex(
+    double height,
+    int index, {
+    required bool isDesktop,
+  }) {
+    final movie = widget.movies[index];
+    if (widget.scrollController == null) {
+      return _buildStaticItem(
+        context,
+        movie,
+        height,
+        isDesktop: isDesktop,
+      );
+    }
+    return _buildCarouselItem(
+      context,
+      movie,
+      height,
+      isDesktop: isDesktop,
+    );
   }
 
   void _navigateToDetails(BuildContext context, MultimediaItem movie) {
@@ -407,8 +465,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
   Widget _buildCarouselItem(
     BuildContext context,
     MultimediaItem movie,
-    double height,
-    int index, {
+    double height, {
     bool isDesktop = false,
   }) {
     final imageUrl = movie.backdropImageUrl;
@@ -437,28 +494,6 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
       type = mType.isNotEmpty
           ? mType[0].toUpperCase() + mType.substring(1)
           : null;
-    }
-
-    final metadata = [
-      if (provider != null && provider.isNotEmpty) provider,
-      type,
-      if (genres.isNotEmpty) genres,
-      if (year.isNotEmpty) year,
-    ].whereType<String>().join(' • ');
-
-    // Use a locally scoped AnimatedBuilder if controller exists
-    if (widget.scrollController == null) {
-      return _buildStaticItem(
-        context,
-        imageUrl,
-        logoUrl,
-        title,
-        metadata,
-        height,
-        movie,
-        index,
-        isDesktop: isDesktop,
-      );
     }
 
     return CardsWrapper(
@@ -516,30 +551,35 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                     ),
                   ),
 
-                  // 2. Gradients for readability
+                  // 2. Gradients for readability — track parallax so they stay
+                  // locked to the background image instead of jittering against
+                  // the scaffold-colour feather at the bottom edge.
                   Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: isDesktop
-                              ? [
-                                  Colors.black.withValues(alpha: 0.2),
-                                  Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.6),
-                                  Colors.black.withValues(alpha: 0.85),
-                                ]
-                              : [
-                                  Colors.black.withValues(alpha: 0.3),
-                                  Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.1),
-                                  scaffoldColor.withValues(alpha: 0.8),
-                                  scaffoldColor,
-                                ],
-                          stops: isDesktop
-                              ? const [0.0, 0.35, 0.75, 1.0]
-                              : const [0.0, 0.4, 0.6, 0.85, 1.0],
+                    child: Transform.translate(
+                      offset: Offset(0, parallaxOffset),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: isDesktop
+                                ? [
+                                    Colors.black.withValues(alpha: 0.2),
+                                    Colors.transparent,
+                                    scaffoldColor.withValues(alpha: 0.72),
+                                    scaffoldColor,
+                                  ]
+                                : [
+                                    Colors.black.withValues(alpha: 0.3),
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.1),
+                                    scaffoldColor.withValues(alpha: 0.8),
+                                    scaffoldColor,
+                                  ],
+                            stops: isDesktop
+                                ? const [0.0, 0.35, 0.75, 1.0]
+                                : const [0.0, 0.4, 0.6, 0.85, 1.0],
+                          ),
                         ),
                       ),
                     ),
@@ -549,7 +589,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                   Positioned(
                     left: 24,
                     right: 24,
-                    bottom: 50,
+                    bottom: 48,
                     child: Transform.translate(
                       offset: Offset(0, contentOffset),
                       // Opacity widget triggers a saveLayer every frame even at
@@ -670,18 +710,42 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
 
   Widget _buildStaticItem(
     BuildContext context,
-    String imageUrl,
-    String? logoUrl,
-    String title,
-    String metadata,
-    double height,
     MultimediaItem movie,
-    int index, {
+    double height, {
     bool isDesktop = false,
   }) {
+    final imageUrl = movie.backdropImageUrl;
+    final logoUrl = movie.logoUrl;
+    final title = movie.title;
+
+    final year = movie.year?.toString() ?? '';
+    final genres = movie.tags?.join(' • ') ?? '';
+    final provider = movie.provider;
+
+    String? type;
+    final mType = movie.mediaType.toLowerCase();
+    if (mType == 'movie') {
+      type = "Movie";
+    } else if (mType == 'series' || mType == 'tv') {
+      type = "TV Show";
+    } else if (mType == 'anime') {
+      type = "Anime";
+    } else if (mType == 'livestream') {
+      type = "Live Stream";
+    } else {
+      type = mType.isNotEmpty
+          ? mType[0].toUpperCase() + mType.substring(1)
+          : null;
+    }
+
+    final metadata = [
+      if (provider != null && provider.isNotEmpty) provider,
+      type,
+      if (genres.isNotEmpty) genres,
+      if (year.isNotEmpty) year,
+    ].whereType<String>().join(' • ');
+
     return CardsWrapper(
-      // Slides are wrapped in ExcludeFocus above; the carousel anchor owns
-      // focus, so no autoFocus here.
       scaleFactor: 1.0,
       onTap: () {
         if (widget.onTap != null) {
@@ -724,7 +788,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
           Positioned(
             left: 24,
             right: 24,
-            bottom: 40,
+            bottom: 48,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -820,6 +884,112 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
           letterSpacing: 0.5,
         ),
       ),
+    );
+  }
+}
+
+/// A single progress dot whose width animates with spring physics.
+///
+/// When [isActive] toggles the dot springs between inactive (11 px) and active
+/// (35 px) width. The active dot also renders a fill bar driven by
+/// [fillController] that grows from 0 % → 100 % over the auto-advance interval.
+///
+/// Each dot manages its own [AnimationController] for the spring width
+/// transition — only two dots tick per toggle. The fill bar is a separate
+/// [AnimatedBuilder] that exists only on the active dot, so per-frame fill
+/// rebuilds are limited to exactly one dot.
+class _ProgressDot extends StatefulWidget {
+  final bool isActive;
+  final AnimationController fillController;
+
+  const _ProgressDot({
+    super.key,
+    required this.isActive,
+    required this.fillController,
+  });
+
+  @override
+  State<_ProgressDot> createState() => _ProgressDotState();
+}
+
+class _ProgressDotState extends State<_ProgressDot>
+    with SingleTickerProviderStateMixin {
+  static const double _activeWidth = 35.0;
+  static const double _inactiveWidth = 11.0;
+  static const double _height = 4.0;
+
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this);
+    _controller.value = widget.isActive ? 1.0 : 0.0;
+  }
+
+  @override
+  void didUpdateWidget(_ProgressDot old) {
+    super.didUpdateWidget(old);
+    if (widget.isActive != old.isActive) {
+      _animateToTarget();
+    }
+  }
+
+  void _animateToTarget() {
+    _controller.animateWith(
+      SpringSimulation(
+        const SpringDescription(mass: 1, stiffness: 300, damping: 30),
+        _controller.value,
+        widget.isActive ? 1.0 : 0.0,
+        0,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        final width = _inactiveWidth + (_activeWidth - _inactiveWidth) * t;
+
+        return Container(
+          width: width,
+          height: _height,
+          margin: const EdgeInsets.symmetric(horizontal: 3.0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(2),
+            color: Colors.white.withValues(
+              alpha: widget.isActive ? 0.3 : 0.2,
+            ),
+          ),
+          child: widget.isActive
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: AnimatedBuilder(
+                    animation: widget.fillController,
+                    builder: (context, _) {
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          width: _activeWidth * widget.fillController.value,
+                          height: _height,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      );
+                    },
+                  ),
+                )
+              : null,
+        );
+      },
     );
   }
 }

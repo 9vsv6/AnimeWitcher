@@ -1,4 +1,3 @@
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,16 +39,27 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
+/// Hides the platform scrollbar — replaced by a gradient edge hint.
+class _NoScrollbarBehavior extends ScrollBehavior {
+  const _NoScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
+  }
+}
+
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
   final ValueNotifier<bool> _isFabExtended = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
   final FocusNode _firstActionFocusNode = FocusNode();
 
   /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
   /// Used by DashboardHeaderBar arrows.
-  CarouselSliderController? _carouselController;
+  HeroCarouselController? _carouselController;
 
   @override
   bool get wantKeepAlive => true;
@@ -68,6 +78,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
+
+    // Track gradient edge hint visibility — fades away near the bottom.
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    final showFade = maxScroll > 0 && currentScroll < maxScroll - 10;
+    if (showFade != _showBottomFade.value) {
+      _showBottomFade.value = showFade;
+    }
 
     // On widescreen there is no mobile AppBar (opacity notifier) and no FAB
     // (extended notifier). Skip all work to avoid per-frame overhead that
@@ -96,6 +114,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _scrollController.dispose();
     _appBarOpacityNotifier.dispose();
     _isFabExtended.dispose();
+    _showBottomFade.dispose();
     _firstActionFocusNode.dispose();
     super.dispose();
   }
@@ -340,14 +359,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     return switch (state) {
-      HomeLoading() => CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          SliverToBoxAdapter(child: _buildCarouselShimmer(context)),
-          SliverToBoxAdapter(child: _buildListShimmer(context)),
-          SliverToBoxAdapter(child: _buildListShimmer(context)),
-          SliverToBoxAdapter(child: _buildListShimmer(context)),
-        ],
+      HomeLoading() => _withGradientEdgeHint(
+        CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            SliverToBoxAdapter(child: _buildCarouselShimmer(context)),
+            SliverToBoxAdapter(child: _buildListShimmer(context)),
+            SliverToBoxAdapter(child: _buildListShimmer(context)),
+            SliverToBoxAdapter(child: _buildListShimmer(context)),
+          ],
+        ),
       ),
       HomeNoProvider() => _buildNoProviderState(
         context,
@@ -356,11 +377,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       HomeOffline() => _buildErrorState(context, l10n.noInternetError, ref),
       HomeError(:final message) => _buildErrorState(context, message, ref),
-      HomeSuccess(:final data) => RefreshIndicator(
-        onRefresh: () async => ref.read(homeDataProvider.notifier).fetch(),
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
+      HomeSuccess(:final data) => _withGradientEdgeHint(
+        RefreshIndicator(
+          onRefresh: () async => ref.read(homeDataProvider.notifier).fetch(),
+          child: CustomScrollView(
+            controller: _scrollController,
+            slivers: [
             if (data.containsKey('Trending'))
               SliverToBoxAdapter(
                 child: ExploreCarousel(
@@ -405,6 +427,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 child: ContinueWatchingSection(
                   title: l10n.continueWatching,
                   items: history.cast<HistoryItem>(),
+                  topPadding: isWidescreen ? 0 : null,
                 ),
               ),
 
@@ -451,8 +474,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
           ],
         ),
+        ),
       ),
     };
+  }
+
+  Widget _withGradientEdgeHint(Widget scrollView) {
+    return Stack(
+      children: [
+        ScrollConfiguration(
+          behavior: const _NoScrollbarBehavior(),
+          child: scrollView,
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 32,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _showBottomFade,
+            builder: (context, show, _) {
+              if (!show) return const SizedBox.shrink();
+              return IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Theme.of(context).scaffoldBackgroundColor,
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildNoProviderState(

@@ -1,4 +1,3 @@
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,7 +33,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
   final FocusNode _firstActionFocusNode = FocusNode();
 
   /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
-  CarouselSliderController? _carouselController;
+  HeroCarouselController? _carouselController;
 
   @override
   bool get wantKeepAlive => true;

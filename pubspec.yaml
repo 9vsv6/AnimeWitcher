@@ -73,7 +73,6 @@ dependencies:
   version: ^3.0.2
   open_file: ^3.5.11
   flutter_displaymode: ^0.7.0
-  carousel_slider: ^5.1.1
   intl: ^0.20.2
   flutter_svg: ^2.2.3
   dpad: ^2.0.2
