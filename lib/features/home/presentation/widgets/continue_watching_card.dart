@@ -10,6 +10,7 @@ import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import '../../../../core/extensions/extension_manager.dart';
+import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/loading_dialog.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/core/services/notification_service.dart';
@@ -25,6 +26,14 @@ class ContinueWatchingCard extends ConsumerStatefulWidget {
     this.width = 280,
     this.isLarge = false,
   });
+
+  @override
+  ConsumerState<ContinueWatchingCard> createState() =>
+      _ContinueWatchingCardState();
+}
+
+class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
+  bool _isHovered = false;
 
   static String _normalizeMatchKey(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
@@ -53,14 +62,6 @@ class ContinueWatchingCard extends ConsumerStatefulWidget {
     return exactTitleMatches.firstOrNull;
   }
 
-  @override
-  ConsumerState<ContinueWatchingCard> createState() =>
-      _ContinueWatchingCardState();
-}
-
-class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
-  bool _isHovered = false;
-
   Future<MultimediaItem?> _resolveFreshLiveItem(
     WidgetRef ref,
     MultimediaItem item,
@@ -76,7 +77,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
 
     try {
       final results = await provider.search(item.title);
-      final match = ContinueWatchingCard._pickBestLiveMatch(results, item);
+      final match = _pickBestLiveMatch(results, item);
       if (match != null) {
         return match.copyWith(provider: provider.packageName);
       }
@@ -85,7 +86,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     try {
       final homeSections = await provider.getHome();
       final flattened = homeSections.values.expand((items) => items);
-      final match = ContinueWatchingCard._pickBestLiveMatch(flattened, item);
+      final match = _pickBestLiveMatch(flattened, item);
       if (match != null) {
         return match.copyWith(provider: provider.packageName);
       }
@@ -135,118 +136,111 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
         ? "S${widget.historyItem.season} E${widget.historyItem.episode}${widget.historyItem.episodeTitle != null && widget.historyItem.episodeTitle!.isNotEmpty && !widget.historyItem.episodeTitle!.startsWith("Episode") ? " - ${widget.historyItem.episodeTitle}" : ""}"
         : null;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: () async {
-          if (isLivestream) {
-            bool dialogDismissed = false;
-            bool canceled = false;
-            unawaited(
-              LoadingDialog.show(
-                context,
-                message: AppLocalizations.of(context)!.refreshingLiveStream,
-                onCancel: () {
-                  canceled = true;
-                  dialogDismissed = true;
-                },
-              ),
-            );
-            final refreshedItem = await _resolveFreshLiveItem(ref, item);
-            if (!context.mounted || canceled) return;
-
-            if (!dialogDismissed) {
-              Navigator.of(context, rootNavigator: true).pop();
-              dialogDismissed = true;
-            }
-
-            final liveItem = refreshedItem ?? item;
-            if (!context.mounted || canceled) return;
-
-            unawaited(
-              PlayerRoute(
-                $extra: PlayerRouteExtra(
-                  item: liveItem,
-                  videoUrl: liveItem.url,
-                ),
-              ).push<void>(context),
-            );
-            unawaited(
-              ref
-                  .read(watchHistoryProvider.notifier)
-                  .removeFromHistory(item.url),
-            );
-            return;
-          }
-
+    return CardsWrapper(
+      onTap: () async {
+        if (isLivestream) {
+          bool dialogDismissed = false;
+          bool canceled = false;
           unawaited(
-            DetailsRoute(
-              $extra: DetailsRouteExtra(item: item, autoPlay: true),
-            ).push<void>(context),
-          );
-        },
-        onLongPress: () {
-          showModalBottomSheet<void>(
-            context: context,
-            builder: (context) => Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: Text(AppLocalizations.of(context)!.viewDetails),
-                    onTap: () {
-                      Navigator.pop(context);
-                      unawaited(
-                        DetailsRoute(
-                          $extra: DetailsRouteExtra(item: item),
-                        ).push<void>(context),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: Icon(
-                      Icons.delete_outline,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    title: Text(
-                      AppLocalizations.of(context)!.removeFromHistory,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                    onTap: () {
-                      ref
-                          .read(watchHistoryProvider.notifier)
-                          .removeFromHistory(item.url);
-                      Navigator.pop(context);
-                      ref
-                          .read(notificationServiceProvider)
-                          .showSuccess(
-                            AppLocalizations.of(
-                              context,
-                            )!.removedFromHistory(item.title),
-                          );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.close),
-                    title: Text(AppLocalizations.of(context)!.cancel),
-                    onTap: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
+            LoadingDialog.show(
+              context,
+              message: AppLocalizations.of(context)!.refreshingLiveStream,
+              onCancel: () {
+                canceled = true;
+                dialogDismissed = true;
+              },
             ),
           );
-        },
+          final refreshedItem = await _resolveFreshLiveItem(ref, item);
+          if (!context.mounted || canceled) return;
+
+          if (!dialogDismissed) {
+            Navigator.of(context, rootNavigator: true).pop();
+            dialogDismissed = true;
+          }
+
+          final liveItem = refreshedItem ?? item;
+          if (!context.mounted || canceled) return;
+
+          unawaited(
+            PlayerRoute(
+              $extra: PlayerRouteExtra(item: liveItem, videoUrl: liveItem.url),
+            ).push<void>(context),
+          );
+          unawaited(
+            ref.read(watchHistoryProvider.notifier).removeFromHistory(item.url),
+          );
+          return;
+        }
+
+        unawaited(
+          DetailsRoute(
+            $extra: DetailsRouteExtra(item: item, autoPlay: true),
+          ).push<void>(context),
+        );
+      },
+      onLongPress: () {
+        showModalBottomSheet<void>(
+          context: context,
+          builder: (context) => Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.title, style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: Text(AppLocalizations.of(context)!.viewDetails),
+                  onTap: () {
+                    Navigator.pop(context);
+                    unawaited(
+                      DetailsRoute(
+                        $extra: DetailsRouteExtra(item: item),
+                      ).push<void>(context),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  title: Text(
+                    AppLocalizations.of(context)!.removeFromHistory,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  onTap: () {
+                    ref
+                        .read(watchHistoryProvider.notifier)
+                        .removeFromHistory(item.url);
+                    Navigator.pop(context);
+                    ref
+                        .read(notificationServiceProvider)
+                        .showSuccess(
+                          AppLocalizations.of(
+                            context,
+                          )!.removedFromHistory(item.title),
+                        );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: Text(AppLocalizations.of(context)!.cancel),
+                  onTap: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(LayoutConstants.radiusLg),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
         child: SizedBox(
           width: widget.width,
           child: ClipRRect(
@@ -275,7 +269,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
                       color: Colors.black.withValues(
-                        alpha: _isHovered ? 0.60 : 0.40,
+                        alpha: _isHovered ? 0.40 : 0.20,
                       ),
                     ),
                   ),

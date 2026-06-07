@@ -44,7 +44,11 @@ class _NoScrollbarBehavior extends ScrollBehavior {
   const _NoScrollbarBehavior();
 
   @override
-  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
     return child;
   }
 }
@@ -383,97 +387,97 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
-            if (data.containsKey('Trending'))
-              SliverToBoxAdapter(
-                child: ExploreCarousel(
-                  movies: data['Trending']!.take(7).toList(),
-                  scrollController: _scrollController,
-                  onNavigateUp: () => _firstActionFocusNode.requestFocus(),
-                  onControllerReady: (c) =>
-                      setState(() => _carouselController = c),
-                  onTap: (item) {
-                    DetailsRoute(
-                      $extra: DetailsRouteExtra(item: item),
-                    ).push<void>(context);
-                  },
-                ),
-              )
-            else if (data.isNotEmpty)
-              SliverToBoxAdapter(
-                child: ExploreCarousel(
-                  movies: data.values.first.take(7).toList(),
-                  scrollController: _scrollController,
-                  onNavigateUp: () => _firstActionFocusNode.requestFocus(),
-                  onControllerReady: (c) =>
-                      setState(() => _carouselController = c),
-                  onTap: (item) {
-                    DetailsRoute(
-                      $extra: DetailsRouteExtra(item: item),
-                    ).push<void>(context);
-                  },
-                ),
-              )
-            else if (!isWidescreen)
-              // No carousel — add top padding so content below doesn't
-              // overlap with the transparent app bar (mobile only).
-              SliverPadding(
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + kToolbarHeight,
-                ),
-              ),
-
-            if (watchHistoryEnabled && history.isNotEmpty)
-              SliverToBoxAdapter(
-                child: ContinueWatchingSection(
-                  title: l10n.continueWatching,
-                  items: history.cast<HistoryItem>(),
-                  topPadding: isWidescreen ? 0 : null,
-                ),
-              ),
-
-            if (syncedProgressAsync.asData?.value.isNotEmpty == true)
-              SliverToBoxAdapter(
-                child: SyncedProgressSection(
-                  title: 'Synced from Trakt',
-                  items: syncedProgressAsync.asData!.value,
-                  onItemTap: (item) {
-                    // Pre-fill search query and navigate to Search tab
-                    ref.read(searchQueryProvider.notifier).set(item.title);
-                    const SearchRoute().go(context);
-                  },
-                ),
-              ),
-
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final filteredEntries = data.entries
-                      .where((e) => e.key != 'Trending')
-                      .toList();
-                  if (index >= filteredEntries.length) return null;
-                  final entry = filteredEntries[index];
-                  return MediaHorizontalList(
-                    title: entry.key,
-                    mediaList: entry.value,
-                    category: ViewAllCategory.providerContent,
-                    showViewAll: true,
+              if (data.containsKey('Trending'))
+                SliverToBoxAdapter(
+                  child: ExploreCarousel(
+                    movies: data['Trending']!.take(7).toList(),
+                    scrollController: _scrollController,
+                    onNavigateUp: () => _firstActionFocusNode.requestFocus(),
+                    onControllerReady: (c) =>
+                        setState(() => _carouselController = c),
                     onTap: (item) {
                       DetailsRoute(
                         $extra: DetailsRouteExtra(item: item),
                       ).push<void>(context);
                     },
-                    heroTagPrefix: 'home',
-                  );
-                },
-                childCount: data.entries
-                    .where((e) => e.key != 'Trending')
-                    .length,
-              ),
-            ),
+                  ),
+                )
+              else if (data.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: ExploreCarousel(
+                    movies: data.values.first.take(7).toList(),
+                    scrollController: _scrollController,
+                    onNavigateUp: () => _firstActionFocusNode.requestFocus(),
+                    onControllerReady: (c) =>
+                        setState(() => _carouselController = c),
+                    onTap: (item) {
+                      DetailsRoute(
+                        $extra: DetailsRouteExtra(item: item),
+                      ).push<void>(context);
+                    },
+                  ),
+                )
+              else if (!isWidescreen)
+                // No carousel — add top padding so content below doesn't
+                // overlap with the transparent app bar (mobile only).
+                SliverPadding(
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + kToolbarHeight,
+                  ),
+                ),
 
-            const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
-          ],
-        ),
+              if (watchHistoryEnabled && history.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: ContinueWatchingSection(
+                    title: l10n.continueWatching,
+                    items: history.cast<HistoryItem>(),
+                    topPadding: isWidescreen ? 0 : null,
+                  ),
+                ),
+
+              if (syncedProgressAsync.asData?.value.isNotEmpty == true)
+                SliverToBoxAdapter(
+                  child: SyncedProgressSection(
+                    title: 'Synced from Trakt',
+                    items: syncedProgressAsync.asData!.value,
+                    onItemTap: (item) {
+                      // Pre-fill search query and navigate to Search tab
+                      ref.read(searchQueryProvider.notifier).set(item.title);
+                      const SearchRoute().go(context);
+                    },
+                  ),
+                ),
+
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final filteredEntries = data.entries
+                        .where((e) => e.key != 'Trending')
+                        .toList();
+                    if (index >= filteredEntries.length) return null;
+                    final entry = filteredEntries[index];
+                    return MediaHorizontalList(
+                      title: entry.key,
+                      mediaList: entry.value,
+                      category: ViewAllCategory.providerContent,
+                      showViewAll: true,
+                      onTap: (item) {
+                        DetailsRoute(
+                          $extra: DetailsRouteExtra(item: item),
+                        ).push<void>(context);
+                      },
+                      heroTagPrefix: 'home',
+                    );
+                  },
+                  childCount: data.entries
+                      .where((e) => e.key != 'Trending')
+                      .length,
+                ),
+              ),
+
+              const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+            ],
+          ),
         ),
       ),
     };

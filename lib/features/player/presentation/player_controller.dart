@@ -176,6 +176,7 @@ class PlayerState {
   final int? nextEpisodeNumber;
   final int? nextEpisodeSeason;
   final int? nextEpisodeRuntime;
+  final String? nextEpisodeDescription;
   final bool isAdaptiveBufferingActive;
   final bool showEpisodeList;
 
@@ -225,6 +226,7 @@ class PlayerState {
     this.nextEpisodeNumber,
     this.nextEpisodeSeason,
     this.nextEpisodeRuntime,
+    this.nextEpisodeDescription,
     this.isAdaptiveBufferingActive = false,
     this.showEpisodeList = false,
     this.showSourcesPanel = false,
@@ -287,6 +289,7 @@ class PlayerState {
     int? nextEpisodeNumber,
     int? nextEpisodeSeason,
     int? nextEpisodeRuntime,
+    String? nextEpisodeDescription,
     bool? isAdaptiveBufferingActive,
     bool? showEpisodeList,
     bool? showSourcesPanel,
@@ -328,6 +331,8 @@ class PlayerState {
       nextEpisodeNumber: nextEpisodeNumber ?? this.nextEpisodeNumber,
       nextEpisodeSeason: nextEpisodeSeason ?? this.nextEpisodeSeason,
       nextEpisodeRuntime: nextEpisodeRuntime ?? this.nextEpisodeRuntime,
+      nextEpisodeDescription:
+          nextEpisodeDescription ?? this.nextEpisodeDescription,
       isAdaptiveBufferingActive:
           isAdaptiveBufferingActive ?? this.isAdaptiveBufferingActive,
       showEpisodeList: showEpisodeList ?? this.showEpisodeList,
@@ -1302,6 +1307,7 @@ class PlayerController extends Notifier<PlayerState> {
                 nextEpisodeNumber: next.episode,
                 nextEpisodeSeason: next.season,
                 nextEpisodeRuntime: next.runtime,
+                nextEpisodeDescription: next.description,
               );
             }
             // Ensure it persists if video completes and resets position
@@ -1823,6 +1829,7 @@ class PlayerController extends Notifier<PlayerState> {
                 nextEpisodeNumber: next.episode,
                 nextEpisodeSeason: next.season,
                 nextEpisodeRuntime: next.runtime,
+                nextEpisodeDescription: next.description,
               );
             }
             // Ensure it persists if video completes and resets position

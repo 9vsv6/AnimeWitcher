@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +15,13 @@ class NextEpisodeOverlay extends StatefulWidget {
   final double? nextEpisodeRating;
   final int? nextEpisodeNumber;
   final int? nextEpisodeSeason;
+
+  /// Episode runtime in seconds.
   final int? nextEpisodeRuntime;
+
+  /// Short synopsis / description of the next episode.
+  final String? nextEpisodeDescription;
+
   final VoidCallback onPlayNext;
   final VoidCallback onDismiss;
   final bool isTv;
@@ -29,6 +36,7 @@ class NextEpisodeOverlay extends StatefulWidget {
     this.nextEpisodeNumber,
     this.nextEpisodeSeason,
     this.nextEpisodeRuntime,
+    this.nextEpisodeDescription,
     required this.onPlayNext,
     required this.onDismiss,
     this.isTv = false,
@@ -63,6 +71,11 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     )..forward();
+    _entranceController.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed && _completed) {
+        widget.onDismiss();
+      }
+    });
 
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0.12, 0.0), end: Offset.zero).animate(
@@ -154,7 +167,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
     _completed = true;
     _timer?.cancel();
     _countdownController.stop();
-    widget.onDismiss();
+    _entranceController.reverse();
   }
 
   String _formatRuntime(int? seconds) {
@@ -188,9 +201,30 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHeader(l10n, isCompact),
-                _buildThumbnail(thumbHeight, cardWidth),
-                _buildInfo(isCompact),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                          child: Container(
+                            color: Colors.black.withValues(alpha: 0.45),
+                          ),
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildHeader(l10n, isCompact),
+                          _buildThumbnail(thumbHeight, cardWidth),
+                          _buildInfo(isCompact),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
                 _buildButtons(isCompact, l10n),
               ],
             ),
@@ -205,14 +239,14 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
       color: Colors.white.withValues(alpha: 0.5),
       fontSize: isCompact ? 10 : 11,
       fontWeight: FontWeight.w700,
-      letterSpacing: 1.2,
+      letterSpacing: 0.5,
       shadows: const [Shadow(color: Colors.black38, blurRadius: 1)],
     );
     final upNextStyle = TextStyle(
-      color: const Color(0xFFE50914),
+      color: Theme.of(context).colorScheme.primary,
       fontSize: isCompact ? 10 : 11,
       fontWeight: FontWeight.w700,
-      letterSpacing: 1.2,
+      letterSpacing: 0.5,
       shadows: const [Shadow(color: Colors.black38, blurRadius: 1)],
     );
     return Padding(
@@ -240,8 +274,10 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               animation: _countdownController,
               builder: (context, _) {
                 final remaining =
-                    _countdownSecs -
-                    (_countdownController.value * _countdownSecs).round();
+                    (_countdownSecs -
+                            (_countdownController.value * _countdownSecs)
+                                .round())
+                        .clamp(0, _countdownSecs);
                 return Row(
                   children: [
                     Text(
@@ -252,7 +288,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                       ),
                     ),
                     const Spacer(),
-                    if (remaining <= 3 && remaining > 0) _buildPulseDot(),
+                    if (remaining <= 3 && remaining >= 0) _buildPulseDot(),
                   ],
                 );
               },
@@ -264,22 +300,20 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
   }
 
   Widget _buildPulseDot() {
-    final phase = (_countdownController.value - 0.8) / 0.2;
+    final phase = ((_countdownController.value - 0.8) / 0.2).clamp(0.0, 1.0);
     final pulse = (math.sin(phase * 4 * math.pi) + 1) / 2;
     final scale = 0.6 + pulse * 0.4;
+    final primary = Theme.of(context).colorScheme.primary;
     return Transform.scale(
       scale: scale,
       child: Container(
         width: 6,
         height: 6,
         decoration: BoxDecoration(
-          color: const Color(0xFFE50914),
+          color: primary,
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFE50914).withValues(alpha: 0.5),
-              blurRadius: 4,
-            ),
+            BoxShadow(color: primary.withValues(alpha: 0.5), blurRadius: 4),
           ],
         ),
       ),
@@ -355,40 +389,6 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                     ),
                   ),
                 ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: height * 0.35,
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.85),
-                          Colors.black.withValues(alpha: 0.5),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.4, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(radius),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -418,30 +418,33 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              if (badge.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE50914),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    badge,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: isCompact ? 10 : 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 20),
+            child: Row(
+              children: [
+                if (badge.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isCompact ? 10 : 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
-                ),
-              if (hasRating) ...[const Spacer(), _buildRating(isCompact)],
-            ],
+                if (hasRating) ...[const Spacer(), _buildRating(isCompact)],
+              ],
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -453,9 +456,24 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               fontSize: isCompact ? 13 : 14,
               fontWeight: FontWeight.w600,
               height: 1.3,
-              shadows: const [Shadow(color: Colors.black54, blurRadius: 6)],
             ),
           ),
+          if (widget.nextEpisodeDescription != null &&
+              widget.nextEpisodeDescription!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                widget.nextEpisodeDescription!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: isCompact ? 11 : 12,
+                  fontWeight: FontWeight.w400,
+                  height: 1.3,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -568,16 +586,24 @@ class _PlayNowButton extends StatefulWidget {
   State<_PlayNowButton> createState() => _PlayNowButtonState();
 }
 
-class _PlayNowButtonState extends State<_PlayNowButton> {
+class _PlayNowButtonState extends State<_PlayNowButton>
+    with SingleTickerProviderStateMixin {
   FocusNode? _focusNode;
   bool _isFocused = false;
   bool _isHovered = false;
+  late AnimationController _shineController;
+
+  static const double _skew = -0.21;
 
   bool get _isActive => _isFocused || _isHovered;
 
   @override
   void initState() {
     super.initState();
+    _shineController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
     if (widget.isTv) {
       _focusNode = widget.focusNode ?? FocusNode();
       _focusNode!.addListener(() {
@@ -588,56 +614,123 @@ class _PlayNowButtonState extends State<_PlayNowButton> {
 
   @override
   void dispose() {
+    _shineController.dispose();
     if (widget.focusNode == null) _focusNode?.dispose();
     super.dispose();
   }
 
+  void _onHover(bool hovering) {
+    if (!mounted) return;
+    setState(() => _isHovered = hovering);
+    if (hovering) {
+      _shineController.forward(from: 0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final button = AnimatedScale(
-      scale: _isActive ? 1.03 : 1.0,
-      duration: const Duration(milliseconds: 150),
-      child: Container(
-        height: widget.isCompact ? 36 : 40,
-        decoration: BoxDecoration(
-          color: HotstarPlayerStyle.accent.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 10),
-          border: Border.all(
+    final isCompact = widget.isCompact;
+    final button = Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.skewX(_skew),
+      child: AnimatedScale(
+        scale: _isActive ? 1.03 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
             color: HotstarPlayerStyle.accent,
-            width: _isActive ? 1.5 : 1,
+            boxShadow: _isActive
+                ? [
+                    BoxShadow(
+                      color: HotstarPlayerStyle.accent.withValues(alpha: 0.5),
+                      blurRadius: 16,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
           ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.isCompleted ? null : widget.onPressed,
-            onHover: widget.isTv
-                ? null
-                : (v) {
-                    if (mounted) setState(() => _isHovered = v);
-                  },
-            borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 10),
-            splashColor: Colors.white.withValues(alpha: 0.15),
-            highlightColor: Colors.white.withValues(alpha: 0.05),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.play_arrow_rounded,
-                  color: Colors.white,
-                  size: widget.isCompact ? 18 : 20,
-                ),
-                SizedBox(width: widget.isCompact ? 4 : 6),
-                Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: widget.isCompact ? 12 : 13,
-                    fontWeight: FontWeight.w700,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Shine overlay
+              Positioned.fill(
+                child: ClipRect(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final w = constraints.maxWidth;
+                      return AnimatedBuilder(
+                        animation: _shineController,
+                        builder: (context, _) {
+                          final streakWidth = w * 0.4;
+                          return Transform.translate(
+                            offset: Offset(
+                              (-0.3 + _shineController.value * 1.8) * w,
+                              0,
+                            ),
+                            child: Container(
+                              width: streakWidth,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.white.withValues(alpha: 0.4),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
-              ],
-            ),
+              ),
+              // Content (counter-skewed)
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: widget.isCompleted ? null : widget.onPressed,
+                  onHover: widget.isTv ? null : _onHover,
+                  splashColor: Colors.white.withValues(alpha: 0.15),
+                  highlightColor: Colors.white.withValues(alpha: 0.05),
+                  child: Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.skewX(-_skew),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 24 : 32,
+                        vertical: isCompact ? 8 : 12,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.play_arrow_rounded,
+                              color: Colors.white,
+                              size: isCompact ? 18 : 20,
+                            ),
+                            SizedBox(width: isCompact ? 6 : 8),
+                            Text(
+                              widget.label.toUpperCase(),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: isCompact ? 11 : 13,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2.6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -692,6 +785,7 @@ class _CancelButtonState extends State<_CancelButton> {
   bool _isHovered = false;
 
   bool get _isActive => _isFocused || _isHovered;
+  static const double _skew = -0.21;
 
   @override
   void initState() {
@@ -710,56 +804,118 @@ class _CancelButtonState extends State<_CancelButton> {
     super.dispose();
   }
 
+  void _onHover(bool hovering) {
+    if (!mounted) return;
+    setState(() => _isHovered = hovering);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final button = AnimatedScale(
-      scale: _isActive ? 1.03 : 1.0,
-      duration: const Duration(milliseconds: 150),
-      child: Container(
-        height: widget.isCompact ? 36 : 40,
-        decoration: BoxDecoration(
-          color: _isActive
-              ? Colors.white.withValues(alpha: 0.12)
-              : Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 10),
-          border: Border.all(
+    final isCompact = widget.isCompact;
+    final primary = Theme.of(context).colorScheme.primary;
+    final button = Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.skewX(_skew),
+      child: AnimatedScale(
+        scale: _isActive ? 1.03 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
             color: _isActive
-                ? const Color(0xFFE50914)
-                : const Color(0xFFE50914).withValues(alpha: 0.5),
-            width: _isActive ? 1.5 : 1,
+                ? Colors.black.withValues(alpha: 0.8)
+                : Colors.black.withValues(alpha: 0.6),
+            border: Border.all(
+              color: _isActive
+                  ? primary.withValues(alpha: 0.8)
+                  : Colors.white.withValues(alpha: 0.1),
+              width: 1,
+            ),
           ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.isCompleted ? null : widget.onPressed,
-            onHover: widget.isTv
-                ? null
-                : (v) {
-                    if (mounted) setState(() => _isHovered = v);
-                  },
-            borderRadius: BorderRadius.circular(widget.isCompact ? 8 : 10),
-            splashColor: Colors.white.withValues(alpha: 0.1),
-            highlightColor: Colors.white.withValues(alpha: 0.03),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.close_rounded,
-                  color: const Color(0xFFE50914),
-                  size: widget.isCompact ? 16 : 18,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Right edge vertical line
+              Positioned(
+                top: 0,
+                right: 0,
+                bottom: 0,
+                width: 1,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  color: _isActive
+                      ? primary.withValues(alpha: 0.5)
+                      : Colors.white.withValues(alpha: 0.1),
                 ),
-                SizedBox(width: widget.isCompact ? 4 : 6),
-                Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: const Color(0xFFE50914),
-                    fontSize: widget.isCompact ? 12 : 13,
-                    fontWeight: FontWeight.w600,
+              ),
+              // Gradient overlay (fades in on hover)
+              Positioned.fill(
+                child: AnimatedOpacity(
+                  opacity: _isActive ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          primary.withValues(alpha: 0.0),
+                          primary.withValues(alpha: 0.15),
+                          primary.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              // Content (counter-skewed)
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: widget.isCompleted ? null : widget.onPressed,
+                  onHover: widget.isTv ? null : _onHover,
+                  splashColor: Colors.white.withValues(alpha: 0.1),
+                  highlightColor: Colors.white.withValues(alpha: 0.03),
+                  child: Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.skewX(-_skew),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 24 : 32,
+                        vertical: isCompact ? 8 : 12,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedRotation(
+                              turns: _isActive ? 0.25 : 0.0,
+                              duration: const Duration(milliseconds: 300),
+                              child: Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                                size: isCompact ? 18 : 20,
+                              ),
+                            ),
+                            SizedBox(width: isCompact ? 6 : 8),
+                            Text(
+                              widget.label.toUpperCase(),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: isCompact ? 11 : 13,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2.6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

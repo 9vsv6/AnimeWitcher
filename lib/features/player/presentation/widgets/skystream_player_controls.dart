@@ -918,6 +918,9 @@ class SkyStreamPlayerControlsState
     final nextEpRuntime = ref.watch(
       playerControllerProvider.select((s) => s.nextEpisodeRuntime),
     );
+    final nextEpDescription = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeDescription),
+    );
     final resumePromptPosition = ref.watch(
       playerControllerProvider.select((s) => s.resumePromptPosition),
     );
@@ -1156,6 +1159,7 @@ class SkyStreamPlayerControlsState
                     nextEpisodeNumber: nextEpNumber,
                     nextEpisodeSeason: nextEpSeason,
                     nextEpisodeRuntime: nextEpRuntime,
+                    nextEpisodeDescription: nextEpDescription,
                     onPlayNext: () => ref
                         .read(playerControllerProvider.notifier)
                         .playNextEpisode(),
