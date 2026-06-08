@@ -218,7 +218,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _buildHeader(l10n, isCompact),
-                          _buildThumbnail(thumbHeight, cardWidth),
+                          _buildThumbnail(thumbHeight, cardWidth, isCompact),
                           _buildInfo(isCompact),
                         ],
                       ),
@@ -320,76 +320,80 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
     );
   }
 
-  Widget _buildThumbnail(double height, double cardWidth) {
+  Widget _buildThumbnail(double height, double cardWidth, bool isCompact) {
     final imageUrl = widget.nextEpisodePosterUrl?.isNotEmpty == true
         ? widget.nextEpisodePosterUrl!
         : null;
-    final radius = height < 100 ? 8.0 : 12.0;
+    // Use a smaller radius (8.0) to fit concentrically inside the parent (12.0)
+    const radius = 8.0;
 
-    return SizedBox(
-      height: height,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(radius),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (imageUrl != null)
-                CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.cover,
-                  memCacheWidth: (cardWidth * 2).round(),
-                  memCacheHeight: (height * 2).round(),
-                  errorWidget: (context, url, error) =>
-                      const ThumbnailErrorPlaceholder(),
-                  placeholder: (context, url) => Container(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                const ThumbnailErrorPlaceholder(),
-              if (widget.nextEpisodeRuntime != null &&
-                  widget.nextEpisodeRuntime! >= 60)
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _formatRuntime(widget.nextEpisodeRuntime),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 16),
+      child: SizedBox(
+        height: height,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
             ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (imageUrl != null)
+                  CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    memCacheWidth: (cardWidth * 2).round(),
+                    memCacheHeight: (height * 2).round(),
+                    errorWidget: (context, url, error) =>
+                        const ThumbnailErrorPlaceholder(),
+                    placeholder: (context, url) => Container(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const ThumbnailErrorPlaceholder(),
+                if (widget.nextEpisodeRuntime != null &&
+                    widget.nextEpisodeRuntime! >= 60)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        _formatRuntime(widget.nextEpisodeRuntime),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -649,6 +653,7 @@ class _PlayNowButtonState extends State<_PlayNowButton>
         duration: const Duration(milliseconds: 150),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
+          height: isCompact ? 40 : null,
           decoration: BoxDecoration(
             color: HotstarPlayerStyle.accent,
             boxShadow: _isActive
@@ -709,32 +714,36 @@ class _PlayNowButtonState extends State<_PlayNowButton>
                   child: Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.skewX(-_skew),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isCompact ? 24 : 32,
-                        vertical: isCompact ? 8 : 12,
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.play_arrow_rounded,
-                              color: Colors.white,
-                              size: isCompact ? 18 : 20,
-                            ),
-                            SizedBox(width: isCompact ? 6 : 8),
-                            Text(
-                              widget.label.toUpperCase(),
-                              style: TextStyle(
+                    child: Center(
+                      widthFactor: isCompact ? null : 1.0,
+                      heightFactor: isCompact ? null : 1.0,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isCompact ? 16 : 32,
+                          vertical: isCompact ? 0 : 12,
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.play_arrow_rounded,
                                 color: Colors.white,
-                                fontSize: isCompact ? 11 : 13,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2.6,
+                                size: isCompact ? 18 : 20,
                               ),
-                            ),
-                          ],
+                              SizedBox(width: isCompact ? 6 : 8),
+                              Text(
+                                widget.label.toUpperCase(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isCompact ? 11 : 13,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 2.6,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -832,6 +841,7 @@ class _CancelButtonState extends State<_CancelButton> {
         duration: const Duration(milliseconds: 150),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
+          height: isCompact ? 40 : null,
           decoration: BoxDecoration(
             color: _isActive
                 ? Colors.black.withValues(alpha: 0.8)
@@ -890,36 +900,40 @@ class _CancelButtonState extends State<_CancelButton> {
                   child: Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.skewX(-_skew),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isCompact ? 24 : 32,
-                        vertical: isCompact ? 8 : 12,
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedRotation(
-                              turns: _isActive ? 0.25 : 0.0,
-                              duration: const Duration(milliseconds: 300),
-                              child: Icon(
-                                Icons.close_rounded,
-                                color: Colors.white,
-                                size: isCompact ? 18 : 20,
+                    child: Center(
+                      widthFactor: isCompact ? null : 1.0,
+                      heightFactor: isCompact ? null : 1.0,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isCompact ? 16 : 32,
+                          vertical: isCompact ? 0 : 12,
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedRotation(
+                                turns: _isActive ? 0.25 : 0.0,
+                                duration: const Duration(milliseconds: 300),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.white,
+                                  size: isCompact ? 18 : 20,
+                                ),
                               ),
-                            ),
-                            SizedBox(width: isCompact ? 6 : 8),
-                            Text(
-                              widget.label.toUpperCase(),
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: isCompact ? 11 : 13,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2.6,
+                              SizedBox(width: isCompact ? 6 : 8),
+                              Text(
+                                widget.label.toUpperCase(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isCompact ? 11 : 13,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 2.6,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
