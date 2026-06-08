@@ -25,11 +25,26 @@ class ExploreScreen extends ConsumerStatefulWidget {
   ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
 }
 
+/// Hides the platform scrollbar — replaced by a gradient edge hint.
+class _NoScrollbarBehavior extends ScrollBehavior {
+  const _NoScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 class _ExploreScreenState extends ConsumerState<ExploreScreen>
     with AutomaticKeepAliveClientMixin {
   late ScrollController _scrollController;
   final ValueNotifier<bool> _isScrolledNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
+  final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
   final FocusNode _firstActionFocusNode = FocusNode();
 
   /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
@@ -54,6 +69,14 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
   void _onScroll() {
     if (!_scrollController.hasClients) return;
 
+    // Track gradient edge hint visibility — fades away near the bottom.
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    final showFade = maxScroll > 0 && currentScroll < maxScroll - 10;
+    if (showFade != _showBottomFade.value) {
+      _showBottomFade.value = showFade;
+    }
+
     // On widescreen there is no mobile AppBar, skip calculations
     if (_isWidescreenForScroll()) return;
 
@@ -74,6 +97,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     _scrollController.dispose();
     _isScrolledNotifier.dispose();
     _appBarOpacityNotifier.dispose();
+    _showBottomFade.dispose();
     _firstActionFocusNode.dispose();
     super.dispose();
   }
@@ -212,7 +236,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
               ),
             ],
           ),
-          body: _buildScrollView(context),
+          body: _withGradientEdgeHint(_buildScrollView(context)),
         );
       },
     );
@@ -233,7 +257,44 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 : null,
           ),
         ),
-        Expanded(child: _buildScrollView(context)),
+        Expanded(child: _withGradientEdgeHint(_buildScrollView(context))),
+      ],
+    );
+  }
+
+  Widget _withGradientEdgeHint(Widget scrollView) {
+    return Stack(
+      children: [
+        ScrollConfiguration(
+          behavior: const _NoScrollbarBehavior(),
+          child: scrollView,
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 32,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _showBottomFade,
+            builder: (context, show, _) {
+              if (!show) return const SizedBox.shrink();
+              return IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Theme.of(context).scaffoldBackgroundColor,
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ],
     );
   }

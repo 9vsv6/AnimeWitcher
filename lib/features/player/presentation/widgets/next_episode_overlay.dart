@@ -243,10 +243,10 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
       shadows: const [Shadow(color: Colors.black38, blurRadius: 1)],
     );
     final upNextStyle = TextStyle(
-      color: Theme.of(context).colorScheme.primary,
+      color: HotstarPlayerStyle.hotstar,
       fontSize: isCompact ? 10 : 11,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.5,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 1.0,
       shadows: const [Shadow(color: Colors.black38, blurRadius: 1)],
     );
     return Padding(
@@ -303,7 +303,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
     final phase = ((_countdownController.value - 0.8) / 0.2).clamp(0.0, 1.0);
     final pulse = (math.sin(phase * 4 * math.pi) + 1) / 2;
     final scale = 0.6 + pulse * 0.4;
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = HotstarPlayerStyle.hotstar;
     return Transform.scale(
       scale: scale,
       child: Container(
@@ -425,20 +425,31 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                 if (badge.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
+                      horizontal: 8,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      borderRadius: BorderRadius.circular(3),
+                      color: HotstarPlayerStyle.hotstar.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        width: 0.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Text(
                       badge,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: isCompact ? 10 : 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ),
@@ -665,7 +676,7 @@ class _PlayNowButtonState extends State<_PlayNowButton>
                           final streakWidth = w * 0.4;
                           return Transform.translate(
                             offset: Offset(
-                              (-0.3 + _shineController.value * 1.8) * w,
+                              (-0.6 + _shineController.value * 2.1) * w,
                               0,
                             ),
                             child: Container(

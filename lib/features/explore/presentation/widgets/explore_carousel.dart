@@ -252,10 +252,8 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
           SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
           SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
           SingleActivator(LogicalKeyboardKey.arrowUp): _CarouselUpIntent(),
-          SingleActivator(LogicalKeyboardKey.arrowLeft):
-              _CarouselPrevIntent(),
-          SingleActivator(LogicalKeyboardKey.arrowRight):
-              _CarouselNextIntent(),
+          SingleActivator(LogicalKeyboardKey.arrowLeft): _CarouselPrevIntent(),
+          SingleActivator(LogicalKeyboardKey.arrowRight): _CarouselNextIntent(),
         },
         actions: <Type, Action<Intent>>{
           ActivateIntent: CallbackAction<ActivateIntent>(
@@ -390,11 +388,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
                   );
                 },
               )
-            : _buildSlideForIndex(
-                height,
-                _currentSlide,
-                isDesktop: isDesktop,
-              ),
+            : _buildSlideForIndex(height, _currentSlide, isDesktop: isDesktop),
 
         // Progress bar indicators
         if (widget.movies.length > 1)
@@ -402,9 +396,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
             bottom: 20,
             left: 0,
             right: 0,
-            child: RepaintBoundary(
-              child: _buildProgressIndicators(),
-            ),
+            child: RepaintBoundary(child: _buildProgressIndicators()),
           ),
       ],
     );
@@ -436,19 +428,9 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
   }) {
     final movie = widget.movies[index];
     if (widget.scrollController == null) {
-      return _buildStaticItem(
-        context,
-        movie,
-        height,
-        isDesktop: isDesktop,
-      );
+      return _buildStaticItem(context, movie, height, isDesktop: isDesktop);
     }
-    return _buildCarouselItem(
-      context,
-      movie,
-      height,
-      isDesktop: isDesktop,
-    );
+    return _buildCarouselItem(context, movie, height, isDesktop: isDesktop);
   }
 
   void _navigateToDetails(BuildContext context, MultimediaItem movie) {
@@ -468,20 +450,211 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
     double height, {
     bool isDesktop = false,
   }) {
-    final imageUrl = movie.backdropImageUrl;
-    final title = movie.title;
-    final logoUrl = movie.logoUrl;
     final theme = Theme.of(context);
     final scaffoldColor = theme.scaffoldBackgroundColor;
 
-    // Metadata parsing
+    return CardsWrapper(
+      scaleFactor: 1.0,
+      onTap: () {
+        if (widget.onTap != null) {
+          widget.onTap!(movie);
+        } else {
+          _navigateToDetails(context, movie);
+        }
+      },
+      borderRadius: BorderRadius.zero,
+      child: RepaintBoundary(
+        child: ValueListenableBuilder<double>(
+          valueListenable: _scrollOffset,
+          builder: (context, scrollOffset, child) {
+            final parallaxOffset = scrollOffset * 0.1;
+            final contentOffset = -scrollOffset * 0.2;
+            final opacity = (1.0 - (scrollOffset / (height * 0.5))).clamp(
+              0.0,
+              1.0,
+            );
+
+            return _buildSlideBase(
+              context: context,
+              movie: movie,
+              height: height,
+              isDesktop: isDesktop,
+              parallaxOffset: parallaxOffset,
+              contentOffset: contentOffset,
+              opacity: opacity,
+              scaffoldColor: scaffoldColor,
+              theme: theme,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStaticItem(
+    BuildContext context,
+    MultimediaItem movie,
+    double height, {
+    bool isDesktop = false,
+  }) {
+    final theme = Theme.of(context);
+    return CardsWrapper(
+      scaleFactor: 1.0,
+      onTap: () {
+        if (widget.onTap != null) {
+          widget.onTap!(movie);
+        } else {
+          _navigateToDetails(context, movie);
+        }
+      },
+      borderRadius: BorderRadius.zero,
+      child: _buildSlideBase(
+        context: context,
+        movie: movie,
+        height: height,
+        isDesktop: isDesktop,
+        parallaxOffset: 0,
+        contentOffset: 0,
+        opacity: 1.0,
+        scaffoldColor: theme.scaffoldBackgroundColor,
+        theme: theme,
+      ),
+    );
+  }
+
+  Widget _buildSlideBase({
+    required BuildContext context,
+    required MultimediaItem movie,
+    required double height,
+    required bool isDesktop,
+    required double parallaxOffset,
+    required double contentOffset,
+    required double opacity,
+    required Color scaffoldColor,
+    required ThemeData theme,
+  }) {
+    final imageUrl = movie.backdropImageUrl;
+    final title = movie.title;
+    final logoUrl = movie.logoUrl;
+
+    const bleed = 60.0;
+
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Background Image
+          Positioned(
+            top: -bleed + parallaxOffset,
+            bottom: -bleed - parallaxOffset,
+            left: 0,
+            right: 0,
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
+              fit: BoxFit.cover,
+              placeholder: (context, url) =>
+                  Container(color: theme.colorScheme.surfaceContainerHighest),
+              errorWidget: (_, _, _) =>
+                  ThumbnailErrorPlaceholder(label: title, isBackdrop: true),
+            ),
+          ),
+
+          // 2. Parallax Gradients
+          Positioned(
+            top: -bleed + parallaxOffset,
+            bottom: -bleed - parallaxOffset,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: isDesktop
+                      ? [
+                          Colors.black.withValues(alpha: 0.2),
+                          Colors.transparent,
+                          scaffoldColor.withValues(alpha: 0.72),
+                          scaffoldColor,
+                        ]
+                      : [
+                          Colors.black.withValues(alpha: 0.3),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.1),
+                          scaffoldColor.withValues(alpha: 0.8),
+                          scaffoldColor,
+                        ],
+                  stops: isDesktop
+                      ? const [0.0, 0.35, 0.75, 1.0]
+                      : const [0.0, 0.4, 0.6, 0.85, 1.0],
+                ),
+              ),
+            ),
+          ),
+
+          // 2.5. Fixed Bottom Feather
+          Positioned(
+            bottom: -1,
+            left: 0,
+            right: 0,
+            height: 120,
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [scaffoldColor.withValues(alpha: 0), scaffoldColor],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 3. Content
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 48,
+            child: Transform.translate(
+              offset: Offset(0, contentOffset),
+              child: opacity >= 0.999
+                  ? _buildCarouselContent(
+                      isDesktop: isDesktop,
+                      movie: movie,
+                      theme: theme,
+                      context: context,
+                    )
+                  : Opacity(
+                      opacity: opacity,
+                      child: _buildCarouselContent(
+                        isDesktop: isDesktop,
+                        movie: movie,
+                        theme: theme,
+                        context: context,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCarouselContent({
+    required bool isDesktop,
+    required MultimediaItem movie,
+    required ThemeData theme,
+    required BuildContext context,
+  }) {
+    final logoUrl = movie.logoUrl;
+    final title = movie.title;
     final year = movie.year?.toString() ?? '';
     final genres = movie.tags?.join(' • ') ?? '';
     final provider = movie.provider;
 
     String? type;
     final mType = movie.mediaType.toLowerCase();
-
     if (mType == 'movie') {
       type = "Movie";
     } else if (mType == 'series' || mType == 'tv') {
@@ -496,160 +669,12 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
           : null;
     }
 
-    return CardsWrapper(
-      // Slides are wrapped in ExcludeFocus above; the carousel anchor owns
-      // focus, so no autoFocus here.
-      scaleFactor: 1.0,
-      onTap: () {
-        if (widget.onTap != null) {
-          widget.onTap!(movie);
-        } else {
-          _navigateToDetails(context, movie);
-        }
-      },
-      borderRadius: BorderRadius.zero,
-      // Wrap the whole carousel page in its own raster layer so pagination-dot
-      // animations and parent-tree changes don't force re-rasterizing the
-      // backdrop image + gradient on every frame.
-      child: RepaintBoundary(
-        child: ValueListenableBuilder<double>(
-          valueListenable: _scrollOffset,
-          builder: (context, scrollOffset, child) {
-            // Parallax effect: Background moves slower than foreground
-            final parallaxOffset = scrollOffset * 0.1;
-
-            // Content effect: Slide up faster and fade out
-            final contentOffset = -scrollOffset * 0.2;
-            final opacity = (1.0 - (scrollOffset / (height * 0.5))).clamp(
-              0.0,
-              1.0,
-            );
-
-            return ClipRect(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // 1. Background Image with Parallax
-                  Transform.translate(
-                    offset: Offset(0, parallaxOffset),
-                    child: CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.cover,
-                      height: height,
-                      width: double.infinity,
-                      // No memCacheHeight — source is w1280 (~720 px tall),
-                      // already bounded by the URL choice. Capping below
-                      // source just causes blur on hi-DPR phones without
-                      // saving meaningful memory.
-                      placeholder: (context, url) => Container(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                      ),
-                      errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
-                        label: title,
-                        isBackdrop: true,
-                      ),
-                    ),
-                  ),
-
-                  // 2. Gradients for readability — track parallax so they stay
-                  // locked to the background image instead of jittering against
-                  // the scaffold-colour feather at the bottom edge.
-                  Positioned.fill(
-                    child: Transform.translate(
-                      offset: Offset(0, parallaxOffset),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: isDesktop
-                                ? [
-                                    Colors.black.withValues(alpha: 0.2),
-                                    Colors.transparent,
-                                    scaffoldColor.withValues(alpha: 0.72),
-                                    scaffoldColor,
-                                  ]
-                                : [
-                                    Colors.black.withValues(alpha: 0.3),
-                                    Colors.transparent,
-                                    Colors.black.withValues(alpha: 0.1),
-                                    scaffoldColor.withValues(alpha: 0.8),
-                                    scaffoldColor,
-                                  ],
-                            stops: isDesktop
-                                ? const [0.0, 0.35, 0.75, 1.0]
-                                : const [0.0, 0.4, 0.6, 0.85, 1.0],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // 3. Animated Content
-                  Positioned(
-                    left: 24,
-                    right: 24,
-                    bottom: 48,
-                    child: Transform.translate(
-                      offset: Offset(0, contentOffset),
-                      // Opacity widget triggers a saveLayer every frame even at
-                      // 1.0, which keeps the raster thread busy on idle. Skip it
-                      // entirely until the user actually scrolls and we fade.
-                      child: opacity >= 0.999
-                          ? _buildCarouselContent(
-                              isDesktop: isDesktop,
-                              logoUrl: logoUrl,
-                              title: title,
-                              provider: provider,
-                              type: type,
-                              genres: genres,
-                              year: year,
-                              theme: theme,
-                              context: context,
-                            )
-                          : Opacity(
-                              opacity: opacity,
-                              child: _buildCarouselContent(
-                                isDesktop: isDesktop,
-                                logoUrl: logoUrl,
-                                title: title,
-                                provider: provider,
-                                type: type,
-                                genres: genres,
-                                year: year,
-                                theme: theme,
-                                context: context,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCarouselContent({
-    required bool isDesktop,
-    required String? logoUrl,
-    required String title,
-    required String? provider,
-    required String? type,
-    required String genres,
-    required String year,
-    required ThemeData theme,
-    required BuildContext context,
-  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: isDesktop
           ? CrossAxisAlignment.start
           : CrossAxisAlignment.center,
       children: [
-        // Logo or Title Fallback
         if (logoUrl != null)
           Padding(
             padding: const EdgeInsets.only(bottom: LayoutConstants.spacingLg),
@@ -657,8 +682,6 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
           )
         else
           _buildTitleFallback(title, isDesktop: isDesktop),
-
-        // Metadata Row (Premium Layout)
         Wrap(
           alignment: isDesktop ? WrapAlignment.start : WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -705,111 +728,6 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildStaticItem(
-    BuildContext context,
-    MultimediaItem movie,
-    double height, {
-    bool isDesktop = false,
-  }) {
-    final imageUrl = movie.backdropImageUrl;
-    final logoUrl = movie.logoUrl;
-    final title = movie.title;
-
-    final year = movie.year?.toString() ?? '';
-    final genres = movie.tags?.join(' • ') ?? '';
-    final provider = movie.provider;
-
-    String? type;
-    final mType = movie.mediaType.toLowerCase();
-    if (mType == 'movie') {
-      type = "Movie";
-    } else if (mType == 'series' || mType == 'tv') {
-      type = "TV Show";
-    } else if (mType == 'anime') {
-      type = "Anime";
-    } else if (mType == 'livestream') {
-      type = "Live Stream";
-    } else {
-      type = mType.isNotEmpty
-          ? mType[0].toUpperCase() + mType.substring(1)
-          : null;
-    }
-
-    final metadata = [
-      if (provider != null && provider.isNotEmpty) provider,
-      type,
-      if (genres.isNotEmpty) genres,
-      if (year.isNotEmpty) year,
-    ].whereType<String>().join(' • ');
-
-    return CardsWrapper(
-      scaleFactor: 1.0,
-      onTap: () {
-        if (widget.onTap != null) {
-          widget.onTap!(movie);
-        } else {
-          _navigateToDetails(context, movie);
-        }
-      },
-      borderRadius: BorderRadius.zero,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            height: height,
-            width: double.infinity,
-            placeholder: (context, url) => Container(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            ),
-            errorWidget: (_, _, _) =>
-                ThumbnailErrorPlaceholder(label: title, isBackdrop: true),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Theme.of(
-                    context,
-                  ).scaffoldBackgroundColor.withValues(alpha: 0.8),
-                  Theme.of(context).scaffoldBackgroundColor,
-                ],
-                stops: const [0.5, 0.85, 1.0],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 48,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (logoUrl != null)
-                  _buildLogo(logoUrl, title, isDesktop: isDesktop)
-                else
-                  _buildTitleFallback(title, isDesktop: isDesktop),
-                const SizedBox(height: 8),
-                Text(
-                  metadata,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -966,9 +884,7 @@ class _ProgressDotState extends State<_ProgressDot>
           margin: const EdgeInsets.symmetric(horizontal: 3.0),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(2),
-            color: Colors.white.withValues(
-              alpha: widget.isActive ? 0.3 : 0.2,
-            ),
+            color: Colors.white.withValues(alpha: widget.isActive ? 0.3 : 0.2),
           ),
           child: widget.isActive
               ? ClipRRect(
