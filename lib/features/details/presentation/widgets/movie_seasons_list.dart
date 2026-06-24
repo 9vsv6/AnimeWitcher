@@ -11,6 +11,7 @@ import '../../../../core/models/tmdb_details.dart';
 import '../tmdb_details_controller.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class MovieSeasonsList extends ConsumerStatefulWidget {
   final int movieId;
@@ -274,7 +275,7 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
               .episodesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: AppLoadingIndicator());
             }
             if (snapshot.hasError || !snapshot.hasData) {
               return const SizedBox.shrink();
@@ -441,7 +442,7 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
               .episodesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: AppLoadingIndicator());
             }
             if (snapshot.hasError || !snapshot.hasData) {
               return const SizedBox.shrink();

@@ -14,6 +14,7 @@ import '../../explore/presentation/widgets/explore_carousel.dart';
 import '../../explore/presentation/widgets/media_horizontal_list.dart';
 import '../../explore/presentation/view_all_screen.dart';
 import '../../../shared/widgets/desktop_scroll_wrapper.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import '../../extensions/providers/extensions_controller.dart';
 import '../../../core/extensions/models/extension_plugin.dart';
 
@@ -352,7 +353,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     if (isResolving) {
       return Center(
-        child: CircularProgressIndicator(
+        child: AppLoadingIndicator(
           color: Theme.of(context).colorScheme.primary,
         ),
       );

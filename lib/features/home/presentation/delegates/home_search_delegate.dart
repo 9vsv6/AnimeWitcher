@@ -6,6 +6,7 @@ import '../../../../core/extensions/base_provider.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../search/presentation/search_provider.dart';
 import 'package:skystream/shared/widgets/multimedia_card.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class HomeSearchDelegate extends SearchDelegate<void> {
   final String? initialQuery;
@@ -129,7 +130,7 @@ class _HomeSearchSuggestionsState
 
     if (isLoading) {
       return Center(
-        child: CircularProgressIndicator(
+        child: AppLoadingIndicator(
           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
         ),
       );
@@ -235,7 +236,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: AppLoadingIndicator());
     }
 
     if (result == null || result!.results.isEmpty) {

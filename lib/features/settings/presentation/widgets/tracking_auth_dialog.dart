@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class TrackingAuthDialog extends StatefulWidget {
   final String providerName;
@@ -127,7 +128,7 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
           ),
         ),
         const SizedBox(height: 24),
-        const CircularProgressIndicator(),
+        const AppLoadingIndicator(),
         const SizedBox(height: 16),
         Text(
           'Waiting for authorization...',

@@ -5,6 +5,7 @@ import '../../../../core/utils/layout_constants.dart';
 import '../../data/explore_filter_provider.dart';
 import '../../data/explore_language_provider.dart';
 import '../../data/explore_tmdb_provider.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class UnifiedFilterDialog extends ConsumerStatefulWidget {
   const UnifiedFilterDialog({super.key});
@@ -542,7 +543,7 @@ class _GenreTab extends ConsumerWidget {
           );
         },
       ),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: AppLoadingIndicator()),
       error: (_, _) => const Center(
         child: Text(
           "Failed to load genres",

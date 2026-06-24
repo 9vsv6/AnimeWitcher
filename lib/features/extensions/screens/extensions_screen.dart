@@ -6,6 +6,7 @@ import '../../../core/extensions/models/extension_repository.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../providers/extensions_controller.dart';
 import '../widgets/plugin_settings_dialog.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 class ExtensionsScreen extends ConsumerStatefulWidget {
@@ -56,7 +57,7 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
           constraints: const BoxConstraints(maxWidth: 800),
           child: switch (state) {
             ExtensionsLoading(repositories: []) => const Center(
-              child: CircularProgressIndicator(),
+              child: AppLoadingIndicator(),
             ),
             _ => ListView.builder(
               padding: const EdgeInsets.only(bottom: 24),
@@ -415,10 +416,13 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                 if (isRepoInstalling)
                   const Padding(
                     padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AppLoadingIndicator(
+                      constraints: BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                        maxWidth: 24,
+                        maxHeight: 24,
+                      ),
                     ),
                   )
                 else ...[
@@ -703,10 +707,13 @@ class _PluginTileState extends ConsumerState<_PluginTile> {
       trailing: isInstalling
           ? const Padding(
               padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              child: AppLoadingIndicator(
+                constraints: BoxConstraints(
+                  minWidth: 24,
+                  minHeight: 24,
+                  maxWidth: 24,
+                  maxHeight: 24,
+                ),
               ),
             )
           : Row(

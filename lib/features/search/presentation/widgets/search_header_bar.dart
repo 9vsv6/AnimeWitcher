@@ -4,6 +4,7 @@ import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import '../search_provider.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 /// A custom header bar for the search screen in widescreen/desktop layout.
 ///
@@ -63,9 +64,9 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                       child: SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
+                        child: AppLoadingIndicator(
                           color: theme.colorScheme.primary,
+                          constraints: BoxConstraints.tight(const Size(18, 18)),
                         ),
                       ),
                     );

@@ -8,6 +8,7 @@ import '../../../../core/network/doh_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/utils/app_utils.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 import '../player_settings_provider.dart';
 import '../../../../core/utils/stream_quality_sorter.dart';
 import '../general_settings_provider.dart';
@@ -793,7 +794,7 @@ void showLanguageDialog(
           if (!snapshot.hasData) {
             return const SizedBox(
               height: 100,
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: AppLoadingIndicator()),
             );
           }
 
@@ -867,7 +868,7 @@ void showDeveloperDialog(BuildContext context) {
                   'https://avatars.githubusercontent.com/u/74624467?v=4',
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(child: AppLoadingIndicator());
                   },
                   errorBuilder: (context, error, stackTrace) =>
                       const Icon(Icons.person_rounded, size: 50),
@@ -974,13 +975,9 @@ class _SocialButton extends StatelessWidget {
           colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
           width: 24,
           height: 24,
-          placeholderBuilder: (context) => SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: color.withValues(alpha: 0.5),
-            ),
+          placeholderBuilder: (context) => AppLoadingIndicator(
+            color: color.withValues(alpha: 0.5),
+            constraints: BoxConstraints.tight(const Size(24, 24)),
           ),
         ),
         onPressed: onTap,
@@ -1200,10 +1197,13 @@ void showOpenSubtitlesAuthDialog(
                               }
                             },
                       icon: isVerifying
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          ? const AppLoadingIndicator(
+                              constraints: BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                                maxWidth: 16,
+                                maxHeight: 16,
+                              ),
                             )
                           : const Icon(
                               Icons.check_circle_outline_rounded,
@@ -1396,12 +1396,13 @@ void showSubDlAuthDialog(
                               }
                             },
                       icon: isFetching
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                          ? const AppLoadingIndicator(
+                              color: Colors.white,
+                              constraints: BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                                maxWidth: 16,
+                                maxHeight: 16,
                               ),
                             )
                           : const Icon(Icons.download_rounded, size: 18),
@@ -1486,10 +1487,13 @@ void showSubDlAuthDialog(
                               }
                             },
                       icon: isVerifyingKey
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          ? const AppLoadingIndicator(
+                              constraints: BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                                maxWidth: 16,
+                                maxHeight: 16,
+                              ),
                             )
                           : const Icon(
                               Icons.check_circle_outline_rounded,
@@ -1656,10 +1660,13 @@ void showSubSourceAuthDialog(
                               }
                             },
                       icon: isVerifying
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          ? const AppLoadingIndicator(
+                              constraints: BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                                maxWidth: 16,
+                                maxHeight: 16,
+                              ),
                             )
                           : const Icon(
                               Icons.check_circle_outline_rounded,

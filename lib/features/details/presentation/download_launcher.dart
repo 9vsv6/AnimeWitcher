@@ -12,6 +12,7 @@ import '../../../core/services/download_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../shared/widgets/custom_widgets.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 part 'download_launcher.g.dart';
@@ -165,7 +166,7 @@ class DownloadLauncher {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  const AppLoadingIndicator(),
                   const SizedBox(height: 16),
                   Text(l10n.verifyingSourceSize),
                 ],

@@ -27,6 +27,7 @@ import 'core/network/cloudflare_bypass.dart';
 import 'package:dpad/dpad.dart';
 import 'core/config/tmdb_config.dart';
 import 'core/providers/device_info_provider.dart';
+import 'shared/widgets/loading_indicator.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -146,7 +147,7 @@ class _AppRootState extends State<AppRoot> {
                 const Color(0xFF6200EE); // Default Purple/Blue
             return ColoredBox(
               color: Colors.black,
-              child: Center(child: CircularProgressIndicator(color: color)),
+              child: Center(child: AppLoadingIndicator(color: color)),
             );
           },
         ),

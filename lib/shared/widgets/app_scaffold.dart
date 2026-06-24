@@ -9,6 +9,7 @@ import 'package:skystream/shared/widgets/app_sidebar.dart';
 
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../../features/settings/presentation/general_settings_provider.dart';
+import 'loading_indicator.dart';
 
 class AppScaffold extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -164,8 +165,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
           ),
         );
       },
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => const Scaffold(body: Center(child: AppLoadingIndicator())),
       error: (err, stack) => Scaffold(
         body: Center(
           child: Text(

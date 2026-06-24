@@ -21,6 +21,7 @@ import "widgets/details_layout_widgets.dart";
 import "widgets/details_desktop_hero.dart";
 import "widgets/premium_details_widgets.dart";
 import "../../../shared/widgets/expandable_text.dart";
+import "../../../shared/widgets/loading_indicator.dart";
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 class DetailsScreen extends ConsumerStatefulWidget {
@@ -308,7 +309,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
       children: [
         // Loading / Error / Season chips
         if (detailsState is AsyncLoading)
-          const Center(child: CircularProgressIndicator())
+          const Center(child: AppLoadingIndicator())
         else if (detailsState is AsyncError)
           Text(
             "Error: ${detailsState.error}",
@@ -456,7 +457,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
               ),
               const SizedBox(height: 32),
               if (detailsState is AsyncLoading)
-                const Center(child: CircularProgressIndicator())
+                const Center(child: AppLoadingIndicator())
               else if (detailsState is AsyncError)
                 Container(
                   padding: const EdgeInsets.all(16),

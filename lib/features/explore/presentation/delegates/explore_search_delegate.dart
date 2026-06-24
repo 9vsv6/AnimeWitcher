@@ -8,6 +8,7 @@ import '../../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 
 import '../controllers/explore_search_controller.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class ExploreSearchDelegate extends SearchDelegate<void> {
   ExploreSearchDelegate()
@@ -119,7 +120,7 @@ class _SearchSuggestionsListState
     final suggestions = searchState.suggestions;
     if (isLoading) {
       return Center(
-        child: CircularProgressIndicator(
+        child: AppLoadingIndicator(
           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
         ),
       );

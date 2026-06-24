@@ -8,6 +8,7 @@ import 'search_provider.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -203,13 +204,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 if (isSearching) {
                   suffix = Padding(
                     padding: const EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: theme.colorScheme.primary,
-                      ),
+                    child: AppLoadingIndicator(
+                      color: theme.colorScheme.primary,
+                      constraints: BoxConstraints.tight(const Size(18, 18)),
                     ),
                   );
                 } else if (value.text.isNotEmpty) {
@@ -315,7 +312,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               if (allResults.isEmpty && !state.isLoading) {
                 return _buildEmptyState(context);
               } else if (allResults.isEmpty && state.isLoading) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: AppLoadingIndicator());
               }
 
               // RepaintBoundary isolates list repaints from the rest of the
@@ -339,7 +336,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               );
             },
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(child: AppLoadingIndicator()),
             error: (err, stack) =>
                 Center(child: Text(l10n.errorPrefix(err.toString()))),
           );
@@ -350,7 +347,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     SearchSuggestionState suggestionState,
   ) {
     if (suggestionState.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: AppLoadingIndicator());
     }
 
     if (suggestionState.suggestions.isEmpty) {
