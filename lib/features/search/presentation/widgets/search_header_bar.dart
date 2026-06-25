@@ -7,7 +7,14 @@ import '../../../../shared/widgets/cards_wrapper.dart';
 
 class WaveformEqualizer extends StatefulWidget {
   final bool isActive;
-  const WaveformEqualizer({super.key, required this.isActive});
+  final Color? activeColor;
+  final Color? inactiveColor;
+  const WaveformEqualizer({
+    super.key,
+    required this.isActive,
+    this.activeColor,
+    this.inactiveColor,
+  });
 
   @override
   State<WaveformEqualizer> createState() => _WaveformEqualizerState();
@@ -46,6 +53,10 @@ class _WaveformEqualizerState extends State<WaveformEqualizer>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final active = widget.activeColor ?? Colors.redAccent;
+    final inactive = widget.inactiveColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.6);
+
     if (!widget.isActive) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -55,7 +66,7 @@ class _WaveformEqualizerState extends State<WaveformEqualizer>
           height: 4,
           margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: inactive,
             borderRadius: BorderRadius.circular(0.5),
           ),
         )),
@@ -66,14 +77,14 @@ class _WaveformEqualizerState extends State<WaveformEqualizer>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        _buildBar(_anim1, 4, 12),
-        _buildBar(_anim2, 6, 14),
-        _buildBar(_anim3, 3, 10),
+        _buildBar(_anim1, 4, 12, active),
+        _buildBar(_anim2, 6, 14, active),
+        _buildBar(_anim3, 3, 10, active),
       ],
     );
   }
 
-  Widget _buildBar(Animation<double> anim, double minH, double maxH) {
+  Widget _buildBar(Animation<double> anim, double minH, double maxH, Color color) {
     return AnimatedBuilder(
       animation: anim,
       builder: (context, child) {
@@ -83,7 +94,7 @@ class _WaveformEqualizerState extends State<WaveformEqualizer>
           height: h,
           margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
-            color: Colors.redAccent,
+            color: color,
             borderRadius: BorderRadius.circular(0.5),
           ),
         );
@@ -137,7 +148,7 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
     final nativeFont = theme.textTheme.bodyLarge?.fontFamily;
 
     return Container(
-      width: 280,
+      width: 310,
       height: 38,
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
@@ -189,12 +200,9 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.video_library_rounded,
-                            size: 14,
-                            color: !isLive
-                                ? Colors.white
-                                : Colors.white60,
+                          Transform.translate(
+                            offset: const Offset(0, -1.5),
+                            child: const Text('🍿', style: TextStyle(fontSize: 14)),
                           ),
                           const SizedBox(width: 6),
                           Text(
@@ -229,7 +237,10 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          WaveformEqualizer(isActive: isLive),
+                          WaveformEqualizer(
+                            isActive: isLive,
+                            inactiveColor: Colors.white.withValues(alpha: 0.6),
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Live TV',

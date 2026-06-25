@@ -384,7 +384,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   value: SearchFilter.live,
                   child: Row(
                     children: [
-                      const Text('📺', style: TextStyle(fontSize: 18)),
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: Center(
+                          child: WaveformEqualizer(isActive: true),
+                        ),
+                      ),
                       const SizedBox(width: 12),
                       const Expanded(child: Text('Livestreams')),
                       if (isLive)
@@ -407,10 +413,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  isLive ? '📺' : '🍿',
-                  style: const TextStyle(fontSize: 18),
-                ),
+                child: isLive
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: Center(
+                          child: WaveformEqualizer(isActive: true),
+                        ),
+                      )
+                    : const Text('🍿', style: TextStyle(fontSize: 18)),
               ),
             ),
           ),
@@ -653,6 +664,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       );
     }
     final nativeFont = Theme.of(context).textTheme.bodyLarge?.fontFamily;
+    final profile = ref.watch(deviceProfileProvider).asData?.value;
+    final isTv = profile?.isTv == true || context.isTv;
+    final isWidescreen = isTv || context.isTabletOrLarger;
+    final imageWidth = isWidescreen ? 320.0 : 200.0;
 
     // No search results found: display No Results Found text and the image grouped vertically
     return Center(
@@ -673,7 +688,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           Image.asset(
             'assets/images/no_results.png',
             fit: BoxFit.contain,
-            width: 320,
+            width: imageWidth,
             errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
           ),
         ],
