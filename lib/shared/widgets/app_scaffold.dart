@@ -114,45 +114,74 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                 widget.navigationShell.goBranch(defaultIndex);
               }
             },
-            child: Material(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: SafeArea(
-                bottom: false,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Content in its own traversal group, positioned first (bottom layer)
-                    Positioned.fill(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: LayoutConstants.sidebarWidthCompact),
-                        child: FocusTraversalGroup(
-                          policy: WidgetOrderTraversalPolicy(),
-                          child: Focus(
-                            canRequestFocus: false,
-                            skipTraversal: true,
-                            onKeyEvent: _onContentKeyEvent,
-                            child: widget.navigationShell,
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) {
+                ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(false);
+              },
+              onPointerHover: (_) {
+                ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(false);
+              },
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: (node, event) {
+                  if (event is KeyDownEvent) {
+                    final key = event.logicalKey;
+                    if (key == LogicalKeyboardKey.arrowDown ||
+                        key == LogicalKeyboardKey.arrowUp ||
+                        key == LogicalKeyboardKey.arrowLeft ||
+                        key == LogicalKeyboardKey.arrowRight ||
+                        key == LogicalKeyboardKey.enter ||
+                        key == LogicalKeyboardKey.select ||
+                        key == LogicalKeyboardKey.space ||
+                        key == LogicalKeyboardKey.tab) {
+                      ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(true);
+                    }
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Material(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Content in its own traversal group, positioned first (bottom layer)
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: LayoutConstants.sidebarWidthCompact),
+                            child: FocusTraversalGroup(
+                              policy: WidgetOrderTraversalPolicy(),
+                              child: Focus(
+                                canRequestFocus: false,
+                                skipTraversal: true,
+                                onKeyEvent: _onContentKeyEvent,
+                                child: widget.navigationShell,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    // Sidebar in its own traversal group, positioned second (top layer)
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: LayoutConstants.sidebarWidthCompact,
-                      child: FocusTraversalGroup(
-                        policy: WidgetOrderTraversalPolicy(),
-                        child: AppSidebar(
-                          currentIndex: widget.navigationShell.currentIndex,
-                          onItemTapped: (int index) =>
-                              _onItemTapped(index, context),
-                          focusNodes: _sidebarNodes,
+                        // Sidebar in its own traversal group, positioned second (top layer)
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: LayoutConstants.sidebarWidthCompact,
+                          child: FocusTraversalGroup(
+                            policy: WidgetOrderTraversalPolicy(),
+                            child: AppSidebar(
+                              currentIndex: widget.navigationShell.currentIndex,
+                              onItemTapped: (int index) =>
+                                  _onItemTapped(index, context),
+                              focusNodes: _sidebarNodes,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),

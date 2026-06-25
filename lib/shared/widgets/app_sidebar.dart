@@ -5,6 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 
+/// Global provider to track whether the D-pad/keyboard navigation mode is active.
+/// This prevents cursor hover magnification from fighting with focus magnification,
+/// especially during focus resets or Alt+Tab.
+class DpadActiveNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool val) => state = val;
+}
+
+final isDpadActiveProvider = NotifierProvider<DpadActiveNotifier, bool>(DpadActiveNotifier.new);
+
 /// Number of destinations rendered by [AppSidebar].
 const int kSidebarDestinationCount = 5;
 
@@ -47,7 +59,6 @@ class AppSidebar extends ConsumerStatefulWidget {
 class _AppSidebarState extends ConsumerState<AppSidebar> {
   late final ValueNotifier<double> _mouseY;
   int? _focusedIndex;
-  bool _isDpadMode = false;
 
   @override
   void initState() {
@@ -96,19 +107,11 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
           _focusedIndex = currentFocused;
           // If focus changed and mouse is not hovering, we are in D-pad mode!
           if (currentFocused != null && _mouseY.value == double.infinity) {
-            _isDpadMode = true;
+            ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(true);
           }
         });
       }
     });
-  }
-
-  void _setDpadMode(bool value) {
-    if (_isDpadMode != value) {
-      setState(() {
-        _isDpadMode = value;
-      });
-    }
   }
 
   @override
@@ -116,6 +119,9 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // Watch the global D-pad mode provider
+    final isDpadMode = ref.watch<bool>(isDpadActiveProvider);
 
     final destinations = [
       (Icons.home_outlined, Icons.home, l10n.home),
@@ -162,7 +168,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
               double distance = 150.0;
               if (mouseYValue != double.infinity) {
                 distance = mouseYValue - unscaledCenters[i];
-              } else if (_focusedIndex != null && _isDpadMode) {
+              } else if (_focusedIndex != null && isDpadMode) {
                 final diff = (i - _focusedIndex!).abs();
                 if (diff == 0) {
                   distance = 0.0;
@@ -186,10 +192,8 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
             return MouseRegion(
               onHover: (event) {
                 _mouseY.value = event.localPosition.dy;
-                if (_isDpadMode) {
-                  setState(() {
-                    _isDpadMode = false;
-                  });
+                if (ref.read<bool>(isDpadActiveProvider)) {
+                  ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(false);
                 }
               },
               onExit: (_) {
@@ -240,8 +244,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                         onTap: () => widget.onItemTapped(i),
                         index: i,
                         focusNodes: widget.focusNodes,
-                        isDpadMode: _isDpadMode,
-                        onDpadModeChanged: _setDpadMode,
+                        isDpadMode: isDpadMode,
                       ),
                     );
                   }),
@@ -255,7 +258,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
   }
 }
 
-class _SidebarDockItem extends StatefulWidget {
+class _SidebarDockItem extends ConsumerStatefulWidget {
   final FocusNode focusNode;
   final IconData icon;
   final String label;
@@ -265,7 +268,6 @@ class _SidebarDockItem extends StatefulWidget {
   final int index;
   final List<FocusNode> focusNodes;
   final bool isDpadMode;
-  final ValueChanged<bool> onDpadModeChanged;
 
   const _SidebarDockItem({
     required this.focusNode,
@@ -277,14 +279,13 @@ class _SidebarDockItem extends StatefulWidget {
     required this.index,
     required this.focusNodes,
     required this.isDpadMode,
-    required this.onDpadModeChanged,
   });
 
   @override
-  State<_SidebarDockItem> createState() => _SidebarDockItemState();
+  ConsumerState<_SidebarDockItem> createState() => _SidebarDockItemState();
 }
 
-class _SidebarDockItemState extends State<_SidebarDockItem> {
+class _SidebarDockItemState extends ConsumerState<_SidebarDockItem> {
   bool _isFocused = false;
   bool _isHovered = false;
 
@@ -313,7 +314,7 @@ class _SidebarDockItemState extends State<_SidebarDockItem> {
       },
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
-          widget.onDpadModeChanged(true);
+          ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(true);
           if (event.logicalKey == LogicalKeyboardKey.select ||
               event.logicalKey == LogicalKeyboardKey.enter ||
               event.logicalKey == LogicalKeyboardKey.space) {
