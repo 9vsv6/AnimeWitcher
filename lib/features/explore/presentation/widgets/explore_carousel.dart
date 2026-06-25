@@ -283,19 +283,54 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
         },
         onShowFocusHighlight: (show) =>
             setState(() => _isFocusHighlighted = show),
-        child: isDesktop
-            ? RepaintBoundary(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    LayoutConstants.dashboardContentPadding,
-                    LayoutConstants.spacingSm,
-                    LayoutConstants.dashboardContentPadding,
-                    0,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragEnd: (details) {
+            if (details.primaryVelocity == null) return;
+            if (details.primaryVelocity! < -300) {
+              _goToNextSlide();
+            } else if (details.primaryVelocity! > 300) {
+              _goToPreviousSlide();
+            }
+          },
+          child: isDesktop
+              ? RepaintBoundary(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      LayoutConstants.dashboardContentPadding,
+                      LayoutConstants.spacingSm,
+                      LayoutConstants.dashboardContentPadding,
+                      0,
+                    ),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: _isFocusHighlighted
+                            ? Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 2.5,
+                              )
+                            : null,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: SizedBox(
+                          height: heroHeight,
+                          child: _buildCarouselStack(
+                            heroHeight,
+                            isDesktop: isDesktop || isTv,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
+                )
+              : Padding(
+                  padding: EdgeInsets.zero,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
                       border: _isFocusHighlighted
                           ? Border.all(
                               color: Theme.of(context).colorScheme.primary,
@@ -303,40 +338,16 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
                             )
                           : null,
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: SizedBox(
-                        height: heroHeight,
-                        child: _buildCarouselStack(
-                          heroHeight,
-                          isDesktop: isDesktop || isTv,
-                        ),
+                    child: SizedBox(
+                      height: heroHeight,
+                      child: _buildCarouselStack(
+                        heroHeight,
+                        isDesktop: isDesktop || isTv,
                       ),
                     ),
                   ),
                 ),
-              )
-            : Padding(
-                padding: EdgeInsets.zero,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  decoration: BoxDecoration(
-                    border: _isFocusHighlighted
-                        ? Border.all(
-                            color: Theme.of(context).colorScheme.primary,
-                            width: 2.5,
-                          )
-                        : null,
-                  ),
-                  child: SizedBox(
-                    height: heroHeight,
-                    child: _buildCarouselStack(
-                      heroHeight,
-                      isDesktop: isDesktop || isTv,
-                    ),
-                  ),
-                ),
-              ),
+        ),
       ),
     );
   }
