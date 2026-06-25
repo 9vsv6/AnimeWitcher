@@ -9,17 +9,21 @@ import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/shared/widgets/desktop_scroll_wrapper.dart';
 import 'package:skystream/shared/widgets/multimedia_card.dart';
+import 'stamp_in_label.dart';
+import 'bouncy_entry_animation.dart';
 
 class SearchResultSection extends ConsumerStatefulWidget {
   final String providerName;
   final String providerId;
   final List<MultimediaItem> results;
+  final FocusNode? firstCardFocusNode;
 
   const SearchResultSection({
     super.key,
     required this.providerName,
     required this.providerId,
     required this.results,
+    this.firstCardFocusNode,
   });
 
   @override
@@ -57,22 +61,24 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            widget.providerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: isLarge ? 24 : 20,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.onSurface,
+                    StampInLabel(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.providerName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: isLarge ? 24 : 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
                           ),
-                        ),
-                        _buildDebugTag(context, ref),
-                      ],
+                          _buildDebugTag(context, ref),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Container(
@@ -105,6 +111,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
                   scrollDirection: Axis.horizontal,
                   itemCount: widget.results.length,
                   itemExtent: cardWidth + spacing,
+                  clipBehavior: Clip.none,
                   itemBuilder: (context, rIndex) {
                     final item = widget.results[rIndex];
                     final uniqueTag =
@@ -112,17 +119,21 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
 
                     return Padding(
                       padding: EdgeInsets.only(right: spacing),
-                      child: MultimediaCard(
-                        key: ValueKey(item.url),
-                        imageUrl: AppImageFallbacks.poster(
-                          item.posterUrl,
-                          label: item.title,
+                      child: BouncyEntryAnimation(
+                        delay: Duration(milliseconds: rIndex * 50),
+                        child: MultimediaCard(
+                          key: ValueKey(item.url),
+                          imageUrl: AppImageFallbacks.poster(
+                            item.posterUrl,
+                            label: item.title,
+                          ),
+                          title: item.title,
+                          heroTag: uniqueTag,
+                          focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
+                          onTap: () => DetailsRoute(
+                            $extra: DetailsRouteExtra(item: item),
+                          ).push<void>(context),
                         ),
-                        title: item.title,
-                        heroTag: uniqueTag,
-                        onTap: () => DetailsRoute(
-                          $extra: DetailsRouteExtra(item: item),
-                        ).push<void>(context),
                       ),
                     );
                   },
