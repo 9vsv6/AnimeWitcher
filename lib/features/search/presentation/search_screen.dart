@@ -745,6 +745,9 @@ class _SuggestionCardState extends State<_SuggestionCard> {
     if (widget.focusNode == null) {
       _bodyNode.dispose();
     } else {
+      if (_bodyNode.hasFocus) {
+        _bodyNode.unfocus();
+      }
       _bodyNode.removeListener(_onFocusChange);
     }
     _buttonNode.dispose();

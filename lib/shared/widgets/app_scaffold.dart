@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:skystream/core/providers/device_info_provider.dart';
+import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:skystream/shared/widgets/custom_bottom_nav.dart';
 import 'package:skystream/shared/widgets/app_sidebar.dart';
@@ -117,27 +118,37 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
               color: Theme.of(context).scaffoldBackgroundColor,
               child: SafeArea(
                 bottom: false,
-                child: Row(
+                child: Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    // Sidebar in its own traversal group so UP/DOWN stays inside it.
-                    FocusTraversalGroup(
-                      policy: WidgetOrderTraversalPolicy(),
-                      child: AppSidebar(
-                        currentIndex: widget.navigationShell.currentIndex,
-                        onItemTapped: (int index) =>
-                            _onItemTapped(index, context),
-                        focusNodes: _sidebarNodes,
+                    // Content in its own traversal group, positioned first (bottom layer)
+                    Positioned.fill(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: LayoutConstants.sidebarWidthCompact),
+                        child: FocusTraversalGroup(
+                          policy: WidgetOrderTraversalPolicy(),
+                          child: Focus(
+                            canRequestFocus: false,
+                            skipTraversal: true,
+                            onKeyEvent: _onContentKeyEvent,
+                            child: widget.navigationShell,
+                          ),
+                        ),
                       ),
                     ),
-                    // Content in its own traversal group.
-                    Expanded(
+                    // Sidebar in its own traversal group, positioned second (top layer)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: LayoutConstants.sidebarWidthCompact,
                       child: FocusTraversalGroup(
                         policy: WidgetOrderTraversalPolicy(),
-                        child: Focus(
-                          canRequestFocus: false,
-                          skipTraversal: true,
-                          onKeyEvent: _onContentKeyEvent,
-                          child: widget.navigationShell,
+                        child: AppSidebar(
+                          currentIndex: widget.navigationShell.currentIndex,
+                          onItemTapped: (int index) =>
+                              _onItemTapped(index, context),
+                          focusNodes: _sidebarNodes,
                         ),
                       ),
                     ),

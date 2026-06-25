@@ -66,7 +66,13 @@ class _CardsWrapperState extends State<CardsWrapper>
   @override
   void dispose() {
     _controller?.dispose();
-    if (widget.focusNode == null) _node.dispose();
+    if (widget.focusNode == null) {
+      _node.dispose();
+    } else {
+      if (widget.focusNode!.hasFocus) {
+        widget.focusNode!.unfocus();
+      }
+    }
     super.dispose();
   }
 
