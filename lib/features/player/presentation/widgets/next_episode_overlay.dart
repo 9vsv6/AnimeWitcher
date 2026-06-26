@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -217,7 +216,6 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildHeader(l10n, isCompact),
                           _buildThumbnail(thumbHeight, cardWidth, isCompact),
                           _buildInfo(isCompact),
                         ],
@@ -234,167 +232,87 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
     );
   }
 
-  Widget _buildHeader(AppLocalizations l10n, bool isCompact) {
-    final textStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.5),
-      fontSize: isCompact ? 10 : 11,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.5,
-      shadows: const [Shadow(color: Colors.black38, blurRadius: 1)],
-    );
-    final upNextStyle = TextStyle(
-      color: HotstarPlayerStyle.hotstar,
-      fontSize: isCompact ? 10 : 11,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 1.0,
-      shadows: const [Shadow(color: Colors.black38, blurRadius: 1)],
-    );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        isCompact ? 12 : 16,
-        isCompact ? 8 : 10,
-        isCompact ? 12 : 16,
-        isCompact ? 8 : 10,
-      ),
-      child: Row(
-        children: [
-          Text(l10n.upNext.toUpperCase(), style: upNextStyle),
-          const SizedBox(width: 6),
-          Container(
-            width: 3,
-            height: 3,
-            decoration: const BoxDecoration(
-              color: Color(0x80FFFFFF),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _countdownController,
-              builder: (context, _) {
-                final remaining =
-                    (_countdownSecs -
-                            (_countdownController.value * _countdownSecs)
-                                .round())
-                        .clamp(0, _countdownSecs);
-                return Row(
-                  children: [
-                    Text(
-                      '${remaining}s',
-                      style: textStyle.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                    const Spacer(),
-                    if (remaining <= 3 && remaining >= 0) _buildPulseDot(),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPulseDot() {
-    final phase = ((_countdownController.value - 0.8) / 0.2).clamp(0.0, 1.0);
-    final pulse = (math.sin(phase * 4 * math.pi) + 1) / 2;
-    final scale = 0.6 + pulse * 0.4;
-    final primary = HotstarPlayerStyle.hotstar;
-    return Transform.scale(
-      scale: scale,
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(
-          color: primary,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(color: primary.withValues(alpha: 0.5), blurRadius: 4),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildThumbnail(double height, double cardWidth, bool isCompact) {
     final imageUrl = widget.nextEpisodePosterUrl?.isNotEmpty == true
         ? widget.nextEpisodePosterUrl!
         : null;
-    // Use a smaller radius (8.0) to fit concentrically inside the parent (12.0)
-    const radius = 8.0;
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 16),
-      child: SizedBox(
-        height: height,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(radius),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (imageUrl != null)
-                  CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.cover,
-                    memCacheWidth: (cardWidth * 2).round(),
-                    memCacheHeight: (height * 2).round(),
-                    errorWidget: (context, url, error) =>
-                        const ThumbnailErrorPlaceholder(),
-                    placeholder: (context, url) => Container(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      child: const Center(
-                        child: SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  const ThumbnailErrorPlaceholder(),
-                if (widget.nextEpisodeRuntime != null &&
-                    widget.nextEpisodeRuntime! >= 60)
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        _formatRuntime(widget.nextEpisodeRuntime),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+    return SizedBox(
+      height: height,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (imageUrl != null)
+              CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.cover,
+                memCacheWidth: (cardWidth * 2).round(),
+                memCacheHeight: (height * 2).round(),
+                errorWidget: (context, url, error) =>
+                    const ThumbnailErrorPlaceholder(),
+                placeholder: (context, url) => Container(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-              ],
+                ),
+              )
+            else
+              const ThumbnailErrorPlaceholder(),
+            
+            // Gradient fade overlay on the top of the thumbnail container
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: height * 0.35,
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.45),
+                        Colors.black.withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
+
+            if (widget.nextEpisodeRuntime != null &&
+                widget.nextEpisodeRuntime! >= 60)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    _formatRuntime(widget.nextEpisodeRuntime),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -403,18 +321,12 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
   Widget _buildInfo(bool isCompact) {
     final hasRating =
         widget.nextEpisodeRating != null && widget.nextEpisodeRating! > 0;
-    final seasonStr = widget.nextEpisodeSeason != null
-        ? 'S${widget.nextEpisodeSeason}'
-        : '';
-    final epStr = widget.nextEpisodeNumber != null
-        ? 'E${widget.nextEpisodeNumber}'
-        : '';
-    final badge = [seasonStr, epStr].where((s) => s.isNotEmpty).join(' ');
+    final hasBadge = widget.nextEpisodeSeason != null || widget.nextEpisodeNumber != null;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
         isCompact ? 12 : 16,
-        isCompact ? 10 : 12,
+        isCompact ? 12 : 14,
         isCompact ? 12 : 16,
         isCompact ? 8 : 10,
       ),
@@ -426,34 +338,61 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
             constraints: const BoxConstraints(minHeight: 20),
             child: Row(
               children: [
-                if (badge.isNotEmpty)
+                if (hasBadge)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isCompact ? 6 : 8,
+                      vertical: isCompact ? 2 : 2.5,
                     ),
                     decoration: BoxDecoration(
-                      color: HotstarPlayerStyle.hotstar.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(4),
+                      color: HotstarPlayerStyle.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(100),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        width: 0.5,
+                        color: HotstarPlayerStyle.accent.withValues(alpha: 0.35),
+                        width: 0.8,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 4,
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: Text(
-                      badge,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isCompact ? 10 : 11,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          if (widget.nextEpisodeSeason != null)
+                            TextSpan(
+                              text: 'S${widget.nextEpisodeSeason}',
+                              style: TextStyle(
+                                fontSize: isCompact ? 8.5 : 9.5,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.white.withValues(alpha: 0.7),
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          if (widget.nextEpisodeSeason != null &&
+                              widget.nextEpisodeNumber != null)
+                            TextSpan(
+                              text: ' • ',
+                              style: TextStyle(
+                                fontSize: isCompact ? 8 : 9,
+                                fontWeight: FontWeight.bold,
+                                color: HotstarPlayerStyle.accent.withValues(alpha: 0.55),
+                              ),
+                            ),
+                          if (widget.nextEpisodeNumber != null)
+                            TextSpan(
+                              text: 'E${widget.nextEpisodeNumber}',
+                              style: TextStyle(
+                                fontSize: isCompact ? 9.5 : 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
@@ -461,31 +400,31 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               ],
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             widget.nextEpisodeTitle,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: Colors.white,
-              fontSize: isCompact ? 13 : 14,
-              fontWeight: FontWeight.w600,
-              height: 1.3,
+              color: HotstarPlayerStyle.primaryText,
+              fontSize: isCompact ? 14 : 16,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
             ),
           ),
           if (widget.nextEpisodeDescription != null &&
               widget.nextEpisodeDescription!.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 3),
+              padding: const EdgeInsets.only(top: 6),
               child: Text(
                 widget.nextEpisodeDescription!,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
+                  color: HotstarPlayerStyle.secondaryText,
                   fontSize: isCompact ? 11 : 12,
                   fontWeight: FontWeight.w400,
-                  height: 1.3,
+                  height: 1.4,
                 ),
               ),
             ),
@@ -526,7 +465,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
         Text(
           numeric,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: HotstarPlayerStyle.secondaryText,
             fontSize: isCompact ? 10 : 11,
             fontWeight: FontWeight.w700,
           ),
@@ -534,7 +473,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
         Text(
           '/10',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.35),
+            color: HotstarPlayerStyle.mutedText,
             fontSize: isCompact ? 9 : 10,
             fontWeight: FontWeight.w500,
           ),
