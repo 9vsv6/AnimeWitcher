@@ -48,3 +48,13 @@ class ExploreFilter extends _$ExploreFilter {
     state = const FilterState();
   }
 }
+
+@Riverpod(keepAlive: true)
+class AnimeTitleLanguage extends _$AnimeTitleLanguage {
+  @override
+  String build() => 'english';
+
+  void setLanguage(String lang) {
+    state = lang;
+  }
+}

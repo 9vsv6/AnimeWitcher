@@ -14,11 +14,13 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
     required this.data,
     required this.isMovie,
     required this.child,
+    this.source,
   });
 
   final TmdbDetails data;
   final bool isMovie;
   final Widget child;
+  final String? source;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -194,7 +196,9 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
                           _buildTmdbLogo(),
                           _buildTopBadge(
                             context,
-                            isMovie ? "MOVIE" : "TV SHOW",
+                            source == 'anilist'
+                                ? (isMovie ? "MOVIE" : "ANIME")
+                                : (isMovie ? "MOVIE" : "TV SHOW"),
                           ),
                           if (year.isNotEmpty)
                             _buildIconInfo(
@@ -305,7 +309,7 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
                           query: title,
                           compact: true,
                           parentMediaType: isMovie ? 'movie' : 'tv',
-                          tmdbId: data.id,
+                          tmdbId: data.tmdbId,
                           imdbId: data.imdbId,
                         ),
                       ),
@@ -322,15 +326,16 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
   }
 
   Widget _buildTmdbLogo() {
+    final isAnilist = source == 'anilist';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF01B4E4), // TMDB Blue
+        color: isAnilist ? const Color(0xFF3DB4F2) : const Color(0xFF01B4E4), // AniList Blue or TMDB Blue
         borderRadius: BorderRadius.circular(4),
       ),
-      child: const Text(
-        "TMDB",
-        style: TextStyle(
+      child: Text(
+        isAnilist ? "ANILIST" : "TMDB",
+        style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w900,
           fontSize: 10,

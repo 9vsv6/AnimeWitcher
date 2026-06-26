@@ -180,6 +180,7 @@ class _SearchSuggestionsListState
                 movieId: item.id,
                 mediaType: item.tmdbMediaType,
                 heroTag: 'search_${item.id}',
+                source: item.source,
               ).push<void>(context);
             },
           ),
@@ -342,6 +343,7 @@ class _SearchResultsGridState extends ConsumerState<_SearchResultsGrid> {
               mediaType: item.tmdbMediaType,
               heroTag: uniqueTag,
               placeholderPoster: imageUrl,
+              source: item.source,
             ).push<void>(context);
           },
         );

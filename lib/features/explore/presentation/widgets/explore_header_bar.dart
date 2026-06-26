@@ -6,6 +6,7 @@ import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/features/explore/presentation/delegates/explore_search_delegate.dart';
 import 'package:skystream/features/explore/presentation/widgets/unified_filter_dialog.dart';
 import 'package:skystream/features/explore/data/explore_filter_provider.dart';
+import 'package:skystream/features/explore/data/explore_mode_provider.dart';
 import 'dart:async';
 
 /// A custom header bar for the explore screen in widescreen/desktop layout.
@@ -80,6 +81,39 @@ class ExploreHeaderBar extends ConsumerWidget {
 
           const SizedBox(width: 16),
 
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment<bool>(
+                value: false,
+                label: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text('Movies & Shows', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              ButtonSegment<bool>(
+                value: true,
+                label: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text('Anime', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+            selected: {ref.watch(exploreModeProvider)},
+            onSelectionChanged: (value) {
+              ref.read(exploreModeProvider.notifier).setAnimeMode(value.first);
+            },
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              selectedBackgroundColor: theme.colorScheme.primary,
+              selectedForegroundColor: theme.colorScheme.onPrimary,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              side: BorderSide.none,
+              padding: EdgeInsets.zero,
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
           // Capsule search bar
           Expanded(
             child: CardsWrapper(
@@ -132,7 +166,6 @@ class ExploreHeaderBar extends ConsumerWidget {
           ),
 
           const SizedBox(width: 16),
-
           // Filter chip
           CardsWrapper(
             scaleFactor: 1.01,

@@ -452,6 +452,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
       movieId: movie.id,
       mediaType: mediaType,
       heroTag: 'hero_${movie.id}',
+      source: movie.source,
     ).push<void>(context);
   }
 
@@ -546,7 +547,6 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
   }) {
     final imageUrl = movie.backdropImageUrl;
     final title = movie.title;
-    final logoUrl = movie.logoUrl;
 
     const bleed = 60.0;
 

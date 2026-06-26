@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/widgets/cards_wrapper.dart';
 import '../data/explore_tmdb_provider.dart';
+import '../data/explore_mode_provider.dart';
+import 'anilist_explore_screen.dart';
 import 'view_all_screen.dart';
 import 'widgets/explore_carousel.dart';
 import 'widgets/explore_header_bar.dart';
@@ -153,12 +155,53 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 );
               },
             ),
-            title: Text(
-              AppLocalizations.of(context)!.explore,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
-                fontSize: 24,
-              ),
+            title: Row(
+              children: [
+                Text(
+                  AppLocalizations.of(context)!.explore,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment<bool>(
+                          value: false,
+                          label: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Text('Movies & Shows', style: TextStyle(fontSize: 12)),
+                          ),
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          label: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Text('Anime', style: TextStyle(fontSize: 12)),
+                          ),
+                        ),
+                      ],
+                      selected: {ref.watch(exploreModeProvider)},
+                      onSelectionChanged: (value) {
+                        ref.read(exploreModeProvider.notifier).setAnimeMode(value.first);
+                      },
+                      showSelectedIcon: false,
+                      style: SegmentedButton.styleFrom(
+                        selectedBackgroundColor: Theme.of(context).colorScheme.primary,
+                        selectedForegroundColor: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                        side: BorderSide.none,
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             centerTitle: false,
             actions: [
@@ -236,13 +279,23 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
               ),
             ],
           ),
-          body: _withGradientEdgeHint(_buildScrollView(context)),
+          body: _withGradientEdgeHint(
+            ref.watch(exploreModeProvider)
+                ? AnilistExploreScreen(
+                    scrollController: _scrollController,
+                    firstActionFocusNode: _firstActionFocusNode,
+                    onControllerReady: (c) =>
+                        setState(() => _carouselController = c),
+                  )
+                : _buildScrollView(context),
+          ),
         );
       },
     );
   }
 
   Widget _buildWidescreenBody(BuildContext context) {
+    final isAnime = ref.watch(exploreModeProvider);
     return Column(
       children: [
         Padding(
@@ -257,7 +310,18 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 : null,
           ),
         ),
-        Expanded(child: _withGradientEdgeHint(_buildScrollView(context))),
+        Expanded(
+          child: _withGradientEdgeHint(
+            isAnime
+                ? AnilistExploreScreen(
+                    scrollController: _scrollController,
+                    firstActionFocusNode: _firstActionFocusNode,
+                    onControllerReady: (c) =>
+                        setState(() => _carouselController = c),
+                  )
+                : _buildScrollView(context),
+          ),
+        ),
       ],
     );
   }

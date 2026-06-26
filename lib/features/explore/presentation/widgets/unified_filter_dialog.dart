@@ -5,6 +5,7 @@ import '../../../../core/utils/layout_constants.dart';
 import '../../data/explore_filter_provider.dart';
 import '../../data/explore_language_provider.dart';
 import '../../data/explore_tmdb_provider.dart';
+import '../../data/explore_mode_provider.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 
 class UnifiedFilterDialog extends ConsumerStatefulWidget {
@@ -33,6 +34,8 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
 
   @override
   Widget build(BuildContext context) {
+    final isAnime = ref.watch(exploreModeProvider);
+
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
       child: Dialog(
@@ -60,9 +63,11 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               // Header & Tabs
               Container(
                 decoration: BoxDecoration(
@@ -114,10 +119,16 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
                         fontSize: 13,
                       ),
                       tabs: [
-                        const Tab(
-                          text: "Lang",
-                          icon: Icon(Icons.translate, size: 20),
-                        ),
+                        if (isAnime)
+                          const Tab(
+                            text: "Title Lang",
+                            icon: Icon(Icons.title, size: 20),
+                          )
+                        else
+                          const Tab(
+                            text: "Lang",
+                            icon: Icon(Icons.translate, size: 20),
+                          ),
 
                         // Genre Tab
                         Consumer(
@@ -223,11 +234,14 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
               Flexible(
                 child: TabBarView(
                   controller: _tabController,
-                  children: const [
-                    _LanguageTab(),
-                    _GenreTab(),
-                    _YearTab(),
-                    _RatingTab(),
+                  children: [
+                    if (isAnime)
+                      const _TitleLanguageTab()
+                    else
+                      const _LanguageTab(),
+                    const _GenreTab(),
+                    const _YearTab(),
+                    const _RatingTab(),
                   ],
                 ),
               ),
@@ -260,6 +274,7 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),
@@ -652,6 +667,128 @@ class _YearTab extends ConsumerWidget {
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 fontSize: 16,
               ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TitleLanguageTab extends ConsumerWidget {
+  const _TitleLanguageTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(animeTitleLanguageProvider);
+    final titleLangs = [
+      {'code': 'english', 'name': 'English Title', 'native': 'English'},
+      {'code': 'japanese', 'name': 'Japanese Title', 'native': '日本語 (Native)'},
+      {'code': 'romaji', 'name': 'Romaji Title', 'native': 'Rōmaji'},
+    ];
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(20),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 2.5,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: titleLangs.length,
+      itemBuilder: (context, index) {
+        final lang = titleLangs[index];
+        final isSelected = lang['code'] == currentLang;
+
+        return InkWell(
+          onTap: () {
+            ref.read(animeTitleLanguageProvider.notifier).setLanguage(lang['code']!);
+          },
+          borderRadius: BorderRadius.circular(16),
+          focusColor: Theme.of(
+            context,
+          ).colorScheme.primary.withValues(alpha: 0.6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: LayoutConstants.spacingMd,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).dividerColor.withValues(alpha: 0.1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.1),
+                  ),
+                  child: Text(
+                    lang['code']!.substring(0, 2).toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: LayoutConstants.spacingSm),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        lang['name']!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        lang['native']!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.7)
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Icon(
+                    Icons.check_circle,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+              ],
             ),
           ),
         );

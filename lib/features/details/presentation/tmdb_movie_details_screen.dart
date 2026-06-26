@@ -27,6 +27,7 @@ class TmdbMovieDetailsScreen extends ConsumerStatefulWidget {
   final String mediaType; // 'movie' or 'tv'
   final String? heroTag;
   final String? placeholderPoster;
+  final String? source;
 
   const TmdbMovieDetailsScreen({
     super.key,
@@ -34,6 +35,7 @@ class TmdbMovieDetailsScreen extends ConsumerStatefulWidget {
     this.mediaType = 'movie',
     this.heroTag,
     this.placeholderPoster,
+    this.source,
   });
 
   @override
@@ -106,7 +108,7 @@ class _TmdbMovieDetailsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final params = MovieDetailsParams(widget.movieId, widget.mediaType);
+    final params = MovieDetailsParams(widget.movieId, widget.mediaType, source: widget.source);
     final detailsAsync = ref.watch(tmdbDetailsProvider(params));
     final fastDetailsAsync = ref.watch(lightweightDetailsProvider(params));
 
@@ -241,6 +243,7 @@ class _TmdbMovieDetailsScreenState
       body: TmdbDetailsDesktopHero(
         data: data,
         isMovie: isMovie,
+        source: widget.source,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -250,6 +253,7 @@ class _TmdbMovieDetailsScreenState
                 movieId: widget.movieId,
                 seasons: seasons,
                 textColor: textColor,
+                source: widget.source,
               ),
             ],
             if (isHeavyLoading || cast.isNotEmpty) ...[
@@ -535,7 +539,7 @@ class _TmdbMovieDetailsScreenState
                 ProviderSearchSection(
                   query: title,
                   parentMediaType: isMovie ? 'movie' : 'tv',
-                  tmdbId: widget.movieId,
+                  tmdbId: data.tmdbId,
                   imdbId: data.imdbId,
                 ),
                 const SizedBox(height: 16),
@@ -598,9 +602,11 @@ class _TmdbMovieDetailsScreenState
                     _buildTmdbLogo(),
                     _buildTopBadge(
                       context,
-                      isMovie
-                          ? l10n.movie.toUpperCase()
-                          : l10n.tvShow.toUpperCase(),
+                      widget.source == 'anilist'
+                          ? (isMovie ? "MOVIE" : "ANIME")
+                          : (isMovie
+                              ? l10n.movie.toUpperCase()
+                              : l10n.tvShow.toUpperCase()),
                     ),
                     _buildIconInfo(context, Icons.calendar_today_rounded, year),
                     _buildIconInfo(
@@ -740,6 +746,7 @@ class _TmdbMovieDetailsScreenState
                   MovieSeasonsList(
                     movieId: widget.movieId,
                     seasons: data.seasons,
+                    source: widget.source,
                   ),
                 ],
 
@@ -761,9 +768,13 @@ class _TmdbMovieDetailsScreenState
                 _buildDetailRow(l10n.status, status),
                 _buildDetailRow(
                   isMovie ? l10n.releaseDate : l10n.firstAirDate,
-                  DateFormat(
-                    'MMMM d, yyyy',
-                  ).format(DateTime.parse(releaseDate)),
+                  () {
+                    final parsed = DateTime.tryParse(releaseDate);
+                    if (parsed != null) {
+                      return DateFormat('MMMM d, yyyy').format(parsed);
+                    }
+                    return releaseDate.isNotEmpty ? releaseDate : l10n.unknown;
+                  }(),
                 ),
                 if (budget > 0)
                   _buildDetailRow(
@@ -791,15 +802,16 @@ class _TmdbMovieDetailsScreenState
   }
 
   Widget _buildTmdbLogo() {
+    final isAnilist = widget.source == 'anilist';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF01B4E4), // TMDB Blue
+        color: isAnilist ? const Color(0xFF3DB4F2) : const Color(0xFF01B4E4), // AniList Blue or TMDB Blue
         borderRadius: BorderRadius.circular(4),
       ),
-      child: const Text(
-        "TMDB",
-        style: TextStyle(
+      child: Text(
+        isAnilist ? "ANILIST" : "TMDB",
+        style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w900,
           fontSize: 10,

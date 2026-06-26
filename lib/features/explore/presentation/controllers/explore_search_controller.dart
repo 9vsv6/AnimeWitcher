@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../data/explore_tmdb_provider.dart';
+import '../../data/explore_mode_provider.dart';
+import '../../data/anilist_repository.dart';
+import '../../data/explore_filter_provider.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 
 part 'explore_search_controller.g.dart';
@@ -68,8 +71,16 @@ class ExploreSearchController extends _$ExploreSearchController {
 
     _debounce = Timer(const Duration(milliseconds: 500), () async {
       try {
-        final tmdb = ref.read(tmdbServiceProvider);
-        final results = await tmdb.multiSearch(query: query, language: 'en-US');
+        final isAnime = ref.read(exploreModeProvider);
+        final List<MultimediaItem> results;
+        if (isAnime) {
+          final anilist = ref.read(anilistRepositoryProvider);
+          final titleLang = ref.read(animeTitleLanguageProvider);
+          results = await anilist.searchAnime(query, titleLang: titleLang);
+        } else {
+          final tmdb = ref.read(tmdbServiceProvider);
+          results = await tmdb.multiSearch(query: query, language: 'en-US');
+        }
 
         if (state.query == query) {
           state = state.copyWith(
@@ -96,12 +107,20 @@ class ExploreSearchController extends _$ExploreSearchController {
     );
 
     try {
-      final tmdb = ref.read(tmdbServiceProvider);
-      final results = await tmdb.multiSearch(
-        query: query,
-        language: 'en-US',
-        page: 1,
-      );
+      final isAnime = ref.read(exploreModeProvider);
+      final List<MultimediaItem> results;
+      if (isAnime) {
+        final anilist = ref.read(anilistRepositoryProvider);
+        final titleLang = ref.read(animeTitleLanguageProvider);
+        results = await anilist.searchAnime(query, page: 1, titleLang: titleLang);
+      } else {
+        final tmdb = ref.read(tmdbServiceProvider);
+        results = await tmdb.multiSearch(
+          query: query,
+          language: 'en-US',
+          page: 1,
+        );
+      }
 
       if (state.query == query) {
         state = state.copyWith(
@@ -123,13 +142,21 @@ class ExploreSearchController extends _$ExploreSearchController {
     state = state.copyWith(isLoading: true);
 
     try {
-      final tmdb = ref.read(tmdbServiceProvider);
+      final isAnime = ref.read(exploreModeProvider);
       final nextPage = state.page + 1;
-      final results = await tmdb.multiSearch(
-        query: state.query,
-        language: 'en-US',
-        page: nextPage,
-      );
+      final List<MultimediaItem> results;
+      if (isAnime) {
+        final anilist = ref.read(anilistRepositoryProvider);
+        final titleLang = ref.read(animeTitleLanguageProvider);
+        results = await anilist.searchAnime(state.query, page: nextPage, titleLang: titleLang);
+      } else {
+        final tmdb = ref.read(tmdbServiceProvider);
+        results = await tmdb.multiSearch(
+          query: state.query,
+          language: 'en-US',
+          page: nextPage,
+        );
+      }
 
       if (results.isEmpty) {
         state = state.copyWith(hasMore: false, isLoading: false);
