@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/widgets/cards_wrapper.dart';
@@ -47,6 +48,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
   final ValueNotifier<bool> _isScrolledNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
   final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
+  final ValueNotifier<bool> _isFabExtended = ValueNotifier<bool>(true);
   final FocusNode _firstActionFocusNode = FocusNode();
 
   /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
@@ -91,6 +93,16 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     if (isScrolled != _isScrolledNotifier.value) {
       _isScrolledNotifier.value = isScrolled;
     }
+
+    if (_scrollController.position.userScrollDirection ==
+            ScrollDirection.reverse &&
+        _isFabExtended.value) {
+      _isFabExtended.value = false;
+    } else if (_scrollController.position.userScrollDirection ==
+            ScrollDirection.forward &&
+        !_isFabExtended.value) {
+      _isFabExtended.value = true;
+    }
   }
 
   @override
@@ -100,6 +112,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     _isScrolledNotifier.dispose();
     _appBarOpacityNotifier.dispose();
     _showBottomFade.dispose();
+    _isFabExtended.dispose();
     _firstActionFocusNode.dispose();
     super.dispose();
   }
@@ -155,53 +168,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 );
               },
             ),
-            title: Row(
-              children: [
-                Text(
-                  AppLocalizations.of(context)!.explore,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment<bool>(
-                          value: false,
-                          label: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 4),
-                            child: Text('Movies & Shows', style: TextStyle(fontSize: 12)),
-                          ),
-                        ),
-                        ButtonSegment<bool>(
-                          value: true,
-                          label: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 4),
-                            child: Text('Anime', style: TextStyle(fontSize: 12)),
-                          ),
-                        ),
-                      ],
-                      selected: {ref.watch(exploreModeProvider)},
-                      onSelectionChanged: (value) {
-                        ref.read(exploreModeProvider.notifier).setAnimeMode(value.first);
-                      },
-                      showSelectedIcon: false,
-                      style: SegmentedButton.styleFrom(
-                        selectedBackgroundColor: Theme.of(context).colorScheme.primary,
-                        selectedForegroundColor: Theme.of(context).colorScheme.onPrimary,
-                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                        side: BorderSide.none,
-                        padding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            title: Text(
+              AppLocalizations.of(context)!.explore,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             centerTitle: false,
             actions: [
@@ -288,6 +261,61 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                         setState(() => _carouselController = c),
                   )
                 : _buildScrollView(context),
+          ),
+          floatingActionButton: ValueListenableBuilder<bool>(
+            valueListenable: _isFabExtended,
+            builder: (context, isFabExtended, _) {
+              final isAnime = ref.watch(exploreModeProvider);
+              return Material(
+                elevation: 4,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Theme.of(context).colorScheme.surfaceDim
+                    : Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () {
+                    ref.read(exploreModeProvider.notifier).setAnimeMode(!isAnime);
+                  },
+                  child: Container(
+                    height: 56,
+                    constraints: const BoxConstraints(minWidth: 56),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isFabExtended ? 16 : 0,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isAnime ? Icons.arrow_back : Icons.explore,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          child: SizedBox(
+                            width: isFabExtended ? null : 0,
+                            child: isFabExtended
+                                ? Padding(
+                                    padding: const EdgeInsets.only(left: 12),
+                                    child: Text(
+                                      isAnime ? 'Go Back' : 'Explore Anime',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         );
       },
