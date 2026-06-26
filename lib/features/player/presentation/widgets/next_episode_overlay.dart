@@ -265,7 +265,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               )
             else
               const ThumbnailErrorPlaceholder(),
-            
+
             // Gradient fade overlay on the top of the thumbnail container
             Positioned(
               top: 0,
@@ -321,7 +321,8 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
   Widget _buildInfo(bool isCompact) {
     final hasRating =
         widget.nextEpisodeRating != null && widget.nextEpisodeRating! > 0;
-    final hasBadge = widget.nextEpisodeSeason != null || widget.nextEpisodeNumber != null;
+    final hasBadge =
+        widget.nextEpisodeSeason != null || widget.nextEpisodeNumber != null;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -348,7 +349,9 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                       color: HotstarPlayerStyle.accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(100),
                       border: Border.all(
-                        color: HotstarPlayerStyle.accent.withValues(alpha: 0.35),
+                        color: HotstarPlayerStyle.accent.withValues(
+                          alpha: 0.35,
+                        ),
                         width: 0.8,
                       ),
                       boxShadow: [
@@ -379,7 +382,9 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                               style: TextStyle(
                                 fontSize: isCompact ? 8 : 9,
                                 fontWeight: FontWeight.bold,
-                                color: HotstarPlayerStyle.accent.withValues(alpha: 0.55),
+                                color: HotstarPlayerStyle.accent.withValues(
+                                  alpha: 0.55,
+                                ),
                               ),
                             ),
                           if (widget.nextEpisodeNumber != null)

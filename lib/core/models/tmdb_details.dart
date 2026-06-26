@@ -57,10 +57,14 @@ class TmdbDetails extends MultimediaItem {
   }) : super(
          url: '', // Resolved via provider
          posterUrl: posterPath != null
-             ? (posterPath.startsWith('http') ? posterPath : '${TmdbConfig.posterSizeUrl}$posterPath')
+             ? (posterPath.startsWith('http')
+                   ? posterPath
+                   : '${TmdbConfig.posterSizeUrl}$posterPath')
              : '',
          bannerUrl: backdropPath != null
-             ? (backdropPath.startsWith('http') ? backdropPath : '${TmdbConfig.backdropSizeUrl}$backdropPath')
+             ? (backdropPath.startsWith('http')
+                   ? backdropPath
+                   : '${TmdbConfig.backdropSizeUrl}$backdropPath')
              : null,
          description: overview,
          contentType: MultimediaItem.parseContentType(mediaType),
@@ -321,7 +325,13 @@ class TmdbDetails extends MultimediaItem {
   }) {
     return TmdbDetails(
       id: id ?? this.id,
-      mediaType: mediaType ?? (contentType != null ? contentType.name : (this.contentType == MultimediaContentType.movie ? 'movie' : 'tv')),
+      mediaType:
+          mediaType ??
+          (contentType != null
+              ? contentType.name
+              : (this.contentType == MultimediaContentType.movie
+                    ? 'movie'
+                    : 'tv')),
       title: title ?? this.title,
       posterPath: posterUrl ?? this.posterUrl,
       backdropPath: bannerUrl ?? this.bannerUrl,

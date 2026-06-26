@@ -68,213 +68,218 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-              // Header & Tabs
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Theme.of(context).dividerColor),
+                // Header & Tabs
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Theme.of(context).dividerColor),
+                    ),
                   ),
-                ),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.tune,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 28,
-                          ),
-                          const SizedBox(width: LayoutConstants.spacingSm),
-                          Text(
-                            "Filters",
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.tune,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 28,
                             ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            icon: Icon(
-                              Icons.close,
-                              color: Theme.of(context).colorScheme.onSurface,
+                            const SizedBox(width: LayoutConstants.spacingSm),
+                            Text(
+                              "Filters",
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            splashRadius: 24,
+                            const Spacer(),
+                            IconButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              icon: Icon(
+                                Icons.close,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                              splashRadius: 24,
+                            ),
+                          ],
+                        ),
+                      ),
+                      TabBar(
+                        controller: _tabController,
+                        indicatorColor: Theme.of(context).colorScheme.primary,
+                        labelColor: Theme.of(context).colorScheme.primary,
+                        unselectedLabelColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant,
+                        labelStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                        tabs: [
+                          if (isAnime)
+                            const Tab(
+                              text: "Title Lang",
+                              icon: Icon(Icons.title, size: 20),
+                            )
+                          else
+                            const Tab(
+                              text: "Lang",
+                              icon: Icon(Icons.translate, size: 20),
+                            ),
+
+                          // Genre Tab
+                          Consumer(
+                            builder: (c, ref, _) {
+                              final hasFilter =
+                                  ref
+                                      .watch(exploreFilterProvider)
+                                      .selectedGenre !=
+                                  null;
+                              return Tab(
+                                text: "Genre",
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    const Icon(
+                                      Icons.category_outlined,
+                                      size: 20,
+                                    ),
+                                    if (hasFilter)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                          // Year Tab
+                          Consumer(
+                            builder: (c, ref, _) {
+                              final hasFilter =
+                                  ref
+                                      .watch(exploreFilterProvider)
+                                      .selectedYear !=
+                                  null;
+                              return Tab(
+                                text: "Year",
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 20),
+                                    if (hasFilter)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                          // Rating Tab
+                          Consumer(
+                            builder: (c, ref, _) {
+                              final hasFilter =
+                                  ref.watch(exploreFilterProvider).minRating !=
+                                  null;
+                              return Tab(
+                                text: "Rating",
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    const Icon(Icons.star_outline, size: 20),
+                                    if (hasFilter)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
-                    ),
-                    TabBar(
-                      controller: _tabController,
-                      indicatorColor: Theme.of(context).colorScheme.primary,
-                      labelColor: Theme.of(context).colorScheme.primary,
-                      unselectedLabelColor: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant,
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                      tabs: [
-                        if (isAnime)
-                          const Tab(
-                            text: "Title Lang",
-                            icon: Icon(Icons.title, size: 20),
-                          )
-                        else
-                          const Tab(
-                            text: "Lang",
-                            icon: Icon(Icons.translate, size: 20),
-                          ),
-
-                        // Genre Tab
-                        Consumer(
-                          builder: (c, ref, _) {
-                            final hasFilter =
-                                ref
-                                    .watch(exploreFilterProvider)
-                                    .selectedGenre !=
-                                null;
-                            return Tab(
-                              text: "Genre",
-                              icon: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(Icons.category_outlined, size: 20),
-                                  if (hasFilter)
-                                    Positioned(
-                                      right: -2,
-                                      top: -2,
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Year Tab
-                        Consumer(
-                          builder: (c, ref, _) {
-                            final hasFilter =
-                                ref.watch(exploreFilterProvider).selectedYear !=
-                                null;
-                            return Tab(
-                              text: "Year",
-                              icon: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(Icons.calendar_today, size: 20),
-                                  if (hasFilter)
-                                    Positioned(
-                                      right: -2,
-                                      top: -2,
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Rating Tab
-                        Consumer(
-                          builder: (c, ref, _) {
-                            final hasFilter =
-                                ref.watch(exploreFilterProvider).minRating !=
-                                null;
-                            return Tab(
-                              text: "Rating",
-                              icon: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(Icons.star_outline, size: 20),
-                                  if (hasFilter)
-                                    Positioned(
-                                      right: -2,
-                                      top: -2,
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              // Tab View Content
-              Flexible(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    if (isAnime)
-                      const _TitleLanguageTab()
-                    else
-                      const _LanguageTab(),
-                    const _GenreTab(),
-                    const _YearTab(),
-                    const _RatingTab(),
-                  ],
+                // Tab View Content
+                Flexible(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      if (isAnime)
+                        const _TitleLanguageTab()
+                      else
+                        const _LanguageTab(),
+                      const _GenreTab(),
+                      const _YearTab(),
+                      const _RatingTab(),
+                    ],
+                  ),
                 ),
-              ),
 
-              // Footer
-              Padding(
-                padding: const EdgeInsets.all(LayoutConstants.spacingMd),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: LayoutConstants.spacingMd,
+                // Footer
+                Padding(
+                  padding: const EdgeInsets.all(LayoutConstants.spacingMd),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: LayoutConstants.spacingMd,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      "Done",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                      child: const Text(
+                        "Done",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           ),
         ),
       ),
@@ -702,7 +707,9 @@ class _TitleLanguageTab extends ConsumerWidget {
 
         return InkWell(
           onTap: () {
-            ref.read(animeTitleLanguageProvider.notifier).setLanguage(lang['code']!);
+            ref
+                .read(animeTitleLanguageProvider.notifier)
+                .setLanguage(lang['code']!);
           },
           borderRadius: BorderRadius.circular(16),
           focusColor: Theme.of(

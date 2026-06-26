@@ -267,7 +267,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
               'assets/images/no_results.png',
               fit: BoxFit.contain,
               width: imageWidth,
-              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+              errorBuilder: (context, error, stackTrace) =>
+                  const SizedBox.shrink(),
             ),
           ],
         ),

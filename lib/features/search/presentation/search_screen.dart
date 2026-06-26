@@ -89,14 +89,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           final suggestionState = ref.read(searchSuggestionControllerProvider);
           final typedLongEnough = suggestionState.query.trim().length >= 2;
           final hasSuggestionContent =
-              suggestionState.isLoading || suggestionState.suggestions.isNotEmpty;
+              suggestionState.isLoading ||
+              suggestionState.suggestions.isNotEmpty;
 
           if (typedLongEnough && hasSuggestionContent) {
             _firstSuggestionFocusNode.requestFocus();
             return KeyEventResult.handled;
           } else {
             final resultsState = ref.read(searchResultsProvider).asData?.value;
-            final hasResults = resultsState != null &&
+            final hasResults =
+                resultsState != null &&
                 resultsState.results.any((r) => r.results.isNotEmpty);
             if (hasResults) {
               _firstResultFocusNode.requestFocus();
@@ -122,14 +124,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           final suggestionState = ref.read(searchSuggestionControllerProvider);
           final typedLongEnough = suggestionState.query.trim().length >= 2;
           final hasSuggestionContent =
-              suggestionState.isLoading || suggestionState.suggestions.isNotEmpty;
+              suggestionState.isLoading ||
+              suggestionState.suggestions.isNotEmpty;
 
           if (typedLongEnough && hasSuggestionContent) {
             _firstSuggestionFocusNode.requestFocus();
             return KeyEventResult.handled;
           } else {
             final resultsState = ref.read(searchResultsProvider).asData?.value;
-            final hasResults = resultsState != null &&
+            final hasResults =
+                resultsState != null &&
                 resultsState.results.any((r) => r.results.isNotEmpty);
             if (hasResults) {
               _firstResultFocusNode.requestFocus();
@@ -212,14 +216,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               child: Image.asset(
                 'assets/images/search_background.jpg',
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
               ),
             ),
             // Rich Architectural Stage Overlay (Vignette + Dark overlay)
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.7), // Rich dark overlay
+                  color: Colors.black.withValues(
+                    alpha: 0.7,
+                  ), // Rich dark overlay
                 ),
               ),
             ),
@@ -242,7 +249,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
             // Focus Spotlight (Stage Lighting)
             Positioned(
-              top: 76, // Anchored to bottom edge of search bar (24 top padding + 52 height)
+              top:
+                  76, // Anchored to bottom edge of search bar (24 top padding + 52 height)
               left: 0,
               right: 0,
               height: 250,
@@ -256,12 +264,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         width: 900, // Broader fanning footprint
                         decoration: BoxDecoration(
                           gradient: RadialGradient(
-                            center: Alignment.topCenter, // Anchored to the bottom edge of the search bar
+                            center: Alignment
+                                .topCenter, // Anchored to the bottom edge of the search bar
                             radius: 1.3,
                             colors: [
-                              const Color(0xFF1E40AF).withValues(alpha: 0.50), // Strong source point deep premium blue
-                              const Color(0xFF1D4ED8).withValues(alpha: 0.15), // Bleeding downward
-                              const Color(0xFF1E40AF).withValues(alpha: 0.0),  // Falloff to transparent
+                              const Color(0xFF1E40AF).withValues(
+                                alpha: 0.50,
+                              ), // Strong source point deep premium blue
+                              const Color(
+                                0xFF1D4ED8,
+                              ).withValues(alpha: 0.15), // Bleeding downward
+                              const Color(0xFF1E40AF).withValues(
+                                alpha: 0.0,
+                              ), // Falloff to transparent
                             ],
                             stops: const [0.0, 0.45, 1.0],
                           ),
@@ -272,37 +287,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 },
               ),
             ),
-            // Premium Navy Blue / Royal Blue Sunrise-Style Gradient Bloom rising from bottom center
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 450,
-              child: IgnorePointer(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
-                    return Center(
-                      child: Container(
-                        width: width * 0.7, // Spans roughly 70% of screen width
-                        decoration: BoxDecoration(
-                          gradient: RadialGradient(
-                            center: const Alignment(0.0, 1.0),
-                            radius: 0.9,
-                            colors: [
-                              const Color(0xFF1D4ED8).withValues(alpha: 0.3), // Soft glowing Navy/Royal Blue
-                              const Color(0xFF3B82F6).withValues(alpha: 0.08), // Warm blue aura
-                              Colors.transparent,
-                            ],
-                            stops: const [0.0, 0.45, 1.0],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
+
             // Content layout in Column: Still header and Body directly below it
             Positioned.fill(
               child: Column(
@@ -387,9 +372,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       const SizedBox(
                         width: 18,
                         height: 18,
-                        child: Center(
-                          child: WaveformEqualizer(isActive: true),
-                        ),
+                        child: Center(child: WaveformEqualizer(isActive: true)),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(child: Text('Livestreams')),
@@ -417,9 +400,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: Center(
-                          child: WaveformEqualizer(isActive: true),
-                        ),
+                        child: Center(child: WaveformEqualizer(isActive: true)),
                       )
                     : const Text('🍿', style: TextStyle(fontSize: 18)),
               ),
@@ -571,7 +552,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       providerName: pResult.providerName,
                       providerId: pResult.providerId,
                       results: pResult.results,
-                      firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
+                      firstCardFocusNode: index == 0
+                          ? _firstResultFocusNode
+                          : null,
                     );
                   },
                 ),
@@ -601,7 +584,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       );
     }
-
 
     return ListView.builder(
       itemCount: suggestionState.suggestions.length,
@@ -645,7 +627,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             Icon(
               Icons.movie_filter_rounded,
               size: 64,
-              color: Colors.white.withValues(alpha: 0.65), // Soft visible 65% opacity
+              color: Colors.white.withValues(
+                alpha: 0.65,
+              ), // Soft visible 65% opacity
             ),
             const SizedBox(height: LayoutConstants.spacingMd),
             Text(
@@ -689,7 +673,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             'assets/images/no_results.png',
             fit: BoxFit.contain,
             width: imageWidth,
-            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+            errorBuilder: (context, error, stackTrace) =>
+                const SizedBox.shrink(),
           ),
         ],
       ),
@@ -773,10 +758,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.65), // Card background
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: borderColor,
-          width: 1.5,
-        ),
+        border: Border.all(color: borderColor, width: 1.5),
         boxShadow: isAnyHighlighted
             ? [
                 BoxShadow(
@@ -795,7 +777,8 @@ class _SuggestionCardState extends State<_SuggestionCard> {
               focusNode: _bodyNode,
               onKeyEvent: (node, event) {
                 if (event is KeyDownEvent) {
-                  if (event.logicalKey == LogicalKeyboardKey.arrowUp && widget.isFirst) {
+                  if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+                      widget.isFirst) {
                     widget.onFocusSearch();
                     return KeyEventResult.handled;
                   }
@@ -822,7 +805,10 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeInOut,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: isBodyHighlighted
                           ? const Color(0xFF1F80E0).withValues(alpha: 0.25)
@@ -836,7 +822,9 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                       children: [
                         Icon(
                           Icons.search_rounded,
-                          color: isBodyHighlighted ? const Color(0xFF1F80E0) : Colors.white70,
+                          color: isBodyHighlighted
+                              ? const Color(0xFF1F80E0)
+                              : Colors.white70,
                           size: 20,
                         ),
                         const SizedBox(width: 16),
@@ -849,7 +837,9 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                               fontFamily: nativeFont,
                               color: Colors.white,
                               fontSize: 16.0,
-                              fontWeight: isBodyHighlighted ? FontWeight.w500 : FontWeight.w400,
+                              fontWeight: isBodyHighlighted
+                                  ? FontWeight.w500
+                                  : FontWeight.w400,
                             ),
                           ),
                         ),
@@ -871,7 +861,8 @@ class _SuggestionCardState extends State<_SuggestionCard> {
             focusNode: _buttonNode,
             onKeyEvent: (node, event) {
               if (event is KeyDownEvent) {
-                if (event.logicalKey == LogicalKeyboardKey.arrowUp && widget.isFirst) {
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+                    widget.isFirst) {
                   widget.onFocusSearch();
                   return KeyEventResult.handled;
                 }
@@ -898,7 +889,10 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeInOut,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: isButtonHighlighted
                         ? const Color(0xFF1F80E0).withValues(alpha: 0.35)
@@ -910,7 +904,9 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                   ),
                   child: Icon(
                     Icons.north_west_rounded,
-                    color: isButtonHighlighted ? const Color(0xFF1F80E0) : Colors.white54,
+                    color: isButtonHighlighted
+                        ? const Color(0xFF1F80E0)
+                        : Colors.white54,
                     size: 20,
                   ),
                 ),

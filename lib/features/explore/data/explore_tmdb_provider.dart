@@ -39,7 +39,11 @@ Future<List<TmdbGenre>> genres(Ref ref) async {
       'Supernatural',
       'Thriller',
     ];
-    return animeGenres.asMap().entries.map((e) => TmdbGenre(id: e.key, name: e.value)).toList();
+    return animeGenres
+        .asMap()
+        .entries
+        .map((e) => TmdbGenre(id: e.key, name: e.value))
+        .toList();
   }
 
   final service = ref.watch(tmdbServiceProvider);

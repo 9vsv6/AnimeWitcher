@@ -128,7 +128,8 @@ class _MovieProductionCompaniesState extends State<MovieProductionCompanies> {
   Widget _buildMobileItem(BuildContext context, int index) {
     final company = widget.productionCompanies[index];
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasLogo = company.logoImageUrl != null && company.logoImageUrl!.isNotEmpty;
+    final hasLogo =
+        company.logoImageUrl != null && company.logoImageUrl!.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(right: 16),
@@ -143,7 +144,8 @@ class _MovieProductionCompaniesState extends State<MovieProductionCompanies> {
               fit: BoxFit.contain,
               width: 100,
               placeholder: (_, _) => const SizedBox.shrink(),
-              errorWidget: (_, _, _) => _buildTextLogo(company.name, isDark, 10),
+              errorWidget: (_, _, _) =>
+                  _buildTextLogo(company.name, isDark, 10),
             )
           : _buildTextLogo(company.name, isDark, 10),
     );

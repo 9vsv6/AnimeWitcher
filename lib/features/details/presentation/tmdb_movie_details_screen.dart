@@ -108,7 +108,11 @@ class _TmdbMovieDetailsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final params = MovieDetailsParams(widget.movieId, widget.mediaType, source: widget.source);
+    final params = MovieDetailsParams(
+      widget.movieId,
+      widget.mediaType,
+      source: widget.source,
+    );
     final detailsAsync = ref.watch(tmdbDetailsProvider(params));
     final fastDetailsAsync = ref.watch(lightweightDetailsProvider(params));
 
@@ -605,8 +609,8 @@ class _TmdbMovieDetailsScreenState
                       widget.source == 'anilist'
                           ? (isMovie ? "MOVIE" : "ANIME")
                           : (isMovie
-                              ? l10n.movie.toUpperCase()
-                              : l10n.tvShow.toUpperCase()),
+                                ? l10n.movie.toUpperCase()
+                                : l10n.tvShow.toUpperCase()),
                     ),
                     _buildIconInfo(context, Icons.calendar_today_rounded, year),
                     _buildIconInfo(
@@ -806,7 +810,9 @@ class _TmdbMovieDetailsScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
-        color: isAnilist ? const Color(0xFF3DB4F2) : const Color(0xFF01B4E4), // AniList Blue or TMDB Blue
+        color: isAnilist
+            ? const Color(0xFF3DB4F2)
+            : const Color(0xFF01B4E4), // AniList Blue or TMDB Blue
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(

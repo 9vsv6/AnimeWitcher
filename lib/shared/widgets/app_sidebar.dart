@@ -15,7 +15,9 @@ class DpadActiveNotifier extends Notifier<bool> {
   void set(bool val) => state = val;
 }
 
-final isDpadActiveProvider = NotifierProvider<DpadActiveNotifier, bool>(DpadActiveNotifier.new);
+final isDpadActiveProvider = NotifierProvider<DpadActiveNotifier, bool>(
+  DpadActiveNotifier.new,
+);
 
 /// Number of destinations rendered by [AppSidebar].
 const int kSidebarDestinationCount = 5;
@@ -107,7 +109,9 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
           _focusedIndex = currentFocused;
           // If focus changed and mouse is not hovering, we are in D-pad mode!
           if (currentFocused != null && _mouseY.value == double.infinity) {
-            ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(true);
+            ref
+                .read<DpadActiveNotifier>(isDpadActiveProvider.notifier)
+                .set(true);
           }
         });
       }
@@ -147,8 +151,12 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
     const unscaledCenters = [36.0, 92.0, 148.0, 204.0, 260.0];
 
     // Outer container colors matching bg-gray-50 / dark:bg-neutral-900 verbatim
-    final dockBgColor = isDark ? const Color(0xFF171717) : const Color(0xFFF9FAFB);
-    final dockBorderColor = isDark ? const Color(0xFF262626) : const Color(0xFFE5E7EB);
+    final dockBgColor = isDark
+        ? const Color(0xFF171717)
+        : const Color(0xFFF9FAFB);
+    final dockBorderColor = isDark
+        ? const Color(0xFF262626)
+        : const Color(0xFFE5E7EB);
 
     return Material(
       color: Colors.transparent,
@@ -184,16 +192,24 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
             final tops = List<double>.filled(destinations.length, 0.0);
             tops[0] = 16.0; // Top padding
             for (int i = 1; i < destinations.length; i++) {
-              tops[i] = tops[i - 1] + itemSizes[i - 1] + 16.0; // Dynamic height + 16.0px gap
+              tops[i] =
+                  tops[i - 1] +
+                  itemSizes[i - 1] +
+                  16.0; // Dynamic height + 16.0px gap
             }
-            final double dynamicDockHeight = tops[destinations.length - 1] + itemSizes[destinations.length - 1] + 16.0;
+            final double dynamicDockHeight =
+                tops[destinations.length - 1] +
+                itemSizes[destinations.length - 1] +
+                16.0;
 
             // The MouseRegion tracks coordinates only within the active size of the dock
             return MouseRegion(
               onHover: (event) {
                 _mouseY.value = event.localPosition.dy;
                 if (ref.read<bool>(isDpadActiveProvider)) {
-                  ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(false);
+                  ref
+                      .read<DpadActiveNotifier>(isDpadActiveProvider.notifier)
+                      .set(false);
                 }
               },
               onExit: (_) {
@@ -203,7 +219,8 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                 duration: const Duration(milliseconds: 350),
                 curve: const _AceternitySpringCurve(),
                 width: dockWidth,
-                height: dynamicDockHeight, // Dynamic height scales on the spring curve!
+                height:
+                    dynamicDockHeight, // Dynamic height scales on the spring curve!
                 clipBehavior: Clip.none,
                 decoration: BoxDecoration(
                   color: dockBgColor,
@@ -214,7 +231,9 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.35 : 0.08,
+                      ),
                       blurRadius: 16,
                       spreadRadius: 0,
                       offset: const Offset(0, 4),
@@ -231,7 +250,8 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                       key: ValueKey('dock_item_$i'),
                       duration: const Duration(milliseconds: 350),
                       curve: const _AceternitySpringCurve(),
-                      left: 12.0, // Fixed left baseline anchors growth horizontally to the right
+                      left:
+                          12.0, // Fixed left baseline anchors growth horizontally to the right
                       top: tops[i],
                       width: itemSizes[i],
                       height: itemSizes[i],
@@ -295,15 +315,25 @@ class _SidebarDockItemState extends ConsumerState<_SidebarDockItem> {
     final isDark = theme.brightness == Brightness.dark;
 
     // Background color of the items (bg-gray-200 / dark:bg-neutral-800 verbatim, no accent highlight)
-    final itemBgColor = isDark ? const Color(0xFF262626) : const Color(0xFFE5E7EB);
+    final itemBgColor = isDark
+        ? const Color(0xFF262626)
+        : const Color(0xFFE5E7EB);
 
     // Icon color of the items (text-neutral-500 / dark:text-neutral-300 verbatim, no accent highlight)
-    final iconColor = isDark ? const Color(0xFFD4D4D4) : const Color(0xFF6B7280);
+    final iconColor = isDark
+        ? const Color(0xFFD4D4D4)
+        : const Color(0xFF6B7280);
 
     // Tooltip style color variables (bg-gray-100 / dark:bg-neutral-800 verbatim)
-    final tooltipBgColor = isDark ? const Color(0xFF262626) : const Color(0xFFF3F4F6);
-    final tooltipBorderColor = isDark ? const Color(0xFF171717) : const Color(0xFFE5E7EB);
-    final tooltipTextColor = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF374151);
+    final tooltipBgColor = isDark
+        ? const Color(0xFF262626)
+        : const Color(0xFFF3F4F6);
+    final tooltipBorderColor = isDark
+        ? const Color(0xFF171717)
+        : const Color(0xFFE5E7EB);
+    final tooltipTextColor = isDark
+        ? const Color(0xFFFFFFFF)
+        : const Color(0xFF374151);
 
     final showTooltip = _isHovered || (_isFocused && widget.isDpadMode);
 
@@ -349,7 +379,8 @@ class _SidebarDockItemState extends ConsumerState<_SidebarDockItem> {
         child: SizedBox.expand(
           child: Stack(
             clipBehavior: Clip.none,
-            alignment: Alignment.centerLeft, // Centered to the left edge of the animated positioned widget
+            alignment: Alignment
+                .centerLeft, // Centered to the left edge of the animated positioned widget
             children: [
               Positioned(
                 left: 0,
@@ -385,7 +416,8 @@ class _SidebarDockItemState extends ConsumerState<_SidebarDockItem> {
                                   return Icon(
                                     widget.icon,
                                     color: iconColor,
-                                    size: animatedIconSize, // Dynamic font size animated on the spring curve
+                                    size:
+                                        animatedIconSize, // Dynamic font size animated on the spring curve
                                   );
                                 },
                               ),
@@ -394,7 +426,9 @@ class _SidebarDockItemState extends ConsumerState<_SidebarDockItem> {
                         );
                       },
                     ),
-                    const SizedBox(width: 12.0), // Constant gap of 12.0px between badge and tooltip!
+                    const SizedBox(
+                      width: 12.0,
+                    ), // Constant gap of 12.0px between badge and tooltip!
                     IgnorePointer(
                       child: AnimatedOpacity(
                         opacity: showTooltip ? 1.0 : 0.0,
@@ -411,7 +445,10 @@ class _SidebarDockItemState extends ConsumerState<_SidebarDockItem> {
                             );
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: tooltipBgColor,
                               borderRadius: BorderRadius.circular(8),
@@ -462,7 +499,8 @@ class _AceternitySpringCurve extends Curve {
     if (t == 1.0) return 1.0;
     // Map normalized t [0, 1] to actual spring time (overdamped settling completes by 0.35s)
     final double actualT = t * 0.35;
-    final double val = 1.0 -
+    final double val =
+        1.0 -
         1.15465359 * math.exp(-14.1742431 * actualT) +
         0.15465359 * math.exp(-105.8257569 * actualT);
     return val.clamp(0.0, 1.0);

@@ -22,11 +22,11 @@ class AnilistExploreScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<AnilistExploreScreen> createState() => _AnilistExploreScreenState();
+  ConsumerState<AnilistExploreScreen> createState() =>
+      _AnilistExploreScreenState();
 }
 
 class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
-
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(

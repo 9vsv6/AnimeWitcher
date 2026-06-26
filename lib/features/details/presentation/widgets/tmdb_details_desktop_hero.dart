@@ -330,7 +330,9 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
-        color: isAnilist ? const Color(0xFF3DB4F2) : const Color(0xFF01B4E4), // AniList Blue or TMDB Blue
+        color: isAnilist
+            ? const Color(0xFF3DB4F2)
+            : const Color(0xFF01B4E4), // AniList Blue or TMDB Blue
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(

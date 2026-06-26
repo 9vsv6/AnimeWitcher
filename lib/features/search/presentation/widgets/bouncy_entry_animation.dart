@@ -41,11 +41,18 @@ class _BouncyEntryAnimationState extends State<BouncyEntryAnimation>
       curve: Curves.easeOutBack,
     );
 
-    _scaleAnimation = Tween<double>(begin: widget.animateScale ? 0.75 : 1.0, end: 1.0).animate(curve);
-    _slideAnimation = Tween<double>(begin: widget.slideOffset, end: 0.0).animate(curve);
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: widget.animateScale ? 0.75 : 1.0,
+      end: 1.0,
+    ).animate(curve);
+    _slideAnimation = Tween<double>(
+      begin: widget.slideOffset,
+      end: 0.0,
+    ).animate(curve);
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     if (widget.delay == Duration.zero) {
       _controller.forward();
@@ -71,10 +78,7 @@ class _BouncyEntryAnimationState extends State<BouncyEntryAnimation>
           opacity: _fadeAnimation.value,
           child: Transform.translate(
             offset: Offset(0.0, _slideAnimation.value),
-            child: Transform.scale(
-              scale: _scaleAnimation.value,
-              child: child,
-            ),
+            child: Transform.scale(scale: _scaleAnimation.value, child: child),
           ),
         );
       },

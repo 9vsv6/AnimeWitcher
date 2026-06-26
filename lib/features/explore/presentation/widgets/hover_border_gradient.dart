@@ -136,7 +136,8 @@ class _HoverBorderGradientState extends State<HoverBorderGradient>
           child: AnimatedBuilder(
             animation: _controller,
             builder: (context, child) {
-              final angle = _controller.value * 2 * math.pi * (widget.clockwise ? 1 : -1);
+              final angle =
+                  _controller.value * 2 * math.pi * (widget.clockwise ? 1 : -1);
 
               final borderColors = isActive
                   ? [
@@ -162,10 +163,12 @@ class _HoverBorderGradientState extends State<HoverBorderGradient>
                   boxShadow: isActive
                       ? [
                           BoxShadow(
-                            color: const Color(0xFF3275F8).withValues(alpha: 0.4),
+                            color: const Color(
+                              0xFF3275F8,
+                            ).withValues(alpha: 0.4),
                             blurRadius: 12,
                             spreadRadius: 1,
-                          )
+                          ),
                         ]
                       : [],
                   gradient: SweepGradient(
@@ -179,7 +182,10 @@ class _HoverBorderGradientState extends State<HoverBorderGradient>
                     borderRadius: BorderRadius.circular(100),
                     color: isDark ? Colors.black : Colors.white,
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: widget.child,
                 ),
               );

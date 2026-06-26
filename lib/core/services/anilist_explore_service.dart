@@ -15,7 +15,9 @@ class AnilistExploreService {
   final Map<String, _CacheEntry> _cache = {};
 
   AnilistExploreService(Dio baseDio)
-      : _dio = Dio(baseDio.options.copyWith(baseUrl: 'https://graphql.anilist.co')) {
+    : _dio = Dio(
+        baseDio.options.copyWith(baseUrl: 'https://graphql.anilist.co'),
+      ) {
     _dio.interceptors.addAll(baseDio.interceptors);
   }
 
@@ -42,10 +44,7 @@ class AnilistExploreService {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '',
-        data: {
-          'query': query,
-          if (variables != null) 'variables': variables,
-        },
+        data: {'query': query, if (variables != null) 'variables': variables},
         options: Options(
           headers: {
             'Content-Type': 'application/json',
@@ -55,11 +54,18 @@ class AnilistExploreService {
       );
       if (response.statusCode == 200 && response.data != null) {
         final body = response.data!;
-        if (body.containsKey('errors') && body['errors'] is List && (body['errors'] as List).isNotEmpty) {
-          talker.error('AnilistExploreService: GraphQL errors: ${body['errors']}');
+        if (body.containsKey('errors') &&
+            body['errors'] is List &&
+            (body['errors'] as List).isNotEmpty) {
+          talker.error(
+            'AnilistExploreService: GraphQL errors: ${body['errors']}',
+          );
         }
         // Cache for 5 minutes
-        _cache[cacheKey] = _CacheEntry(body, DateTime.now().add(const Duration(minutes: 5)));
+        _cache[cacheKey] = _CacheEntry(
+          body,
+          DateTime.now().add(const Duration(minutes: 5)),
+        );
         return body;
       }
     } catch (e, st) {
@@ -69,9 +75,15 @@ class AnilistExploreService {
           final retryAfterStr = response.headers.value('retry-after');
           int retryAfterSeconds = int.tryParse(retryAfterStr ?? '') ?? 2;
           if (retryAfterSeconds <= 0) retryAfterSeconds = 2;
-          talker.warning('AnilistExploreService: 429 Rate Limit. Retrying in $retryAfterSeconds seconds (retry $retryCount/3)...');
+          talker.warning(
+            'AnilistExploreService: 429 Rate Limit. Retrying in $retryAfterSeconds seconds (retry $retryCount/3)...',
+          );
           await Future.delayed(Duration(seconds: retryAfterSeconds));
-          return postGraphQL(query, variables: variables, retryCount: retryCount + 1);
+          return postGraphQL(
+            query,
+            variables: variables,
+            retryCount: retryCount + 1,
+          );
         }
       }
       talker.error('AnilistExploreService: HTTP/GraphQL request failed', e, st);

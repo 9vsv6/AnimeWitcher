@@ -299,7 +299,8 @@ class _SearchResultsGridState extends ConsumerState<_SearchResultsGrid> {
               'assets/images/no_results.png',
               fit: BoxFit.contain,
               width: imageWidth,
-              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+              errorBuilder: (context, error, stackTrace) =>
+                  const SizedBox.shrink(),
             ),
           ],
         ),

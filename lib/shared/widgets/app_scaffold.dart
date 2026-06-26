@@ -117,10 +117,14 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
             child: Listener(
               behavior: HitTestBehavior.translucent,
               onPointerDown: (_) {
-                ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(false);
+                ref
+                    .read<DpadActiveNotifier>(isDpadActiveProvider.notifier)
+                    .set(false);
               },
               onPointerHover: (_) {
-                ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(false);
+                ref
+                    .read<DpadActiveNotifier>(isDpadActiveProvider.notifier)
+                    .set(false);
               },
               child: Focus(
                 canRequestFocus: false,
@@ -136,7 +140,11 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                         key == LogicalKeyboardKey.select ||
                         key == LogicalKeyboardKey.space ||
                         key == LogicalKeyboardKey.tab) {
-                      ref.read<DpadActiveNotifier>(isDpadActiveProvider.notifier).set(true);
+                      ref
+                          .read<DpadActiveNotifier>(
+                            isDpadActiveProvider.notifier,
+                          )
+                          .set(true);
                     }
                   }
                   return KeyEventResult.ignored;
@@ -151,7 +159,9 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                         // Content in its own traversal group, positioned first (bottom layer)
                         Positioned.fill(
                           child: Padding(
-                            padding: const EdgeInsets.only(left: LayoutConstants.sidebarWidthCompact),
+                            padding: const EdgeInsets.only(
+                              left: LayoutConstants.sidebarWidthCompact,
+                            ),
                             child: FocusTraversalGroup(
                               policy: WidgetOrderTraversalPolicy(),
                               child: Focus(

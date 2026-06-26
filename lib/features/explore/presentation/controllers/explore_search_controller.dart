@@ -112,7 +112,11 @@ class ExploreSearchController extends _$ExploreSearchController {
       if (isAnime) {
         final anilist = ref.read(anilistRepositoryProvider);
         final titleLang = ref.read(animeTitleLanguageProvider);
-        results = await anilist.searchAnime(query, page: 1, titleLang: titleLang);
+        results = await anilist.searchAnime(
+          query,
+          page: 1,
+          titleLang: titleLang,
+        );
       } else {
         final tmdb = ref.read(tmdbServiceProvider);
         results = await tmdb.multiSearch(
@@ -148,7 +152,11 @@ class ExploreSearchController extends _$ExploreSearchController {
       if (isAnime) {
         final anilist = ref.read(anilistRepositoryProvider);
         final titleLang = ref.read(animeTitleLanguageProvider);
-        results = await anilist.searchAnime(state.query, page: nextPage, titleLang: titleLang);
+        results = await anilist.searchAnime(
+          state.query,
+          page: nextPage,
+          titleLang: titleLang,
+        );
       } else {
         final tmdb = ref.read(tmdbServiceProvider);
         results = await tmdb.multiSearch(

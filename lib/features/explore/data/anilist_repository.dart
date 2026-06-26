@@ -74,7 +74,8 @@ class AnilistRepository {
   static final Map<String, AnilistSectionDefinition> sections = {
     'trending': const AnilistSectionDefinition(
       title: 'Trending right now',
-      query: '''
+      query:
+          '''
         query (\$page: Int, \$perPage: Int, \$genre: String, \$seasonYear: Int, \$minScore: Int) {
           Page(page: \$page, perPage: \$perPage) {
             media(sort: TRENDING_DESC, type: ANIME, genre: \$genre, seasonYear: \$seasonYear, averageScore_greater: \$minScore) {
@@ -87,7 +88,8 @@ class AnilistRepository {
     ),
     'airedRecently': const AnilistSectionDefinition(
       title: 'Aired recently',
-      query: '''
+      query:
+          '''
         query (\$page: Int, \$perPage: Int, \$genre: String, \$seasonYear: Int, \$minScore: Int) {
           Page(page: \$page, perPage: \$perPage) {
             media(sort: START_DATE_DESC, type: ANIME, status_in: [FINISHED, RELEASING], genre: \$genre, seasonYear: \$seasonYear, averageScore_greater: \$minScore) {
@@ -100,7 +102,8 @@ class AnilistRepository {
     ),
     'topSeason': const AnilistSectionDefinition(
       title: 'Top of the season',
-      query: '''
+      query:
+          '''
         query (\$page: Int, \$perPage: Int, \$genre: String, \$seasonYear: Int, \$minScore: Int) {
           Page(page: \$page, perPage: \$perPage) {
             media(season: SUMMER, seasonYear: \$seasonYear, sort: SCORE_DESC, type: ANIME, genre: \$genre, averageScore_greater: \$minScore) {
@@ -113,7 +116,8 @@ class AnilistRepository {
     ),
     'bestLastSeason': const AnilistSectionDefinition(
       title: 'Best of last season',
-      query: '''
+      query:
+          '''
         query (\$page: Int, \$perPage: Int, \$genre: String, \$seasonYear: Int, \$minScore: Int) {
           Page(page: \$page, perPage: \$perPage) {
             media(season: SPRING, seasonYear: \$seasonYear, sort: SCORE_DESC, type: ANIME, genre: \$genre, averageScore_greater: \$minScore) {
@@ -126,7 +130,8 @@ class AnilistRepository {
     ),
     'movies': const AnilistSectionDefinition(
       title: 'Movies',
-      query: '''
+      query:
+          '''
         query (\$page: Int, \$perPage: Int, \$genre: String, \$seasonYear: Int, \$minScore: Int) {
           Page(page: \$page, perPage: \$perPage) {
             media(format: MOVIE, sort: SCORE_DESC, type: ANIME, genre: \$genre, seasonYear: \$seasonYear, averageScore_greater: \$minScore) {
@@ -139,7 +144,8 @@ class AnilistRepository {
     ),
     'comingSoon': const AnilistSectionDefinition(
       title: 'Coming soon',
-      query: '''
+      query:
+          '''
         query (\$page: Int, \$perPage: Int, \$genre: String, \$seasonYear: Int, \$minScore: Int) {
           Page(page: \$page, perPage: \$perPage) {
             media(status: NOT_YET_RELEASED, sort: POPULARITY_DESC, type: ANIME, genre: \$genre, seasonYear: \$seasonYear, averageScore_greater: \$minScore) {
@@ -152,30 +158,52 @@ class AnilistRepository {
     ),
   };
 
-  MultimediaItem _mapMediaToMultimediaItem(Map<String, dynamic> media, {String? titleLang}) {
+  MultimediaItem _mapMediaToMultimediaItem(
+    Map<String, dynamic> media, {
+    String? titleLang,
+  }) {
     final titleObj = media['title'] as Map<String, dynamic>?;
-    
+
     String title;
     if (titleLang == 'japanese' || titleLang == 'native') {
-      title = (titleObj?['native'] ?? titleObj?['english'] ?? titleObj?['romaji'] ?? 'Unknown Anime') as String;
+      title =
+          (titleObj?['native'] ??
+                  titleObj?['english'] ??
+                  titleObj?['romaji'] ??
+                  'Unknown Anime')
+              as String;
     } else if (titleLang == 'romaji') {
-      title = (titleObj?['romaji'] ?? titleObj?['english'] ?? titleObj?['native'] ?? 'Unknown Anime') as String;
+      title =
+          (titleObj?['romaji'] ??
+                  titleObj?['english'] ??
+                  titleObj?['native'] ??
+                  'Unknown Anime')
+              as String;
     } else {
       // Default: english
-      title = (titleObj?['english'] ?? titleObj?['romaji'] ?? titleObj?['native'] ?? 'Unknown Anime') as String;
+      title =
+          (titleObj?['english'] ??
+                  titleObj?['romaji'] ??
+                  titleObj?['native'] ??
+                  'Unknown Anime')
+              as String;
     }
 
     final coverObj = media['coverImage'] as Map<String, dynamic>?;
-    final posterUrl = (coverObj?['extraLarge'] ??
-        coverObj?['large'] ??
-        coverObj?['medium'] ??
-        '') as String;
+    final posterUrl =
+        (coverObj?['extraLarge'] ??
+                coverObj?['large'] ??
+                coverObj?['medium'] ??
+                '')
+            as String;
     final bannerUrl = (media['bannerImage'] ?? posterUrl) as String;
 
     final averageScore = (media['averageScore'] as num?)?.toDouble();
     final score = averageScore != null ? averageScore / 10.0 : null;
 
-    final genres = (media['genres'] as List?)?.map((g) => g.toString()).toList();
+    final genres = (media['genres'] as List?)
+        ?.map((g) => g.toString())
+        .toList();
     final format = media['format'] as String?;
     final description = media['description'] as String?;
 
@@ -230,11 +258,7 @@ class AnilistRepository {
     final def = sections[sectionKey];
     if (def == null) return [];
 
-    final variables = {
-      'page': page,
-      'perPage': perPage,
-      ...def.variables,
-    };
+    final variables = {'page': page, 'perPage': perPage, ...def.variables};
     if (genre != null) variables['genre'] = genre;
     if (year != null) variables['seasonYear'] = year;
     if (minRating != null) variables['minScore'] = (minRating * 10).toInt();
@@ -252,7 +276,12 @@ class AnilistRepository {
       if (mediaList == null) return [];
 
       return mediaList
-          .map((m) => _mapMediaToMultimediaItem(Map<String, dynamic>.from(m as Map), titleLang: titleLang))
+          .map(
+            (m) => _mapMediaToMultimediaItem(
+              Map<String, dynamic>.from(m as Map),
+              titleLang: titleLang,
+            ),
+          )
           .toList();
     } catch (_) {
       return [];
@@ -265,7 +294,8 @@ class AnilistRepository {
     int perPage = 20,
     String? titleLang,
   }) async {
-    const searchGraphQL = '''
+    const searchGraphQL =
+        '''
       query (\$search: String, \$page: Int, \$perPage: Int) {
         Page(page: \$page, perPage: \$perPage) {
           media(search: \$search, type: ANIME, sort: SEARCH_MATCH) {
@@ -277,11 +307,7 @@ class AnilistRepository {
 
     final response = await _service.postGraphQL(
       searchGraphQL,
-      variables: {
-        'search': query,
-        'page': page,
-        'perPage': perPage,
-      },
+      variables: {'search': query, 'page': page, 'perPage': perPage},
     );
 
     if (response == null) return [];
@@ -292,7 +318,12 @@ class AnilistRepository {
       if (mediaList == null) return [];
 
       return mediaList
-          .map((m) => _mapMediaToMultimediaItem(Map<String, dynamic>.from(m as Map), titleLang: titleLang))
+          .map(
+            (m) => _mapMediaToMultimediaItem(
+              Map<String, dynamic>.from(m as Map),
+              titleLang: titleLang,
+            ),
+          )
           .toList();
     } catch (_) {
       return [];
@@ -384,10 +415,12 @@ class AnilistRepository {
       if (media == null) return null;
 
       final titleObj = media['title'] as Map<String, dynamic>?;
-      final title = (titleObj?['english'] ??
-          titleObj?['romaji'] ??
-          titleObj?['native'] ??
-          'Unknown Anime') as String;
+      final title =
+          (titleObj?['english'] ??
+                  titleObj?['romaji'] ??
+                  titleObj?['native'] ??
+                  'Unknown Anime')
+              as String;
 
       final format = media['format'] as String?;
       final isMovie = format == 'MOVIE';
@@ -405,7 +438,9 @@ class AnilistRepository {
           final aniZipData = aniZipResponse.data!;
           final mappings = aniZipData['mappings'] as Map<String, dynamic>?;
           if (mappings != null) {
-            resolvedTmdbId = int.tryParse(mappings['themoviedb_id']?.toString() ?? '');
+            resolvedTmdbId = int.tryParse(
+              mappings['themoviedb_id']?.toString() ?? '',
+            );
             resolvedImdbId = mappings['imdb_id']?.toString();
           }
           final imagesList = aniZipData['images'] as List?;
@@ -423,16 +458,19 @@ class AnilistRepository {
       }
 
       final coverObj = media['coverImage'] as Map<String, dynamic>?;
-      final posterUrl = (coverObj?['extraLarge'] ??
-          coverObj?['large'] ??
-          coverObj?['medium'] ??
-          '') as String;
+      final posterUrl =
+          (coverObj?['extraLarge'] ??
+                  coverObj?['large'] ??
+                  coverObj?['medium'] ??
+                  '')
+              as String;
       final bannerUrl = (media['bannerImage'] ?? posterUrl) as String;
 
       final averageScore = (media['averageScore'] as num?)?.toDouble() ?? 0.0;
       final score = averageScore / 10.0;
 
-      final genresList = (media['genres'] as List?)?.map((g) => g.toString()).toList() ?? [];
+      final genresList =
+          (media['genres'] as List?)?.map((g) => g.toString()).toList() ?? [];
       final genresStr = genresList.join(' | ');
 
       final nextAiringObj = media['nextAiringEpisode'] as Map<String, dynamic>?;
@@ -466,11 +504,13 @@ class AnilistRepository {
             if (characterNode == null) continue;
             final charName = characterNode['name']?['full'] as String? ?? '';
             final charImage = characterNode['image']?['large'] as String?;
-            cast.add(TmdbCast(
-              name: charName,
-              character: edge['role'] as String? ?? '',
-              profilePath: charImage,
-            ));
+            cast.add(
+              TmdbCast(
+                name: charName,
+                character: edge['role'] as String? ?? '',
+                profilePath: charImage,
+              ),
+            );
           }
         }
       }
@@ -482,10 +522,12 @@ class AnilistRepository {
         final nodes = studiosObj['nodes'] as List?;
         if (nodes != null) {
           for (final node in nodes) {
-            productionCompanies.add(TmdbProductionCompany(
-              name: node['name'] as String? ?? '',
-              logoPath: null,
-            ));
+            productionCompanies.add(
+              TmdbProductionCompany(
+                name: node['name'] as String? ?? '',
+                logoPath: null,
+              ),
+            );
           }
         }
       }
@@ -493,19 +535,23 @@ class AnilistRepository {
       // Trailers
       final trailers = <TmdbVideo>[];
       final trailerObj = media['trailer'] as Map<String, dynamic>?;
-      if (trailerObj != null && trailerObj['site']?.toString().toLowerCase() == 'youtube') {
-        trailers.add(TmdbVideo(
-          key: trailerObj['id'] as String? ?? '',
-          type: 'Trailer',
-          name: 'Official Trailer',
-        ));
+      if (trailerObj != null &&
+          trailerObj['site']?.toString().toLowerCase() == 'youtube') {
+        trailers.add(
+          TmdbVideo(
+            key: trailerObj['id'] as String? ?? '',
+            type: 'Trailer',
+            name: 'Official Trailer',
+          ),
+        );
       }
 
       final startDateObj = media['startDate'] as Map<String, dynamic>?;
       final startYear = startDateObj?['year'] ?? media['seasonYear'] ?? 2025;
       final startMonth = startDateObj?['month'] ?? 1;
       final startDay = startDateObj?['day'] ?? 1;
-      final date = '${startYear.toString().padLeft(4, '0')}-${startMonth.toString().padLeft(2, '0')}-${startDay.toString().padLeft(2, '0')}';
+      final date =
+          '${startYear.toString().padLeft(4, '0')}-${startMonth.toString().padLeft(2, '0')}-${startDay.toString().padLeft(2, '0')}';
 
       return TmdbDetails(
         id: id,
@@ -530,7 +576,7 @@ class AnilistRepository {
                   episodeCount: episodesCount,
                   posterPath: posterUrl,
                   airDate: date,
-                )
+                ),
               ],
         tmdbCast: cast,
         genres: genresList,
@@ -577,27 +623,29 @@ class AnilistRepository {
         }
       }
     ''';
- 
+
     final response = await _service.postGraphQL(
       episodesGraphQL,
       variables: {'id': id},
     );
- 
+
     if (response == null) return null;
     try {
       final data = response['data'] as Map<String, dynamic>?;
       final media = data?['Media'] as Map<String, dynamic>?;
       if (media == null) return null;
- 
+
       final titleObj = media['title'] as Map<String, dynamic>?;
-      final title = (titleObj?['english'] ??
-          titleObj?['romaji'] ??
-          titleObj?['native'] ??
-          'Anime') as String;
- 
+      final title =
+          (titleObj?['english'] ??
+                  titleObj?['romaji'] ??
+                  titleObj?['native'] ??
+                  'Anime')
+              as String;
+
       final averageScore = (media['averageScore'] as num?)?.toDouble() ?? 0.0;
       final voteAverage = averageScore / 10.0;
- 
+
       // Fetch episodes from AniZip mapping API (providing titles, summaries, ratings, and stills)
       Map<String, dynamic>? aniZipEpisodes;
       try {
@@ -639,15 +687,15 @@ class AnilistRepository {
           }
         }
       }
- 
+
       final streamingList = List<Map<String, dynamic>>.from(
         (media['streamingEpisodes'] as List?) ?? const <dynamic>[],
       );
- 
+
       final episodes = List.generate(count, (index) {
         final epNum = index + 1;
         final epKey = epNum.toString();
-        
+
         String epName = 'Episode $epNum';
         String? stillPath;
         double epVoteAverage = voteAverage;
@@ -680,7 +728,8 @@ class AnilistRepository {
               }
             }
 
-            final overviewVal = (epData['overview'] ?? epData['summary']) as String?;
+            final overviewVal =
+                (epData['overview'] ?? epData['summary']) as String?;
             if (overviewVal != null && overviewVal.isNotEmpty) {
               epOverview = overviewVal;
             }
@@ -688,7 +737,10 @@ class AnilistRepository {
         }
 
         // Fallback to streaming list if name is generic or still is missing
-        if ((stillPath == null || stillPath.isEmpty || epName == 'Episode $epNum') && index < streamingList.length) {
+        if ((stillPath == null ||
+                stillPath.isEmpty ||
+                epName == 'Episode $epNum') &&
+            index < streamingList.length) {
           final streamEp = streamingList[index];
           if (epName == 'Episode $epNum') {
             final titleStr = streamEp['title'] as String?;
@@ -700,7 +752,7 @@ class AnilistRepository {
             stillPath = streamEp['thumbnail'] as String?;
           }
         }
- 
+
         return {
           'id': epNum,
           'episode_number': epNum,
@@ -711,15 +763,13 @@ class AnilistRepository {
           'overview': epOverview,
         };
       });
- 
-      return {
-        'episodes': episodes,
-      };
+
+      return {'episodes': episodes};
     } catch (_) {
       return null;
     }
   }
- 
+
   String _cleanDescription(String? raw) {
     if (raw == null) return '';
     final unescaped = _unescape.convert(raw);

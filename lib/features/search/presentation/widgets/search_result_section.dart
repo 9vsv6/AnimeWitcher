@@ -129,7 +129,9 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
                           ),
                           title: item.title,
                           heroTag: uniqueTag,
-                          focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
+                          focusNode: rIndex == 0
+                              ? widget.firstCardFocusNode
+                              : null,
                           onTap: () => DetailsRoute(
                             $extra: DetailsRouteExtra(item: item),
                           ).push<void>(context),

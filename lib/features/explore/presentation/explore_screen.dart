@@ -275,7 +275,9 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
                   onTap: () {
-                    ref.read(exploreModeProvider.notifier).setAnimeMode(!isAnime);
+                    ref
+                        .read(exploreModeProvider.notifier)
+                        .setAnimeMode(!isAnime);
                   },
                   child: Container(
                     height: 56,
@@ -302,7 +304,9 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                                     child: Text(
                                       isAnime ? 'Go Back' : 'Explore Anime',
                                       style: TextStyle(
-                                        color: Theme.of(context).colorScheme.onSurface,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),

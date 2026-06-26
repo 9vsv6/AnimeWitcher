@@ -26,12 +26,10 @@ class _StampInLabelState extends State<StampInLabel>
     _controller = AnimationController(vsync: this, duration: widget.duration);
 
     // Elastic snap back curve
-    _scaleAnimation = Tween<double>(begin: 1.25, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.elasticOut,
-      ),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.25,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
 
     _controller.forward();
   }
@@ -44,9 +42,6 @@ class _StampInLabelState extends State<StampInLabel>
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scaleAnimation,
-      child: widget.child,
-    );
+    return ScaleTransition(scale: _scaleAnimation, child: widget.child);
   }
 }

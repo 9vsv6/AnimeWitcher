@@ -55,21 +55,26 @@ class _WaveformEqualizerState extends State<WaveformEqualizer>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final active = widget.activeColor ?? Colors.redAccent;
-    final inactive = widget.inactiveColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.6);
+    final inactive =
+        widget.inactiveColor ??
+        theme.colorScheme.onSurface.withValues(alpha: 0.6);
 
     if (!widget.isActive) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(3, (index) => Container(
-          width: 2,
-          height: 4,
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          decoration: BoxDecoration(
-            color: inactive,
-            borderRadius: BorderRadius.circular(0.5),
+        children: List.generate(
+          3,
+          (index) => Container(
+            width: 2,
+            height: 4,
+            margin: const EdgeInsets.symmetric(horizontal: 1),
+            decoration: BoxDecoration(
+              color: inactive,
+              borderRadius: BorderRadius.circular(0.5),
+            ),
           ),
-        )),
+        ),
       );
     }
 
@@ -84,7 +89,12 @@ class _WaveformEqualizerState extends State<WaveformEqualizer>
     );
   }
 
-  Widget _buildBar(Animation<double> anim, double minH, double maxH, Color color) {
+  Widget _buildBar(
+    Animation<double> anim,
+    double minH,
+    double maxH,
+    Color color,
+  ) {
     return AnimatedBuilder(
       animation: anim,
       builder: (context, child) {
@@ -151,7 +161,9 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
       width: 310,
       height: 38,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.25,
+        ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
@@ -202,7 +214,10 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                         children: [
                           Transform.translate(
                             offset: const Offset(0, -1.5),
-                            child: const Text('🍿', style: TextStyle(fontSize: 14)),
+                            child: const Text(
+                              '🍿',
+                              style: TextStyle(fontSize: 14),
+                            ),
                           ),
                           const SizedBox(width: 6),
                           Text(
@@ -211,9 +226,7 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                               fontFamily: nativeFont,
                               fontSize: 13.0,
                               fontWeight: FontWeight.w400,
-                              color: !isLive
-                                  ? Colors.white
-                                  : Colors.white60,
+                              color: !isLive ? Colors.white : Colors.white60,
                             ),
                           ),
                         ],
@@ -248,9 +261,7 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                               fontFamily: nativeFont,
                               fontSize: 13.0,
                               fontWeight: FontWeight.w400,
-                              color: isLive
-                                  ? Colors.white
-                                  : Colors.white60,
+                              color: isLive ? Colors.white : Colors.white60,
                             ),
                           ),
                         ],
@@ -322,7 +333,9 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                 height: 48,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.3,
+                  ),
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.12),
                     width: 1.2,
@@ -330,99 +343,111 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                 ),
                 child: ValueListenableBuilder<TextEditingValue>(
                   valueListenable: widget.textController,
-                builder: (context, value, child) {
-                  final isSearching = searchResultsAsync.maybeWhen(
-                    data: (state) => state.isLoading,
-                    loading: () => true,
-                    orElse: () => false,
-                  );
+                  builder: (context, value, child) {
+                    final isSearching = searchResultsAsync.maybeWhen(
+                      data: (state) => state.isLoading,
+                      loading: () => true,
+                      orElse: () => false,
+                    );
 
-                  Widget? suffix;
-                  if (isSearching) {
-                    suffix = Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: AppLoadingIndicator(
-                          color: theme.colorScheme.primary,
-                          constraints: BoxConstraints.tight(const Size(20, 20)),
+                    Widget? suffix;
+                    if (isSearching) {
+                      suffix = Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: AppLoadingIndicator(
+                            color: theme.colorScheme.primary,
+                            constraints: BoxConstraints.tight(
+                              const Size(20, 20),
+                            ),
+                          ),
+                        ),
+                      );
+                    } else if (value.text.isNotEmpty) {
+                      suffix = AnimatedBuilder(
+                        animation: widget.clearButtonFocusNode,
+                        builder: (context, child) {
+                          final isFocused =
+                              widget.clearButtonFocusNode.hasFocus;
+                          return IconButton(
+                            focusNode: widget.clearButtonFocusNode,
+                            icon: Icon(
+                              Icons.clear_rounded,
+                              size: 18,
+                              color: isFocused
+                                  ? const Color(0xFF1F80E0)
+                                  : Colors.white70,
+                            ),
+                            style: IconButton.styleFrom(
+                              backgroundColor: isFocused
+                                  ? const Color(
+                                      0xFF1F80E0,
+                                    ).withValues(alpha: 0.2)
+                                  : Colors.transparent,
+                            ),
+                            onPressed: () {
+                              widget.textController.clear();
+                              ref
+                                  .read(
+                                    searchSuggestionControllerProvider.notifier,
+                                  )
+                                  .clear();
+                              ref.read(searchQueryProvider.notifier).set('');
+                              widget.searchFocusNode.requestFocus();
+                            },
+                          );
+                        },
+                      );
+                    }
+
+                    return TextField(
+                      controller: widget.textController,
+                      focusNode: widget.searchFocusNode,
+                      autofocus: false,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                      textAlignVertical: TextAlignVertical.center,
+                      textInputAction: TextInputAction.search,
+                      onChanged: widget.onChanged,
+                      onSubmitted: widget.onSubmitted,
+                      decoration: InputDecoration(
+                        hintText: l10n.searchHint,
+                        border: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        filled: false,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 15,
+                        ),
+                        hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          size: 20,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 46,
+                          minHeight: 48,
+                        ),
+                        suffixIcon: suffix,
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 46,
+                          minHeight: 48,
                         ),
                       ),
                     );
-                  } else if (value.text.isNotEmpty) {
-                    suffix = AnimatedBuilder(
-                      animation: widget.clearButtonFocusNode,
-                      builder: (context, child) {
-                        final isFocused = widget.clearButtonFocusNode.hasFocus;
-                        return IconButton(
-                          focusNode: widget.clearButtonFocusNode,
-                          icon: Icon(
-                            Icons.clear_rounded,
-                            size: 18,
-                            color: isFocused ? const Color(0xFF1F80E0) : Colors.white70,
-                          ),
-                          style: IconButton.styleFrom(
-                            backgroundColor: isFocused
-                                ? const Color(0xFF1F80E0).withValues(alpha: 0.2)
-                                : Colors.transparent,
-                          ),
-                          onPressed: () {
-                            widget.textController.clear();
-                            ref
-                                .read(searchSuggestionControllerProvider.notifier)
-                                .clear();
-                            ref.read(searchQueryProvider.notifier).set('');
-                            widget.searchFocusNode.requestFocus();
-                          },
-                        );
-                      },
-                    );
-                  }
-
-                  return TextField(
-                    controller: widget.textController,
-                    focusNode: widget.searchFocusNode,
-                    autofocus: false,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    textAlignVertical: TextAlignVertical.center,
-                    textInputAction: TextInputAction.search,
-                    onChanged: widget.onChanged,
-                    onSubmitted: widget.onSubmitted,
-                    decoration: InputDecoration(
-                      hintText: l10n.searchHint,
-                      border: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      filled: false,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                      hintStyle: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.search_rounded,
-                        size: 20,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      prefixIconConstraints: const BoxConstraints(
-                        minWidth: 46,
-                        minHeight: 48,
-                      ),
-                      suffixIcon: suffix,
-                      suffixIconConstraints: const BoxConstraints(
-                        minWidth: 46,
-                        minHeight: 48,
-                      ),
-                    ),
-                  );
-                },
+                  },
+                ),
               ),
-            ),
             ),
 
             const SizedBox(height: 16),

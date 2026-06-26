@@ -18,12 +18,14 @@ class MovieDetailsParams {
 
   @override
   bool operator ==(Object other) =>
-      other is MovieDetailsParams && other.id == id && other.type == type && other.source == source;
+      other is MovieDetailsParams &&
+      other.id == id &&
+      other.type == type &&
+      other.source == source;
 
   @override
   int get hashCode => Object.hash(id, type, source);
 }
-
 
 @riverpod
 Future<TmdbDetails?> tmdbDetails(Ref ref, MovieDetailsParams params) async {
