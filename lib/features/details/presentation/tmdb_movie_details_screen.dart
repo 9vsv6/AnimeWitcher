@@ -807,17 +807,30 @@ class _TmdbMovieDetailsScreenState
 
   Widget _buildTmdbLogo() {
     final isAnilist = widget.source == 'anilist';
+    if (isAnilist) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: const Color(0xFF02A9FF).withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(6),
+        child: SvgPicture.asset(
+          'assets/images/anilist_icon.svg',
+          fit: BoxFit.contain,
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
-        color: isAnilist
-            ? const Color(0xFF3DB4F2)
-            : const Color(0xFF01B4E4), // AniList Blue or TMDB Blue
+        color: const Color(0xFF01B4E4), // TMDB Blue
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(
-        isAnilist ? "ANILIST" : "TMDB",
-        style: const TextStyle(
+      child: const Text(
+        "TMDB",
+        style: TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w900,
           fontSize: 10,

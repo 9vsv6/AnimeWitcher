@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/shimmer_placeholder.dart';
@@ -52,16 +53,31 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
 
   Widget _buildTmdbLogo(BuildContext context) {
     final isAnilist = widget.source == 'anilist';
+    if (isAnilist) {
+      return Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: const Color(0xFF02A9FF).withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(4),
+        child: SvgPicture.asset(
+          'assets/images/anilist_icon.svg',
+          fit: BoxFit.contain,
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
-        color: isAnilist ? const Color(0xFF0b1622) : const Color(0xFF0d253f),
+        color: const Color(0xFF0d253f),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        isAnilist ? "ANILIST" : AppLocalizations.of(context)!.tmdb,
-        style: TextStyle(
-          color: isAnilist ? const Color(0xFF3DB4F2) : const Color(0xFF90cea1),
+        AppLocalizations.of(context)!.tmdb,
+        style: const TextStyle(
+          color: Color(0xFF90cea1),
           fontSize: 8,
           fontWeight: FontWeight.bold,
         ),

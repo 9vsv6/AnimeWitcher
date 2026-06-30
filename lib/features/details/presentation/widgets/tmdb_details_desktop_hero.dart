@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../../../core/models/tmdb_details.dart';
 import '../../../../core/storage/history_repository.dart';
@@ -327,17 +328,30 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
 
   Widget _buildTmdbLogo() {
     final isAnilist = source == 'anilist';
+    if (isAnilist) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: const Color(0xFF02A9FF).withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(6),
+        child: SvgPicture.asset(
+          'assets/images/anilist_icon.svg',
+          fit: BoxFit.contain,
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
-        color: isAnilist
-            ? const Color(0xFF3DB4F2)
-            : const Color(0xFF01B4E4), // AniList Blue or TMDB Blue
+        color: const Color(0xFF01B4E4), // TMDB Blue
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(
-        isAnilist ? "ANILIST" : "TMDB",
-        style: const TextStyle(
+      child: const Text(
+        "TMDB",
+        style: TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w900,
           fontSize: 10,
