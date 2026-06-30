@@ -20,6 +20,7 @@ import '../../../../features/settings/presentation/player_settings_provider.dart
 import 'widgets/skystream_player_controls.dart';
 import 'widgets/hotstar_player_style.dart';
 import 'player_controller.dart';
+import 'player_gesture_handler.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final MultimediaItem item;
@@ -311,6 +312,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           unawaited(
             ref.read(playerControllerProvider.notifier).setPlaybackSpeed(2.0),
           );
+          ref.read(playerGestureHandlerProvider.notifier).showToast(
+                "2.0x",
+                Icons.fast_forward_rounded,
+              );
         });
         return KeyEventResult.handled;
       }
@@ -325,6 +330,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           unawaited(
             ref.read(playerControllerProvider.notifier).setPlaybackSpeed(2.0),
           );
+          ref.read(playerGestureHandlerProvider.notifier).showToast(
+                "2.0x",
+                Icons.fast_forward_rounded,
+              );
         }
         return KeyEventResult.handled;
       }
@@ -344,6 +353,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               .read(playerControllerProvider.notifier)
               .setPlaybackSpeed(previousSpeed),
         );
+        ref.read(playerGestureHandlerProvider.notifier).showToast(
+              "${previousSpeed.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}x",
+              Icons.play_arrow_rounded,
+            );
         return KeyEventResult.handled;
       }
     }

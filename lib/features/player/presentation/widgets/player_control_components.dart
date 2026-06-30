@@ -202,7 +202,7 @@ class PlayerBottomBar extends StatelessWidget {
 
 /// Compact icon-only button for utilities (resize, PiP, fullscreen) and the
 /// top-bar back button. Tooltip doubles as the semantics label.
-class PlayerIconButton extends StatelessWidget {
+class PlayerIconButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
@@ -226,25 +226,44 @@ class PlayerIconButton extends StatelessWidget {
   });
 
   @override
+  State<PlayerIconButton> createState() => _PlayerIconButtonState();
+}
+
+class _PlayerIconButtonState extends State<PlayerIconButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final double glyph = iconSize ?? (isTv ? 28 : 26);
-    final double box = glyph + (isTv ? 20 : 18);
+    final double glyph = widget.iconSize ?? (widget.isTv ? 28 : 26);
+    final double box = glyph + (widget.isTv ? 20 : 18);
+
+    Color iconColor;
+    if (_hovered) {
+      iconColor = HotstarPlayerStyle.accent;
+    } else if (widget.highlight) {
+      iconColor = HotstarPlayerStyle.accent;
+    } else {
+      iconColor = Colors.white;
+    }
+
     return Tooltip(
-      message: tooltip,
-      child: CustomButton(
-        onPressed: onPressed,
-        showFocusHighlight: isTv,
-        focusNode: focusNode,
-        shape: const CircleBorder(),
-        child: SizedBox(
-          width: box,
-          height: box,
-          child: Icon(
-            icon,
-            color: highlight
-                ? Theme.of(context).colorScheme.primary
-                : Colors.white,
-            size: glyph,
+      message: widget.tooltip,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: CustomButton(
+          onPressed: widget.onPressed,
+          showFocusHighlight: widget.isTv,
+          focusNode: widget.focusNode,
+          shape: const CircleBorder(),
+          child: SizedBox(
+            width: box,
+            height: box,
+            child: Icon(
+              widget.icon,
+              color: iconColor,
+              size: glyph,
+            ),
           ),
         ),
       ),
@@ -290,8 +309,10 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = widget.highlight || _hovered || _focused || _pressed;
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final showBg = (widget.highlight || _focused || _pressed) && !_hovered;
+    final color = (widget.highlight || _hovered || _focused || _pressed)
+        ? HotstarPlayerStyle.accent
+        : Colors.white;
     final showTvFocusRing = widget.isTv && _focused;
 
     return Semantics(
@@ -335,17 +356,17 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                 constraints: const BoxConstraints(minHeight: 44),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: isActive
-                      ? primaryColor.withValues(alpha: 0.16)
+                  color: showBg
+                      ? HotstarPlayerStyle.accent.withValues(alpha: 0.16)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                   border: showTvFocusRing
-                      ? Border.all(color: primaryColor, width: 2)
+                      ? Border.all(color: HotstarPlayerStyle.accent, width: 2)
                       : null,
                   boxShadow: showTvFocusRing
                       ? [
                           BoxShadow(
-                            color: primaryColor.withValues(alpha: 0.2),
+                            color: HotstarPlayerStyle.accent.withValues(alpha: 0.2),
                             blurRadius: 8,
                           ),
                         ]
@@ -356,16 +377,14 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                   children: [
                     Icon(
                       widget.icon,
-                      color: isActive ? primaryColor : Colors.white,
+                      color: color,
                       size: 20,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       widget.label,
                       style: TextStyle(
-                        color: isActive
-                            ? primaryColor
-                            : HotstarPlayerStyle.primaryText,
+                        color: color,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),

@@ -402,6 +402,7 @@ class _CustomButtonState extends State<CustomButton> {
           side: BorderSide.none,
           shadowColor: Colors.transparent,
           shape: widget.shape,
+          overlayColor: Colors.transparent,
         ),
         child: widget.child,
       );
@@ -426,6 +427,8 @@ class _CustomButtonState extends State<CustomButton> {
               ? BorderSide(color: Theme.of(context).colorScheme.outline)
               : BorderSide.none,
           shape: widget.shape,
+          overlayColor: Colors.transparent,
+          shadowColor: Colors.transparent,
         ),
         child: widget.child,
       );
