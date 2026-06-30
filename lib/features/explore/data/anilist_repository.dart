@@ -38,8 +38,50 @@ class AnilistRepository {
   final AnilistExploreService _service;
   final Dio _dio;
   static final _unescape = HtmlUnescape();
+  final Map<int, String?> _fanartCache = {};
+  final Map<int, String?> _logoCache = {};
 
   AnilistRepository(this._service, this._dio);
+
+  Future<Map<String, String?>> getAnimeImages(int id) async {
+    if (_logoCache.containsKey(id) && _fanartCache.containsKey(id)) {
+      return {
+        'logo': _logoCache[id],
+        'fanart': _fanartCache[id],
+      };
+    }
+    String? logoUrl;
+    String? fanartUrl;
+    try {
+      final aniZipResponse = await _dio.get<Map<String, dynamic>>(
+        'https://api.ani.zip/mappings',
+        queryParameters: {'anilist_id': id},
+      );
+      if (aniZipResponse.statusCode == 200 && aniZipResponse.data != null) {
+        final aniZipData = aniZipResponse.data!;
+        final imagesList = aniZipData['images'] as List?;
+        if (imagesList != null) {
+          for (final img in imagesList) {
+            if (img is Map) {
+              if (img['coverType'] == 'Clearlogo') {
+                logoUrl = img['url'] as String?;
+              } else if (img['coverType'] == 'Fanart') {
+                fanartUrl = img['url'] as String?;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      talker.error('AnilistRepository: Failed to fetch anime images: $e');
+    }
+    _logoCache[id] = logoUrl;
+    _fanartCache[id] = fanartUrl;
+    return {
+      'logo': logoUrl,
+      'fanart': fanartUrl,
+    };
+  }
 
   static const String mediaFragment = '''
     id
@@ -427,6 +469,7 @@ class AnilistRepository {
       final mediaType = isMovie ? 'movie' : 'tv';
 
       String? logoUrl;
+      String? fanartUrl;
       int? resolvedTmdbId;
       String? resolvedImdbId;
       try {
@@ -446,9 +489,12 @@ class AnilistRepository {
           final imagesList = aniZipData['images'] as List?;
           if (imagesList != null) {
             for (final img in imagesList) {
-              if (img is Map && img['coverType'] == 'Clearlogo') {
-                logoUrl = img['url'] as String?;
-                break;
+              if (img is Map) {
+                if (img['coverType'] == 'Clearlogo') {
+                  logoUrl = img['url'] as String?;
+                } else if (img['coverType'] == 'Fanart') {
+                  fanartUrl = img['url'] as String?;
+                }
               }
             }
           }
@@ -464,7 +510,7 @@ class AnilistRepository {
                   coverObj?['medium'] ??
                   '')
               as String;
-      final bannerUrl = (media['bannerImage'] ?? posterUrl) as String;
+      final bannerUrl = (fanartUrl ?? media['bannerImage'] ?? posterUrl) as String;
 
       final averageScore = (media['averageScore'] as num?)?.toDouble() ?? 0.0;
       final score = averageScore / 10.0;
@@ -780,25 +826,7 @@ class AnilistRepository {
   }
 
   Future<String?> getAnimeLogo(int id) async {
-    try {
-      final aniZipResponse = await _dio.get<Map<String, dynamic>>(
-        'https://api.ani.zip/mappings',
-        queryParameters: {'anilist_id': id},
-      );
-      if (aniZipResponse.statusCode == 200 && aniZipResponse.data != null) {
-        final aniZipData = aniZipResponse.data!;
-        final imagesList = aniZipData['images'] as List?;
-        if (imagesList != null) {
-          for (final img in imagesList) {
-            if (img is Map && img['coverType'] == 'Clearlogo') {
-              return img['url'] as String?;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      talker.error('AnilistRepository: Failed to fetch anime logo: $e');
-    }
-    return null;
+    final images = await getAnimeImages(id);
+    return images['logo'];
   }
 }

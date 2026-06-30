@@ -113,11 +113,17 @@ Future<List<MultimediaItem>> anilistHeroAnime(Ref ref) async {
     top5.map((item) async {
       final anilistId = item.tmdbId;
       if (anilistId == null) return item;
-      final logoUrl = await repo.getAnimeLogo(anilistId);
+      final images = await repo.getAnimeImages(anilistId);
+      final logoUrl = images['logo'];
+      final fanartUrl = images['fanart'];
+      var updatedItem = item;
       if (logoUrl != null && logoUrl.isNotEmpty) {
-        return item.copyWith(logoUrl: logoUrl);
+        updatedItem = updatedItem.copyWith(logoUrl: logoUrl);
       }
-      return item;
+      if (fanartUrl != null && fanartUrl.isNotEmpty) {
+        updatedItem = updatedItem.copyWith(bannerUrl: fanartUrl);
+      }
+      return updatedItem;
     }),
   );
 }

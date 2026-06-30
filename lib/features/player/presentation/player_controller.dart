@@ -2317,6 +2317,13 @@ class PlayerController extends Notifier<PlayerState> {
 
     _isNextEpisodeOverlayForced = false;
 
+    if (!_isApplyingPendingResumeSeek) {
+      state = state.copyWith(
+        resumePromptPosition: null,
+        resumePromptPercentage: null,
+      );
+    }
+
     final clamped = position < Duration.zero ? Duration.zero : position;
 
     if (state.useExoPlayer && _videoViewController != null) {
