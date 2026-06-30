@@ -185,6 +185,42 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
     final cardWidth = isCompact ? 280.0 : (widget.isTv ? 440.0 : 360.0);
     final thumbHeight = cardWidth * 9 / 16;
 
+    final cardContent = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.45),
+              ),
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildThumbnail(thumbHeight, cardWidth, isCompact),
+              _buildInfo(isCompact),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final card = isCompact
+        ? Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: _handlePressed,
+              child: cardContent,
+            ),
+          )
+        : cardContent;
+
     return PlayerPromptPlacement(
       isTv: widget.isTv,
       alignment: widget.isTv
@@ -196,34 +232,47 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
           position: _slideAnimation,
           child: SizedBox(
             width: cardWidth,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                          child: Container(
-                            color: Colors.black.withValues(alpha: 0.45),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (isCompact) const SizedBox(height: 48),
+                    card,
+                    if (!isCompact) _buildButtons(isCompact, l10n),
+                  ],
+                ),
+                if (isCompact)
+                  Positioned(
+                    top: 8,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: GestureDetector(
+                        onTap: _handleDismiss,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 18,
                           ),
                         ),
                       ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildThumbnail(thumbHeight, cardWidth, isCompact),
-                          _buildInfo(isCompact),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                _buildButtons(isCompact, l10n),
               ],
             ),
           ),

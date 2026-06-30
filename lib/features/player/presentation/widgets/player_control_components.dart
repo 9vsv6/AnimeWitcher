@@ -23,15 +23,20 @@ class PlayerTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final padding = MediaQuery.viewPaddingOf(context);
     final edge = isTv
         ? HotstarPlayerStyle.tvEdgeInset
         : HotstarPlayerStyle.edgeInset;
+    final double leftPadding = isTv ? edge : (padding.left > edge ? padding.left : edge);
+    final double rightPadding = isTv ? edge : (padding.right > edge ? padding.right : edge);
     return DecoratedBox(
       decoration: const BoxDecoration(gradient: HotstarPlayerStyle.topGradient),
       child: SafeArea(
+        left: false,
+        right: false,
         bottom: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(edge, 14, edge, 24),
+          padding: EdgeInsets.fromLTRB(leftPadding, 14, rightPadding, 24),
           child: Row(
             children: [
               PlayerIconButton(
@@ -136,17 +141,22 @@ class PlayerBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final padding = MediaQuery.viewPaddingOf(context);
     final edge = isTv
         ? HotstarPlayerStyle.tvEdgeInset
         : HotstarPlayerStyle.edgeInset;
+    final double leftPadding = isTv ? edge : (padding.left > edge ? padding.left : edge);
+    final double rightPadding = isTv ? edge : (padding.right > edge ? padding.right : edge);
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: HotstarPlayerStyle.bottomGradient,
       ),
       child: SafeArea(
+        left: false,
+        right: false,
         top: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(edge, 2, edge, 6),
+          padding: EdgeInsets.fromLTRB(leftPadding, 2, rightPadding, 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

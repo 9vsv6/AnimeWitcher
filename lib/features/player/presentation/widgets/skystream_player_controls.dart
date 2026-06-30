@@ -1100,10 +1100,12 @@ class SkyStreamPlayerControlsState
                 // Torrent stats card — top-right, toggled by the Stats action.
                 // Responsive width, cleared below the top bar, and pointer-
                 // transparent so it never blocks the player. Non-focusable.
-                if (torrentStatus != null && _showTorrentInfo)
+                 if (torrentStatus != null && _showTorrentInfo)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: SafeArea(
+                        left: false,
+                        right: false,
                         child: Align(
                           alignment: Alignment.topRight,
                           child: Padding(
@@ -1112,7 +1114,9 @@ class SkyStreamPlayerControlsState
                               top: _isTv ? 88 : 68,
                               right: _isTv
                                   ? HotstarPlayerStyle.tvEdgeInset
-                                  : HotstarPlayerStyle.edgeInset,
+                                  : (MediaQuery.viewPaddingOf(context).right > HotstarPlayerStyle.edgeInset
+                                      ? MediaQuery.viewPaddingOf(context).right
+                                      : HotstarPlayerStyle.edgeInset),
                               left: 12,
                             ),
                             child: ConstrainedBox(

@@ -47,10 +47,11 @@ class PlayerPromptPlacement extends StatelessWidget {
     final edge = isTv
         ? HotstarPlayerStyle.tvEdgeInset
         : HotstarPlayerStyle.edgeInset;
+    final double rightPadding = isTv ? edge : (padding.right > edge ? padding.right : edge);
 
     if (alignment == PromptVerticalAlignment.center) {
       return Positioned(
-        right: edge + padding.right,
+        right: rightPadding,
         top: 0,
         bottom: 0,
         child: Center(child: child),
@@ -58,7 +59,7 @@ class PlayerPromptPlacement extends StatelessWidget {
     }
 
     return Positioned(
-      right: edge + padding.right,
+      right: rightPadding,
       bottom: _bottomOffset(context),
       child: child,
     );
