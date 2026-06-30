@@ -3207,6 +3207,7 @@ class PlayerController extends Notifier<PlayerState> {
     if (state.skipSegments.isNotEmpty) {
       state = state.copyWith(skipSegments: const []);
     }
+    unawaited(setSubtitleDelay(0.0));
   }
 
   Future<void> playNextEpisode() async {

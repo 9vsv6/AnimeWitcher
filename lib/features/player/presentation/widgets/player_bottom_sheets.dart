@@ -14,6 +14,7 @@ import '../subtitle_search_provider.dart';
 import '../../domain/entity/subtitle_model.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'hotstar_player_style.dart';
+import 'subtitle_sync_dialog.dart';
 
 class _TrackDialogResult {
   final String? audioId;
@@ -814,131 +815,17 @@ class PlayerBottomSheets {
   }
 
   static void _showSubtitleSync(BuildContext context) {
-    final theme = Theme.of(context);
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor:
-          theme.bottomSheetTheme.modalBackgroundColor ??
-          theme.dialogTheme.backgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return Consumer(
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Consumer(
           builder: (context, ref, child) {
-            final currentDelay = ref.watch(
-              playerControllerProvider.select((s) => s.subtitleDelay),
-            );
-            final supportsSubtitleDelay = ref.watch(
-              playerControllerProvider.select((s) => s.supportsSubtitleDelay),
-            );
-
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      AppLocalizations.of(context)!.subtitleSync,
-                      style: TextStyle(
-                        color: theme.textTheme.bodyLarge?.color,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (!supportsSubtitleDelay) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.4),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.info_outline,
-                              color: Colors.orange,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                AppLocalizations.of(
-                                  context,
-                                )!.subtitleDelayWarning,
-                                style: TextStyle(
-                                  color: Colors.orange.shade200,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          onPressed: !supportsSubtitleDelay
-                              ? null
-                              : () => ref
-                                    .read(playerControllerProvider.notifier)
-                                    .setSubtitleDelay(currentDelay - 0.1),
-                          icon: const Icon(
-                            Icons.remove_circle_outline,
-                            size: 32,
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        Text(
-                          "${currentDelay.toStringAsFixed(1)}s",
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: !supportsSubtitleDelay
-                                ? Colors.white38
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        IconButton(
-                          onPressed: !supportsSubtitleDelay
-                              ? null
-                              : () => ref
-                                    .read(playerControllerProvider.notifier)
-                                    .setSubtitleDelay(currentDelay + 0.1),
-                          icon: const Icon(Icons.add_circle_outline, size: 32),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    TextButton(
-                      onPressed: !supportsSubtitleDelay
-                          ? null
-                          : () => ref
-                                .read(playerControllerProvider.notifier)
-                                .setSubtitleDelay(0.0),
-                      child: Text(AppLocalizations.of(context)!.resetDelay),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                ),
-              ),
-            );
+            final controller = ref.read(playerControllerProvider.notifier);
+            final wasPlaying = controller.isPlaying;
+            return SubtitleSyncDialog(wasPlaying: wasPlaying);
           },
-        );
-      },
+        ),
+      ),
     );
   }
 
