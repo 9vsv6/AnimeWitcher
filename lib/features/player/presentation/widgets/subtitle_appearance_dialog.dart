@@ -381,6 +381,8 @@ class _SubtitleAppearanceDialogState
   bool _customFontLoading = false;
   bool _customFontLoaded = false;
 
+
+
   final List<int> _textColors = const [
     0xFFFFFFFF, // White
     0xFFFFFF00, // Yellow
@@ -453,6 +455,8 @@ class _SubtitleAppearanceDialogState
     }
     super.dispose();
   }
+
+
 
   Future<void> _loadCustomFontIfNeeded() async {
     final path = _localSettings.subTypefaceFilePath;
@@ -599,40 +603,29 @@ class _SubtitleAppearanceDialogState
                       _buildRemoveCaptionsRow(),
                       _buildUppercaseRow(),
 
+                      const SizedBox(height: 32),
+                      Row(
+                        children: [
+                          DpadButton(
+                            label: "Reset to Default",
+                            isPrimary: false,
+                            onPressed: _resetAll,
+                          ),
+                          const Spacer(),
+                          DpadButton(
+                            label: "Cancel",
+                            isPrimary: false,
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                          const SizedBox(width: 12),
+                          DpadButton(
+                            label: "Apply Settings",
+                            isPrimary: true,
+                            onPressed: _applyAndSave,
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ),
-              SafeArea(
-                top: false,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0F1016),
-                    border: Border(
-                      top: BorderSide(color: HotstarPlayerStyle.divider, width: 0.5),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      DpadButton(
-                        label: "Reset to Default",
-                        isPrimary: false,
-                        onPressed: _resetAll,
-                      ),
-                      const Spacer(),
-                      DpadButton(
-                        label: "Cancel",
-                        isPrimary: false,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                      const SizedBox(width: 12),
-                      DpadButton(
-                        label: "Apply Settings",
-                        isPrimary: true,
-                        onPressed: _applyAndSave,
-                      ),
                     ],
                   ),
                 ),
