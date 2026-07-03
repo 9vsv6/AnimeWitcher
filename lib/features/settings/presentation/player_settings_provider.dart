@@ -190,12 +190,18 @@ class PlayerSettings {
           : (preferredPlayer ?? this.preferredPlayer),
       readaheadSeconds: readaheadSeconds ?? this.readaheadSeconds,
       subtitlePosition: subtitlePosition ?? this.subtitlePosition,
-      subFixedTextSize: subFixedTextSize != null ? subFixedTextSize() : this.subFixedTextSize,
+      subFixedTextSize: subFixedTextSize != null
+          ? subFixedTextSize()
+          : this.subFixedTextSize,
       subTypeface: subTypeface != null ? subTypeface() : this.subTypeface,
-      subTypefaceFilePath: subTypefaceFilePath != null ? subTypefaceFilePath() : this.subTypefaceFilePath,
+      subTypefaceFilePath: subTypefaceFilePath != null
+          ? subTypefaceFilePath()
+          : this.subTypefaceFilePath,
       subEdgeType: subEdgeType ?? this.subEdgeType,
       subEdgeSize: subEdgeSize != null ? subEdgeSize() : this.subEdgeSize,
-      subBackgroundRadius: subBackgroundRadius != null ? subBackgroundRadius() : this.subBackgroundRadius,
+      subBackgroundRadius: subBackgroundRadius != null
+          ? subBackgroundRadius()
+          : this.subBackgroundRadius,
       subElevation: subElevation ?? this.subElevation,
       subRemoveBloat: subRemoveBloat ?? this.subRemoveBloat,
       subRemoveCaptions: subRemoveCaptions ?? this.subRemoveCaptions,
@@ -318,22 +324,85 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     final dlKey = storage.getPlayerSetting<String>('player_subdl_key') ?? '';
     final ssKey = storage.getPlayerSetting<String>('player_ss_key') ?? '';
 
-    final subFixedTextSize = (storage.getPlayerSetting('player_sub_fixed_text_size') as num?)?.toDouble();
+    final subFixedTextSize =
+        (storage.getPlayerSetting('player_sub_fixed_text_size') as num?)
+            ?.toDouble();
     final subTypeface = storage.getPlayerSetting<int>('player_sub_typeface');
-    final subTypefaceFilePath = storage.getPlayerSetting<String>('player_sub_typeface_file_path');
-    final subEdgeType = storage.getPlayerSetting<int>('player_sub_edge_type', defaultValue: 1) ?? 1;
-    final subEdgeSize = (storage.getPlayerSetting('player_sub_edge_size') as num?)?.toDouble();
-    final subBackgroundRadius = (storage.getPlayerSetting('player_sub_bg_radius') as num?)?.toDouble();
-    final subElevation = storage.getPlayerSetting<int>('player_sub_elevation', defaultValue: 20) ?? 20;
-    final subRemoveBloat = storage.getPlayerSetting<bool>('player_sub_remove_bloat', defaultValue: true) ?? true;
-    final subRemoveCaptions = storage.getPlayerSetting<bool>('player_sub_remove_captions', defaultValue: false) ?? false;
-    final subUpperCase = storage.getPlayerSetting<bool>('player_sub_uppercase', defaultValue: false) ?? false;
-    final subBold = storage.getPlayerSetting<bool>('player_sub_bold', defaultValue: false) ?? false;
-    final subItalic = storage.getPlayerSetting<bool>('player_sub_italic', defaultValue: false) ?? false;
-    final subForegroundColor = storage.getPlayerSetting<int>('player_sub_foreground_color', defaultValue: 0xFFFFFFFF) ?? 0xFFFFFFFF;
-    final subBackgroundColor = storage.getPlayerSetting<int>('player_sub_background_color', defaultValue: 0x00000000) ?? 0x00000000;
-    final subEdgeColor = storage.getPlayerSetting<int>('player_sub_edge_color', defaultValue: 0xFF000000) ?? 0xFF000000;
-    final subBackgroundOpacity = (storage.getPlayerSetting('player_sub_background_opacity', defaultValue: 0.5) as num?)?.toDouble() ?? 0.5;
+    final subTypefaceFilePath = storage.getPlayerSetting<String>(
+      'player_sub_typeface_file_path',
+    );
+    final subEdgeType =
+        storage.getPlayerSetting<int>(
+          'player_sub_edge_type',
+          defaultValue: 1,
+        ) ??
+        1;
+    final subEdgeSize =
+        (storage.getPlayerSetting('player_sub_edge_size') as num?)?.toDouble();
+    final subBackgroundRadius =
+        (storage.getPlayerSetting('player_sub_bg_radius') as num?)?.toDouble();
+    final subElevation =
+        storage.getPlayerSetting<int>(
+          'player_sub_elevation',
+          defaultValue: 20,
+        ) ??
+        20;
+    final subRemoveBloat =
+        storage.getPlayerSetting<bool>(
+          'player_sub_remove_bloat',
+          defaultValue: true,
+        ) ??
+        true;
+    final subRemoveCaptions =
+        storage.getPlayerSetting<bool>(
+          'player_sub_remove_captions',
+          defaultValue: false,
+        ) ??
+        false;
+    final subUpperCase =
+        storage.getPlayerSetting<bool>(
+          'player_sub_uppercase',
+          defaultValue: false,
+        ) ??
+        false;
+    final subBold =
+        storage.getPlayerSetting<bool>(
+          'player_sub_bold',
+          defaultValue: false,
+        ) ??
+        false;
+    final subItalic =
+        storage.getPlayerSetting<bool>(
+          'player_sub_italic',
+          defaultValue: false,
+        ) ??
+        false;
+    final subForegroundColor =
+        storage.getPlayerSetting<int>(
+          'player_sub_foreground_color',
+          defaultValue: 0xFFFFFFFF,
+        ) ??
+        0xFFFFFFFF;
+    final subBackgroundColor =
+        storage.getPlayerSetting<int>(
+          'player_sub_background_color',
+          defaultValue: 0x00000000,
+        ) ??
+        0x00000000;
+    final subEdgeColor =
+        storage.getPlayerSetting<int>(
+          'player_sub_edge_color',
+          defaultValue: 0xFF000000,
+        ) ??
+        0xFF000000;
+    final subBackgroundOpacity =
+        (storage.getPlayerSetting(
+                  'player_sub_background_opacity',
+                  defaultValue: 0.5,
+                )
+                as num?)
+            ?.toDouble() ??
+        0.5;
     final subAlignment = storage.getPlayerSetting<int>('player_sub_alignment');
 
     return PlayerSettings(
@@ -384,23 +453,68 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
 
   Future<void> setSubtitleAppearanceSettings(PlayerSettings newSettings) async {
     final storage = _repository;
-    await storage.setPlayerSetting('player_sub_fixed_text_size', newSettings.subFixedTextSize);
-    await storage.setPlayerSetting('player_sub_typeface', newSettings.subTypeface);
-    await storage.setPlayerSetting('player_sub_typeface_file_path', newSettings.subTypefaceFilePath);
-    await storage.setPlayerSetting('player_sub_edge_type', newSettings.subEdgeType);
-    await storage.setPlayerSetting('player_sub_edge_size', newSettings.subEdgeSize);
-    await storage.setPlayerSetting('player_sub_bg_radius', newSettings.subBackgroundRadius);
-    await storage.setPlayerSetting('player_sub_elevation', newSettings.subElevation);
-    await storage.setPlayerSetting('player_sub_remove_bloat', newSettings.subRemoveBloat);
-    await storage.setPlayerSetting('player_sub_remove_captions', newSettings.subRemoveCaptions);
-    await storage.setPlayerSetting('player_sub_uppercase', newSettings.subUpperCase);
+    await storage.setPlayerSetting(
+      'player_sub_fixed_text_size',
+      newSettings.subFixedTextSize,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_typeface',
+      newSettings.subTypeface,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_typeface_file_path',
+      newSettings.subTypefaceFilePath,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_edge_type',
+      newSettings.subEdgeType,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_edge_size',
+      newSettings.subEdgeSize,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_bg_radius',
+      newSettings.subBackgroundRadius,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_elevation',
+      newSettings.subElevation,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_remove_bloat',
+      newSettings.subRemoveBloat,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_remove_captions',
+      newSettings.subRemoveCaptions,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_uppercase',
+      newSettings.subUpperCase,
+    );
     await storage.setPlayerSetting('player_sub_bold', newSettings.subBold);
     await storage.setPlayerSetting('player_sub_italic', newSettings.subItalic);
-    await storage.setPlayerSetting('player_sub_foreground_color', newSettings.subForegroundColor);
-    await storage.setPlayerSetting('player_sub_background_color', newSettings.subBackgroundColor);
-    await storage.setPlayerSetting('player_sub_edge_color', newSettings.subEdgeColor);
-    await storage.setPlayerSetting('player_sub_background_opacity', newSettings.subBackgroundOpacity);
-    await storage.setPlayerSetting('player_sub_alignment', newSettings.subAlignment);
+    await storage.setPlayerSetting(
+      'player_sub_foreground_color',
+      newSettings.subForegroundColor,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_background_color',
+      newSettings.subBackgroundColor,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_edge_color',
+      newSettings.subEdgeColor,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_background_opacity',
+      newSettings.subBackgroundOpacity,
+    );
+    await storage.setPlayerSetting(
+      'player_sub_alignment',
+      newSettings.subAlignment,
+    );
 
     state = AsyncData(newSettings);
   }

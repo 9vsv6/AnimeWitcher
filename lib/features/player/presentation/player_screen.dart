@@ -313,10 +313,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           unawaited(
             ref.read(playerControllerProvider.notifier).setPlaybackSpeed(2.0),
           );
-          ref.read(playerGestureHandlerProvider.notifier).showToast(
-                "2.0x",
-                Icons.fast_forward_rounded,
-              );
+          ref
+              .read(playerGestureHandlerProvider.notifier)
+              .showToast("2.0x", Icons.fast_forward_rounded);
         });
         return KeyEventResult.handled;
       }
@@ -331,10 +330,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           unawaited(
             ref.read(playerControllerProvider.notifier).setPlaybackSpeed(2.0),
           );
-          ref.read(playerGestureHandlerProvider.notifier).showToast(
-                "2.0x",
-                Icons.fast_forward_rounded,
-              );
+          ref
+              .read(playerGestureHandlerProvider.notifier)
+              .showToast("2.0x", Icons.fast_forward_rounded);
         }
         return KeyEventResult.handled;
       }
@@ -354,7 +352,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               .read(playerControllerProvider.notifier)
               .setPlaybackSpeed(previousSpeed),
         );
-        ref.read(playerGestureHandlerProvider.notifier).showToast(
+        ref
+            .read(playerGestureHandlerProvider.notifier)
+            .showToast(
               "${previousSpeed.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}x",
               Icons.play_arrow_rounded,
             );
@@ -655,20 +655,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                             (s) => s.useExoPlayer,
                           ),
                         );
-                        
+
                         final subTrack = _player.state.track.subtitle;
-                        final isExternalMediaKit = subTrack != SubtitleTrack.no() &&
+                        final isExternalMediaKit =
+                            subTrack != SubtitleTrack.no() &&
                             (subTrack.id.startsWith('external:') ||
-                             subTrack.id.startsWith('http://') ||
-                             subTrack.id.startsWith('https://') ||
-                             subTrack.id.startsWith('file://'));
-                             
-                        final exoSubId = _videoViewController?.overrideSubtitle.value;
-                        final isExternalExo = useExoPlayer && exoSubId != null &&
+                                subTrack.id.startsWith('http://') ||
+                                subTrack.id.startsWith('https://') ||
+                                subTrack.id.startsWith('file://'));
+
+                        final exoSubId =
+                            _videoViewController?.overrideSubtitle.value;
+                        final isExternalExo =
+                            useExoPlayer &&
+                            exoSubId != null &&
                             (exoSubId.startsWith('external:') ||
-                             exoSubId.startsWith('http://') ||
-                             exoSubId.startsWith('https://') ||
-                             exoSubId.startsWith('file://'));
+                                exoSubId.startsWith('http://') ||
+                                exoSubId.startsWith('https://') ||
+                                exoSubId.startsWith('file://'));
 
                         if (isExternalMediaKit || isExternalExo) {
                           return SkyStreamSubtitleView(
@@ -683,14 +687,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           return const SizedBox.shrink();
                         }
 
-                        final fontColor = subtitleSettings?.subForegroundColor ?? 0xFFFFFFFF;
-                        final bgColor = subtitleSettings?.subBackgroundColor ?? 0x00000000;
-                        final opacity = subtitleSettings?.subBackgroundOpacity ?? 0.5;
-                        final fontSize = subtitleSettings?.subFixedTextSize ?? 22.0;
+                        final fontColor =
+                            subtitleSettings?.subForegroundColor ?? 0xFFFFFFFF;
+                        final bgColor =
+                            subtitleSettings?.subBackgroundColor ?? 0x00000000;
+                        final opacity =
+                            subtitleSettings?.subBackgroundOpacity ?? 0.5;
+                        final fontSize =
+                            subtitleSettings?.subFixedTextSize ?? 22.0;
 
                         return Positioned(
-                          bottom: (controlsVisible ? HotstarPlayerStyle.bottomChromeHeight : 20.0) +
-                              (subtitleSettings?.subElevation.toDouble() ?? 20.0),
+                          bottom:
+                              (controlsVisible
+                                  ? HotstarPlayerStyle.bottomChromeHeight
+                                  : 20.0) +
+                              (subtitleSettings?.subElevation.toDouble() ??
+                                  20.0),
                           left: 20,
                           right: 20,
                           child: SubtitleView(
@@ -699,9 +711,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                               style: TextStyle(
                                 fontSize: fontSize,
                                 color: Color(fontColor),
-                                backgroundColor: Color(bgColor).withOpacity(opacity),
-                                fontWeight: (subtitleSettings?.subBold ?? false) ? FontWeight.bold : FontWeight.normal,
-                                fontStyle: (subtitleSettings?.subItalic ?? false) ? FontStyle.italic : FontStyle.normal,
+                                backgroundColor: Color(
+                                  bgColor,
+                                ).withOpacity(opacity),
+                                fontWeight: (subtitleSettings?.subBold ?? false)
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                fontStyle:
+                                    (subtitleSettings?.subItalic ?? false)
+                                    ? FontStyle.italic
+                                    : FontStyle.normal,
                               ),
                               padding: EdgeInsets.zero,
                             ),

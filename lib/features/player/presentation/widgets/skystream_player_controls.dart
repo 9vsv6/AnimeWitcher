@@ -466,10 +466,9 @@ class SkyStreamPlayerControlsState
     unawaited(
       ref.read(playerControllerProvider.notifier).setPlaybackSpeed(2.0),
     );
-    ref.read(playerGestureHandlerProvider.notifier).showToast(
-          "2.0x",
-          Icons.fast_forward_rounded,
-        );
+    ref
+        .read(playerGestureHandlerProvider.notifier)
+        .showToast("2.0x", Icons.fast_forward_rounded);
   }
 
   void _endTouchSpeedHold() {
@@ -482,7 +481,9 @@ class SkyStreamPlayerControlsState
           .read(playerControllerProvider.notifier)
           .setPlaybackSpeed(previousSpeed),
     );
-    ref.read(playerGestureHandlerProvider.notifier).showToast(
+    ref
+        .read(playerGestureHandlerProvider.notifier)
+        .showToast(
           "${previousSpeed.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}x",
           Icons.play_arrow_rounded,
         );
@@ -1108,7 +1109,7 @@ class SkyStreamPlayerControlsState
                 // Torrent stats card — top-right, toggled by the Stats action.
                 // Responsive width, cleared below the top bar, and pointer-
                 // transparent so it never blocks the player. Non-focusable.
-                 if (torrentStatus != null && _showTorrentInfo)
+                if (torrentStatus != null && _showTorrentInfo)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: SafeArea(
@@ -1122,9 +1123,12 @@ class SkyStreamPlayerControlsState
                               top: _isTv ? 88 : 68,
                               right: _isTv
                                   ? HotstarPlayerStyle.tvEdgeInset
-                                  : (MediaQuery.viewPaddingOf(context).right > HotstarPlayerStyle.edgeInset
-                                      ? MediaQuery.viewPaddingOf(context).right
-                                      : HotstarPlayerStyle.edgeInset),
+                                  : (MediaQuery.viewPaddingOf(context).right >
+                                            HotstarPlayerStyle.edgeInset
+                                        ? MediaQuery.viewPaddingOf(
+                                            context,
+                                          ).right
+                                        : HotstarPlayerStyle.edgeInset),
                               left: 12,
                             ),
                             child: ConstrainedBox(

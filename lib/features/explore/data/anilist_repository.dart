@@ -45,10 +45,7 @@ class AnilistRepository {
 
   Future<Map<String, String?>> getAnimeImages(int id) async {
     if (_logoCache.containsKey(id) && _fanartCache.containsKey(id)) {
-      return {
-        'logo': _logoCache[id],
-        'fanart': _fanartCache[id],
-      };
+      return {'logo': _logoCache[id], 'fanart': _fanartCache[id]};
     }
     String? logoUrl;
     String? fanartUrl;
@@ -77,10 +74,7 @@ class AnilistRepository {
     }
     _logoCache[id] = logoUrl;
     _fanartCache[id] = fanartUrl;
-    return {
-      'logo': logoUrl,
-      'fanart': fanartUrl,
-    };
+    return {'logo': logoUrl, 'fanart': fanartUrl};
   }
 
   static const String mediaFragment = '''
@@ -510,7 +504,8 @@ class AnilistRepository {
                   coverObj?['medium'] ??
                   '')
               as String;
-      final bannerUrl = (fanartUrl ?? media['bannerImage'] ?? posterUrl) as String;
+      final bannerUrl =
+          (fanartUrl ?? media['bannerImage'] ?? posterUrl) as String;
 
       final averageScore = (media['averageScore'] as num?)?.toDouble() ?? 0.0;
       final score = averageScore / 10.0;

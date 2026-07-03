@@ -41,7 +41,8 @@ class SkyStreamSubtitleView extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<SkyStreamSubtitleView> createState() => _SkyStreamSubtitleViewState();
+  ConsumerState<SkyStreamSubtitleView> createState() =>
+      _SkyStreamSubtitleViewState();
 }
 
 class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
@@ -76,14 +77,18 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
     _positionSub?.cancel();
     _positionSub = null;
     try {
-      widget.videoViewController?.position.removeListener(_onExoPositionChanged);
+      widget.videoViewController?.position.removeListener(
+        _onExoPositionChanged,
+      );
     } catch (_) {}
   }
 
   void _listenPosition() {
     if (widget.useExoPlayer && widget.videoViewController != null) {
       widget.videoViewController!.position.addListener(_onExoPositionChanged);
-      _currentPosition = Duration(milliseconds: widget.videoViewController!.position.value);
+      _currentPosition = Duration(
+        milliseconds: widget.videoViewController!.position.value,
+      );
     } else {
       _positionSub = widget.player.stream.position.listen((pos) {
         if (mounted) {
@@ -98,7 +103,9 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
   void _onExoPositionChanged() {
     if (mounted && widget.videoViewController != null) {
       setState(() {
-        _currentPosition = Duration(milliseconds: widget.videoViewController!.position.value);
+        _currentPosition = Duration(
+          milliseconds: widget.videoViewController!.position.value,
+        );
       });
     }
   }
@@ -120,7 +127,9 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
     if (id.startsWith('external:')) {
       return id.substring('external:'.length);
     }
-    if (id.startsWith('http://') || id.startsWith('https://') || id.startsWith('file://')) {
+    if (id.startsWith('http://') ||
+        id.startsWith('https://') ||
+        id.startsWith('file://')) {
       return id;
     }
 
@@ -130,10 +139,13 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
       }
     }
 
-    final cleanTrackLabel = widget.useExoPlayer ? "" : (widget.player.state.track.subtitle.title?.toLowerCase() ?? "");
+    final cleanTrackLabel = widget.useExoPlayer
+        ? ""
+        : (widget.player.state.track.subtitle.title?.toLowerCase() ?? "");
     for (final sub in playerState.externalSubtitles) {
       final cleanSubLabel = sub.label.toLowerCase();
-      if (cleanTrackLabel.contains(cleanSubLabel) || cleanSubLabel.contains(cleanTrackLabel)) {
+      if (cleanTrackLabel.contains(cleanSubLabel) ||
+          cleanSubLabel.contains(cleanTrackLabel)) {
         return sub.url;
       }
     }
@@ -142,7 +154,9 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
       if (playerState.externalSubtitles.length == 1) {
         return playerState.externalSubtitles.first.url;
       }
-      if (cleanTrackLabel.contains('external') || cleanTrackLabel.contains('srt') || cleanTrackLabel.contains('vtt')) {
+      if (cleanTrackLabel.contains('external') ||
+          cleanTrackLabel.contains('srt') ||
+          cleanTrackLabel.contains('vtt')) {
         return playerState.externalSubtitles.first.url;
       }
     }
@@ -153,7 +167,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
   Future<void> _loadCustomFontIfNeeded() async {
     final settings = ref.read(playerSettingsProvider).value as PlayerSettings?;
     if (settings == null) return;
-    
+
     final path = settings.subTypefaceFilePath;
     if (path != null && path.isNotEmpty && !_customFontLoaded) {
       try {
@@ -187,8 +201,11 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
       return;
     }
 
-    final settings = (ref.read(playerSettingsProvider).value ?? const PlayerSettings()) as PlayerSettings;
-    final cacheKey = "${url}_${settings.subRemoveBloat}_${settings.subRemoveCaptions}_${settings.subUpperCase}";
+    final settings =
+        (ref.read(playerSettingsProvider).value ?? const PlayerSettings())
+            as PlayerSettings;
+    final cacheKey =
+        "${url}_${settings.subRemoveBloat}_${settings.subRemoveCaptions}_${settings.subUpperCase}";
 
     if (cacheKey == _loadedUrl && !_loading) return;
 
@@ -264,7 +281,9 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
     Duration? parseTimestamp(String timestamp) {
       try {
         final cleaned = timestamp.trim().replaceAll(',', '.');
-        final match = RegExp(r'(?:(\d+):)?(\d+):(\d+)(?:\.(\d+))?').firstMatch(cleaned);
+        final match = RegExp(
+          r'(?:(\d+):)?(\d+):(\d+)(?:\.(\d+))?',
+        ).firstMatch(cleaned);
         if (match != null) {
           final hoursStr = match.group(1);
           final minutesStr = match.group(2);
@@ -274,7 +293,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
           final hours = hoursStr != null ? int.parse(hoursStr) : 0;
           final minutes = int.parse(minutesStr!);
           final seconds = int.parse(secondsStr!);
-          
+
           int milliseconds = 0;
           if (millisecondsStr != null) {
             String msStr = millisecondsStr;
@@ -324,7 +343,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
                 break;
               }
               var cleaned = textLine.replaceAll(RegExp(r'<[^>]*>'), '');
-              
+
               if (removeBloat) {
                 bool isBloat = false;
                 for (final regex in bloatRegex) {
@@ -345,24 +364,29 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
             }
             if (textLines.isNotEmpty) {
               final durationMs = end.inMilliseconds - start.inMilliseconds;
-              
-              final processedLines = textLines.map((textLine) {
-                var processed = textLine;
-                if (removeCaptions) {
-                  processed = processed.replaceAll(captionsRegex, "");
-                }
-                if (upperCase) {
-                  processed = processed.toUpperCase();
-                }
-                return processed.trim();
-              }).where((line) => line.isNotEmpty).toList();
+
+              final processedLines = textLines
+                  .map((textLine) {
+                    var processed = textLine;
+                    if (removeCaptions) {
+                      processed = processed.replaceAll(captionsRegex, "");
+                    }
+                    if (upperCase) {
+                      processed = processed.toUpperCase();
+                    }
+                    return processed.trim();
+                  })
+                  .where((line) => line.isNotEmpty)
+                  .toList();
 
               if (processedLines.isNotEmpty) {
-                cues.add(SubtitleCue(
-                  startTimeMs: start.inMilliseconds,
-                  durationMs: durationMs > 0 ? durationMs : 1000,
-                  text: processedLines,
-                ));
+                cues.add(
+                  SubtitleCue(
+                    startTimeMs: start.inMilliseconds,
+                    durationMs: durationMs > 0 ? durationMs : 1000,
+                    text: processedLines,
+                  ),
+                );
               }
             }
           }
@@ -378,10 +402,15 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
     final url = _getSubtitleUrl();
     if (url == null || _cues.isEmpty) return const SizedBox.shrink();
 
-    final settings = (ref.watch(playerSettingsProvider).value ?? const PlayerSettings()) as PlayerSettings;
+    final settings =
+        (ref.watch(playerSettingsProvider).value ?? const PlayerSettings())
+            as PlayerSettings;
 
     // Calculate position with sync delay (in seconds)
-    final delayMs = (ref.watch(playerControllerProvider.select((s) => s.subtitleDelay)) * 1000).round();
+    final delayMs =
+        (ref.watch(playerControllerProvider.select((s) => s.subtitleDelay)) *
+                1000)
+            .round();
     final adjustedPositionMs = _currentPosition.inMilliseconds + delayMs;
 
     final activeCue = _cues.firstWhereOrNull((cue) {
@@ -485,8 +514,14 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
       List<Shadow>? shadows;
       if (settings.subEdgeType == 2) {
         shadows = [
-          Shadow(offset: const Offset(-1, -1), color: edgeColor.withOpacity(0.5)),
-          Shadow(offset: const Offset(1, 1), color: Colors.white.withOpacity(0.5)),
+          Shadow(
+            offset: const Offset(-1, -1),
+            color: edgeColor.withOpacity(0.5),
+          ),
+          Shadow(
+            offset: const Offset(1, 1),
+            color: Colors.white.withOpacity(0.5),
+          ),
         ];
       } else if (settings.subEdgeType == 3) {
         shadows = [
@@ -513,10 +548,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
       if (bgColor.alpha > 0 && settings.subBackgroundOpacity > 0) {
         final paddingVal = 2.0 + (settings.subBackgroundRadius ?? 0.0) * 0.5;
         resultLine = Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: paddingVal,
-            vertical: 2.0,
-          ),
+          padding: EdgeInsets.symmetric(horizontal: paddingVal, vertical: 2.0),
           decoration: BoxDecoration(
             color: bgColor.withOpacity(settings.subBackgroundOpacity),
             borderRadius: settings.subBackgroundRadius != null
@@ -543,13 +575,20 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
             right: 20.0,
             top: 0.0,
             bottom: alignment.y > 0
-                ? (widget.useExoPlayer ? 20.0 : (widget.controlsVisible ? 60.0 : 20.0))
+                ? (widget.useExoPlayer
+                      ? 20.0
+                      : (widget.controlsVisible ? 60.0 : 20.0))
                 : 0.0,
           ),
           child: Align(
             alignment: alignment,
             child: Transform.translate(
-              offset: Offset(0.0, alignment.y >= 0 ? -settings.subElevation.toDouble() : settings.subElevation.toDouble()),
+              offset: Offset(
+                0.0,
+                alignment.y >= 0
+                    ? -settings.subElevation.toDouble()
+                    : settings.subElevation.toDouble(),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: crossAxisAlignment,

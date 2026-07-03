@@ -15,10 +15,7 @@ import 'hotstar_player_style.dart';
 class DpadSettingCard extends StatelessWidget {
   final Widget child;
 
-  const DpadSettingCard({
-    super.key,
-    required this.child,
-  });
+  const DpadSettingCard({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +33,9 @@ class DpadSettingCard extends StatelessWidget {
               color: const Color(0xFF161720),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: isFocused ? HotstarPlayerStyle.accent : Colors.transparent,
+                color: isFocused
+                    ? HotstarPlayerStyle.accent
+                    : Colors.transparent,
                 width: 1.5,
               ),
               boxShadow: isFocused
@@ -45,7 +44,7 @@ class DpadSettingCard extends StatelessWidget {
                         color: HotstarPlayerStyle.accent.withOpacity(0.15),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
-                      )
+                      ),
                     ]
                   : null,
             ),
@@ -112,10 +111,16 @@ class _DpadSliderState extends State<DpadSlider> {
           if (event is KeyDownEvent || event is KeyRepeatEvent) {
             final step = (widget.max - widget.min) / widget.divisions;
             if (key == LogicalKeyboardKey.arrowLeft) {
-              final newValue = (widget.value - step).clamp(widget.min, widget.max);
+              final newValue = (widget.value - step).clamp(
+                widget.min,
+                widget.max,
+              );
               widget.onChanged(newValue);
             } else if (key == LogicalKeyboardKey.arrowRight) {
-              final newValue = (widget.value + step).clamp(widget.min, widget.max);
+              final newValue = (widget.value + step).clamp(
+                widget.min,
+                widget.max,
+              );
               widget.onChanged(newValue);
             } else if (key == LogicalKeyboardKey.arrowDown) {
               node.nextFocus();
@@ -143,17 +148,23 @@ class _DpadSliderState extends State<DpadSlider> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
-                          color: _isFocused ? HotstarPlayerStyle.accent : const Color(0xFF202130),
+                          color: _isFocused
+                              ? HotstarPlayerStyle.accent
+                              : const Color(0xFF202130),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: _isFocused
                               ? [
                                   BoxShadow(
-                                    color: HotstarPlayerStyle.accent.withOpacity(0.3),
+                                    color: HotstarPlayerStyle.accent
+                                        .withOpacity(0.3),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2),
-                                  )
+                                  ),
                                 ]
                               : null,
                         ),
@@ -169,7 +180,9 @@ class _DpadSliderState extends State<DpadSlider> {
                       CustomPaint(
                         size: const Size(10, 5),
                         painter: _CaretPainter(
-                          color: _isFocused ? HotstarPlayerStyle.accent : const Color(0xFF202130),
+                          color: _isFocused
+                              ? HotstarPlayerStyle.accent
+                              : const Color(0xFF202130),
                         ),
                       ),
                     ],
@@ -181,11 +194,15 @@ class _DpadSliderState extends State<DpadSlider> {
               data: SliderThemeData(
                 activeTrackColor: HotstarPlayerStyle.accent,
                 inactiveTrackColor: Colors.grey.shade800,
-                thumbColor: _isFocused ? Colors.white : HotstarPlayerStyle.accent,
+                thumbColor: _isFocused
+                    ? Colors.white
+                    : HotstarPlayerStyle.accent,
                 overlayColor: HotstarPlayerStyle.accent.withOpacity(0.12),
                 valueIndicatorColor: HotstarPlayerStyle.accent,
                 trackHeight: 4,
-                thumbShape: RoundSliderThumbShape(enabledThumbRadius: _isFocused ? 8 : 6),
+                thumbShape: RoundSliderThumbShape(
+                  enabledThumbRadius: _isFocused ? 8 : 6,
+                ),
               ),
               child: Slider(
                 value: widget.value,
@@ -249,7 +266,8 @@ class DpadColorCircle extends StatelessWidget {
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
           final key = event.logicalKey;
-          if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown) {
+          if (key == LogicalKeyboardKey.arrowUp ||
+              key == LogicalKeyboardKey.arrowDown) {
             if (key == LogicalKeyboardKey.arrowUp) {
               parentCardNode.focusInDirection(TraversalDirection.up);
             } else {
@@ -289,7 +307,11 @@ class DpadColorCircle extends StatelessWidget {
                 ),
                 child: isTransparent
                     ? const Center(
-                        child: Icon(Icons.disabled_by_default_outlined, size: 16, color: Colors.red),
+                        child: Icon(
+                          Icons.disabled_by_default_outlined,
+                          size: 16,
+                          color: Colors.red,
+                        ),
                       )
                     : null,
               ),
@@ -319,11 +341,17 @@ class DpadButton extends StatelessWidget {
     return DpadFocusable(
       onSelect: onPressed,
       builder: (context, isFocused, child) {
-        final baseColor = isPrimary ? HotstarPlayerStyle.accent : Colors.transparent;
-        final focusedColor = isPrimary ? Colors.white : HotstarPlayerStyle.accent.withValues(alpha: 0.2);
+        final baseColor = isPrimary
+            ? HotstarPlayerStyle.accent
+            : Colors.transparent;
+        final focusedColor = isPrimary
+            ? Colors.white
+            : HotstarPlayerStyle.accent.withValues(alpha: 0.2);
         final textColor = isPrimary
             ? (isFocused ? Colors.black : Colors.white)
-            : (isFocused ? HotstarPlayerStyle.accent : HotstarPlayerStyle.secondaryText);
+            : (isFocused
+                  ? HotstarPlayerStyle.accent
+                  : HotstarPlayerStyle.secondaryText);
 
         return Material(
           color: Colors.transparent,
@@ -337,16 +365,20 @@ class DpadButton extends StatelessWidget {
                 color: isFocused ? focusedColor : baseColor,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isFocused ? HotstarPlayerStyle.accent : (isPrimary ? Colors.transparent : Colors.grey.shade800),
+                  color: isFocused
+                      ? HotstarPlayerStyle.accent
+                      : (isPrimary ? Colors.transparent : Colors.grey.shade800),
                   width: 1.5,
                 ),
                 boxShadow: isFocused
                     ? [
                         BoxShadow(
-                          color: HotstarPlayerStyle.accent.withValues(alpha: 0.3),
+                          color: HotstarPlayerStyle.accent.withValues(
+                            alpha: 0.3,
+                          ),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
-                        )
+                        ),
                       ]
                     : null,
               ),
@@ -380,8 +412,6 @@ class _SubtitleAppearanceDialogState
   late PlayerSettings _localSettings;
   bool _customFontLoading = false;
   bool _customFontLoaded = false;
-
-
 
   final List<int> _textColors = const [
     0xFFFFFFFF, // White
@@ -455,8 +485,6 @@ class _SubtitleAppearanceDialogState
     }
     super.dispose();
   }
-
-
 
   Future<void> _loadCustomFontIfNeeded() async {
     final path = _localSettings.subTypefaceFilePath;
@@ -568,14 +596,14 @@ class _SubtitleAppearanceDialogState
 
           return Column(
             children: [
-              SizedBox(
-                height: previewHeight,
-                child: _buildPreviewPane(),
-              ),
+              SizedBox(height: previewHeight, child: _buildPreviewPane()),
               const Divider(color: HotstarPlayerStyle.divider, height: 1),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -731,8 +759,14 @@ class _SubtitleAppearanceDialogState
       List<Shadow>? shadows;
       if (_localSettings.subEdgeType == 2) {
         shadows = [
-          Shadow(offset: const Offset(-1, -1), color: edgeColor.withValues(alpha: 0.5)),
-          Shadow(offset: const Offset(1, 1), color: Colors.white.withValues(alpha: 0.5)),
+          Shadow(
+            offset: const Offset(-1, -1),
+            color: edgeColor.withValues(alpha: 0.5),
+          ),
+          Shadow(
+            offset: const Offset(1, 1),
+            color: Colors.white.withValues(alpha: 0.5),
+          ),
         ];
       } else if (_localSettings.subEdgeType == 3) {
         shadows = [
@@ -741,7 +775,10 @@ class _SubtitleAppearanceDialogState
       } else if (_localSettings.subEdgeType == 4) {
         shadows = [
           Shadow(offset: const Offset(1, 1), color: edgeColor),
-          Shadow(offset: const Offset(2, 2), color: edgeColor.withValues(alpha: 0.5)),
+          Shadow(
+            offset: const Offset(2, 2),
+            color: edgeColor.withValues(alpha: 0.5),
+          ),
         ];
       }
 
@@ -757,14 +794,14 @@ class _SubtitleAppearanceDialogState
 
       final bgColor = Color(_localSettings.subBackgroundColor);
       if (bgColor.a > 0 && _localSettings.subBackgroundOpacity > 0) {
-        final paddingVal = 2.0 + (_localSettings.subBackgroundRadius ?? 0.0) * 0.5;
+        final paddingVal =
+            2.0 + (_localSettings.subBackgroundRadius ?? 0.0) * 0.5;
         resultLine = Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: paddingVal,
-            vertical: 2.0,
-          ),
+          padding: EdgeInsets.symmetric(horizontal: paddingVal, vertical: 2.0),
           decoration: BoxDecoration(
-            color: bgColor.withValues(alpha: _localSettings.subBackgroundOpacity),
+            color: bgColor.withValues(
+              alpha: _localSettings.subBackgroundOpacity,
+            ),
             borderRadius: _localSettings.subBackgroundRadius != null
                 ? BorderRadius.circular(_localSettings.subBackgroundRadius!)
                 : BorderRadius.zero,
@@ -807,7 +844,12 @@ class _SubtitleAppearanceDialogState
           child: Align(
             alignment: alignment,
             child: Transform.translate(
-              offset: Offset(0.0, alignment.y >= 0 ? -_localSettings.subElevation.toDouble() * 0.2 : _localSettings.subElevation.toDouble() * 0.2),
+              offset: Offset(
+                0.0,
+                alignment.y >= 0
+                    ? -_localSettings.subElevation.toDouble() * 0.2
+                    : _localSettings.subElevation.toDouble() * 0.2,
+              ),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Column(
@@ -907,7 +949,10 @@ class _SubtitleAppearanceDialogState
           backgroundColor: const Color(0xFF161720),
           title: const Text(
             "Select Font Size",
-            style: TextStyle(color: HotstarPlayerStyle.primaryText, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: HotstarPlayerStyle.primaryText,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: SizedBox(
             width: 300,
@@ -915,12 +960,17 @@ class _SubtitleAppearanceDialogState
             child: ListView(
               children: [
                 ListTile(
-                  title: const Text("File Default", style: TextStyle(color: HotstarPlayerStyle.primaryText)),
+                  title: const Text(
+                    "File Default",
+                    style: TextStyle(color: HotstarPlayerStyle.primaryText),
+                  ),
                   selected: _localSettings.subFixedTextSize == null,
                   selectedColor: HotstarPlayerStyle.accent,
                   onTap: () {
                     setState(() {
-                      _localSettings = _localSettings.copyWith(subFixedTextSize: () => null);
+                      _localSettings = _localSettings.copyWith(
+                        subFixedTextSize: () => null,
+                      );
                     });
                     Navigator.of(context).pop();
                   },
@@ -928,12 +978,19 @@ class _SubtitleAppearanceDialogState
                 ...sizeList.map((size) {
                   final val = size.toDouble();
                   return ListTile(
-                    title: Text("${size}sp", style: const TextStyle(color: HotstarPlayerStyle.primaryText)),
+                    title: Text(
+                      "${size}sp",
+                      style: const TextStyle(
+                        color: HotstarPlayerStyle.primaryText,
+                      ),
+                    ),
                     selected: _localSettings.subFixedTextSize == val,
                     selectedColor: HotstarPlayerStyle.accent,
                     onTap: () {
                       setState(() {
-                        _localSettings = _localSettings.copyWith(subFixedTextSize: () => val);
+                        _localSettings = _localSettings.copyWith(
+                          subFixedTextSize: () => val,
+                        );
                       });
                       Navigator.of(context).pop();
                     },
@@ -967,7 +1024,10 @@ class _SubtitleAppearanceDialogState
           backgroundColor: const Color(0xFF161720),
           title: const Text(
             "Select Font Typeface",
-            style: TextStyle(color: HotstarPlayerStyle.primaryText, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: HotstarPlayerStyle.primaryText,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: SizedBox(
             width: 300,
@@ -975,9 +1035,16 @@ class _SubtitleAppearanceDialogState
             child: ListView(
               children: [
                 ...List.generate(_builtInFonts.length, (idx) {
-                  final isSelected = _localSettings.subTypefaceFilePath == null && _localSettings.subTypeface == idx;
+                  final isSelected =
+                      _localSettings.subTypefaceFilePath == null &&
+                      _localSettings.subTypeface == idx;
                   return ListTile(
-                    title: Text(_builtInFonts[idx], style: const TextStyle(color: HotstarPlayerStyle.primaryText)),
+                    title: Text(
+                      _builtInFonts[idx],
+                      style: const TextStyle(
+                        color: HotstarPlayerStyle.primaryText,
+                      ),
+                    ),
                     selected: isSelected,
                     selectedColor: HotstarPlayerStyle.accent,
                     onTap: () {
@@ -993,7 +1060,10 @@ class _SubtitleAppearanceDialogState
                   );
                 }),
                 ListTile(
-                  title: const Text("Custom Font File...", style: TextStyle(color: HotstarPlayerStyle.primaryText)),
+                  title: const Text(
+                    "Custom Font File...",
+                    style: TextStyle(color: HotstarPlayerStyle.primaryText),
+                  ),
                   selected: _localSettings.subTypefaceFilePath != null,
                   selectedColor: HotstarPlayerStyle.accent,
                   onTap: () async {
@@ -1117,21 +1187,20 @@ class _SubtitleAppearanceDialogState
   }
 
   Widget _buildTextColorRow() {
-    return _buildColorRow("Text Color", "colors", _localSettings.subForegroundColor, (color) {
-      setState(() {
-        _localSettings = _localSettings.copyWith(subForegroundColor: color);
-      });
-    });
+    return _buildColorRow(
+      "Text Color",
+      "colors",
+      _localSettings.subForegroundColor,
+      (color) {
+        setState(() {
+          _localSettings = _localSettings.copyWith(subForegroundColor: color);
+        });
+      },
+    );
   }
 
   void _showEdgeTypePicker() {
-    final edgeTypes = [
-      "None",
-      "Outline",
-      "Depressed",
-      "Drop Shadow",
-      "Raised",
-    ];
+    final edgeTypes = ["None", "Outline", "Depressed", "Drop Shadow", "Raised"];
 
     showDialog<void>(
       context: context,
@@ -1140,7 +1209,10 @@ class _SubtitleAppearanceDialogState
           backgroundColor: const Color(0xFF161720),
           title: const Text(
             "Select Edge Type",
-            style: TextStyle(color: HotstarPlayerStyle.primaryText, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: HotstarPlayerStyle.primaryText,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: SizedBox(
             width: 300,
@@ -1148,7 +1220,12 @@ class _SubtitleAppearanceDialogState
             child: ListView(
               children: List.generate(edgeTypes.length, (int i) {
                 return ListTile(
-                  title: Text(edgeTypes[i], style: const TextStyle(color: HotstarPlayerStyle.primaryText)),
+                  title: Text(
+                    edgeTypes[i],
+                    style: const TextStyle(
+                      color: HotstarPlayerStyle.primaryText,
+                    ),
+                  ),
                   selected: _localSettings.subEdgeType == i,
                   selectedColor: HotstarPlayerStyle.accent,
                   onTap: () {
@@ -1254,19 +1331,29 @@ class _SubtitleAppearanceDialogState
   }
 
   Widget _buildEdgeColorRow() {
-    return _buildColorRow("Outline Color", "edgeColor", _localSettings.subEdgeColor, (color) {
-      setState(() {
-        _localSettings = _localSettings.copyWith(subEdgeColor: color);
-      });
-    });
+    return _buildColorRow(
+      "Outline Color",
+      "edgeColor",
+      _localSettings.subEdgeColor,
+      (color) {
+        setState(() {
+          _localSettings = _localSettings.copyWith(subEdgeColor: color);
+        });
+      },
+    );
   }
 
   Widget _buildBackgroundColorRow() {
-    return _buildColorRow("Background Pill Color", "colors", _localSettings.subBackgroundColor, (color) {
-      setState(() {
-        _localSettings = _localSettings.copyWith(subBackgroundColor: color);
-      });
-    });
+    return _buildColorRow(
+      "Background Pill Color",
+      "colors",
+      _localSettings.subBackgroundColor,
+      (color) {
+        setState(() {
+          _localSettings = _localSettings.copyWith(subBackgroundColor: color);
+        });
+      },
+    );
   }
 
   Widget _buildBackgroundOpacityRow() {
@@ -1298,10 +1385,13 @@ class _SubtitleAppearanceDialogState
               min: 0.0,
               max: 1.0,
               divisions: 20,
-              labelText: "${(_localSettings.subBackgroundOpacity * 100).round()}%",
+              labelText:
+                  "${(_localSettings.subBackgroundOpacity * 100).round()}%",
               onChanged: (val) {
                 setState(() {
-                  _localSettings = _localSettings.copyWith(subBackgroundOpacity: val);
+                  _localSettings = _localSettings.copyWith(
+                    subBackgroundOpacity: val,
+                  );
                 });
               },
             ),
@@ -1320,7 +1410,10 @@ class _SubtitleAppearanceDialogState
           backgroundColor: const Color(0xFF161720),
           title: const Text(
             "Select Corner Radius",
-            style: TextStyle(color: HotstarPlayerStyle.primaryText, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: HotstarPlayerStyle.primaryText,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: SizedBox(
             width: 300,
@@ -1328,12 +1421,17 @@ class _SubtitleAppearanceDialogState
             child: ListView(
               children: [
                 ListTile(
-                  title: const Text("None (Sharp)", style: TextStyle(color: HotstarPlayerStyle.primaryText)),
+                  title: const Text(
+                    "None (Sharp)",
+                    style: TextStyle(color: HotstarPlayerStyle.primaryText),
+                  ),
                   selected: _localSettings.subBackgroundRadius == null,
                   selectedColor: HotstarPlayerStyle.accent,
                   onTap: () {
                     setState(() {
-                      _localSettings = _localSettings.copyWith(subBackgroundRadius: () => null);
+                      _localSettings = _localSettings.copyWith(
+                        subBackgroundRadius: () => null,
+                      );
                     });
                     Navigator.of(context).pop();
                   },
@@ -1341,12 +1439,19 @@ class _SubtitleAppearanceDialogState
                 ...steps.map((step) {
                   final val = step.toDouble();
                   return ListTile(
-                    title: Text("${step}px", style: const TextStyle(color: HotstarPlayerStyle.primaryText)),
+                    title: Text(
+                      "${step}px",
+                      style: const TextStyle(
+                        color: HotstarPlayerStyle.primaryText,
+                      ),
+                    ),
                     selected: _localSettings.subBackgroundRadius == val,
                     selectedColor: HotstarPlayerStyle.accent,
                     onTap: () {
                       setState(() {
-                        _localSettings = _localSettings.copyWith(subBackgroundRadius: () => val);
+                        _localSettings = _localSettings.copyWith(
+                          subBackgroundRadius: () => val,
+                        );
                       });
                       Navigator.of(context).pop();
                     },
@@ -1404,7 +1509,9 @@ class _SubtitleAppearanceDialogState
               labelText: "${_localSettings.subElevation}dp",
               onChanged: (val) {
                 setState(() {
-                  _localSettings = _localSettings.copyWith(subElevation: val.round());
+                  _localSettings = _localSettings.copyWith(
+                    subElevation: val.round(),
+                  );
                 });
               },
             ),
@@ -1434,7 +1541,10 @@ class _SubtitleAppearanceDialogState
           backgroundColor: const Color(0xFF161720),
           title: const Text(
             "Select Alignment",
-            style: TextStyle(color: HotstarPlayerStyle.primaryText, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: HotstarPlayerStyle.primaryText,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: SizedBox(
             width: 300,
@@ -1442,24 +1552,36 @@ class _SubtitleAppearanceDialogState
             child: ListView(
               children: [
                 ListTile(
-                  title: const Text("Auto (Exo/Ass default)", style: TextStyle(color: HotstarPlayerStyle.primaryText)),
+                  title: const Text(
+                    "Auto (Exo/Ass default)",
+                    style: TextStyle(color: HotstarPlayerStyle.primaryText),
+                  ),
                   selected: _localSettings.subAlignment == null,
                   selectedColor: HotstarPlayerStyle.accent,
                   onTap: () {
                     setState(() {
-                      _localSettings = _localSettings.copyWith(subAlignment: () => null);
+                      _localSettings = _localSettings.copyWith(
+                        subAlignment: () => null,
+                      );
                     });
                     Navigator.of(context).pop();
                   },
                 ),
                 ...list.map((item) {
                   return ListTile(
-                    title: Text(item.$2, style: const TextStyle(color: HotstarPlayerStyle.primaryText)),
+                    title: Text(
+                      item.$2,
+                      style: const TextStyle(
+                        color: HotstarPlayerStyle.primaryText,
+                      ),
+                    ),
                     selected: _localSettings.subAlignment == item.$1,
                     selectedColor: HotstarPlayerStyle.accent,
                     onTap: () {
                       setState(() {
-                        _localSettings = _localSettings.copyWith(subAlignment: () => item.$1);
+                        _localSettings = _localSettings.copyWith(
+                          subAlignment: () => item.$1,
+                        );
                       });
                       Navigator.of(context).pop();
                     },
@@ -1569,7 +1691,9 @@ class _SubtitleAppearanceDialogState
               inactiveTrackColor: Colors.grey.shade800,
               onChanged: (val) {
                 setState(() {
-                  _localSettings = _localSettings.copyWith(subRemoveCaptions: val);
+                  _localSettings = _localSettings.copyWith(
+                    subRemoveCaptions: val,
+                  );
                 });
               },
             ),
@@ -1626,9 +1750,19 @@ class _SubtitleAppearanceDialogState
     );
   }
 
-  Widget _buildColorRow(String label, String fieldKey, int selectedColor, void Function(int) onSelected) {
-    final palette = fieldKey == 'edgeColor' ? [0xFF000000, 0xFFFFFFFF, 0xFFFF0000, 0xFFFFFF00] : _textColors;
-    final finalPalette = fieldKey == 'colors' && label == 'Background Pill Color' ? _bgColors : palette;
+  Widget _buildColorRow(
+    String label,
+    String fieldKey,
+    int selectedColor,
+    void Function(int) onSelected,
+  ) {
+    final palette = fieldKey == 'edgeColor'
+        ? [0xFF000000, 0xFFFFFFFF, 0xFFFF0000, 0xFFFFFF00]
+        : _textColors;
+    final finalPalette =
+        fieldKey == 'colors' && label == 'Background Pill Color'
+        ? _bgColors
+        : palette;
 
     return DpadSettingCard(
       child: Padding(

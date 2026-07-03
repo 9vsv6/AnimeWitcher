@@ -192,9 +192,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
           Positioned.fill(
             child: BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.45),
-              ),
+              child: Container(color: Colors.black.withValues(alpha: 0.45)),
             ),
           ),
           Column(
@@ -214,10 +212,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: _handlePressed,
-              child: cardContent,
-            ),
+            child: InkWell(onTap: _handlePressed, child: cardContent),
           )
         : cardContent;
 

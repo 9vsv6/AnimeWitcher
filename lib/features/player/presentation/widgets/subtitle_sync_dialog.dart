@@ -33,7 +33,9 @@ List<SubtitleCue> parseSubtitle(String content) {
   Duration? parseTimestamp(String timestamp) {
     try {
       final cleaned = timestamp.trim().replaceAll(',', '.');
-      final match = RegExp(r'(?:(\d+):)?(\d+):(\d+)(?:\.(\d+))?').firstMatch(cleaned);
+      final match = RegExp(
+        r'(?:(\d+):)?(\d+):(\d+)(?:\.(\d+))?',
+      ).firstMatch(cleaned);
       if (match != null) {
         final hoursStr = match.group(1);
         final minutesStr = match.group(2);
@@ -43,7 +45,7 @@ List<SubtitleCue> parseSubtitle(String content) {
         final hours = hoursStr != null ? int.parse(hoursStr) : 0;
         final minutes = int.parse(minutesStr!);
         final seconds = int.parse(secondsStr!);
-        
+
         int milliseconds = 0;
         if (millisecondsStr != null) {
           String msStr = millisecondsStr;
@@ -101,11 +103,13 @@ List<SubtitleCue> parseSubtitle(String content) {
           }
           if (textLines.isNotEmpty) {
             final durationMs = end.inMilliseconds - start.inMilliseconds;
-            cues.add(SubtitleCue(
-              startTimeMs: start.inMilliseconds,
-              durationMs: durationMs > 0 ? durationMs : 1000,
-              text: textLines,
-            ));
+            cues.add(
+              SubtitleCue(
+                startTimeMs: start.inMilliseconds,
+                durationMs: durationMs > 0 ? durationMs : 1000,
+                text: textLines,
+              ),
+            );
           }
         }
       }
@@ -118,10 +122,7 @@ List<SubtitleCue> parseSubtitle(String content) {
 class SubtitleSyncDialog extends ConsumerStatefulWidget {
   final bool wasPlaying;
 
-  const SubtitleSyncDialog({
-    super.key,
-    required this.wasPlaying,
-  });
+  const SubtitleSyncDialog({super.key, required this.wasPlaying});
 
   @override
   ConsumerState<SubtitleSyncDialog> createState() => _SubtitleSyncDialogState();
@@ -135,7 +136,7 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
   int _offsetMs = 0;
   late final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
+
   // Explicit FocusNodes for stepper & action buttons to route TV/D-pad focus manually and safely
   final FocusNode _subtractMoreFocusNode = FocusNode();
   final FocusNode _subtractFocusNode = FocusNode();
@@ -147,9 +148,11 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
   final FocusNode _cancelFocusNode = FocusNode();
 
   bool _keyboardActive = false;
-  
+
   // ValueNotifier is used for efficient partial list updates (only visible/changed items rebuild)
-  final ValueNotifier<Duration> _timeNotifier = ValueNotifier<Duration>(Duration.zero);
+  final ValueNotifier<Duration> _timeNotifier = ValueNotifier<Duration>(
+    Duration.zero,
+  );
   Duration _pausedPosition = Duration.zero;
   String _hintText = "No subtitle delay";
 
@@ -159,7 +162,7 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
 
     final controller = ref.read(playerControllerProvider.notifier);
     final playerState = ref.read(playerControllerProvider);
-    
+
     // Pause player because the subtitles cannot be continuously updated to follow playback
     // While the dialog is open, the player freezes so the user can inspect individual subtitle cues and work out the offset.
     if (widget.wasPlaying) {
@@ -170,7 +173,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
     Duration currentPos = Duration.zero;
     try {
       if (playerState.useExoPlayer) {
-        currentPos = Duration(milliseconds: controller.videoViewController?.position.value ?? 0);
+        currentPos = Duration(
+          milliseconds: controller.videoViewController?.position.value ?? 0,
+        );
       } else {
         currentPos = controller.player.state.position;
       }
@@ -226,7 +231,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
         down.requestFocus();
         return KeyEventResult.handled;
       }
-      if ((key == LogicalKeyboardKey.select || key == LogicalKeyboardKey.enter) && onSelect != null) {
+      if ((key == LogicalKeyboardKey.select ||
+              key == LogicalKeyboardKey.enter) &&
+          onSelect != null) {
         onSelect();
         return KeyEventResult.handled;
       }
@@ -324,7 +331,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
     final playerState = ref.read(playerControllerProvider);
     final snapshot = controller.getTrackSelectionSnapshot();
     if (snapshot.subtitlesOffSelected) return null;
-    final selectedTrack = snapshot.subtitleTracks.firstWhereOrNull((t) => t.selected);
+    final selectedTrack = snapshot.subtitleTracks.firstWhereOrNull(
+      (t) => t.selected,
+    );
     if (selectedTrack == null) return null;
     final id = selectedTrack.id;
 
@@ -332,7 +341,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
     if (id.startsWith('external:')) {
       return id.substring('external:'.length);
     }
-    if (id.startsWith('http://') || id.startsWith('https://') || id.startsWith('file://')) {
+    if (id.startsWith('http://') ||
+        id.startsWith('https://') ||
+        id.startsWith('file://')) {
       return id;
     }
 
@@ -347,7 +358,8 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
     final cleanTrackLabel = selectedTrack.label.toLowerCase();
     for (final sub in playerState.externalSubtitles) {
       final cleanSubLabel = sub.label.toLowerCase();
-      if (cleanTrackLabel.contains(cleanSubLabel) || cleanSubLabel.contains(cleanTrackLabel)) {
+      if (cleanTrackLabel.contains(cleanSubLabel) ||
+          cleanSubLabel.contains(cleanTrackLabel)) {
         return sub.url;
       }
     }
@@ -357,7 +369,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
       if (playerState.externalSubtitles.length == 1) {
         return playerState.externalSubtitles.first.url;
       }
-      if (cleanTrackLabel.contains('external') || cleanTrackLabel.contains('srt') || cleanTrackLabel.contains('vtt')) {
+      if (cleanTrackLabel.contains('external') ||
+          cleanTrackLabel.contains('srt') ||
+          cleanTrackLabel.contains('vtt')) {
         return playerState.externalSubtitles.first.url;
       }
     }
@@ -382,7 +396,8 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
 
     try {
       String content = '';
-      if (subtitleUrl.startsWith('http://') || subtitleUrl.startsWith('https://')) {
+      if (subtitleUrl.startsWith('http://') ||
+          subtitleUrl.startsWith('https://')) {
         final response = await Dio().get<String>(
           subtitleUrl,
           options: Options(responseType: ResponseType.plain),
@@ -406,10 +421,13 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
         _cues = parsed;
         _loadingCues = false;
       });
-      
+
       // Auto-scroll to first active cue on open
-      final initialSubtitlePosition = _pausedPosition.inMilliseconds - _offsetMs;
-      final firstSubtitleIndex = _getLatestActiveItem(Duration(milliseconds: initialSubtitlePosition));
+      final initialSubtitlePosition =
+          _pausedPosition.inMilliseconds - _offsetMs;
+      final firstSubtitleIndex = _getLatestActiveItem(
+        Duration(milliseconds: initialSubtitlePosition),
+      );
       _scrollToPosition(firstSubtitleIndex);
     } catch (e) {
       setState(() {
@@ -440,13 +458,15 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
 
   void _onOffsetChanged(int newOffsetMs) {
     _offsetMs = newOffsetMs;
-    
+
     // Live update position: player position minus the existing offset
     final totalPositionMs = _pausedPosition.inMilliseconds - _offsetMs;
     _timeNotifier.value = Duration(milliseconds: totalPositionMs);
 
     // Auto-scroll to position on change
-    final activeIndex = _getLatestActiveItem(Duration(milliseconds: totalPositionMs));
+    final activeIndex = _getLatestActiveItem(
+      Duration(milliseconds: totalPositionMs),
+    );
     _scrollToPosition(activeIndex);
 
     _updateHintText();
@@ -467,7 +487,8 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
   void _updateHintText() {
     setState(() {
       if (_offsetMs > 0) {
-        _hintText = "Use this if the subtitles are shown $_offsetMs ms too early";
+        _hintText =
+            "Use this if the subtitles are shown $_offsetMs ms too early";
       } else if (_offsetMs < 0) {
         _hintText = "Use this if subtitles are shown ${-_offsetMs} ms too late";
       } else {
@@ -528,7 +549,8 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                   timeNotifier: _timeNotifier,
                   onTap: () {
                     // Calculate required offset: pausedPosition - cueStartTime
-                    final calculatedOffset = _pausedPosition.inMilliseconds - cue.startTimeMs;
+                    final calculatedOffset =
+                        _pausedPosition.inMilliseconds - cue.startTimeMs;
                     _updateOffset(calculatedOffset);
                   },
                 );
@@ -609,7 +631,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                               // subtitle_offset_subtract_more (<<, -1000ms)
                               IconButton(
                                 focusNode: _subtractMoreFocusNode,
-                                icon: const Icon(Icons.keyboard_double_arrow_left_rounded),
+                                icon: const Icon(
+                                  Icons.keyboard_double_arrow_left_rounded,
+                                ),
                                 color: Colors.white,
                                 iconSize: 28,
                                 onPressed: () => _changeBy(-1000),
@@ -625,7 +649,7 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                                 tooltip: "-100 ms",
                               ),
                               const SizedBox(width: 8),
-                              
+
                               // subtitle_offset_input (EditText)
                               SizedBox(
                                 width: 100,
@@ -634,12 +658,15 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                                   controller: _inputController,
                                   readOnly: !_keyboardActive,
                                   showCursor: true,
-                                  keyboardType: const TextInputType.numberWithOptions(
-                                    signed: true,
-                                    decimal: false,
-                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        signed: true,
+                                        decimal: false,
+                                      ),
                                   inputFormatters: [
-                                    FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'^-?\d*'),
+                                    ),
                                   ],
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
@@ -650,12 +677,18 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                                   decoration: const InputDecoration(
                                     hintText: "1000 ms",
                                     hintStyle: TextStyle(color: Colors.white30),
-                                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 8,
+                                    ),
                                     enabledBorder: UnderlineInputBorder(
-                                      borderSide: BorderSide(color: Colors.white38),
+                                      borderSide: BorderSide(
+                                        color: Colors.white38,
+                                      ),
                                     ),
                                     focusedBorder: UnderlineInputBorder(
-                                      borderSide: BorderSide(color: HotstarPlayerStyle.accent),
+                                      borderSide: BorderSide(
+                                        color: HotstarPlayerStyle.accent,
+                                      ),
                                     ),
                                   ),
                                   onTap: () {
@@ -689,7 +722,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                               // subtitle_offset_add_more (>>, +1000ms)
                               IconButton(
                                 focusNode: _addMoreFocusNode,
-                                icon: const Icon(Icons.keyboard_double_arrow_right_rounded),
+                                icon: const Icon(
+                                  Icons.keyboard_double_arrow_right_rounded,
+                                ),
                                 color: Colors.white,
                                 iconSize: 28,
                                 onPressed: () => _changeBy(1000),
@@ -794,29 +829,17 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
               if (orientation == Orientation.landscape) {
                 return Row(
                   children: [
-                    Expanded(
-                      flex: 1,
-                      child: _buildLeftPanel(),
-                    ),
+                    Expanded(flex: 1, child: _buildLeftPanel()),
                     const SizedBox(width: 24),
-                    Expanded(
-                      flex: 1,
-                      child: _buildRightPanel(),
-                    ),
+                    Expanded(flex: 1, child: _buildRightPanel()),
                   ],
                 );
               } else {
                 return Column(
                   children: [
-                    Expanded(
-                      flex: 1,
-                      child: _buildLeftPanel(),
-                    ),
+                    Expanded(flex: 1, child: _buildLeftPanel()),
                     const SizedBox(height: 16),
-                    Expanded(
-                      flex: 1,
-                      child: _buildRightPanel(),
-                    ),
+                    Expanded(flex: 1, child: _buildRightPanel()),
                   ],
                 );
               }
@@ -848,12 +871,12 @@ class SubtitleCueRow extends StatelessWidget {
         final timeMs = time.inMilliseconds;
         final startTime = cue.startTimeMs;
         final endTime = cue.endTimeMs;
-        
+
         final isStarted = timeMs >= startTime;
         final isActive = timeMs >= startTime && timeMs < endTime;
-        
+
         final double targetAlpha = isStarted ? 1.0 : 0.5;
-        
+
         double progress = 0.0;
         if (isActive) {
           final duration = cue.durationMs;
@@ -875,10 +898,7 @@ class SubtitleCueRow extends StatelessWidget {
               alignment: Alignment.centerLeft,
               decoration: const BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white10,
-                    width: 0.5,
-                  ),
+                  bottom: BorderSide(color: Colors.white10, width: 0.5),
                 ),
               ),
               child: Column(

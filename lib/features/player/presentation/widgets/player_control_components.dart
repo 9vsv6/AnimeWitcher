@@ -27,8 +27,12 @@ class PlayerTopBar extends StatelessWidget {
     final edge = isTv
         ? HotstarPlayerStyle.tvEdgeInset
         : HotstarPlayerStyle.edgeInset;
-    final double leftPadding = isTv ? edge : (padding.left > edge ? padding.left : edge);
-    final double rightPadding = isTv ? edge : (padding.right > edge ? padding.right : edge);
+    final double leftPadding = isTv
+        ? edge
+        : (padding.left > edge ? padding.left : edge);
+    final double rightPadding = isTv
+        ? edge
+        : (padding.right > edge ? padding.right : edge);
     return DecoratedBox(
       decoration: const BoxDecoration(gradient: HotstarPlayerStyle.topGradient),
       child: SafeArea(
@@ -145,8 +149,12 @@ class PlayerBottomBar extends StatelessWidget {
     final edge = isTv
         ? HotstarPlayerStyle.tvEdgeInset
         : HotstarPlayerStyle.edgeInset;
-    final double leftPadding = isTv ? edge : (padding.left > edge ? padding.left : edge);
-    final double rightPadding = isTv ? edge : (padding.right > edge ? padding.right : edge);
+    final double leftPadding = isTv
+        ? edge
+        : (padding.left > edge ? padding.left : edge);
+    final double rightPadding = isTv
+        ? edge
+        : (padding.right > edge ? padding.right : edge);
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: HotstarPlayerStyle.bottomGradient,
@@ -259,11 +267,7 @@ class _PlayerIconButtonState extends State<PlayerIconButton> {
           child: SizedBox(
             width: box,
             height: box,
-            child: Icon(
-              widget.icon,
-              color: iconColor,
-              size: glyph,
-            ),
+            child: Icon(widget.icon, color: iconColor, size: glyph),
           ),
         ),
       ),
@@ -366,7 +370,9 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                   boxShadow: showTvFocusRing
                       ? [
                           BoxShadow(
-                            color: HotstarPlayerStyle.accent.withValues(alpha: 0.2),
+                            color: HotstarPlayerStyle.accent.withValues(
+                              alpha: 0.2,
+                            ),
                             blurRadius: 8,
                           ),
                         ]
@@ -375,11 +381,7 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      widget.icon,
-                      color: color,
-                      size: 20,
-                    ),
+                    Icon(widget.icon, color: color, size: 20),
                     const SizedBox(width: 6),
                     Text(
                       widget.label,
