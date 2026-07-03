@@ -15,6 +15,7 @@ import '../../domain/entity/subtitle_model.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'hotstar_player_style.dart';
 import 'subtitle_sync_dialog.dart';
+import 'subtitle_appearance_dialog.dart';
 
 class _TrackDialogResult {
   final String? audioId;
@@ -830,216 +831,18 @@ class PlayerBottomSheets {
   }
 
   static void _showSubtitleStyles(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return Consumer(
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Consumer(
           builder: (context, ref, child) {
-            final supportsSubtitleStyling = ref.watch(
-              playerControllerProvider.select((s) => s.supportsSubtitleStyling),
-            );
-            final settings =
-                ref.watch(playerSettingsProvider).asData?.value ??
-                const PlayerSettings();
-            final l10n = AppLocalizations.of(context)!;
-            const labelStyle = TextStyle(
-              color: HotstarPlayerStyle.mutedText,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            );
-
-            if (!supportsSubtitleStyling) {
-              return _fullscreenShell(
-                context: ctx,
-                title: l10n.subtitleStyles,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.orange.withValues(alpha: 0.4),
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.info_outline,
-                          color: Colors.orange,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            l10n.mediaKitStylingWarning,
-                            style: TextStyle(
-                              color: Colors.orange.shade200,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            return _fullscreenShell(
-              context: ctx,
-              title: l10n.subtitleStyles,
-              trailing: IconButton(
-                icon: const Icon(Icons.refresh),
-                color: HotstarPlayerStyle.secondaryText,
-                tooltip: l10n.resetToDefault,
-                onPressed: () {
-                  ref
-                      .read(playerSettingsProvider.notifier)
-                      .resetSubtitleSettings();
-                  ref
-                      .read(playerControllerProvider.notifier)
-                      .applySubtitleSettings();
-                },
-              ),
-              child: ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  Text(l10n.fontSize, style: labelStyle),
-                  CustomSlider(
-                    value: settings.subtitleSize,
-                    min: 10,
-                    max: 60,
-                    step: 1,
-                    onChanged: (v) {
-                      ref
-                          .read(playerSettingsProvider.notifier)
-                          .setSubtitleSettings(
-                            v,
-                            settings.subtitleColor,
-                            settings.subtitleBackgroundColor,
-                          );
-                      ref
-                          .read(playerControllerProvider.notifier)
-                          .applySubtitleSettings();
-                    },
-                  ),
-                  Text(l10n.verticalPosition, style: labelStyle),
-                  CustomSlider(
-                    value: settings.subtitlePosition,
-                    min: 50,
-                    max: 100,
-                    step: 1,
-                    onChanged: (v) {
-                      ref
-                          .read(playerSettingsProvider.notifier)
-                          .setSubtitlePosition(v);
-                      ref
-                          .read(playerControllerProvider.notifier)
-                          .applySubtitleSettings();
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  Text(l10n.textColor, style: labelStyle),
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children:
-                          [
-                            0xFFFFFFFF,
-                            0xFFFFFF00,
-                            0xFF00FFFF,
-                            0xFFFF00FF,
-                            0xFF00FF00,
-                            0xFFFF0000,
-                            0xFF2196F3,
-                            0xFFFF9800,
-                          ].map((colorValue) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: _colorCircle(
-                                colorValue,
-                                settings.subtitleColor,
-                                (selected) {
-                                  ref
-                                      .read(playerSettingsProvider.notifier)
-                                      .setSubtitleSettings(
-                                        settings.subtitleSize,
-                                        selected,
-                                        settings.subtitleBackgroundColor,
-                                        settings.subtitleBackgroundOpacity,
-                                      );
-                                  ref
-                                      .read(playerControllerProvider.notifier)
-                                      .applySubtitleSettings();
-                                },
-                              ),
-                            );
-                          }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(l10n.backgroundColor, style: labelStyle),
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children:
-                          [
-                            0x00000000,
-                            0xFF000000,
-                            0xFF333333,
-                            0xFF1A1A1A,
-                            0xFF001F3F,
-                          ].map((colorValue) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: _colorCircle(
-                                colorValue,
-                                settings.subtitleBackgroundColor,
-                                (selected) {
-                                  ref
-                                      .read(playerSettingsProvider.notifier)
-                                      .setSubtitleSettings(
-                                        settings.subtitleSize,
-                                        settings.subtitleColor,
-                                        selected,
-                                        settings.subtitleBackgroundOpacity,
-                                      );
-                                  ref
-                                      .read(playerControllerProvider.notifier)
-                                      .applySubtitleSettings();
-                                },
-                              ),
-                            );
-                          }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(l10n.backgroundOpacity, style: labelStyle),
-                  CustomSlider(
-                    value: settings.subtitleBackgroundOpacity,
-                    min: 0,
-                    max: 1,
-                    step: 0.05,
-                    onChanged: (v) {
-                      ref
-                          .read(playerSettingsProvider.notifier)
-                          .setSubtitleBackgroundOpacity(v);
-                      ref
-                          .read(playerControllerProvider.notifier)
-                          .applySubtitleSettings();
-                    },
-                  ),
-                ],
-              ),
-            );
+            final controller = ref.read(playerControllerProvider.notifier);
+            final wasPlaying = controller.isPlaying;
+            return SubtitleAppearanceDialog(wasPlaying: wasPlaying);
           },
-        );
-      },
+        ),
+        fullscreenDialog: true,
+      ),
     );
   }
 
