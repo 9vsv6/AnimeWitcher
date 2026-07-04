@@ -18,11 +18,7 @@ import 'subtitle_sync_dialog.dart';
 import 'subtitle_appearance_dialog.dart';
 
 const List<Shadow> _kGlassTextShadow = [
-  Shadow(
-    color: Colors.black54,
-    offset: Offset(0, 1.5),
-    blurRadius: 3.0,
-  ),
+  Shadow(color: Colors.black54, offset: Offset(0, 1.5), blurRadius: 3.0),
 ];
 
 /// A reusable right-anchored drawer shell for the player.
