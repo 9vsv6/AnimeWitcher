@@ -453,70 +453,85 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
 
   Future<void> setSubtitleAppearanceSettings(PlayerSettings newSettings) async {
     final storage = _repository;
+    
+    // Sync the legacy settings to match the new appearance settings
+    final syncedSettings = newSettings.copyWith(
+      subtitleSize: newSettings.subFixedTextSize ?? 22.0,
+      subtitleColor: newSettings.subForegroundColor,
+      subtitleBackgroundColor: newSettings.subBackgroundColor,
+      subtitleBackgroundOpacity: newSettings.subBackgroundOpacity,
+    );
+
     await storage.setPlayerSetting(
       'player_sub_fixed_text_size',
-      newSettings.subFixedTextSize,
+      syncedSettings.subFixedTextSize,
     );
     await storage.setPlayerSetting(
       'player_sub_typeface',
-      newSettings.subTypeface,
+      syncedSettings.subTypeface,
     );
     await storage.setPlayerSetting(
       'player_sub_typeface_file_path',
-      newSettings.subTypefaceFilePath,
+      syncedSettings.subTypefaceFilePath,
     );
     await storage.setPlayerSetting(
       'player_sub_edge_type',
-      newSettings.subEdgeType,
+      syncedSettings.subEdgeType,
     );
     await storage.setPlayerSetting(
       'player_sub_edge_size',
-      newSettings.subEdgeSize,
+      syncedSettings.subEdgeSize,
     );
     await storage.setPlayerSetting(
       'player_sub_bg_radius',
-      newSettings.subBackgroundRadius,
+      syncedSettings.subBackgroundRadius,
     );
     await storage.setPlayerSetting(
       'player_sub_elevation',
-      newSettings.subElevation,
+      syncedSettings.subElevation,
     );
     await storage.setPlayerSetting(
       'player_sub_remove_bloat',
-      newSettings.subRemoveBloat,
+      syncedSettings.subRemoveBloat,
     );
     await storage.setPlayerSetting(
       'player_sub_remove_captions',
-      newSettings.subRemoveCaptions,
+      syncedSettings.subRemoveCaptions,
     );
     await storage.setPlayerSetting(
       'player_sub_uppercase',
-      newSettings.subUpperCase,
+      syncedSettings.subUpperCase,
     );
-    await storage.setPlayerSetting('player_sub_bold', newSettings.subBold);
-    await storage.setPlayerSetting('player_sub_italic', newSettings.subItalic);
+    await storage.setPlayerSetting('player_sub_bold', syncedSettings.subBold);
+    await storage.setPlayerSetting('player_sub_italic', syncedSettings.subItalic);
     await storage.setPlayerSetting(
       'player_sub_foreground_color',
-      newSettings.subForegroundColor,
+      syncedSettings.subForegroundColor,
     );
     await storage.setPlayerSetting(
       'player_sub_background_color',
-      newSettings.subBackgroundColor,
+      syncedSettings.subBackgroundColor,
     );
     await storage.setPlayerSetting(
       'player_sub_edge_color',
-      newSettings.subEdgeColor,
+      syncedSettings.subEdgeColor,
     );
     await storage.setPlayerSetting(
       'player_sub_background_opacity',
-      newSettings.subBackgroundOpacity,
+      syncedSettings.subBackgroundOpacity,
     );
     await storage.setPlayerSetting(
       'player_sub_alignment',
-      newSettings.subAlignment,
+      syncedSettings.subAlignment,
     );
 
-    state = AsyncData(newSettings);
+    // Persist legacy settings to database too
+    await storage.setPlayerSetting('player_sub_size', syncedSettings.subtitleSize);
+    await storage.setPlayerSetting('player_sub_color', syncedSettings.subtitleColor);
+    await storage.setPlayerSetting('player_sub_bg', syncedSettings.subtitleBackgroundColor);
+    await storage.setPlayerSetting('player_sub_bg_opacity', syncedSettings.subtitleBackgroundOpacity);
+
+    state = AsyncData(syncedSettings);
   }
 
   Future<void> resetSubtitleAppearanceSettings() async {
@@ -539,6 +554,11 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       subEdgeColor: 0xFF000000,
       subBackgroundOpacity: 0.5,
       subAlignment: () => null,
+      // Reset legacy settings as well
+      subtitleSize: 22.0,
+      subtitleColor: 0xFFFFFFFF,
+      subtitleBackgroundColor: 0x00000000,
+      subtitleBackgroundOpacity: 0.5,
     );
 
     final storage = _repository;
@@ -559,6 +579,12 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     await storage.setPlayerSetting('player_sub_edge_color', 0xFF000000);
     await storage.setPlayerSetting('player_sub_background_opacity', 0.5);
     await storage.setPlayerSetting('player_sub_alignment', null);
+
+    // Reset legacy keys in storage too
+    await storage.setPlayerSetting('player_sub_size', 22.0);
+    await storage.setPlayerSetting('player_sub_color', 0xFFFFFFFF);
+    await storage.setPlayerSetting('player_sub_bg', 0x00000000);
+    await storage.setPlayerSetting('player_sub_bg_opacity', 0.5);
 
     state = AsyncData(newState);
   }

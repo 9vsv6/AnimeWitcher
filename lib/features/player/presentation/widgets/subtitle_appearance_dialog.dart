@@ -41,7 +41,7 @@ class DpadSettingCard extends StatelessWidget {
               boxShadow: isFocused
                   ? [
                       BoxShadow(
-                        color: HotstarPlayerStyle.accent.withOpacity(0.15),
+                        color: HotstarPlayerStyle.accent.withValues(alpha: 0.15),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -161,7 +161,7 @@ class _DpadSliderState extends State<DpadSlider> {
                               ? [
                                   BoxShadow(
                                     color: HotstarPlayerStyle.accent
-                                        .withOpacity(0.3),
+                                        .withValues(alpha: 0.3),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2),
                                   ),
@@ -197,7 +197,7 @@ class _DpadSliderState extends State<DpadSlider> {
                 thumbColor: _isFocused
                     ? Colors.white
                     : HotstarPlayerStyle.accent,
-                overlayColor: HotstarPlayerStyle.accent.withOpacity(0.12),
+                overlayColor: HotstarPlayerStyle.accent.withValues(alpha: 0.12),
                 valueIndicatorColor: HotstarPlayerStyle.accent,
                 trackHeight: 4,
                 thumbShape: RoundSliderThumbShape(
@@ -412,6 +412,7 @@ class _SubtitleAppearanceDialogState
   late PlayerSettings _localSettings;
   bool _customFontLoading = false;
   bool _customFontLoaded = false;
+  late final PlayerController _playerController;
 
   final List<int> _textColors = const [
     0xFFFFFFFF, // White
@@ -468,8 +469,9 @@ class _SubtitleAppearanceDialogState
   @override
   void initState() {
     super.initState();
+    _playerController = ref.read(playerControllerProvider.notifier);
     if (widget.wasPlaying) {
-      unawaited(ref.read(playerControllerProvider.notifier).pause());
+      unawaited(_playerController.pause());
     }
     final currentSettings =
         ref.read(playerSettingsProvider).asData?.value ??
@@ -481,7 +483,7 @@ class _SubtitleAppearanceDialogState
   @override
   void dispose() {
     if (widget.wasPlaying) {
-      unawaited(ref.read(playerControllerProvider.notifier).play());
+      unawaited(_playerController.play());
     }
     super.dispose();
   }
