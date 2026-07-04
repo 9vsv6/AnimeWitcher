@@ -41,7 +41,9 @@ class DpadSettingCard extends StatelessWidget {
               boxShadow: isFocused
                   ? [
                       BoxShadow(
-                        color: HotstarPlayerStyle.accent.withValues(alpha: 0.15),
+                        color: HotstarPlayerStyle.accent.withValues(
+                          alpha: 0.15,
+                        ),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -160,8 +162,9 @@ class _DpadSliderState extends State<DpadSlider> {
                           boxShadow: _isFocused
                               ? [
                                   BoxShadow(
-                                    color: HotstarPlayerStyle.accent
-                                        .withValues(alpha: 0.3),
+                                    color: HotstarPlayerStyle.accent.withValues(
+                                      alpha: 0.3,
+                                    ),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2),
                                   ),

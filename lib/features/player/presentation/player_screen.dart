@@ -926,12 +926,19 @@ class _SkyStreamEmbeddedSubtitleViewState
             ];
           } else if (settings.subEdgeType == 3) {
             shadows = [
-              Shadow(offset: const Offset(2, 2), blurRadius: 2.0, color: edgeColor),
+              Shadow(
+                offset: const Offset(2, 2),
+                blurRadius: 2.0,
+                color: edgeColor,
+              ),
             ];
           } else if (settings.subEdgeType == 4) {
             shadows = [
               Shadow(offset: const Offset(1, 1), color: edgeColor),
-              Shadow(offset: const Offset(2, 2), color: edgeColor.withValues(alpha: 0.5)),
+              Shadow(
+                offset: const Offset(2, 2),
+                color: edgeColor.withValues(alpha: 0.5),
+              ),
             ];
           }
 
@@ -947,9 +954,13 @@ class _SkyStreamEmbeddedSubtitleViewState
 
           final bgColor = Color(settings.subBackgroundColor);
           if (bgColor.a > 0 && settings.subBackgroundOpacity > 0) {
-            final paddingVal = 2.0 + (settings.subBackgroundRadius ?? 0.0) * 0.5;
+            final paddingVal =
+                2.0 + (settings.subBackgroundRadius ?? 0.0) * 0.5;
             resultLine = Container(
-              padding: EdgeInsets.symmetric(horizontal: paddingVal, vertical: 2.0),
+              padding: EdgeInsets.symmetric(
+                horizontal: paddingVal,
+                vertical: 2.0,
+              ),
               decoration: BoxDecoration(
                 color: bgColor.withValues(alpha: settings.subBackgroundOpacity),
                 borderRadius: settings.subBackgroundRadius != null
