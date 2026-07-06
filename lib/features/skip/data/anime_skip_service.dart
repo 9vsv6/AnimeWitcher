@@ -89,8 +89,9 @@ class AnimeSkipService implements SkipService {
       if (data == null ||
           data['findShowsByExternalId'] == null ||
           (data['findShowsByExternalId'] as List).isEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('AnimeSkip: Could not find show for anilistId $anilistId');
+        }
         _store(key, const []);
         return [];
       }
@@ -118,15 +119,17 @@ class AnimeSkipService implements SkipService {
       if (episodeData == null ||
           episodeData['findEpisodesByShowId'] == null ||
           (episodeData['findEpisodesByShowId'] as List).isEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('AnimeSkip: Could not find episodes for showId $showId');
+        }
         _store(key, const []);
         return [];
       }
 
       final episodes = episodeData['findEpisodesByShowId'] as List;
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('AnimeSkip: Found ${episodes.length} episodes');
+      }
       final targetEpisode = episodes.firstWhere(
         (dynamic ep) =>
             ep['number'] == episode ||
@@ -135,10 +138,11 @@ class AnimeSkipService implements SkipService {
       );
 
       if (targetEpisode == null) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint(
             'AnimeSkip: Could not find episode $episode for showId $showId',
           );
+        }
         _store(key, const []);
         return [];
       }
@@ -165,20 +169,22 @@ class AnimeSkipService implements SkipService {
       final timestampData = response.data?['data'];
       if (timestampData == null ||
           timestampData['findTimestampsByEpisodeId'] == null) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint(
             'AnimeSkip: Could not find timestamps for episodeId $episodeId',
           );
+        }
         _store(key, const []);
         return [];
       }
 
       final timestamps = timestampData['findTimestampsByEpisodeId'] as List;
       if (timestamps.isEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint(
             'AnimeSkip: Timestamps array is empty for episodeId $episodeId',
           );
+        }
         _store(key, const []);
         return [];
       }
@@ -249,12 +255,15 @@ class AnimeSkipService implements SkipService {
       return cleaned;
     } catch (e) {
       if (e is DioException && e.response != null) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint(
             'AnimeSkip Caught Error: ${e.response?.statusCode} - ${e.response?.data}',
           );
+        }
       } else {
-        if (kDebugMode) debugPrint('AnimeSkip Caught Error: $e');
+        if (kDebugMode) {
+          debugPrint('AnimeSkip Caught Error: $e');
+        }
       }
     }
 

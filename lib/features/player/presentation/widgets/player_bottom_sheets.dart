@@ -846,31 +846,7 @@ class PlayerBottomSheets {
     );
   }
 
-  static Widget _colorCircle(
-    int colorValue,
-    int selectedColor,
-    void Function(int) onSelected,
-  ) {
-    final isSelected = colorValue == selectedColor;
-    return GestureDetector(
-      onTap: () => onSelected(colorValue),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Color(colorValue),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? Colors.white : Colors.white24,
-            width: isSelected ? 3 : 1,
-          ),
-        ),
-        child: isSelected
-            ? const Icon(Icons.check, color: Colors.black54)
-            : null,
-      ),
-    );
-  }
+
 
   static void _showSubtitleSearch(BuildContext context) {
     final parentContext = context;

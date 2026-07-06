@@ -49,7 +49,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
   List<SubtitleCue> _cues = [];
   String? _loadedUrl;
   bool _loading = false;
-  StreamSubscription? _positionSub;
+  StreamSubscription<Duration>? _positionSub;
   Duration _currentPosition = Duration.zero;
   bool _customFontLoaded = false;
 
@@ -165,7 +165,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
   }
 
   Future<void> _loadCustomFontIfNeeded() async {
-    final settings = ref.read(playerSettingsProvider).value as PlayerSettings?;
+    final settings = ref.read(playerSettingsProvider).value;
     if (settings == null) return;
 
     final path = settings.subTypefaceFilePath;
@@ -202,8 +202,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
     }
 
     final settings =
-        (ref.read(playerSettingsProvider).value ?? const PlayerSettings())
-            as PlayerSettings;
+        ref.read(playerSettingsProvider).value ?? const PlayerSettings();
     final cacheKey =
         "${url}_${settings.subRemoveBloat}_${settings.subRemoveCaptions}_${settings.subUpperCase}";
 
@@ -261,16 +260,16 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
     required bool upperCase,
   }) {
     final bloatRegex = [
-      RegExp(r'(?i)opensubtitles'),
-      RegExp(r'(?i)www\.opensubtitles\.(org|com|net)'),
-      RegExp(r'(?i)subtitles by'),
-      RegExp(r'(?i)translated by'),
-      RegExp(r'(?i)corrected by'),
-      RegExp(r'(?i)sync(hronized)? by'),
-      RegExp(r'(?i)support us'),
-      RegExp(r'(?i)advertise your product'),
-      RegExp(r'(?i)visit www'),
-      RegExp(r'(?i)opensubtitles\.org'),
+      RegExp(r'opensubtitles', caseSensitive: false),
+      RegExp(r'www\.opensubtitles\.(org|com|net)', caseSensitive: false),
+      RegExp(r'subtitles by', caseSensitive: false),
+      RegExp(r'translated by', caseSensitive: false),
+      RegExp(r'corrected by', caseSensitive: false),
+      RegExp(r'sync(hronized)? by', caseSensitive: false),
+      RegExp(r'support us', caseSensitive: false),
+      RegExp(r'advertise your product', caseSensitive: false),
+      RegExp(r'visit www', caseSensitive: false),
+      RegExp(r'opensubtitles\.org', caseSensitive: false),
     ];
 
     final captionsRegex = RegExp(r'(-?\s*)[\[({][^\])}]*[\])}]\s*');
@@ -297,8 +296,12 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
           int milliseconds = 0;
           if (millisecondsStr != null) {
             String msStr = millisecondsStr;
-            if (msStr.length > 3) msStr = msStr.substring(0, 3);
-            while (msStr.length < 3) msStr += '0';
+            if (msStr.length > 3) {
+              msStr = msStr.substring(0, 3);
+            }
+            while (msStr.length < 3) {
+              msStr += '0';
+            }
             milliseconds = int.parse(msStr);
           }
 
@@ -403,8 +406,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
     if (url == null || _cues.isEmpty) return const SizedBox.shrink();
 
     final settings =
-        (ref.watch(playerSettingsProvider).value ?? const PlayerSettings())
-            as PlayerSettings;
+        ref.watch(playerSettingsProvider).value ?? const PlayerSettings();
 
     // Calculate position with sync delay (in seconds)
     final delayMs =
@@ -423,7 +425,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
 
     // Map font family
     String? fontFamily;
-    final List<String> builtInFonts = const [
+    const List<String> builtInFonts = [
       'Normal (system sans-serif)',
       'Trebuchet MS',
       'Netflix Sans',
@@ -516,11 +518,11 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
         shadows = [
           Shadow(
             offset: const Offset(-1, -1),
-            color: edgeColor.withOpacity(0.5),
+            color: edgeColor.withValues(alpha: 0.5),
           ),
           Shadow(
             offset: const Offset(1, 1),
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
           ),
         ];
       } else if (settings.subEdgeType == 3) {
@@ -530,7 +532,7 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
       } else if (settings.subEdgeType == 4) {
         shadows = [
           Shadow(offset: const Offset(1, 1), color: edgeColor),
-          Shadow(offset: const Offset(2, 2), color: edgeColor.withOpacity(0.5)),
+          Shadow(offset: const Offset(2, 2), color: edgeColor.withValues(alpha: 0.5)),
         ];
       }
 
@@ -545,12 +547,12 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
       Widget resultLine = Stack(children: children);
 
       final bgColor = Color(settings.subBackgroundColor);
-      if (bgColor.alpha > 0 && settings.subBackgroundOpacity > 0) {
+      if (bgColor.a > 0 && settings.subBackgroundOpacity > 0) {
         final paddingVal = 2.0 + (settings.subBackgroundRadius ?? 0.0) * 0.5;
         resultLine = Container(
           padding: EdgeInsets.symmetric(horizontal: paddingVal, vertical: 2.0),
           decoration: BoxDecoration(
-            color: bgColor.withOpacity(settings.subBackgroundOpacity),
+            color: bgColor.withValues(alpha: settings.subBackgroundOpacity),
             borderRadius: settings.subBackgroundRadius != null
                 ? BorderRadius.circular(settings.subBackgroundRadius!)
                 : BorderRadius.zero,

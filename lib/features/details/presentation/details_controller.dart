@@ -252,10 +252,11 @@ class DetailsController extends _$DetailsController {
           }
         }
       } catch (e) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint(
             'DetailsController: TMDB metadata resolution failed, but continuing: $e',
           );
+        }
       }
 
       // Pre-fetch Simkl / AniList tracking IDs
@@ -287,21 +288,24 @@ class DetailsController extends _$DetailsController {
               );
               newSyncData.addAll(resolved);
               finalItem = enrichedItem.copyWith(syncData: newSyncData);
-              if (kDebugMode)
+              if (kDebugMode) {
                 debugPrint('DetailsController: Fetched Simkl IDs: $resolved');
+              }
             }
           } else {
-            if (kDebugMode)
+            if (kDebugMode) {
               debugPrint(
                 'DetailsController: Bypassed Simkl fetch (AniList ID already provided by scraper)',
               );
+            }
           }
         }
       } catch (e) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint(
             'DetailsController: Failed to fetch Simkl IDs in background: $e',
           );
+        }
       }
 
       if (!ref.mounted) return;
@@ -324,10 +328,11 @@ class DetailsController extends _$DetailsController {
         }
       }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint(
           'DetailsController: Background metadata resolution failed: $e',
         );
+      }
     }
   }
 

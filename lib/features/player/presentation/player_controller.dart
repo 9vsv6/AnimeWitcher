@@ -976,8 +976,9 @@ class PlayerController extends Notifier<PlayerState> {
         if (kDebugMode) debugPrint('IntroDB error: $e');
       }
     } else {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('IntroDB integration is disabled in settings.');
+      }
     }
 
     if (_isDisposed) return;
@@ -1032,8 +1033,9 @@ class PlayerController extends Notifier<PlayerState> {
           if (kDebugMode) debugPrint('AnimeSkip error: $e');
         }
       } else {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('AnimeSkip integration is disabled in settings.');
+        }
       }
     } else {
       if (kDebugMode) {

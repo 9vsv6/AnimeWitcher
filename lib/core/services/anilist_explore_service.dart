@@ -44,7 +44,7 @@ class AnilistExploreService {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '',
-        data: {'query': query, if (variables != null) 'variables': variables},
+        data: {'query': query, 'variables': ?variables},
         options: Options(
           headers: {
             'Content-Type': 'application/json',
@@ -78,7 +78,7 @@ class AnilistExploreService {
           talker.warning(
             'AnilistExploreService: 429 Rate Limit. Retrying in $retryAfterSeconds seconds (retry $retryCount/3)...',
           );
-          await Future.delayed(Duration(seconds: retryAfterSeconds));
+          await Future<void>.delayed(Duration(seconds: retryAfterSeconds));
           return postGraphQL(
             query,
             variables: variables,

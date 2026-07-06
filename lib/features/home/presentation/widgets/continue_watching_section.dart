@@ -174,7 +174,7 @@ class _ContinueWatchingSectionState
                   itemBuilder: (context, index) {
                     final historyItem = widget.items[index];
                     return Padding(
-                      padding: EdgeInsets.only(right: spacing),
+                      padding: const EdgeInsets.only(right: spacing),
                       child: ContinueWatchingCard(
                         key: ValueKey(historyItem.item.url),
                         historyItem: historyItem,

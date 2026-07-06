@@ -202,16 +202,21 @@ class SimklService implements TrackingService {
             final detailsIds =
                 detailsResponse.data!['ids'] as Map<String, dynamic>?;
             if (detailsIds != null) {
-              if (detailsIds['simkl'] != null)
+              if (detailsIds['simkl'] != null) {
                 resolvedIds['simkl'] = detailsIds['simkl'].toString();
-              if (detailsIds['mal'] != null)
+              }
+              if (detailsIds['mal'] != null) {
                 resolvedIds['mal'] = detailsIds['mal'].toString();
-              if (detailsIds['anilist'] != null)
+              }
+              if (detailsIds['anilist'] != null) {
                 resolvedIds['anilist'] = detailsIds['anilist'].toString();
-              if (detailsIds['tmdb'] != null)
+              }
+              if (detailsIds['tmdb'] != null) {
                 resolvedIds['tmdb'] = detailsIds['tmdb'].toString();
-              if (detailsIds['imdb'] != null)
+              }
+              if (detailsIds['imdb'] != null) {
                 resolvedIds['imdb'] = detailsIds['imdb'].toString();
+              }
             }
           }
         }
@@ -236,8 +241,9 @@ class SimklService implements TrackingService {
 
     final simklId = resolvedIds?['simkl'];
     // We need simkl id or other ids. We'll send TMDB/IMDB directly if available.
-    if (simklId == null && item.tmdbId == null && item.imdbId == null)
+    if (simklId == null && item.tmdbId == null && item.imdbId == null) {
       return false;
+    }
 
     try {
       final payload = <String, dynamic>{};
@@ -285,8 +291,9 @@ class SimklService implements TrackingService {
   }) async {
     if (_accessToken == null) return false;
     final simklId = resolvedIds?['simkl'];
-    if (simklId == null && item.tmdbId == null && item.imdbId == null)
+    if (simklId == null && item.tmdbId == null && item.imdbId == null) {
       return false;
+    }
 
     try {
       final payload = <String, dynamic>{};

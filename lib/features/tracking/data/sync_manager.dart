@@ -248,12 +248,15 @@ Future<List<SyncProgressItem>> syncedProgress(Ref ref) async {
         final localTmdb = local.item.tmdbId?.toString();
         final localImdb = local.item.imdbId;
 
-        if (syncItem.tmdbId != null && localTmdb == syncItem.tmdbId)
+        if (syncItem.tmdbId != null && localTmdb == syncItem.tmdbId) {
           return true;
-        if (syncItem.imdbId != null && localImdb == syncItem.imdbId)
+        }
+        if (syncItem.imdbId != null && localImdb == syncItem.imdbId) {
           return true;
-        if (local.item.title.toLowerCase() == syncItem.title.toLowerCase())
+        }
+        if (local.item.title.toLowerCase() == syncItem.title.toLowerCase()) {
           return true;
+        }
 
         return false;
       },

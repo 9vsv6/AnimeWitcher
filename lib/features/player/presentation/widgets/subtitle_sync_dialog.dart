@@ -49,8 +49,12 @@ List<SubtitleCue> parseSubtitle(String content) {
         int milliseconds = 0;
         if (millisecondsStr != null) {
           String msStr = millisecondsStr;
-          if (msStr.length > 3) msStr = msStr.substring(0, 3);
-          while (msStr.length < 3) msStr += '0';
+          if (msStr.length > 3) {
+            msStr = msStr.substring(0, 3);
+          }
+          while (msStr.length < 3) {
+            msStr += '0';
+          }
           milliseconds = int.parse(msStr);
         }
 

@@ -210,8 +210,9 @@ class SkyStreamPlayerControlsState
       widget.player.stream.playing.listen((val) {
         final oldPlaying = _isPlaying;
         _isPlaying = val; // Update local cache
-        if (mounted)
+        if (mounted) {
           setState(() {}); // Sync isPlaying to overlays (next ep countdown)
+        }
         if (val) {
           _startHideTimer();
         } else {
@@ -682,8 +683,9 @@ class SkyStreamPlayerControlsState
     final playing = state == vv.VideoControllerPlaybackState.playing;
     if (playing != _isPlaying) {
       _isPlaying = playing;
-      if (mounted)
+      if (mounted) {
         setState(() {}); // Sync isPlaying to overlays (next ep countdown)
+      }
       if (playing) {
         _startHideTimer();
       } else {

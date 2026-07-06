@@ -9,7 +9,7 @@ import 'package:video_view/video_view.dart' as vv;
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/history_repository.dart';
-import '../../../settings/presentation/player_settings_provider.dart';
+
 import '../player_controller.dart';
 import 'hotstar_player_style.dart';
 import 'player_bottom_sheets.dart';
@@ -648,28 +648,8 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
     );
   }
 
-  // Palettes mirrored from the legacy subtitle-style dialog.
-  static const List<int> _textColors = [
-    0xFFFFFFFF,
-    0xFFFFFF00,
-    0xFF00FFFF,
-    0xFFFF00FF,
-    0xFF00FF00,
-    0xFFFF0000,
-    0xFF2196F3,
-    0xFFFF9800,
-  ];
-  static const List<int> _bgColors = [
-    0x00000000,
-    0xFF000000,
-    0xFF333333,
-    0xFF1A1A1A,
-    0xFF001F3F,
-  ];
-
   Widget _buildSubtitleBody(AppLocalizations l10n) {
     final controller = ref.read(playerControllerProvider.notifier);
-    final settingsNotifier = ref.read(playerSettingsProvider.notifier);
 
     final supportsExternal = ref.watch(
       playerControllerProvider.select((s) => s.supportsExternalSubtitleLoading),
@@ -680,21 +660,9 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
     final supportsStyling = ref.watch(
       playerControllerProvider.select((s) => s.supportsSubtitleStyling),
     );
-    final settings =
-        ref.watch(playerSettingsProvider).asData?.value ??
-        const PlayerSettings();
+
 
     final tracks = controller.getTrackSelectionSnapshot().subtitleTracks;
-
-    void applyStyle({double? size, int? color, int? bg, double? opacity}) {
-      settingsNotifier.setSubtitleSettings(
-        size ?? settings.subtitleSize,
-        color ?? settings.subtitleColor,
-        bg ?? settings.subtitleBackgroundColor,
-        opacity ?? settings.subtitleBackgroundOpacity,
-      );
-      controller.applySubtitleSettings();
-    }
 
     final rows = <Widget>[
       // Track selection (Off + available tracks) first. Anchor stays on the
@@ -1603,8 +1571,6 @@ class _SubtitleAdjusterRow extends StatefulWidget {
   final String label;
   final String valueText;
   final bool isTv;
-  final IconData decreaseIcon;
-  final IconData increaseIcon;
   final VoidCallback onDecrease;
   final VoidCallback onIncrease;
 
@@ -1614,8 +1580,6 @@ class _SubtitleAdjusterRow extends StatefulWidget {
     required this.valueText,
     required this.onDecrease,
     required this.onIncrease,
-    this.decreaseIcon = Icons.remove_rounded,
-    this.increaseIcon = Icons.add_rounded,
   });
 
   @override
@@ -1685,12 +1649,12 @@ class _SubtitleAdjusterRowState extends State<_SubtitleAdjusterRow> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _StepButton(
-                        icon: widget.decreaseIcon,
+                        icon: Icons.remove_rounded,
                         onTap: widget.onDecrease,
                       ),
                       SizedBox(width: 56, child: Center(child: _buildValue())),
                       _StepButton(
-                        icon: widget.increaseIcon,
+                        icon: Icons.add_rounded,
                         onTap: widget.onIncrease,
                       ),
                     ],
@@ -1745,157 +1709,4 @@ class _StepButton extends StatelessWidget {
 /// rows (and out to other settings) geometrically, while each swatch consumes
 /// Left/Right to step to the previous/next swatch in reading order — so the
 /// panel never mistakes them for tab switches.
-class _ColorGridRow extends StatelessWidget {
-  final String label;
-  final List<int> palette;
-  final int selectedColor;
-  final bool isTv;
-  final ValueChanged<int> onSelected;
 
-  const _ColorGridRow({
-    required this.label,
-    required this.palette,
-    required this.selectedColor,
-    required this.isTv,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: HotstarPlayerStyle.secondaryText,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              shadows: _kGlassTextShadow,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: palette
-                .map(
-                  (value) => _ColorSwatch(
-                    colorValue: value,
-                    selected: value == selectedColor,
-                    isTv: isTv,
-                    onSelect: () => onSelected(value),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ColorSwatch extends StatefulWidget {
-  final int colorValue;
-  final bool selected;
-  final bool isTv;
-  final VoidCallback onSelect;
-
-  const _ColorSwatch({
-    required this.colorValue,
-    required this.selected,
-    required this.isTv,
-    required this.onSelect,
-  });
-
-  @override
-  State<_ColorSwatch> createState() => _ColorSwatchState();
-}
-
-class _ColorSwatchState extends State<_ColorSwatch> {
-  bool _focused = false;
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Color(widget.colorValue);
-    final isTransparent = color.a == 0;
-    final ring = _focused && widget.isTv;
-    final checkColor = color.computeLuminance() > 0.5
-        ? Colors.black87
-        : Colors.white;
-    return Focus(
-      onFocusChange: (v) => setState(() => _focused = v),
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-          return KeyEventResult.ignored;
-        }
-        final key = event.logicalKey;
-        if (key == LogicalKeyboardKey.select ||
-            key == LogicalKeyboardKey.enter ||
-            key == LogicalKeyboardKey.space) {
-          widget.onSelect();
-          return KeyEventResult.handled;
-        }
-        // Step between swatches in reading order; consume so the panel doesn't
-        // switch tabs. Up/Down bubble for vertical traversal.
-        if (key == LogicalKeyboardKey.arrowLeft) {
-          node.previousFocus();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.arrowRight) {
-          node.nextFocus();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onSelect,
-          child: AnimatedContainer(
-            duration: HotstarPlayerStyle.fastMotionDuration,
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isTransparent ? Colors.transparent : color,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: ring
-                    ? HotstarPlayerStyle.accent
-                    : (widget.selected
-                          ? Colors.white
-                          : (_hovered ? Colors.white70 : Colors.white24)),
-                width: ring || widget.selected ? 3 : 1.5,
-              ),
-              boxShadow: ring
-                  ? [
-                      BoxShadow(
-                        color: HotstarPlayerStyle.accent.withValues(alpha: 0.2),
-                        blurRadius: 8,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: widget.selected
-                ? Icon(Icons.check_rounded, size: 20, color: checkColor)
-                : (isTransparent
-                      ? const Icon(
-                          Icons.block_rounded,
-                          size: 18,
-                          color: Colors.white54,
-                        )
-                      : null),
-          ),
-        ),
-      ),
-    );
-  }
-}
