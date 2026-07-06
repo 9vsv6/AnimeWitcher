@@ -51,6 +51,8 @@ void main() async {
     await windowManager.ensureInitialized();
 
     const windowOptions = WindowOptions(
+      size: Size(1280, 720),
+      minimumSize: Size(360, 640),
       center: true,
       backgroundColor: Colors.black, // Solid black prevents transparency during fullscreen transition
       skipTaskbar: false,
@@ -60,9 +62,6 @@ void main() async {
     unawaited(
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.show();
-        if (!Platform.isWindows) {
-          await windowManager.maximize();
-        }
         await windowManager.focus();
       }),
     );

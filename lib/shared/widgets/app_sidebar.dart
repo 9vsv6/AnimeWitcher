@@ -319,10 +319,8 @@ class _SidebarDockItemState extends ConsumerState<_SidebarDockItem> {
         ? const Color(0xFF262626)
         : const Color(0xFFE5E7EB);
 
-    // Icon color of the items (text-neutral-500 / dark:text-neutral-300 verbatim, no accent highlight)
-    final iconColor = isDark
-        ? const Color(0xFFD4D4D4)
-        : const Color(0xFF6B7280);
+    // Icon color of the items (high contrast in both dark and light modes)
+    final iconColor = isDark ? Colors.white : const Color(0xFF171717);
 
     // Tooltip style color variables (bg-gray-100 / dark:bg-neutral-800 verbatim)
     final tooltipBgColor = isDark
