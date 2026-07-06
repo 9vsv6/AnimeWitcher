@@ -156,7 +156,7 @@ class PlayerOsdOverlay extends StatelessWidget {
               Text(
                 osdLabel,
                 style: const TextStyle(
-                  color: HotstarPlayerStyle.accent,
+                  color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
