@@ -115,66 +115,127 @@ class _PanelSurface extends StatelessWidget {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.65),
-            blurRadius: 40,
-            spreadRadius: 2,
-            offset: const Offset(-12, 0),
+            color: Colors.black.withValues(alpha: 0.50),
+            blurRadius: 50,
+            spreadRadius: 0,
+            offset: const Offset(-8, 0),
           ),
         ],
       ),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. BACKGROUND LAYER: Deep ambient glow mesh to ensure the frost has texture to refract
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.purple.withValues(alpha: 0.16),
-                    Colors.blue.withValues(alpha: 0.10),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.topRight,
-                  end: Alignment.bottomLeft,
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    Colors.orange.withValues(alpha: 0.08),
-                    Colors.transparent,
-                  ],
-                  center: Alignment.bottomRight,
-                  radius: 1.3,
-                ),
-              ),
-            ),
-          ),
-          // 2. FROST FILTER + 3. TINTED OVERLAY
+          // 1. LAYERED TRANSLUCENT OBSIDIAN/CHARCOAL BLACK BASE WITH BACKDROP BLUR
           Positioned.fill(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18.0, sigmaY: 18.0),
+              filter: ImageFilter.blur(sigmaX: 22.0, sigmaY: 22.0),
               child: const DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Color(0xC70E1013), // 0.78 opacity tinted overlay
+                  color: Color(0xA6060608), // Frosted glass obsidian tint (65% opacity)
                 ),
               ),
             ),
           ),
-          // 4. BORDER LIGHT (1px rim highlight simulating catching light on inner rim edge)
+          // 2. SOFT AMBIENT GLOSS 
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.14),
-                      width: 1.0,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.04), // soft mirror-like reflection
+                      Colors.white.withValues(alpha: 0.01),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.4, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 3. REALISTIC LIGHT DIFFUSION (Soft ambient lighting texture)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.6, -0.7),
+                    radius: 1.5,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.02),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 4. FRESNEL EDGE HIGHLIGHTS WITH SOFT GRADIENT BLENDING (Left and Right)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ShaderMask(
+                shaderCallback: (rect) {
+                  return const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.white,
+                      Colors.white,
+                      Colors.transparent,
+                    ],
+                    stops: [0.0, 0.15, 0.85, 1.0],
+                  ).createShader(rect);
+                },
+                blendMode: BlendMode.dstIn,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        width: 0.5,
+                      ),
+                      right: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 5. INNER RIM HIGHLIGHT WITH SOFT GRADIENT BLENDING (Left and Right)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ShaderMask(
+                shaderCallback: (rect) {
+                  return const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.white,
+                      Colors.white,
+                      Colors.transparent,
+                    ],
+                    stops: [0.0, 0.20, 0.80, 1.0],
+                  ).createShader(rect);
+                },
+                blendMode: BlendMode.dstIn,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.04),
+                        width: 1.5,
+                      ),
+                      right: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.04),
+                        width: 1.5,
+                      ),
                     ),
                   ),
                 ),
