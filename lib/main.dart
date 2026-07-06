@@ -54,7 +54,8 @@ void main() async {
       size: Size(1280, 720),
       minimumSize: Size(360, 640),
       center: true,
-      backgroundColor: Colors.black, // Solid black prevents transparency during fullscreen transition
+      backgroundColor: Colors
+          .black, // Solid black prevents transparency during fullscreen transition
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.hidden,
     );
@@ -375,7 +376,8 @@ class _MyAppState extends ConsumerState<MyApp> {
               );
             }
 
-            if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+            if (!kIsWeb &&
+                (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
               result = Stack(
                 children: [
                   Positioned.fill(child: result),
@@ -585,7 +587,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                     color: Colors.black.withValues(alpha: 0.25),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
-                  )
+                  ),
                 ]
               : null,
         ),
@@ -692,7 +694,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                                             height: 8,
                                             decoration: BoxDecoration(
                                               border: Border.all(
-                                                color: Colors.white.withValues(alpha: 0.85),
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.85,
+                                                ),
                                                 width: 1.2,
                                               ),
                                             ),
@@ -707,7 +711,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                                             decoration: BoxDecoration(
                                               color: const Color(0xFF050505),
                                               border: Border.all(
-                                                color: Colors.white.withValues(alpha: 0.85),
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.85,
+                                                ),
                                                 width: 1.2,
                                               ),
                                             ),
@@ -721,7 +727,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                                     height: 10,
                                     decoration: BoxDecoration(
                                       border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.85),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.85,
+                                        ),
                                         width: 1.2,
                                       ),
                                     ),
@@ -756,10 +764,7 @@ class _PinButton extends StatefulWidget {
   final bool isActive;
   final VoidCallback onPressed;
 
-  const _PinButton({
-    required this.isActive,
-    required this.onPressed,
-  });
+  const _PinButton({required this.isActive, required this.onPressed});
 
   @override
   State<_PinButton> createState() => _PinButtonState();
@@ -780,7 +785,9 @@ class _PinButtonState extends State<_PinButton> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: _isHovered ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+            color: _isHovered
+                ? Colors.white.withValues(alpha: 0.15)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(

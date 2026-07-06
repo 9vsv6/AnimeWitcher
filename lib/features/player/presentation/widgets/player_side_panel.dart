@@ -131,12 +131,14 @@ class _PanelSurface extends StatelessWidget {
               filter: ImageFilter.blur(sigmaX: 22.0, sigmaY: 22.0),
               child: const DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Color(0xA6060608), // Frosted glass obsidian tint (65% opacity)
+                  color: Color(
+                    0xA6060608,
+                  ), // Frosted glass obsidian tint (65% opacity)
                 ),
               ),
             ),
           ),
-          // 2. SOFT AMBIENT GLOSS 
+          // 2. SOFT AMBIENT GLOSS
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -145,7 +147,9 @@ class _PanelSurface extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.white.withValues(alpha: 0.04), // soft mirror-like reflection
+                      Colors.white.withValues(
+                        alpha: 0.04,
+                      ), // soft mirror-like reflection
                       Colors.white.withValues(alpha: 0.01),
                       Colors.transparent,
                     ],
