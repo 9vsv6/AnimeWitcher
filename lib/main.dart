@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart'; // For kReleaseMode
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
+import 'features/player/presentation/widgets/hotstar_player_style.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -51,10 +52,9 @@ void main() async {
 
     const windowOptions = WindowOptions(
       center: true,
-      backgroundColor: Colors
-          .black, // Solid black prevents transparency during fullscreen transition
+      backgroundColor: Colors.black, // Solid black prevents transparency during fullscreen transition
       skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.normal,
+      titleBarStyle: TitleBarStyle.hidden,
     );
 
     unawaited(
@@ -288,17 +288,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     if (!(Platform.isMacOS || Platform.isWindows || Platform.isLinux)) return;
     try {
       final isFull = await windowManager.isFullScreen();
-      if (!isFull) {
-        if (Platform.isWindows || Platform.isLinux) {
-          await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-        }
-        await windowManager.setFullScreen(true);
-      } else {
-        await windowManager.setFullScreen(false);
-        if (Platform.isWindows || Platform.isLinux) {
-          await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-        }
-      }
+      await windowManager.setFullScreen(!isFull);
     } catch (e) {
       if (kDebugMode) debugPrint('_toggleFullscreen: $e');
     }
@@ -383,6 +373,20 @@ class _MyAppState extends ConsumerState<MyApp> {
                   textScaler: TextScaler.noScaling,
                 ),
                 child: result,
+              );
+            }
+
+            if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+              result = Stack(
+                children: [
+                  Positioned.fill(child: result),
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: CustomTitleBar(),
+                  ),
+                ],
               );
             }
 
@@ -500,6 +504,335 @@ class LaunchErrorApp extends StatelessWidget {
               },
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class CustomTitleBar extends StatefulWidget {
+  const CustomTitleBar({super.key});
+
+  @override
+  State<CustomTitleBar> createState() => _CustomTitleBarState();
+}
+
+class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
+  bool _hovered = false;
+  bool _isMaximized = false;
+  bool _isFullScreen = false;
+  bool _isAlwaysOnTop = false;
+
+  @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+    _updateStates();
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    super.dispose();
+  }
+
+  @override
+  void onWindowMaximize() {
+    _updateStates();
+  }
+
+  @override
+  void onWindowUnmaximize() {
+    _updateStates();
+  }
+
+  @override
+  void onWindowEnterFullScreen() {
+    _updateStates();
+  }
+
+  @override
+  void onWindowLeaveFullScreen() {
+    _updateStates();
+  }
+
+  Future<void> _updateStates() async {
+    final isMax = await windowManager.isMaximized();
+    final isFull = await windowManager.isFullScreen();
+    final isAlways = await windowManager.isAlwaysOnTop();
+    if (mounted) {
+      setState(() {
+        _isMaximized = isMax;
+        _isFullScreen = isFull;
+        _isAlwaysOnTop = isAlways;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: _hovered ? 48 : 8,
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: _hovered ? const Color(0xE0050505) : Colors.transparent,
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (_hovered)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart: (_) {
+                    windowManager.startDragging();
+                  },
+                  onDoubleTap: () async {
+                    final isMax = await windowManager.isMaximized();
+                    if (isMax) {
+                      await windowManager.unmaximize();
+                    } else {
+                      await windowManager.maximize();
+                    }
+                  },
+                ),
+              ),
+            // Pin icon on the left (visible when neither maximized nor fullscreen)
+            if (_hovered && !_isFullScreen && !_isMaximized)
+              Positioned(
+                left: 12,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: _PinButton(
+                    isActive: _isAlwaysOnTop,
+                    onPressed: () async {
+                      final nextState = !_isAlwaysOnTop;
+                      await windowManager.setAlwaysOnTop(nextState);
+                      await _updateStates();
+                    },
+                  ),
+                ),
+              ),
+            // Right-side window controls (fullscreen, minimize, maximize/restore, close)
+            Positioned(
+              right: 12,
+              top: 0,
+              bottom: 0,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 150),
+                opacity: _hovered ? 1.0 : 0.0,
+                child: IgnorePointer(
+                  ignoring: !_hovered,
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 1. Full Screen Toggle
+                        _TitleBarButton(
+                          onPressed: () async {
+                            await windowManager.setFullScreen(!_isFullScreen);
+                            await _updateStates();
+                          },
+                          child: Icon(
+                            _isFullScreen
+                                ? Icons.fullscreen_exit_rounded
+                                : Icons.fullscreen_rounded,
+                            color: Colors.white.withValues(alpha: 0.85),
+                            size: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // 2. Minimize
+                        _TitleBarButton(
+                          onPressed: () => windowManager.minimize(),
+                          child: Center(
+                            child: Container(
+                              width: 10,
+                              height: 1.5,
+                              color: Colors.white.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // 3. Maximize / Restore
+                        _TitleBarButton(
+                          onPressed: () async {
+                            if (_isMaximized) {
+                              await windowManager.unmaximize();
+                            } else {
+                              await windowManager.maximize();
+                            }
+                            await _updateStates();
+                          },
+                          child: Center(
+                            child: _isMaximized
+                                ? SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: Stack(
+                                      children: [
+                                        Positioned(
+                                          right: 0,
+                                          top: 0,
+                                          child: Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.85),
+                                                width: 1.2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          left: 0,
+                                          bottom: 0,
+                                          child: Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF050505),
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.85),
+                                                width: 1.2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.85),
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // 4. Close
+                        _TitleBarButton(
+                          hoverColor: Colors.red.withValues(alpha: 0.8),
+                          onPressed: () => windowManager.close(),
+                          child: Icon(
+                            Icons.close_rounded,
+                            color: Colors.white.withValues(alpha: 0.85),
+                            size: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PinButton extends StatefulWidget {
+  final bool isActive;
+  final VoidCallback onPressed;
+
+  const _PinButton({
+    required this.isActive,
+    required this.onPressed,
+  });
+
+  @override
+  State<_PinButton> createState() => _PinButtonState();
+}
+
+class _PinButtonState extends State<_PinButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: _isHovered ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            widget.isActive ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+            color: widget.isActive
+                ? HotstarPlayerStyle.accent
+                : Colors.white.withValues(alpha: _isHovered ? 0.75 : 0.4),
+            size: 16,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleBarButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onPressed;
+  final Color? hoverColor;
+
+  const _TitleBarButton({
+    required this.child,
+    required this.onPressed,
+    this.hoverColor,
+  });
+
+  @override
+  State<_TitleBarButton> createState() => _TitleBarButtonState();
+}
+
+class _TitleBarButtonState extends State<_TitleBarButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? (widget.hoverColor ?? Colors.white.withValues(alpha: 0.15))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: widget.child,
         ),
       ),
     );

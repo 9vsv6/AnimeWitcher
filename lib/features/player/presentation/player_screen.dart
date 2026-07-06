@@ -275,9 +275,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (!Platform.isAndroid && !Platform.isIOS) {
       try {
         windowManager.setFullScreen(false);
-        if (Platform.isWindows || Platform.isLinux) {
-          windowManager.setTitleBarStyle(TitleBarStyle.normal);
-        }
       } catch (e) {
         if (kDebugMode) debugPrint('PlayerScreen.dispose: $e');
       }
