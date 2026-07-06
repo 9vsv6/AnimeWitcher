@@ -846,8 +846,6 @@ class PlayerBottomSheets {
     );
   }
 
-
-
   static void _showSubtitleSearch(BuildContext context) {
     final parentContext = context;
     final TextEditingController queryController = TextEditingController();

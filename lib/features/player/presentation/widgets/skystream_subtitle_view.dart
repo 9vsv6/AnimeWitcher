@@ -532,7 +532,10 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
       } else if (settings.subEdgeType == 4) {
         shadows = [
           Shadow(offset: const Offset(1, 1), color: edgeColor),
-          Shadow(offset: const Offset(2, 2), color: edgeColor.withValues(alpha: 0.5)),
+          Shadow(
+            offset: const Offset(2, 2),
+            color: edgeColor.withValues(alpha: 0.5),
+          ),
         ];
       }
 

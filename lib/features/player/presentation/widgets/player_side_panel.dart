@@ -661,7 +661,6 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
       playerControllerProvider.select((s) => s.supportsSubtitleStyling),
     );
 
-
     final tracks = controller.getTrackSelectionSnapshot().subtitleTracks;
 
     final rows = <Widget>[
@@ -1709,4 +1708,3 @@ class _StepButton extends StatelessWidget {
 /// rows (and out to other settings) geometrically, while each swatch consumes
 /// Left/Right to step to the previous/next swatch in reading order — so the
 /// panel never mistakes them for tab switches.
-
