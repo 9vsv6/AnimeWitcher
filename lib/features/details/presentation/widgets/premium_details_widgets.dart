@@ -7,6 +7,7 @@ import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/shared/widgets/shimmer_placeholder.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:skystream/shared/widgets/thumbnail_error_placeholder.dart';
+import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'details_layout_widgets.dart';
 
@@ -456,6 +457,10 @@ class RecommendationsCarousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLarge = context.isDesktop || context.isTv;
+    final cardWidth = isLarge ? 180.0 : 110.0;
+    final listHeight = isLarge ? 310.0 : 180.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -469,17 +474,17 @@ class RecommendationsCarousel extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 180,
+          height: listHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final item = items[index];
-              return InkWell(
+              return CardsWrapper(
                 onTap: () => onItemTap(item),
                 child: SizedBox(
-                  width: 110,
+                  width: cardWidth,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -494,7 +499,7 @@ class RecommendationsCarousel extends StatelessWidget {
                                 ) ??
                                 '',
                             fit: BoxFit.cover,
-                            width: 110,
+                            width: cardWidth,
                             errorWidget: (_, _, _) =>
                                 ThumbnailErrorPlaceholder(label: item.title),
                           ),
@@ -505,9 +510,13 @@ class RecommendationsCarousel extends StatelessWidget {
                         item.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: isLarge
+                            ? Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                )
+                            : Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
                       ),
                     ],
                   ),
