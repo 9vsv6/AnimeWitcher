@@ -16,7 +16,9 @@ class AppTheme {
   // Light Theme Colors
   static const Color lightBackground = Color(0xFFF5F1EC); // primary surface
   static const Color lightSurface = Color(0xFFFAF8F5); // surfaceContainerLowest
-  static const Color lightSurfaceHighlight = Color(0xFFE8E2D8); // surfaceContainerHigh
+  static const Color lightSurfaceHighlight = Color(
+    0xFFE8E2D8,
+  ); // surfaceContainerHigh
   static const Color lightTextPrimary = Color(0xFF2C2521); // onSurface
   static const Color lightTextSecondary = Color(0xFF5C5C5C); // onSurfaceVariant
   static const Color lightCoral = Color(0xFFC63523); // Coral Accent

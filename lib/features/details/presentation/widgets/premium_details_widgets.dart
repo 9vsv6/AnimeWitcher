@@ -512,11 +512,11 @@ class RecommendationsCarousel extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: isLarge
                             ? Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                )
+                                fontWeight: FontWeight.bold,
+                              )
                             : Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                fontWeight: FontWeight.w500,
+                              ),
                       ),
                     ],
                   ),

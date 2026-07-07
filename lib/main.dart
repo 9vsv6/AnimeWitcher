@@ -718,7 +718,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                                             decoration: BoxDecoration(
                                               color: isDark
                                                   ? const Color(0xFF050505)
-                                                  : const Color(0xFFFAF8F5), // overlap box bg matches titlebar
+                                                  : const Color(
+                                                      0xFFFAF8F5,
+                                                    ), // overlap box bg matches titlebar
                                               border: Border.all(
                                                 color: iconColor,
                                                 width: 1.2,
@@ -743,9 +745,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                         ),
                         const SizedBox(width: 6),
                         // 4. Close
-                        _CloseButton(
-                          onPressed: () => windowManager.close(),
-                        ),
+                        _CloseButton(onPressed: () => windowManager.close()),
                       ],
                     ),
                   ),
@@ -776,7 +776,9 @@ class _PinButtonState extends State<_PinButton> {
     final isDark = theme.brightness == Brightness.dark;
     final hoverColor = isDark
         ? Colors.white.withValues(alpha: 0.15)
-        : const Color(0xFFE4D9C8); // Darker warm neutral tan hover background (#E4D9C8)
+        : const Color(
+            0xFFE4D9C8,
+          ); // Darker warm neutral tan hover background (#E4D9C8)
 
     return Material(
       color: Colors.transparent,
@@ -793,8 +795,8 @@ class _PinButtonState extends State<_PinButton> {
             color: widget.isActive
                 ? theme.colorScheme.primary
                 : (isDark
-                    ? Colors.white.withValues(alpha: 0.5)
-                    : const Color(0xFF5C5C5C).withValues(alpha: 0.6)),
+                      ? Colors.white.withValues(alpha: 0.5)
+                      : const Color(0xFF5C5C5C).withValues(alpha: 0.6)),
             size: 16,
           ),
         ),
@@ -807,10 +809,7 @@ class _TitleBarButton extends StatefulWidget {
   final Widget child;
   final VoidCallback onPressed;
 
-  const _TitleBarButton({
-    required this.child,
-    required this.onPressed,
-  });
+  const _TitleBarButton({required this.child, required this.onPressed});
 
   @override
   State<_TitleBarButton> createState() => _TitleBarButtonState();
@@ -822,7 +821,9 @@ class _TitleBarButtonState extends State<_TitleBarButton> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final hoverColor = isDark
         ? Colors.white.withValues(alpha: 0.15)
-        : const Color(0xFFE4D9C8); // Darker warm neutral tan hover background (#E4D9C8)
+        : const Color(
+            0xFFE4D9C8,
+          ); // Darker warm neutral tan hover background (#E4D9C8)
 
     return Material(
       color: Colors.transparent,
@@ -831,11 +832,7 @@ class _TitleBarButtonState extends State<_TitleBarButton> {
         borderRadius: BorderRadius.circular(6),
         hoverColor: hoverColor,
         splashColor: hoverColor.withValues(alpha: 0.2),
-        child: SizedBox(
-          width: 32,
-          height: 32,
-          child: widget.child,
-        ),
+        child: SizedBox(width: 32, height: 32, child: widget.child),
       ),
     );
   }
@@ -873,7 +870,9 @@ class _CloseButtonState extends State<_CloseButton> {
               Icons.close_rounded,
               color: _isHovered
                   ? Colors.white
-                  : (isDark ? Colors.white.withValues(alpha: 0.85) : const Color(0xFF5C5C5C)),
+                  : (isDark
+                        ? Colors.white.withValues(alpha: 0.85)
+                        : const Color(0xFF5C5C5C)),
               size: 16,
             ),
           ),

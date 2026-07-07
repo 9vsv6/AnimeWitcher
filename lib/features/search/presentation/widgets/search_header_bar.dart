@@ -186,7 +186,9 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
               child: Container(
                 margin: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary, // Theme primary (Coral in light, Blue in dark)
+                  color: theme
+                      .colorScheme
+                      .primary, // Theme primary (Coral in light, Blue in dark)
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
@@ -231,7 +233,9 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                               fontFamily: nativeFont,
                               fontSize: 13.0,
                               fontWeight: FontWeight.w400,
-                              color: !isLive ? theme.colorScheme.onPrimary : unselectedTextColor,
+                              color: !isLive
+                                  ? theme.colorScheme.onPrimary
+                                  : unselectedTextColor,
                             ),
                           ),
                         ],
@@ -257,7 +261,9 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                         children: [
                           WaveformEqualizer(
                             isActive: isLive,
-                            inactiveColor: unselectedTextColor.withValues(alpha: 0.6),
+                            inactiveColor: unselectedTextColor.withValues(
+                              alpha: 0.6,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -266,7 +272,9 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                               fontFamily: nativeFont,
                               fontSize: 13.0,
                               fontWeight: FontWeight.w400,
-                              color: isLive ? theme.colorScheme.onPrimary : unselectedTextColor,
+                              color: isLive
+                                  ? theme.colorScheme.onPrimary
+                                  : unselectedTextColor,
                             ),
                           ),
                         ],
@@ -386,11 +394,15 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                               size: 18,
                               color: isFocused
                                   ? theme.colorScheme.primary
-                                  : (isDark ? Colors.white70 : theme.colorScheme.onSurfaceVariant),
+                                  : (isDark
+                                        ? Colors.white70
+                                        : theme.colorScheme.onSurfaceVariant),
                             ),
                             style: IconButton.styleFrom(
                               backgroundColor: isFocused
-                                  ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                                  ? theme.colorScheme.primary.withValues(
+                                      alpha: 0.15,
+                                    )
                                   : Colors.transparent,
                               minimumSize: const Size(32, 32),
                               padding: EdgeInsets.zero,

@@ -81,7 +81,9 @@ class _FocusableItemState extends State<FocusableItem>
           final targetContext = hScroll?.context ?? context;
           final targetRo = targetContext.findRenderObject();
           if (targetRo is RenderBox && targetRo.hasSize) {
-            final top = targetRo.localToGlobal(Offset.zero, ancestor: scrollBox).dy;
+            final top = targetRo
+                .localToGlobal(Offset.zero, ancestor: scrollBox)
+                .dy;
             final bottom = top + targetRo.size.height;
             final viewportH = scrollBox.size.height;
             if (top < 0 || bottom > viewportH) {

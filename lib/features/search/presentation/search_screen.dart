@@ -304,7 +304,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             // Focus Spotlight (Stage Lighting - Soft fanning semi-circle)
             Positioned(
-              top: 76, // Anchored immediately below the search bar (24 top padding + 52 height)
+              top:
+                  76, // Anchored immediately below the search bar (24 top padding + 52 height)
               left: 0,
               right: 0,
               height: 250,
@@ -312,20 +313,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 listenable: _focusNode,
                 builder: (context, child) {
                   if (!_focusNode.hasFocus) return const SizedBox.shrink();
-                  final spotlightColor = isDark ? const Color(0xFF1E40AF) : theme.colorScheme.primary;
+                  final spotlightColor = isDark
+                      ? const Color(0xFF1E40AF)
+                      : theme.colorScheme.primary;
                   return IgnorePointer(
                     child: Center(
                       child: Container(
                         width: 900, // Broader fanning footprint
                         decoration: BoxDecoration(
                           gradient: RadialGradient(
-                            center: Alignment.topCenter, // Fanning downward from the bottom edge of the search bar
+                            center: Alignment
+                                .topCenter, // Fanning downward from the bottom edge of the search bar
                             radius: 1.3,
                             colors: [
-                              spotlightColor.withValues(alpha: isDark ? 0.35 : 0.22), // Soft center source point
-                              spotlightColor.withValues(alpha: isDark ? 0.18 : 0.10), // Smooth bleed
-                              spotlightColor.withValues(alpha: isDark ? 0.06 : 0.03), // Gentle falloff
-                              spotlightColor.withValues(alpha: 0.0),                  // Fade to transparent
+                              spotlightColor.withValues(
+                                alpha: isDark ? 0.35 : 0.22,
+                              ), // Soft center source point
+                              spotlightColor.withValues(
+                                alpha: isDark ? 0.18 : 0.10,
+                              ), // Smooth bleed
+                              spotlightColor.withValues(
+                                alpha: isDark ? 0.06 : 0.03,
+                              ), // Gentle falloff
+                              spotlightColor.withValues(
+                                alpha: 0.0,
+                              ), // Fade to transparent
                             ],
                             stops: const [0.0, 0.35, 0.70, 1.0],
                           ),
@@ -681,9 +693,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             Icon(
               Icons.movie_filter_rounded,
               size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(
-                alpha: 0.65,
-              ),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.65),
             ),
             const SizedBox(height: LayoutConstants.spacingMd),
             Text(
@@ -830,9 +842,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
         ? Colors.white70
         : theme.colorScheme.onSurfaceVariant;
 
-    final textColor = isDark
-        ? Colors.white
-        : theme.colorScheme.onSurface;
+    final textColor = isDark ? Colors.white : theme.colorScheme.onSurface;
 
     final buttonIconColor = isDark
         ? Colors.white54
@@ -912,9 +922,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                       children: [
                         Icon(
                           Icons.search_rounded,
-                          color: isBodyHighlighted
-                              ? highlightColor
-                              : iconColor,
+                          color: isBodyHighlighted ? highlightColor : iconColor,
                           size: 20,
                         ),
                         const SizedBox(width: 16),
@@ -941,11 +949,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
             ),
           ),
           // Vertical divider line between text block and arrow button
-          Container(
-            width: 1.0,
-            height: 24.0,
-            color: dividerColor,
-          ),
+          Container(width: 1.0, height: 24.0, color: dividerColor),
           // Fill Button Focus (Arrow icon button)
           Focus(
             focusNode: _buttonNode,

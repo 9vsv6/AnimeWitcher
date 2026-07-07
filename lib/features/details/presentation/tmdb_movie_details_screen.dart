@@ -432,10 +432,18 @@ class _TmdbMovieDetailsScreenState
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.0),
-                            Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.15),
-                            Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.45),
-                            Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
+                            Theme.of(
+                              context,
+                            ).scaffoldBackgroundColor.withValues(alpha: 0.0),
+                            Theme.of(
+                              context,
+                            ).scaffoldBackgroundColor.withValues(alpha: 0.15),
+                            Theme.of(
+                              context,
+                            ).scaffoldBackgroundColor.withValues(alpha: 0.45),
+                            Theme.of(
+                              context,
+                            ).scaffoldBackgroundColor.withValues(alpha: 0.8),
                             Theme.of(context).scaffoldBackgroundColor,
                           ],
                           stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
