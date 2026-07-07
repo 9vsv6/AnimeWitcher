@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart'; // For kReleaseMode
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
-import 'features/player/presentation/widgets/hotstar_player_style.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -572,6 +571,16 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final titleBarColor = isDark
+        ? const Color(0xE0050505)
+        : const Color(0xD8FAF8F5); // Transparent warm off-white (85% opacity)
+    final iconColor = isDark
+        ? Colors.white.withValues(alpha: 0.85)
+        : const Color(0xFF5C5C5C); // High contrast text/icon color
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -580,7 +589,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
         height: _hovered ? 48 : 8,
         curve: Curves.easeInOut,
         decoration: BoxDecoration(
-          color: _hovered ? const Color(0xE0050505) : Colors.transparent,
+          color: _hovered ? titleBarColor : Colors.transparent,
           boxShadow: _hovered
               ? [
                   BoxShadow(
@@ -652,7 +661,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                             _isFullScreen
                                 ? Icons.fullscreen_exit_rounded
                                 : Icons.fullscreen_rounded,
-                            color: Colors.white.withValues(alpha: 0.85),
+                            color: iconColor,
                             size: 16,
                           ),
                         ),
@@ -664,7 +673,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                             child: Container(
                               width: 10,
                               height: 1.5,
-                              color: Colors.white.withValues(alpha: 0.85),
+                              color: iconColor,
                             ),
                           ),
                         ),
@@ -694,9 +703,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                                             height: 8,
                                             decoration: BoxDecoration(
                                               border: Border.all(
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.85,
-                                                ),
+                                                color: iconColor,
                                                 width: 1.2,
                                               ),
                                             ),
@@ -709,11 +716,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                                             width: 8,
                                             height: 8,
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFF050505),
+                                              color: isDark
+                                                  ? const Color(0xFF050505)
+                                                  : const Color(0xFFFAF8F5), // overlap box bg matches titlebar
                                               border: Border.all(
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.85,
-                                                ),
+                                                color: iconColor,
                                                 width: 1.2,
                                               ),
                                             ),
@@ -727,9 +734,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                                     height: 10,
                                     decoration: BoxDecoration(
                                       border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.85,
-                                        ),
+                                        color: iconColor,
                                         width: 1.2,
                                       ),
                                     ),
@@ -738,14 +743,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                         ),
                         const SizedBox(width: 6),
                         // 4. Close
-                        _TitleBarButton(
-                          hoverColor: Colors.red.withValues(alpha: 0.8),
+                        _CloseButton(
                           onPressed: () => windowManager.close(),
-                          child: Icon(
-                            Icons.close_rounded,
-                            color: Colors.white.withValues(alpha: 0.85),
-                            size: 16,
-                          ),
                         ),
                       ],
                     ),
@@ -771,30 +770,31 @@ class _PinButton extends StatefulWidget {
 }
 
 class _PinButtonState extends State<_PinButton> {
-  bool _isHovered = false;
-
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final hoverColor = isDark
+        ? Colors.white.withValues(alpha: 0.15)
+        : const Color(0xFFE4D9C8); // Darker warm neutral tan hover background (#E4D9C8)
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         onTap: widget.onPressed,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+        borderRadius: BorderRadius.circular(6),
+        hoverColor: hoverColor,
+        splashColor: hoverColor.withValues(alpha: 0.2),
+        child: SizedBox(
           width: 32,
           height: 32,
-          decoration: BoxDecoration(
-            color: _isHovered
-                ? Colors.white.withValues(alpha: 0.15)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
           child: Icon(
             widget.isActive ? Icons.push_pin_rounded : Icons.push_pin_outlined,
             color: widget.isActive
-                ? HotstarPlayerStyle.accent
-                : Colors.white.withValues(alpha: _isHovered ? 0.75 : 0.4),
+                ? theme.colorScheme.primary
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.5)
+                    : const Color(0xFF5C5C5C).withValues(alpha: 0.6)),
             size: 16,
           ),
         ),
@@ -806,12 +806,10 @@ class _PinButtonState extends State<_PinButton> {
 class _TitleBarButton extends StatefulWidget {
   final Widget child;
   final VoidCallback onPressed;
-  final Color? hoverColor;
 
   const _TitleBarButton({
     required this.child,
     required this.onPressed,
-    this.hoverColor,
   });
 
   @override
@@ -819,26 +817,66 @@ class _TitleBarButton extends StatefulWidget {
 }
 
 class _TitleBarButtonState extends State<_TitleBarButton> {
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hoverColor = isDark
+        ? Colors.white.withValues(alpha: 0.15)
+        : const Color(0xFFE4D9C8); // Darker warm neutral tan hover background (#E4D9C8)
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onPressed,
+        borderRadius: BorderRadius.circular(6),
+        hoverColor: hoverColor,
+        splashColor: hoverColor.withValues(alpha: 0.2),
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+class _CloseButton extends StatefulWidget {
+  final VoidCallback onPressed;
+
+  const _CloseButton({required this.onPressed});
+
+  @override
+  State<_CloseButton> createState() => _CloseButtonState();
+}
+
+class _CloseButtonState extends State<_CloseButton> {
   bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: _isHovered
-                ? (widget.hoverColor ?? Colors.white.withValues(alpha: 0.15))
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: Colors.transparent,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(6),
+          hoverColor: Colors.red.withValues(alpha: 0.8),
+          splashColor: Colors.red,
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Icon(
+              Icons.close_rounded,
+              color: _isHovered
+                  ? Colors.white
+                  : (isDark ? Colors.white.withValues(alpha: 0.85) : const Color(0xFF5C5C5C)),
+              size: 16,
+            ),
           ),
-          child: widget.child,
         ),
       ),
     );

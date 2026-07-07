@@ -154,8 +154,13 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isLive = widget.value == SearchFilter.live;
     final nativeFont = theme.textTheme.bodyLarge?.fontFamily;
+
+    final unselectedTextColor = isDark
+        ? Colors.white60
+        : theme.colorScheme.onSurfaceVariant;
 
     return Container(
       width: 310,
@@ -181,11 +186,11 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
               child: Container(
                 margin: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1D4ED8), // Premium Navy Blue indicator
+                  color: theme.colorScheme.primary, // Theme primary (Coral in light, Blue in dark)
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF1D4ED8).withValues(alpha: 0.25),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.25),
                       blurRadius: 5,
                       offset: const Offset(0, 1.5),
                     ),
@@ -226,7 +231,7 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                               fontFamily: nativeFont,
                               fontSize: 13.0,
                               fontWeight: FontWeight.w400,
-                              color: !isLive ? Colors.white : Colors.white60,
+                              color: !isLive ? theme.colorScheme.onPrimary : unselectedTextColor,
                             ),
                           ),
                         ],
@@ -252,7 +257,7 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                         children: [
                           WaveformEqualizer(
                             isActive: isLive,
-                            inactiveColor: Colors.white.withValues(alpha: 0.6),
+                            inactiveColor: unselectedTextColor.withValues(alpha: 0.6),
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -261,7 +266,7 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                               fontFamily: nativeFont,
                               fontSize: 13.0,
                               fontWeight: FontWeight.w400,
-                              color: isLive ? Colors.white : Colors.white60,
+                              color: isLive ? theme.colorScheme.onPrimary : unselectedTextColor,
                             ),
                           ),
                         ],
@@ -313,6 +318,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
     final filter = ref.watch(searchFilterProvider);
     final searchResultsAsync = ref.watch(searchResultsProvider);
     final isCompact = widget.isCompact;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Center(
       child: Container(
@@ -337,7 +343,9 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                     alpha: 0.3,
                   ),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : theme.colorScheme.outlineVariant,
                     width: 1.2,
                   ),
                 ),
@@ -377,15 +385,16 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                               Icons.clear_rounded,
                               size: 18,
                               color: isFocused
-                                  ? const Color(0xFF1F80E0)
-                                  : Colors.white70,
+                                  ? theme.colorScheme.primary
+                                  : (isDark ? Colors.white70 : theme.colorScheme.onSurfaceVariant),
                             ),
                             style: IconButton.styleFrom(
                               backgroundColor: isFocused
-                                  ? const Color(
-                                      0xFF1F80E0,
-                                    ).withValues(alpha: 0.2)
+                                  ? theme.colorScheme.primary.withValues(alpha: 0.15)
                                   : Colors.transparent,
+                              minimumSize: const Size(32, 32),
+                              padding: EdgeInsets.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             onPressed: () {
                               widget.textController.clear();

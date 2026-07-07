@@ -229,7 +229,7 @@ class _TabChipState extends State<_TabChip> {
                     ),
               borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
               border: showHighlight
-                  ? Border.all(color: Colors.white, width: 2)
+                  ? Border.all(color: theme.colorScheme.primary, width: 2)
                   : (widget.selected
                         ? Border.all(
                             color: theme.colorScheme.primary.withValues(

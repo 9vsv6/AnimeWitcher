@@ -585,25 +585,24 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
                       ? [
                           Colors.black.withValues(alpha: 0.2),
                           Colors.transparent,
-                          scaffoldColor.withValues(alpha: 0.72),
-                          scaffoldColor,
+                          Colors.black.withValues(alpha: 0.45),
+                          Colors.black.withValues(alpha: 0.75),
                         ]
                       : [
                           Colors.black.withValues(alpha: 0.3),
                           Colors.transparent,
-                          Colors.black.withValues(alpha: 0.1),
-                          scaffoldColor.withValues(alpha: 0.8),
-                          scaffoldColor,
+                          Colors.black.withValues(alpha: 0.4),
+                          Colors.black.withValues(alpha: 0.8),
                         ],
                   stops: isDesktop
                       ? const [0.0, 0.35, 0.75, 1.0]
-                      : const [0.0, 0.4, 0.6, 0.85, 1.0],
+                      : const [0.0, 0.4, 0.6, 1.0],
                 ),
               ),
             ),
           ),
 
-          // 2.5. Fixed Bottom Feather
+          // 2.5. Fixed Bottom Feather (eased page transition scrim)
           Positioned(
             bottom: -1,
             left: 0,
@@ -615,7 +614,14 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [scaffoldColor.withValues(alpha: 0), scaffoldColor],
+                    colors: [
+                      scaffoldColor.withValues(alpha: 0.0),
+                      scaffoldColor.withValues(alpha: 0.15),
+                      scaffoldColor.withValues(alpha: 0.45),
+                      scaffoldColor.withValues(alpha: 0.8),
+                      scaffoldColor,
+                    ],
+                    stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
                   ),
                 ),
               ),

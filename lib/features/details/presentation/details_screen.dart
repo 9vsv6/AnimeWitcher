@@ -144,6 +144,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                       ),
                     ),
                   ),
+                  // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -151,12 +152,26 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.5),
+                          Colors.black.withValues(alpha: 0.65),
+                        ],
+                        stops: const [0.5, 1.0],
+                      ),
+                    ),
+                  ),
+                  // 2. Blend-into-page transition: Theme-aware eased fade to surface
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.0),
+                          Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.15),
+                          Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.45),
+                          Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
                           Theme.of(context).scaffoldBackgroundColor,
                         ],
-                        stops: const [0.0, 0.6, 1.0],
+                        stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
                       ),
                     ),
                   ),

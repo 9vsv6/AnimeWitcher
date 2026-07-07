@@ -495,11 +495,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           bottom: 0,
           left: 0,
           right: 0,
-          height: 32,
+          height: 48, // Taller height for smoother blend
           child: ValueListenableBuilder<bool>(
             valueListenable: _showBottomFade,
             builder: (context, show, _) {
               if (!show) return const SizedBox.shrink();
+              final surfaceColor = Theme.of(context).colorScheme.surface;
               return IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
@@ -507,9 +508,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.transparent,
-                        Theme.of(context).scaffoldBackgroundColor,
+                        surfaceColor.withValues(alpha: 0.0),
+                        surfaceColor.withValues(alpha: 0.15),
+                        surfaceColor.withValues(alpha: 0.45),
+                        surfaceColor.withValues(alpha: 0.8),
+                        surfaceColor,
                       ],
+                      stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
                     ),
                   ),
                 ),

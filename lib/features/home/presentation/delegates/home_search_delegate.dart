@@ -16,7 +16,7 @@ class HomeSearchDelegate extends SearchDelegate<void> {
   HomeSearchDelegate({this.initialQuery})
     : super(
         searchFieldLabel: 'Search movies, series...',
-        searchFieldStyle: const TextStyle(color: Colors.white70, fontSize: 18),
+        searchFieldStyle: null,
       ) {
     if (initialQuery != null) {
       query = initialQuery!;
@@ -42,6 +42,12 @@ class HomeSearchDelegate extends SearchDelegate<void> {
       textSelectionTheme: TextSelectionThemeData(
         cursorColor: theme.colorScheme.primary,
         selectionColor: theme.colorScheme.primary.withValues(alpha: 0.3),
+      ),
+      textTheme: theme.textTheme.copyWith(
+        titleMedium: TextStyle(
+          color: theme.colorScheme.onSurface,
+          fontSize: 18,
+        ),
       ),
     );
   }
@@ -259,7 +265,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
                 fontFamily: nativeFont,
                 fontSize: 16.0,
                 fontWeight: FontWeight.w400,
-                color: Colors.white70,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 16),

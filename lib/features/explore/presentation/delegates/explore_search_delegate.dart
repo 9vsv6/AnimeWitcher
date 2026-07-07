@@ -16,7 +16,7 @@ class ExploreSearchDelegate extends SearchDelegate<void> {
   ExploreSearchDelegate()
     : super(
         searchFieldLabel: 'Search movies, tv shows...',
-        searchFieldStyle: const TextStyle(color: Colors.white70, fontSize: 18),
+        searchFieldStyle: null,
       );
 
   @override
@@ -38,6 +38,12 @@ class ExploreSearchDelegate extends SearchDelegate<void> {
       textSelectionTheme: TextSelectionThemeData(
         cursorColor: theme.colorScheme.primary,
         selectionColor: theme.colorScheme.primary.withValues(alpha: 0.3),
+      ),
+      textTheme: theme.textTheme.copyWith(
+        titleMedium: TextStyle(
+          color: theme.colorScheme.onSurface,
+          fontSize: 18,
+        ),
       ),
     );
   }
@@ -291,7 +297,7 @@ class _SearchResultsGridState extends ConsumerState<_SearchResultsGrid> {
                 fontFamily: nativeFont,
                 fontSize: 16.0,
                 fontWeight: FontWeight.w400,
-                color: Colors.white70,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 16),

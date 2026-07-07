@@ -411,24 +411,34 @@ class _TmdbMovieDetailsScreenState
                         ),
                       ),
                     ),
+                    // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Theme.of(
-                              context,
-                            ).scaffoldBackgroundColor.withValues(alpha: 0.0),
-                            Theme.of(
-                              context,
-                            ).scaffoldBackgroundColor.withValues(alpha: 0.0),
-                            Theme.of(
-                              context,
-                            ).scaffoldBackgroundColor.withValues(alpha: 0.8),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.65),
+                          ],
+                          stops: const [0.4, 1.0],
+                        ),
+                      ),
+                    ),
+                    // 2. Blend-into-page transition: Theme-aware eased fade to surface
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.0),
+                            Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.15),
+                            Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.45),
+                            Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
                             Theme.of(context).scaffoldBackgroundColor,
                           ],
-                          stops: const [0.0, 0.4, 0.8, 1.0],
+                          stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
                         ),
                       ),
                     ),

@@ -206,51 +206,105 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (isWidescreen) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: Stack(
           children: [
-            // Cinematic Background Image - Local Asset
-            Positioned.fill(
-              child: Image.asset(
-                'assets/images/search_background.jpg',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    const SizedBox.shrink(),
-              ),
-            ),
-            // Rich Architectural Stage Overlay (Vignette + Dark overlay)
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(
-                    alpha: 0.7,
-                  ), // Rich dark overlay
+            // Cinematic Background Image - Local Asset (Dark Mode only)
+            if (isDark)
+              Positioned.fill(
+                child: Image.asset(
+                  'assets/images/search_background.jpg',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox.shrink(),
                 ),
               ),
-            ),
-            // Radial Vignette Overlay centered on search area
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment.center,
-                    radius: 1.1,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.1),
-                      Colors.black.withValues(alpha: 0.85),
-                      Colors.black.withValues(alpha: 0.98),
-                    ],
-                    stops: const [0.0, 0.65, 1.0],
+            // Rich Architectural Stage Overlay (Vignette + Dark overlay - Dark Mode only)
+            if (isDark)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(
+                      alpha: 0.7,
+                    ), // Rich dark overlay
                   ),
                 ),
               ),
-            ),
-            // Focus Spotlight (Stage Lighting)
+            // Radial Vignette Overlay centered on search area (Dark Mode only)
+            if (isDark)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment.center,
+                      radius: 1.1,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.1),
+                        Colors.black.withValues(alpha: 0.85),
+                        Colors.black.withValues(alpha: 0.98),
+                      ],
+                      stops: const [0.0, 0.65, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            // Left-to-right fade to blend backdrop image with the sidebar / background (Dark Mode only)
+            if (isDark)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 320, // Wide fanning width to ease the transition
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          theme.scaffoldBackgroundColor,
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.85),
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.50),
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.18),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.25, 0.55, 0.8, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // Top-to-bottom edge vignette to mask out top/bottom image boundaries/black letterboxing (Dark Mode only)
+            if (isDark)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          theme.scaffoldBackgroundColor,
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.8),
+                          Colors.transparent,
+                          Colors.transparent,
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.8),
+                          theme.scaffoldBackgroundColor,
+                        ],
+                        stops: const [0.0, 0.08, 0.2, 0.8, 0.92, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // Focus Spotlight (Stage Lighting - Soft fanning semi-circle)
             Positioned(
-              top:
-                  76, // Anchored to bottom edge of search bar (24 top padding + 52 height)
+              top: 76, // Anchored immediately below the search bar (24 top padding + 52 height)
               left: 0,
               right: 0,
               height: 250,
@@ -258,27 +312,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 listenable: _focusNode,
                 builder: (context, child) {
                   if (!_focusNode.hasFocus) return const SizedBox.shrink();
+                  final spotlightColor = isDark ? const Color(0xFF1E40AF) : theme.colorScheme.primary;
                   return IgnorePointer(
                     child: Center(
                       child: Container(
                         width: 900, // Broader fanning footprint
                         decoration: BoxDecoration(
                           gradient: RadialGradient(
-                            center: Alignment
-                                .topCenter, // Anchored to the bottom edge of the search bar
+                            center: Alignment.topCenter, // Fanning downward from the bottom edge of the search bar
                             radius: 1.3,
                             colors: [
-                              const Color(0xFF1E40AF).withValues(
-                                alpha: 0.50,
-                              ), // Strong source point deep premium blue
-                              const Color(
-                                0xFF1D4ED8,
-                              ).withValues(alpha: 0.15), // Bleeding downward
-                              const Color(0xFF1E40AF).withValues(
-                                alpha: 0.0,
-                              ), // Falloff to transparent
+                              spotlightColor.withValues(alpha: isDark ? 0.35 : 0.22), // Soft center source point
+                              spotlightColor.withValues(alpha: isDark ? 0.18 : 0.10), // Smooth bleed
+                              spotlightColor.withValues(alpha: isDark ? 0.06 : 0.03), // Gentle falloff
+                              spotlightColor.withValues(alpha: 0.0),                  // Fade to transparent
                             ],
-                            stops: const [0.0, 0.45, 1.0],
+                            stops: const [0.0, 0.35, 0.70, 1.0],
                           ),
                         ),
                       ),
@@ -433,6 +482,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 } else if (value.text.isNotEmpty) {
                   suffix = IconButton(
                     icon: const Icon(Icons.clear, size: 18),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(32, 32),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     onPressed: () {
                       _controller.clear();
                       ref
@@ -627,9 +681,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             Icon(
               Icons.movie_filter_rounded,
               size: 64,
-              color: Colors.white.withValues(
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(
                 alpha: 0.65,
-              ), // Soft visible 65% opacity
+              ),
             ),
             const SizedBox(height: LayoutConstants.spacingMd),
             Text(
@@ -665,7 +719,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               fontFamily: nativeFont,
               fontSize: 16.0,
               fontWeight: FontWeight.w400,
-              color: Colors.white70,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 16),
@@ -742,27 +796,63 @@ class _SuggestionCardState extends State<_SuggestionCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final nativeFont = theme.textTheme.bodyLarge?.fontFamily;
 
     final isBodyHighlighted = _isBodyHovered || _bodyNode.hasFocus;
     final isButtonHighlighted = _isButtonHovered || _buttonNode.hasFocus;
     final isAnyHighlighted = isBodyHighlighted || isButtonHighlighted;
 
+    final baseBorderColor = isDark
+        ? Colors.white.withValues(alpha: 0.1)
+        : theme.colorScheme.outlineVariant;
+    final highlightColor = isDark
+        ? const Color(0xFF1F80E0)
+        : theme.colorScheme.primary;
+
     final borderColor = isAnyHighlighted
-        ? const Color(0xFF1F80E0).withValues(alpha: 0.85)
-        : Colors.white.withValues(alpha: 0.1);
+        ? highlightColor.withValues(alpha: 0.85)
+        : baseBorderColor;
+
+    final cardBgColor = isDark
+        ? Colors.black.withValues(alpha: 0.65)
+        : theme.colorScheme.surfaceContainer;
+
+    final bodyHighlightBg = isDark
+        ? const Color(0xFF1F80E0).withValues(alpha: 0.25)
+        : theme.colorScheme.primary.withValues(alpha: 0.12);
+
+    final buttonHighlightBg = isDark
+        ? const Color(0xFF1F80E0).withValues(alpha: 0.35)
+        : theme.colorScheme.primary.withValues(alpha: 0.18);
+
+    final iconColor = isDark
+        ? Colors.white70
+        : theme.colorScheme.onSurfaceVariant;
+
+    final textColor = isDark
+        ? Colors.white
+        : theme.colorScheme.onSurface;
+
+    final buttonIconColor = isDark
+        ? Colors.white54
+        : theme.colorScheme.onSurfaceVariant;
+
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : theme.colorScheme.outlineVariant;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.65), // Card background
+        color: cardBgColor, // Theme-aware card background
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor, width: 1.5),
         boxShadow: isAnyHighlighted
             ? [
                 BoxShadow(
-                  color: const Color(0xFF1F80E0).withValues(alpha: 0.2),
+                  color: highlightColor.withValues(alpha: 0.2),
                   blurRadius: 8,
                   spreadRadius: 1,
                 ),
@@ -811,7 +901,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                     ),
                     decoration: BoxDecoration(
                       color: isBodyHighlighted
-                          ? const Color(0xFF1F80E0).withValues(alpha: 0.25)
+                          ? bodyHighlightBg
                           : Colors.transparent,
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(11),
@@ -823,8 +913,8 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                         Icon(
                           Icons.search_rounded,
                           color: isBodyHighlighted
-                              ? const Color(0xFF1F80E0)
-                              : Colors.white70,
+                              ? highlightColor
+                              : iconColor,
                           size: 20,
                         ),
                         const SizedBox(width: 16),
@@ -835,7 +925,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontFamily: nativeFont,
-                              color: Colors.white,
+                              color: textColor,
                               fontSize: 16.0,
                               fontWeight: isBodyHighlighted
                                   ? FontWeight.w500
@@ -854,7 +944,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
           Container(
             width: 1.0,
             height: 24.0,
-            color: Colors.white.withValues(alpha: 0.08),
+            color: dividerColor,
           ),
           // Fill Button Focus (Arrow icon button)
           Focus(
@@ -895,7 +985,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                   ),
                   decoration: BoxDecoration(
                     color: isButtonHighlighted
-                        ? const Color(0xFF1F80E0).withValues(alpha: 0.35)
+                        ? buttonHighlightBg
                         : Colors.transparent,
                     borderRadius: const BorderRadius.only(
                       topRight: Radius.circular(11),
@@ -905,8 +995,8 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                   child: Icon(
                     Icons.north_west_rounded,
                     color: isButtonHighlighted
-                        ? const Color(0xFF1F80E0)
-                        : Colors.white54,
+                        ? highlightColor
+                        : buttonIconColor,
                     size: 20,
                   ),
                 ),
