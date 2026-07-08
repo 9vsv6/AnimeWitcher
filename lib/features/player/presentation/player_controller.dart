@@ -1292,18 +1292,16 @@ class PlayerController extends Notifier<PlayerState> {
           if (isSeries &&
               currentEp != null &&
               currentEp.dubStatus != DubStatus.none) {
-            episodes = episodes?.where((e) => e.dubStatus == currentEp.dubStatus).toList();
+            episodes = episodes
+                ?.where((e) => e.dubStatus == currentEp.dubStatus)
+                .toList();
           }
 
           int? currentIndex;
           if (currentEp != null) {
-            currentIndex = episodes?.indexWhere(
-              (e) => e.url == currentEp.url,
-            );
+            currentIndex = episodes?.indexWhere((e) => e.url == currentEp.url);
           } else {
-            currentIndex = episodes?.indexWhere(
-              (e) => e.url == _videoUrl,
-            );
+            currentIndex = episodes?.indexWhere((e) => e.url == _videoUrl);
           }
           if (currentIndex != null &&
               currentIndex != -1 &&
@@ -1349,7 +1347,9 @@ class PlayerController extends Notifier<PlayerState> {
     if (isSeries &&
         currentEp != null &&
         currentEp.dubStatus != DubStatus.none) {
-      episodes = episodes?.where((e) => e.dubStatus == currentEp.dubStatus).toList();
+      episodes = episodes
+          ?.where((e) => e.dubStatus == currentEp.dubStatus)
+          .toList();
     }
 
     int? currentIndex;
@@ -1832,18 +1832,16 @@ class PlayerController extends Notifier<PlayerState> {
           if (isSeries &&
               currentEp != null &&
               currentEp.dubStatus != DubStatus.none) {
-            episodes = episodes?.where((e) => e.dubStatus == currentEp.dubStatus).toList();
+            episodes = episodes
+                ?.where((e) => e.dubStatus == currentEp.dubStatus)
+                .toList();
           }
 
           int? currentIndex;
           if (currentEp != null) {
-            currentIndex = episodes?.indexWhere(
-              (e) => e.url == currentEp.url,
-            );
+            currentIndex = episodes?.indexWhere((e) => e.url == currentEp.url);
           } else {
-            currentIndex = episodes?.indexWhere(
-              (e) => e.url == _videoUrl,
-            );
+            currentIndex = episodes?.indexWhere((e) => e.url == _videoUrl);
           }
           if (currentIndex != null &&
               currentIndex != -1 &&
@@ -3251,7 +3249,9 @@ class PlayerController extends Notifier<PlayerState> {
     if (isSeries &&
         currentEp != null &&
         currentEp.dubStatus != DubStatus.none) {
-      episodes = episodes?.where((e) => e.dubStatus == currentEp.dubStatus).toList();
+      episodes = episodes
+          ?.where((e) => e.dubStatus == currentEp.dubStatus)
+          .toList();
     }
 
     int? currentIndex;
@@ -3475,13 +3475,13 @@ class PlayerController extends Notifier<PlayerState> {
           } else if (currentEpisode != null) {
             // Find next episode
             List<Episode> episodes = _item.episodes ?? const <Episode>[];
-            if (isSeries &&
-                currentEpisode.dubStatus != DubStatus.none) {
-              episodes = episodes.where((e) => e.dubStatus == currentEpisode.dubStatus).toList();
+            if (isSeries && currentEpisode.dubStatus != DubStatus.none) {
+              episodes = episodes
+                  .where((e) => e.dubStatus == currentEpisode.dubStatus)
+                  .toList();
             }
             final currentIndex = episodes.indexOf(currentEpisode);
-            if (currentIndex != -1 &&
-                currentIndex < episodes.length - 1) {
+            if (currentIndex != -1 && currentIndex < episodes.length - 1) {
               final nextEpisode = episodes[currentIndex + 1];
               // Save NEXT episode as current progress (reset to 0)
               historyNotifier.saveProgress(

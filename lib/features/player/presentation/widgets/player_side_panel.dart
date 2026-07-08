@@ -833,13 +833,18 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
         ) ??
         ref.read(playerControllerProvider.notifier).currentEpisodeUrl;
     var episodes = widget.item.episodes ?? const <Episode>[];
-    final currentEpisode = episodes.firstWhereOrNull((e) => e.url == currentUrl);
-    final isSeries = widget.item.contentType == MultimediaContentType.series ||
+    final currentEpisode = episodes.firstWhereOrNull(
+      (e) => e.url == currentUrl,
+    );
+    final isSeries =
+        widget.item.contentType == MultimediaContentType.series ||
         widget.item.contentType == MultimediaContentType.anime;
     if (isSeries &&
         currentEpisode != null &&
         currentEpisode.dubStatus != DubStatus.none) {
-      episodes = episodes.where((e) => e.dubStatus == currentEpisode.dubStatus).toList();
+      episodes = episodes
+          .where((e) => e.dubStatus == currentEpisode.dubStatus)
+          .toList();
     }
     final historyRepo = ref.read(historyRepositoryProvider);
 
@@ -1096,10 +1101,7 @@ class _DubBadge extends StatelessWidget {
   final DubStatus dubStatus;
   final bool isCurrent;
 
-  const _DubBadge({
-    required this.dubStatus,
-    required this.isCurrent,
-  });
+  const _DubBadge({required this.dubStatus, required this.isCurrent});
 
   @override
   Widget build(BuildContext context) {
@@ -1132,10 +1134,7 @@ class _DubBadge extends StatelessWidget {
             spreadRadius: 0,
           ),
         ],
-        border: Border.all(
-          color: tint.withValues(alpha: 0.25),
-          width: 0.5,
-        ),
+        border: Border.all(color: tint.withValues(alpha: 0.25), width: 0.5),
       ),
       child: Text(
         label,
