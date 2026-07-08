@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../player_gesture_handler.dart';
 import 'hotstar_edge_rail.dart';
-import 'hotstar_player_style.dart';
 
 /// Rebuilds only when [PlayerGestureHandler] notifies (OSD/volume state).
 /// Use this instead of listening to the handler in the full controls to avoid
@@ -151,7 +150,7 @@ class PlayerOsdOverlay extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(osdIcon, color: HotstarPlayerStyle.accent, size: 24),
+              Icon(osdIcon, color: Colors.white, size: 24),
               const SizedBox(width: 12),
               Text(
                 osdLabel,

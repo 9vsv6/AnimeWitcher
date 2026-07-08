@@ -801,6 +801,7 @@ class PlayerController extends Notifier<PlayerState> {
           _item.contentType == MultimediaContentType.anime);
   MultimediaItem? get multimediaItem => _isInitialized ? _item : null;
   String? get currentEpisodeUrl => _episode?.url ?? _videoUrl;
+  Episode? get currentEpisode => _episode ?? _resolveCurrentEpisode();
 
   Future<void> init({
     required Player player,
@@ -1286,20 +1287,29 @@ class PlayerController extends Notifier<PlayerState> {
         // Show next episode overlay if within last 15 seconds or video ended.
         // It persists until the user dismisses it or loads a new episode.
         if (remainingSecs <= 15.0) {
+          final currentEp = _episode ?? _resolveCurrentEpisode();
+          List<Episode>? episodes = _item.episodes;
+          if (isSeries &&
+              currentEp != null &&
+              currentEp.dubStatus != DubStatus.none) {
+            episodes = episodes?.where((e) => e.dubStatus == currentEp.dubStatus).toList();
+          }
+
           int? currentIndex;
-          if (_episode != null) {
-            currentIndex = _item.episodes?.indexWhere(
-              (e) => e.url == _episode!.url,
+          if (currentEp != null) {
+            currentIndex = episodes?.indexWhere(
+              (e) => e.url == currentEp.url,
             );
           } else {
-            currentIndex = _item.episodes?.indexWhere(
+            currentIndex = episodes?.indexWhere(
               (e) => e.url == _videoUrl,
             );
           }
           if (currentIndex != null &&
               currentIndex != -1 &&
-              currentIndex < _item.episodes!.length - 1) {
-            final next = _item.episodes![currentIndex + 1];
+              episodes != null &&
+              currentIndex < episodes.length - 1) {
+            final next = episodes[currentIndex + 1];
             if (!_userDismissedOverlay && !state.showNextEpisodeOverlay) {
               state = state.copyWith(
                 showNextEpisodeOverlay: true,
@@ -1334,17 +1344,26 @@ class PlayerController extends Notifier<PlayerState> {
     }
     if (_userDismissedOverlay) return;
 
+    final currentEp = _episode ?? _resolveCurrentEpisode();
+    List<Episode>? episodes = _item.episodes;
+    if (isSeries &&
+        currentEp != null &&
+        currentEp.dubStatus != DubStatus.none) {
+      episodes = episodes?.where((e) => e.dubStatus == currentEp.dubStatus).toList();
+    }
+
     int? currentIndex;
-    if (_episode != null) {
-      currentIndex = _item.episodes?.indexWhere((e) => e.url == _episode!.url);
+    if (currentEp != null) {
+      currentIndex = episodes?.indexWhere((e) => e.url == currentEp.url);
     } else {
-      currentIndex = _item.episodes?.indexWhere((e) => e.url == _videoUrl);
+      currentIndex = episodes?.indexWhere((e) => e.url == _videoUrl);
     }
 
     if (currentIndex != null &&
         currentIndex != -1 &&
-        currentIndex < _item.episodes!.length - 1) {
-      final next = _item.episodes![currentIndex + 1];
+        episodes != null &&
+        currentIndex < episodes.length - 1) {
+      final next = episodes[currentIndex + 1];
       _isNextEpisodeOverlayForced = true;
       state = state.copyWith(
         showNextEpisodeOverlay: true,
@@ -1808,20 +1827,29 @@ class PlayerController extends Notifier<PlayerState> {
         // Show next episode overlay if within last 15 seconds or video ended.
         // It persists until the user dismisses it or loads a new episode.
         if (remainingSecs <= 15.0) {
+          final currentEp = _episode ?? _resolveCurrentEpisode();
+          List<Episode>? episodes = _item.episodes;
+          if (isSeries &&
+              currentEp != null &&
+              currentEp.dubStatus != DubStatus.none) {
+            episodes = episodes?.where((e) => e.dubStatus == currentEp.dubStatus).toList();
+          }
+
           int? currentIndex;
-          if (_episode != null) {
-            currentIndex = _item.episodes?.indexWhere(
-              (e) => e.url == _episode!.url,
+          if (currentEp != null) {
+            currentIndex = episodes?.indexWhere(
+              (e) => e.url == currentEp.url,
             );
           } else {
-            currentIndex = _item.episodes?.indexWhere(
+            currentIndex = episodes?.indexWhere(
               (e) => e.url == _videoUrl,
             );
           }
           if (currentIndex != null &&
               currentIndex != -1 &&
-              currentIndex < _item.episodes!.length - 1) {
-            final next = _item.episodes![currentIndex + 1];
+              episodes != null &&
+              currentIndex < episodes.length - 1) {
+            final next = episodes[currentIndex + 1];
             if (!_userDismissedOverlay && !state.showNextEpisodeOverlay) {
               state = state.copyWith(
                 showNextEpisodeOverlay: true,
@@ -2088,7 +2116,7 @@ class PlayerController extends Notifier<PlayerState> {
 
   Episode? _resolveCurrentEpisode() {
     if (_episode != null) return _episode;
-    if (_item.contentType != MultimediaContentType.series) return null;
+    if (!isSeries) return null;
     return _item.episodes?.firstWhereOrNull((e) => e.url == _videoUrl);
   }
 
@@ -3218,17 +3246,26 @@ class PlayerController extends Notifier<PlayerState> {
       return;
     }
 
+    final currentEp = _episode ?? _resolveCurrentEpisode();
+    List<Episode>? episodes = _item.episodes;
+    if (isSeries &&
+        currentEp != null &&
+        currentEp.dubStatus != DubStatus.none) {
+      episodes = episodes?.where((e) => e.dubStatus == currentEp.dubStatus).toList();
+    }
+
     int? currentIndex;
-    if (_episode != null) {
-      currentIndex = _item.episodes?.indexWhere((e) => e.url == _episode!.url);
+    if (currentEp != null) {
+      currentIndex = episodes?.indexWhere((e) => e.url == currentEp.url);
     } else {
-      currentIndex = _item.episodes?.indexWhere((e) => e.url == _videoUrl);
+      currentIndex = episodes?.indexWhere((e) => e.url == _videoUrl);
     }
 
     if (currentIndex != null &&
         currentIndex != -1 &&
-        currentIndex < _item.episodes!.length - 1) {
-      final nextEpisode = _item.episodes![currentIndex + 1];
+        episodes != null &&
+        currentIndex < episodes.length - 1) {
+      final nextEpisode = episodes[currentIndex + 1];
 
       // Smart Next Episode: Check for downloaded version
       final downloadService = ref.read(downloadServiceProvider);
@@ -3437,10 +3474,15 @@ class PlayerController extends Notifier<PlayerState> {
             return;
           } else if (currentEpisode != null) {
             // Find next episode
-            final currentIndex = _item.episodes!.indexOf(currentEpisode);
+            List<Episode> episodes = _item.episodes ?? const <Episode>[];
+            if (isSeries &&
+                currentEpisode.dubStatus != DubStatus.none) {
+              episodes = episodes.where((e) => e.dubStatus == currentEpisode.dubStatus).toList();
+            }
+            final currentIndex = episodes.indexOf(currentEpisode);
             if (currentIndex != -1 &&
-                currentIndex < _item.episodes!.length - 1) {
-              final nextEpisode = _item.episodes![currentIndex + 1];
+                currentIndex < episodes.length - 1) {
+              final nextEpisode = episodes[currentIndex + 1];
               // Save NEXT episode as current progress (reset to 0)
               historyNotifier.saveProgress(
                 itemToSave,

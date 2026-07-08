@@ -827,12 +827,20 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
     });
 
     final l10n = AppLocalizations.of(context)!;
-    final episodes = widget.item.episodes ?? const <Episode>[];
     final currentUrl =
         ref.watch(
           playerControllerProvider.select((s) => s.currentStream?.url),
         ) ??
         ref.read(playerControllerProvider.notifier).currentEpisodeUrl;
+    var episodes = widget.item.episodes ?? const <Episode>[];
+    final currentEpisode = episodes.firstWhereOrNull((e) => e.url == currentUrl);
+    final isSeries = widget.item.contentType == MultimediaContentType.series ||
+        widget.item.contentType == MultimediaContentType.anime;
+    if (isSeries &&
+        currentEpisode != null &&
+        currentEpisode.dubStatus != DubStatus.none) {
+      episodes = episodes.where((e) => e.dubStatus == currentEpisode.dubStatus).toList();
+    }
     final historyRepo = ref.read(historyRepositoryProvider);
 
     final seasons = episodes.map((e) => e.season).toSet().toList()..sort();
