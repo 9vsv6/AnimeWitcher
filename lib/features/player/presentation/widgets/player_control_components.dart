@@ -155,53 +155,48 @@ class PlayerBottomBar extends StatelessWidget {
     final double rightPadding = isTv
         ? edge
         : (padding.right > edge ? padding.right : edge);
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: HotstarPlayerStyle.bottomGradient,
-      ),
-      child: SafeArea(
-        left: false,
-        right: false,
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(leftPadding, 2, rightPadding, 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              progressBar,
-              FocusTraversalGroup(
-                child: Focus(
-                  canRequestFocus: false,
-                  skipTraversal: true,
-                  onKeyEvent: isTv ? _handleRowKey : null,
-                  child: Row(
-                    children: [
-                      // Left group: play/pause, lock, next — always visible.
-                      ...leading,
-                      if (isTouch)
-                        // Touch: right-anchored finger-scroll strip so a long
-                        // action list is never clipped out of reach.
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            reverse: true,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: actions,
-                            ),
+    return SafeArea(
+      left: false,
+      right: false,
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(leftPadding, 2, rightPadding, 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            progressBar,
+            FocusTraversalGroup(
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: isTv ? _handleRowKey : null,
+                child: Row(
+                  children: [
+                    // Left group: play/pause, lock, next — always visible.
+                    ...leading,
+                    if (isTouch)
+                      // Touch: right-anchored finger-scroll strip so a long
+                      // action list is never clipped out of reach.
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          reverse: true,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: actions,
                           ),
-                        )
-                      else ...[
-                        // TV/desktop: fixed right-aligned group (D-pad nav).
-                        const Spacer(),
-                        ...actions,
-                      ],
+                        ),
+                      )
+                    else ...[
+                      // TV/desktop: fixed right-aligned group (D-pad nav).
+                      const Spacer(),
+                      ...actions,
                     ],
-                  ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
