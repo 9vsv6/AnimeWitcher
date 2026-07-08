@@ -392,7 +392,7 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
       value: displayValue.clamp(0, maxValue),
       min: 0.0,
       max: maxValue,
-      step: 5 * 60 * 1000.0, // D-pad Left/Right jumps 5 minutes on the remote
+      step: 30 * 1000.0, // D-pad Left/Right jumps 30 seconds on the remote
       focusNode: _scrubFocusNode,
       onArrowUp: widget.onArrowUp,
       onArrowDown: widget.onArrowDown,
