@@ -197,10 +197,6 @@ class _PanelSurface extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     border: Border(
-                      left: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        width: 0.5,
-                      ),
                       right: BorderSide(
                         color: Colors.white.withValues(alpha: 0.12),
                         width: 0.5,
@@ -232,10 +228,6 @@ class _PanelSurface extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     border: Border(
-                      left: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.04),
-                        width: 1.5,
-                      ),
                       right: BorderSide(
                         color: Colors.white.withValues(alpha: 0.04),
                         width: 1.5,

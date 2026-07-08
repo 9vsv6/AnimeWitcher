@@ -557,6 +557,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
   }
 
   Future<void> _updateStates() async {
+    // A short delay gives the OS window manager time to finalize transitions (fullscreen/maximize/etc.)
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (!mounted) return;
     final isMax = await windowManager.isMaximized();
     final isFull = await windowManager.isFullScreen();
     final isAlways = await windowManager.isAlwaysOnTop();
@@ -651,7 +654,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 1. Full Screen Toggle
+                        // 1. Full Screen Toggle / Exit Full Screen
                         _TitleBarButton(
                           onPressed: () async {
                             await windowManager.setFullScreen(!_isFullScreen);
@@ -665,87 +668,89 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                             size: 16,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        // 2. Minimize
-                        _TitleBarButton(
-                          onPressed: () => windowManager.minimize(),
-                          child: Center(
-                            child: Container(
-                              width: 10,
-                              height: 1.5,
-                              color: iconColor,
+                        if (!_isFullScreen) ...[
+                          const SizedBox(width: 6),
+                          // 2. Minimize
+                          _TitleBarButton(
+                            onPressed: () => windowManager.minimize(),
+                            child: Center(
+                              child: Container(
+                                width: 10,
+                                height: 1.5,
+                                color: iconColor,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        // 3. Maximize / Restore
-                        _TitleBarButton(
-                          onPressed: () async {
-                            if (_isMaximized) {
-                              await windowManager.unmaximize();
-                            } else {
-                              await windowManager.maximize();
-                            }
-                            await _updateStates();
-                          },
-                          child: Center(
-                            child: _isMaximized
-                                ? SizedBox(
-                                    width: 12,
-                                    height: 12,
-                                    child: Stack(
-                                      children: [
-                                        Positioned(
-                                          right: 0,
-                                          top: 0,
-                                          child: Container(
-                                            width: 8,
-                                            height: 8,
-                                            decoration: BoxDecoration(
-                                              border: Border.all(
-                                                color: iconColor,
-                                                width: 1.2,
+                          const SizedBox(width: 6),
+                          // 3. Maximize / Restore
+                          _TitleBarButton(
+                            onPressed: () async {
+                              if (_isMaximized) {
+                                await windowManager.unmaximize();
+                              } else {
+                                await windowManager.maximize();
+                              }
+                              await _updateStates();
+                            },
+                            child: Center(
+                              child: _isMaximized
+                                  ? SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: Stack(
+                                        children: [
+                                          Positioned(
+                                            right: 0,
+                                            top: 0,
+                                            child: Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                border: Border.all(
+                                                  color: iconColor,
+                                                  width: 1.2,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        Positioned(
-                                          left: 0,
-                                          bottom: 0,
-                                          child: Container(
-                                            width: 8,
-                                            height: 8,
-                                            decoration: BoxDecoration(
-                                              color: isDark
-                                                  ? const Color(0xFF050505)
-                                                  : const Color(
-                                                      0xFFFAF8F5,
-                                                    ), // overlap box bg matches titlebar
-                                              border: Border.all(
-                                                color: iconColor,
-                                                width: 1.2,
+                                          Positioned(
+                                            left: 0,
+                                            bottom: 0,
+                                            child: Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? const Color(0xFF050505)
+                                                    : const Color(
+                                                        0xFFFAF8F5,
+                                                      ), // overlap box bg matches titlebar
+                                                border: Border.all(
+                                                  color: iconColor,
+                                                  width: 1.2,
+                                                ),
                                               ),
                                             ),
                                           ),
+                                        ],
+                                      ),
+                                    )
+                                  : Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: iconColor,
+                                          width: 1.2,
                                         ),
-                                      ],
-                                    ),
-                                  )
-                                : Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: iconColor,
-                                        width: 1.2,
                                       ),
                                     ),
-                                  ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        // 4. Close
-                        _CloseButton(onPressed: () => windowManager.close()),
+                          const SizedBox(width: 6),
+                          // 4. Close
+                          _CloseButton(onPressed: () => windowManager.close()),
+                        ],
                       ],
                     ),
                   ),
