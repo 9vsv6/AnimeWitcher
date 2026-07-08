@@ -1037,17 +1037,28 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'S${ep.season} : E${ep.episode}',
-                          style: TextStyle(
-                            color: widget.isCurrent
-                                ? accent
-                                : HotstarPlayerStyle.mutedText,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.8,
-                            shadows: _kGlassTextShadow,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              'S${ep.season} : E${ep.episode}',
+                              style: TextStyle(
+                                color: widget.isCurrent
+                                    ? accent
+                                    : HotstarPlayerStyle.mutedText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                                shadows: _kGlassTextShadow,
+                              ),
+                            ),
+                            if (ep.dubStatus != DubStatus.none) ...[
+                              const SizedBox(width: 6),
+                              _DubBadge(
+                                dubStatus: ep.dubStatus,
+                                isCurrent: widget.isCurrent,
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -1072,6 +1083,69 @@ class _EpisodeRowState extends State<_EpisodeRow> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Claymorphism badge showing SUB or DUB next to the episode number.
+/// Soft inner shadow + subtle highlight simulates a pressed-clay look on the
+/// frosted-glass panel surface. Colour-coded: blue-ish for SUB, warm amber for DUB.
+class _DubBadge extends StatelessWidget {
+  final DubStatus dubStatus;
+  final bool isCurrent;
+
+  const _DubBadge({
+    required this.dubStatus,
+    required this.isCurrent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSub = dubStatus == DubStatus.subbed;
+    final label = isSub
+        ? AppLocalizations.of(context)!.sub.toUpperCase()
+        : AppLocalizations.of(context)!.dub.toUpperCase();
+    // SUB = cool blue tint, DUB = warm amber tint.
+    final tint = isSub ? const Color(0xFF64B5F6) : const Color(0xFFFFB74D);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        // Claymorphism: translucent tinted fill.
+        color: tint.withValues(alpha: isCurrent ? 0.22 : 0.14),
+        borderRadius: BorderRadius.circular(4),
+        // Soft outer shadow (depth) + inner highlight (clay press).
+        boxShadow: [
+          // Outer shadow — subtle depth lift.
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            offset: const Offset(0, 1),
+            blurRadius: 2,
+          ),
+          // Inner highlight — top-left light catch.
+          BoxShadow(
+            color: tint.withValues(alpha: 0.18),
+            offset: const Offset(0, -0.5),
+            blurRadius: 1,
+            spreadRadius: 0,
+          ),
+        ],
+        border: Border.all(
+          color: tint.withValues(alpha: 0.25),
+          width: 0.5,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isCurrent ? tint : tint.withValues(alpha: 0.85),
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+          height: 1.2,
+          shadows: _kGlassTextShadow,
         ),
       ),
     );
