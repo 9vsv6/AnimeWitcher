@@ -30,6 +30,7 @@ import 'skip_segment_overlay.dart';
 import 'hotstar_player_style.dart';
 import '../player_platform_service.dart';
 import '../player_gesture_handler.dart';
+import 'player_metadata_scrim.dart';
 
 class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   final Player player;
@@ -95,6 +96,9 @@ class SkyStreamPlayerControlsState
 
   bool _showTorrentInfo = false; // Changed from true
   Timer? _hideTimer;
+
+  // Metadata scrim (Netflix-style info panel on pause, TV/desktop only)
+  final GlobalKey<PlayerMetadataScrimState> _metadataScrimKey = GlobalKey();
   bool _isLocked = false;
 
   // Seek animation state
@@ -215,8 +219,12 @@ class SkyStreamPlayerControlsState
         }
         if (val) {
           _startHideTimer();
+          // Playing → tell scrim to re-evaluate (will hide immediately).
+          _metadataScrimKey.currentState?.resetSchedule();
         } else {
           _cancelHideTimer();
+          // Paused → tell scrim to re-evaluate (will schedule 8s show).
+          _metadataScrimKey.currentState?.resetSchedule();
         }
 
         // REBUILD: If we transition to playing but were stuck in loading UI, trigger rebuild
@@ -528,6 +536,8 @@ class SkyStreamPlayerControlsState
       setState(() => _isVisible = false);
       widget.onVisibilityChanged?.call(false);
       _returnFocusToRoot();
+      // Reschedule scrim visibility on auto-hide.
+      _metadataScrimKey.currentState?.resetSchedule();
     }
   }
 
@@ -688,8 +698,10 @@ class SkyStreamPlayerControlsState
       }
       if (playing) {
         _startHideTimer();
+        _metadataScrimKey.currentState?.resetSchedule();
       } else {
         _cancelHideTimer();
+        _metadataScrimKey.currentState?.resetSchedule();
       }
     }
   }
@@ -1264,6 +1276,22 @@ class SkyStreamPlayerControlsState
                       ),
                     ),
                   ),
+
+                // Netflix-style metadata scrim (TV / desktop only).
+                // Sits over the paused video as a left-anchored gradient panel
+                // with logo/title, meta line, and description. Appears after
+                // 8 s of pause; hides on resume or dialog open.
+                PlayerMetadataScrim(
+                  key: _metadataScrimKey,
+                  item: ref.read(playerControllerProvider.notifier).multimediaItem,
+                  episode: ref.read(playerControllerProvider.notifier).currentEpisode,
+                  isSeries: ref.read(playerControllerProvider.notifier).isSeries,
+                  isPaused: !_isPlaying,
+                  isDialogOpen: _panelOpen,
+                  controlsVisible: _isVisible,
+                  isTv: _isTv,
+                  onHidePlayerUI: hideControls,
+                ),
 
                 // Sources / Audio / Subtitles drawer — topmost so it sits above
                 // the chrome. Pure Row layout inside (no nested Stack).
