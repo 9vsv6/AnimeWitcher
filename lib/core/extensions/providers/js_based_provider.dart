@@ -596,11 +596,49 @@ class JsBasedProvider extends SkyStreamProvider {
                 );
                 final realUrlBytes = base64Decode(b64Url);
                 final realUrl = utf8.decode(realUrlBytes);
+
+                Map<String, String>? sticky = map['headers'] != null
+                    ? Map<String, String>.from(map['headers'] as Map)
+                    : null;
+
+                if (mainUrl.isNotEmpty) {
+                  try {
+                    final baseUri = Uri.parse(mainUrl);
+                    final jarCookies = await _jsEngine.getCookiesForUri(baseUri);
+                    if (jarCookies.isNotEmpty) {
+                      final cookieHeader = jarCookies.map((c) => '${c.name}=${c.value}').join('; ');
+                      sticky ??= <String, String>{};
+                      String? existingKey;
+                      sticky.forEach((k, v) {
+                        if (k.toLowerCase() == 'cookie') existingKey = k;
+                      });
+                      final existingCookie = existingKey != null ? sticky[existingKey] : null;
+                      if (existingCookie != null && existingCookie.isNotEmpty) {
+                        final Map<String, String> merged = {};
+                        for (final pair in existingCookie.split(';')) {
+                          final parts = pair.split('=');
+                          if (parts.length >= 2) {
+                            merged[parts[0].trim()] = parts.sublist(1).join('=').trim();
+                          }
+                        }
+                        for (final c in jarCookies) {
+                          merged[c.name] = c.value;
+                        }
+                        sticky[existingKey!] = merged.entries.map((e) => '${e.key}=${e.value}').join('; ');
+                      } else {
+                        sticky['Cookie'] = cookieHeader;
+                      }
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      debugPrint("Failed to copy cookies from JS engine jar to proxy headers: $e");
+                    }
+                  }
+                }
+
                 finalUrl = LocalProxyService.instance.getProxyUrl(
                   realUrl,
-                  headers: map['headers'] != null
-                      ? Map<String, String>.from(map['headers'] as Map)
-                      : null,
+                  headers: sticky,
                 );
               } catch (e) {
                 if (kDebugMode) {
@@ -616,11 +654,46 @@ class JsBasedProvider extends SkyStreamProvider {
                     jsonDecode(decodedJson) as Map<String, dynamic>;
 
                 final String realUrl = config['url'] as String;
-                final Map<String, String>? sticky = config['headers'] != null
+                Map<String, String>? sticky = config['headers'] != null
                     ? Map<String, String>.from(config['headers'] as Map)
                     : (map['headers'] != null
                           ? Map<String, String>.from(map['headers'] as Map)
                           : null);
+
+                if (mainUrl.isNotEmpty) {
+                  try {
+                    final baseUri = Uri.parse(mainUrl);
+                    final jarCookies = await _jsEngine.getCookiesForUri(baseUri);
+                    if (jarCookies.isNotEmpty) {
+                      final cookieHeader = jarCookies.map((c) => '${c.name}=${c.value}').join('; ');
+                      sticky ??= <String, String>{};
+                      String? existingKey;
+                      sticky.forEach((k, v) {
+                        if (k.toLowerCase() == 'cookie') existingKey = k;
+                      });
+                      final existingCookie = existingKey != null ? sticky[existingKey] : null;
+                      if (existingCookie != null && existingCookie.isNotEmpty) {
+                        final Map<String, String> merged = {};
+                        for (final pair in existingCookie.split(';')) {
+                          final parts = pair.split('=');
+                          if (parts.length >= 2) {
+                            merged[parts[0].trim()] = parts.sublist(1).join('=').trim();
+                          }
+                        }
+                        for (final c in jarCookies) {
+                          merged[c.name] = c.value;
+                        }
+                        sticky[existingKey!] = merged.entries.map((e) => '${e.key}=${e.value}').join('; ');
+                      } else {
+                        sticky['Cookie'] = cookieHeader;
+                      }
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      debugPrint("Failed to copy cookies from JS engine jar to proxy headers: $e");
+                    }
+                  }
+                }
 
                 ProxyOptions? options;
                 if (config['options'] != null) {

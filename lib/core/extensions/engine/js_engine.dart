@@ -6,7 +6,6 @@ import 'dart:ui' show RootIsolateToken;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart' as wv;
@@ -97,9 +96,9 @@ class JsEngineService {
       _cookieJar = PersistCookieJar();
     }
     _cookieJarReady = true;
-    final hasCookieManager = _dio.interceptors.any((i) => i is CookieManager);
-    if (!hasCookieManager) {
-      _dio.interceptors.add(CookieManager(_cookieJar));
+    final hasCfInterceptor = _dio.interceptors.any((i) => i is CfOnlyCookieInterceptor);
+    if (!hasCfInterceptor) {
+      _dio.interceptors.add(CfOnlyCookieInterceptor(_cookieJar));
     }
   }
 
@@ -266,8 +265,9 @@ class JsEngineService {
         // is still visible to whichever plugin first reads it. New writes
         // always go through the prefixed path (set_storage below).
         String? value;
-        if (invokingNamespace != null) {
-          value = _storage.getExtensionData('$invokingNamespace::$key');
+        final cleanNamespace = _getCleanNamespace(invokingNamespace);
+        if (cleanNamespace != null) {
+          value = _storage.getExtensionData('$cleanNamespace::$key');
           value ??= _storage.getExtensionData(key); // legacy fallback
         } else {
           value = _storage.getExtensionData(key);
@@ -286,8 +286,9 @@ class JsEngineService {
         final parsed = jsonDecode(argsJson) as Map<String, dynamic>;
         final key = parsed['key'] as String? ?? '';
         final value = parsed['value'] as String?;
-        final effectiveKey = invokingNamespace != null
-            ? '$invokingNamespace::$key'
+        final cleanNamespace = _getCleanNamespace(invokingNamespace);
+        final effectiveKey = cleanNamespace != null
+            ? '$cleanNamespace::$key'
             : key;
         _storage.setExtensionData(effectiveKey, value).ignore();
 
@@ -302,8 +303,9 @@ class JsEngineService {
         // plugin B's namespace to read its preferences. Fall back to the
         // JS-supplied value only for async callbacks where we've lost the
         // invoke context (timers etc.) — those are rare and lower risk.
-        final pkgName =
+        final rawPkgName =
             invokingNamespace ?? (parsed['packageName'] as String? ?? '');
+        final pkgName = _getCleanNamespace(rawPkgName) ?? '';
         if (kDebugMode &&
             invokingNamespace != null &&
             parsed['packageName'] != invokingNamespace) {
@@ -326,8 +328,9 @@ class JsEngineService {
 
       case 'set_preference':
         final parsed = jsonDecode(argsJson) as Map<String, dynamic>;
-        final pkgName =
+        final rawPkgName =
             invokingNamespace ?? (parsed['packageName'] as String? ?? '');
+        final pkgName = _getCleanNamespace(rawPkgName) ?? '';
         if (kDebugMode &&
             invokingNamespace != null &&
             parsed['packageName'] != invokingNamespace) {
@@ -381,6 +384,21 @@ class JsEngineService {
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
             '(KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
       }
+      if (!headers.keys.any((k) => k.toLowerCase() == 'accept-encoding')) {
+        headers['Accept-Encoding'] = 'identity';
+      }
+
+      final contentTypeKey = headers.keys.firstWhere(
+        (k) => k.toLowerCase() == 'content-type',
+        orElse: () => '',
+      );
+      String? contentType;
+      if (contentTypeKey.isNotEmpty) {
+        contentType = headers[contentTypeKey] as String;
+      } else if (method == 'POST' || method == 'PUT') {
+        contentType = 'application/x-www-form-urlencoded';
+        headers['Content-Type'] = contentType;
+      }
 
       talker.debug('[JS HTTP] $method $url ($requestId)');
 
@@ -391,25 +409,31 @@ class JsEngineService {
         options: Options(
           method: method,
           headers: headers,
+          contentType: contentType,
           responseType: ResponseType.plain,
           validateStatus: (_) => true,
+          followRedirects: true,
           sendTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 15),
         ),
       );
 
-      talker.debug('[JS HTTP] Back $url ($requestId) → ${response.statusCode}');
-
-      final responseHeaders = response.headers.map.map(
-        (k, v) => MapEntry(k, v.join(',')),
+      final responseHeaders = response.headers.map.map<String, dynamic>(
+        (k, v) => MapEntry(
+          k,
+          k.toLowerCase() == 'set-cookie' ? v : v.join(','),
+        ),
       );
       final responseBody = response.data.toString();
+
+      talker.debug('[JS HTTP] Back $url ($requestId) → ${response.statusCode}');
 
       if (CloudflareBypass.instance.isCloudflareChallenge(
         response.statusCode,
         responseHeaders,
         responseBody,
       )) {
+        talker.debug('[JS HTTP] Cloudflare challenge detected ($requestId)');
         if (cancelToken != null && cancelToken.isCancelled) {
           return {
             'code': 0,
@@ -425,6 +449,7 @@ class JsEngineService {
           onSolved: (host) => _injectCfCookies(host),
         );
         if (cfResult != null) {
+          talker.debug('[JS HTTP] Cloudflare solved ($requestId)');
           return {
             'code': cfResult.statusCode,
             'statusCode': cfResult.statusCode,
@@ -433,6 +458,8 @@ class JsEngineService {
             'headers': <String, String>{},
             'finalUrl': cfResult.finalUrl,
           };
+        } else {
+          talker.error('[JS HTTP] Cloudflare solve failed ($requestId)');
         }
       }
 
@@ -463,7 +490,12 @@ class JsEngineService {
       final webCookies = await mgr.getCookies(url: wv.WebUri('https://$host/'));
       if (webCookies.isEmpty) return;
       final uri = Uri.parse('https://$host/');
-      final ioCookies = webCookies.map((c) {
+      final ioCookies = webCookies
+          .where((c) =>
+              c.name == 'cf_clearance' ||
+              c.name == '__cf_bm' ||
+              c.name.toString().startsWith('__cf'))
+          .map((c) {
         final cookie = io.Cookie(c.name.toString(), (c.value as String?) ?? '');
         cookie.domain = c.domain ?? host;
         cookie.path = c.path ?? '/';
@@ -639,6 +671,16 @@ class JsEngineService {
     _workerPort.send({_mUnload: namespace});
   }
 
+  Future<List<io.Cookie>> getCookiesForUri(Uri uri) async {
+    if (!_cookieJarReady) return [];
+    return await _cookieJar.loadForRequest(uri);
+  }
+
+  String? _getCleanNamespace(String? ns) {
+    if (ns == null) return null;
+    return ns.contains('__') ? ns.split('__')[0] : ns;
+  }
+
   void dispose() {
     for (final entry in _cancelTokens.entries) {
       if (!entry.value.isCancelled) entry.value.cancel('engine disposed');
@@ -656,6 +698,85 @@ class JsEngineService {
 
   void runGC() {
     _workerPort.send({_mGc: 1});
+  }
+}
+
+class CfOnlyCookieInterceptor extends Interceptor {
+  final CookieJar jar;
+  CfOnlyCookieInterceptor(this.jar);
+
+  @override
+  Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    final uri = Uri.parse(options.uri.toString());
+    List<io.Cookie> cookies = [];
+    try {
+      cookies = await jar.loadForRequest(uri);
+    } catch (_) {}
+
+    final cfCookies = cookies.where((c) =>
+      c.name == 'cf_clearance' ||
+      c.name == '__cf_bm' ||
+      c.name.startsWith('__cf')
+    ).toList();
+
+    String? manualCookie;
+    options.headers.forEach((key, value) {
+      if (key.toLowerCase() == 'cookie') {
+        manualCookie = value?.toString();
+      }
+    });
+
+    if (cfCookies.isNotEmpty) {
+      final cfCookieStr = cfCookies.map((c) => '${c.name}=${c.value}').join('; ');
+      if (manualCookie != null && manualCookie!.isNotEmpty) {
+        final Map<String, String> merged = {};
+        for (final pair in cfCookieStr.split(';')) {
+          final parts = pair.split('=');
+          if (parts.length >= 2) {
+            merged[parts[0].trim()] = parts.sublist(1).join('=').trim();
+          }
+        }
+        for (final pair in manualCookie!.split(';')) {
+          final parts = pair.split('=');
+          if (parts.length >= 2) {
+            merged[parts[0].trim()] = parts.sublist(1).join('=').trim();
+          }
+        }
+        final finalCookieStr = merged.entries.map((e) => '${e.key}=${e.value}').join('; ');
+        options.headers['Cookie'] = finalCookieStr;
+      } else {
+        options.headers['Cookie'] = cfCookieStr;
+      }
+    } else if (manualCookie != null) {
+      options.headers['Cookie'] = manualCookie;
+    }
+
+    handler.next(options);
+  }
+
+  @override
+  Future<void> onResponse(Response<dynamic> response, ResponseInterceptorHandler handler) async {
+    final rawCookies = response.headers['set-cookie'];
+    if (rawCookies != null && rawCookies.isNotEmpty) {
+      final uri = Uri.parse(response.realUri.toString());
+      final List<io.Cookie> ioCookies = [];
+      for (final header in rawCookies) {
+        try {
+          final cookie = io.Cookie.fromSetCookieValue(header);
+          if (cookie.name == 'cf_clearance' ||
+              cookie.name == '__cf_bm' ||
+              cookie.name.startsWith('__cf')) {
+            ioCookies.add(cookie);
+          }
+        } catch (_) {}
+      }
+      if (ioCookies.isNotEmpty) {
+        try {
+          await jar.saveFromResponse(uri, ioCookies);
+        } catch (_) {}
+      }
+    }
+    handler.next(response);
   }
 }
 
