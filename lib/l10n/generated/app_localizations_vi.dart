@@ -475,6 +475,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get playNow => 'Phát ngay';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Xóa tải xuống?';
 
   @override

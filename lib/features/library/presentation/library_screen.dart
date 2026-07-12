@@ -166,7 +166,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       },
     );
   }
-
 }
 
 class _TabChip extends StatefulWidget {
@@ -230,12 +229,14 @@ class _TabChipState extends State<_TabChip> {
                     ),
               borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
               border: showHighlight
-                  ? Border.all(color: Colors.white, width: 2)
+                  ? Border.all(color: theme.colorScheme.primary, width: 2)
                   : (widget.selected
-                      ? Border.all(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                        )
-                      : Border.all(color: Colors.transparent, width: 1)),
+                        ? Border.all(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.3,
+                            ),
+                          )
+                        : Border.all(color: Colors.transparent, width: 1)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -252,8 +253,9 @@ class _TabChipState extends State<_TabChip> {
                   widget.label,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight:
-                        widget.selected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: widget.selected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: widget.selected
                         ? theme.colorScheme.primary
                         : theme.colorScheme.onSurfaceVariant,

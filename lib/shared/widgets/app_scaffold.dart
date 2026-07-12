@@ -3,12 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:skystream/core/providers/device_info_provider.dart';
+import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:skystream/shared/widgets/custom_bottom_nav.dart';
 import 'package:skystream/shared/widgets/app_sidebar.dart';
 
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../../features/settings/presentation/general_settings_provider.dart';
+import 'loading_indicator.dart';
 
 class AppScaffold extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -112,35 +114,84 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                 widget.navigationShell.goBranch(defaultIndex);
               }
             },
-            child: Material(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: SafeArea(
-                bottom: false,
-                child: Row(
-                  children: [
-                    // Sidebar in its own traversal group so UP/DOWN stays inside it.
-                    FocusTraversalGroup(
-                      policy: WidgetOrderTraversalPolicy(),
-                      child: AppSidebar(
-                        currentIndex: widget.navigationShell.currentIndex,
-                        onItemTapped: (int index) =>
-                            _onItemTapped(index, context),
-                        focusNodes: _sidebarNodes,
-                      ),
-                    ),
-                    // Content in its own traversal group.
-                    Expanded(
-                      child: FocusTraversalGroup(
-                        policy: WidgetOrderTraversalPolicy(),
-                        child: Focus(
-                          canRequestFocus: false,
-                          skipTraversal: true,
-                          onKeyEvent: _onContentKeyEvent,
-                          child: widget.navigationShell,
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) {
+                ref
+                    .read<DpadActiveNotifier>(isDpadActiveProvider.notifier)
+                    .set(false);
+              },
+              onPointerHover: (_) {
+                ref
+                    .read<DpadActiveNotifier>(isDpadActiveProvider.notifier)
+                    .set(false);
+              },
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: (node, event) {
+                  if (event is KeyDownEvent) {
+                    final key = event.logicalKey;
+                    if (key == LogicalKeyboardKey.arrowDown ||
+                        key == LogicalKeyboardKey.arrowUp ||
+                        key == LogicalKeyboardKey.arrowLeft ||
+                        key == LogicalKeyboardKey.arrowRight ||
+                        key == LogicalKeyboardKey.enter ||
+                        key == LogicalKeyboardKey.select ||
+                        key == LogicalKeyboardKey.space ||
+                        key == LogicalKeyboardKey.tab) {
+                      ref
+                          .read<DpadActiveNotifier>(
+                            isDpadActiveProvider.notifier,
+                          )
+                          .set(true);
+                    }
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Material(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Content in its own traversal group, positioned first (bottom layer)
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: LayoutConstants.sidebarWidthCompact,
+                            ),
+                            child: FocusTraversalGroup(
+                              policy: WidgetOrderTraversalPolicy(),
+                              child: Focus(
+                                canRequestFocus: false,
+                                skipTraversal: true,
+                                onKeyEvent: _onContentKeyEvent,
+                                child: widget.navigationShell,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        // Sidebar in its own traversal group, positioned second (top layer)
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: LayoutConstants.sidebarWidthCompact,
+                          child: FocusTraversalGroup(
+                            policy: WidgetOrderTraversalPolicy(),
+                            child: AppSidebar(
+                              currentIndex: widget.navigationShell.currentIndex,
+                              onItemTapped: (int index) =>
+                                  _onItemTapped(index, context),
+                              focusNodes: _sidebarNodes,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -164,8 +215,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
           ),
         );
       },
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => const Scaffold(body: Center(child: AppLoadingIndicator())),
       error: (err, stack) => Scaffold(
         body: Center(
           child: Text(

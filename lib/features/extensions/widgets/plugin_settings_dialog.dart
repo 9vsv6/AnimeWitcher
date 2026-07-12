@@ -5,6 +5,7 @@ import '../../../core/extensions/extension_manager.dart';
 import '../../../core/storage/settings_repository.dart';
 import '../../../core/storage/extension_repository.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 
 class PluginSettingsDialog extends ConsumerStatefulWidget {
   final ExtensionPlugin plugin;
@@ -152,10 +153,8 @@ class _PluginSettingsDialogState extends ConsumerState<PluginSettingsDialog> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                      AppLoadingIndicator(
+                        constraints: BoxConstraints.tight(const Size(14, 14)),
                       ),
                       const SizedBox(width: 8),
                       Text(

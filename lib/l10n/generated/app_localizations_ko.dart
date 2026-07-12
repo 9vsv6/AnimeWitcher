@@ -472,6 +472,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get playNow => '지금 재생하기';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => '다운로드 삭제?';
 
   @override

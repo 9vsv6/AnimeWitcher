@@ -480,6 +480,9 @@ class AppLocalizationsUk extends AppLocalizations {
   String get playNow => 'Дивитися зараз';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Видалити завантаження?';
 
   @override

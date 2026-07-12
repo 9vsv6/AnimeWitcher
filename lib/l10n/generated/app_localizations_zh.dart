@@ -470,6 +470,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get playNow => '立即播放';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => '删除下载？';
 
   @override

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class TrackingAuthDialog extends StatefulWidget {
   final String providerName;
@@ -91,19 +92,13 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
     final codeWidget = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          '2. Enter the following code:',
-          textAlign: TextAlign.center,
-        ),
+        const Text('2. Enter the following code:', textAlign: TextAlign.center),
         const SizedBox(height: 8),
         InkWell(
           onTap: () => _copyToClipboard(isManual: true),
           borderRadius: BorderRadius.circular(8),
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             decoration: BoxDecoration(
               color: theme.colorScheme.secondaryContainer,
               borderRadius: BorderRadius.circular(8),
@@ -120,10 +115,7 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Icon(
-                  Icons.copy,
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
+                Icon(Icons.copy, color: theme.colorScheme.onSecondaryContainer),
               ],
             ),
           ),
@@ -136,7 +128,7 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
           ),
         ),
         const SizedBox(height: 24),
-        const CircularProgressIndicator(),
+        const AppLoadingIndicator(),
         const SizedBox(height: 16),
         Text(
           'Waiting for authorization...',

@@ -478,6 +478,9 @@ class AppLocalizationsBg extends AppLocalizations {
   String get playNow => 'Гледай сега';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Изтрий изтеглянето?';
 
   @override

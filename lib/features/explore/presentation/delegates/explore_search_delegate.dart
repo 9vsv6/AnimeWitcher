@@ -8,12 +8,15 @@ import '../../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 
 import '../controllers/explore_search_controller.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
+import '../../../../core/providers/device_info_provider.dart';
+import '../../../../core/utils/responsive_breakpoints.dart';
 
 class ExploreSearchDelegate extends SearchDelegate<void> {
   ExploreSearchDelegate()
     : super(
         searchFieldLabel: 'Search movies, tv shows...',
-        searchFieldStyle: const TextStyle(color: Colors.white70, fontSize: 18),
+        searchFieldStyle: null,
       );
 
   @override
@@ -35,6 +38,12 @@ class ExploreSearchDelegate extends SearchDelegate<void> {
       textSelectionTheme: TextSelectionThemeData(
         cursorColor: theme.colorScheme.primary,
         selectionColor: theme.colorScheme.primary.withValues(alpha: 0.3),
+      ),
+      textTheme: theme.textTheme.copyWith(
+        titleMedium: TextStyle(
+          color: theme.colorScheme.onSurface,
+          fontSize: 18,
+        ),
       ),
     );
   }
@@ -119,7 +128,7 @@ class _SearchSuggestionsListState
     final suggestions = searchState.suggestions;
     if (isLoading) {
       return Center(
-        child: CircularProgressIndicator(
+        child: AppLoadingIndicator(
           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
         ),
       );
@@ -177,6 +186,7 @@ class _SearchSuggestionsListState
                 movieId: item.id,
                 mediaType: item.tmdbMediaType,
                 heroTag: 'search_${item.id}',
+                source: item.source,
               ).push<void>(context);
             },
           ),
@@ -270,26 +280,33 @@ class _SearchResultsGridState extends ConsumerState<_SearchResultsGrid> {
     }
 
     if (results.isEmpty) {
+      final profile = ref.watch(deviceProfileProvider).asData?.value;
+      final isTv = profile?.isTv == true || context.isTv;
+      final isWidescreen = isTv || context.isTabletOrLarger;
+      final imageWidth = isWidescreen ? 320.0 : 200.0;
+      final nativeFont = Theme.of(context).textTheme.bodyLarge?.fontFamily;
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.search_off,
-              size: 60,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.3),
+            Text(
+              'No Results Found',
+              style: TextStyle(
+                fontFamily: nativeFont,
+                fontSize: 16.0,
+                fontWeight: FontWeight.w400,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 16),
-            Text(
-              "No results found for \"${widget.query}\"",
-              style: TextStyle(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
-                fontSize: 16,
-              ),
+            Image.asset(
+              'assets/images/no_results.png',
+              fit: BoxFit.contain,
+              width: imageWidth,
+              errorBuilder: (context, error, stackTrace) =>
+                  const SizedBox.shrink(),
             ),
           ],
         ),
@@ -333,6 +350,7 @@ class _SearchResultsGridState extends ConsumerState<_SearchResultsGrid> {
               mediaType: item.tmdbMediaType,
               heroTag: uniqueTag,
               placeholderPoster: imageUrl,
+              source: item.source,
             ).push<void>(context);
           },
         );

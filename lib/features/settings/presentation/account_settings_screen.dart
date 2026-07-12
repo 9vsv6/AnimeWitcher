@@ -23,7 +23,8 @@ class AccountSettingsScreen extends ConsumerStatefulWidget {
   const AccountSettingsScreen({super.key});
 
   @override
-  ConsumerState<AccountSettingsScreen> createState() => _AccountSettingsScreenState();
+  ConsumerState<AccountSettingsScreen> createState() =>
+      _AccountSettingsScreenState();
 }
 
 class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
@@ -312,9 +313,11 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                               } else {
                                 final malService = ref.read(malServiceProvider);
                                 // Generate PKCE verifier before opening webview
-                                final codeVerifier = malService.generateCodeVerifier();
+                                final codeVerifier = malService
+                                    .generateCodeVerifier();
 
-                                final authUrl = 'https://myanimelist.net/v1/oauth2/authorize'
+                                final authUrl =
+                                    'https://myanimelist.net/v1/oauth2/authorize'
                                     '?response_type=code'
                                     '&client_id=${SyncConfig.malClientId}'
                                     '&code_challenge=$codeVerifier'
@@ -332,18 +335,30 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                                   );
 
                                   if (redirectUrl != null && context.mounted) {
-                                    final success = await malService.exchangeCodeForToken(redirectUrl, codeVerifier);
+                                    final success = await malService
+                                        .exchangeCodeForToken(
+                                          redirectUrl,
+                                          codeVerifier,
+                                        );
                                     if (success && context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Successfully connected to MyAnimeList!'),
+                                          content: Text(
+                                            'Successfully connected to MyAnimeList!',
+                                          ),
                                           backgroundColor: Colors.green,
                                         ),
                                       );
                                     } else if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Failed to connect to MyAnimeList'),
+                                          content: Text(
+                                            'Failed to connect to MyAnimeList',
+                                          ),
                                           backgroundColor: Colors.red,
                                         ),
                                       );
@@ -386,35 +401,48 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                                   }
                                 }
                               } else {
-                                final anilistService = ref.read(aniListServiceProvider);
+                                final anilistService = ref.read(
+                                  aniListServiceProvider,
+                                );
 
-                                const authUrl = 'https://anilist.co/api/v2/oauth/authorize'
+                                const authUrl =
+                                    'https://anilist.co/api/v2/oauth/authorize'
                                     '?client_id=${SyncConfig.anilistClientId}'
                                     '&response_type=token';
 
                                 if (context.mounted) {
                                   final redirectUrl = await showDialog<String>(
                                     context: context,
-                                    builder: (context) => const WebViewAuthDialog(
-                                      providerName: 'AniList',
-                                      initialUrl: authUrl,
-                                      redirectUrlPrefix: 'http://localhost',
-                                    ),
+                                    builder: (context) =>
+                                        const WebViewAuthDialog(
+                                          providerName: 'AniList',
+                                          initialUrl: authUrl,
+                                          redirectUrlPrefix: 'http://localhost',
+                                        ),
                                   );
 
                                   if (redirectUrl != null && context.mounted) {
-                                    final success = await anilistService.saveTokenFromRedirect(redirectUrl);
+                                    final success = await anilistService
+                                        .saveTokenFromRedirect(redirectUrl);
                                     if (success && context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Successfully connected to AniList!'),
+                                          content: Text(
+                                            'Successfully connected to AniList!',
+                                          ),
                                           backgroundColor: Colors.green,
                                         ),
                                       );
                                     } else if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Failed to connect to AniList'),
+                                          content: Text(
+                                            'Failed to connect to AniList',
+                                          ),
                                           backgroundColor: Colors.red,
                                         ),
                                       );
@@ -442,7 +470,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     icon: Icons.fast_forward_rounded,
                     title: 'AnimeSkip',
                     isBeta: true,
-                    subtitle: 'Automatically fetch skip segments for Anime (requires AniList authentication)',
+                    subtitle:
+                        'Automatically fetch skip segments for Anime (requires AniList authentication)',
                     trailing: Switch(
                       value: settingsRepo.isAnimeSkipIntegrationEnabled(),
                       onChanged: (val) {
@@ -452,7 +481,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                       },
                     ),
                     onTap: () {
-                      final current = settingsRepo.isAnimeSkipIntegrationEnabled();
+                      final current = settingsRepo
+                          .isAnimeSkipIntegrationEnabled();
                       settingsRepo.setAnimeSkipIntegrationEnabled(!current);
                       ref.invalidate(settingsRepositoryProvider);
                     },
@@ -471,7 +501,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                       },
                     ),
                     onTap: () {
-                      final current = settingsRepo.isIntroDbIntegrationEnabled();
+                      final current = settingsRepo
+                          .isIntroDbIntegrationEnabled();
                       settingsRepo.setIntroDbIntegrationEnabled(!current);
                       ref.invalidate(settingsRepositoryProvider);
                     },

@@ -5,17 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:skystream/features/library/presentation/history_provider.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 
-import 'package:skystream/shared/widgets/cards_wrapper.dart';
-import 'package:skystream/shared/widgets/thumbnail_error_placeholder.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
+import 'package:skystream/core/utils/layout_constants.dart';
 import '../../../../core/extensions/extension_manager.dart';
+import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/loading_dialog.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/core/services/notification_service.dart';
 
-class ContinueWatchingCard extends ConsumerWidget {
+class ContinueWatchingCard extends ConsumerStatefulWidget {
   final HistoryItem historyItem;
   final double width;
   final bool isLarge;
@@ -26,6 +26,14 @@ class ContinueWatchingCard extends ConsumerWidget {
     this.width = 280,
     this.isLarge = false,
   });
+
+  @override
+  ConsumerState<ContinueWatchingCard> createState() =>
+      _ContinueWatchingCardState();
+}
+
+class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
+  bool _isHovered = false;
 
   static String _normalizeMatchKey(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
@@ -87,25 +95,50 @@ class ContinueWatchingCard extends ConsumerWidget {
     return null;
   }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final item = historyItem.item;
-    // Calculate progress (0.0 to 1.0)
-    final double progress = (historyItem.duration > 0)
-        ? (historyItem.position / historyItem.duration).clamp(0.0, 1.0)
-        : 0.0;
-    final int percentage = (progress * 100).toInt();
+  String _formatDuration(int milliseconds) {
+    if (milliseconds <= 0) return '00:00';
+    final d = Duration(milliseconds: milliseconds);
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) {
+      if (m > 0) return '${h}h ${m}m';
+      return '${h}h';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
 
-    // Resolve Provider Name
-    final providers = ref.watch(extensionManagerProvider);
-    final providerObj = (item.provider != null)
-        ? providers.where((p) => p.packageName == item.provider).firstOrNull
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.historyItem.item;
+    final double progress = (widget.historyItem.duration > 0)
+        ? (widget.historyItem.position / widget.historyItem.duration).clamp(
+            0.0,
+            1.0,
+          )
+        : 0.0;
+
+    final isLivestream = item.contentType == MultimediaContentType.livestream;
+    final isSeries = item.contentType == MultimediaContentType.series;
+    final isAnime = item.contentType == MultimediaContentType.anime;
+    final hasEpisodes = isSeries || isAnime;
+
+    final imageUrl = hasEpisodes
+        ? (widget.historyItem.episodePosterUrl ?? item.backdropImageUrl)
+        : item.backdropImageUrl;
+    final bannerUrl = AppImageFallbacks.poster(imageUrl, label: item.title);
+
+    final episodeLabel =
+        hasEpisodes &&
+            widget.historyItem.season != null &&
+            widget.historyItem.episode != null &&
+            (widget.historyItem.season! > 0 || widget.historyItem.episode! > 0)
+        ? "S${widget.historyItem.season} E${widget.historyItem.episode}${widget.historyItem.episodeTitle != null && widget.historyItem.episodeTitle!.isNotEmpty && !widget.historyItem.episodeTitle!.startsWith("Episode") ? " - ${widget.historyItem.episodeTitle}" : ""}"
         : null;
-    final providerName = providerObj?.name ?? item.provider;
 
     return CardsWrapper(
       onTap: () async {
-        if (item.contentType == MultimediaContentType.livestream) {
+        if (isLivestream) {
           bool dialogDismissed = false;
           bool canceled = false;
           unawaited(
@@ -204,200 +237,164 @@ class ContinueWatchingCard extends ConsumerWidget {
           ),
         );
       },
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        children: [
-          Container(
-            width: width,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
-              ),
-            ),
-            child: Row(
+      borderRadius: BorderRadius.circular(LayoutConstants.radiusLg),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: SizedBox(
+          width: widget.width,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(LayoutConstants.radiusLg),
+            child: Stack(
               children: [
-                AspectRatio(
-                  aspectRatio: 2 / 3,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.horizontal(
-                      left: Radius.circular(12),
-                    ),
-                    child: CachedNetworkImage(
-                      imageUrl:
-                          AppImageFallbacks.poster(
-                            item.posterUrl,
-                            label: item.title,
-                          ) ??
-                          '',
-                      fit: BoxFit.cover,
-                      // No memCacheWidth — TMDB w500 source is already sized
-                      // appropriately for the displayed width × DPR.
-                      placeholder: (context, url) =>
-                          Container(color: Theme.of(context).dividerColor),
-                      errorWidget: (_, _, _) =>
-                          ThumbnailErrorPlaceholder(label: item.title),
+                // Banner background
+                Positioned.fill(
+                  child: Container(
+                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    child: bannerUrl != null
+                        ? CachedNetworkImage(
+                            imageUrl: bannerUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (_, _) => const SizedBox.shrink(),
+                            errorWidget: (_, _, _) => const SizedBox.shrink(),
+                          )
+                        : null,
+                  ),
+                ),
+
+                // Dark overlay (full card) — 40% at rest, 60% on hover
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      color: Colors.black.withValues(
+                        alpha: _isHovered ? 0.40 : 0.20,
+                      ),
                     ),
                   ),
                 ),
-                Expanded(
+
+                // Bottom scrim gradient (from-black/80 to transparent)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 64,
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Colors.black87, Colors.transparent],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Duration badge (bottom-right)
+                if (!isLivestream)
+                  Positioned(
+                    bottom: 10,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.70),
+                        borderRadius: BorderRadius.circular(
+                          LayoutConstants.radiusMd,
+                        ),
+                      ),
+                      child: Text(
+                        '${_formatDuration(widget.historyItem.position)} / ${_formatDuration(widget.historyItem.duration)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Progress bar (bottom edge)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: SizedBox(
+                    height: 4,
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: Colors.transparent,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Bottom info column
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
                   child: Padding(
-                    padding: const EdgeInsets.all(12.0),
+                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 28),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 0,
-                          runSpacing: 4,
-                          children: [
-                            if (item.provider != null &&
-                                item.provider!.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                margin: const EdgeInsets.only(right: 8),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  providerName!,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onPrimaryContainer,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                item.contentType.name.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                        if (hasEpisodes || isLivestream) ...[
+                          Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
-                          ],
-                        ),
-                        const Spacer(),
-                        if (item.contentType ==
-                            MultimediaContentType.livestream) ...[
+                          ),
+                          const SizedBox(height: 2),
+                        ],
+                        if (isLivestream)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                              horizontal: 6,
+                              vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: Colors.red.withValues(alpha: 0.3),
+                              color: Colors.red.withValues(alpha: 0.20),
+                              borderRadius: BorderRadius.circular(
+                                LayoutConstants.radiusSm,
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  AppLocalizations.of(context)!.live,
-                                  style: const TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                        ] else ...[
-                          if (item.contentType ==
-                                  MultimediaContentType.series &&
-                              historyItem.season != null &&
-                              historyItem.episode != null &&
-                              (historyItem.season! > 0 ||
-                                  historyItem.episode! > 0))
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4.0),
-                              child: Text(
-                                "S${historyItem.season} E${historyItem.episode}${historyItem.episodeTitle != null && historyItem.episodeTitle!.isNotEmpty && !historyItem.episodeTitle!.startsWith("Episode") ? " - ${historyItem.episodeTitle}" : ""}",
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            child: const Text(
+                              'LIVE',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
                               ),
                             ),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              minHeight: 4,
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
+                          )
+                        else
                           Text(
-                            AppLocalizations.of(
-                              context,
-                            )!.percentWatched(percentage),
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.outline,
-                              fontSize: 11,
+                            episodeLabel ?? item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ),
@@ -405,36 +402,7 @@ class ContinueWatchingCard extends ConsumerWidget {
               ],
             ),
           ),
-          // Close button at top-right corner
-          Positioned(
-            top: 4,
-            right: 4,
-            child: Material(
-              color: Colors.black.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                focusNode: FocusNode(canRequestFocus: false, skipTraversal: true),
-                borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  ref
-                      .read(watchHistoryProvider.notifier)
-                      .removeFromHistory(item.url);
-                  ref
-                      .read(notificationServiceProvider)
-                      .showSuccess(
-                        AppLocalizations.of(
-                          context,
-                        )!.removedFromHistory(item.title),
-                      );
-                },
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.close, size: 16, color: Colors.white70),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

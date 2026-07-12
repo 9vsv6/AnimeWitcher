@@ -338,8 +338,7 @@ class _CustomButtonState extends State<CustomButton> {
   late final VoidCallback _focusListener;
   // Tracks whether focus was last driven by keyboard/D-pad (traditional) vs a
   // touch tap, so the focus ring only appears for directional navigation.
-  FocusHighlightMode _highlightMode =
-      FocusManager.instance.highlightMode;
+  FocusHighlightMode _highlightMode = FocusManager.instance.highlightMode;
 
   @override
   void initState() {
@@ -403,6 +402,7 @@ class _CustomButtonState extends State<CustomButton> {
           side: BorderSide.none,
           shadowColor: Colors.transparent,
           shape: widget.shape,
+          overlayColor: Colors.transparent,
         ),
         child: widget.child,
       );
@@ -427,6 +427,8 @@ class _CustomButtonState extends State<CustomButton> {
               ? BorderSide(color: Theme.of(context).colorScheme.outline)
               : BorderSide.none,
           shape: widget.shape,
+          overlayColor: Colors.transparent,
+          shadowColor: Colors.transparent,
         ),
         child: widget.child,
       );

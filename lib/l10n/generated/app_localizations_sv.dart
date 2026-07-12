@@ -480,6 +480,9 @@ class AppLocalizationsSv extends AppLocalizations {
   String get playNow => 'Spela nu';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Radera nedladdning?';
 
   @override

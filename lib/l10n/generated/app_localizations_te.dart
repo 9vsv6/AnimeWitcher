@@ -483,6 +483,9 @@ class AppLocalizationsTe extends AppLocalizations {
   String get playNow => 'ఇప్పుడే ప్లే చేయండి';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'డౌన్‌లోడ్‌ను తొలగించాలా?';
 
   @override

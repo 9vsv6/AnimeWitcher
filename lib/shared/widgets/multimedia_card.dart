@@ -11,6 +11,7 @@ class MultimediaCard extends StatelessWidget {
   final VoidCallback onTap;
   final String heroTag;
   final bool isPortrait;
+  final FocusNode? focusNode;
 
   const MultimediaCard({
     super.key,
@@ -19,6 +20,7 @@ class MultimediaCard extends StatelessWidget {
     required this.onTap,
     required this.heroTag,
     this.isPortrait = true,
+    this.focusNode,
   });
 
   @override
@@ -37,6 +39,8 @@ class MultimediaCard extends StatelessWidget {
     return RepaintBoundary(
       child: CardsWrapper(
         onTap: onTap,
+        focusNode: focusNode,
+        scaleFactor: 1.05,
         child: SizedBox(
           width: cardWidth,
           child: Column(

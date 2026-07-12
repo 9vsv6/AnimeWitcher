@@ -130,6 +130,7 @@ class JsBasedProvider extends SkyStreamProvider {
       c.complete();
     }
   }
+
   // Optional shared script loader injected by ExtensionManager to deduplicate
   // file reads across sub-providers that share the same JS file.
   final Future<String?> Function()? _scriptLoader;
@@ -423,8 +424,7 @@ class JsBasedProvider extends SkyStreamProvider {
           return result
               .whereType<Map<dynamic, dynamic>>()
               .map(
-                (e) =>
-                    PluginSubProvider.fromJson(Map<String, dynamic>.from(e)),
+                (e) => PluginSubProvider.fromJson(Map<String, dynamic>.from(e)),
               )
               .where((p) => p.id.isNotEmpty)
               .toList();
@@ -451,34 +451,34 @@ class JsBasedProvider extends SkyStreamProvider {
     await _ensureReady();
     if (_error != null) throw JsPluginException("INIT_ERROR", _error!);
     return _serializedInvoke(() async {
-    try {
-      final result = await _jsEngine.invokeAsync(_fn('getHome'));
-      if (result is Map) {
-        // Bound the per-section list size before crossing the isolate
-        // boundary. Audit M25 — a plugin returning 100k items per section
-        // would otherwise force compute() to serialise all of it.
-        final bounded = <dynamic, dynamic>{};
-        for (final entry in result.entries) {
-          final v = entry.value;
-          if (v is List && v.length > _kMaxResultListLength) {
-            bounded[entry.key] = v.sublist(0, _kMaxResultListLength);
-          } else {
-            bounded[entry.key] = v;
+      try {
+        final result = await _jsEngine.invokeAsync(_fn('getHome'));
+        if (result is Map) {
+          // Bound the per-section list size before crossing the isolate
+          // boundary. Audit M25 — a plugin returning 100k items per section
+          // would otherwise force compute() to serialise all of it.
+          final bounded = <dynamic, dynamic>{};
+          for (final entry in result.entries) {
+            final v = entry.value;
+            if (v is List && v.length > _kMaxResultListLength) {
+              bounded[entry.key] = v.sublist(0, _kMaxResultListLength);
+            } else {
+              bounded[entry.key] = v;
+            }
           }
+          final map = await compute(_parseHomeResults, bounded);
+          return map;
         }
-        final map = await compute(_parseHomeResults, bounded);
-        return map;
+        throw Exception("Extension returned invalid home data (not a map).");
+      } on JsPluginException catch (e) {
+        if (kDebugMode) debugPrint("JsPluginException in getHome: $e");
+        talker.error("JsPluginException in getHome: $e");
+        rethrow;
+      } catch (e) {
+        if (kDebugMode) debugPrint("Error in getHome: $e");
+        talker.error("Error in getHome: $e");
+        throw Exception("Failed to load home content: $e");
       }
-      throw Exception("Extension returned invalid home data (not a map).");
-    } on JsPluginException catch (e) {
-      if (kDebugMode) debugPrint("JsPluginException in getHome: $e");
-      talker.error("JsPluginException in getHome: $e");
-      rethrow;
-    } catch (e) {
-      if (kDebugMode) debugPrint("Error in getHome: $e");
-      talker.error("Error in getHome: $e");
-      throw Exception("Failed to load home content: $e");
-    }
     });
   }
 
@@ -547,25 +547,27 @@ class JsBasedProvider extends SkyStreamProvider {
     await LocalProxyService.instance.startServer();
 
     return _serializedInvoke(() async {
-    try {
-      final result = await _jsEngine.invokeAsync(_fn('loadStreams'), [url]);
-      if (result is List) {
-        // Cap the per-call result list. Audit M25 — a misbehaving plugin
-        // could otherwise stream tens of thousands of entries through the
-        // fanout below.
-        final bounded = result.length > _kMaxStreamsPerCall
-            ? result.sublist(0, _kMaxStreamsPerCall)
-            : result;
-        if (kDebugMode && result.length > _kMaxStreamsPerCall) {
-          debugPrint(
-            "[$_packageName] loadStreams returned ${result.length} entries — "
-            "capping to $_kMaxStreamsPerCall (audit M25).",
-          );
-        }
-        // Process in bounded-concurrency chunks. Audit M23 — was
-        // unbounded Future.wait, allowing N parallel compute() spawns +
-        // proxy fetches for an N-entry plugin response.
-        return _processInChunks(bounded, _kStreamFanoutConcurrency, (e) async {
+      try {
+        final result = await _jsEngine.invokeAsync(_fn('loadStreams'), [url]);
+        if (result is List) {
+          // Cap the per-call result list. Audit M25 — a misbehaving plugin
+          // could otherwise stream tens of thousands of entries through the
+          // fanout below.
+          final bounded = result.length > _kMaxStreamsPerCall
+              ? result.sublist(0, _kMaxStreamsPerCall)
+              : result;
+          if (kDebugMode && result.length > _kMaxStreamsPerCall) {
+            debugPrint(
+              "[$_packageName] loadStreams returned ${result.length} entries — "
+              "capping to $_kMaxStreamsPerCall (audit M25).",
+            );
+          }
+          // Process in bounded-concurrency chunks. Audit M23 — was
+          // unbounded Future.wait, allowing N parallel compute() spawns +
+          // proxy fetches for an N-entry plugin response.
+          return _processInChunks(bounded, _kStreamFanoutConcurrency, (
+            e,
+          ) async {
             final map = Map<String, dynamic>.from(e as Map);
             String finalUrl = map['url'] as String;
 
@@ -594,11 +596,49 @@ class JsBasedProvider extends SkyStreamProvider {
                 );
                 final realUrlBytes = base64Decode(b64Url);
                 final realUrl = utf8.decode(realUrlBytes);
+
+                Map<String, String>? sticky = map['headers'] != null
+                    ? Map<String, String>.from(map['headers'] as Map)
+                    : null;
+
+                if (mainUrl.isNotEmpty) {
+                  try {
+                    final baseUri = Uri.parse(mainUrl);
+                    final jarCookies = await _jsEngine.getCookiesForUri(baseUri);
+                    if (jarCookies.isNotEmpty) {
+                      final cookieHeader = jarCookies.map((c) => '${c.name}=${c.value}').join('; ');
+                      sticky ??= <String, String>{};
+                      String? existingKey;
+                      sticky.forEach((k, v) {
+                        if (k.toLowerCase() == 'cookie') existingKey = k;
+                      });
+                      final existingCookie = existingKey != null ? sticky[existingKey] : null;
+                      if (existingCookie != null && existingCookie.isNotEmpty) {
+                        final Map<String, String> merged = {};
+                        for (final pair in existingCookie.split(';')) {
+                          final parts = pair.split('=');
+                          if (parts.length >= 2) {
+                            merged[parts[0].trim()] = parts.sublist(1).join('=').trim();
+                          }
+                        }
+                        for (final c in jarCookies) {
+                          merged[c.name] = c.value;
+                        }
+                        sticky[existingKey!] = merged.entries.map((e) => '${e.key}=${e.value}').join('; ');
+                      } else {
+                        sticky['Cookie'] = cookieHeader;
+                      }
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      debugPrint("Failed to copy cookies from JS engine jar to proxy headers: $e");
+                    }
+                  }
+                }
+
                 finalUrl = LocalProxyService.instance.getProxyUrl(
                   realUrl,
-                  headers: map['headers'] != null
-                      ? Map<String, String>.from(map['headers'] as Map)
-                      : null,
+                  headers: sticky,
                 );
               } catch (e) {
                 if (kDebugMode) {
@@ -614,11 +654,46 @@ class JsBasedProvider extends SkyStreamProvider {
                     jsonDecode(decodedJson) as Map<String, dynamic>;
 
                 final String realUrl = config['url'] as String;
-                final Map<String, String>? sticky = config['headers'] != null
+                Map<String, String>? sticky = config['headers'] != null
                     ? Map<String, String>.from(config['headers'] as Map)
                     : (map['headers'] != null
                           ? Map<String, String>.from(map['headers'] as Map)
                           : null);
+
+                if (mainUrl.isNotEmpty) {
+                  try {
+                    final baseUri = Uri.parse(mainUrl);
+                    final jarCookies = await _jsEngine.getCookiesForUri(baseUri);
+                    if (jarCookies.isNotEmpty) {
+                      final cookieHeader = jarCookies.map((c) => '${c.name}=${c.value}').join('; ');
+                      sticky ??= <String, String>{};
+                      String? existingKey;
+                      sticky.forEach((k, v) {
+                        if (k.toLowerCase() == 'cookie') existingKey = k;
+                      });
+                      final existingCookie = existingKey != null ? sticky[existingKey] : null;
+                      if (existingCookie != null && existingCookie.isNotEmpty) {
+                        final Map<String, String> merged = {};
+                        for (final pair in existingCookie.split(';')) {
+                          final parts = pair.split('=');
+                          if (parts.length >= 2) {
+                            merged[parts[0].trim()] = parts.sublist(1).join('=').trim();
+                          }
+                        }
+                        for (final c in jarCookies) {
+                          merged[c.name] = c.value;
+                        }
+                        sticky[existingKey!] = merged.entries.map((e) => '${e.key}=${e.value}').join('; ');
+                      } else {
+                        sticky['Cookie'] = cookieHeader;
+                      }
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      debugPrint("Failed to copy cookies from JS engine jar to proxy headers: $e");
+                    }
+                  }
+                }
 
                 ProxyOptions? options;
                 if (config['options'] != null) {
@@ -659,17 +734,17 @@ class JsBasedProvider extends SkyStreamProvider {
               licenseUrl: map['licenseUrl'] as String?,
             );
           });
+        }
+        return [];
+      } on JsPluginException catch (e) {
+        if (kDebugMode) debugPrint("JsPluginException in loadStreams: $e");
+        talker.error("JsPluginException in loadStreams: $e");
+        rethrow;
+      } catch (e) {
+        if (kDebugMode) debugPrint("Error in loadStreams: $e");
+        talker.error("Error in loadStreams: $e");
+        return <StreamResult>[];
       }
-      return [];
-    } on JsPluginException catch (e) {
-      if (kDebugMode) debugPrint("JsPluginException in loadStreams: $e");
-      talker.error("JsPluginException in loadStreams: $e");
-      rethrow;
-    } catch (e) {
-      if (kDebugMode) debugPrint("Error in loadStreams: $e");
-      talker.error("Error in loadStreams: $e");
-      return <StreamResult>[];
-    }
     });
   }
 }

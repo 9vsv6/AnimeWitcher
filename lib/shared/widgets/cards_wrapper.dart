@@ -66,7 +66,13 @@ class _CardsWrapperState extends State<CardsWrapper>
   @override
   void dispose() {
     _controller?.dispose();
-    if (widget.focusNode == null) _node.dispose();
+    if (widget.focusNode == null) {
+      _node.dispose();
+    } else {
+      if (widget.focusNode!.hasFocus) {
+        widget.focusNode!.unfocus();
+      }
+    }
     super.dispose();
   }
 
@@ -126,23 +132,31 @@ class _CardsWrapperState extends State<CardsWrapper>
           curve: curve,
         );
 
-        // Vertical: only scroll if the card is actually clipped. Moving
-        // Left/Right within a row would otherwise re-center the row
-        // vertically on every keystroke and the whole screen would jump.
+        // Vertical: only scroll if the row is actually clipped. Target the
+        // horizontal parent scrollable row's RenderObject to prevent
+        // horizontal animation coordinate mutations from fighting with
+        // vertical scrolling, which causes screen jitter/jumping.
         final vScroll = Scrollable.maybeOf(context, axis: Axis.vertical);
         if (vScroll != null) {
           final scrollBox = vScroll.context.findRenderObject();
           if (scrollBox is RenderBox && scrollBox.hasSize) {
-            final top = ro.localToGlobal(Offset.zero, ancestor: scrollBox).dy;
-            final bottom = top + ro.size.height;
-            final viewportH = scrollBox.size.height;
-            if (top < 0 || bottom > viewportH) {
-              vScroll.position.ensureVisible(
-                ro,
-                alignment: 0.5,
-                duration: duration,
-                curve: curve,
-              );
+            final hScroll = Scrollable.maybeOf(context, axis: Axis.horizontal);
+            final targetContext = hScroll?.context ?? context;
+            final targetRo = targetContext.findRenderObject();
+            if (targetRo is RenderBox && targetRo.hasSize) {
+              final top = targetRo
+                  .localToGlobal(Offset.zero, ancestor: scrollBox)
+                  .dy;
+              final bottom = top + targetRo.size.height;
+              final viewportH = scrollBox.size.height;
+              if (top < 0 || bottom > viewportH) {
+                vScroll.position.ensureVisible(
+                  targetRo,
+                  alignment: 0.5,
+                  duration: duration,
+                  curve: curve,
+                );
+              }
             }
           }
         }

@@ -7,6 +7,8 @@ import '../../explore/data/explore_language_provider.dart';
 import '../../explore/data/explore_tmdb_provider.dart';
 import './tmdb_details_provider.dart';
 
+import '../../explore/data/anilist_repository.dart';
+
 part 'lightweight_details_provider.g.dart';
 
 @riverpod
@@ -14,6 +16,9 @@ Future<TmdbDetails?> lightweightDetails(
   Ref ref,
   MovieDetailsParams params,
 ) async {
+  if (params.source == 'anilist') {
+    return ref.watch(anilistRepositoryProvider).getAnimeDetails(params.id);
+  }
   final service = ref.watch(tmdbServiceProvider);
   final language = ref.watch(languageProvider);
 

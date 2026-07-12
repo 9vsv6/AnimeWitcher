@@ -482,6 +482,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get playNow => 'Şimdi Oynat';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'İndirmeyi Sil?';
 
   @override

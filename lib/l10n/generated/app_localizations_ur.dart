@@ -480,6 +480,9 @@ class AppLocalizationsUr extends AppLocalizations {
   String get playNow => 'ابھی چلائیں';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'ڈاؤن لوڈ ختم کریں؟';
 
   @override

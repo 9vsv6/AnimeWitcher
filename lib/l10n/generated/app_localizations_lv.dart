@@ -483,6 +483,9 @@ class AppLocalizationsLv extends AppLocalizations {
   String get playNow => 'Atskaņot tūlīt';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Dzēst lejupielādi?';
 
   @override

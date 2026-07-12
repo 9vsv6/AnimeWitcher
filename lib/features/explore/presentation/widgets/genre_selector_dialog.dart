@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/explore_filter_provider.dart';
 import '../../data/explore_tmdb_provider.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class GenreSelectorDialog extends ConsumerWidget {
   const GenreSelectorDialog({super.key});
@@ -116,8 +117,7 @@ class GenreSelectorDialog extends ConsumerWidget {
                       );
                     },
                   ),
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
+                  loading: () => const Center(child: AppLoadingIndicator()),
                   error: (_, _) => Center(
                     child: Text(
                       "Failed to load genres",

@@ -1,7 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-
 import '../../explore/data/explore_language_provider.dart';
 import '../../explore/data/explore_tmdb_provider.dart';
+import '../../explore/data/anilist_repository.dart';
 
 part 'tmdb_details_controller.g.dart';
 
@@ -25,7 +25,13 @@ class TmdbDetailsState {
 @riverpod
 class TmdbDetailsController extends _$TmdbDetailsController {
   @override
-  TmdbDetailsState build(int movieId) {
+  TmdbDetailsState build(int movieId, {String? source}) {
+    if (source == 'anilist') {
+      final future = ref
+          .read(anilistRepositoryProvider)
+          .getAnimeEpisodes(movieId);
+      return TmdbDetailsState(selectedSeason: 1, episodesFuture: future);
+    }
     // Watch language so we re-fetch if it changes
     final lang = ref.watch(languageProvider);
 
@@ -37,7 +43,10 @@ class TmdbDetailsController extends _$TmdbDetailsController {
     return TmdbDetailsState(selectedSeason: 1, episodesFuture: future);
   }
 
-  Future<void> fetchEpisodes(int season) async {
+  Future<void> fetchEpisodes(int season, {String? source}) async {
+    if (source == 'anilist') {
+      return;
+    }
     final lang = ref.read(languageProvider);
 
     final future = ref

@@ -479,6 +479,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get playNow => 'Reproduzir Agora';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Apagar Transferência?';
 
   @override

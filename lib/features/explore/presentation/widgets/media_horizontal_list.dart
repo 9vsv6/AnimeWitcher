@@ -301,6 +301,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                             mediaType: item.tmdbMediaType,
                             heroTag: uniqueTag,
                             placeholderPoster: imageUrl,
+                            source: item.source,
                           ).push<void>(context);
                         }
                       },

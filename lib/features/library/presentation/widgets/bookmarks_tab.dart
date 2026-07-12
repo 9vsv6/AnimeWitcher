@@ -9,6 +9,7 @@ import '../../../../shared/widgets/multimedia_card.dart';
 import '../library_provider.dart';
 
 import '../library_state.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class BookmarksTab extends ConsumerStatefulWidget {
   const BookmarksTab({super.key});
@@ -30,7 +31,7 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
     final double totalHeight = isLarge ? 180.0 : 150.0;
 
     return switch (libraryState) {
-      LibraryLoading() => const Center(child: CircularProgressIndicator()),
+      LibraryLoading() => const Center(child: AppLoadingIndicator()),
       LibraryError(message: final msg) => Center(child: Text(msg)),
       LibraryEmpty() => _buildEmpty(context),
       LibrarySuccess(items: final items) => GridView.builder(

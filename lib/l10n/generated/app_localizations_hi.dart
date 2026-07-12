@@ -478,6 +478,9 @@ class AppLocalizationsHi extends AppLocalizations {
   String get playNow => 'अभी चलाएं';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'डाउनलोड हटाएं?';
 
   @override

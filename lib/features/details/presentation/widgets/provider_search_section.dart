@@ -13,6 +13,7 @@ import '../../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 part 'provider_search_section.g.dart';
@@ -112,10 +113,13 @@ class _ProviderSearchSectionState extends ConsumerState<ProviderSearchSection> {
               return const SizedBox(
                 height: 140,
                 child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AppLoadingIndicator(
+                    constraints: BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                      maxWidth: 24,
+                      maxHeight: 24,
+                    ),
                   ),
                 ),
               );
@@ -273,10 +277,13 @@ class _ProviderSearchSectionState extends ConsumerState<ProviderSearchSection> {
         loading: () => const SizedBox(
           height: 140, // Fix 2: Force height for centering
           child: Center(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            child: AppLoadingIndicator(
+              constraints: BoxConstraints(
+                minWidth: 24,
+                minHeight: 24,
+                maxWidth: 24,
+                maxHeight: 24,
+              ),
             ),
           ),
         ),

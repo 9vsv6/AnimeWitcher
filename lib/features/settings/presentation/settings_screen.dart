@@ -22,8 +22,6 @@ import '../../../core/router/app_router.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(deviceProfileProvider).asData?.value;
@@ -78,7 +76,8 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
 
     final platform = Theme.of(context).platform;
-    final isDesktopOS = platform == TargetPlatform.windows ||
+    final isDesktopOS =
+        platform == TargetPlatform.windows ||
         platform == TargetPlatform.macOS ||
         platform == TargetPlatform.linux;
     final isTouchDevice = !isTv && !isDesktopOS;
@@ -177,7 +176,10 @@ class SettingsScreen extends ConsumerWidget {
                   SettingsTile(
                     icon: Icons.swipe_vertical_rounded,
                     title: l10n.rightGesture,
-                    subtitle: getGestureLabel(playerSettings.rightGesture, l10n),
+                    subtitle: getGestureLabel(
+                      playerSettings.rightGesture,
+                      l10n,
+                    ),
                     onTap: () => showGestureDialog(
                       context,
                       ref,
@@ -386,7 +388,8 @@ class SettingsScreen extends ConsumerWidget {
                         ref
                             .read(generalSettingsProvider.notifier)
                             .setGithubProxyEnabled(
-                                !generalSettings.githubProxyEnabled);
+                              !generalSettings.githubProxyEnabled,
+                            );
                       },
                       isLast: true,
                     ),

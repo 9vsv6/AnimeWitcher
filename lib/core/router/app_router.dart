@@ -201,11 +201,13 @@ class TmdbDetailsRoute extends GoRouteData with $TmdbDetailsRoute {
     this.mediaType = 'movie',
     this.heroTag,
     this.placeholderPoster,
+    this.source,
   });
   final int movieId;
   final String mediaType;
   final String? heroTag;
   final String? placeholderPoster;
+  final String? source;
 
   @override
   Widget build(BuildContext context, GoRouterState state) {
@@ -214,6 +216,7 @@ class TmdbDetailsRoute extends GoRouteData with $TmdbDetailsRoute {
       mediaType: mediaType,
       heroTag: heroTag,
       placeholderPoster: placeholderPoster,
+      source: source,
     );
   }
 }

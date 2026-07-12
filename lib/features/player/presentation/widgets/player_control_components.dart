@@ -23,15 +23,24 @@ class PlayerTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final padding = MediaQuery.viewPaddingOf(context);
     final edge = isTv
         ? HotstarPlayerStyle.tvEdgeInset
         : HotstarPlayerStyle.edgeInset;
+    final double leftPadding = isTv
+        ? edge
+        : (padding.left > edge ? padding.left : edge);
+    final double rightPadding = isTv
+        ? edge
+        : (padding.right > edge ? padding.right : edge);
     return DecoratedBox(
       decoration: const BoxDecoration(gradient: HotstarPlayerStyle.topGradient),
       child: SafeArea(
+        left: false,
+        right: false,
         bottom: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(edge, 14, edge, 24),
+          padding: EdgeInsets.fromLTRB(leftPadding, 14, rightPadding, 24),
           child: Row(
             children: [
               PlayerIconButton(
@@ -136,54 +145,58 @@ class PlayerBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final padding = MediaQuery.viewPaddingOf(context);
     final edge = isTv
         ? HotstarPlayerStyle.tvEdgeInset
         : HotstarPlayerStyle.edgeInset;
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: HotstarPlayerStyle.bottomGradient,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(edge, 2, edge, 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              progressBar,
-              FocusTraversalGroup(
-                child: Focus(
-                  canRequestFocus: false,
-                  skipTraversal: true,
-                  onKeyEvent: isTv ? _handleRowKey : null,
-                  child: Row(
-                    children: [
-                      // Left group: play/pause, lock, next — always visible.
-                      ...leading,
-                      if (isTouch)
-                        // Touch: right-anchored finger-scroll strip so a long
-                        // action list is never clipped out of reach.
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            reverse: true,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: actions,
-                            ),
+    final double leftPadding = isTv
+        ? edge
+        : (padding.left > edge ? padding.left : edge);
+    final double rightPadding = isTv
+        ? edge
+        : (padding.right > edge ? padding.right : edge);
+    return SafeArea(
+      left: false,
+      right: false,
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(leftPadding, 2, rightPadding, 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            progressBar,
+            FocusTraversalGroup(
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: isTv ? _handleRowKey : null,
+                child: Row(
+                  children: [
+                    // Left group: play/pause, lock, next — always visible.
+                    ...leading,
+                    if (isTouch)
+                      // Touch: right-anchored finger-scroll strip so a long
+                      // action list is never clipped out of reach.
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          reverse: true,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: actions,
                           ),
-                        )
-                      else ...[
-                        // TV/desktop: fixed right-aligned group (D-pad nav).
-                        const Spacer(),
-                        ...actions,
-                      ],
+                        ),
+                      )
+                    else ...[
+                      // TV/desktop: fixed right-aligned group (D-pad nav).
+                      const Spacer(),
+                      ...actions,
                     ],
-                  ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -192,7 +205,7 @@ class PlayerBottomBar extends StatelessWidget {
 
 /// Compact icon-only button for utilities (resize, PiP, fullscreen) and the
 /// top-bar back button. Tooltip doubles as the semantics label.
-class PlayerIconButton extends StatelessWidget {
+class PlayerIconButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
@@ -216,25 +229,40 @@ class PlayerIconButton extends StatelessWidget {
   });
 
   @override
+  State<PlayerIconButton> createState() => _PlayerIconButtonState();
+}
+
+class _PlayerIconButtonState extends State<PlayerIconButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final double glyph = iconSize ?? (isTv ? 28 : 26);
-    final double box = glyph + (isTv ? 20 : 18);
+    final double glyph = widget.iconSize ?? (widget.isTv ? 28 : 26);
+    final double box = glyph + (widget.isTv ? 20 : 18);
+
+    Color iconColor;
+    if (_hovered) {
+      iconColor = HotstarPlayerStyle.accent;
+    } else if (widget.highlight) {
+      iconColor = HotstarPlayerStyle.accent;
+    } else {
+      iconColor = Colors.white;
+    }
+
     return Tooltip(
-      message: tooltip,
-      child: CustomButton(
-        onPressed: onPressed,
-        showFocusHighlight: isTv,
-        focusNode: focusNode,
-        shape: const CircleBorder(),
-        child: SizedBox(
-          width: box,
-          height: box,
-          child: Icon(
-            icon,
-            color: highlight
-                ? Theme.of(context).colorScheme.primary
-                : Colors.white,
-            size: glyph,
+      message: widget.tooltip,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: CustomButton(
+          onPressed: widget.onPressed,
+          showFocusHighlight: widget.isTv,
+          focusNode: widget.focusNode,
+          shape: const CircleBorder(),
+          child: SizedBox(
+            width: box,
+            height: box,
+            child: Icon(widget.icon, color: iconColor, size: glyph),
           ),
         ),
       ),
@@ -280,8 +308,10 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = widget.highlight || _hovered || _focused || _pressed;
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final showBg = (widget.highlight || _focused || _pressed) && !_hovered;
+    final color = (widget.highlight || _hovered || _focused || _pressed)
+        ? HotstarPlayerStyle.accent
+        : Colors.white;
     final showTvFocusRing = widget.isTv && _focused;
 
     return Semantics(
@@ -325,17 +355,19 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                 constraints: const BoxConstraints(minHeight: 44),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: isActive
-                      ? primaryColor.withValues(alpha: 0.16)
+                  color: showBg
+                      ? HotstarPlayerStyle.accent.withValues(alpha: 0.16)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                   border: showTvFocusRing
-                      ? Border.all(color: primaryColor, width: 2)
+                      ? Border.all(color: HotstarPlayerStyle.accent, width: 2)
                       : null,
                   boxShadow: showTvFocusRing
                       ? [
                           BoxShadow(
-                            color: primaryColor.withValues(alpha: 0.2),
+                            color: HotstarPlayerStyle.accent.withValues(
+                              alpha: 0.2,
+                            ),
                             blurRadius: 8,
                           ),
                         ]
@@ -344,18 +376,12 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      widget.icon,
-                      color: isActive ? primaryColor : Colors.white,
-                      size: 20,
-                    ),
+                    Icon(widget.icon, color: color, size: 20),
                     const SizedBox(width: 6),
                     Text(
                       widget.label,
                       style: TextStyle(
-                        color: isActive
-                            ? primaryColor
-                            : HotstarPlayerStyle.primaryText,
+                        color: color,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),

@@ -483,6 +483,9 @@ class AppLocalizationsMl extends AppLocalizations {
   String get playNow => 'ഇപ്പോൾ പ്ലേ ചെയ്യുക';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'ഡൗൺലോഡ് ഇല്ലാതാക്കണോ?';
 
   @override

@@ -20,7 +20,8 @@ class SyncedProgressSection extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<SyncedProgressSection> createState() => _SyncedProgressSectionState();
+  ConsumerState<SyncedProgressSection> createState() =>
+      _SyncedProgressSectionState();
 }
 
 class _SyncedProgressSectionState extends ConsumerState<SyncedProgressSection> {
@@ -82,7 +83,9 @@ class _SyncedProgressSectionState extends ConsumerState<SyncedProgressSection> {
             child: ListView.builder(
               controller: _scrollController,
               padding: EdgeInsets.symmetric(
-                horizontal: isLarge ? LayoutConstants.dashboardContentPadding : 16,
+                horizontal: isLarge
+                    ? LayoutConstants.dashboardContentPadding
+                    : 16,
                 vertical: 8,
               ),
               scrollDirection: Axis.horizontal,
@@ -93,7 +96,9 @@ class _SyncedProgressSectionState extends ConsumerState<SyncedProgressSection> {
                 return Padding(
                   padding: EdgeInsets.only(right: isLarge ? 24.0 : 12.0),
                   child: SyncedProgressCard(
-                    key: ValueKey('${item.tmdbId}_${item.imdbId}_${item.title}'),
+                    key: ValueKey(
+                      '${item.tmdbId}_${item.imdbId}_${item.title}',
+                    ),
                     item: item,
                     width: width,
                     isLarge: isLarge,

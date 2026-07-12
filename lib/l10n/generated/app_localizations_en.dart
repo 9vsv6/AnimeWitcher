@@ -477,6 +477,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get playNow => 'Play Now';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Delete Download?';
 
   @override

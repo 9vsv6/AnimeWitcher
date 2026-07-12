@@ -21,6 +21,7 @@ import "widgets/details_layout_widgets.dart";
 import "widgets/details_desktop_hero.dart";
 import "widgets/premium_details_widgets.dart";
 import "../../../shared/widgets/expandable_text.dart";
+import "../../../shared/widgets/loading_indicator.dart";
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 class DetailsScreen extends ConsumerStatefulWidget {
@@ -143,6 +144,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                       ),
                     ),
                   ),
+                  // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -150,12 +152,34 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
+                          Colors.black.withValues(alpha: 0.65),
+                        ],
+                        stops: const [0.5, 1.0],
+                      ),
+                    ),
+                  ),
+                  // 2. Blend-into-page transition: Theme-aware eased fade to surface
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
                           Theme.of(
                             context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.5),
+                          ).scaffoldBackgroundColor.withValues(alpha: 0.0),
+                          Theme.of(
+                            context,
+                          ).scaffoldBackgroundColor.withValues(alpha: 0.15),
+                          Theme.of(
+                            context,
+                          ).scaffoldBackgroundColor.withValues(alpha: 0.45),
+                          Theme.of(
+                            context,
+                          ).scaffoldBackgroundColor.withValues(alpha: 0.8),
                           Theme.of(context).scaffoldBackgroundColor,
                         ],
-                        stops: const [0.0, 0.6, 1.0],
+                        stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
                       ),
                     ),
                   ),
@@ -308,7 +332,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
       children: [
         // Loading / Error / Season chips
         if (detailsState is AsyncLoading)
-          const Center(child: CircularProgressIndicator())
+          const Center(child: AppLoadingIndicator())
         else if (detailsState is AsyncError)
           Text(
             "Error: ${detailsState.error}",
@@ -456,7 +480,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
               ),
               const SizedBox(height: 32),
               if (detailsState is AsyncLoading)
-                const Center(child: CircularProgressIndicator())
+                const Center(child: AppLoadingIndicator())
               else if (detailsState is AsyncError)
                 Container(
                   padding: const EdgeInsets.all(16),

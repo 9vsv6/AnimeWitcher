@@ -77,7 +77,8 @@ class SimklService implements TrackingService {
 
       // Polling
       int attempts = 0;
-      while (attempts < 60) { // Timeout after ~5 mins (assuming 5s interval)
+      while (attempts < 60) {
+        // Timeout after ~5 mins (assuming 5s interval)
         if (isCancelled != null && isCancelled()) {
           talker.debug('SimklService: Polling cancelled by user.');
           return false;
@@ -93,7 +94,9 @@ class SimklService implements TrackingService {
           );
 
           final data = tokenResponse.data;
-          if (data is Map && data['result'] == 'OK' && data['access_token'] != null) {
+          if (data is Map &&
+              data['result'] == 'OK' &&
+              data['access_token'] != null) {
             _accessToken = data['access_token'].toString();
             await _storage.write(_kAccessTokenKey, _accessToken!);
             talker.debug('SimklService: Login successful!');
@@ -124,7 +127,7 @@ class SimklService implements TrackingService {
   @override
   Future<List<MultimediaItem>> search(String query) async {
     if (_accessToken == null) return [];
-    
+
     // Search implementation
     return [];
   }
@@ -132,39 +135,45 @@ class SimklService implements TrackingService {
   @override
   Future<Map<String, String>> syncIds(MultimediaItem item) async {
     final Map<String, String> resolvedIds = {};
-    
+
     try {
-      final queryParams = <String, String>{
-        'client_id': _clientId,
-      };
-      
+      final queryParams = <String, String>{'client_id': _clientId};
+
       if (item.imdbId != null) {
         queryParams['imdb'] = item.imdbId!;
       } else if (item.tmdbId != null) {
         queryParams['tmdb'] = item.tmdbId.toString();
       } else {
-        talker.debug('SimklService.syncIds: No imdbId or tmdbId found on item: ${item.title}');
+        talker.debug(
+          'SimklService.syncIds: No imdbId or tmdbId found on item: ${item.title}',
+        );
         return {};
       }
 
-      talker.debug('SimklService.syncIds: Querying Simkl for ${item.title} with params: $queryParams');
+      talker.debug(
+        'SimklService.syncIds: Querying Simkl for ${item.title} with params: $queryParams',
+      );
 
       final response = await _dio.get<List<dynamic>>(
         'https://api.simkl.com/search/id',
         queryParameters: queryParams,
       );
 
-      talker.debug('SimklService.syncIds: Response code: ${response.statusCode}, data: ${response.data}');
+      talker.debug(
+        'SimklService.syncIds: Response code: ${response.statusCode}, data: ${response.data}',
+      );
 
-      if (response.statusCode == 200 && response.data != null && response.data!.isNotEmpty) {
+      if (response.statusCode == 200 &&
+          response.data != null &&
+          response.data!.isNotEmpty) {
         final result = response.data!.first as Map<String, dynamic>;
         final type = result['type'] as String?;
         final ids = result['ids'] as Map<String, dynamic>?;
-        
+
         if (ids != null && ids['simkl'] != null) {
           final simklId = ids['simkl'].toString();
           resolvedIds['simkl'] = simklId;
-          
+
           // Determine correct details endpoint path
           String detailsPath;
           if (type == 'movie') {
@@ -174,24 +183,40 @@ class SimklService implements TrackingService {
           } else if (type == 'anime') {
             detailsPath = 'anime';
           } else {
-            detailsPath = item.contentType == MultimediaContentType.movie ? 'movies' : 'tv';
+            detailsPath = item.contentType == MultimediaContentType.movie
+                ? 'movies'
+                : 'tv';
           }
-          
-          talker.debug('SimklService.syncIds: Fetching full details from /$detailsPath/$simklId');
-          
+
+          talker.debug(
+            'SimklService.syncIds: Fetching full details from /$detailsPath/$simklId',
+          );
+
           final detailsResponse = await _dio.get<Map<String, dynamic>>(
             'https://api.simkl.com/$detailsPath/$simklId',
             queryParameters: {'client_id': _clientId},
           );
-          
-          if (detailsResponse.statusCode == 200 && detailsResponse.data != null) {
-            final detailsIds = detailsResponse.data!['ids'] as Map<String, dynamic>?;
+
+          if (detailsResponse.statusCode == 200 &&
+              detailsResponse.data != null) {
+            final detailsIds =
+                detailsResponse.data!['ids'] as Map<String, dynamic>?;
             if (detailsIds != null) {
-              if (detailsIds['simkl'] != null) resolvedIds['simkl'] = detailsIds['simkl'].toString();
-              if (detailsIds['mal'] != null) resolvedIds['mal'] = detailsIds['mal'].toString();
-              if (detailsIds['anilist'] != null) resolvedIds['anilist'] = detailsIds['anilist'].toString();
-              if (detailsIds['tmdb'] != null) resolvedIds['tmdb'] = detailsIds['tmdb'].toString();
-              if (detailsIds['imdb'] != null) resolvedIds['imdb'] = detailsIds['imdb'].toString();
+              if (detailsIds['simkl'] != null) {
+                resolvedIds['simkl'] = detailsIds['simkl'].toString();
+              }
+              if (detailsIds['mal'] != null) {
+                resolvedIds['mal'] = detailsIds['mal'].toString();
+              }
+              if (detailsIds['anilist'] != null) {
+                resolvedIds['anilist'] = detailsIds['anilist'].toString();
+              }
+              if (detailsIds['tmdb'] != null) {
+                resolvedIds['tmdb'] = detailsIds['tmdb'].toString();
+              }
+              if (detailsIds['imdb'] != null) {
+                resolvedIds['imdb'] = detailsIds['imdb'].toString();
+              }
             }
           }
         }
@@ -202,16 +227,23 @@ class SimklService implements TrackingService {
     } catch (e, st) {
       talker.error('SimklService.syncIds error for item: ${item.title}', e, st);
     }
-    
+
     return resolvedIds;
   }
 
-  Future<bool> _syncList(MultimediaItem item, Episode? episode, String listType, Map<String, String>? resolvedIds) async {
+  Future<bool> _syncList(
+    MultimediaItem item,
+    Episode? episode,
+    String listType,
+    Map<String, String>? resolvedIds,
+  ) async {
     if (_accessToken == null) return false;
-    
+
     final simklId = resolvedIds?['simkl'];
     // We need simkl id or other ids. We'll send TMDB/IMDB directly if available.
-    if (simklId == null && item.tmdbId == null && item.imdbId == null) return false;
+    if (simklId == null && item.tmdbId == null && item.imdbId == null) {
+      return false;
+    }
 
     try {
       final payload = <String, dynamic>{};
@@ -223,11 +255,11 @@ class SimklService implements TrackingService {
 
       if (item.contentType == MultimediaContentType.movie) {
         payload['movies'] = [
-          {'to': listType, 'ids': ids}
+          {'to': listType, 'ids': ids},
         ];
       } else {
         payload['shows'] = [
-          {'to': listType, 'ids': ids}
+          {'to': listType, 'ids': ids},
         ];
       }
 
@@ -241,7 +273,9 @@ class SimklService implements TrackingService {
           },
         ),
       );
-      talker.debug('SimklService: Add to list $listType success: ${response.statusCode}');
+      talker.debug(
+        'SimklService: Add to list $listType success: ${response.statusCode}',
+      );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       talker.error('SimklService: Add to list $listType failed', e);
@@ -250,10 +284,16 @@ class SimklService implements TrackingService {
   }
 
   @override
-  Future<bool> markWatched(MultimediaItem item, Episode? episode, {Map<String, String>? resolvedIds}) async {
+  Future<bool> markWatched(
+    MultimediaItem item,
+    Episode? episode, {
+    Map<String, String>? resolvedIds,
+  }) async {
     if (_accessToken == null) return false;
     final simklId = resolvedIds?['simkl'];
-    if (simklId == null && item.tmdbId == null && item.imdbId == null) return false;
+    if (simklId == null && item.tmdbId == null && item.imdbId == null) {
+      return false;
+    }
 
     try {
       final payload = <String, dynamic>{};
@@ -264,19 +304,18 @@ class SimklService implements TrackingService {
       };
 
       if (item.contentType == MultimediaContentType.movie) {
-        payload['movies'] = [{'ids': ids}];
+        payload['movies'] = [
+          {'ids': ids},
+        ];
       } else {
         if (episode == null) return false;
         payload['shows'] = [
           {
             'ids': ids,
             'episodes': [
-              {
-                'season': episode.season,
-                'number': episode.episode,
-              }
-            ]
-          }
+              {'season': episode.season, 'number': episode.episode},
+            ],
+          },
         ];
       }
 
@@ -290,7 +329,9 @@ class SimklService implements TrackingService {
           },
         ),
       );
-      talker.debug('SimklService: Mark watched success: ${response.statusCode}');
+      talker.debug(
+        'SimklService: Mark watched success: ${response.statusCode}',
+      );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       talker.error('SimklService: Mark watched failed', e);
@@ -299,27 +340,46 @@ class SimklService implements TrackingService {
   }
 
   @override
-  Future<bool> scrobbleStart(MultimediaItem item, Episode? episode, double progress, {Map<String, String>? resolvedIds}) async {
+  Future<bool> scrobbleStart(
+    MultimediaItem item,
+    Episode? episode,
+    double progress, {
+    Map<String, String>? resolvedIds,
+  }) async {
     // Simkl doesn't have real-time scrobble, so we add to watching list
     return _syncList(item, episode, 'watching', resolvedIds);
   }
 
   @override
-  Future<bool> scrobblePause(MultimediaItem item, Episode? episode, double progress, {Map<String, String>? resolvedIds}) async {
+  Future<bool> scrobblePause(
+    MultimediaItem item,
+    Episode? episode,
+    double progress, {
+    Map<String, String>? resolvedIds,
+  }) async {
     // No-op for Simkl
     return true;
   }
 
   @override
-  Future<bool> scrobbleStop(MultimediaItem item, Episode? episode, double progress, {Map<String, String>? resolvedIds}) async {
+  Future<bool> scrobbleStop(
+    MultimediaItem item,
+    Episode? episode,
+    double progress, {
+    Map<String, String>? resolvedIds,
+  }) async {
     // No-op for Simkl. Actual completion is handled by markWatched.
     return true;
   }
 
   @override
-  Future<bool> addToPlanToWatch(MultimediaItem item, {Map<String, String>? resolvedIds}) async {
+  Future<bool> addToPlanToWatch(
+    MultimediaItem item, {
+    Map<String, String>? resolvedIds,
+  }) async {
     return _syncList(item, null, 'plantowatch', resolvedIds);
   }
+
   @override
   Future<List<SyncProgressItem>> pullPlaybackProgress() async {
     return [];

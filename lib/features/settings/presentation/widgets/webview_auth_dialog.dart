@@ -53,7 +53,8 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
     // AniList's implicit-grant flow puts the access token in the fragment of
     // its pin page (https://anilist.co/api/v2/oauth/pin#access_token=…)
     // before any redirect to localhost happens — accept that exact URL too.
-    final isAnilistPin = widget.providerName == 'AniList' &&
+    final isAnilistPin =
+        widget.providerName == 'AniList' &&
         parsed.scheme == 'https' &&
         parsed.host == 'anilist.co' &&
         parsed.path == '/api/v2/oauth/pin';
@@ -183,8 +184,7 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
                 ),
                 elevation: 0,
               ),
-              if (progress < 1.0)
-                LinearProgressIndicator(value: progress),
+              if (progress < 1.0) LinearProgressIndicator(value: progress),
               Expanded(
                 child: InAppWebView(
                   initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
@@ -207,17 +207,18 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
                   onReceivedError: (controller, request, error) {
                     _handleRedirect(request.url);
                   },
-                  shouldOverrideUrlLoading: (controller, navigationAction) async {
-                    final url = navigationAction.request.url;
-                    if (url != null) {
-                      final parsed = Uri.tryParse(url.toString());
-                      if (parsed != null && _matchesRedirect(parsed)) {
-                        _handleRedirect(url);
-                        return NavigationActionPolicy.CANCEL;
-                      }
-                    }
-                    return NavigationActionPolicy.ALLOW;
-                  },
+                  shouldOverrideUrlLoading:
+                      (controller, navigationAction) async {
+                        final url = navigationAction.request.url;
+                        if (url != null) {
+                          final parsed = Uri.tryParse(url.toString());
+                          if (parsed != null && _matchesRedirect(parsed)) {
+                            _handleRedirect(url);
+                            return NavigationActionPolicy.CANCEL;
+                          }
+                        }
+                        return NavigationActionPolicy.ALLOW;
+                      },
                   onProgressChanged: (controller, progress) {
                     setState(() {
                       this.progress = progress / 100;

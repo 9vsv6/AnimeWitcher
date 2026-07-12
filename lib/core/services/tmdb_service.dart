@@ -542,7 +542,11 @@ class TmdbService {
       'sort_by': sortBy,
       'page': page,
       'include_null_first_air_dates': false,
-      'vote_count.gte': minVoteCount(fullLanguageCode),
+      // Skip vote threshold for recency-sorted queries so new releases
+      // (especially regional language films with few votes yet) show up.
+      if (!sortBy.contains('release_date') &&
+          !sortBy.contains('first_air_date'))
+        'vote_count.gte': minVoteCount(fullLanguageCode),
       // Content Filter: Original Language
       if (fullLanguageCode != 'en-US') 'with_original_language': isoCode,
       // Content Filter: Released Only (Fix for user request)

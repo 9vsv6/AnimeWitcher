@@ -6,23 +6,32 @@ import '../../../core/services/tmdb_service.dart';
 import '../../explore/data/explore_language_provider.dart';
 import '../../explore/data/explore_tmdb_provider.dart';
 
+import '../../explore/data/anilist_repository.dart';
+
 part 'tmdb_details_provider.g.dart';
 
 class MovieDetailsParams {
   final int id;
   final String type; // 'movie' or 'tv'
-  MovieDetailsParams(this.id, this.type);
+  final String? source;
+  MovieDetailsParams(this.id, this.type, {this.source});
 
   @override
   bool operator ==(Object other) =>
-      other is MovieDetailsParams && other.id == id && other.type == type;
+      other is MovieDetailsParams &&
+      other.id == id &&
+      other.type == type &&
+      other.source == source;
 
   @override
-  int get hashCode => Object.hash(id, type);
+  int get hashCode => Object.hash(id, type, source);
 }
 
 @riverpod
 Future<TmdbDetails?> tmdbDetails(Ref ref, MovieDetailsParams params) async {
+  if (params.source == 'anilist') {
+    return ref.watch(anilistRepositoryProvider).getAnimeDetails(params.id);
+  }
   final service = ref.watch(tmdbServiceProvider);
   final language = ref.watch(languageProvider);
 

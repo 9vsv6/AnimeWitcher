@@ -176,10 +176,12 @@ class RepositoryService {
 
   String _normalizeUrl(String url) {
     if (!enableGithubProxy) return url;
-    
+
     // Convert raw.githubusercontent.com to jsdelivr for caching/performance
     if (url.contains('raw.githubusercontent.com')) {
-      final regex = RegExp(r'^https://raw\.githubusercontent\.com/([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+)/(.*)$');
+      final regex = RegExp(
+        r'^https://raw\.githubusercontent\.com/([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+)/(.*)$',
+      );
       final match = regex.firstMatch(url);
       if (match != null) {
         final user = match.group(1);

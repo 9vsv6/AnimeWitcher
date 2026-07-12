@@ -30,6 +30,7 @@ import 'skip_segment_overlay.dart';
 import 'hotstar_player_style.dart';
 import '../player_platform_service.dart';
 import '../player_gesture_handler.dart';
+import 'player_metadata_scrim.dart';
 
 class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   final Player player;
@@ -52,6 +53,8 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   /// subtree). This is the single mechanism that keeps D-pad alive after the
   /// controls auto-hide — replacing the old `primaryFocus.unfocus()` dance.
   final VoidCallback? onRequestRootFocus;
+  final String? backdropUrl;
+  final String? logoUrl;
 
   const SkyStreamPlayerControls({
     super.key,
@@ -69,6 +72,8 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
     this.onResize,
     this.onVisibilityChanged,
     this.onRequestRootFocus,
+    this.backdropUrl,
+    this.logoUrl,
     this.isLoading = false,
   });
 
@@ -91,6 +96,9 @@ class SkyStreamPlayerControlsState
 
   bool _showTorrentInfo = false; // Changed from true
   Timer? _hideTimer;
+
+  // Metadata scrim (Netflix-style info panel on pause, TV/desktop only)
+  final GlobalKey<PlayerMetadataScrimState> _metadataScrimKey = GlobalKey();
   bool _isLocked = false;
 
   // Seek animation state
@@ -111,6 +119,7 @@ class SkyStreamPlayerControlsState
   Offset? _tapPosition;
   Duration _animDuration = HotstarPlayerStyle.controlFadeDuration;
   bool _isFullscreen = false;
+  bool get isFullscreen => _isFullscreen;
   // The single focus anchor: when the chrome (re)appears on TV we move focus
   // here (the bottom-row play/pause). Directional traversal handles every
   // other movement between controls — no other requestFocus calls exist.
@@ -205,10 +214,17 @@ class SkyStreamPlayerControlsState
       widget.player.stream.playing.listen((val) {
         final oldPlaying = _isPlaying;
         _isPlaying = val; // Update local cache
+        if (mounted) {
+          setState(() {}); // Sync isPlaying to overlays (next ep countdown)
+        }
         if (val) {
           _startHideTimer();
+          // Playing → tell scrim to re-evaluate (will hide immediately).
+          _metadataScrimKey.currentState?.resetSchedule();
         } else {
           _cancelHideTimer();
+          // Paused → tell scrim to re-evaluate (will schedule 8s show).
+          _metadataScrimKey.currentState?.resetSchedule();
         }
 
         // REBUILD: If we transition to playing but were stuck in loading UI, trigger rebuild
@@ -459,6 +475,9 @@ class SkyStreamPlayerControlsState
     unawaited(
       ref.read(playerControllerProvider.notifier).setPlaybackSpeed(2.0),
     );
+    ref
+        .read(playerGestureHandlerProvider.notifier)
+        .showToast("2.0x", Icons.fast_forward_rounded);
   }
 
   void _endTouchSpeedHold() {
@@ -471,6 +490,12 @@ class SkyStreamPlayerControlsState
           .read(playerControllerProvider.notifier)
           .setPlaybackSpeed(previousSpeed),
     );
+    ref
+        .read(playerGestureHandlerProvider.notifier)
+        .showToast(
+          "${previousSpeed.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}x",
+          Icons.play_arrow_rounded,
+        );
   }
 
   // ... (keeping other methods same)
@@ -511,6 +536,8 @@ class SkyStreamPlayerControlsState
       setState(() => _isVisible = false);
       widget.onVisibilityChanged?.call(false);
       _returnFocusToRoot();
+      // Reschedule scrim visibility on auto-hide.
+      _metadataScrimKey.currentState?.resetSchedule();
     }
   }
 
@@ -666,10 +693,15 @@ class SkyStreamPlayerControlsState
     final playing = state == vv.VideoControllerPlaybackState.playing;
     if (playing != _isPlaying) {
       _isPlaying = playing;
+      if (mounted) {
+        setState(() {}); // Sync isPlaying to overlays (next ep countdown)
+      }
       if (playing) {
         _startHideTimer();
+        _metadataScrimKey.currentState?.resetSchedule();
       } else {
         _cancelHideTimer();
+        _metadataScrimKey.currentState?.resetSchedule();
       }
     }
   }
@@ -894,6 +926,24 @@ class SkyStreamPlayerControlsState
     final nextEpTitle = ref.watch(
       playerControllerProvider.select((s) => s.nextEpisodeTitle),
     );
+    final nextEpPosterUrl = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodePosterUrl),
+    );
+    final nextEpRating = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeRating),
+    );
+    final nextEpNumber = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeNumber),
+    );
+    final nextEpSeason = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeSeason),
+    );
+    final nextEpRuntime = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeRuntime),
+    );
+    final nextEpDescription = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeDescription),
+    );
     final resumePromptPosition = ref.watch(
       playerControllerProvider.select((s) => s.resumePromptPosition),
     );
@@ -1077,6 +1127,8 @@ class SkyStreamPlayerControlsState
                   Positioned.fill(
                     child: IgnorePointer(
                       child: SafeArea(
+                        left: false,
+                        right: false,
                         child: Align(
                           alignment: Alignment.topRight,
                           child: Padding(
@@ -1085,12 +1137,20 @@ class SkyStreamPlayerControlsState
                               top: _isTv ? 88 : 68,
                               right: _isTv
                                   ? HotstarPlayerStyle.tvEdgeInset
-                                  : HotstarPlayerStyle.edgeInset,
+                                  : (MediaQuery.viewPaddingOf(context).right >
+                                            HotstarPlayerStyle.edgeInset
+                                        ? MediaQuery.viewPaddingOf(
+                                            context,
+                                          ).right
+                                        : HotstarPlayerStyle.edgeInset),
                               left: 12,
                             ),
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
-                                maxWidth: (size.width * 0.36).clamp(240.0, 360.0),
+                                maxWidth: (size.width * 0.36).clamp(
+                                  240.0,
+                                  360.0,
+                                ),
                               ),
                               child: TorrentInfoWidget(status: torrentStatus),
                             ),
@@ -1101,8 +1161,11 @@ class SkyStreamPlayerControlsState
                   ),
 
                 // Resume Prompt Button
-                if (resumePromptPosition != null ||
-                    resumePromptPercentage != null)
+                if (!widget.isLoading &&
+                    _duration != Duration.zero &&
+                    !_isLocked &&
+                    (resumePromptPosition != null ||
+                        resumePromptPercentage != null))
                   ResumePromptOverlay(
                     focusNode: _resumeFocusNode,
                     positionMs: resumePromptPosition,
@@ -1116,7 +1179,7 @@ class SkyStreamPlayerControlsState
                     isTv: _isTv,
                   ),
 
-                // Next Episode Button (Persistent when triggered)
+                // Next Episode Card (Persistent when triggered)
                 if (resumePromptPosition == null &&
                     resumePromptPercentage == null &&
                     showNextEpOverlay &&
@@ -1124,6 +1187,12 @@ class SkyStreamPlayerControlsState
                   NextEpisodeOverlay(
                     focusNode: _nextEpFocusNode,
                     nextEpisodeTitle: nextEpTitle,
+                    nextEpisodePosterUrl: nextEpPosterUrl,
+                    nextEpisodeRating: nextEpRating,
+                    nextEpisodeNumber: nextEpNumber,
+                    nextEpisodeSeason: nextEpSeason,
+                    nextEpisodeRuntime: nextEpRuntime,
+                    nextEpisodeDescription: nextEpDescription,
                     onPlayNext: () => ref
                         .read(playerControllerProvider.notifier)
                         .playNextEpisode(),
@@ -1131,6 +1200,7 @@ class SkyStreamPlayerControlsState
                         .read(playerControllerProvider.notifier)
                         .dismissNextEpisodeOverlay(),
                     isTv: _isTv,
+                    isPlaying: _isPlaying,
                   ),
 
                 // Skip Segment Overlay (Skip Intro / Skip Recap / Skip Outro)
@@ -1206,6 +1276,22 @@ class SkyStreamPlayerControlsState
                       ),
                     ),
                   ),
+
+                // Netflix-style metadata scrim (TV / desktop only).
+                // Sits over the paused video as a left-anchored gradient panel
+                // with logo/title, meta line, and description. Appears after
+                // 8 s of pause; hides on resume or dialog open.
+                PlayerMetadataScrim(
+                  key: _metadataScrimKey,
+                  item: ref.read(playerControllerProvider.notifier).multimediaItem,
+                  episode: ref.read(playerControllerProvider.notifier).currentEpisode,
+                  isSeries: ref.read(playerControllerProvider.notifier).isSeries,
+                  isPaused: !_isPlaying,
+                  isDialogOpen: _panelOpen,
+                  controlsVisible: _isVisible,
+                  isTv: _isTv,
+                  onHidePlayerUI: hideControls,
+                ),
 
                 // Sources / Audio / Subtitles drawer — topmost so it sits above
                 // the chrome. Pure Row layout inside (no nested Stack).
@@ -1460,16 +1546,24 @@ class SkyStreamPlayerControlsState
                       focusNode: _scrubFocusNode,
                       onArrowUp: () {
                         final resumePromptPosition = ref.read(
-                          playerControllerProvider.select((s) => s.resumePromptPosition),
+                          playerControllerProvider.select(
+                            (s) => s.resumePromptPosition,
+                          ),
                         );
                         final resumePromptPercentage = ref.read(
-                          playerControllerProvider.select((s) => s.resumePromptPercentage),
+                          playerControllerProvider.select(
+                            (s) => s.resumePromptPercentage,
+                          ),
                         );
                         final showNextEpOverlay = ref.read(
-                          playerControllerProvider.select((s) => s.showNextEpisodeOverlay),
+                          playerControllerProvider.select(
+                            (s) => s.showNextEpisodeOverlay,
+                          ),
                         );
                         final nextEpTitle = ref.read(
-                          playerControllerProvider.select((s) => s.nextEpisodeTitle),
+                          playerControllerProvider.select(
+                            (s) => s.nextEpisodeTitle,
+                          ),
                         );
 
                         if (resumePromptPosition != null ||
@@ -1524,6 +1618,8 @@ class SkyStreamPlayerControlsState
       onBack: widget.onBackPointer ?? () => context.pop(),
       phase: phase,
       sourceAttempts: sourceAttempts,
+      backdropUrl: widget.backdropUrl,
+      logoUrl: widget.logoUrl,
       isTv: _isTv,
       onSkip: canSkip
           ? () =>

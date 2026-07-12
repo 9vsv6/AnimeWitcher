@@ -481,6 +481,9 @@ class AppLocalizationsRo extends AppLocalizations {
   String get playNow => 'Redă acum';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Ștergi descărcarea?';
 
   @override

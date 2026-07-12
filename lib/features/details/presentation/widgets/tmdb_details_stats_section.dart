@@ -58,9 +58,13 @@ class TmdbDetailsStatsSection extends StatelessWidget {
                   ? AppLocalizations.of(context)!.releaseDate
                   : AppLocalizations.of(context)!.firstAirDate,
               releaseDateFull.isNotEmpty
-                  ? DateFormat(
-                      'MMMM d, yyyy',
-                    ).format(DateTime.parse(releaseDateFull))
+                  ? () {
+                      final parsed = DateTime.tryParse(releaseDateFull);
+                      if (parsed != null) {
+                        return DateFormat('MMMM d, yyyy').format(parsed);
+                      }
+                      return releaseDateFull;
+                    }()
                   : AppLocalizations.of(context)!.unknown,
             ),
             _DetailItem(

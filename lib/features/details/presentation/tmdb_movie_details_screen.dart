@@ -27,6 +27,7 @@ class TmdbMovieDetailsScreen extends ConsumerStatefulWidget {
   final String mediaType; // 'movie' or 'tv'
   final String? heroTag;
   final String? placeholderPoster;
+  final String? source;
 
   const TmdbMovieDetailsScreen({
     super.key,
@@ -34,6 +35,7 @@ class TmdbMovieDetailsScreen extends ConsumerStatefulWidget {
     this.mediaType = 'movie',
     this.heroTag,
     this.placeholderPoster,
+    this.source,
   });
 
   @override
@@ -106,7 +108,11 @@ class _TmdbMovieDetailsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final params = MovieDetailsParams(widget.movieId, widget.mediaType);
+    final params = MovieDetailsParams(
+      widget.movieId,
+      widget.mediaType,
+      source: widget.source,
+    );
     final detailsAsync = ref.watch(tmdbDetailsProvider(params));
     final fastDetailsAsync = ref.watch(lightweightDetailsProvider(params));
 
@@ -241,6 +247,7 @@ class _TmdbMovieDetailsScreenState
       body: TmdbDetailsDesktopHero(
         data: data,
         isMovie: isMovie,
+        source: widget.source,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -250,6 +257,7 @@ class _TmdbMovieDetailsScreenState
                 movieId: widget.movieId,
                 seasons: seasons,
                 textColor: textColor,
+                source: widget.source,
               ),
             ],
             if (isHeavyLoading || cast.isNotEmpty) ...[
@@ -403,6 +411,21 @@ class _TmdbMovieDetailsScreenState
                         ),
                       ),
                     ),
+                    // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.65),
+                          ],
+                          stops: const [0.4, 1.0],
+                        ),
+                      ),
+                    ),
+                    // 2. Blend-into-page transition: Theme-aware eased fade to surface
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -414,13 +437,16 @@ class _TmdbMovieDetailsScreenState
                             ).scaffoldBackgroundColor.withValues(alpha: 0.0),
                             Theme.of(
                               context,
-                            ).scaffoldBackgroundColor.withValues(alpha: 0.0),
+                            ).scaffoldBackgroundColor.withValues(alpha: 0.15),
+                            Theme.of(
+                              context,
+                            ).scaffoldBackgroundColor.withValues(alpha: 0.45),
                             Theme.of(
                               context,
                             ).scaffoldBackgroundColor.withValues(alpha: 0.8),
                             Theme.of(context).scaffoldBackgroundColor,
                           ],
-                          stops: const [0.0, 0.4, 0.8, 1.0],
+                          stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
                         ),
                       ),
                     ),
@@ -535,7 +561,7 @@ class _TmdbMovieDetailsScreenState
                 ProviderSearchSection(
                   query: title,
                   parentMediaType: isMovie ? 'movie' : 'tv',
-                  tmdbId: widget.movieId,
+                  tmdbId: data.tmdbId,
                   imdbId: data.imdbId,
                 ),
                 const SizedBox(height: 16),
@@ -598,9 +624,11 @@ class _TmdbMovieDetailsScreenState
                     _buildTmdbLogo(),
                     _buildTopBadge(
                       context,
-                      isMovie
-                          ? l10n.movie.toUpperCase()
-                          : l10n.tvShow.toUpperCase(),
+                      widget.source == 'anilist'
+                          ? (isMovie ? "MOVIE" : "ANIME")
+                          : (isMovie
+                                ? l10n.movie.toUpperCase()
+                                : l10n.tvShow.toUpperCase()),
                     ),
                     _buildIconInfo(context, Icons.calendar_today_rounded, year),
                     _buildIconInfo(
@@ -740,6 +768,7 @@ class _TmdbMovieDetailsScreenState
                   MovieSeasonsList(
                     movieId: widget.movieId,
                     seasons: data.seasons,
+                    source: widget.source,
                   ),
                 ],
 
@@ -761,9 +790,13 @@ class _TmdbMovieDetailsScreenState
                 _buildDetailRow(l10n.status, status),
                 _buildDetailRow(
                   isMovie ? l10n.releaseDate : l10n.firstAirDate,
-                  DateFormat(
-                    'MMMM d, yyyy',
-                  ).format(DateTime.parse(releaseDate)),
+                  () {
+                    final parsed = DateTime.tryParse(releaseDate);
+                    if (parsed != null) {
+                      return DateFormat('MMMM d, yyyy').format(parsed);
+                    }
+                    return releaseDate.isNotEmpty ? releaseDate : l10n.unknown;
+                  }(),
                 ),
                 if (budget > 0)
                   _buildDetailRow(
@@ -791,6 +824,22 @@ class _TmdbMovieDetailsScreenState
   }
 
   Widget _buildTmdbLogo() {
+    final isAnilist = widget.source == 'anilist';
+    if (isAnilist) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: const Color(0xFF02A9FF).withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(6),
+        child: SvgPicture.asset(
+          'assets/images/anilist_icon.svg',
+          fit: BoxFit.contain,
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(

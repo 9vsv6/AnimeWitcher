@@ -12,6 +12,7 @@ class HotstarPlayerStyle {
   static const Color panel = Color(0xFF05070B);
   static const Color panelElevated = Color(0xFF090D14);
   static const Color accent = Color(0xFF0A84FF);
+  static const Color hotstar = Color(0xFF1F80E0);
   static const Color accentAlt = Color(0xFFDD3EFF);
   static const Color primaryText = Color(0xF2FFFFFF);
   static const Color secondaryText = Color(0xA6FFFFFF);

@@ -6,6 +6,7 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/features/home/presentation/delegates/home_search_delegate.dart';
 import 'package:skystream/features/home/presentation/home_provider.dart';
+import 'package:skystream/features/explore/presentation/widgets/hover_border_gradient.dart';
 import 'dart:async';
 
 /// A custom header bar for the widescreen dashboard layout.
@@ -161,39 +162,30 @@ class DashboardHeaderBar extends ConsumerWidget {
 
           const SizedBox(width: 12),
 
-          // Provider chip
-          CardsWrapper(
-            scaleFactor: 1.01,
+          HoverBorderGradient(
             onTap: onShowProviderSelector,
-            borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.3,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.extension,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
+                  size: 16,
                 ),
-                borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.extension,
-                    color: theme.colorScheme.primary,
-                    size: 16,
+                const SizedBox(width: 8),
+                Text(
+                  activeProvider?.name ?? l10n.none,
+                  style: TextStyle(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    activeProvider?.name ?? l10n.none,
-                    style: TextStyle(
-                      color: theme.colorScheme.onSurface,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],

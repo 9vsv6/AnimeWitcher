@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../player_controller.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
@@ -9,6 +11,8 @@ class PlayerLoadingOverlay extends StatelessWidget {
   final VoidCallback onBack;
   final PlaybackUiPhase phase;
   final List<SourceAttemptEntry> sourceAttempts;
+  final String? backdropUrl;
+  final String? logoUrl;
   final VoidCallback? onGoLive;
   final VoidCallback? onSkip;
   final bool isTv;
@@ -19,6 +23,8 @@ class PlayerLoadingOverlay extends StatelessWidget {
     required this.onBack,
     required this.phase,
     required this.sourceAttempts,
+    this.backdropUrl,
+    this.logoUrl,
     this.onGoLive,
     this.onSkip,
     this.isTv = false,
@@ -26,9 +32,11 @@ class PlayerLoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).shortestSide < 600;
     final content = _LoadingCard(
       phase: phase,
       sourceAttempts: sourceAttempts,
+      logoUrl: logoUrl,
       onGoLive: onGoLive,
       onSkip: onSkip,
       onBack: onBack,
@@ -40,23 +48,39 @@ class PlayerLoadingOverlay extends StatelessWidget {
       behavior: HitTestBehavior.translucent,
       // ReadingOrderTraversalPolicy makes D-pad traverse all focusable widgets
       // by their rendered screen position across all Positioned branches in the
-      // Stack — so the top-left back button is reachable from the action buttons.
+      // Stack â€” so the top-left back button is reachable from the action buttons.
       child: FocusTraversalGroup(
         policy: ReadingOrderTraversalPolicy(),
         child: Stack(
           children: [
             Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.92),
-                      Colors.black.withValues(alpha: 0.86),
-                    ],
+              child: Stack(
+                children: [
+                  if (backdropUrl != null && (!isCompact || isTv))
+                    Positioned.fill(
+                      child: CachedNetworkImage(
+                        imageUrl: backdropUrl!,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        placeholder: (_, _) => const SizedBox.shrink(),
+                        errorWidget: (_, _, _) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.5),
+                            Colors.black.withValues(alpha: 0.5),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             Positioned(
@@ -98,6 +122,7 @@ class PlayerLoadingOverlay extends StatelessWidget {
 class _LoadingCard extends StatelessWidget {
   final PlaybackUiPhase phase;
   final List<SourceAttemptEntry> sourceAttempts;
+  final String? logoUrl;
   final VoidCallback? onGoLive;
   final VoidCallback? onSkip;
   final VoidCallback? onBack;
@@ -106,6 +131,7 @@ class _LoadingCard extends StatelessWidget {
   const _LoadingCard({
     required this.phase,
     required this.sourceAttempts,
+    this.logoUrl,
     this.onGoLive,
     this.onSkip,
     this.onBack,
@@ -121,12 +147,11 @@ class _LoadingCard extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 640),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.5),
+          color: Colors.black.withValues(alpha: 0.0),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.32),
+              color: Colors.black.withValues(alpha: 0.0),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
@@ -138,6 +163,24 @@ class _LoadingCard extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (logoUrl != null && logoUrl!.isNotEmpty) ...[
+                  if (logoUrl!.toLowerCase().endsWith('.svg'))
+                    SvgPicture.network(
+                      logoUrl!,
+                      height: isTv ? 100 : 80,
+                      fit: BoxFit.contain,
+                      placeholderBuilder: (_) => const SizedBox(height: 80),
+                    )
+                  else
+                    CachedNetworkImage(
+                      imageUrl: logoUrl!,
+                      height: isTv ? 100 : 80,
+                      fit: BoxFit.contain,
+                      placeholder: (_, _) => const SizedBox(height: 80),
+                      errorWidget: (_, _, _) => const SizedBox(height: 80),
+                    ),
+                  const SizedBox(height: 24),
+                ],
                 _PhaseIndicator(phase: phase),
                 const SizedBox(height: 18),
                 if (phase.title.isNotEmpty)
@@ -377,7 +420,7 @@ class _SourceAttemptListState extends State<_SourceAttemptList> {
       constraints: const BoxConstraints(maxHeight: 220),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
+          color: Colors.black.withValues(alpha: 0.35),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
@@ -402,7 +445,7 @@ class _SourceAttemptRow extends StatelessWidget {
 
     return Material(
       color: highlight
-          ? Colors.white.withValues(alpha: 0.07)
+          ? Colors.white.withValues(alpha: 0.08)
           : Colors.transparent,
       child: SizedBox(
         height: 46,

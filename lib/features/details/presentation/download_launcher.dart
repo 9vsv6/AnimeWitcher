@@ -12,6 +12,7 @@ import '../../../core/services/download_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../shared/widgets/custom_widgets.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 part 'download_launcher.g.dart';
@@ -160,35 +161,35 @@ class DownloadLauncher {
         barrierDismissible: false, // Block UI interaction
         builder: (ctx) {
           return PopScope(
-          canPop: false,
-          child: AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text(l10n.verifyingSourceSize),
+            canPop: false,
+            child: AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const AppLoadingIndicator(),
+                  const SizedBox(height: 16),
+                  Text(l10n.verifyingSourceSize),
+                ],
+              ),
+              actions: [
+                CustomButton(
+                  isPrimary: false,
+                  onPressed: () {
+                    isCanceled = true;
+                    Navigator.of(ctx).pop();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Text(l10n.cancel),
+                  ),
+                ),
               ],
             ),
-            actions: [
-              CustomButton(
-                isPrimary: false,
-                onPressed: () {
-                  isCanceled = true;
-                  Navigator.of(ctx).pop();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Text(l10n.cancel),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+          );
+        },
       ),
     );
 
@@ -220,91 +221,93 @@ class DownloadLauncher {
 
     // 2. Show Confirmation Dialog
     if (finalContext.mounted) {
-      unawaited(showDialog<void>(
-        context: finalContext,
-        builder: (ctx) => AlertDialog(
-          title: Text(l10n.confirmDownload),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l10n.titleWithParam(item.title)),
-              const SizedBox(height: 8),
-              Text(l10n.sourceWithParam(stream.source)),
-              const SizedBox(height: 8),
-              Text(l10n.sizeWithParam(metadata.sizeString)),
-              const SizedBox(height: 16),
-              Text(l10n.fileSaveLocationNotification),
+      unawaited(
+        showDialog<void>(
+          context: finalContext,
+          builder: (ctx) => AlertDialog(
+            title: Text(l10n.confirmDownload),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.titleWithParam(item.title)),
+                const SizedBox(height: 8),
+                Text(l10n.sourceWithParam(stream.source)),
+                const SizedBox(height: 8),
+                Text(l10n.sizeWithParam(metadata.sizeString)),
+                const SizedBox(height: 16),
+                Text(l10n.fileSaveLocationNotification),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(l10n.cancel),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+
+                  // Finalize path and filename
+                  final episodeData = item.episodes?.firstWhereOrNull(
+                    (e) => e.url == resolveUrl,
+                  );
+                  final saveDir = await downloadService.getDownloadPath(
+                    item,
+                    episode: episodeData,
+                  );
+
+                  final extension = _getFileExtension(
+                    stream.url,
+                    metadata.mimeType,
+                  );
+                  String filename;
+                  if (episodeData != null &&
+                      item.contentType != MultimediaContentType.movie) {
+                    final sanitizedEpName = episodeData.name
+                        .replaceAll(RegExp(r'[^\w\s-]'), '')
+                        .trim();
+                    filename =
+                        "S${episodeData.season}-E${episodeData.episode} $sanitizedEpName$extension";
+                  } else {
+                    final sanitizedTitle = item.title
+                        .replaceAll(RegExp(r'[^\w\s-]'), '')
+                        .trim();
+                    filename = "$sanitizedTitle$extension";
+                  }
+
+                  if (kDebugMode) {
+                    debugPrint(
+                      '[DownloadLauncher] Final Path: $saveDir/$filename',
+                    );
+                  }
+
+                  final started = await downloadService.startDownload(
+                    url: stream.url,
+                    filename: filename,
+                    directory: saveDir,
+                    item: item,
+                    episode: episodeData,
+                    trackingUrl: resolveUrl,
+                    headers: stream.headers,
+                  );
+
+                  if (!started && finalContext.mounted) {
+                    ScaffoldMessenger.of(finalContext).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Failed to start download. Check storage permissions.',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: Text(l10n.downloadNow),
+              ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(l10n.cancel),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-
-                // Finalize path and filename
-                final episodeData = item.episodes?.firstWhereOrNull(
-                  (e) => e.url == resolveUrl,
-                );
-                final saveDir = await downloadService.getDownloadPath(
-                  item,
-                  episode: episodeData,
-                );
-
-                final extension = _getFileExtension(
-                  stream.url,
-                  metadata.mimeType,
-                );
-                String filename;
-                if (episodeData != null &&
-                    item.contentType != MultimediaContentType.movie) {
-                  final sanitizedEpName = episodeData.name
-                      .replaceAll(RegExp(r'[^\w\s-]'), '')
-                      .trim();
-                  filename =
-                      "S${episodeData.season}-E${episodeData.episode} $sanitizedEpName$extension";
-                } else {
-                  final sanitizedTitle = item.title
-                      .replaceAll(RegExp(r'[^\w\s-]'), '')
-                      .trim();
-                  filename = "$sanitizedTitle$extension";
-                }
-
-                if (kDebugMode) {
-                  debugPrint(
-                    '[DownloadLauncher] Final Path: $saveDir/$filename',
-                  );
-                }
-
-                final started = await downloadService.startDownload(
-                  url: stream.url,
-                  filename: filename,
-                  directory: saveDir,
-                  item: item,
-                  episode: episodeData,
-                  trackingUrl: resolveUrl,
-                  headers: stream.headers,
-                );
-
-                if (!started && finalContext.mounted) {
-                  ScaffoldMessenger.of(finalContext).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Failed to start download. Check storage permissions.',
-                      ),
-                    ),
-                  );
-                }
-              },
-              child: Text(l10n.downloadNow),
-            ),
-          ],
         ),
-      ));
+      );
     }
   }
 

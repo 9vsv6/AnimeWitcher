@@ -1063,6 +1063,12 @@ abstract class AppLocalizations {
   /// **'Play Now'**
   String get playNow;
 
+  /// No description provided for @upNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Up Next'**
+  String get upNext;
+
   /// No description provided for @deleteDownloadPrompt.
   ///
   /// In en, this message translates to:
