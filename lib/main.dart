@@ -420,12 +420,13 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                 clipBehavior: Clip.none,
                 children: [
                   Positioned.fill(child: result),
-                  const Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: CustomTitleBar(),
-                  ),
+                  if (!_isFullScreen)
+                    const Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: CustomTitleBar(),
+                    ),
                 ],
               );
             }
@@ -629,7 +630,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        height: _hovered ? 48 : 8,
+        height: _hovered ? (Platform.isMacOS ? 28 : 48) : 8,
         curve: Curves.easeInOut,
         decoration: BoxDecoration(
           color: _hovered ? titleBarColor : Colors.transparent,
@@ -839,7 +840,7 @@ class _PinButtonState extends State<_PinButton> {
         splashColor: hoverColor.withValues(alpha: 0.2),
         child: SizedBox(
           width: 32,
-          height: 32,
+          height: Platform.isMacOS ? 28 : 32,
           child: Icon(
             widget.isActive ? Icons.push_pin_rounded : Icons.push_pin_outlined,
             color: widget.isActive
