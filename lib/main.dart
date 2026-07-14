@@ -49,14 +49,13 @@ void main() async {
   if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
     await windowManager.ensureInitialized();
 
-    const windowOptions = WindowOptions(
-      size: Size(1280, 720),
-      minimumSize: Size(360, 640),
+    final windowOptions = WindowOptions(
+      size: const Size(1280, 720),
+      minimumSize: const Size(360, 640),
       center: true,
-      backgroundColor: Colors
-          .black, // Solid black prevents transparency during fullscreen transition
+      backgroundColor: Colors.black, // Solid black prevents transparency during fullscreen transition
       skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.hidden,
+      titleBarStyle: Platform.isMacOS ? TitleBarStyle.normal : TitleBarStyle.hidden,
     );
 
     unawaited(
@@ -410,25 +409,21 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
             if (!kIsWeb &&
                 (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
               final isMac = Platform.isMacOS;
-              result = Padding(
-                padding: EdgeInsets.only(
-                  top: (isMac && !_isFullScreen) ? 28.0 : 0.0,
-                ),
-                child: result,
-              );
-              result = Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(child: result),
-                  if (!_isFullScreen)
-                    const Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: CustomTitleBar(),
-                    ),
-                ],
-              );
+              if (!isMac) {
+                result = Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(child: result),
+                    if (!_isFullScreen)
+                      const Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: CustomTitleBar(),
+                      ),
+                  ],
+                );
+              }
             }
 
             return result;
