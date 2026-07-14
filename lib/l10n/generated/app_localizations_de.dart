@@ -481,6 +481,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get playNow => 'Jetzt abspielen';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Download löschen?';
 
   @override

@@ -481,6 +481,9 @@ class AppLocalizationsHu extends AppLocalizations {
   String get playNow => 'Lejátszás most';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Letöltés törlése?';
 
   @override

@@ -77,16 +77,23 @@ class _FocusableItemState extends State<FocusableItem>
       if (vScroll != null) {
         final scrollBox = vScroll.context.findRenderObject();
         if (scrollBox is RenderBox && scrollBox.hasSize) {
-          final top = ro.localToGlobal(Offset.zero, ancestor: scrollBox).dy;
-          final bottom = top + ro.size.height;
-          final viewportH = scrollBox.size.height;
-          if (top < 0 || bottom > viewportH) {
-            vScroll.position.ensureVisible(
-              ro,
-              alignment: 0.5,
-              duration: duration,
-              curve: curve,
-            );
+          final hScroll = Scrollable.maybeOf(context, axis: Axis.horizontal);
+          final targetContext = hScroll?.context ?? context;
+          final targetRo = targetContext.findRenderObject();
+          if (targetRo is RenderBox && targetRo.hasSize) {
+            final top = targetRo
+                .localToGlobal(Offset.zero, ancestor: scrollBox)
+                .dy;
+            final bottom = top + targetRo.size.height;
+            final viewportH = scrollBox.size.height;
+            if (top < 0 || bottom > viewportH) {
+              vScroll.position.ensureVisible(
+                targetRo,
+                alignment: 0.5,
+                duration: duration,
+                curve: curve,
+              );
+            }
           }
         }
       }

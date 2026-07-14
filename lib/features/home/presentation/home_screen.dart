@@ -1,4 +1,3 @@
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +14,7 @@ import '../../explore/presentation/widgets/explore_carousel.dart';
 import '../../explore/presentation/widgets/media_horizontal_list.dart';
 import '../../explore/presentation/view_all_screen.dart';
 import '../../../shared/widgets/desktop_scroll_wrapper.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import '../../extensions/providers/extensions_controller.dart';
 import '../../../core/extensions/models/extension_plugin.dart';
 
@@ -40,16 +40,31 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
+/// Hides the platform scrollbar — replaced by a gradient edge hint.
+class _NoScrollbarBehavior extends ScrollBehavior {
+  const _NoScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
   final ValueNotifier<bool> _isFabExtended = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
   final FocusNode _firstActionFocusNode = FocusNode();
 
   /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
   /// Used by DashboardHeaderBar arrows.
-  CarouselSliderController? _carouselController;
+  HeroCarouselController? _carouselController;
 
   @override
   bool get wantKeepAlive => true;
@@ -68,6 +83,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
+
+    // Track gradient edge hint visibility — fades away near the bottom.
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    final showFade = maxScroll > 0 && currentScroll < maxScroll - 10;
+    if (showFade != _showBottomFade.value) {
+      _showBottomFade.value = showFade;
+    }
 
     // On widescreen there is no mobile AppBar (opacity notifier) and no FAB
     // (extended notifier). Skip all work to avoid per-frame overhead that
@@ -96,6 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _scrollController.dispose();
     _appBarOpacityNotifier.dispose();
     _isFabExtended.dispose();
+    _showBottomFade.dispose();
     _firstActionFocusNode.dispose();
     super.dispose();
   }
@@ -329,7 +353,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     if (isResolving) {
       return Center(
-        child: CircularProgressIndicator(
+        child: AppLoadingIndicator(
           color: Theme.of(context).colorScheme.primary,
         ),
       );
@@ -340,14 +364,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     return switch (state) {
-      HomeLoading() => CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          SliverToBoxAdapter(child: _buildCarouselShimmer(context)),
-          SliverToBoxAdapter(child: _buildListShimmer(context)),
-          SliverToBoxAdapter(child: _buildListShimmer(context)),
-          SliverToBoxAdapter(child: _buildListShimmer(context)),
-        ],
+      HomeLoading() => _withGradientEdgeHint(
+        CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            SliverToBoxAdapter(child: _buildCarouselShimmer(context)),
+            SliverToBoxAdapter(child: _buildListShimmer(context)),
+            SliverToBoxAdapter(child: _buildListShimmer(context)),
+            SliverToBoxAdapter(child: _buildListShimmer(context)),
+          ],
+        ),
       ),
       HomeNoProvider() => _buildNoProviderState(
         context,
@@ -356,103 +382,148 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       HomeOffline() => _buildErrorState(context, l10n.noInternetError, ref),
       HomeError(:final message) => _buildErrorState(context, message, ref),
-      HomeSuccess(:final data) => RefreshIndicator(
-        onRefresh: () async => ref.read(homeDataProvider.notifier).fetch(),
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            if (data.containsKey('Trending'))
-              SliverToBoxAdapter(
-                child: ExploreCarousel(
-                  movies: data['Trending']!.take(7).toList(),
-                  scrollController: _scrollController,
-                  onNavigateUp: () => _firstActionFocusNode.requestFocus(),
-                  onControllerReady: (c) =>
-                      setState(() => _carouselController = c),
-                  onTap: (item) {
-                    DetailsRoute(
-                      $extra: DetailsRouteExtra(item: item),
-                    ).push<void>(context);
-                  },
-                ),
-              )
-            else if (data.isNotEmpty)
-              SliverToBoxAdapter(
-                child: ExploreCarousel(
-                  movies: data.values.first.take(7).toList(),
-                  scrollController: _scrollController,
-                  onNavigateUp: () => _firstActionFocusNode.requestFocus(),
-                  onControllerReady: (c) =>
-                      setState(() => _carouselController = c),
-                  onTap: (item) {
-                    DetailsRoute(
-                      $extra: DetailsRouteExtra(item: item),
-                    ).push<void>(context);
-                  },
-                ),
-              )
-            else if (!isWidescreen)
-              // No carousel — add top padding so content below doesn't
-              // overlap with the transparent app bar (mobile only).
-              SliverPadding(
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + kToolbarHeight,
-                ),
-              ),
-
-            if (watchHistoryEnabled && history.isNotEmpty)
-              SliverToBoxAdapter(
-                child: ContinueWatchingSection(
-                  title: l10n.continueWatching,
-                  items: history.cast<HistoryItem>(),
-                ),
-              ),
-
-            if (syncedProgressAsync.asData?.value.isNotEmpty == true)
-              SliverToBoxAdapter(
-                child: SyncedProgressSection(
-                  title: 'Synced from Trakt',
-                  items: syncedProgressAsync.asData!.value,
-                  onItemTap: (item) {
-                    // Pre-fill search query and navigate to Search tab
-                    ref.read(searchQueryProvider.notifier).set(item.title);
-                    const SearchRoute().go(context);
-                  },
-                ),
-              ),
-
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final filteredEntries = data.entries
-                      .where((e) => e.key != 'Trending')
-                      .toList();
-                  if (index >= filteredEntries.length) return null;
-                  final entry = filteredEntries[index];
-                  return MediaHorizontalList(
-                    title: entry.key,
-                    mediaList: entry.value,
-                    category: ViewAllCategory.providerContent,
-                    showViewAll: true,
+      HomeSuccess(:final data) => _withGradientEdgeHint(
+        RefreshIndicator(
+          onRefresh: () async => ref.read(homeDataProvider.notifier).fetch(),
+          child: CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              if (data.containsKey('Trending'))
+                SliverToBoxAdapter(
+                  child: ExploreCarousel(
+                    movies: data['Trending']!.take(7).toList(),
+                    scrollController: _scrollController,
+                    onNavigateUp: () => _firstActionFocusNode.requestFocus(),
+                    onControllerReady: (c) =>
+                        setState(() => _carouselController = c),
                     onTap: (item) {
                       DetailsRoute(
                         $extra: DetailsRouteExtra(item: item),
                       ).push<void>(context);
                     },
-                    heroTagPrefix: 'home',
-                  );
-                },
-                childCount: data.entries
-                    .where((e) => e.key != 'Trending')
-                    .length,
-              ),
-            ),
+                  ),
+                )
+              else if (data.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: ExploreCarousel(
+                    movies: data.values.first.take(7).toList(),
+                    scrollController: _scrollController,
+                    onNavigateUp: () => _firstActionFocusNode.requestFocus(),
+                    onControllerReady: (c) =>
+                        setState(() => _carouselController = c),
+                    onTap: (item) {
+                      DetailsRoute(
+                        $extra: DetailsRouteExtra(item: item),
+                      ).push<void>(context);
+                    },
+                  ),
+                )
+              else if (!isWidescreen)
+                // No carousel — add top padding so content below doesn't
+                // overlap with the transparent app bar (mobile only).
+                SliverPadding(
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + kToolbarHeight,
+                  ),
+                ),
 
-            const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
-          ],
+              if (watchHistoryEnabled && history.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: ContinueWatchingSection(
+                    title: l10n.continueWatching,
+                    items: history.cast<HistoryItem>(),
+                    topPadding: isWidescreen ? 0 : null,
+                  ),
+                ),
+
+              if (syncedProgressAsync.asData?.value.isNotEmpty == true)
+                SliverToBoxAdapter(
+                  child: SyncedProgressSection(
+                    title: 'Synced from Trakt',
+                    items: syncedProgressAsync.asData!.value,
+                    onItemTap: (item) {
+                      // Pre-fill search query and navigate to Search tab
+                      ref.read(searchQueryProvider.notifier).set(item.title);
+                      const SearchRoute().go(context);
+                    },
+                  ),
+                ),
+
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final filteredEntries = data.entries
+                        .where((e) => e.key != 'Trending')
+                        .toList();
+                    if (index >= filteredEntries.length) return null;
+                    final entry = filteredEntries[index];
+                    return MediaHorizontalList(
+                      title: entry.key,
+                      mediaList: entry.value,
+                      category: ViewAllCategory.providerContent,
+                      showViewAll: true,
+                      onTap: (item) {
+                        DetailsRoute(
+                          $extra: DetailsRouteExtra(item: item),
+                        ).push<void>(context);
+                      },
+                      heroTagPrefix: 'home',
+                    );
+                  },
+                  childCount: data.entries
+                      .where((e) => e.key != 'Trending')
+                      .length,
+                ),
+              ),
+
+              const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+            ],
+          ),
         ),
       ),
     };
+  }
+
+  Widget _withGradientEdgeHint(Widget scrollView) {
+    return Stack(
+      children: [
+        ScrollConfiguration(
+          behavior: const _NoScrollbarBehavior(),
+          child: scrollView,
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 48, // Taller height for smoother blend
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _showBottomFade,
+            builder: (context, show, _) {
+              if (!show) return const SizedBox.shrink();
+              final surfaceColor = Theme.of(context).colorScheme.surface;
+              return IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        surfaceColor.withValues(alpha: 0.0),
+                        surfaceColor.withValues(alpha: 0.15),
+                        surfaceColor.withValues(alpha: 0.45),
+                        surfaceColor.withValues(alpha: 0.8),
+                        surfaceColor,
+                      ],
+                      stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildNoProviderState(
@@ -787,11 +858,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   child: Center(
                                     child: ListTile(
                                       title: Text(l10n.none),
-                                      leading: const Radio<String?>(value: null),
+                                      leading: const Radio<String?>(
+                                        value: null,
+                                      ),
                                       autofocus: index == targetIndex,
                                       onTap: () {
                                         ref
-                                            .read(activeProviderProvider.notifier)
+                                            .read(
+                                              activeProviderProvider.notifier,
+                                            )
                                             .set(null);
                                         Navigator.pop(context);
                                         ref.invalidate(homeDataProvider);
@@ -806,13 +881,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       ? index - 1
                                       : index];
                               final isDebug = p.isDebug;
-                              final isSubprovider = p.packageName.contains('::');
+                              final isSubprovider = p.packageName.contains(
+                                '::',
+                              );
                               String pluginTag = '';
                               if (isSubprovider) {
-                                final parentPackageName = p.packageName.substring(
-                                  0,
-                                  p.packageName.indexOf('::'),
-                                );
+                                final parentPackageName = p.packageName
+                                    .substring(0, p.packageName.indexOf('::'));
                                 final plugin = installedPlugins
                                     .cast<ExtensionPlugin?>()
                                     .firstWhere(
@@ -850,9 +925,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                               color: Theme.of(
                                                 context,
                                               ).colorScheme.secondaryContainer,
-                                              borderRadius: BorderRadius.circular(
-                                                4,
-                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                             ),
                                             child: Text(
                                               pluginTag,
@@ -877,9 +951,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                             ),
                                             decoration: BoxDecoration(
                                               color: Colors.red,
-                                              borderRadius: BorderRadius.circular(
-                                                4,
-                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                             ),
                                             child: Text(
                                               l10n.debug,
@@ -893,7 +966,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                         ],
                                       ],
                                     ),
-                                    leading: Radio<String?>(value: p.packageName),
+                                    leading: Radio<String?>(
+                                      value: p.packageName,
+                                    ),
                                     onTap: () {
                                       ref
                                           .read(activeProviderProvider.notifier)

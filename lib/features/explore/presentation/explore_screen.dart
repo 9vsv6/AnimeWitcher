@@ -1,9 +1,11 @@
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/widgets/cards_wrapper.dart';
 import '../data/explore_tmdb_provider.dart';
+import '../data/explore_mode_provider.dart';
+import 'anilist_explore_screen.dart';
 import 'view_all_screen.dart';
 import 'widgets/explore_carousel.dart';
 import 'widgets/explore_header_bar.dart';
@@ -26,15 +28,31 @@ class ExploreScreen extends ConsumerStatefulWidget {
   ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
 }
 
+/// Hides the platform scrollbar — replaced by a gradient edge hint.
+class _NoScrollbarBehavior extends ScrollBehavior {
+  const _NoScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 class _ExploreScreenState extends ConsumerState<ExploreScreen>
     with AutomaticKeepAliveClientMixin {
   late ScrollController _scrollController;
   final ValueNotifier<bool> _isScrolledNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
+  final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
+  final ValueNotifier<bool> _isFabExtended = ValueNotifier<bool>(true);
   final FocusNode _firstActionFocusNode = FocusNode();
 
   /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
-  CarouselSliderController? _carouselController;
+  HeroCarouselController? _carouselController;
 
   @override
   bool get wantKeepAlive => true;
@@ -49,13 +67,19 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
   bool _isWidescreenForScroll() {
     final profile = ref.read(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv == true || context.isTv;
-    return isTv ||
-        profile?.isLargeScreen == true ||
-        context.isTabletOrLarger;
+    return isTv || profile?.isLargeScreen == true || context.isTabletOrLarger;
   }
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
+
+    // Track gradient edge hint visibility — fades away near the bottom.
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    final showFade = maxScroll > 0 && currentScroll < maxScroll - 10;
+    if (showFade != _showBottomFade.value) {
+      _showBottomFade.value = showFade;
+    }
 
     // On widescreen there is no mobile AppBar, skip calculations
     if (_isWidescreenForScroll()) return;
@@ -69,6 +93,16 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     if (isScrolled != _isScrolledNotifier.value) {
       _isScrolledNotifier.value = isScrolled;
     }
+
+    if (_scrollController.position.userScrollDirection ==
+            ScrollDirection.reverse &&
+        _isFabExtended.value) {
+      _isFabExtended.value = false;
+    } else if (_scrollController.position.userScrollDirection ==
+            ScrollDirection.forward &&
+        !_isFabExtended.value) {
+      _isFabExtended.value = true;
+    }
   }
 
   @override
@@ -77,6 +111,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     _scrollController.dispose();
     _isScrolledNotifier.dispose();
     _appBarOpacityNotifier.dispose();
+    _showBottomFade.dispose();
+    _isFabExtended.dispose();
     _firstActionFocusNode.dispose();
     super.dispose();
   }
@@ -90,7 +126,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     // Use profile?.isLargeScreen so this matches AppScaffold's sidebar
     // decision even when the ExploreScreen's context width is narrowed
     // by the sidebar (e.g. iPad portrait).
-    final isWidescreen = isTv || profile?.isLargeScreen == true || context.isTabletOrLarger;
+    final isWidescreen =
+        isTv || profile?.isLargeScreen == true || context.isTabletOrLarger;
 
     if (isWidescreen) {
       return Scaffold(
@@ -136,6 +173,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 24,
+                fontWeight: FontWeight.bold,
               ),
             ),
             centerTitle: false,
@@ -214,13 +252,82 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
               ),
             ],
           ),
-          body: _buildScrollView(context),
+          body: _withGradientEdgeHint(
+            ref.watch(exploreModeProvider)
+                ? AnilistExploreScreen(
+                    scrollController: _scrollController,
+                    firstActionFocusNode: _firstActionFocusNode,
+                    onControllerReady: (c) =>
+                        setState(() => _carouselController = c),
+                  )
+                : _buildScrollView(context),
+          ),
+          floatingActionButton: ValueListenableBuilder<bool>(
+            valueListenable: _isFabExtended,
+            builder: (context, isFabExtended, _) {
+              final isAnime = ref.watch(exploreModeProvider);
+              return Material(
+                elevation: 4,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Theme.of(context).colorScheme.surfaceDim
+                    : Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () {
+                    ref
+                        .read(exploreModeProvider.notifier)
+                        .setAnimeMode(!isAnime);
+                  },
+                  child: Container(
+                    height: 56,
+                    constraints: const BoxConstraints(minWidth: 56),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isFabExtended ? 16 : 0,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isAnime ? Icons.arrow_back : Icons.explore,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          child: SizedBox(
+                            width: isFabExtended ? null : 0,
+                            child: isFabExtended
+                                ? Padding(
+                                    padding: const EdgeInsets.only(left: 12),
+                                    child: Text(
+                                      isAnime ? 'Go Back' : 'Explore Anime',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
     );
   }
 
   Widget _buildWidescreenBody(BuildContext context) {
+    final isAnime = ref.watch(exploreModeProvider);
     return Column(
       children: [
         Padding(
@@ -236,7 +343,58 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
           ),
         ),
         Expanded(
-          child: _buildScrollView(context),
+          child: _withGradientEdgeHint(
+            isAnime
+                ? AnilistExploreScreen(
+                    scrollController: _scrollController,
+                    firstActionFocusNode: _firstActionFocusNode,
+                    onControllerReady: (c) =>
+                        setState(() => _carouselController = c),
+                  )
+                : _buildScrollView(context),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _withGradientEdgeHint(Widget scrollView) {
+    return Stack(
+      children: [
+        ScrollConfiguration(
+          behavior: const _NoScrollbarBehavior(),
+          child: scrollView,
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 48, // Taller height for smoother blend
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _showBottomFade,
+            builder: (context, show, _) {
+              if (!show) return const SizedBox.shrink();
+              final surfaceColor = Theme.of(context).colorScheme.surface;
+              return IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        surfaceColor.withValues(alpha: 0.0),
+                        surfaceColor.withValues(alpha: 0.15),
+                        surfaceColor.withValues(alpha: 0.45),
+                        surfaceColor.withValues(alpha: 0.8),
+                        surfaceColor,
+                      ],
+                      stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ],
     );
@@ -433,7 +591,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     final heroHeight = size.height * 0.60;
     final isDesktop =
         size.width > LayoutConstants.exploreCarouselDesktopBreakpoint;
-    
+
     if (isDesktop) {
       return Padding(
         padding: const EdgeInsets.symmetric(
@@ -480,44 +638,44 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 : LayoutConstants.spacingMd,
             LayoutConstants.spacingSm,
           ),
-            child: ShimmerPlaceholder.rectangular(
-              width: 150,
-              height: 24,
-              borderRadius: 4,
-            ),
+          child: ShimmerPlaceholder.rectangular(
+            width: 150,
+            height: 24,
+            borderRadius: 4,
           ),
-          const SizedBox(height: LayoutConstants.spacingMd),
-          // List Placeholder
-          SizedBox(
-            height: listHeight,
-            child: ListView.separated(
-              padding: EdgeInsets.symmetric(
-                horizontal: isDesktop
-                    ? LayoutConstants.dashboardContentPadding
-                    : LayoutConstants.spacingMd,
-              ),
-              scrollDirection: Axis.horizontal,
-              itemCount: 10,
-              separatorBuilder: (_, _) => SizedBox(
-                width: isDesktop
-                    ? LayoutConstants.spacingLg
-                    : LayoutConstants.spacingSm,
-              ),
-              itemBuilder: (context, index) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ShimmerPlaceholder.rectangular(
-                      width: cardWidth,
-                      height: imageHeight,
-                      borderRadius: 12,
-                    ),
-                  ],
-                );
-              },
+        ),
+        const SizedBox(height: LayoutConstants.spacingMd),
+        // List Placeholder
+        SizedBox(
+          height: listHeight,
+          child: ListView.separated(
+            padding: EdgeInsets.symmetric(
+              horizontal: isDesktop
+                  ? LayoutConstants.dashboardContentPadding
+                  : LayoutConstants.spacingMd,
             ),
+            scrollDirection: Axis.horizontal,
+            itemCount: 10,
+            separatorBuilder: (_, _) => SizedBox(
+              width: isDesktop
+                  ? LayoutConstants.spacingLg
+                  : LayoutConstants.spacingSm,
+            ),
+            itemBuilder: (context, index) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShimmerPlaceholder.rectangular(
+                    width: cardWidth,
+                    height: imageHeight,
+                    borderRadius: 12,
+                  ),
+                ],
+              );
+            },
           ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 }

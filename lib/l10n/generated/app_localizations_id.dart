@@ -479,6 +479,9 @@ class AppLocalizationsId extends AppLocalizations {
   String get playNow => 'Putar Sekarang';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Hapus Unduhan?';
 
   @override

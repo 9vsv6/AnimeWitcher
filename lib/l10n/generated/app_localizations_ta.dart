@@ -483,6 +483,9 @@ class AppLocalizationsTa extends AppLocalizations {
   String get playNow => 'இப்போது பிளே செய்';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'பதிவிறக்கத்தை நீக்கவா?';
 
   @override

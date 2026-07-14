@@ -478,6 +478,9 @@ class AppLocalizationsGu extends AppLocalizations {
   String get playNow => 'હમણાં ચલાવો';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'ડાઉનલોડ કાઢી નાખવું છે?';
 
   @override

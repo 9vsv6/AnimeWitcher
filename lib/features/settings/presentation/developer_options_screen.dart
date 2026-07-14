@@ -131,7 +131,9 @@ class _DeveloperOptionsScreenState
 
     await handleDevLoadAssetsChanged(newValue);
 
-    await ref.read(extensionsControllerProvider.notifier).loadInstalledPlugins();
+    await ref
+        .read(extensionsControllerProvider.notifier)
+        .loadInstalledPlugins();
   }
 
   Future<void> _pickLocalVideo(BuildContext context) async {

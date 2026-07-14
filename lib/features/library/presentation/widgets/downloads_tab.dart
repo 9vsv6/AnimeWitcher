@@ -12,6 +12,7 @@ import '../../../details/presentation/playback_launcher.dart';
 import '../downloads_provider.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class DownloadsTab extends ConsumerStatefulWidget {
   const DownloadsTab({super.key});
@@ -99,7 +100,7 @@ class _DownloadsTabState extends ConsumerState<DownloadsTab>
           },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: AppLoadingIndicator()),
       error: (err, stack) =>
           Center(child: Text(l10n.errorPrefix(err.toString()))),
     );

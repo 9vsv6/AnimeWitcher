@@ -6,6 +6,8 @@ import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/features/explore/presentation/delegates/explore_search_delegate.dart';
 import 'package:skystream/features/explore/presentation/widgets/unified_filter_dialog.dart';
 import 'package:skystream/features/explore/data/explore_filter_provider.dart';
+import 'package:skystream/features/explore/data/explore_mode_provider.dart';
+import 'package:skystream/features/explore/presentation/widgets/hover_border_gradient.dart';
 import 'dart:async';
 
 /// A custom header bar for the explore screen in widescreen/desktop layout.
@@ -80,6 +82,42 @@ class ExploreHeaderBar extends ConsumerWidget {
 
           const SizedBox(width: 16),
 
+          HoverBorderGradient(
+            onTap: () {
+              final isAnime = ref.read(exploreModeProvider);
+              ref.read(exploreModeProvider.notifier).setAnimeMode(!isAnime);
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CustomPaint(
+                    painter: AnimeLogoPainter(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  ref.watch(exploreModeProvider) ? 'Go Back' : 'Anime',
+                  style: TextStyle(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
           // Capsule search bar
           Expanded(
             child: CardsWrapper(
@@ -132,7 +170,6 @@ class ExploreHeaderBar extends ConsumerWidget {
           ),
 
           const SizedBox(width: 16),
-
           // Filter chip
           CardsWrapper(
             scaleFactor: 1.01,

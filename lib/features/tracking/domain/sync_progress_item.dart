@@ -10,7 +10,8 @@ class SyncProgressItem {
   final MultimediaContentType type;
   final int? season;
   final int? episode;
-  final String? posterUrl; // Optional, some trackers might not provide it directly
+  final String?
+  posterUrl; // Optional, some trackers might not provide it directly
 
   SyncProgressItem({
     this.id,
@@ -69,8 +70,8 @@ class SyncProgressItem {
       tmdbId: tmdbId,
       imdbId: imdbId,
       progressPercentage: (json['progress'] as num?)?.toDouble() ?? 0.0,
-      pausedAt: json['paused_at'] != null 
-          ? DateTime.parse(json['paused_at'] as String) 
+      pausedAt: json['paused_at'] != null
+          ? DateTime.parse(json['paused_at'] as String)
           : DateTime.now(),
       type: type,
       season: season,

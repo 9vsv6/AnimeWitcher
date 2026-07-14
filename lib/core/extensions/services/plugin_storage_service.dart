@@ -276,8 +276,8 @@ class PluginStorageService {
       return true;
     }
 
-    final metaJson = jsonDecode(await metaFile.readAsString())
-        as Map<String, dynamic>;
+    final metaJson =
+        jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
     final expected = metaJson['installSha256'] as String?;
     if (expected == null || expected.isEmpty) {
       // Legacy install pre-PR-08c — no recorded hash. Pass with a
@@ -294,9 +294,7 @@ class PluginStorageService {
     final jsFile = File(p.join(pluginDir.path, 'plugin.js'));
     if (!await jsFile.exists()) return false;
 
-    final actual = crypto.sha256
-        .convert(await jsFile.readAsBytes())
-        .toString();
+    final actual = crypto.sha256.convert(await jsFile.readAsBytes()).toString();
     if (actual != expected) {
       if (kDebugMode) {
         debugPrint(

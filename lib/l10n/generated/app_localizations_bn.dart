@@ -480,6 +480,9 @@ class AppLocalizationsBn extends AppLocalizations {
   String get playNow => 'এখনই চালান';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'ডাউনলোড মুছে ফেলবেন?';
 
   @override

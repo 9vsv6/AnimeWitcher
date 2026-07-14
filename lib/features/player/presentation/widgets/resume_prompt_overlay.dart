@@ -188,117 +188,111 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
                   boxShadow: isFocused && widget.isTv
                       ? [
                           BoxShadow(
-                            color: HotstarPlayerStyle.accent
-                                .withValues(alpha: 0.2),
+                            color: HotstarPlayerStyle.accent.withValues(
+                              alpha: 0.2,
+                            ),
                             blurRadius: 8,
                           ),
                         ]
                       : null,
                 ),
-                  child: ClipRRect(
-                    borderRadius: borderRadius,
-                    // AnimatedBuilder drives the fill width; the content Row
-                    // sits on top via foregroundDecoration on a second
-                    // DecoratedBox so there is still no Stack.
-                    child: AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, child) => DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              HotstarPlayerStyle.accent
-                                  .withValues(alpha: 0.92),
-                              HotstarPlayerStyle.accent
-                                  .withValues(alpha: 0.92),
-                              Colors.transparent,
-                              Colors.transparent,
-                            ],
-                            stops: [
-                              0,
-                              _controller.value,
-                              _controller.value,
-                              1,
-                            ],
-                          ),
+                child: ClipRRect(
+                  borderRadius: borderRadius,
+                  // AnimatedBuilder drives the fill width; the content Row
+                  // sits on top via foregroundDecoration on a second
+                  // DecoratedBox so there is still no Stack.
+                  child: AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, child) => DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            HotstarPlayerStyle.accent.withValues(alpha: 0.92),
+                            HotstarPlayerStyle.accent.withValues(alpha: 0.92),
+                            Colors.transparent,
+                            Colors.transparent,
+                          ],
+                          stops: [0, _controller.value, _controller.value, 1],
                         ),
-                        child: child,
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: borderRadius,
-                          onTap: _handlePressed,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isCompact ? 12 : 16,
-                              vertical: isCompact ? 7 : 8,
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.play_arrow_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                                SizedBox(width: isCompact ? 6 : 8),
-                                Expanded(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
+                      child: child,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: borderRadius,
+                        onTap: _handlePressed,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 12 : 16,
+                            vertical: isCompact ? 7 : 8,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.play_arrow_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                              SizedBox(width: isCompact ? 6 : 8),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: isCompact ? 13 : 15,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    if (widget.subtitle != null &&
+                                        widget.subtitle!.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
                                       Text(
-                                        widget.label,
+                                        widget.subtitle!,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: isCompact ? 13 : 15,
-                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.78,
+                                          ),
+                                          fontSize: isCompact ? 10 : 11,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      if (widget.subtitle != null &&
-                                          widget.subtitle!.isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          widget.subtitle!,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: Colors.white
-                                                .withValues(alpha: 0.78),
-                                            fontSize: isCompact ? 10 : 11,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
                                     ],
+                                  ],
+                                ),
+                              ),
+                              if (widget.showDismiss &&
+                                  widget.onDismiss != null)
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 28,
+                                    minHeight: 28,
+                                  ),
+                                  onPressed: _handleDismiss,
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    color: Colors.white,
+                                    size: 18,
                                   ),
                                 ),
-                                if (widget.showDismiss &&
-                                    widget.onDismiss != null)
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 28,
-                                      minHeight: 28,
-                                    ),
-                                    onPressed: _handleDismiss,
-                                    icon: const Icon(
-                                      Icons.close_rounded,
-                                      color: Colors.white,
-                                      size: 18,
-                                    ),
-                                  ),
-                              ],
-                            ),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
+              ),
             );
           },
         ),

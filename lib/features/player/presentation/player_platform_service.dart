@@ -66,16 +66,10 @@ class PlayerPlatformService {
     try {
       final isFull = await windowManager.isFullScreen();
       if (!isFull) {
-        if (Platform.isWindows || Platform.isLinux) {
-          await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-        }
         await windowManager.setFullScreen(true);
         return true;
       } else {
         await windowManager.setFullScreen(false);
-        if (Platform.isWindows || Platform.isLinux) {
-          await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-        }
         return false;
       }
     } catch (e) {

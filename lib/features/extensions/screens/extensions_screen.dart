@@ -6,6 +6,7 @@ import '../../../core/extensions/models/extension_repository.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../providers/extensions_controller.dart';
 import '../widgets/plugin_settings_dialog.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 class ExtensionsScreen extends ConsumerStatefulWidget {
@@ -56,7 +57,7 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
           constraints: const BoxConstraints(maxWidth: 800),
           child: switch (state) {
             ExtensionsLoading(repositories: []) => const Center(
-              child: CircularProgressIndicator(),
+              child: AppLoadingIndicator(),
             ),
             _ => ListView.builder(
               padding: const EdgeInsets.only(bottom: 24),
@@ -85,7 +86,9 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                     )
                     .toList();
                 final hasInstalledOnly = installedOnlyPlugins.isNotEmpty;
-                final isEmpty = state.repositories.isEmpty && state.installedPlugins.isEmpty;
+                final isEmpty =
+                    state.repositories.isEmpty &&
+                    state.installedPlugins.isEmpty;
 
                 int currentIndex = 0;
 
@@ -128,7 +131,8 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                 }
 
                 // 4. Repositories
-                if (index >= currentIndex && index < currentIndex + state.repositories.length) {
+                if (index >= currentIndex &&
+                    index < currentIndex + state.repositories.length) {
                   final repoIndex = index - currentIndex;
                   final repo = state.repositories[repoIndex];
                   final plugins = state.availablePlugins[repo.url] ?? [];
@@ -416,7 +420,8 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
     final hasInstalledOnly = state.installedPlugins.any(
       (p) => !p.isDebug && !allAvailablePackageNames.contains(p.packageName),
     );
-    final isEmpty = state.repositories.isEmpty && state.installedPlugins.isEmpty;
+    final isEmpty =
+        state.repositories.isEmpty && state.installedPlugins.isEmpty;
 
     return (hasDebug ? 1 : 0) +
         1 + // Always show Installed Extensions tile
@@ -513,10 +518,13 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                 if (isRepoInstalling)
                   const Padding(
                     padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AppLoadingIndicator(
+                      constraints: BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                        maxWidth: 24,
+                        maxHeight: 24,
+                      ),
                     ),
                   )
                 else ...[
@@ -801,10 +809,13 @@ class _PluginTileState extends ConsumerState<_PluginTile> {
       trailing: isInstalling
           ? const Padding(
               padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              child: AppLoadingIndicator(
+                constraints: BoxConstraints(
+                  minWidth: 24,
+                  minHeight: 24,
+                  maxWidth: 24,
+                  maxHeight: 24,
+                ),
               ),
             )
           : Row(

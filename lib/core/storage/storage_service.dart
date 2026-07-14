@@ -282,7 +282,10 @@ class StorageService {
   }
 
   bool isAnimeSkipIntegrationEnabled() {
-    return (_settingsBox.get('animeskip_integration_enabled', defaultValue: false)
+    return (_settingsBox.get(
+              'animeskip_integration_enabled',
+              defaultValue: false,
+            )
             as bool?) ??
         false;
   }
@@ -308,7 +311,7 @@ class StorageService {
   String? getString(String key) {
     return _settingsBox.get(key) as String?;
   }
-  
+
   Future<void> remove(String key) async {
     await _settingsBox.delete(key);
   }
@@ -333,6 +336,7 @@ class StorageService {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodePosterUrl,
   }) async {
     final entry = {
       'title': item.title,
@@ -351,6 +355,7 @@ class StorageService {
       'season': season,
       'episode': episode,
       'episodeTitle': episodeTitle,
+      'episodePosterUrl': episodePosterUrl,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
 

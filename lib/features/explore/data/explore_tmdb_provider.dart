@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/services/tmdb_service.dart';
 import 'explore_language_provider.dart';
 import 'explore_filter_provider.dart';
+import 'explore_mode_provider.dart';
 
 import '../../../core/network/dio_client_provider.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
@@ -16,6 +17,35 @@ TmdbService tmdbService(Ref ref) {
 
 @Riverpod(keepAlive: true)
 Future<List<TmdbGenre>> genres(Ref ref) async {
+  final isAnime = ref.watch(exploreModeProvider);
+  if (isAnime) {
+    final animeGenres = [
+      'Action',
+      'Adventure',
+      'Comedy',
+      'Drama',
+      'Ecchi',
+      'Fantasy',
+      'Horror',
+      'Mahou Shoujo',
+      'Mecha',
+      'Music',
+      'Mystery',
+      'Psychological',
+      'Romance',
+      'Sci-Fi',
+      'Slice of Life',
+      'Sports',
+      'Supernatural',
+      'Thriller',
+    ];
+    return animeGenres
+        .asMap()
+        .entries
+        .map((e) => TmdbGenre(id: e.key, name: e.value))
+        .toList();
+  }
+
   final service = ref.watch(tmdbServiceProvider);
   final lang = ref.watch(languageProvider);
   final isEnglish = lang == 'en-US';

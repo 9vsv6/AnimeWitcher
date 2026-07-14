@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../../../core/models/tmdb_details.dart';
 import '../../../../core/storage/history_repository.dart';
@@ -14,11 +15,13 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
     required this.data,
     required this.isMovie,
     required this.child,
+    this.source,
   });
 
   final TmdbDetails data;
   final bool isMovie;
   final Widget child;
+  final String? source;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,8 +54,15 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
               return LinearGradient(
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
-                colors: [scaffoldColor, Colors.transparent],
-                stops: const [0.2, 1.0],
+                colors: [
+                  scaffoldColor,
+                  scaffoldColor.withValues(alpha: 0.85),
+                  scaffoldColor.withValues(alpha: 0.55),
+                  scaffoldColor.withValues(alpha: 0.25),
+                  scaffoldColor.withValues(alpha: 0.08),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
               ).createShader(rect);
             },
             blendMode: BlendMode.dstOut,
@@ -78,11 +88,14 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  scaffoldColor.withValues(alpha: 0.8),
-                  scaffoldColor.withValues(alpha: 0.4),
+                  scaffoldColor,
+                  scaffoldColor.withValues(alpha: 0.85),
+                  scaffoldColor.withValues(alpha: 0.55),
+                  scaffoldColor.withValues(alpha: 0.25),
+                  scaffoldColor.withValues(alpha: 0.08),
                   Colors.transparent,
                 ],
-                stops: const [0.0, 0.4, 1.0],
+                stops: const [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
               ),
             ),
           ),
@@ -93,8 +106,15 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
-                colors: [scaffoldColor, Colors.transparent],
-                stops: const [0.0, 0.4],
+                colors: [
+                  scaffoldColor,
+                  scaffoldColor.withValues(alpha: 0.85),
+                  scaffoldColor.withValues(alpha: 0.55),
+                  scaffoldColor.withValues(alpha: 0.25),
+                  scaffoldColor.withValues(alpha: 0.08),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.1, 0.2, 0.28, 0.35, 0.4],
               ),
             ),
           ),
@@ -194,7 +214,9 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
                           _buildTmdbLogo(),
                           _buildTopBadge(
                             context,
-                            isMovie ? "MOVIE" : "TV SHOW",
+                            source == 'anilist'
+                                ? (isMovie ? "MOVIE" : "ANIME")
+                                : (isMovie ? "MOVIE" : "TV SHOW"),
                           ),
                           if (year.isNotEmpty)
                             _buildIconInfo(
@@ -305,7 +327,7 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
                           query: title,
                           compact: true,
                           parentMediaType: isMovie ? 'movie' : 'tv',
-                          tmdbId: data.id,
+                          tmdbId: data.tmdbId,
                           imdbId: data.imdbId,
                         ),
                       ),
@@ -322,6 +344,22 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
   }
 
   Widget _buildTmdbLogo() {
+    final isAnilist = source == 'anilist';
+    if (isAnilist) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: const Color(0xFF02A9FF).withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(6),
+        child: SvgPicture.asset(
+          'assets/images/anilist_icon.svg',
+          fit: BoxFit.contain,
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(

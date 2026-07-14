@@ -480,6 +480,9 @@ class AppLocalizationsIt extends AppLocalizations {
   String get playNow => 'Riproduci ora';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Elimina download?';
 
   @override

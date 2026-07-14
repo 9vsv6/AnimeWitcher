@@ -478,6 +478,9 @@ class AppLocalizationsPa extends AppLocalizations {
   String get playNow => 'ਹੁਣੇ ਚਲਾਓ';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'ਡਾਊਨਲੋਡ ਮਿਟਾਈਏ?';
 
   @override

@@ -104,57 +104,63 @@ class _MovieProductionCompaniesState extends State<MovieProductionCompanies> {
 
   Widget _buildDesktopItem(BuildContext context, int index) {
     final c = widget.productionCompanies[index];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasLogo = c.logoImageUrl != null && c.logoImageUrl!.isNotEmpty;
+
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.onSurface,
+        color: isDark ? Colors.white : Colors.black.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: CachedNetworkImage(
-        imageUrl: c.logoImageUrl ?? '',
-        height: 20, // Reduced for TV
-        fit: BoxFit.contain,
-        placeholder: (_, _) => const SizedBox(width: 20, height: 20),
-        errorWidget: (_, _, _) => Center(
-          child: Text(
-            c.name,
-            style: const TextStyle(
-              color: Colors.black,
-              fontSize: 8,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
+      child: hasLogo
+          ? CachedNetworkImage(
+              imageUrl: c.logoImageUrl!,
+              height: 20,
+              fit: BoxFit.contain,
+              placeholder: (_, _) => const SizedBox(width: 20, height: 20),
+              errorWidget: (_, _, _) => _buildTextLogo(c.name, isDark, 8),
+            )
+          : _buildTextLogo(c.name, isDark, 8),
     );
   }
 
   Widget _buildMobileItem(BuildContext context, int index) {
     final company = widget.productionCompanies[index];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasLogo =
+        company.logoImageUrl != null && company.logoImageUrl!.isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(right: 16),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.onSurface,
+        color: isDark ? Colors.white : Colors.black.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: CachedNetworkImage(
-        imageUrl: company.logoImageUrl ?? '',
-        fit: BoxFit.contain,
-        width: 100,
-        placeholder: (_, _) => const SizedBox.shrink(),
-        errorWidget: (_, _, _) => Center(
-          child: Text(
-            company.name,
-            style: const TextStyle(
-              color: Colors.black,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
+      child: hasLogo
+          ? CachedNetworkImage(
+              imageUrl: company.logoImageUrl!,
+              fit: BoxFit.contain,
+              width: 100,
+              placeholder: (_, _) => const SizedBox.shrink(),
+              errorWidget: (_, _, _) =>
+                  _buildTextLogo(company.name, isDark, 10),
+            )
+          : _buildTextLogo(company.name, isDark, 10),
+    );
+  }
+
+  Widget _buildTextLogo(String name, bool isDark, double fontSize) {
+    return Center(
+      child: Text(
+        name,
+        style: TextStyle(
+          color: isDark ? Colors.black : Colors.black87,
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
         ),
+        textAlign: TextAlign.center,
       ),
     );
   }

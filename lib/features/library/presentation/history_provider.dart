@@ -55,6 +55,7 @@ class WatchHistory extends _$WatchHistory {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodePosterUrl,
   }) async {
     final enabled = ref.read(generalSettingsProvider).watchHistoryEnabled;
     if (!enabled) return;
@@ -74,6 +75,7 @@ class WatchHistory extends _$WatchHistory {
       season: season,
       episode: episode,
       episodeTitle: episodeTitle,
+      episodePosterUrl: episodePosterUrl,
     );
     refresh();
   }

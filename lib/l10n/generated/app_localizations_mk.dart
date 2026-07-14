@@ -479,6 +479,9 @@ class AppLocalizationsMk extends AppLocalizations {
   String get playNow => 'Гледај сега';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Избриши преземање?';
 
   @override

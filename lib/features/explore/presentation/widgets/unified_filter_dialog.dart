@@ -5,6 +5,8 @@ import '../../../../core/utils/layout_constants.dart';
 import '../../data/explore_filter_provider.dart';
 import '../../data/explore_language_provider.dart';
 import '../../data/explore_tmdb_provider.dart';
+import '../../data/explore_mode_provider.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class UnifiedFilterDialog extends ConsumerStatefulWidget {
   const UnifiedFilterDialog({super.key});
@@ -32,6 +34,8 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
 
   @override
   Widget build(BuildContext context) {
+    final isAnime = ref.watch(exploreModeProvider);
+
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
       child: Dialog(
@@ -59,206 +63,223 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header & Tabs
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Theme.of(context).dividerColor),
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header & Tabs
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Theme.of(context).dividerColor),
+                    ),
                   ),
-                ),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.tune,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 28,
-                          ),
-                          const SizedBox(width: LayoutConstants.spacingSm),
-                          Text(
-                            "Filters",
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.tune,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 28,
                             ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            icon: Icon(
-                              Icons.close,
-                              color: Theme.of(context).colorScheme.onSurface,
+                            const SizedBox(width: LayoutConstants.spacingSm),
+                            Text(
+                              "Filters",
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            splashRadius: 24,
+                            const Spacer(),
+                            IconButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              icon: Icon(
+                                Icons.close,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                              splashRadius: 24,
+                            ),
+                          ],
+                        ),
+                      ),
+                      TabBar(
+                        controller: _tabController,
+                        indicatorColor: Theme.of(context).colorScheme.primary,
+                        labelColor: Theme.of(context).colorScheme.primary,
+                        unselectedLabelColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant,
+                        labelStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                        tabs: [
+                          if (isAnime)
+                            const Tab(
+                              text: "Title Lang",
+                              icon: Icon(Icons.title, size: 20),
+                            )
+                          else
+                            const Tab(
+                              text: "Lang",
+                              icon: Icon(Icons.translate, size: 20),
+                            ),
+
+                          // Genre Tab
+                          Consumer(
+                            builder: (c, ref, _) {
+                              final hasFilter =
+                                  ref
+                                      .watch(exploreFilterProvider)
+                                      .selectedGenre !=
+                                  null;
+                              return Tab(
+                                text: "Genre",
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    const Icon(
+                                      Icons.category_outlined,
+                                      size: 20,
+                                    ),
+                                    if (hasFilter)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                          // Year Tab
+                          Consumer(
+                            builder: (c, ref, _) {
+                              final hasFilter =
+                                  ref
+                                      .watch(exploreFilterProvider)
+                                      .selectedYear !=
+                                  null;
+                              return Tab(
+                                text: "Year",
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 20),
+                                    if (hasFilter)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                          // Rating Tab
+                          Consumer(
+                            builder: (c, ref, _) {
+                              final hasFilter =
+                                  ref.watch(exploreFilterProvider).minRating !=
+                                  null;
+                              return Tab(
+                                text: "Rating",
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    const Icon(Icons.star_outline, size: 20),
+                                    if (hasFilter)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
-                    ),
-                    TabBar(
-                      controller: _tabController,
-                      indicatorColor: Theme.of(context).colorScheme.primary,
-                      labelColor: Theme.of(context).colorScheme.primary,
-                      unselectedLabelColor: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant,
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                      tabs: [
-                        const Tab(
-                          text: "Lang",
-                          icon: Icon(Icons.translate, size: 20),
-                        ),
-
-                        // Genre Tab
-                        Consumer(
-                          builder: (c, ref, _) {
-                            final hasFilter =
-                                ref
-                                    .watch(exploreFilterProvider)
-                                    .selectedGenre !=
-                                null;
-                            return Tab(
-                              text: "Genre",
-                              icon: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(Icons.category_outlined, size: 20),
-                                  if (hasFilter)
-                                    Positioned(
-                                      right: -2,
-                                      top: -2,
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Year Tab
-                        Consumer(
-                          builder: (c, ref, _) {
-                            final hasFilter =
-                                ref.watch(exploreFilterProvider).selectedYear !=
-                                null;
-                            return Tab(
-                              text: "Year",
-                              icon: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(Icons.calendar_today, size: 20),
-                                  if (hasFilter)
-                                    Positioned(
-                                      right: -2,
-                                      top: -2,
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Rating Tab
-                        Consumer(
-                          builder: (c, ref, _) {
-                            final hasFilter =
-                                ref.watch(exploreFilterProvider).minRating !=
-                                null;
-                            return Tab(
-                              text: "Rating",
-                              icon: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(Icons.star_outline, size: 20),
-                                  if (hasFilter)
-                                    Positioned(
-                                      right: -2,
-                                      top: -2,
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              // Tab View Content
-              Flexible(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: const [
-                    _LanguageTab(),
-                    _GenreTab(),
-                    _YearTab(),
-                    _RatingTab(),
-                  ],
+                // Tab View Content
+                Flexible(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      if (isAnime)
+                        const _TitleLanguageTab()
+                      else
+                        const _LanguageTab(),
+                      const _GenreTab(),
+                      const _YearTab(),
+                      const _RatingTab(),
+                    ],
+                  ),
                 ),
-              ),
 
-              // Footer
-              Padding(
-                padding: const EdgeInsets.all(LayoutConstants.spacingMd),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: LayoutConstants.spacingMd,
+                // Footer
+                Padding(
+                  padding: const EdgeInsets.all(LayoutConstants.spacingMd),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: LayoutConstants.spacingMd,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      "Done",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                      child: const Text(
+                        "Done",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -542,7 +563,7 @@ class _GenreTab extends ConsumerWidget {
           );
         },
       ),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: AppLoadingIndicator()),
       error: (_, _) => const Center(
         child: Text(
           "Failed to load genres",
@@ -651,6 +672,130 @@ class _YearTab extends ConsumerWidget {
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 fontSize: 16,
               ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TitleLanguageTab extends ConsumerWidget {
+  const _TitleLanguageTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(animeTitleLanguageProvider);
+    final titleLangs = [
+      {'code': 'english', 'name': 'English Title', 'native': 'English'},
+      {'code': 'japanese', 'name': 'Japanese Title', 'native': '日本語 (Native)'},
+      {'code': 'romaji', 'name': 'Romaji Title', 'native': 'Rōmaji'},
+    ];
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(20),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 2.5,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: titleLangs.length,
+      itemBuilder: (context, index) {
+        final lang = titleLangs[index];
+        final isSelected = lang['code'] == currentLang;
+
+        return InkWell(
+          onTap: () {
+            ref
+                .read(animeTitleLanguageProvider.notifier)
+                .setLanguage(lang['code']!);
+          },
+          borderRadius: BorderRadius.circular(16),
+          focusColor: Theme.of(
+            context,
+          ).colorScheme.primary.withValues(alpha: 0.6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: LayoutConstants.spacingMd,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).dividerColor.withValues(alpha: 0.1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.1),
+                  ),
+                  child: Text(
+                    lang['code']!.substring(0, 2).toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: LayoutConstants.spacingSm),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        lang['name']!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        lang['native']!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.7)
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Icon(
+                    Icons.check_circle,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+              ],
             ),
           ),
         );

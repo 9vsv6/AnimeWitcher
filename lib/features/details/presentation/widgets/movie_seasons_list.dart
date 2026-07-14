@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/shimmer_placeholder.dart';
@@ -11,17 +12,20 @@ import '../../../../core/models/tmdb_details.dart';
 import '../tmdb_details_controller.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
 
 class MovieSeasonsList extends ConsumerStatefulWidget {
   final int movieId;
   final List<TmdbSeason> seasons;
   final Color? textColor;
+  final String? source;
 
   const MovieSeasonsList({
     super.key,
     required this.movieId,
     required this.seasons,
     this.textColor,
+    this.source,
   });
 
   @override
@@ -48,6 +52,22 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
   }
 
   Widget _buildTmdbLogo(BuildContext context) {
+    final isAnilist = widget.source == 'anilist';
+    if (isAnilist) {
+      return Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: const Color(0xFF02A9FF).withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(4),
+        child: SvgPicture.asset(
+          'assets/images/anilist_icon.svg',
+          fit: BoxFit.contain,
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
@@ -96,7 +116,12 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                   builder: (context, ref, _) {
                     return DropdownButton<int>(
                       value: ref
-                          .watch(tmdbDetailsControllerProvider(widget.movieId))
+                          .watch(
+                            tmdbDetailsControllerProvider(
+                              widget.movieId,
+                              source: widget.source,
+                            ),
+                          )
                           .selectedSeason,
                       dropdownColor: Theme.of(
                         context,
@@ -128,9 +153,10 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                               .read(
                                 tmdbDetailsControllerProvider(
                                   widget.movieId,
+                                  source: widget.source,
                                 ).notifier,
                               )
-                              .fetchEpisodes(val);
+                              .fetchEpisodes(val, source: widget.source);
                         }
                       },
                     );
@@ -173,7 +199,10 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                     final isSelected =
                         ref
                             .watch(
-                              tmdbDetailsControllerProvider(widget.movieId),
+                              tmdbDetailsControllerProvider(
+                                widget.movieId,
+                                source: widget.source,
+                              ),
                             )
                             .selectedSeason ==
                         seasonNum;
@@ -187,9 +216,10 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                             .read(
                               tmdbDetailsControllerProvider(
                                 widget.movieId,
+                                source: widget.source,
                               ).notifier,
                             )
-                            .fetchEpisodes(seasonNum);
+                            .fetchEpisodes(seasonNum, source: widget.source);
                       },
                       child: Container(
                         width: 120,
@@ -262,7 +292,12 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
     return Consumer(
       builder: (context, ref, _) {
         if (ref
-                .watch(tmdbDetailsControllerProvider(widget.movieId))
+                .watch(
+                  tmdbDetailsControllerProvider(
+                    widget.movieId,
+                    source: widget.source,
+                  ),
+                )
                 .episodesFuture ==
             null) {
           return const SizedBox.shrink();
@@ -270,11 +305,16 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
 
         return FutureBuilder<Map<String, dynamic>?>(
           future: ref
-              .watch(tmdbDetailsControllerProvider(widget.movieId))
+              .watch(
+                tmdbDetailsControllerProvider(
+                  widget.movieId,
+                  source: widget.source,
+                ),
+              )
               .episodesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: AppLoadingIndicator());
             }
             if (snapshot.hasError || !snapshot.hasData) {
               return const SizedBox.shrink();
@@ -429,7 +469,12 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
     return Consumer(
       builder: (context, ref, _) {
         if (ref
-                .watch(tmdbDetailsControllerProvider(widget.movieId))
+                .watch(
+                  tmdbDetailsControllerProvider(
+                    widget.movieId,
+                    source: widget.source,
+                  ),
+                )
                 .episodesFuture ==
             null) {
           return const SizedBox.shrink();
@@ -437,11 +482,16 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
 
         return FutureBuilder<Map<String, dynamic>?>(
           future: ref
-              .watch(tmdbDetailsControllerProvider(widget.movieId))
+              .watch(
+                tmdbDetailsControllerProvider(
+                  widget.movieId,
+                  source: widget.source,
+                ),
+              )
               .episodesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: AppLoadingIndicator());
             }
             if (snapshot.hasError || !snapshot.hasData) {
               return const SizedBox.shrink();

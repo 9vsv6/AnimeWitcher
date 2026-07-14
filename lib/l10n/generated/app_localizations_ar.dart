@@ -479,6 +479,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get playNow => 'تشغيل الآن';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'حذف التنزيل؟';
 
   @override

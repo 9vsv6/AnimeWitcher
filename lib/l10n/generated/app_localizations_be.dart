@@ -476,6 +476,9 @@ class AppLocalizationsBe extends AppLocalizations {
   String get playNow => 'Глядзець зараз';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Выдаліць загрузку?';
 
   @override

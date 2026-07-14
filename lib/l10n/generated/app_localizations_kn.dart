@@ -484,6 +484,9 @@ class AppLocalizationsKn extends AppLocalizations {
   String get playNow => 'ಈಗಲೇ ಪ್ಲೇ ಮಾಡಿ';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'ಡೌನ್‌ಲೋಡ್ ಅಳಿಸಬೇಕೆ?';
 
   @override

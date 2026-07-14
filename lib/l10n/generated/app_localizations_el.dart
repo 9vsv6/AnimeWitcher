@@ -482,6 +482,9 @@ class AppLocalizationsEl extends AppLocalizations {
   String get playNow => 'Προβολή τώρα';
 
   @override
+  String get upNext => 'Up Next';
+
+  @override
   String get deleteDownloadPrompt => 'Διαγραφή λήψης;';
 
   @override

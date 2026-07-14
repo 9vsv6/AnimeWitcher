@@ -109,6 +109,7 @@ class MultimediaItem {
 
   final int? tmdbId;
   final String? imdbId;
+  final String? source;
 
   MultimediaItem({
     required this.title,
@@ -137,6 +138,7 @@ class MultimediaItem {
     this.streams,
     this.tmdbId,
     this.imdbId,
+    this.source,
   }) : episodes = episodes != null
            ? (List<Episode>.from(episodes)..sort((a, b) {
                if (a.season != b.season) return a.season.compareTo(b.season);
@@ -233,6 +235,7 @@ class MultimediaItem {
           : null,
       tmdbId: json['tmdbId'] as int?,
       imdbId: json['imdbId'] as String?,
+      source: json['source'] as String?,
     );
   }
 
@@ -241,9 +244,7 @@ class MultimediaItem {
         (json['media_type'] as String?) ??
         (json['title'] != null ? 'movie' : 'tv');
     final title = _unescape.convert(
-      (json['title'] as String?) ??
-          (json['name'] as String?) ??
-          'Unknown',
+      (json['title'] as String?) ?? (json['name'] as String?) ?? 'Unknown',
     );
     final date =
         (json['release_date'] as String?) ??
@@ -349,6 +350,7 @@ class MultimediaItem {
     List<StreamResult>? streams,
     int? tmdbId,
     String? imdbId,
+    String? source,
   }) {
     return MultimediaItem(
       title: title ?? this.title,
@@ -377,6 +379,7 @@ class MultimediaItem {
       streams: streams ?? this.streams,
       tmdbId: tmdbId ?? this.tmdbId,
       imdbId: imdbId ?? this.imdbId,
+      source: source ?? this.source,
     );
   }
 
@@ -408,6 +411,7 @@ class MultimediaItem {
       'tmdbId': tmdbId,
       'imdbId': imdbId,
       'streams': streams?.map((s) => s.toJson()).toList(),
+      'source': source,
     };
   }
 
@@ -422,10 +426,7 @@ class MultimediaItem {
           provider == other.provider &&
           tmdbId == other.tmdbId &&
           imdbId == other.imdbId &&
-          const MapEquality<String, String>().equals(
-            syncData,
-            other.syncData,
-          );
+          const MapEquality<String, String>().equals(syncData, other.syncData);
 
   @override
   int get hashCode =>

@@ -33,6 +33,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  expressive_loading_indicator: ^0.0.1
+  material_new_shapes: ^1.0.0-wip.6
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   flutter_riverpod: ^3.1.0
@@ -73,7 +76,6 @@ dependencies:
   version: ^3.0.2
   open_file: ^3.5.11
   flutter_displaymode: ^0.7.0
-  carousel_slider: ^5.1.1
   intl: ^0.20.2
   flutter_svg: ^2.2.3
   dpad: ^2.0.2
