@@ -255,6 +255,17 @@ class StorageService {
         true;
   }
 
+  // --- Window Settings ---
+  Future<void> setAlwaysOnTop(bool enabled) async {
+    await _settingsBox.put('always_on_top', enabled);
+  }
+
+  bool isAlwaysOnTop() {
+    return (_settingsBox.get('always_on_top', defaultValue: false)
+            as bool?) ??
+        false;
+  }
+
   // --- Network Settings ---
   Future<void> setGithubProxyEnabled(bool enabled) async {
     await _settingsBox.put('github_proxy_enabled', enabled);

@@ -28,6 +28,7 @@ import 'package:dpad/dpad.dart';
 import 'core/config/tmdb_config.dart';
 import 'core/providers/device_info_provider.dart';
 import 'shared/widgets/loading_indicator.dart';
+import 'features/settings/presentation/general_settings_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,6 +101,11 @@ class _AppRootState extends State<AppRoot> {
             if (kDebugMode) debugPrint("Error setting high refresh rate: $e");
           }),
       ]);
+
+      if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        final alwaysOnTop = _storageService.isAlwaysOnTop();
+        await windowManager.setAlwaysOnTop(alwaysOnTop);
+      }
 
       if (mounted) {
         setState(() {
@@ -430,7 +436,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
           },
         );
 
-        return Focus(
+        Widget rootWidget = Focus(
           autofocus: true,
           onKeyEvent: (node, event) {
             if (event is KeyDownEvent &&
@@ -442,6 +448,80 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
           },
           child: DpadNavigator(child: materialApp),
         );
+
+        if (Platform.isMacOS) {
+          final alwaysOnTop = ref.watch(generalSettingsProvider.select((s) => s.alwaysOnTop));
+          rootWidget = PlatformMenuBar(
+            menus: <PlatformMenuItem>[
+              PlatformMenu(
+                label: 'SkyStream',
+                menus: <PlatformMenuItem>[
+                  if (PlatformProvidedMenuItem.hasMenu(PlatformProvidedMenuItemType.about))
+                    const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
+                  const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
+                ],
+              ),
+              PlatformMenu(
+                label: 'Edit',
+                menus: <PlatformMenuItem>[
+                  PlatformMenuItem(
+                    label: 'Undo',
+                    shortcut: const SingleActivator(LogicalKeyboardKey.keyZ, meta: true),
+                    onSelected: () {},
+                  ),
+                  PlatformMenuItem(
+                    label: 'Redo',
+                    shortcut: const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true),
+                    onSelected: () {},
+                  ),
+                  const PlatformMenuItemGroup(
+                    members: <PlatformMenuItem>[
+                      PlatformMenuItem(
+                        label: 'Cut',
+                        shortcut: SingleActivator(LogicalKeyboardKey.keyX, meta: true),
+                        onSelected: null,
+                      ),
+                      PlatformMenuItem(
+                        label: 'Copy',
+                        shortcut: SingleActivator(LogicalKeyboardKey.keyC, meta: true),
+                        onSelected: null,
+                      ),
+                      PlatformMenuItem(
+                        label: 'Paste',
+                        shortcut: SingleActivator(LogicalKeyboardKey.keyV, meta: true),
+                        onSelected: null,
+                      ),
+                      PlatformMenuItem(
+                        label: 'Select All',
+                        shortcut: SingleActivator(LogicalKeyboardKey.keyA, meta: true),
+                        onSelected: null,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              PlatformMenu(
+                label: 'Window',
+                menus: <PlatformMenuItem>[
+                  const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.minimizeWindow),
+                  const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.zoomWindow),
+                  PlatformMenuItem(
+                    label: alwaysOnTop ? 'Disable Stay on Top' : 'Stay on Top',
+                    shortcut: const SingleActivator(LogicalKeyboardKey.keyT, meta: true, control: true),
+                    onSelected: () async {
+                      final nextVal = !alwaysOnTop;
+                      await ref.read(generalSettingsProvider.notifier).setAlwaysOnTop(nextVal);
+                      await windowManager.setAlwaysOnTop(nextVal);
+                    },
+                  ),
+                ],
+              ),
+            ],
+            child: rootWidget,
+          );
+        }
+
+        return rootWidget;
       },
     );
   }

@@ -82,6 +82,14 @@ class SettingsRepository {
     return _storageService.isWatchHistoryEnabled();
   }
 
+  Future<void> setAlwaysOnTop(bool enabled) async {
+    await _storageService.setAlwaysOnTop(enabled);
+  }
+
+  bool isAlwaysOnTop() {
+    return _storageService.isAlwaysOnTop();
+  }
+
   Future<void> setGithubProxyEnabled(bool enabled) async {
     await _storageService.setGithubProxyEnabled(enabled);
   }
