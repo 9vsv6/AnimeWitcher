@@ -167,11 +167,17 @@ class MyApp extends ConsumerStatefulWidget {
   ConsumerState<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends ConsumerState<MyApp> {
+class _MyAppState extends ConsumerState<MyApp> with WindowListener {
+  bool _isFullScreen = false;
+
   @override
   void initState() {
     super.initState();
     FocusManager.instance.addEarlyKeyEventHandler(_handleEarlyKeyEvent);
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      windowManager.addListener(this);
+      _updateFullScreenState();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(downloadServiceProvider).init();
       _checkExtensionsUpdates();
@@ -182,7 +188,33 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void dispose() {
     FocusManager.instance.removeEarlyKeyEventHandler(_handleEarlyKeyEvent);
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      windowManager.removeListener(this);
+    }
     super.dispose();
+  }
+
+  @override
+  void onWindowEnterFullScreen() {
+    setState(() {
+      _isFullScreen = true;
+    });
+  }
+
+  @override
+  void onWindowLeaveFullScreen() {
+    setState(() {
+      _isFullScreen = false;
+    });
+  }
+
+  Future<void> _updateFullScreenState() async {
+    final isFull = await windowManager.isFullScreen();
+    if (mounted) {
+      setState(() {
+        _isFullScreen = isFull;
+      });
+    }
   }
 
   KeyEventResult _handleEarlyKeyEvent(KeyEvent event) {
@@ -377,7 +409,15 @@ class _MyAppState extends ConsumerState<MyApp> {
 
             if (!kIsWeb &&
                 (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+              final isMac = Platform.isMacOS;
+              result = Padding(
+                padding: EdgeInsets.only(
+                  top: (isMac && !_isFullScreen) ? 28.0 : 0.0,
+                ),
+                child: result,
+              );
               result = Stack(
+                clipBehavior: Clip.none,
                 children: [
                   Positioned.fill(child: result),
                   const Positioned(
@@ -607,7 +647,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
           clipBehavior: Clip.none,
           children: [
             if (_hovered)
-              Positioned.fill(
+              Positioned(
+                left: Platform.isMacOS ? 80 : 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onPanStart: (_) {
@@ -626,7 +670,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
             // Pin icon on the left (visible when neither maximized nor fullscreen)
             if (_hovered && !_isFullScreen && !_isMaximized)
               Positioned(
-                left: 12,
+                left: Platform.isMacOS ? 80 : 12,
                 top: 0,
                 bottom: 0,
                 child: Center(
@@ -641,10 +685,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                 ),
               ),
             // Right-side window controls (fullscreen, minimize, maximize/restore, close)
-            Positioned(
-              right: 12,
-              top: 0,
-              bottom: 0,
+            if (!Platform.isMacOS)
+              Positioned(
+                right: 12,
+                top: 0,
+                bottom: 0,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 150),
                 opacity: _hovered ? 1.0 : 0.0,
