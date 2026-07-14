@@ -14,12 +14,9 @@ import '../subtitle_search_provider.dart';
 import '../../domain/entity/subtitle_model.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'hotstar_player_style.dart';
-<<<<<<< HEAD
 import '../../../../core/utils/stream_quality_sorter.dart';
-=======
 import 'subtitle_sync_dialog.dart';
 import 'subtitle_appearance_dialog.dart';
->>>>>>> main
 
 class _TrackDialogResult {
   final String? audioId;
