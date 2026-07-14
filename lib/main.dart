@@ -420,13 +420,12 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                   clipBehavior: Clip.none,
                   children: [
                     Positioned.fill(child: result),
-                    if (!_isFullScreen)
-                      const Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: CustomTitleBar(),
-                      ),
+                    const Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: CustomTitleBar(),
+                    ),
                   ],
                 );
               }
