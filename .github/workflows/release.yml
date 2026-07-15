@@ -485,7 +485,17 @@ jobs:
           echo "$RUNNER_TOOL_CACHE/flutter/bin" >> $GITHUB_PATH
       - name: Install Linux Dependencies
         run: |
-          sudo apt-get update
+          # Force HTTPS for Ubuntu mirrors to bypass port 80 blocks and reduce latency
+          sudo sed -i 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+          sudo sed -i 's|http://.*archive.ubuntu.com|https://archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+          sudo sed -i 's|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+          # Retry loop to handle transient APT repository connection issues
+          for i in {1..5}; do
+            sudo apt-get update -y && break || {
+              echo "apt-get update failed, retrying in 10 seconds ($i/5)..."
+              sleep 10
+            }
+          done
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev libasound2-dev libsecret-1-dev
           
       - name: Install Flutter Dependencies
