@@ -485,8 +485,8 @@ jobs:
           echo "$RUNNER_TOOL_CACHE/flutter/bin" >> $GITHUB_PATH
       - name: Install Linux Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev libasound2-dev libsecret-1-dev
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::ForceIPv4=true update
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::ForceIPv4=true install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev libasound2-dev libsecret-1-dev
           
       - name: Install Flutter Dependencies
         run: |
