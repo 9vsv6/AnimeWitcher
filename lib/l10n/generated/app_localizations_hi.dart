@@ -57,6 +57,15 @@ class AppLocalizationsHi extends AppLocalizations {
   String get defaultHomeScreen => 'डिफ़ॉल्ट होम स्क्रीन';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'प्लेयर';
 
   @override

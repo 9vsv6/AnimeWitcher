@@ -57,6 +57,15 @@ class AppLocalizationsKo extends AppLocalizations {
   String get defaultHomeScreen => '기본 홈 화면';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => '플레이어';
 
   @override

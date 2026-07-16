@@ -57,6 +57,15 @@ class AppLocalizationsUk extends AppLocalizations {
   String get defaultHomeScreen => 'Головний екран за замовчуванням';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Плеєр';
 
   @override

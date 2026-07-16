@@ -57,6 +57,15 @@ class AppLocalizationsBn extends AppLocalizations {
   String get defaultHomeScreen => 'ডিফল্ট হোম স্ক্রিন';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'প্লেয়ার';
 
   @override

@@ -57,6 +57,15 @@ class AppLocalizationsVi extends AppLocalizations {
   String get defaultHomeScreen => 'Màn hình chính mặc định';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Trình phát';
 
   @override

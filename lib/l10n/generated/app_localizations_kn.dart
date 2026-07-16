@@ -57,6 +57,15 @@ class AppLocalizationsKn extends AppLocalizations {
   String get defaultHomeScreen => 'ಡೀಫಾಲ್ಟ್ ಮುಖಪುಟ';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'ಪ್ಲೇಯರ್';
 
   @override

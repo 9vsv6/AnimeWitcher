@@ -57,6 +57,15 @@ class AppLocalizationsHu extends AppLocalizations {
   String get defaultHomeScreen => 'Alapértelmezett kezdőképernyő';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Lejátszó';
 
   @override

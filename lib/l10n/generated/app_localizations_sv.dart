@@ -57,6 +57,15 @@ class AppLocalizationsSv extends AppLocalizations {
   String get defaultHomeScreen => 'Standardhemskärm';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Spelare';
 
   @override
