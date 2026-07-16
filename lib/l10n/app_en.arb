@@ -599,5 +599,12 @@
   "clearCacheDialogContent": "This will delete cached images and video files. Your settings, history, and extensions will not be affected.",
   "clearCacheNow": "Clear Cache",
   "cacheCleared": "Cache cleared",
-  "calculating": "Calculating…"
+  "calculating": "Calculating…",
+  "playerControls": "Player Controls",
+  "playerControlsSubtitle": "Show or hide player control buttons",
+  "showPip": "Picture-in-Picture button",
+  "showResize": "Resize button",
+  "showRotate": "Rotate button",
+  "showPlaybackSpeed": "Playback speed button",
+  "showEpisodes": "Episodes button"
 }

@@ -1196,6 +1196,77 @@ void showQualityFilterModeDialog(
   );
 }
 
+/// Shows a dialog to toggle the visibility of individual player control
+/// buttons. Changes apply live via the player settings notifier.
+void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
+  final l10n = AppLocalizations.of(context)!;
+  final notifier = ref.read(playerSettingsProvider.notifier);
+  final settings =
+      ref.read(playerSettingsProvider).asData?.value ?? const PlayerSettings();
+
+  final metadata = [
+    (icon: Icons.picture_in_picture_alt_rounded, label: l10n.showPip),
+    (icon: Icons.aspect_ratio_rounded, label: l10n.showResize),
+    (icon: Icons.screen_rotation_rounded, label: l10n.showRotate),
+    (icon: Icons.speed_rounded, label: l10n.showPlaybackSpeed),
+    (icon: Icons.playlist_play_rounded, label: l10n.showEpisodes),
+  ];
+  final setters = [
+    notifier.setShowPip,
+    notifier.setShowResize,
+    notifier.setShowRotate,
+    notifier.setShowPlaybackSpeed,
+    notifier.setShowEpisodes,
+  ];
+  final values = [
+    settings.showPip,
+    settings.showResize,
+    settings.showRotate,
+    settings.showPlaybackSpeed,
+    settings.showEpisodes,
+  ];
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) {
+        return AlertDialog(
+          surfaceTintColor: Colors.transparent,
+          title: Text(l10n.playerControls),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < metadata.length; i++)
+                  SwitchListTile(
+                    secondary: Icon(metadata[i].icon),
+                    title: Text(metadata[i].label),
+                    value: values[i],
+                    onChanged: (val) {
+                      setters[i](val);
+                      setState(() => values[i] = val);
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop<void>(ctx),
+              child: Text(
+                l10n.close,
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
 /// Shows a dialog to enter OpenSubtitles.com credentials.
 /// Shows a dialog to enter OpenSubtitles.com credentials.
 void showOpenSubtitlesAuthDialog(

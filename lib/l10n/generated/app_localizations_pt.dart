@@ -1261,6 +1261,27 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calculating => 'Calculating…';
+
+  @override
+  String get playerControls => 'Player Controls';
+
+  @override
+  String get playerControlsSubtitle => 'Show or hide player control buttons';
+
+  @override
+  String get showPip => 'Picture-in-Picture button';
+
+  @override
+  String get showResize => 'Resize button';
+
+  @override
+  String get showRotate => 'Rotate button';
+
+  @override
+  String get showPlaybackSpeed => 'Playback speed button';
+
+  @override
+  String get showEpisodes => 'Episodes button';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -2498,4 +2519,25 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calculating => 'Calculating…';
+
+  @override
+  String get playerControls => 'Player Controls';
+
+  @override
+  String get playerControlsSubtitle => 'Show or hide player control buttons';
+
+  @override
+  String get showPip => 'Picture-in-Picture button';
+
+  @override
+  String get showResize => 'Resize button';
+
+  @override
+  String get showRotate => 'Rotate button';
+
+  @override
+  String get showPlaybackSpeed => 'Playback speed button';
+
+  @override
+  String get showEpisodes => 'Episodes button';
 }

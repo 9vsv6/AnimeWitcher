@@ -317,7 +317,6 @@ class SettingsScreen extends ConsumerWidget {
                   subtitle: _qualityFilterModeLabel(
                     playerSettings.qualityFilterMode,
                   ),
-                  isLast: true,
                   onTap: () => showQualityFilterModeDialog(
                     context,
                     ref,
@@ -326,6 +325,13 @@ class SettingsScreen extends ConsumerWidget {
                         .read(playerSettingsProvider.notifier)
                         .setQualityFilterMode,
                   ),
+                ),
+                SettingsTile(
+                  icon: Icons.tune_rounded,
+                  title: l10n.playerControls,
+                  subtitle: l10n.playerControlsSubtitle,
+                  isLast: true,
+                  onTap: () => showPlayerControlsDialog(context, ref),
                 ),
               ],
             ),

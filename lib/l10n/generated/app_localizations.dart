@@ -2472,6 +2472,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Calculating…'**
   String get calculating;
+
+  /// No description provided for @playerControls.
+  ///
+  /// In en, this message translates to:
+  /// **'Player Controls'**
+  String get playerControls;
+
+  /// No description provided for @playerControlsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show or hide player control buttons'**
+  String get playerControlsSubtitle;
+
+  /// No description provided for @showPip.
+  ///
+  /// In en, this message translates to:
+  /// **'Picture-in-Picture button'**
+  String get showPip;
+
+  /// No description provided for @showResize.
+  ///
+  /// In en, this message translates to:
+  /// **'Resize button'**
+  String get showResize;
+
+  /// No description provided for @showRotate.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate button'**
+  String get showRotate;
+
+  /// No description provided for @showPlaybackSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback speed button'**
+  String get showPlaybackSpeed;
+
+  /// No description provided for @showEpisodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Episodes button'**
+  String get showEpisodes;
 }
 
 class _AppLocalizationsDelegate
