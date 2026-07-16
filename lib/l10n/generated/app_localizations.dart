@@ -2430,6 +2430,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View application activity & errors'**
   String get viewLogsSubtitle;
+
+  /// No description provided for @clearCache.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear image and video cache'**
+  String get clearCache;
+
+  /// No description provided for @clearCacheSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Frees up storage used by cached images and videos'**
+  String get clearCacheSubtitle;
+
+  /// No description provided for @clearCacheDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear cache?'**
+  String get clearCacheDialogTitle;
+
+  /// No description provided for @clearCacheDialogContent.
+  ///
+  /// In en, this message translates to:
+  /// **'This will delete cached images and video files. Your settings, history, and extensions will not be affected.'**
+  String get clearCacheDialogContent;
+
+  /// No description provided for @clearCacheNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Cache'**
+  String get clearCacheNow;
+
+  /// No description provided for @cacheCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache cleared'**
+  String get cacheCleared;
+
+  /// No description provided for @calculating.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculating…'**
+  String get calculating;
 }
 
 class _AppLocalizationsDelegate

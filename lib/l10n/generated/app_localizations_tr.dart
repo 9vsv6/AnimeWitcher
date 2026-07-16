@@ -1248,4 +1248,27 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get viewLogsSubtitle => 'Uygulama etkinliğini ve hataları görüntüle';
+
+  @override
+  String get clearCache => 'Clear image and video cache';
+
+  @override
+  String get clearCacheSubtitle =>
+      'Frees up storage used by cached images and videos';
+
+  @override
+  String get clearCacheDialogTitle => 'Clear cache?';
+
+  @override
+  String get clearCacheDialogContent =>
+      'This will delete cached images and video files. Your settings, history, and extensions will not be affected.';
+
+  @override
+  String get clearCacheNow => 'Clear Cache';
+
+  @override
+  String get cacheCleared => 'Cache cleared';
+
+  @override
+  String get calculating => 'Calculating…';
 }

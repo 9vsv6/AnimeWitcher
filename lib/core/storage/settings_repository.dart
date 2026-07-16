@@ -129,4 +129,10 @@ class SettingsRepository {
   Future<void> deleteAllData() async {
     await _storageService.deleteAllData();
   }
+
+  Future<int> computeImageVideoCacheBytes() =>
+      _storageService.computeImageVideoCacheBytes();
+
+  Future<void> clearImageVideoCache() =>
+      _storageService.clearImageVideoCache();
 }
