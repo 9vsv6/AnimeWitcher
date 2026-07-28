@@ -54,9 +54,12 @@ void main() async {
       size: const Size(1280, 720),
       minimumSize: const Size(360, 640),
       center: true,
-      backgroundColor: Colors.black, // Solid black prevents transparency during fullscreen transition
+      backgroundColor: Colors
+          .black, // Solid black prevents transparency during fullscreen transition
       skipTaskbar: false,
-      titleBarStyle: Platform.isMacOS ? TitleBarStyle.normal : TitleBarStyle.hidden,
+      titleBarStyle: Platform.isMacOS
+          ? TitleBarStyle.normal
+          : TitleBarStyle.hidden,
     );
 
     unawaited(
@@ -449,15 +452,23 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
         );
 
         if (Platform.isMacOS) {
-          final alwaysOnTop = ref.watch(generalSettingsProvider.select((s) => s.alwaysOnTop));
+          final alwaysOnTop = ref.watch(
+            generalSettingsProvider.select((s) => s.alwaysOnTop),
+          );
           rootWidget = PlatformMenuBar(
             menus: <PlatformMenuItem>[
               PlatformMenu(
                 label: 'SkyStream',
                 menus: <PlatformMenuItem>[
-                  if (PlatformProvidedMenuItem.hasMenu(PlatformProvidedMenuItemType.about))
-                    const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
-                  const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
+                  if (PlatformProvidedMenuItem.hasMenu(
+                    PlatformProvidedMenuItemType.about,
+                  ))
+                    const PlatformProvidedMenuItem(
+                      type: PlatformProvidedMenuItemType.about,
+                    ),
+                  const PlatformProvidedMenuItem(
+                    type: PlatformProvidedMenuItemType.quit,
+                  ),
                 ],
               ),
               PlatformMenu(
@@ -465,34 +476,53 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                 menus: <PlatformMenuItem>[
                   PlatformMenuItem(
                     label: 'Undo',
-                    shortcut: const SingleActivator(LogicalKeyboardKey.keyZ, meta: true),
+                    shortcut: const SingleActivator(
+                      LogicalKeyboardKey.keyZ,
+                      meta: true,
+                    ),
                     onSelected: () {},
                   ),
                   PlatformMenuItem(
                     label: 'Redo',
-                    shortcut: const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true),
+                    shortcut: const SingleActivator(
+                      LogicalKeyboardKey.keyZ,
+                      meta: true,
+                      shift: true,
+                    ),
                     onSelected: () {},
                   ),
                   const PlatformMenuItemGroup(
                     members: <PlatformMenuItem>[
                       PlatformMenuItem(
                         label: 'Cut',
-                        shortcut: SingleActivator(LogicalKeyboardKey.keyX, meta: true),
+                        shortcut: SingleActivator(
+                          LogicalKeyboardKey.keyX,
+                          meta: true,
+                        ),
                         onSelected: null,
                       ),
                       PlatformMenuItem(
                         label: 'Copy',
-                        shortcut: SingleActivator(LogicalKeyboardKey.keyC, meta: true),
+                        shortcut: SingleActivator(
+                          LogicalKeyboardKey.keyC,
+                          meta: true,
+                        ),
                         onSelected: null,
                       ),
                       PlatformMenuItem(
                         label: 'Paste',
-                        shortcut: SingleActivator(LogicalKeyboardKey.keyV, meta: true),
+                        shortcut: SingleActivator(
+                          LogicalKeyboardKey.keyV,
+                          meta: true,
+                        ),
                         onSelected: null,
                       ),
                       PlatformMenuItem(
                         label: 'Select All',
-                        shortcut: SingleActivator(LogicalKeyboardKey.keyA, meta: true),
+                        shortcut: SingleActivator(
+                          LogicalKeyboardKey.keyA,
+                          meta: true,
+                        ),
                         onSelected: null,
                       ),
                     ],
@@ -502,14 +532,24 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
               PlatformMenu(
                 label: 'Window',
                 menus: <PlatformMenuItem>[
-                  const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.minimizeWindow),
-                  const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.zoomWindow),
+                  const PlatformProvidedMenuItem(
+                    type: PlatformProvidedMenuItemType.minimizeWindow,
+                  ),
+                  const PlatformProvidedMenuItem(
+                    type: PlatformProvidedMenuItemType.zoomWindow,
+                  ),
                   PlatformMenuItem(
                     label: alwaysOnTop ? 'Disable Stay on Top' : 'Stay on Top',
-                    shortcut: const SingleActivator(LogicalKeyboardKey.keyT, meta: true, control: true),
+                    shortcut: const SingleActivator(
+                      LogicalKeyboardKey.keyT,
+                      meta: true,
+                      control: true,
+                    ),
                     onSelected: () async {
                       final nextVal = !alwaysOnTop;
-                      await ref.read(generalSettingsProvider.notifier).setAlwaysOnTop(nextVal);
+                      await ref
+                          .read(generalSettingsProvider.notifier)
+                          .setAlwaysOnTop(nextVal);
                       await windowManager.setAlwaysOnTop(nextVal);
                     },
                   ),
@@ -765,118 +805,120 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                 right: 12,
                 top: 0,
                 bottom: 0,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 150),
-                opacity: _hovered ? 1.0 : 0.0,
-                child: IgnorePointer(
-                  ignoring: !_hovered,
-                  child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 1. Full Screen Toggle / Exit Full Screen
-                        _TitleBarButton(
-                          onPressed: () async {
-                            await windowManager.setFullScreen(!_isFullScreen);
-                            await _updateStates();
-                          },
-                          child: Icon(
-                            _isFullScreen
-                                ? Icons.fullscreen_exit_rounded
-                                : Icons.fullscreen_rounded,
-                            color: iconColor,
-                            size: 16,
-                          ),
-                        ),
-                        if (!_isFullScreen) ...[
-                          const SizedBox(width: 6),
-                          // 2. Minimize
-                          _TitleBarButton(
-                            onPressed: () => windowManager.minimize(),
-                            child: Center(
-                              child: Container(
-                                width: 10,
-                                height: 1.5,
-                                color: iconColor,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          // 3. Maximize / Restore
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 150),
+                  opacity: _hovered ? 1.0 : 0.0,
+                  child: IgnorePointer(
+                    ignoring: !_hovered,
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 1. Full Screen Toggle / Exit Full Screen
                           _TitleBarButton(
                             onPressed: () async {
-                              if (_isMaximized) {
-                                await windowManager.unmaximize();
-                              } else {
-                                await windowManager.maximize();
-                              }
+                              await windowManager.setFullScreen(!_isFullScreen);
                               await _updateStates();
                             },
-                            child: Center(
-                              child: _isMaximized
-                                  ? SizedBox(
-                                      width: 12,
-                                      height: 12,
-                                      child: Stack(
-                                        children: [
-                                          Positioned(
-                                            right: 0,
-                                            top: 0,
-                                            child: Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                border: Border.all(
-                                                  color: iconColor,
-                                                  width: 1.2,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Positioned(
-                                            left: 0,
-                                            bottom: 0,
-                                            child: Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                color: isDark
-                                                    ? const Color(0xFF050505)
-                                                    : const Color(
-                                                        0xFFFAF8F5,
-                                                      ), // overlap box bg matches titlebar
-                                                border: Border.all(
-                                                  color: iconColor,
-                                                  width: 1.2,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  : Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: iconColor,
-                                          width: 1.2,
-                                        ),
-                                      ),
-                                    ),
+                            child: Icon(
+                              _isFullScreen
+                                  ? Icons.fullscreen_exit_rounded
+                                  : Icons.fullscreen_rounded,
+                              color: iconColor,
+                              size: 16,
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          // 4. Close
-                          _CloseButton(onPressed: () => windowManager.close()),
+                          if (!_isFullScreen) ...[
+                            const SizedBox(width: 6),
+                            // 2. Minimize
+                            _TitleBarButton(
+                              onPressed: () => windowManager.minimize(),
+                              child: Center(
+                                child: Container(
+                                  width: 10,
+                                  height: 1.5,
+                                  color: iconColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            // 3. Maximize / Restore
+                            _TitleBarButton(
+                              onPressed: () async {
+                                if (_isMaximized) {
+                                  await windowManager.unmaximize();
+                                } else {
+                                  await windowManager.maximize();
+                                }
+                                await _updateStates();
+                              },
+                              child: Center(
+                                child: _isMaximized
+                                    ? SizedBox(
+                                        width: 12,
+                                        height: 12,
+                                        child: Stack(
+                                          children: [
+                                            Positioned(
+                                              right: 0,
+                                              top: 0,
+                                              child: Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(
+                                                    color: iconColor,
+                                                    width: 1.2,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              left: 0,
+                                              bottom: 0,
+                                              child: Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  color: isDark
+                                                      ? const Color(0xFF050505)
+                                                      : const Color(
+                                                          0xFFFAF8F5,
+                                                        ), // overlap box bg matches titlebar
+                                                  border: Border.all(
+                                                    color: iconColor,
+                                                    width: 1.2,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: iconColor,
+                                            width: 1.2,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            // 4. Close
+                            _CloseButton(
+                              onPressed: () => windowManager.close(),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

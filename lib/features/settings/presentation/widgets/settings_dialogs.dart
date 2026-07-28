@@ -1073,7 +1073,8 @@ void showQualityFilterModeDialog(
     (
       mode: QualityFilterMode.any,
       label: 'Show all (sort only)',
-      subtitle: 'Sources are sorted by your quality preference but none are hidden.',
+      subtitle:
+          'Sources are sorted by your quality preference but none are hidden.',
     ),
     (
       mode: QualityFilterMode.atOrAbove,

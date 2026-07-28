@@ -250,10 +250,9 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                     child: Text(
                       'No extensions installed',
                       style: TextStyle(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant
-                            .withValues(alpha: 0.7),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                         fontSize: 14,
                       ),
                     ),
@@ -267,7 +266,9 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                     if (entry.key == 0)
                       Divider(
                         height: 1,
-                        color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+                        color: Theme.of(
+                          context,
+                        ).dividerColor.withValues(alpha: 0.5),
                       ),
                     _PluginTile(plugin: entry.value),
                     if (!isLast)
@@ -275,7 +276,9 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                         height: 1,
                         indent: 56,
                         endIndent: 16,
-                        color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+                        color: Theme.of(
+                          context,
+                        ).dividerColor.withValues(alpha: 0.5),
                       ),
                   ],
                 );

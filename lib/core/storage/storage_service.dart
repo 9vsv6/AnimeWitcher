@@ -261,8 +261,7 @@ class StorageService {
   }
 
   bool isAlwaysOnTop() {
-    return (_settingsBox.get('always_on_top', defaultValue: false)
-            as bool?) ??
+    return (_settingsBox.get('always_on_top', defaultValue: false) as bool?) ??
         false;
   }
 

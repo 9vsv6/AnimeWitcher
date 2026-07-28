@@ -669,8 +669,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           return const SizedBox.shrink();
                         }
 
-                        final subtitleSettings =
-                            ref.watch(playerSettingsProvider).asData?.value;
+                        final subtitleSettings = ref
+                            .watch(playerSettingsProvider)
+                            .asData
+                            ?.value;
 
                         return Positioned(
                           bottom:
@@ -690,8 +692,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                 fontSize:
                                     subtitleSettings?.subtitleSize ?? 22.0,
                                 color: Color(
-                                  subtitleSettings?.subtitleColor ??
-                                      0xFFFFFFFF,
+                                  subtitleSettings?.subtitleColor ?? 0xFFFFFFFF,
                                 ),
                                 backgroundColor:
                                     Color(

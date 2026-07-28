@@ -350,7 +350,8 @@ class _SkyStreamSubtitleViewState extends ConsumerState<SkyStreamSubtitleView> {
                 break;
               }
               // Check if this line is the next cue's ID (number followed by timestamp)
-              final isNextCueId = int.tryParse(textLine) != null &&
+              final isNextCueId =
+                  int.tryParse(textLine) != null &&
                   (i + 1 < lines.length && lines[i + 1].trim().contains('-->'));
               if (isNextCueId) {
                 i--; // Rewind to process the index line in outer loop (where it gets skipped)
