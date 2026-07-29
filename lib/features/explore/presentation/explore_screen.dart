@@ -404,7 +404,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     final heroMoviesAsync = ref.watch(exploreHeroMovieProvider);
     final isNone = heroMoviesAsync.maybeWhen(
       data: (list) => list.isEmpty,
-      error: (_, __) => true,
+      error: (_, _) => true,
       orElse: () => false,
     );
     final topPadding = isNone

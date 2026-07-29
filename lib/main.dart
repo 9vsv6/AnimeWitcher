@@ -176,15 +176,12 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> with WindowListener {
-  bool _isFullScreen = false;
-
   @override
   void initState() {
     super.initState();
     FocusManager.instance.addEarlyKeyEventHandler(_handleEarlyKeyEvent);
     if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
       windowManager.addListener(this);
-      _updateFullScreenState();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(downloadServiceProvider).init();
@@ -200,29 +197,6 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
       windowManager.removeListener(this);
     }
     super.dispose();
-  }
-
-  @override
-  void onWindowEnterFullScreen() {
-    setState(() {
-      _isFullScreen = true;
-    });
-  }
-
-  @override
-  void onWindowLeaveFullScreen() {
-    setState(() {
-      _isFullScreen = false;
-    });
-  }
-
-  Future<void> _updateFullScreenState() async {
-    final isFull = await windowManager.isFullScreen();
-    if (mounted) {
-      setState(() {
-        _isFullScreen = isFull;
-      });
-    }
   }
 
   KeyEventResult _handleEarlyKeyEvent(KeyEvent event) {
