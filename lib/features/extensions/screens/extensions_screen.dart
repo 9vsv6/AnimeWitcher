@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/extensions/models/extension_plugin.dart';
 import '../../../core/extensions/models/extension_repository.dart';
+import '../../../core/extensions/extension_manager.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../providers/extensions_controller.dart';
 import '../widgets/plugin_settings_dialog.dart';
@@ -836,10 +837,14 @@ class _PluginTileState extends ConsumerState<_PluginTile> {
                     },
                   ),
 
-                // Settings button (shown when plugin declares domains or providers)
+                // Settings button (shown when plugin declares domains, static providers, or dynamic providers from JS)
                 if (isInstalled &&
                     ((installedPlugin.domains?.isNotEmpty ?? false) ||
-                        (installedPlugin.providers?.isNotEmpty ?? false)))
+                        (installedPlugin.providers?.isNotEmpty ?? false) ||
+                        ref
+                            .watch(extensionManagerProvider.notifier)
+                            .getProvidersForPlugin(installedPlugin)
+                            .isNotEmpty))
                   IconButton(
                     focusNode: _settingsFocusNode,
                     icon: const Icon(Icons.settings),
