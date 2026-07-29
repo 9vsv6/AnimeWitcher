@@ -479,7 +479,8 @@ class ExtensionsController extends _$ExtensionsController {
                 .read(extensionManagerProvider.notifier)
                 .reloadPlugin(targetPlugin);
           } catch (e) {
-            if (kDebugMode) debugPrint("Error initializing plugin providers: $e");
+            if (kDebugMode)
+              debugPrint("Error initializing plugin providers: $e");
           }
 
           // Clear this plugin from availableUpdates
