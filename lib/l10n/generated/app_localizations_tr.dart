@@ -57,6 +57,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get defaultHomeScreen => 'Varsayılan Ana Ekran';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Oynatıcı';
 
   @override

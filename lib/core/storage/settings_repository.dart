@@ -37,6 +37,14 @@ class SettingsRepository {
     return _storageService.getDefaultHomeScreen();
   }
 
+  Future<void> setTitlePosition(String position) async {
+    await _storageService.setTitlePosition(position);
+  }
+
+  String getTitlePosition() {
+    return _storageService.getTitlePosition();
+  }
+
   Future<void> setDevLoadAssets(bool enabled) async {
     await _storageService.setDevLoadAssets(enabled);
   }

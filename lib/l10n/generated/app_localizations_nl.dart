@@ -57,6 +57,15 @@ class AppLocalizationsNl extends AppLocalizations {
   String get defaultHomeScreen => 'Standaard startscherm';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Speler';
 
   @override

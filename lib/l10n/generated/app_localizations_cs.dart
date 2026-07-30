@@ -57,6 +57,15 @@ class AppLocalizationsCs extends AppLocalizations {
   String get defaultHomeScreen => 'Výchozí domovská obrazovka';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Přehrávač';
 
   @override

@@ -167,6 +167,16 @@ class StorageService {
         as String;
   }
 
+  Future<void> setTitlePosition(String position) async {
+    await _settingsBox.put('title_position', position);
+  }
+
+  String getTitlePosition() {
+    return (_settingsBox.get('title_position', defaultValue: 'below')
+            as String?) ??
+        'below';
+  }
+
   Future<void> setDevLoadAssets(bool enabled) async {
     await _settingsBox.put('dev_load_assets', enabled);
   }

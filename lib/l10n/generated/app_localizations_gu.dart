@@ -57,6 +57,15 @@ class AppLocalizationsGu extends AppLocalizations {
   String get defaultHomeScreen => 'ડિફૉલ્ટ હોમ સ્ક્રીન';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'પ્લેયર';
 
   @override

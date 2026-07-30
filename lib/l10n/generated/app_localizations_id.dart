@@ -57,6 +57,15 @@ class AppLocalizationsId extends AppLocalizations {
   String get defaultHomeScreen => 'Layar Utama Default';
 
   @override
+  String get titlePosition => 'Posisi Judul';
+
+  @override
+  String get titlePositionBelowPoster => 'Di Bawah Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Di Dalam Poster';
+
+  @override
   String get player => 'Pemutar';
 
   @override

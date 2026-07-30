@@ -57,6 +57,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get defaultHomeScreen => '默认启动页';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => '播放器';
 
   @override

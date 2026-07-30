@@ -57,6 +57,15 @@ class AppLocalizationsPa extends AppLocalizations {
   String get defaultHomeScreen => 'ਡਿਫੌਲਟ ਹੋਮ ਸਕ੍ਰੀਨ';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'ਪਲੇਅਰ';
 
   @override

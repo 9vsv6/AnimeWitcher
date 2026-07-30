@@ -57,6 +57,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get defaultHomeScreen => 'Главный экран по умолчанию';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Плеер';
 
   @override

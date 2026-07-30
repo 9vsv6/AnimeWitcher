@@ -106,6 +106,63 @@ void showDefaultHomeScreenDialog(
   );
 }
 
+/// Returns a localized label for a title position.
+String getTitlePositionLabel(String position, AppLocalizations l10n) {
+  switch (position) {
+    case 'inside':
+      return l10n.titlePositionInsidePoster;
+    case 'below':
+    default:
+      return l10n.titlePositionBelowPoster;
+  }
+}
+
+/// Shows a dialog to pick the title position on poster cards.
+void showTitlePositionDialog(
+  BuildContext context,
+  WidgetRef ref,
+  String current,
+) {
+  final l10n = AppLocalizations.of(context)!;
+  final options = <Map<String, String>>[
+    {'label': l10n.titlePositionBelowPoster, 'value': 'below'},
+    {'label': l10n.titlePositionInsidePoster, 'value': 'inside'},
+  ];
+
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      surfaceTintColor: Colors.transparent,
+      title: Text(l10n.titlePosition),
+      content: RadioGroup<String>(
+        groupValue: current,
+        onChanged: (val) {
+          if (val == null) return;
+          ref.read(generalSettingsProvider.notifier).setTitlePosition(val);
+          Navigator.pop<void>(context);
+        },
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options.map((opt) {
+              return ListTile(
+                title: Text(opt['label']!),
+                leading: Radio<String>(value: opt['value']!),
+                onTap: () {
+                  ref
+                      .read(generalSettingsProvider.notifier)
+                      .setTitlePosition(opt['value']!);
+                  Navigator.pop<void>(context);
+                },
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 // Must be used inside a RadioGroup<ThemeMode> ancestor.
 Widget _buildThemeOption(String title, ThemeMode value, VoidCallback onSelect) {
   return ListTile(

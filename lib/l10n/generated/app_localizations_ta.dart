@@ -57,6 +57,15 @@ class AppLocalizationsTa extends AppLocalizations {
   String get defaultHomeScreen => 'இயல்புநிலை முகப்புத் திரை';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'வீடியோ பிளேயர்';
 
   @override

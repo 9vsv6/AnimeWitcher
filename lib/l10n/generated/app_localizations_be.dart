@@ -57,6 +57,15 @@ class AppLocalizationsBe extends AppLocalizations {
   String get defaultHomeScreen => 'Галоўны экран па змаўчанні';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'Плэер';
 
   @override

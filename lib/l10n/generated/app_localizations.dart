@@ -271,6 +271,24 @@ abstract class AppLocalizations {
   /// **'Default Home Screen'**
   String get defaultHomeScreen;
 
+  /// No description provided for @titlePosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Title Position'**
+  String get titlePosition;
+
+  /// No description provided for @titlePositionBelowPoster.
+  ///
+  /// In en, this message translates to:
+  /// **'Below Poster'**
+  String get titlePositionBelowPoster;
+
+  /// No description provided for @titlePositionInsidePoster.
+  ///
+  /// In en, this message translates to:
+  /// **'Inside Poster'**
+  String get titlePositionInsidePoster;
+
   /// No description provided for @player.
   ///
   /// In en, this message translates to:

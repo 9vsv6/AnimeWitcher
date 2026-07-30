@@ -57,6 +57,15 @@ class AppLocalizationsTe extends AppLocalizations {
   String get defaultHomeScreen => 'డిఫాల్ట్ హోమ్ స్క్రీన్';
 
   @override
+  String get titlePosition => 'Title Position';
+
+  @override
+  String get titlePositionBelowPoster => 'Below Poster';
+
+  @override
+  String get titlePositionInsidePoster => 'Inside Poster';
+
+  @override
   String get player => 'ప్లేయర్';
 
   @override

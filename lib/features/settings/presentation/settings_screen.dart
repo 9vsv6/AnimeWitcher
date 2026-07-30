@@ -134,6 +134,19 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
                 SettingsTile(
+                  icon: Icons.title_rounded,
+                  title: l10n.titlePosition,
+                  subtitle: getTitlePositionLabel(
+                    generalSettings.titlePosition,
+                    l10n,
+                  ),
+                  onTap: () => showTitlePositionDialog(
+                    context,
+                    ref,
+                    generalSettings.titlePosition,
+                  ),
+                ),
+                SettingsTile(
                   icon: Icons.translate_rounded,
                   title: l10n.language,
                   subtitle: l10n.languageName,
