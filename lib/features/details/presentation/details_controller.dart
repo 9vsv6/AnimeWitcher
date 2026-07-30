@@ -186,6 +186,19 @@ class DetailsController extends _$DetailsController {
     state = state.copyWith(selectedEpisodeKeys: next);
   }
 
+  void selectAllEpisodes() {
+    final allEpisodeKeys = state.seasonMap.values
+        .expand((episodes) => episodes)
+        .map(episodeSelectionKey)
+        .toSet();
+
+    if (allEpisodeKeys.isEmpty) {
+      return;
+    }
+
+    state = state.copyWith(selectedEpisodeKeys: allEpisodeKeys);
+  }
+
   void clearEpisodeSelection() {
     if (state.selectedEpisodeKeys.isEmpty) {
       return;

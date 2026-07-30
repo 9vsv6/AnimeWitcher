@@ -83,6 +83,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
       detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
     );
     final item = details ?? widget.item;
+    final selectedEpisodeCount = ref.watch(
+      detailsControllerProvider(
+        widget.item.url,
+      ).select((state) => state.selectedEpisodeKeys.length),
+    );
 
     final l10n = AppLocalizations.of(context)!;
 
@@ -97,11 +102,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         isBookmarked,
         libraryNotifier,
         l10n,
+        selectedEpisodeCount,
       );
     }
 
     // ── Mobile: SliverAppBar-based layout (unchanged) ──
     return Scaffold(
+      bottomNavigationBar: selectedEpisodeCount == 0
+          ? null
+          : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -241,6 +250,136 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     );
   }
 
+  Widget _buildEpisodeSelectionBar(BuildContext context, int selectedCount) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final controller = ref.read(
+      detailsControllerProvider(widget.item.url).notifier,
+    );
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+        child: Material(
+          elevation: 10,
+          shadowColor: Colors.black.withValues(alpha: 0.30),
+          color: colors.surfaceContainerHigh,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: colors.outlineVariant.withValues(alpha: 0.45),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            height: 112,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final showLabels = constraints.maxWidth >= 520;
+
+                  Widget actionButton({
+                    required String label,
+                    required IconData icon,
+                    required VoidCallback onPressed,
+                  }) {
+                    if (showLabels) {
+                      return FilledButton.tonalIcon(
+                        onPressed: onPressed,
+                        icon: Icon(icon, size: 20),
+                        label: Text(label),
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                        ),
+                      );
+                    }
+
+                    return IconButton.filledTonal(
+                      tooltip: label,
+                      onPressed: onPressed,
+                      icon: Icon(icon),
+                    );
+                  }
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.checklist_rounded,
+                            color: colors.primary,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '$selectedCount selected',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Cancel selection',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: controller.clearEpisodeSelection,
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          actionButton(
+                            label: 'Select all',
+                            icon: Icons.select_all_rounded,
+                            onPressed: controller.selectAllEpisodes,
+                          ),
+                          const SizedBox(width: 6),
+                          actionButton(
+                            label: 'Watched',
+                            icon: Icons.visibility_rounded,
+                            onPressed: () async {
+                              await controller.setSelectedEpisodesWatched(
+                                widget.item.url,
+                                true,
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          actionButton(
+                            label: 'Unwatched',
+                            icon: Icons.visibility_off_rounded,
+                            onPressed: () async {
+                              await controller.setSelectedEpisodesWatched(
+                                widget.item.url,
+                                false,
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────────
   //  DESKTOP / TV  — Immersive hero layout
   // ─────────────────────────────────────────────────────────────────
@@ -254,11 +393,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     bool isBookmarked,
     dynamic libraryNotifier,
     AppLocalizations l10n,
+    int selectedEpisodeCount,
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
+      bottomNavigationBar: selectedEpisodeCount == 0
+          ? null
+          : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
