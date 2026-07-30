@@ -1,0 +1,366 @@
+name: Replace episode selection snackbar
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Replace selection UI
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def regex_replace_once(path: str, pattern: str, replacement: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              updated, count = re.subn(
+                  pattern,
+                  replacement,
+                  text,
+                  count=1,
+                  flags=re.MULTILINE | re.DOTALL,
+              )
+              if count != 1:
+                  raise RuntimeError(
+                      f"{path}: expected exactly one regex match, found {count}\n"
+                      f"Pattern starts with: {pattern[:180]!r}"
+                  )
+              file_path.write_text(updated, encoding="utf-8")
+
+          episode_card = (
+              "lib/features/details/presentation/widgets/episode_card.dart"
+          )
+
+          # Selection changes should only update Riverpod state. Recreating a
+          # global SnackBar on every tap caused the visible disappear/reappear
+          # flicker and allowed the bar to outlive the details screen.
+          regex_replace_once(
+              episode_card,
+              r"""    void updateSelection\(\) \{
+.*?
+    \}
+
+    void handleEpisodeTap\(\)""",
+              """    void updateSelection() {
+              HapticFeedback.selectionClick();
+
+              ref
+                  .read(detailsControllerProvider(parentItem.url).notifier)
+                  .toggleEpisodeSelection(episode);
+            }
+
+            void handleEpisodeTap()""",
+          )
+
+          # Remove the old persistent global SnackBar implementation entirely.
+          regex_replace_once(
+              episode_card,
+              r"""
+  void _showSelectionSnackBar\(BuildContext context\) \{
+.*?
+  \}
+
+  Widget _buildActionButtons\(""",
+              """
+            Widget _buildActionButtons(""",
+          )
+
+          details_controller = (
+              "lib/features/details/presentation/details_controller.dart"
+          )
+
+          # Select every episode in the anime across all available seasons.
+          regex_replace_once(
+              details_controller,
+              r"""  void clearEpisodeSelection\(\) \{""",
+              """  void selectAllEpisodes() {
+              final allEpisodeKeys = state.seasonMap.values
+                  .expand((episodes) => episodes)
+                  .map(episodeSelectionKey)
+                  .toSet();
+
+              if (allEpisodeKeys.isEmpty) {
+                return;
+              }
+
+              state = state.copyWith(selectedEpisodeKeys: allEpisodeKeys);
+            }
+
+            void clearEpisodeSelection() {""",
+          )
+
+          details_screen = (
+              "lib/features/details/presentation/details_screen.dart"
+          )
+
+          # Watch the selection count once at screen level.
+          regex_replace_once(
+              details_screen,
+              r"""    final item = details \?\? widget\.item;
+
+    final l10n = AppLocalizations\.of\(context\)!;""",
+              """    final item = details ?? widget.item;
+            final selectedEpisodeCount = ref.watch(
+              detailsControllerProvider(
+                widget.item.url,
+              ).select((state) => state.selectedEpisodeKeys.length),
+            );
+
+            final l10n = AppLocalizations.of(context)!;""",
+          )
+
+          # Pass the count into the desktop builder.
+          regex_replace_once(
+              details_screen,
+              r"""        libraryNotifier,
+        l10n,
+      \);""",
+              """        libraryNotifier,
+                    l10n,
+                    selectedEpisodeCount,
+                  );""",
+          )
+
+          # Add the compact bar to the mobile Scaffold.
+          regex_replace_once(
+              details_screen,
+              r"""    return Scaffold\(
+      body: CustomScrollView\(""",
+              """    return Scaffold(
+              bottomNavigationBar: selectedEpisodeCount == 0
+                  ? null
+                  : _buildEpisodeSelectionBar(
+                      context,
+                      selectedEpisodeCount,
+                    ),
+              body: CustomScrollView(""",
+          )
+
+          # Add selectedEpisodeCount to the desktop builder signature.
+          regex_replace_once(
+              details_screen,
+              r"""    dynamic libraryNotifier,
+    AppLocalizations l10n,
+  \) \{""",
+              """    dynamic libraryNotifier,
+                AppLocalizations l10n,
+                int selectedEpisodeCount,
+              ) {""",
+          )
+
+          # Add the compact bar to the desktop Scaffold.
+          regex_replace_once(
+              details_screen,
+              r"""    return Scaffold\(
+      extendBodyBehindAppBar: true,""",
+              """    return Scaffold(
+              bottomNavigationBar: selectedEpisodeCount == 0
+                  ? null
+                  : _buildEpisodeSelectionBar(
+                      context,
+                      selectedEpisodeCount,
+                    ),
+              extendBodyBehindAppBar: true,""",
+          )
+
+          # Insert the new page-owned selection bar before the desktop section.
+          regex_replace_once(
+              details_screen,
+              r"""
+  // ─────────────────────────────────────────────────────────────────
+  //  DESKTOP / TV  — Immersive hero layout""",
+              r"""
+            Widget _buildEpisodeSelectionBar(
+              BuildContext context,
+              int selectedCount,
+            ) {
+              final theme = Theme.of(context);
+              final colors = theme.colorScheme;
+              final controller = ref.read(
+                detailsControllerProvider(widget.item.url).notifier,
+              );
+
+              return SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                  child: Material(
+                    elevation: 10,
+                    shadowColor: Colors.black.withValues(alpha: 0.30),
+                    color: colors.surfaceContainerHigh,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(
+                        color: colors.outlineVariant.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: SizedBox(
+                      height: 64,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final showLabels = constraints.maxWidth >= 520;
+
+                            Widget actionButton({
+                              required String label,
+                              required IconData icon,
+                              required VoidCallback onPressed,
+                            }) {
+                              if (showLabels) {
+                                return FilledButton.tonalIcon(
+                                  onPressed: onPressed,
+                                  icon: Icon(icon, size: 20),
+                                  label: Text(label),
+                                  style: FilledButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              return IconButton.filledTonal(
+                                tooltip: label,
+                                onPressed: onPressed,
+                                icon: Icon(icon),
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Icon(
+                                  Icons.checklist_rounded,
+                                  color: colors.primary,
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '$selectedCount selected',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  tooltip: 'Select all episodes',
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: controller.selectAllEpisodes,
+                                  icon: const Icon(Icons.select_all_rounded),
+                                ),
+                                IconButton(
+                                  tooltip: 'Clear all selections',
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: controller.clearEpisodeSelection,
+                                  icon: const Icon(Icons.deselect_rounded),
+                                ),
+                                const SizedBox(width: 4),
+                                actionButton(
+                                  label: 'Watched',
+                                  icon: Icons.visibility_rounded,
+                                  onPressed: () async {
+                                    await controller.setSelectedEpisodesWatched(
+                                      widget.item.url,
+                                      true,
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 6),
+                                actionButton(
+                                  label: 'Unwatched',
+                                  icon: Icons.visibility_off_rounded,
+                                  onPressed: () async {
+                                    await controller.setSelectedEpisodesWatched(
+                                      widget.item.url,
+                                      false,
+                                    );
+                                  },
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            //  DESKTOP / TV  — Immersive hero layout""",
+          )
+
+          print("Episode selection UI replaced successfully.")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate Riverpod files
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Format changed files
+        run: |
+          dart format \
+            lib/features/details/presentation/details_controller.dart \
+            lib/features/details/presentation/details_screen.dart \
+            lib/features/details/presentation/widgets/episode_card.dart
+
+      - name: Analyze changed files
+        run: |
+          flutter analyze \
+            lib/features/details/presentation/details_controller.dart \
+            lib/features/details/presentation/details_screen.dart \
+            lib/features/details/presentation/widgets/episode_card.dart
+
+      - name: Verify diff
+        run: git diff --check
+
+      - name: Commit fix and remove workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/replace-episode-selection-snackbar.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            lib/features/details/presentation/details_controller.dart \
+            lib/features/details/presentation/details_screen.dart \
+            lib/features/details/presentation/widgets/episode_card.dart \
+            .github/workflows/replace-episode-selection-snackbar.yml
+
+          git commit -m "Improve episode selection action bar"
+          git push origin HEAD:main
