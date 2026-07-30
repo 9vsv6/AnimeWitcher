@@ -1,4 +1,4 @@
-name: Add download Live Activity v3
+name: Add download Live Activity v4
 
 on:
   workflow_dispatch:
@@ -49,6 +49,12 @@ jobs:
 
       - name: Regenerate iOS configuration
         run: flutter build ios --config-only
+
+      - name: Harden Flutter SwiftPM pre-action
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwYXRoID0gUGF0aCgKICAgICJpb3MvUnVubmVyLnhjb2RlcHJvai94Y3NoYXJlZGRhdGEveGNzY2hlbWVzL1J1bm5lci54Y3NjaGVtZSIKKQp0ZXh0ID0gcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKCm9sZCA9ICgKICAgICdzY3JpcHRUZXh0ID0gIi9iaW4vc2ggJnF1b3Q7JEZMVVRURVJfUk9PVC9wYWNrYWdlcy9mbHV0dGVyX3Rvb2xzLycKICAgICdiaW4veGNvZGVfYmFja2VuZC5zaCZxdW90OyBwcmVwYXJlJiMxMDsiPicKKQoKbmV3ID0gKAogICAgJ3NjcmlwdFRleHQgPSAiL2Jpbi9zaCAmcXVvdDskRkxVVFRFUl9ST09UL3BhY2thZ2VzL2ZsdXR0ZXJfdG9vbHMvJwogICAgJ2Jpbi94Y29kZV9iYWNrZW5kLnNoJnF1b3Q7IHByZXBhcmUmIzEwOycKICAgICdQQUNLQUdFX0ZJTEU9JnF1b3Q7JFNSQ1JPT1QvRmx1dHRlci9lcGhlbWVyYWwvUGFja2FnZXMvJwogICAgJ0ZsdXR0ZXJHZW5lcmF0ZWRQbHVnaW5Td2lmdFBhY2thZ2UvUGFja2FnZS5zd2lmdCZxdW90OyYjMTA7JwogICAgJ2lmIFsgLWYgJnF1b3Q7JFBBQ0tBR0VfRklMRSZxdW90OyBdOyB0aGVuJiMxMDsnCiAgICAnICAvdXNyL2Jpbi9wZXJsIC0wcGkgLWUgJwogICAgIidzL1xcLmlPU1xcKCg/OlxcLnYxM3wmcXVvdDsxM1xcLjAmcXVvdDspXFwpLy5pT1MoJnF1b3Q7MTUuNiZxdW90OykvZycgIgogICAgJyZxdW90OyRQQUNLQUdFX0ZJTEUmcXVvdDsmIzEwOycKICAgICdmaSYjMTA7Ij4nCikKCmlmIHRleHQuY291bnQob2xkKSAhPSAxOgogICAgcmFpc2UgUnVudGltZUVycm9yKAogICAgICAgICdFeHBlY3RlZCBleGFjdGx5IG9uZSBGbHV0dGVyIHByZXBhcmUgcHJlLWFjdGlvbiwgJwogICAgICAgIGYnZm91bmQge3RleHQuY291bnQob2xkKX0uJwogICAgKQoKcGF0aC53cml0ZV90ZXh0KHRleHQucmVwbGFjZShvbGQsIG5ldywgMSksIGVuY29kaW5nPSJ1dGYtOCIpCnByaW50KCJIYXJkZW5lZCBGbHV0dGVyIFN3aWZ0UE0gcHJlcGFyZSBwcmUtYWN0aW9uIGZvciBpT1MgMTUuNi4iKQo=' | base64 --decode > /tmp/harden_swiftpm_preaction.py
+          python3 /tmp/harden_swiftpm_preaction.py
 
       - name: Verify generated Swift package target
         shell: bash
@@ -106,6 +112,7 @@ jobs:
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=15.6 \
             ONLY_ACTIVE_ARCH=NO \
             build
 
