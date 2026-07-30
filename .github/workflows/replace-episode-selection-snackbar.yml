@@ -274,10 +274,10 @@ jobs:
                                   icon: const Icon(Icons.select_all_rounded),
                                 ),
                                 IconButton(
-                                  tooltip: 'Clear all selections',
+                                  tooltip: 'Cancel selection',
                                   visualDensity: VisualDensity.compact,
                                   onPressed: controller.clearEpisodeSelection,
-                                  icon: const Icon(Icons.deselect_rounded),
+                                  icon: const Icon(Icons.close_rounded),
                                 ),
                                 const SizedBox(width: 4),
                                 actionButton(
