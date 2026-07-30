@@ -1,4 +1,4 @@
-name: Add download Live Activity v4
+name: Add download Live Activity v5
 
 on:
   workflow_dispatch:
@@ -113,7 +113,8 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             IPHONEOS_DEPLOYMENT_TARGET=15.6 \
-            ONLY_ACTIVE_ARCH=NO \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
             build
 
       - name: Verify diff
