@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 
@@ -36,6 +37,25 @@ class DetailsScreen extends ConsumerStatefulWidget {
 
 class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   bool _didTriggerAutoPlay = false;
+
+  Future<void> _copyAnimeTitle(BuildContext context, String title) async {
+    await Clipboard.setData(ClipboardData(text: title));
+    await HapticFeedback.selectionClick();
+
+    if (!context.mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Title copied'),
+        duration: Duration(milliseconds: 1200),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -567,24 +587,32 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (item.logoUrl != null)
-                          CachedNetworkImage(
-                            imageUrl: item.logoUrl!,
-                            height: 50,
-                            fit: BoxFit.contain,
-                            alignment: Alignment.centerLeft,
-                            errorWidget: (_, _, _) => Text(
-                              item.title,
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                          )
-                        else
-                          Text(
-                            item.title,
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress: () =>
+                              _copyAnimeTitle(context, item.title),
+                          child: item.logoUrl != null
+                              ? CachedNetworkImage(
+                                  imageUrl: item.logoUrl!,
+                                  height: 50,
+                                  fit: BoxFit.contain,
+                                  alignment: Alignment.centerLeft,
+                                  errorWidget: (_, _, _) => Text(
+                                    item.title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                )
+                              : Text(
+                                  item.title,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                        ),
                         const SizedBox(height: 8),
                         MetadataBar(
                           item: item,
