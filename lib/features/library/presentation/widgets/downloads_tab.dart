@@ -353,7 +353,9 @@ class _DownloadItemTile extends ConsumerWidget {
               ),
               if (!isInsideGroup &&
                   item.episode != null &&
-                  item.item.contentType == MultimediaContentType.series) ...[
+                  (item.item.contentType == MultimediaContentType.series ||
+                      item.item.contentType ==
+                          MultimediaContentType.anime)) ...[
                 const SizedBox(height: 2),
                 Text(
                   'S${item.episode!.season} E${item.episode!.episode}: ${item.episode!.name}',
@@ -518,7 +520,12 @@ class _DownloadItemTile extends ConsumerWidget {
       unawaited(
         ref
             .read(playbackLauncherProvider)
-            .play(context, file.path, baseItem: item.item),
+            .play(
+              context,
+              file.path,
+              baseItem: item.item,
+              episode: item.episode,
+            ),
       );
     }
   }
