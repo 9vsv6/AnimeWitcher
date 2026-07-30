@@ -298,32 +298,36 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final showLabels = constraints.maxWidth >= 520;
-
                   Widget actionButton({
                     required String label,
                     required IconData icon,
                     required VoidCallback onPressed,
+                    required bool outlined,
                   }) {
-                    if (showLabels) {
-                      return FilledButton.tonalIcon(
+                    final style = outlined
+                        ? OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            visualDensity: VisualDensity.compact,
+                          )
+                        : FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            visualDensity: VisualDensity.compact,
+                          );
+
+                    if (outlined) {
+                      return OutlinedButton.icon(
                         onPressed: onPressed,
-                        icon: Icon(icon, size: 20),
+                        icon: Icon(icon, size: 21),
                         label: Text(label),
-                        style: FilledButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                        ),
+                        style: style,
                       );
                     }
 
-                    return IconButton.filledTonal(
-                      tooltip: label,
+                    return FilledButton.icon(
                       onPressed: onPressed,
-                      icon: Icon(icon),
+                      icon: Icon(icon, size: 21),
+                      label: Text(label),
+                      style: style,
                     );
                   }
 
@@ -358,34 +362,43 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                       ),
                       const SizedBox(height: 4),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          actionButton(
-                            label: 'Select all',
-                            icon: Icons.select_all_rounded,
+                          Expanded(
+                            child: actionButton(
+                              label: 'Watched',
+                              icon: Icons.visibility_rounded,
+                              outlined: false,
+                              onPressed: () async {
+                                await controller.setSelectedEpisodesWatched(
+                                  widget.item.url,
+                                  true,
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: actionButton(
+                              label: 'Unwatched',
+                              icon: Icons.visibility_off_rounded,
+                              outlined: true,
+                              onPressed: () async {
+                                await controller.setSelectedEpisodesWatched(
+                                  widget.item.url,
+                                  false,
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton.filledTonal(
+                            tooltip: 'Select all episodes',
                             onPressed: controller.selectAllEpisodes,
-                          ),
-                          const SizedBox(width: 6),
-                          actionButton(
-                            label: 'Watched',
-                            icon: Icons.visibility_rounded,
-                            onPressed: () async {
-                              await controller.setSelectedEpisodesWatched(
-                                widget.item.url,
-                                true,
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 6),
-                          actionButton(
-                            label: 'Unwatched',
-                            icon: Icons.visibility_off_rounded,
-                            onPressed: () async {
-                              await controller.setSelectedEpisodesWatched(
-                                widget.item.url,
-                                false,
-                              );
-                            },
+                            icon: const Icon(Icons.select_all_rounded),
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              maximumSize: const Size(48, 48),
+                            ),
                           ),
                         ],
                       ),
