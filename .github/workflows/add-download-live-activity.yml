@@ -1,4 +1,4 @@
-name: Add download Live Activity v2
+name: Add download Live Activity v3
 
 on:
   workflow_dispatch:
@@ -47,11 +47,26 @@ jobs:
       - name: Generate Riverpod files
         run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: Fix generated Swift package deployment target
+      - name: Regenerate iOS configuration
+        run: flutter build ios --config-only
+
+      - name: Verify generated Swift package target
         shell: bash
         run: |
-          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKcGF0aCA9IFBhdGgoCiAgICAiaW9zL0ZsdXR0ZXIvZXBoZW1lcmFsL1BhY2thZ2VzLyIKICAgICJGbHV0dGVyR2VuZXJhdGVkUGx1Z2luU3dpZnRQYWNrYWdlL1BhY2thZ2Uuc3dpZnQiCikKaWYgbm90IHBhdGguZXhpc3RzKCk6CiAgICByYWlzZSBSdW50aW1lRXJyb3IoZiJHZW5lcmF0ZWQgU3dpZnQgcGFja2FnZSBub3QgZm91bmQ6IHtwYXRofSIpCgp0ZXh0ID0gcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKdXBkYXRlZCA9IHRleHQKCnBhdHRlcm5zID0gKAogICAgKHInXC5pT1NcKCIxM1wuMCJcKScsICcuaU9TKCIxNS4wIiknKSwKICAgIChyJ1wuaU9TXChcLnYxM1wpJywgJy5pT1MoLnYxNSknKSwKICAgIChyJ1wuaU9TXChcLnYxM18wXCknLCAnLmlPUygudjE1KScpLAopCgpmb3IgcGF0dGVybiwgcmVwbGFjZW1lbnQgaW4gcGF0dGVybnM6CiAgICB1cGRhdGVkID0gcmUuc3ViKHBhdHRlcm4sIHJlcGxhY2VtZW50LCB1cGRhdGVkKQoKaWYgdXBkYXRlZCA9PSB0ZXh0OgogICAgcmFpc2UgUnVudGltZUVycm9yKAogICAgICAgICJDb3VsZCBub3QgZmluZCB0aGUgZ2VuZXJhdGVkIGlPUyAxMyBkZXBsb3ltZW50IHRhcmdldC5cbiIKICAgICAgICBmIlBhY2thZ2UgY29udGVudHM6XG57dGV4dH0iCiAgICApCgpwYXRoLndyaXRlX3RleHQodXBkYXRlZCwgZW5jb2Rpbmc9InV0Zi04IikKcHJpbnQoIlJhaXNlZCBnZW5lcmF0ZWQgRmx1dHRlciBTd2lmdCBwYWNrYWdlIGRlcGxveW1lbnQgdGFyZ2V0IHRvIGlPUyAxNS4iKQo=' | base64 --decode > /tmp/fix_generated_swift_package.py
-          python3 /tmp/fix_generated_swift_package.py
+          PACKAGE_FILE="ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift"
+
+          if [ ! -f "$PACKAGE_FILE" ]; then
+            echo "Generated Flutter Swift package was not found."
+            exit 1
+          fi
+
+          echo "Generated package platforms:"
+          grep -n "platforms\|\.iOS" "$PACKAGE_FILE" || true
+
+          if grep -Eq '\.iOS\((\.v13|"13\.0")\)' "$PACKAGE_FILE"; then
+            echo "FlutterGeneratedPluginSwiftPackage is still targeting iOS 13."
+            exit 1
+          fi
 
       - name: Format Dart files
         run: |
@@ -117,6 +132,7 @@ jobs:
             ios/SkyStreamDownloadActivity/Info.plist \
             ios/LiveActivity.xcconfig \
             ios/Runner.xcodeproj/project.pbxproj \
+            ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme \
             .github/workflows/add-download-live-activity.yml
 
           git commit -m "Add iOS download Live Activity"
