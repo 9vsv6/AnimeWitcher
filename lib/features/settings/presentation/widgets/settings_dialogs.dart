@@ -1069,11 +1069,12 @@ void showQualityFilterModeDialog(
   required QualityFilterMode current,
   required Future<void> Function(QualityFilterMode) onChanged,
 }) {
-  const _options = [
+  const options = [
     (
       mode: QualityFilterMode.any,
       label: 'Show all (sort only)',
-      subtitle: 'Sources are sorted by your quality preference but none are hidden.',
+      subtitle:
+          'Sources are sorted by your quality preference but none are hidden.',
     ),
     (
       mode: QualityFilterMode.atOrAbove,
@@ -1110,7 +1111,7 @@ void showQualityFilterModeDialog(
               },
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: _options.map((opt) {
+                children: options.map((opt) {
                   return ListTile(
                     title: Text(opt.label),
                     subtitle: Text(opt.subtitle),

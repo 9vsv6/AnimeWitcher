@@ -195,6 +195,7 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
                     mediaType: item.tmdbMediaType,
                     heroTag: uniqueTag,
                     placeholderPoster: imageUrl,
+                    source: item.source,
                   ).push<void>(context);
                 }
               },

@@ -404,10 +404,12 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     final heroMoviesAsync = ref.watch(exploreHeroMovieProvider);
     final isNone = heroMoviesAsync.maybeWhen(
       data: (list) => list.isEmpty,
-      error: (_, __) => true,
+      error: (_, _) => true,
       orElse: () => false,
     );
-    final topPadding = isNone ? (MediaQuery.paddingOf(context).top + kToolbarHeight) : 0.0;
+    final topPadding = isNone
+        ? (MediaQuery.paddingOf(context).top + kToolbarHeight)
+        : 0.0;
 
     return CustomScrollView(
       controller: _scrollController,
@@ -432,8 +434,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
       ],
     );
   }
-
-
 
   List<Widget> _buildContentSlivers(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;

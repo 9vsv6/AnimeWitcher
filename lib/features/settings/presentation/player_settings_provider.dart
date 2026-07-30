@@ -20,9 +20,9 @@ enum QualityPreference {
 
 /// Controls how the quality preference threshold is applied when streams are loaded.
 enum QualityFilterMode {
-  any,        // Sort only — show everything (current behaviour)
-  atOrAbove,  // Hide sources strictly below the preferred quality tier
-  atOrBelow,  // Hide sources strictly above the preferred tier (data-saver mode)
+  any, // Sort only — show everything (current behaviour)
+  atOrAbove, // Hide sources strictly below the preferred quality tier
+  atOrBelow, // Hide sources strictly above the preferred tier (data-saver mode)
 }
 
 class PlayerSettings {
@@ -739,10 +739,7 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   }
 
   Future<void> setQualityFilterMode(QualityFilterMode mode) async {
-    await _repository.setPlayerSetting(
-      'player_quality_filter_mode',
-      mode.name,
-    );
+    await _repository.setPlayerSetting('player_quality_filter_mode', mode.name);
     state = AsyncData(state.requireValue.copyWith(qualityFilterMode: mode));
   }
 

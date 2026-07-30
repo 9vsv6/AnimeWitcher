@@ -1283,9 +1283,15 @@ class SkyStreamPlayerControlsState
                 // 8 s of pause; hides on resume or dialog open.
                 PlayerMetadataScrim(
                   key: _metadataScrimKey,
-                  item: ref.read(playerControllerProvider.notifier).multimediaItem,
-                  episode: ref.read(playerControllerProvider.notifier).currentEpisode,
-                  isSeries: ref.read(playerControllerProvider.notifier).isSeries,
+                  item: ref
+                      .read(playerControllerProvider.notifier)
+                      .multimediaItem,
+                  episode: ref
+                      .read(playerControllerProvider.notifier)
+                      .currentEpisode,
+                  isSeries: ref
+                      .read(playerControllerProvider.notifier)
+                      .isSeries,
                   isPaused: !_isPlaying,
                   isDialogOpen: _panelOpen,
                   controlsVisible: _isVisible,
