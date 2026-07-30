@@ -23,74 +23,79 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import re
 
-          def replace_once(path: str, old: str, new: str) -> None:
+          def regex_replace_once(path: str, pattern: str, replacement: str) -> None:
               file_path = Path(path)
               text = file_path.read_text(encoding="utf-8")
-              count = text.count(old)
+              updated, count = re.subn(
+                  pattern,
+                  replacement,
+                  text,
+                  count=1,
+                  flags=re.MULTILINE,
+              )
               if count != 1:
                   raise RuntimeError(
-                      f"{path}: expected exactly one match, found {count}\n"
-                      f"Pattern starts with: {old[:160]!r}"
+                      f"{path}: expected exactly one regex match, found {count}\n"
+                      f"Pattern: {pattern}"
                   )
-              file_path.write_text(text.replace(old, new, 1), encoding="utf-8")
+              file_path.write_text(updated, encoding="utf-8")
 
-          replace_once(
-              "lib/features/details/presentation/playback_launcher.dart",
-              '''    required MultimediaItem baseItem,
-              MultimediaItem? detailedItem,
-            }) async {''',
-              '''    required MultimediaItem baseItem,
-              MultimediaItem? detailedItem,
-              Episode? episode,
-            }) async {''',
+          launcher = "lib/features/details/presentation/playback_launcher.dart"
+
+          # Accept the episode explicitly when playback starts from Downloads.
+          regex_replace_once(
+              launcher,
+              r"(required MultimediaItem baseItem,\s*\n\s*MultimediaItem\? detailedItem,)(\s*\n\s*\}\) async \{)",
+              r"\1\n    Episode? episode,\2",
           )
 
-          replace_once(
-              "lib/features/details/presentation/playback_launcher.dart",
-              '''    final itemToCheck = detailedItem ?? baseItem;
-              final episode = itemToCheck.episodes?.firstWhereOrNull((e) => e.url == url);
-              final downloadService = _ref.read(downloadServiceProvider);''',
-              '''    final itemToCheck = detailedItem ?? baseItem;
-              final resolvedEpisode =
-                  episode ?? itemToCheck.episodes?.firstWhereOrNull((e) => e.url == url);
-              final downloadService = _ref.read(downloadServiceProvider);''',
+          # Prefer the explicitly supplied episode. Online playback still falls
+          # back to matching the original episode URL as before.
+          regex_replace_once(
+              launcher,
+              r"final episode = itemToCheck\.episodes\?\.firstWhereOrNull\(\(e\) => e\.url == url\);",
+              "final resolvedEpisode =\n"
+              "        episode ??\n"
+              "        itemToCheck.episodes?.firstWhereOrNull((e) => e.url == url);",
           )
 
-          replace_once(
-              "lib/features/details/presentation/playback_launcher.dart",
-              '''      episode: episode,
-            );''',
-              '''      episode: resolvedEpisode,
-            );''',
+          # Use the original episode when looking for an already downloaded file.
+          regex_replace_once(
+              launcher,
+              r"(getDownloadedFile\(\s*\n\s*itemToCheck,\s*\n\s*episode:\s*)episode(,\s*\n\s*\);)",
+              r"\1resolvedEpisode\2",
           )
 
-          replace_once(
-              "lib/features/details/presentation/playback_launcher.dart",
-              '''          episode: episode,
-                ),''',
-              '''          episode: resolvedEpisode,
-                ),''',
+          # Pass the same episode context into PlayerScreen.
+          regex_replace_once(
+              launcher,
+              r"(PlayerRouteExtra\(\s*\n\s*item:\s*detailedItem \?\? baseItem,\s*\n\s*videoUrl:\s*finalUrl,\s*\n\s*episode:\s*)episode(,\s*\n\s*\),)",
+              r"\1resolvedEpisode\2",
           )
 
-          replace_once(
-              "lib/features/library/presentation/widgets/downloads_tab.dart",
-              '''            .read(playbackLauncherProvider)
-                        .play(context, file.path, baseItem: item.item),''',
-              '''            .read(playbackLauncherProvider)
-                        .play(
-                          context,
-                          file.path,
-                          baseItem: item.item,
-                          episode: item.episode,
-                        ),''',
+          downloads = "lib/features/library/presentation/widgets/downloads_tab.dart"
+
+          # A downloaded file path cannot be matched against the remote episode
+          # URL, so pass the episode metadata that was saved at download time.
+          regex_replace_once(
+              downloads,
+              r"\.play\(context,\s*file\.path,\s*baseItem:\s*item\.item\)",
+              ".play(\n"
+              "              context,\n"
+              "              file.path,\n"
+              "              baseItem: item.item,\n"
+              "              episode: item.episode,\n"
+              "            )",
           )
 
-          replace_once(
-              "lib/features/library/presentation/widgets/downloads_tab.dart",
-              '''                  item.item.contentType == MultimediaContentType.series) ...[''',
-              '''                  (item.item.contentType == MultimediaContentType.series ||
-                      item.item.contentType == MultimediaContentType.anime)) ...[''',
+          # Show season/episode information for downloaded anime too.
+          regex_replace_once(
+              downloads,
+              r"item\.item\.contentType == MultimediaContentType\.series\) \.\.\.\[",
+              "(item.item.contentType == MultimediaContentType.series ||\n"
+              "                      item.item.contentType == MultimediaContentType.anime)) ...[",
           )
 
           print("Downloaded episode linkage fix applied successfully.")
@@ -110,11 +115,15 @@ jobs:
 
       - name: Format changed files
         run: |
-          dart format             lib/features/details/presentation/playback_launcher.dart             lib/features/library/presentation/widgets/downloads_tab.dart
+          dart format \
+            lib/features/details/presentation/playback_launcher.dart \
+            lib/features/library/presentation/widgets/downloads_tab.dart
 
       - name: Analyze changed files
         run: |
-          flutter analyze             lib/features/details/presentation/playback_launcher.dart             lib/features/library/presentation/widgets/downloads_tab.dart
+          flutter analyze \
+            lib/features/details/presentation/playback_launcher.dart \
+            lib/features/library/presentation/widgets/downloads_tab.dart
 
       - name: Verify diff
         run: git diff --check
@@ -127,7 +136,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add             lib/features/details/presentation/playback_launcher.dart             lib/features/library/presentation/widgets/downloads_tab.dart             .github/workflows/fix-downloaded-episode-history.yml
+          git add \
+            lib/features/details/presentation/playback_launcher.dart \
+            lib/features/library/presentation/widgets/downloads_tab.dart \
+            .github/workflows/fix-downloaded-episode-history.yml
 
           git commit -m "Link downloaded playback to episode history"
           git push origin HEAD:main
