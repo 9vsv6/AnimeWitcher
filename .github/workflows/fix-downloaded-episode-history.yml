@@ -1,0 +1,133 @@
+name: Fix downloaded episode history
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Link downloaded playback to original episode
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(
+                      f"{path}: expected exactly one match, found {count}\n"
+                      f"Pattern starts with: {old[:160]!r}"
+                  )
+              file_path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "lib/features/details/presentation/playback_launcher.dart",
+              '''    required MultimediaItem baseItem,
+              MultimediaItem? detailedItem,
+            }) async {''',
+              '''    required MultimediaItem baseItem,
+              MultimediaItem? detailedItem,
+              Episode? episode,
+            }) async {''',
+          )
+
+          replace_once(
+              "lib/features/details/presentation/playback_launcher.dart",
+              '''    final itemToCheck = detailedItem ?? baseItem;
+              final episode = itemToCheck.episodes?.firstWhereOrNull((e) => e.url == url);
+              final downloadService = _ref.read(downloadServiceProvider);''',
+              '''    final itemToCheck = detailedItem ?? baseItem;
+              final resolvedEpisode =
+                  episode ?? itemToCheck.episodes?.firstWhereOrNull((e) => e.url == url);
+              final downloadService = _ref.read(downloadServiceProvider);''',
+          )
+
+          replace_once(
+              "lib/features/details/presentation/playback_launcher.dart",
+              '''      episode: episode,
+            );''',
+              '''      episode: resolvedEpisode,
+            );''',
+          )
+
+          replace_once(
+              "lib/features/details/presentation/playback_launcher.dart",
+              '''          episode: episode,
+                ),''',
+              '''          episode: resolvedEpisode,
+                ),''',
+          )
+
+          replace_once(
+              "lib/features/library/presentation/widgets/downloads_tab.dart",
+              '''            .read(playbackLauncherProvider)
+                        .play(context, file.path, baseItem: item.item),''',
+              '''            .read(playbackLauncherProvider)
+                        .play(
+                          context,
+                          file.path,
+                          baseItem: item.item,
+                          episode: item.episode,
+                        ),''',
+          )
+
+          replace_once(
+              "lib/features/library/presentation/widgets/downloads_tab.dart",
+              '''                  item.item.contentType == MultimediaContentType.series) ...[''',
+              '''                  (item.item.contentType == MultimediaContentType.series ||
+                      item.item.contentType == MultimediaContentType.anime)) ...[''',
+          )
+
+          print("Downloaded episode linkage fix applied successfully.")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate Riverpod files
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Format changed files
+        run: |
+          dart format             lib/features/details/presentation/playback_launcher.dart             lib/features/library/presentation/widgets/downloads_tab.dart
+
+      - name: Analyze changed files
+        run: |
+          flutter analyze             lib/features/details/presentation/playback_launcher.dart             lib/features/library/presentation/widgets/downloads_tab.dart
+
+      - name: Verify diff
+        run: git diff --check
+
+      - name: Commit fix and remove workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/fix-downloaded-episode-history.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add             lib/features/details/presentation/playback_launcher.dart             lib/features/library/presentation/widgets/downloads_tab.dart             .github/workflows/fix-downloaded-episode-history.yml
+
+          git commit -m "Link downloaded playback to episode history"
+          git push origin HEAD:main
