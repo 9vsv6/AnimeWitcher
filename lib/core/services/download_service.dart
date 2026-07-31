@@ -15,7 +15,7 @@ import '../domain/entity/multimedia_item.dart';
 import '../router/app_router.dart';
 import '../storage/storage_service.dart';
 import '../network/dio_client_provider.dart';
-import 'download_live_activity_service.dart';
+import 'download_continued_processing_service.dart';
 
 part 'download_service.g.dart';
 
@@ -122,18 +122,22 @@ class DownloadService {
   final Ref _ref;
   final Dio _dio;
   final Set<String> _cancellingUrls = {};
-  final DownloadLiveActivityService _liveActivity =
-      DownloadLiveActivityService();
+  late final DownloadContinuedProcessingService _continuedProcessing;
   final _updatesController = StreamController<TaskUpdate>.broadcast();
   StreamSubscription<TaskUpdate>? _updatesSubscription;
   bool _isInitialized = false;
 
-  DownloadService(this._ref) : _dio = _ref.read(dioClientProvider);
+  DownloadService(this._ref) : _dio = _ref.read(dioClientProvider) {
+    _continuedProcessing = DownloadContinuedProcessingService(
+      onSystemCancel: _cancelFromSystemUI,
+    );
+  }
 
   Stream<TaskUpdate> get updates => _updatesController.stream;
 
   void dispose() {
     _updatesSubscription?.cancel();
+    unawaited(_continuedProcessing.dispose());
     _updatesController.close();
     // Do NOT cancel _fdSubscription — it matches FileDownloader()'s singleton
     // lifetime and cannot be re-subscribed after cancellation.
@@ -243,11 +247,10 @@ class DownloadService {
               .update(trackingUrl, progressData);
 
           unawaited(
-            _liveActivity.update(
+            _continuedProcessing.update(
               taskId: update.task.taskId,
               progress: progressData.progress,
-              speedMBps: progressData.networkSpeed,
-              status: 'downloading',
+              totalBytes: progressData.totalSize,
             ),
           );
 
@@ -278,52 +281,45 @@ class DownloadService {
                   ),
                 );
           }
+
           switch (update.status) {
             case TaskStatus.complete:
               unawaited(
-                _liveActivity.end(
+                _continuedProcessing.finish(
                   taskId: update.task.taskId,
+                  success: true,
                   status: 'completed',
-                  progress: 1.0,
                 ),
               );
             case TaskStatus.failed:
               unawaited(
-                _liveActivity.end(
+                _continuedProcessing.finish(
                   taskId: update.task.taskId,
+                  success: false,
                   status: 'failed',
-                  progress: current?.progress,
                 ),
               );
             case TaskStatus.canceled:
               unawaited(
-                _liveActivity.end(
+                _continuedProcessing.finish(
                   taskId: update.task.taskId,
+                  success: false,
                   status: 'canceled',
-                  progress: current?.progress,
                 ),
               );
             case TaskStatus.paused:
-              unawaited(
-                _liveActivity.update(
-                  taskId: update.task.taskId,
-                  progress: current?.progress ?? 0.0,
-                  speedMBps: 0.0,
-                  status: 'paused',
-                  force: true,
-                ),
-              );
+              unawaited(_continuedProcessing.stop(taskId: update.task.taskId));
             case TaskStatus.running:
             case TaskStatus.enqueued:
-              unawaited(
-                _liveActivity.update(
-                  taskId: update.task.taskId,
-                  progress: current?.progress ?? 0.0,
-                  speedMBps: current?.networkSpeed ?? 0.0,
-                  status: 'downloading',
-                  force: true,
-                ),
-              );
+              if (current != null) {
+                unawaited(
+                  _continuedProcessing.update(
+                    taskId: update.task.taskId,
+                    progress: current.progress,
+                    totalBytes: current.totalSize,
+                  ),
+                );
+              }
             default:
               break;
           }
@@ -404,13 +400,34 @@ class DownloadService {
     }
   }
 
-  Future<void> cancelDownload(String taskId, String trackingUrl) async {
+  Future<void> _cancelFromSystemUI(String taskId) async {
+    final task = await FileDownloader().taskForId(taskId);
+    if (task == null) {
+      await FileDownloader().cancelTasksWithIds([taskId]);
+      return;
+    }
+
+    final trackingUrl = task.metaData.isNotEmpty ? task.metaData : task.url;
+    await cancelDownload(taskId, trackingUrl, notifyContinuedProcessing: false);
+  }
+
+  Future<void> cancelDownload(
+    String taskId,
+    String trackingUrl, {
+    bool notifyContinuedProcessing = true,
+  }) async {
     _cancellingUrls.add(trackingUrl);
     try {
       await FileDownloader().cancelTasksWithIds([taskId]);
       _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
       _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
-      await _liveActivity.end(taskId: taskId, status: 'canceled');
+      if (notifyContinuedProcessing) {
+        await _continuedProcessing.finish(
+          taskId: taskId,
+          success: false,
+          status: 'canceled',
+        );
+      }
 
       // Proactive cleanup
       await FileDownloader().database.deleteRecordWithId(taskId);
@@ -427,13 +444,25 @@ class DownloadService {
     final task = await FileDownloader().taskForId(taskId);
     if (task is DownloadTask) {
       await FileDownloader().pause(task);
+      await _continuedProcessing.stop(taskId: taskId);
     }
   }
 
   Future<void> resumeDownload(String taskId) async {
     final task = await FileDownloader().taskForId(taskId);
     if (task is DownloadTask) {
+      final records = await FileDownloader().database.allRecords();
+      final record = records.firstWhereOrNull(
+        (candidate) => candidate.task.taskId == taskId,
+      );
+
       await FileDownloader().resume(task);
+      await _continuedProcessing.start(
+        taskId: taskId,
+        displayName: task.displayName,
+        progress: record?.progress ?? 0.0,
+        totalBytes: record?.expectedFileSize ?? -1,
+      );
     }
   }
 
@@ -561,22 +590,12 @@ class DownloadService {
       }
 
       _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
-
-      await _liveActivity.start(
+      await _continuedProcessing.start(
         taskId: existingRecord.task.taskId,
-        animeTitle: item.title,
-        episodeTitle: _liveActivityEpisodeTitle(item, episode),
-      );
-      await _liveActivity.update(
-        taskId: existingRecord.task.taskId,
+        displayName: filename,
         progress: existingRecord.progress,
-        speedMBps: 0.0,
-        status: existingRecord.status == TaskStatus.paused
-            ? 'paused'
-            : 'downloading',
-        force: true,
+        totalBytes: existingRecord.expectedFileSize,
       );
-
       return true;
     }
 
@@ -640,29 +659,12 @@ class DownloadService {
       await _ref
           .read(storageServiceProvider)
           .saveDownloadMetadata(task.taskId, item, episode: episode);
-
-      await _liveActivity.start(
+      await _continuedProcessing.start(
         taskId: task.taskId,
-        animeTitle: item.title,
-        episodeTitle: _liveActivityEpisodeTitle(item, episode),
+        displayName: filename,
       );
     }
     return success;
-  }
-
-  String _liveActivityEpisodeTitle(MultimediaItem item, Episode? episode) {
-    if (episode == null) {
-      return item.contentType == MultimediaContentType.movie
-          ? 'Movie'
-          : 'Download';
-    }
-
-    final prefix = 'S${episode.season} E${episode.episode}';
-    final name = episode.name.trim();
-    if (name.isEmpty || name.toLowerCase() == prefix.toLowerCase()) {
-      return prefix;
-    }
-    return '$prefix • $name';
   }
 
   Future<String> getDownloadPath(

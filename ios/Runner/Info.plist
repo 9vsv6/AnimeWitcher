@@ -68,6 +68,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.bbflight.background_downloader.task</string>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).download.*</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
@@ -94,7 +95,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
 </dict>
 </plist>

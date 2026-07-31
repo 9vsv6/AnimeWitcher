@@ -4,7 +4,8 @@ import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  private var downloadLiveActivityChannel: FlutterMethodChannel?
+  private var downloadContinuedProcessingChannel: FlutterMethodChannel?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -17,7 +18,7 @@ import UserNotifications
         }
       }
     }
-    
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -36,13 +37,13 @@ import UserNotifications
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
     let channel = FlutterMethodChannel(
-      name: "dev.akash.skystream/download_live_activity",
+      name: "dev.akash.skystream/download_continued_processing",
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
 
     channel.setMethodCallHandler { call, result in
 #if os(iOS)
-      guard #available(iOS 16.1, *) else {
+      guard #available(iOS 26.0, *) else {
         result(false)
         return
       }
@@ -59,51 +60,64 @@ import UserNotifications
         return
       }
 
-      let progress =
-        (arguments["progress"] as? NSNumber)?.doubleValue ?? 0.0
-      let speedMBps =
-        (arguments["speedMBps"] as? NSNumber)?.doubleValue ?? 0.0
-      let status = arguments["status"] as? String ?? "downloading"
-
       Task { @MainActor in
         do {
+          let manager = DownloadContinuedProcessingManager.shared
+
           switch call.method {
           case "start":
-            guard let animeTitle = arguments["animeTitle"] as? String,
-                  let episodeTitle = arguments["episodeTitle"] as? String else {
+            guard let displayName = arguments["displayName"] as? String else {
               result(
                 FlutterError(
                   code: "INVALID_ARGUMENTS",
-                  message: "animeTitle and episodeTitle are required",
+                  message: "displayName is required",
                   details: nil
                 )
               )
               return
             }
 
-            let activityId = try await DownloadLiveActivityManager.shared.start(
+            let progress =
+              (arguments["progress"] as? NSNumber)?.doubleValue ?? 0.0
+            let totalBytes =
+              (arguments["totalBytes"] as? NSNumber)?.int64Value ?? -1
+
+            let identifier = try manager.start(
               taskId: taskId,
-              animeTitle: animeTitle,
-              episodeTitle: episodeTitle
+              displayName: displayName,
+              progress: progress,
+              totalBytes: totalBytes
             )
-            result(activityId)
+            if let identifier {
+              result(identifier)
+            } else {
+              result(false)
+            }
 
           case "update":
-            await DownloadLiveActivityManager.shared.update(
+            let progress =
+              (arguments["progress"] as? NSNumber)?.doubleValue ?? 0.0
+            let totalBytes =
+              (arguments["totalBytes"] as? NSNumber)?.int64Value ?? -1
+            manager.update(
               taskId: taskId,
               progress: progress,
-              speedMBps: speedMBps,
+              totalBytes: totalBytes
+            )
+            result(true)
+
+          case "finish":
+            let success = arguments["success"] as? Bool ?? false
+            let status = arguments["status"] as? String ?? "failed"
+            manager.finish(
+              taskId: taskId,
+              success: success,
               status: status
             )
             result(true)
 
-          case "end":
-            await DownloadLiveActivityManager.shared.end(
-              taskId: taskId,
-              progress: progress,
-              speedMBps: speedMBps,
-              status: status
-            )
+          case "stop":
+            manager.stop(taskId: taskId)
             result(true)
 
           default:
@@ -112,7 +126,7 @@ import UserNotifications
         } catch {
           result(
             FlutterError(
-              code: "LIVE_ACTIVITY_ERROR",
+              code: "CONTINUED_PROCESSING_ERROR",
               message: error.localizedDescription,
               details: nil
             )
@@ -124,6 +138,18 @@ import UserNotifications
 #endif
     }
 
-    downloadLiveActivityChannel = channel
+#if os(iOS)
+    if #available(iOS 26.0, *) {
+      DownloadContinuedProcessingManager.shared.cancellationHandler = {
+        [weak channel] taskId in
+        channel?.invokeMethod(
+          "cancel",
+          arguments: ["taskId": taskId]
+        )
+      }
+    }
+#endif
+
+    downloadContinuedProcessingChannel = channel
   }
 }
