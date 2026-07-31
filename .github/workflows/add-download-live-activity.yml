@@ -1,4 +1,4 @@
-name: Add download Live Activity v6
+name: Add download Live Activity v7
 
 on:
   workflow_dispatch:
@@ -34,6 +34,37 @@ jobs:
 
       - name: Configure Xcode target
         run: ruby /tmp/configure_live_activity_project.rb
+
+      - name: Set per-target iOS deployment versions
+        shell: bash
+        run: |
+          ruby <<'RUBY'
+          require 'xcodeproj'
+
+          project_path = 'ios/Runner.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+
+          runner = project.targets.find { |target| target.name == 'Runner' }
+          activity = project.targets.find do |target|
+            target.name == 'SkyStreamDownloadActivity'
+          end
+
+          raise 'Runner target was not found.' unless runner
+          raise 'SkyStreamDownloadActivity target was not found.' unless activity
+
+          runner.build_configurations.each do |config|
+            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.6'
+          end
+
+          activity.build_configurations.each do |config|
+            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.1'
+          end
+
+          project.save
+
+          puts 'Runner deployment target: iOS 15.6'
+          puts 'SkyStreamDownloadActivity deployment target: iOS 16.1'
+          RUBY
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -108,6 +139,34 @@ jobs:
             -scheme Runner \
             -list
 
+      - name: Verify per-target deployment versions
+        shell: bash
+        run: |
+          ruby <<'RUBY'
+          require 'xcodeproj'
+
+          project = Xcodeproj::Project.open('ios/Runner.xcodeproj')
+          expected = {
+            'Runner' => '15.6',
+            'SkyStreamDownloadActivity' => '16.1',
+          }
+
+          expected.each do |target_name, required_version|
+            target = project.targets.find { |item| item.name == target_name }
+            raise "#{target_name} target was not found." unless target
+
+            target.build_configurations.each do |config|
+              actual = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+              puts "#{target_name} #{config.name}: #{actual}"
+              unless actual == required_version
+                raise(
+                  "#{target_name} #{config.name} must target iOS "                   "#{required_version}, found #{actual.inspect}."
+                )
+              end
+            end
+          end
+          RUBY
+
       - name: Build iOS simulator
         run: |
           set -o pipefail
@@ -118,7 +177,6 @@ jobs:
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
-            IPHONEOS_DEPLOYMENT_TARGET=15.6 \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=YES \
             build
