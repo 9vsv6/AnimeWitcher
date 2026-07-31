@@ -1,4 +1,4 @@
-name: Add download Live Activity v9
+name: Add download Live Activity v10
 
 on:
   workflow_dispatch:
@@ -17,6 +17,13 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+
+      - name: Select Xcode 16.4
+        shell: bash
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
 
       - name: Add Live Activity sources
         shell: bash
@@ -80,8 +87,20 @@ jobs:
           flutter config --no-enable-swift-package-manager
           flutter clean
 
+      - name: Pin connectivity_plus for Xcode 16.4
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKcGF0aCA9IFBhdGgoJ3B1YnNwZWMueWFtbCcpCnRleHQgPSBwYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQoKcGF0dGVybiA9IHJlLmNvbXBpbGUocicoP20pXiAgY29ubmVjdGl2aXR5X3BsdXM6XHMqW15cbl0rJCcpCm1hdGNoZXMgPSBwYXR0ZXJuLmZpbmRhbGwodGV4dCkKaWYgbGVuKG1hdGNoZXMpICE9IDE6CiAgICByYWlzZSBSdW50aW1lRXJyb3IoCiAgICAgICAgJ0V4cGVjdGVkIGV4YWN0bHkgb25lIGRpcmVjdCBjb25uZWN0aXZpdHlfcGx1cyBkZXBlbmRlbmN5LCAnCiAgICAgICAgZidmb3VuZCB7bGVuKG1hdGNoZXMpfToge21hdGNoZXN9JwogICAgKQoKdGV4dCA9IHBhdHRlcm4uc3ViKCcgIGNvbm5lY3Rpdml0eV9wbHVzOiA3LjAuMCcsIHRleHQsIGNvdW50PTEpCnBhdGgud3JpdGVfdGV4dCh0ZXh0LCBlbmNvZGluZz0ndXRmLTgnKQoKcHJpbnQoJ1Bpbm5lZCBjb25uZWN0aXZpdHlfcGx1cyBleGFjdGx5IHRvIDcuMC4wIGZvciBYY29kZSAxNi40IGNvbXBhdGliaWxpdHkuJykK' | base64 --decode > /tmp/pin_connectivity_plus.py
+          python3 /tmp/pin_connectivity_plus.py
+
       - name: Install Flutter dependencies
         run: flutter pub get
+
+      - name: Verify connectivity_plus compatibility
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCBvcwppbXBvcnQgcmUKCnB1YnNwZWMgPSBQYXRoKCdwdWJzcGVjLnlhbWwnKS5yZWFkX3RleHQoZW5jb2Rpbmc9J3V0Zi04JykKaWYgbm90IHJlLnNlYXJjaChyJyg/bSleICBjb25uZWN0aXZpdHlfcGx1czpccyo3XC4wXC4wXHMqJCcsIHB1YnNwZWMpOgogICAgcmFpc2UgUnVudGltZUVycm9yKCdwdWJzcGVjLnlhbWwgZG9lcyBub3QgcGluIGNvbm5lY3Rpdml0eV9wbHVzIHRvIDcuMC4wLicpCgpsb2NrID0gUGF0aCgncHVic3BlYy5sb2NrJykucmVhZF90ZXh0KGVuY29kaW5nPSd1dGYtOCcpCm1hdGNoID0gcmUuc2VhcmNoKAogICAgcicoP21zKV4gIGNvbm5lY3Rpdml0eV9wbHVzOlxuJwogICAgcicuKj9eICAgIHZlcnNpb246XHMqIihbXiJdKykiXHMqJCcsCiAgICBsb2NrLAopCmlmIG1hdGNoIGlzIE5vbmU6CiAgICByYWlzZSBSdW50aW1lRXJyb3IoJ2Nvbm5lY3Rpdml0eV9wbHVzIHdhcyBub3QgZm91bmQgaW4gcHVic3BlYy5sb2NrLicpCmlmIG1hdGNoLmdyb3VwKDEpICE9ICc3LjAuMCc6CiAgICByYWlzZSBSdW50aW1lRXJyb3IoCiAgICAgICAgJ3B1YnNwZWMubG9jayByZXNvbHZlZCBjb25uZWN0aXZpdHlfcGx1cyAnCiAgICAgICAgZid7bWF0Y2guZ3JvdXAoMSkhcn0sIGV4cGVjdGVkICI3LjAuMCIuJwogICAgKQoKcHViX2NhY2hlID0gUGF0aChvcy5lbnZpcm9uLmdldCgnUFVCX0NBQ0hFJywgc3RyKFBhdGguaG9tZSgpIC8gJy5wdWItY2FjaGUnKSkpCnNvdXJjZSA9ICgKICAgIHB1Yl9jYWNoZQogICAgLyAnaG9zdGVkJwogICAgLyAncHViLmRldicKICAgIC8gJ2Nvbm5lY3Rpdml0eV9wbHVzLTcuMC4wJwogICAgLyAnaW9zJwogICAgLyAnY29ubmVjdGl2aXR5X3BsdXMnCiAgICAvICdTb3VyY2VzJwogICAgLyAnY29ubmVjdGl2aXR5X3BsdXMnCiAgICAvICdQYXRoTW9uaXRvckNvbm5lY3Rpdml0eVByb3ZpZGVyLnN3aWZ0JwopCgppZiBub3Qgc291cmNlLmlzX2ZpbGUoKToKICAgIHJhaXNlIFJ1bnRpbWVFcnJvcihmJ0V4cGVjdGVkIGNvbm5lY3Rpdml0eV9wbHVzIHNvdXJjZSB3YXMgbm90IGZvdW5kOiB7c291cmNlfScpCgpzb3VyY2VfdGV4dCA9IHNvdXJjZS5yZWFkX3RleHQoZW5jb2Rpbmc9J3V0Zi04JykKZm9yIHVuc3VwcG9ydGVkIGluICgnaXNVbHRyYUNvbnN0cmFpbmVkJywgJy5zYXRlbGxpdGUnKToKICAgIGlmIHVuc3VwcG9ydGVkIGluIHNvdXJjZV90ZXh0OgogICAgICAgIHJhaXNlIFJ1bnRpbWVFcnJvcigKICAgICAgICAgICAgZidjb25uZWN0aXZpdHlfcGx1cyA3LjAuMCB1bmV4cGVjdGVkbHkgY29udGFpbnMge3Vuc3VwcG9ydGVkIXJ9LicKICAgICAgICApCgpwcmludCgnVmVyaWZpZWQgY29ubmVjdGl2aXR5X3BsdXMgNy4wLjAgaW4gcHVic3BlYy55YW1sIGFuZCBwdWJzcGVjLmxvY2suJykKcHJpbnQoJ1ZlcmlmaWVkIGl0cyBpT1Mgc291cmNlIGRvZXMgbm90IHJlZmVyZW5jZSB0aGUgaU9TIDI2IE5XUGF0aCBBUEkuJykK' | base64 --decode > /tmp/verify_connectivity_plus.py
+          python3 /tmp/verify_connectivity_plus.py
 
       - name: Patch device_info_plus for Xcode 16.4
         shell: bash
@@ -176,6 +195,7 @@ jobs:
           RUBY
 
       - name: Build iOS simulator
+        shell: bash
         run: |
           set -o pipefail
           xcodebuild \
@@ -187,7 +207,16 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=YES \
-            build
+            build 2>&1 | tee /tmp/skystream-xcodebuild.log
+
+      - name: Print focused Xcode errors
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -f /tmp/skystream-xcodebuild.log ]]; then
+            grep -nE '(^|[[:space:]])(error:|fatal error:)|BUILD FAILED|The following build commands failed' \
+              /tmp/skystream-xcodebuild.log || true
+          fi
 
       - name: Verify diff
         run: git diff --check
@@ -205,6 +234,7 @@ jobs:
 
           git add \
             pubspec.yaml \
+            pubspec.lock \
             ios/Podfile \
             lib/core/services/download_live_activity_service.dart \
             lib/core/services/download_service.dart \
