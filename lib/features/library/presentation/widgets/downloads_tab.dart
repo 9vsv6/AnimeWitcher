@@ -392,27 +392,29 @@ class _DownloadItemTile extends ConsumerWidget {
               const SizedBox(height: LayoutConstants.spacingSm),
               if (!isDone) ...[
                 Row(
+                  textDirection: TextDirection.ltr,
                   children: [
-                    Text(
-                      '${(progress.clamp(0.0, 1.0) * 100).floor()}%',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const Spacer(),
                     Flexible(
                       child: Text(
                         _downloadedSizeText(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.end,
+                        textAlign: TextAlign.start,
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${(progress.clamp(0.0, 1.0) * 100).floor()}%',
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
