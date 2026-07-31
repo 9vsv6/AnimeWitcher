@@ -1,4 +1,4 @@
-name: Show download percentage and size
+name: Show download percentage and size v2
 
 on:
   workflow_dispatch:
@@ -30,6 +30,23 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Generate Riverpod and router files
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Verify generated providers
+        shell: bash
+        run: |
+          test -f lib/features/library/presentation/downloads_provider.g.dart
+          test -f lib/core/services/download_service.g.dart
+          test -f lib/core/services/notification_service.g.dart
+          test -f lib/features/details/presentation/playback_launcher.g.dart
+
+          grep -q 'downloadsProvider'             lib/features/library/presentation/downloads_provider.g.dart
+          grep -q 'downloadProgressProvider'             lib/core/services/download_service.g.dart
+          grep -q 'downloadServiceProvider'             lib/core/services/download_service.g.dart
+          grep -q 'notificationServiceProvider'             lib/core/services/notification_service.g.dart
+          grep -q 'playbackLauncherProvider'             lib/features/details/presentation/playback_launcher.g.dart
+
       - name: Add percentage and downloaded size labels
         shell: bash
         run: |
@@ -45,6 +62,14 @@ jobs:
           --no-fatal-warnings
           --no-fatal-infos
           lib/features/library/presentation/widgets/downloads_tab.dart
+
+      - name: Ensure generated files remain ignored
+        shell: bash
+        run: |
+          if git status --short | grep -E '\.g\.dart$'; then
+            echo 'Generated .g.dart files unexpectedly appeared as tracked changes.'
+            exit 1
+          fi
 
       - name: Verify generated UI
         shell: bash
