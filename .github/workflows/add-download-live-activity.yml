@@ -1,4 +1,4 @@
-name: Add download Live Activity v12
+name: Add download Live Activity v13
 
 on:
   workflow_dispatch:
@@ -202,14 +202,14 @@ jobs:
 
           unless embed_index && run_index && embed_index < run_index
             raise(
-              'Embed Foundation Extensions must be before Flutter Run Script. '
+              "Embed Foundation Extensions must be before Flutter Run Script. " \
               "Found embed=#{embed_index.inspect}, run=#{run_index.inspect}."
             )
           end
 
           unless embed_phase.dst_subfolder_spec.to_s == '13'
             raise(
-              'Extension embed destination must be PlugIns (13), found '
+              "Extension embed destination must be PlugIns (13), found " \
               "#{embed_phase.dst_subfolder_spec.inspect}."
             )
           end
