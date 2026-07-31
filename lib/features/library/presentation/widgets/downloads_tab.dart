@@ -391,6 +391,33 @@ class _DownloadItemTile extends ConsumerWidget {
               ),
               const SizedBox(height: LayoutConstants.spacingSm),
               if (!isDone) ...[
+                Row(
+                  children: [
+                    Text(
+                      '${(progress.clamp(0.0, 1.0) * 100).floor()}%',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
+                    Flexible(
+                      child: Text(
+                        _downloadedSizeText(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 LinearProgressIndicator(
                   value: progress,
                   backgroundColor: theme.dividerColor.withValues(alpha: 0.1),
@@ -473,6 +500,20 @@ class _DownloadItemTile extends ConsumerWidget {
         child: tile,
       ),
     );
+  }
+
+  String _downloadedSizeText() {
+    final data = progressData;
+    if (data == null || data.totalSize <= 0) {
+      return '-- / -- MB';
+    }
+
+    final normalizedProgress = progress.clamp(0.0, 1.0).toDouble();
+    final totalMegabytes = data.totalSize / (1024 * 1024);
+    final downloadedMegabytes = totalMegabytes * normalizedProgress;
+
+    return '${downloadedMegabytes.toStringAsFixed(1)} / '
+        '${totalMegabytes.toStringAsFixed(1)} MB';
   }
 
   String _getStatusText(TaskStatus status, AppLocalizations l10n) {
