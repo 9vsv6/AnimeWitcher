@@ -1,0 +1,76 @@
+name: Swap download progress labels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: swap-download-progress-labels
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies and generate code
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Put percentage on the far right
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwYXRoID0gUGF0aCgnbGliL2ZlYXR1cmVzL2xpYnJhcnkvcHJlc2VudGF0aW9uL3dpZGdldHMvZG93bmxvYWRzX3RhYi5kYXJ0JykKdGV4dCA9IHBhdGgucmVhZF90ZXh0KGVuY29kaW5nPSd1dGYtOCcpCgpvbGQgPSAiIiIgICAgICAgICAgICAgICAgUm93KAogICAgICAgICAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICAgICAgICAgIFRleHQoCiAgICAgICAgICAgICAgICAgICAgICAnJHsocHJvZ3Jlc3MuY2xhbXAoMC4wLCAxLjApICogMTAwKS5mbG9vcigpfSUnLAogICAgICAgICAgICAgICAgICAgICAgc3R5bGU6IHRoZW1lLnRleHRUaGVtZS5ib2R5U21hbGw/LmNvcHlXaXRoKAogICAgICAgICAgICAgICAgICAgICAgICBmb250U2l6ZTogMTAsCiAgICAgICAgICAgICAgICAgICAgICAgIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQudzYwMCwKICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IHRoZW1lLmNvbG9yU2NoZW1lLm9uU3VyZmFjZVZhcmlhbnQsCiAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgY29uc3QgU3BhY2VyKCksCiAgICAgICAgICAgICAgICAgICAgRmxleGlibGUoCiAgICAgICAgICAgICAgICAgICAgICBjaGlsZDogVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgX2Rvd25sb2FkZWRTaXplVGV4dCgpLAogICAgICAgICAgICAgICAgICAgICAgICBtYXhMaW5lczogMSwKICAgICAgICAgICAgICAgICAgICAgICAgb3ZlcmZsb3c6IFRleHRPdmVyZmxvdy5lbGxpcHNpcywKICAgICAgICAgICAgICAgICAgICAgICAgdGV4dEFsaWduOiBUZXh0QWxpZ24uZW5kLAogICAgICAgICAgICAgICAgICAgICAgICBzdHlsZTogdGhlbWUudGV4dFRoZW1lLmJvZHlTbWFsbD8uY29weVdpdGgoCiAgICAgICAgICAgICAgICAgICAgICAgICAgZm9udFNpemU6IDEwLAogICAgICAgICAgICAgICAgICAgICAgICAgIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQudzYwMCwKICAgICAgICAgICAgICAgICAgICAgICAgICBjb2xvcjogdGhlbWUuY29sb3JTY2hlbWUub25TdXJmYWNlVmFyaWFudCwKICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgICksCiIiIgoKbmV3ID0gIiIiICAgICAgICAgICAgICAgIFJvdygKICAgICAgICAgICAgICAgICAgdGV4dERpcmVjdGlvbjogVGV4dERpcmVjdGlvbi5sdHIsCiAgICAgICAgICAgICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICAgICAgICAgICAgRmxleGlibGUoCiAgICAgICAgICAgICAgICAgICAgICBjaGlsZDogVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgX2Rvd25sb2FkZWRTaXplVGV4dCgpLAogICAgICAgICAgICAgICAgICAgICAgICBtYXhMaW5lczogMSwKICAgICAgICAgICAgICAgICAgICAgICAgb3ZlcmZsb3c6IFRleHRPdmVyZmxvdy5lbGxpcHNpcywKICAgICAgICAgICAgICAgICAgICAgICAgdGV4dEFsaWduOiBUZXh0QWxpZ24uc3RhcnQsCiAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlOiB0aGVtZS50ZXh0VGhlbWUuYm9keVNtYWxsPy5jb3B5V2l0aCgKICAgICAgICAgICAgICAgICAgICAgICAgICBmb250U2l6ZTogMTAsCiAgICAgICAgICAgICAgICAgICAgICAgICAgZm9udFdlaWdodDogRm9udFdlaWdodC53NjAwLAogICAgICAgICAgICAgICAgICAgICAgICAgIGNvbG9yOiB0aGVtZS5jb2xvclNjaGVtZS5vblN1cmZhY2VWYXJpYW50LAogICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgIGNvbnN0IFNwYWNlcigpLAogICAgICAgICAgICAgICAgICAgIFRleHQoCiAgICAgICAgICAgICAgICAgICAgICAnJHsocHJvZ3Jlc3MuY2xhbXAoMC4wLCAxLjApICogMTAwKS5mbG9vcigpfSUnLAogICAgICAgICAgICAgICAgICAgICAgdGV4dEFsaWduOiBUZXh0QWxpZ24uZW5kLAogICAgICAgICAgICAgICAgICAgICAgc3R5bGU6IHRoZW1lLnRleHRUaGVtZS5ib2R5U21hbGw/LmNvcHlXaXRoKAogICAgICAgICAgICAgICAgICAgICAgICBmb250U2l6ZTogMTAsCiAgICAgICAgICAgICAgICAgICAgICAgIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQudzYwMCwKICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IHRoZW1lLmNvbG9yU2NoZW1lLm9uU3VyZmFjZVZhcmlhbnQsCiAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIF0sCiAgICAgICAgICAgICAgICApLAoiIiIKCmlmIG5ldyBpbiB0ZXh0OgogICAgcHJpbnQoJ1RoZSBsYWJlbHMgYXJlIGFscmVhZHkgaW4gdGhlIHJlcXVlc3RlZCBwb3NpdGlvbnMuJykKZWxpZiB0ZXh0LmNvdW50KG9sZCkgPT0gMToKICAgIHBhdGgud3JpdGVfdGV4dCh0ZXh0LnJlcGxhY2Uob2xkLCBuZXcsIDEpLCBlbmNvZGluZz0ndXRmLTgnKQogICAgcHJpbnQoZidVcGRhdGVkIHtwYXRofS4nKQplbHNlOgogICAgcmFpc2UgUnVudGltZUVycm9yKAogICAgICAgICdFeHBlY3RlZCBleGFjdGx5IG9uZSBjdXJyZW50IHByb2dyZXNzLWxhYmVsIHJvdywgZm91bmQgJwogICAgICAgIGYne3RleHQuY291bnQob2xkKX0uJwogICAgKQo=' | base64 --decode > /tmp/swap_download_labels.py
+          python3 /tmp/swap_download_labels.py
+
+      - name: Format and analyze
+        run: |
+          set -euo pipefail
+          dart format lib/features/library/presentation/widgets/downloads_tab.dart
+          flutter analyze \
+            --no-fatal-warnings \
+            --no-fatal-infos \
+            lib/features/library/presentation/widgets/downloads_tab.dart
+
+      - name: Verify requested layout
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgp0ZXh0ID0gUGF0aCgKICAgICdsaWIvZmVhdHVyZXMvbGlicmFyeS9wcmVzZW50YXRpb24vd2lkZ2V0cy9kb3dubG9hZHNfdGFiLmRhcnQnCikucmVhZF90ZXh0KGVuY29kaW5nPSd1dGYtOCcpCgpyZXF1aXJlZCA9ICgKICAgICd0ZXh0RGlyZWN0aW9uOiBUZXh0RGlyZWN0aW9uLmx0cicsCiAgICAndGV4dEFsaWduOiBUZXh0QWxpZ24uc3RhcnQnLAogICAgJ3RleHRBbGlnbjogVGV4dEFsaWduLmVuZCcsCikKbWlzc2luZyA9IFt2YWx1ZSBmb3IgdmFsdWUgaW4gcmVxdWlyZWQgaWYgdmFsdWUgbm90IGluIHRleHRdCmlmIG1pc3Npbmc6CiAgICByYWlzZSBSdW50aW1lRXJyb3IoZidNaXNzaW5nIGV4cGVjdGVkIGxheW91dCBjb2RlOiB7bWlzc2luZ30nKQoKcm93X3N0YXJ0ID0gdGV4dC5pbmRleCgndGV4dERpcmVjdGlvbjogVGV4dERpcmVjdGlvbi5sdHInKQpzaXplX2luZGV4ID0gdGV4dC5pbmRleCgnX2Rvd25sb2FkZWRTaXplVGV4dCgpJywgcm93X3N0YXJ0KQpwZXJjZW50X2luZGV4ID0gdGV4dC5pbmRleCgiKiAxMDApLmZsb29yKCl9JSciLCByb3dfc3RhcnQpCmlmIHNpemVfaW5kZXggPj0gcGVyY2VudF9pbmRleDoKICAgIHJhaXNlIFJ1bnRpbWVFcnJvcignRG93bmxvYWRlZCBzaXplIG11c3QgYXBwZWFyIGJlZm9yZSB0aGUgcGVyY2VudGFnZS4nKQoKcHJpbnQoJ1ZlcmlmaWVkIHNpemUgb24gdGhlIGxlZnQgYW5kIHBlcmNlbnRhZ2Ugb24gdGhlIGZhciByaWdodC4nKQo=' | base64 --decode > /tmp/verify_download_labels.py
+          python3 /tmp/verify_download_labels.py
+
+      - name: Remove one-time workflow
+        run: git rm --ignore-unmatch .github/workflows/swap-download-progress-labels.yml
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+
+          git commit -m 'Move download percentage to the right'
+          git push origin HEAD:main
