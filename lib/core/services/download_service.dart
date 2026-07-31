@@ -15,6 +15,7 @@ import '../domain/entity/multimedia_item.dart';
 import '../router/app_router.dart';
 import '../storage/storage_service.dart';
 import '../network/dio_client_provider.dart';
+import 'download_live_activity_service.dart';
 
 part 'download_service.g.dart';
 
@@ -121,6 +122,8 @@ class DownloadService {
   final Ref _ref;
   final Dio _dio;
   final Set<String> _cancellingUrls = {};
+  final DownloadLiveActivityService _liveActivity =
+      DownloadLiveActivityService();
   final _updatesController = StreamController<TaskUpdate>.broadcast();
   StreamSubscription<TaskUpdate>? _updatesSubscription;
   bool _isInitialized = false;
@@ -239,6 +242,15 @@ class DownloadService {
               .read(downloadProgressProvider.notifier)
               .update(trackingUrl, progressData);
 
+          unawaited(
+            _liveActivity.update(
+              taskId: update.task.taskId,
+              progress: progressData.progress,
+              speedMBps: progressData.networkSpeed,
+              status: 'downloading',
+            ),
+          );
+
         case TaskStatusUpdate():
           if (kDebugMode) {
             debugPrint(
@@ -266,6 +278,56 @@ class DownloadService {
                   ),
                 );
           }
+          switch (update.status) {
+            case TaskStatus.complete:
+              unawaited(
+                _liveActivity.end(
+                  taskId: update.task.taskId,
+                  status: 'completed',
+                  progress: 1.0,
+                ),
+              );
+            case TaskStatus.failed:
+              unawaited(
+                _liveActivity.end(
+                  taskId: update.task.taskId,
+                  status: 'failed',
+                  progress: current?.progress,
+                ),
+              );
+            case TaskStatus.canceled:
+              unawaited(
+                _liveActivity.end(
+                  taskId: update.task.taskId,
+                  status: 'canceled',
+                  progress: current?.progress,
+                ),
+              );
+            case TaskStatus.paused:
+              unawaited(
+                _liveActivity.update(
+                  taskId: update.task.taskId,
+                  progress: current?.progress ?? 0.0,
+                  speedMBps: 0.0,
+                  status: 'paused',
+                  force: true,
+                ),
+              );
+            case TaskStatus.running:
+            case TaskStatus.enqueued:
+              unawaited(
+                _liveActivity.update(
+                  taskId: update.task.taskId,
+                  progress: current?.progress ?? 0.0,
+                  speedMBps: current?.networkSpeed ?? 0.0,
+                  status: 'downloading',
+                  force: true,
+                ),
+              );
+            default:
+              break;
+          }
+
           _handleStatusUpdate(update, trackingUrl);
       }
     });
@@ -348,6 +410,7 @@ class DownloadService {
       await FileDownloader().cancelTasksWithIds([taskId]);
       _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
       _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
+      await _liveActivity.end(taskId: taskId, status: 'canceled');
 
       // Proactive cleanup
       await FileDownloader().database.deleteRecordWithId(taskId);
@@ -498,6 +561,22 @@ class DownloadService {
       }
 
       _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
+
+      await _liveActivity.start(
+        taskId: existingRecord.task.taskId,
+        animeTitle: item.title,
+        episodeTitle: _liveActivityEpisodeTitle(item, episode),
+      );
+      await _liveActivity.update(
+        taskId: existingRecord.task.taskId,
+        progress: existingRecord.progress,
+        speedMBps: 0.0,
+        status: existingRecord.status == TaskStatus.paused
+            ? 'paused'
+            : 'downloading',
+        force: true,
+      );
+
       return true;
     }
 
@@ -561,8 +640,29 @@ class DownloadService {
       await _ref
           .read(storageServiceProvider)
           .saveDownloadMetadata(task.taskId, item, episode: episode);
+
+      await _liveActivity.start(
+        taskId: task.taskId,
+        animeTitle: item.title,
+        episodeTitle: _liveActivityEpisodeTitle(item, episode),
+      );
     }
     return success;
+  }
+
+  String _liveActivityEpisodeTitle(MultimediaItem item, Episode? episode) {
+    if (episode == null) {
+      return item.contentType == MultimediaContentType.movie
+          ? 'Movie'
+          : 'Download';
+    }
+
+    final prefix = 'S${episode.season} E${episode.episode}';
+    final name = episode.name.trim();
+    if (name.isEmpty || name.toLowerCase() == prefix.toLowerCase()) {
+      return prefix;
+    }
+    return '$prefix • $name';
   }
 
   Future<String> getDownloadPath(
