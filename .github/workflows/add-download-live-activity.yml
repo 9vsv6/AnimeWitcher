@@ -1,4 +1,4 @@
-name: Add download Live Activity v5
+name: Add download Live Activity v6
 
 on:
   workflow_dispatch:
@@ -43,6 +43,12 @@ jobs:
 
       - name: Install Flutter dependencies
         run: flutter pub get
+
+      - name: Patch device_info_plus for Xcode 16.4
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgptYXRjaGVzID0gbGlzdCgKICAgIFBhdGguaG9tZSgpLmdsb2IoCiAgICAgICAgJy5wdWItY2FjaGUvaG9zdGVkL3B1Yi5kZXYvZGV2aWNlX2luZm9fcGx1cy0qL2lvcy8nCiAgICAgICAgJ2RldmljZV9pbmZvX3BsdXMvU291cmNlcy9kZXZpY2VfaW5mb19wbHVzL0ZQUERldmljZUluZm9QbHVzUGx1Z2luLm0nCiAgICApCikKCmlmIGxlbihtYXRjaGVzKSAhPSAxOgogICAgcmFpc2UgUnVudGltZUVycm9yKAogICAgICAgICdFeHBlY3RlZCBleGFjdGx5IG9uZSBkZXZpY2VfaW5mb19wbHVzIE9iamVjdGl2ZS1DIHNvdXJjZSwgJwogICAgICAgIGYnZm91bmQge2xlbihtYXRjaGVzKX06IHttYXRjaGVzfScKICAgICkKCnBhdGggPSBtYXRjaGVzWzBdCnRleHQgPSBwYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQpvbGQgPSAnW2luZm8gaXNpT1NBcHBPblZpc2lvbl0nCm5ldyA9ICgKICAgICdbaW5mbyByZXNwb25kc1RvU2VsZWN0b3I6TlNTZWxlY3RvckZyb21TdHJpbmcoQCJpc2lPU0FwcE9uVmlzaW9uIildICcKICAgICc/ICgoQk9PTCAoKikoaWQsIFNFTCkpW2luZm8gbWV0aG9kRm9yU2VsZWN0b3I6JwogICAgJ05TU2VsZWN0b3JGcm9tU3RyaW5nKEAiaXNpT1NBcHBPblZpc2lvbiIpXSknCiAgICAnKGluZm8sIE5TU2VsZWN0b3JGcm9tU3RyaW5nKEAiaXNpT1NBcHBPblZpc2lvbiIpKSA6IE5PJwopCgppZiB0ZXh0LmNvdW50KG9sZCkgIT0gMToKICAgIHJhaXNlIFJ1bnRpbWVFcnJvcigKICAgICAgICBmJ0V4cGVjdGVkIG9uZSBpc2lPU0FwcE9uVmlzaW9uIGNhbGwgaW4ge3BhdGh9LCAnCiAgICAgICAgZidmb3VuZCB7dGV4dC5jb3VudChvbGQpfS4nCiAgICApCgpwYXRoLndyaXRlX3RleHQodGV4dC5yZXBsYWNlKG9sZCwgbmV3LCAxKSwgZW5jb2Rpbmc9J3V0Zi04JykKcHJpbnQoZidQYXRjaGVkIGRldmljZV9pbmZvX3BsdXMgY29tcGF0aWJpbGl0eSBpbiB7cGF0aH0uJykK' | base64 --decode > /tmp/patch_device_info_plus.py
+          python3 /tmp/patch_device_info_plus.py
 
       - name: Generate Riverpod files
         run: dart run build_runner build --delete-conflicting-outputs
