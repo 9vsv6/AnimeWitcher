@@ -344,20 +344,17 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 8),
-              Text(
-                'Next episode in',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  '$episodeDescription in',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            episodeDescription,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 4),
           Text(
             countdownText,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
