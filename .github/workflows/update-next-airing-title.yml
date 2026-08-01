@@ -1,4 +1,4 @@
-name: Update next airing countdown title
+name: Update next airing countdown title v2
 
 on:
   workflow_dispatch:
