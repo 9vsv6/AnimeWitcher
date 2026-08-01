@@ -1,4 +1,4 @@
-name: Fix settings and download UI
+name: Fix settings, download UI, and SnackBars
 
 on:
   workflow_dispatch:
@@ -22,13 +22,17 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Apply the three fixes
+      - name: Apply all UI and validation fixes
         shell: bash
         run: |
           set -euo pipefail
 
           if grep -q "formatDownloadSizePair" \
             lib/features/library/presentation/widgets/downloads_tab.dart \
+            && grep -q "Keep SnackBars visually consistent" \
+              lib/core/theme/app_theme.dart \
+            && ! grep -q '^[[:space:]]*if (kDebugMode)$' \
+              lib/features/extensions/providers/extensions_controller.dart \
             && grep -q '^version: 2.6.7+1$' pubspec.yaml; then
             echo "The fixes are already applied."
             exit 0
@@ -136,6 +140,49 @@ jobs:
           +  return '${downloaded.toStringAsFixed(digits)} / '
           +      '${total.toStringAsFixed(digits)} $unit';
           +}
+          diff --git a/lib/core/theme/app_theme.dart b/lib/core/theme/app_theme.dart
+          --- a/lib/core/theme/app_theme.dart
+          +++ b/lib/core/theme/app_theme.dart
+          @@ -147,6 +147,14 @@ class AppTheme {
+                   landscapeLayout: BottomNavigationBarLandscapeLayout.spread,
+                 ),
+           
+          +      // Keep SnackBars visually consistent with the dark application instead
+          +      // of Material's default inverse (light) surface.
+          +      snackBarTheme: SnackBarThemeData(
+          +        backgroundColor: surface,
+          +        contentTextStyle: const TextStyle(color: onSurface),
+          +        actionTextColor: colorScheme.primary,
+          +      ),
+          +
+                 // Input Decoration
+                 inputDecorationTheme: InputDecorationTheme(
+                   filled: true,
+          @@ -364,8 +372,8 @@ class AppTheme {
+           
+                 // SnackBar Theme
+                 snackBarTheme: SnackBarThemeData(
+          -        backgroundColor: colorScheme.onSurface,
+          -        contentTextStyle: TextStyle(color: colorScheme.surface),
+          +        backgroundColor: colorScheme.surfaceContainerHigh,
+          +        contentTextStyle: TextStyle(color: colorScheme.onSurface),
+                   actionTextColor: colorScheme.primary,
+                 ),
+           
+          diff --git a/lib/features/extensions/providers/extensions_controller.dart b/lib/features/extensions/providers/extensions_controller.dart
+          --- a/lib/features/extensions/providers/extensions_controller.dart
+          +++ b/lib/features/extensions/providers/extensions_controller.dart
+          @@ -479,8 +479,9 @@ class ExtensionsController extends _$ExtensionsController {
+                           .read(extensionManagerProvider.notifier)
+                           .reloadPlugin(targetPlugin);
+                     } catch (e) {
+          -            if (kDebugMode)
+          +            if (kDebugMode) {
+                         debugPrint("Error initializing plugin providers: $e");
+          +            }
+                     }
+           
+                     // Clear this plugin from availableUpdates
           diff --git a/lib/features/extensions/screens/plugin_settings_screen.dart b/lib/features/extensions/screens/plugin_settings_screen.dart
           --- a/lib/features/extensions/screens/plugin_settings_screen.dart
           +++ b/lib/features/extensions/screens/plugin_settings_screen.dart
@@ -266,6 +313,38 @@ jobs:
            
            environment:
              sdk: ^3.11.4
+          diff --git a/test/core/theme/app_theme_test.dart b/test/core/theme/app_theme_test.dart
+          new file mode 100644
+          --- /dev/null
+          +++ b/test/core/theme/app_theme_test.dart
+          @@ -0,0 +1,27 @@
+          +import 'package:flutter_test/flutter_test.dart';
+          +import 'package:skystream/core/theme/app_theme.dart';
+          +
+          +void main() {
+          +  test('dark SnackBars use the application surface colors', () {
+          +    final theme = AppTheme.createDarkTheme(null);
+          +
+          +    expect(theme.snackBarTheme.backgroundColor, AppTheme.surface);
+          +    expect(theme.snackBarTheme.contentTextStyle?.color, AppTheme.onSurface);
+          +  });
+          +
+          +  test(
+          +    'light SnackBars use nearby surface colors instead of inverse colors',
+          +    () {
+          +      final theme = AppTheme.createLightTheme(null);
+          +
+          +      expect(
+          +        theme.snackBarTheme.backgroundColor,
+          +        theme.colorScheme.surfaceContainerHigh,
+          +      );
+          +      expect(
+          +        theme.snackBarTheme.contentTextStyle?.color,
+          +        theme.colorScheme.onSurface,
+          +      );
+          +    },
+          +  );
+          +}
           diff --git a/test/core/utils/file_size_formatter_test.dart b/test/core/utils/file_size_formatter_test.dart
           new file mode 100644
           --- /dev/null
@@ -327,13 +406,19 @@ jobs:
         run: >-
           dart format
           lib/core/services/download_service.dart
+          lib/core/theme/app_theme.dart
           lib/core/utils/file_size_formatter.dart
+          lib/features/extensions/providers/extensions_controller.dart
           lib/features/extensions/screens/plugin_settings_screen.dart
           lib/features/library/presentation/widgets/downloads_tab.dart
+          test/core/theme/app_theme_test.dart
           test/core/utils/file_size_formatter_test.dart
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Generate Riverpod files
+        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Analyze
         run: flutter analyze --no-fatal-infos
@@ -350,9 +435,12 @@ jobs:
           git add \
             pubspec.yaml \
             lib/core/services/download_service.dart \
+            lib/core/theme/app_theme.dart \
             lib/core/utils/file_size_formatter.dart \
+            lib/features/extensions/providers/extensions_controller.dart \
             lib/features/extensions/screens/plugin_settings_screen.dart \
             lib/features/library/presentation/widgets/downloads_tab.dart \
+            test/core/theme/app_theme_test.dart \
             test/core/utils/file_size_formatter_test.dart
 
           if git diff --cached --quiet; then
@@ -360,6 +448,6 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Fix settings spacing and download progress display"
+          git commit -m "Fix settings, download progress, and SnackBar colors"
           git pull --rebase origin main
           git push origin HEAD:main
