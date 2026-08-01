@@ -1,7 +1,7 @@
-name: Add script-defined plugin settings v2
+name: Add script-defined plugin settings v3
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -31,1104 +31,642 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Add dynamic extension settings
+      - name: Restore patch script
         shell: bash
         run: |
           set -euo pipefail
-
-          cat > /tmp/add_plugin_settings.py <<'PY'
-          from pathlib import Path
-          import re
-
-          root = Path.cwd()
-
-          # ------------------------------------------------------------------
-          # 1. Setting schema models
-          # ------------------------------------------------------------------
-          model_path = root / 'lib/core/extensions/models/extension_plugin.dart'
-          model = model_path.read_text(encoding='utf-8')
-
-          model_block = r'''enum PluginSettingType { toggle, select, text, url }
-
-          class PluginSettingOption {
-            final String label;
-            final String value;
-
-            const PluginSettingOption({required this.label, required this.value});
-
-            factory PluginSettingOption.fromJson(dynamic raw) {
-              if (raw is Map) {
-                final json = Map<String, dynamic>.from(raw);
-                final value = (json['value'] ?? json['id'] ?? '').toString();
-                final label = (json['label'] ?? json['name'] ?? value).toString();
-                return PluginSettingOption(label: label, value: value);
-              }
-
-              final value = raw?.toString() ?? '';
-              return PluginSettingOption(label: value, value: value);
-            }
-          }
-
-          class PluginSettingDefinition {
-            final String key;
-            final String title;
-            final String? description;
-            final PluginSettingType type;
-            final String defaultValue;
-            final List<PluginSettingOption> options;
-            final bool reloadOnChange;
-            final bool isBaseUrl;
-
-            const PluginSettingDefinition({
-              required this.key,
-              required this.title,
-              required this.type,
-              this.description,
-              this.defaultValue = '',
-              this.options = const [],
-              this.reloadOnChange = true,
-              this.isBaseUrl = false,
-            });
-
-            factory PluginSettingDefinition.fromJson(Map<String, dynamic> json) {
-              final key = (json['key'] ?? json['id'] ?? '').toString().trim();
-              final rawType = (json['type'] ?? 'text')
-                  .toString()
-                  .trim()
-                  .toLowerCase();
-
-              final PluginSettingType type;
-              switch (rawType) {
-                case 'bool':
-                case 'boolean':
-                case 'switch':
-                case 'toggle':
-                  type = PluginSettingType.toggle;
-                  break;
-                case 'select':
-                case 'dropdown':
-                case 'list':
-                  type = PluginSettingType.select;
-                  break;
-                case 'url':
-                case 'domain':
-                  type = PluginSettingType.url;
-                  break;
-                default:
-                  type = PluginSettingType.text;
-                  break;
-              }
-
-              final rawDefault =
-                  json['defaultValue'] ?? json['default'] ?? json['value'] ?? '';
-              final defaultValue = rawDefault is bool
-                  ? (rawDefault ? 'true' : 'false')
-                  : rawDefault.toString();
-
-              final rawDescription = json['description']?.toString().trim();
-              final options = (json['options'] as List<dynamic>? ?? const [])
-                  .take(100)
-                  .map(PluginSettingOption.fromJson)
-                  .where((option) => option.value.isNotEmpty)
-                  .toList(growable: false);
-
-              final reloadValue = json['reloadOnChange'];
-              final baseUrlValue = json['isBaseUrl'] ?? json['baseUrl'];
-
-              return PluginSettingDefinition(
-                key: key,
-                title: (json['title'] ?? json['name'] ?? key).toString(),
-                description:
-                    rawDescription == null || rawDescription.isEmpty
-                    ? null
-                    : rawDescription,
-                type: type,
-                defaultValue: defaultValue,
-                options: options,
-                reloadOnChange: reloadValue is bool ? reloadValue : true,
-                isBaseUrl:
-                    baseUrlValue == true ||
-                    key == 'base_url' ||
-                    key == 'baseUrl',
-              );
-            }
-
-            bool get defaultBool {
-              final normalized = defaultValue.trim().toLowerCase();
-              return normalized == 'true' ||
-                  normalized == '1' ||
-                  normalized == 'yes' ||
-                  normalized == 'on';
-            }
-          }
-
-          '''
-
-          if 'class PluginSettingDefinition' not in model:
-              model = model_block + model
-              model_path.write_text(model, encoding='utf-8')
-
-          # ------------------------------------------------------------------
-          # 2. Export getSettings() from each namespaced JS plugin
-          # ------------------------------------------------------------------
-          provider_path = (
-              root / 'lib/core/extensions/providers/js_based_provider.dart'
-          )
-          provider = provider_path.read_text(encoding='utf-8')
-
-          if 'static const int _iifeWrapperVersion = 2;' not in provider:
-              anchor = 'class JsBasedProvider extends SkyStreamProvider {\n'
-              if provider.count(anchor) != 1:
-                  raise RuntimeError('JsBasedProvider class anchor not found.')
-              provider = provider.replace(
-                  anchor,
-                  anchor + '  static const int _iifeWrapperVersion = 2;\n\n',
-                  1,
-              )
-
-          old_qbc = "    return '$dir$safeId.qbc';"
-          new_qbc = "    return '$dir${safeId}_v$_iifeWrapperVersion.qbc';"
-          if old_qbc in provider:
-              provider = provider.replace(old_qbc, new_qbc, 1)
-          elif new_qbc not in provider:
-              raise RuntimeError('QBC path anchor not found.')
-
-          export_anchor = (
-              "                      getProviders: (typeof getProviders !== "
-              "'undefined') ? getProviders : (typeof globalThis.getProviders "
-              "!== 'undefined' ? globalThis.getProviders : undefined),\n"
-          )
-          export_line = (
-              "                      getSettings: (typeof getSettings !== "
-              "'undefined') ? getSettings : (typeof globalThis.getSettings "
-              "!== 'undefined' ? globalThis.getSettings : undefined),\n"
-          )
-          if export_line not in provider:
-              if provider.count(export_anchor) != 1:
-                  raise RuntimeError('getProviders export anchor not found.')
-              provider = provider.replace(
-                  export_anchor,
-                  export_anchor + export_line,
-                  1,
-              )
-
-          cleanup_anchor = (
-              '              if (globalThis.getProviders) '
-              'delete globalThis.getProviders;\n'
-          )
-          cleanup_line = (
-              '              if (globalThis.getSettings) '
-              'delete globalThis.getSettings;\n'
-          )
-          if cleanup_line not in provider:
-              if provider.count(cleanup_anchor) != 1:
-                  raise RuntimeError('getProviders cleanup anchor not found.')
-              provider = provider.replace(
-                  cleanup_anchor,
-                  cleanup_anchor + cleanup_line,
-                  1,
-              )
-
-          settings_method = r'''
-            /// Calls the optional JS `getSettings()` export.
-            ///
-            /// The plugin may return either a list directly or
-            /// `{ settings: [...] }`. Invalid definitions are ignored.
-            Future<List<PluginSettingDefinition>> getSettings() async {
-              await _ensureReady();
-              if (_error != null) return const [];
-
-              return _serializedInvoke(() async {
-                try {
-                  final result = await _jsEngine.invokeAsync(_fn('getSettings'));
-                  final dynamic rawSettings =
-                      result is Map && result['settings'] is List
-                      ? result['settings']
-                      : result;
-
-                  if (rawSettings is! List) return const [];
-
-                  return rawSettings
-                      .take(100)
-                      .whereType<Map<dynamic, dynamic>>()
-                      .map(
-                        (raw) => PluginSettingDefinition.fromJson(
-                          Map<String, dynamic>.from(raw),
-                        ),
-                      )
-                      .where((setting) => setting.key.isNotEmpty)
-                      .toList(growable: false);
-                } catch (error) {
-                  if (kDebugMode) {
-                    debugPrint(
-                      'JsBasedProvider: getSettings unavailable for '
-                      '$_packageName: $error',
-                    );
-                  }
-                  return const [];
-                }
-              });
-            }
-
-          '''
-
-          if 'Future<List<PluginSettingDefinition>> getSettings() async' not in provider:
-              method_anchor = (
-                  '  @override\n'
-                  '  Future<Map<String, List<MultimediaItem>>> getHome() async {'
-              )
-              if provider.count(method_anchor) != 1:
-                  raise RuntimeError('getHome method anchor not found.')
-              provider = provider.replace(
-                  method_anchor,
-                  settings_method + method_anchor,
-                  1,
-              )
-
-          provider_path.write_text(provider, encoding='utf-8')
-
-          # ------------------------------------------------------------------
-          # 3. Manager API for loading and caching script-defined settings
-          # ------------------------------------------------------------------
-          manager_path = root / 'lib/core/extensions/extension_manager.dart'
-          manager = manager_path.read_text(encoding='utf-8')
-
-          map_anchor = (
-              '  final Map<String, List<PluginSubProvider>> '
-              '_dynamicProvidersMap = {};\n'
-          )
-          map_block = (
-              '  final Map<String, List<PluginSettingDefinition>> '
-              '_dynamicSettingsMap = {};\n'
-              '  final Map<String, JsBasedProvider> _settingsProviders = {};\n'
-          )
-          if map_block not in manager:
-              if manager.count(map_anchor) != 1:
-                  raise RuntimeError('Dynamic providers map anchor not found.')
-              manager = manager.replace(
-                  map_anchor,
-                  map_anchor + map_block,
-                  1,
-              )
-
-          manager_methods = r'''
-            /// Returns settings declared by the plugin's optional JS
-            /// `getSettings()` function. Static `settings` in the manifest are
-            /// also accepted, with JS definitions taking precedence by key.
-            Future<List<PluginSettingDefinition>> getSettingsForPlugin(
-              ExtensionPlugin plugin,
-            ) async {
-              final cached = _dynamicSettingsMap[plugin.packageName];
-              if (cached != null) return cached;
-
-              final byKey = <String, PluginSettingDefinition>{};
-
-              final manifestSettings = plugin.manifest['settings'];
-              if (manifestSettings is List) {
-                for (final raw in manifestSettings
-                    .take(100)
-                    .whereType<Map<dynamic, dynamic>>()) {
-                  final setting = PluginSettingDefinition.fromJson(
-                    Map<String, dynamic>.from(raw),
-                  );
-                  if (setting.key.isNotEmpty) {
-                    byKey[setting.key] = setting;
-                  }
-                }
-              }
-
-              try {
-                JsBasedProvider? provider;
-                final loaded = _firstLoadedProvider(plugin.packageName);
-                if (loaded is JsBasedProvider) {
-                  provider = loaded;
-                } else {
-                  provider = await _createSettingsProvider(plugin);
-                }
-
-                if (provider != null) {
-                  final scriptSettings = await provider.getSettings();
-                  for (final setting in scriptSettings) {
-                    byKey[setting.key] = setting;
-                  }
-                }
-              } catch (error) {
-                if (kDebugMode) {
-                  debugPrint(
-                    'ExtensionManager: settings load failed for '
-                    '${plugin.packageName}: $error',
-                  );
-                }
-              }
-
-              final result = byKey.values.toList(growable: false);
-              _dynamicSettingsMap[plugin.packageName] = result;
-              return result;
-            }
-
-            Future<JsBasedProvider?> _createSettingsProvider(
-              ExtensionPlugin plugin,
-            ) async {
-              final cached = _settingsProviders[plugin.packageName];
-              if (cached != null) return cached;
-              if (_engine == null || _storageService == null) return null;
-
-              final path = await _storageService!.getPluginJsPath(plugin);
-              if (!path.startsWith('assets/') && !await File(path).exists()) {
-                return null;
-              }
-
-              final baseNamespace = plugin.packageName.replaceAll(
-                RegExp(r'[^a-zA-Z0-9]'),
-                '_',
-              );
-              final customBaseUrl = ref
-                  .read(settingsRepositoryProvider)
-                  .getCustomBaseUrl(plugin.packageName);
-
-              final provider = JsBasedProvider(
-                _engine!,
-                path,
-                packageName: plugin.packageName,
-                jsPackageName: plugin.packageName,
-                namespace: '${baseNamespace}__settings',
-                manifest: plugin.manifest,
-                customBaseUrl: customBaseUrl,
-              );
-              _settingsProviders[plugin.packageName] = provider;
-              return provider;
-            }
-
-            void _clearSettingsRuntime(String packageName) {
-              _dynamicSettingsMap.remove(packageName);
-              final provider = _settingsProviders.remove(packageName);
-              final namespace = provider?.namespace;
-              if (namespace != null && namespace.isNotEmpty) {
-                _engine?.unload(namespace);
-              }
-            }
-
-          '''
-
-          if 'getSettingsForPlugin(' not in manager:
-              method_anchor = '  @override\n  List<SkyStreamProvider> build() {'
-              if manager.count(method_anchor) != 1:
-                  raise RuntimeError('ExtensionManager build anchor not found.')
-              manager = manager.replace(
-                  method_anchor,
-                  manager_methods + method_anchor,
-                  1,
-              )
-
-          old_reload = r'''  Future<void> reloadPlugin(ExtensionPlugin plugin) async {
-              if (_engine == null || _storageService == null) return;
-              _removeProvidersForPackage(plugin.packageName);
-              final loaded = await _loadPlugin(plugin);
-              for (final p in loaded) {
-                _addProvider(p);
-              }
-            }
-          '''
-          new_reload = r'''  Future<void> reloadPlugin(ExtensionPlugin plugin) async {
-              if (_engine == null || _storageService == null) return;
-              _clearSettingsRuntime(plugin.packageName);
-              _removeProvidersForPackage(plugin.packageName);
-              final loaded = await _loadPlugin(plugin);
-              for (final p in loaded) {
-                _addProvider(p);
-              }
-            }
-          '''
-          if old_reload in manager:
-              manager = manager.replace(old_reload, new_reload, 1)
-          elif '_clearSettingsRuntime(plugin.packageName);' not in manager:
-              raise RuntimeError('reloadPlugin anchor not found.')
-
-          manager_path.write_text(manager, encoding='utf-8')
-
-          # ------------------------------------------------------------------
-          # 4. Full settings page
-          # ------------------------------------------------------------------
-          settings_screen = r'''import 'package:flutter/material.dart';
-          import 'package:flutter_riverpod/flutter_riverpod.dart';
-          import 'package:skystream/l10n/generated/app_localizations.dart';
-
-          import '../../../core/extensions/extension_manager.dart';
-          import '../../../core/extensions/models/extension_plugin.dart';
-          import '../../../core/storage/extension_repository.dart';
-          import '../../../core/storage/settings_repository.dart';
-          import '../../../shared/widgets/loading_indicator.dart';
-
-          class PluginSettingsScreen extends ConsumerStatefulWidget {
-            final ExtensionPlugin plugin;
-
-            const PluginSettingsScreen({super.key, required this.plugin});
-
-            @override
-            ConsumerState<PluginSettingsScreen> createState() =>
-                _PluginSettingsScreenState();
-          }
-
-          class _PluginSettingsScreenState
-              extends ConsumerState<PluginSettingsScreen> {
-            bool _loading = true;
-            bool _saving = false;
-            String? _error;
-            List<PluginSettingDefinition> _definitions = const [];
-            List<PluginSubProvider> _providers = const [];
-            final Map<String, String> _values = {};
-            final Map<String, bool> _providerEnabled = {};
-            final Map<String, TextEditingController> _controllers = {};
-            String _selectedDomain = '';
-
-            @override
-            void initState() {
-              super.initState();
-              Future.microtask(_load);
-            }
-
-            @override
-            void dispose() {
-              for (final controller in _controllers.values) {
-                controller.dispose();
-              }
-              super.dispose();
-            }
-
-            Future<void> _load() async {
-              if (mounted) {
-                setState(() {
-                  _loading = true;
-                  _error = null;
-                });
-              }
-
-              try {
-                final manager = ref.read(extensionManagerProvider.notifier);
-                final definitions = await manager.getSettingsForPlugin(
-                  widget.plugin,
-                );
-                final providers = manager.getProvidersForPlugin(widget.plugin);
-                final storage = ref.read(extensionRepositoryProvider);
-                final settingsRepository = ref.read(settingsRepositoryProvider);
-                final savedBaseUrl = settingsRepository.getCustomBaseUrl(
-                  widget.plugin.packageName,
-                );
-
-                for (final controller in _controllers.values) {
-                  controller.dispose();
-                }
-                _controllers.clear();
-                _values.clear();
-                _providerEnabled.clear();
-
-                for (final definition in definitions) {
-                  String value;
-                  if (definition.isBaseUrl) {
-                    value =
-                        savedBaseUrl ??
-                        (definition.defaultValue.isNotEmpty
-                            ? definition.defaultValue
-                            : (widget.plugin.manifest['baseUrl']?.toString() ??
-                                  ''));
-                  } else {
-                    value =
-                        storage.getExtensionData(
-                          '${widget.plugin.packageName}:${definition.key}',
-                        ) ??
-                        definition.defaultValue;
-                  }
-
-                  if (definition.type == PluginSettingType.select &&
-                      definition.options.isNotEmpty &&
-                      !definition.options.any(
-                        (option) => option.value == value,
-                      )) {
-                    value = definition.options.first.value;
-                  }
-
-                  _values[definition.key] = value;
-                  if (definition.type == PluginSettingType.text ||
-                      definition.type == PluginSettingType.url) {
-                    _controllers[definition.key] = TextEditingController(
-                      text: value,
-                    );
-                  }
-                }
-
-                for (final provider in providers) {
-                  final saved = storage.getExtensionData(
-                    '${widget.plugin.packageName}:'
-                    '_provider_enabled_${provider.id}',
-                  );
-                  _providerEnabled[provider.id] =
-                      saved == null ? true : saved == 'true';
-                }
-
-                final domains = widget.plugin.domains ?? const <PluginDomain>[];
-                _selectedDomain =
-                    savedBaseUrl ??
-                    (domains.isNotEmpty
-                        ? domains.first.url
-                        : (widget.plugin.manifest['baseUrl']?.toString() ?? ''));
-
-                if (!mounted) return;
-                setState(() {
-                  _definitions = definitions;
-                  _providers = providers;
-                  _loading = false;
-                });
-              } catch (error) {
-                if (!mounted) return;
-                setState(() {
-                  _error = error.toString();
-                  _loading = false;
-                });
-              }
-            }
-
-            bool _boolValue(String key) {
-              final value = (_values[key] ?? '').trim().toLowerCase();
-              return value == 'true' ||
-                  value == '1' ||
-                  value == 'yes' ||
-                  value == 'on';
-            }
-
-            String _normalizedUrl(String raw) {
-              var value = raw.trim();
-              if (value.isEmpty) return '';
-              if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(value)) {
-                value = 'https://$value';
-              }
-              return value.replaceFirst(RegExp(r'/+$'), '');
-            }
-
-            Future<void> _save() async {
-              if (_saving || _loading) return;
-              setState(() => _saving = true);
-
-              try {
-                final storage = ref.read(extensionRepositoryProvider);
-                final settingsRepository = ref.read(settingsRepositoryProvider);
-                final manager = ref.read(extensionManagerProvider.notifier);
-                var shouldReload = false;
-                final hasScriptBaseUrl = _definitions.any(
-                  (definition) => definition.isBaseUrl,
-                );
-
-                for (final definition in _definitions) {
-                  var value =
-                      _controllers[definition.key]?.text ??
-                      _values[definition.key] ??
-                      definition.defaultValue;
-
-                  if (definition.type == PluginSettingType.url) {
-                    value = _normalizedUrl(value);
-                  }
-
-                  if (definition.isBaseUrl) {
-                    await settingsRepository.setCustomBaseUrl(
-                      widget.plugin.packageName,
-                      value.isEmpty ? null : value,
-                    );
-                    shouldReload = true;
-                  } else {
-                    await storage.setExtensionData(
-                      '${widget.plugin.packageName}:${definition.key}',
-                      value,
-                    );
-                    shouldReload =
-                        shouldReload || definition.reloadOnChange;
-                  }
-                  _values[definition.key] = value;
-                }
-
-                if (!hasScriptBaseUrl &&
-                    (widget.plugin.domains?.isNotEmpty ?? false)) {
-                  await settingsRepository.setCustomBaseUrl(
-                    widget.plugin.packageName,
-                    _selectedDomain.isEmpty ? null : _selectedDomain,
-                  );
-                  shouldReload = true;
-                }
-
-                for (final provider in _providers) {
-                  await storage.setExtensionData(
-                    '${widget.plugin.packageName}:'
-                    '_provider_enabled_${provider.id}',
-                    (_providerEnabled[provider.id] ?? true)
-                        ? 'true'
-                        : 'false',
-                  );
-                  shouldReload = true;
-                }
-
-                if (shouldReload) {
-                  await manager.reloadPlugin(widget.plugin);
-                }
-
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Extension settings saved')),
-                );
-              } catch (error) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to save settings: $error')),
-                );
-              } finally {
-                if (mounted) setState(() => _saving = false);
-              }
-            }
-
-            Widget _sectionTitle(BuildContext context, String title) {
-              return Padding(
-                padding: const EdgeInsets.only(top: 8, bottom: 8),
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              );
-            }
-
-            Widget _buildSetting(
-              BuildContext context,
-              PluginSettingDefinition definition,
-            ) {
-              switch (definition.type) {
-                case PluginSettingType.toggle:
-                  return SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(definition.title),
-                    subtitle: definition.description == null
-                        ? null
-                        : Text(definition.description!),
-                    value: _boolValue(definition.key),
-                    onChanged: _saving
-                        ? null
-                        : (value) {
-                            setState(() {
-                              _values[definition.key] = value ? 'true' : 'false';
-                            });
-                          },
-                  );
-
-                case PluginSettingType.select:
-                  final current = _values[definition.key];
-                  final selected = definition.options.any(
-                    (option) => option.value == current,
-                  )
-                      ? current
-                      : null;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: DropdownButtonFormField<String>(
-                      key: ValueKey('${definition.key}:$selected'),
-                      initialValue: selected,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        labelText: definition.title,
-                        helperText: definition.description,
-                        border: const OutlineInputBorder(),
-                      ),
-                      items: definition.options
-                          .map(
-                            (option) => DropdownMenuItem<String>(
-                              value: option.value,
-                              child: Text(
-                                option.label,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
-                      onChanged: _saving
-                          ? null
-                          : (value) {
-                              if (value == null) return;
-                              setState(() {
-                                _values[definition.key] = value;
-                              });
-                            },
-                    ),
-                  );
-
-                case PluginSettingType.text:
-                case PluginSettingType.url:
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: TextField(
-                      controller: _controllers[definition.key],
-                      enabled: !_saving,
-                      keyboardType: definition.type == PluginSettingType.url
-                          ? TextInputType.url
-                          : TextInputType.text,
-                      autocorrect: definition.type != PluginSettingType.url,
-                      enableSuggestions:
-                          definition.type != PluginSettingType.url,
-                      decoration: InputDecoration(
-                        labelText: definition.title,
-                        helperText: definition.description,
-                        hintText: definition.type == PluginSettingType.url
-                            ? 'https://example.com'
-                            : null,
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                  );
-              }
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              final l10n = AppLocalizations.of(context)!;
-              final domains =
-                  widget.plugin.domains ?? const <PluginDomain>[];
-              final hasScriptBaseUrl = _definitions.any(
-                (definition) => definition.isBaseUrl,
-              );
-              final hasContent =
-                  _definitions.isNotEmpty ||
-                  _providers.isNotEmpty ||
-                  (domains.isNotEmpty && !hasScriptBaseUrl);
-
-              return Scaffold(
-                appBar: AppBar(
-                  title: Text(l10n.pluginSettings(widget.plugin.name)),
-                  actions: [
-                    IconButton(
-                      tooltip: 'Save',
-                      onPressed: _loading || _saving ? null : _save,
-                      icon: _saving
-                          ? const AppLoadingIndicator(
-                              constraints: BoxConstraints.tightFor(
-                                width: 20,
-                                height: 20,
-                              ),
-                            )
-                          : const Icon(Icons.save_outlined),
-                    ),
-                  ],
-                ),
-                body: _loading
-                    ? const Center(child: AppLoadingIndicator())
-                    : _error != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _error!,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              FilledButton(
-                                onPressed: _load,
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : !hasContent
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            'This extension does not define configurable settings.',
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                        children: [
-                          if (_definitions.isNotEmpty) ...[
-                            _sectionTitle(context, 'Extension settings'),
-                            ..._definitions.map(
-                              (definition) =>
-                                  _buildSetting(context, definition),
-                            ),
-                          ],
-                          if (domains.isNotEmpty && !hasScriptBaseUrl) ...[
-                            _sectionTitle(context, 'Website address'),
-                            RadioGroup<String>(
-                              groupValue: _selectedDomain,
-                              onChanged: (value) {
-                                if (_saving || value == null) return;
-                                setState(() => _selectedDomain = value);
-                              },
-                              child: Column(
-                                children: domains
-                                    .map(
-                                      (domain) => ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: Text(domain.name),
-                                        subtitle: Text(domain.url),
-                                        leading: Radio<String>(
-                                          value: domain.url,
-                                        ),
-                                        onTap: _saving
-                                            ? null
-                                            : () {
-                                                setState(
-                                                  () => _selectedDomain =
-                                                      domain.url,
-                                                );
-                                              },
-                                      ),
-                                    )
-                                    .toList(growable: false),
-                              ),
-                            ),
-                          ],
-                          if (_providers.isNotEmpty) ...[
-                            _sectionTitle(context, 'Providers'),
-                            ..._providers.map(
-                              (provider) => SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(provider.name),
-                                subtitle: Text(provider.id),
-                                value:
-                                    _providerEnabled[provider.id] ?? true,
-                                onChanged: _saving
-                                    ? null
-                                    : (value) {
-                                        setState(() {
-                                          _providerEnabled[provider.id] =
-                                              value;
-                                        });
-                                      },
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          FilledButton.icon(
-                            onPressed: _saving ? null : _save,
-                            icon: const Icon(Icons.save_outlined),
-                            label: const Text('Save settings'),
-                          ),
-                        ],
-                      ),
-              );
-            }
-          }
-          '''
-
-          new_screen_path = (
-              root /
-              'lib/features/extensions/screens/plugin_settings_screen.dart'
-          )
-          new_screen_path.write_text(settings_screen, encoding='utf-8')
-
-          # ------------------------------------------------------------------
-          # 5. Show settings only when configurable content exists
-          # ------------------------------------------------------------------
-          extensions_path = (
-              root / 'lib/features/extensions/screens/extensions_screen.dart'
-          )
-          extensions = extensions_path.read_text(encoding='utf-8')
-          extensions = extensions.replace(
-              "import '../widgets/plugin_settings_dialog.dart';\n",
-              "import 'plugin_settings_screen.dart';\n",
-          )
-
-          state_anchor = '''class _PluginTileState extends ConsumerState<_PluginTile> {
-            final FocusNode _settingsFocusNode = FocusNode();
-
-            @override
-            void dispose() {
-          '''
-          state_replacement = '''class _PluginTileState extends ConsumerState<_PluginTile> {
-            final FocusNode _settingsFocusNode = FocusNode();
-            Future<List<PluginSettingDefinition>>? _settingsFuture;
-            String? _settingsFuturePackageName;
-
-            Future<List<PluginSettingDefinition>> _settingsFor(
-              ExtensionPlugin plugin,
-            ) {
-              if (_settingsFuture == null ||
-                  _settingsFuturePackageName != plugin.packageName) {
-                _settingsFuturePackageName = plugin.packageName;
-                _settingsFuture = ref
-                    .read(extensionManagerProvider.notifier)
-                    .getSettingsForPlugin(plugin);
-              }
-              return _settingsFuture!;
-            }
-
-            @override
-            void dispose() {
-          '''
-
-          if '_settingsFuturePackageName' not in extensions:
-              if extensions.count(state_anchor) != 1:
-                  raise RuntimeError(
-                      'Expected exactly one _PluginTileState anchor, found '
-                      f'{extensions.count(state_anchor)}.',
-                  )
-              extensions = extensions.replace(
-                  state_anchor,
-                  state_replacement,
-                  1,
-              )
-
-          old_button_pattern = re.compile(
-              r'''                // Settings button \(shown when plugin '''
-              r'''declares domains, static providers, or dynamic providers '''
-              r'''from JS\)\n'''
-              r'''                if \(isInstalled &&[\s\S]*?'''
-              r'''                    },\n'''
-              r'''                  \),\n\n'''
-              r'''                // Install / delete button''',
-          )
-
-          new_button = r'''                // Show the button only when the extension exposes
-                          // settings, domains, or providers. While getSettings()
-                          // is resolving, no empty settings button is displayed.
-                          if (isInstalled)
-                            FutureBuilder<List<PluginSettingDefinition>>(
-                              future: _settingsFor(installedPlugin!),
-                              builder: (context, snapshot) {
-                                final manifestSettings =
-                                    installedPlugin.manifest['settings'];
-                                final hasManifestSettings =
-                                    manifestSettings is List &&
-                                    manifestSettings.isNotEmpty;
-                                final hasScriptSettings =
-                                    snapshot.data?.isNotEmpty ?? false;
-                                final hasDomains =
-                                    installedPlugin.domains?.isNotEmpty ?? false;
-                                final hasStaticProviders =
-                                    installedPlugin.providers?.isNotEmpty ??
-                                    false;
-
-                                // Rebuild when dynamic providers finish loading.
-                                final loadedProviders = ref.watch(
-                                  extensionManagerProvider,
-                                );
-                                final hasLoadedSubProviders = loadedProviders.any(
-                                  (provider) =>
-                                      provider.packageName.startsWith(
-                                        '${installedPlugin.packageName}::',
-                                      ),
-                                );
-                                final hasDynamicProviders = ref
-                                    .read(extensionManagerProvider.notifier)
-                                    .getProvidersForPlugin(installedPlugin)
-                                    .isNotEmpty;
-
-                                final hasSettings =
-                                    hasManifestSettings ||
-                                    hasScriptSettings ||
-                                    hasDomains ||
-                                    hasStaticProviders ||
-                                    hasDynamicProviders ||
-                                    hasLoadedSubProviders;
-
-                                if (!hasSettings) {
-                                  return const SizedBox.shrink();
-                                }
-
-                                return IconButton(
-                                  focusNode: _settingsFocusNode,
-                                  icon: const Icon(Icons.settings_outlined),
-                                  tooltip: l10n.settings,
-                                  onPressed: () async {
-                                    await Navigator.of(context).push<void>(
-                                      MaterialPageRoute<void>(
-                                        builder: (context) =>
-                                            PluginSettingsScreen(
-                                              plugin: installedPlugin,
-                                            ),
-                                      ),
-                                    );
-                                    if (context.mounted) {
-                                      _settingsFocusNode.requestFocus();
-                                    }
-                                  },
-                                );
-                              },
-                            ),
-
-                          // Install / delete button'''
-
-          if 'FutureBuilder<List<PluginSettingDefinition>>' not in extensions:
-              extensions, replaced = old_button_pattern.subn(
-                  new_button,
-                  extensions,
-                  count=1,
-              )
-              if replaced != 1:
-                  raise RuntimeError(
-                      f'Expected one settings button block, replaced {replaced}.'
-                  )
-
-          extensions_path.write_text(extensions, encoding='utf-8')
-
-          old_dialog = (
-              root /
-              'lib/features/extensions/widgets/plugin_settings_dialog.dart'
-          )
-          old_dialog.unlink(missing_ok=True)
-
-          # ------------------------------------------------------------------
-          # 6. Static verification before Flutter analysis
-          # ------------------------------------------------------------------
-          required = {
-              model_path: (
-                  'class PluginSettingDefinition',
-                  'enum PluginSettingType',
-              ),
-              provider_path: (
-                  'getSettings:',
-                  'Future<List<PluginSettingDefinition>> getSettings() async',
-                  '_iifeWrapperVersion',
-              ),
-              manager_path: (
-                  'getSettingsForPlugin(',
-                  '_createSettingsProvider(',
-                  '_clearSettingsRuntime(',
-              ),
-              new_screen_path: (
-                  'class PluginSettingsScreen',
-                  'DropdownButtonFormField<String>',
-                  'SwitchListTile',
-                  'TextInputType.url',
-              ),
-              extensions_path: (
-                  "import 'plugin_settings_screen.dart';",
-                  'PluginSettingsScreen(',
-                  'FutureBuilder<List<PluginSettingDefinition>>',
-                  '_settingsFuturePackageName',
-                  'final hasSettings =',
-                  'return const SizedBox.shrink();',
-              ),
-          }
-
-          for path, needles in required.items():
-              contents = path.read_text(encoding='utf-8')
-              for needle in needles:
-                  if needle not in contents:
-                      raise RuntimeError(f'Missing {needle!r} in {path}.')
-
-          if 'PluginSettingsDialog(' in extensions:
-              raise RuntimeError('Old settings dialog reference remains.')
-
-          print('Added script-defined extension settings support.')
-          PY
-
-          python3 /tmp/add_plugin_settings.py
+          cat > /tmp/add_plugin_settings.py.b64 <<'B64'
+          ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKcm9vdCA9IFBhdGguY3dkKCkKCiMg
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tCiMgMS4gU2V0dGluZyBzY2hlbWEgbW9kZWxzCiMgLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCm1vZGVsX3Bh
+          dGggPSByb290IC8gJ2xpYi9jb3JlL2V4dGVuc2lvbnMvbW9kZWxzL2V4dGVuc2lvbl9wbHVnaW4u
+          ZGFydCcKbW9kZWwgPSBtb2RlbF9wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQoKbW9k
+          ZWxfYmxvY2sgPSByJycnZW51bSBQbHVnaW5TZXR0aW5nVHlwZSB7IHRvZ2dsZSwgc2VsZWN0LCB0
+          ZXh0LCB1cmwgfQoKY2xhc3MgUGx1Z2luU2V0dGluZ09wdGlvbiB7CiAgZmluYWwgU3RyaW5nIGxh
+          YmVsOwogIGZpbmFsIFN0cmluZyB2YWx1ZTsKCiAgY29uc3QgUGx1Z2luU2V0dGluZ09wdGlvbih7
+          cmVxdWlyZWQgdGhpcy5sYWJlbCwgcmVxdWlyZWQgdGhpcy52YWx1ZX0pOwoKICBmYWN0b3J5IFBs
+          dWdpblNldHRpbmdPcHRpb24uZnJvbUpzb24oZHluYW1pYyByYXcpIHsKICAgIGlmIChyYXcgaXMg
+          TWFwKSB7CiAgICAgIGZpbmFsIGpzb24gPSBNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKHJhdyk7
+          CiAgICAgIGZpbmFsIHZhbHVlID0gKGpzb25bJ3ZhbHVlJ10gPz8ganNvblsnaWQnXSA/PyAnJyku
+          dG9TdHJpbmcoKTsKICAgICAgZmluYWwgbGFiZWwgPSAoanNvblsnbGFiZWwnXSA/PyBqc29uWydu
+          YW1lJ10gPz8gdmFsdWUpLnRvU3RyaW5nKCk7CiAgICAgIHJldHVybiBQbHVnaW5TZXR0aW5nT3B0
+          aW9uKGxhYmVsOiBsYWJlbCwgdmFsdWU6IHZhbHVlKTsKICAgIH0KCiAgICBmaW5hbCB2YWx1ZSA9
+          IHJhdz8udG9TdHJpbmcoKSA/PyAnJzsKICAgIHJldHVybiBQbHVnaW5TZXR0aW5nT3B0aW9uKGxh
+          YmVsOiB2YWx1ZSwgdmFsdWU6IHZhbHVlKTsKICB9Cn0KCmNsYXNzIFBsdWdpblNldHRpbmdEZWZp
+          bml0aW9uIHsKICBmaW5hbCBTdHJpbmcga2V5OwogIGZpbmFsIFN0cmluZyB0aXRsZTsKICBmaW5h
+          bCBTdHJpbmc/IGRlc2NyaXB0aW9uOwogIGZpbmFsIFBsdWdpblNldHRpbmdUeXBlIHR5cGU7CiAg
+          ZmluYWwgU3RyaW5nIGRlZmF1bHRWYWx1ZTsKICBmaW5hbCBMaXN0PFBsdWdpblNldHRpbmdPcHRp
+          b24+IG9wdGlvbnM7CiAgZmluYWwgYm9vbCByZWxvYWRPbkNoYW5nZTsKICBmaW5hbCBib29sIGlz
+          QmFzZVVybDsKCiAgY29uc3QgUGx1Z2luU2V0dGluZ0RlZmluaXRpb24oewogICAgcmVxdWlyZWQg
+          dGhpcy5rZXksCiAgICByZXF1aXJlZCB0aGlzLnRpdGxlLAogICAgcmVxdWlyZWQgdGhpcy50eXBl
+          LAogICAgdGhpcy5kZXNjcmlwdGlvbiwKICAgIHRoaXMuZGVmYXVsdFZhbHVlID0gJycsCiAgICB0
+          aGlzLm9wdGlvbnMgPSBjb25zdCBbXSwKICAgIHRoaXMucmVsb2FkT25DaGFuZ2UgPSB0cnVlLAog
+          ICAgdGhpcy5pc0Jhc2VVcmwgPSBmYWxzZSwKICB9KTsKCiAgZmFjdG9yeSBQbHVnaW5TZXR0aW5n
+          RGVmaW5pdGlvbi5mcm9tSnNvbihNYXA8U3RyaW5nLCBkeW5hbWljPiBqc29uKSB7CiAgICBmaW5h
+          bCBrZXkgPSAoanNvblsna2V5J10gPz8ganNvblsnaWQnXSA/PyAnJykudG9TdHJpbmcoKS50cmlt
+          KCk7CiAgICBmaW5hbCByYXdUeXBlID0gKGpzb25bJ3R5cGUnXSA/PyAndGV4dCcpCiAgICAgICAg
+          LnRvU3RyaW5nKCkKICAgICAgICAudHJpbSgpCiAgICAgICAgLnRvTG93ZXJDYXNlKCk7CgogICAg
+          ZmluYWwgUGx1Z2luU2V0dGluZ1R5cGUgdHlwZTsKICAgIHN3aXRjaCAocmF3VHlwZSkgewogICAg
+          ICBjYXNlICdib29sJzoKICAgICAgY2FzZSAnYm9vbGVhbic6CiAgICAgIGNhc2UgJ3N3aXRjaCc6
+          CiAgICAgIGNhc2UgJ3RvZ2dsZSc6CiAgICAgICAgdHlwZSA9IFBsdWdpblNldHRpbmdUeXBlLnRv
+          Z2dsZTsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAnc2VsZWN0JzoKICAgICAgY2FzZSAnZHJv
+          cGRvd24nOgogICAgICBjYXNlICdsaXN0JzoKICAgICAgICB0eXBlID0gUGx1Z2luU2V0dGluZ1R5
+          cGUuc2VsZWN0OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICd1cmwnOgogICAgICBjYXNlICdk
+          b21haW4nOgogICAgICAgIHR5cGUgPSBQbHVnaW5TZXR0aW5nVHlwZS51cmw7CiAgICAgICAgYnJl
+          YWs7CiAgICAgIGRlZmF1bHQ6CiAgICAgICAgdHlwZSA9IFBsdWdpblNldHRpbmdUeXBlLnRleHQ7
+          CiAgICAgICAgYnJlYWs7CiAgICB9CgogICAgZmluYWwgcmF3RGVmYXVsdCA9CiAgICAgICAganNv
+          blsnZGVmYXVsdFZhbHVlJ10gPz8ganNvblsnZGVmYXVsdCddID8/IGpzb25bJ3ZhbHVlJ10gPz8g
+          Jyc7CiAgICBmaW5hbCBkZWZhdWx0VmFsdWUgPSByYXdEZWZhdWx0IGlzIGJvb2wKICAgICAgICA/
+          IChyYXdEZWZhdWx0ID8gJ3RydWUnIDogJ2ZhbHNlJykKICAgICAgICA6IHJhd0RlZmF1bHQudG9T
+          dHJpbmcoKTsKCiAgICBmaW5hbCByYXdEZXNjcmlwdGlvbiA9IGpzb25bJ2Rlc2NyaXB0aW9uJ10/
+          LnRvU3RyaW5nKCkudHJpbSgpOwogICAgZmluYWwgb3B0aW9ucyA9IChqc29uWydvcHRpb25zJ10g
+          YXMgTGlzdDxkeW5hbWljPj8gPz8gY29uc3QgW10pCiAgICAgICAgLnRha2UoMTAwKQogICAgICAg
+          IC5tYXAoUGx1Z2luU2V0dGluZ09wdGlvbi5mcm9tSnNvbikKICAgICAgICAud2hlcmUoKG9wdGlv
+          bikgPT4gb3B0aW9uLnZhbHVlLmlzTm90RW1wdHkpCiAgICAgICAgLnRvTGlzdChncm93YWJsZTog
+          ZmFsc2UpOwoKICAgIGZpbmFsIHJlbG9hZFZhbHVlID0ganNvblsncmVsb2FkT25DaGFuZ2UnXTsK
+          ICAgIGZpbmFsIGJhc2VVcmxWYWx1ZSA9IGpzb25bJ2lzQmFzZVVybCddID8/IGpzb25bJ2Jhc2VV
+          cmwnXTsKCiAgICByZXR1cm4gUGx1Z2luU2V0dGluZ0RlZmluaXRpb24oCiAgICAgIGtleToga2V5
+          LAogICAgICB0aXRsZTogKGpzb25bJ3RpdGxlJ10gPz8ganNvblsnbmFtZSddID8/IGtleSkudG9T
+          dHJpbmcoKSwKICAgICAgZGVzY3JpcHRpb246CiAgICAgICAgICByYXdEZXNjcmlwdGlvbiA9PSBu
+          dWxsIHx8IHJhd0Rlc2NyaXB0aW9uLmlzRW1wdHkKICAgICAgICAgID8gbnVsbAogICAgICAgICAg
+          OiByYXdEZXNjcmlwdGlvbiwKICAgICAgdHlwZTogdHlwZSwKICAgICAgZGVmYXVsdFZhbHVlOiBk
+          ZWZhdWx0VmFsdWUsCiAgICAgIG9wdGlvbnM6IG9wdGlvbnMsCiAgICAgIHJlbG9hZE9uQ2hhbmdl
+          OiByZWxvYWRWYWx1ZSBpcyBib29sID8gcmVsb2FkVmFsdWUgOiB0cnVlLAogICAgICBpc0Jhc2VV
+          cmw6CiAgICAgICAgICBiYXNlVXJsVmFsdWUgPT0gdHJ1ZSB8fAogICAgICAgICAga2V5ID09ICdi
+          YXNlX3VybCcgfHwKICAgICAgICAgIGtleSA9PSAnYmFzZVVybCcsCiAgICApOwogIH0KCiAgYm9v
+          bCBnZXQgZGVmYXVsdEJvb2wgewogICAgZmluYWwgbm9ybWFsaXplZCA9IGRlZmF1bHRWYWx1ZS50
+          cmltKCkudG9Mb3dlckNhc2UoKTsKICAgIHJldHVybiBub3JtYWxpemVkID09ICd0cnVlJyB8fAog
+          ICAgICAgIG5vcm1hbGl6ZWQgPT0gJzEnIHx8CiAgICAgICAgbm9ybWFsaXplZCA9PSAneWVzJyB8
+          fAogICAgICAgIG5vcm1hbGl6ZWQgPT0gJ29uJzsKICB9Cn0KCicnJwoKaWYgJ2NsYXNzIFBsdWdp
+          blNldHRpbmdEZWZpbml0aW9uJyBub3QgaW4gbW9kZWw6CiAgICBtb2RlbCA9IG1vZGVsX2Jsb2Nr
+          ICsgbW9kZWwKICAgIG1vZGVsX3BhdGgud3JpdGVfdGV4dChtb2RlbCwgZW5jb2Rpbmc9J3V0Zi04
+          JykKCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tCiMgMi4gRXhwb3J0IGdldFNldHRpbmdzKCkgZnJvbSBlYWNoIG5hbWVz
+          cGFjZWQgSlMgcGx1Z2luCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCnByb3ZpZGVyX3BhdGggPSAoCiAgICByb290IC8g
+          J2xpYi9jb3JlL2V4dGVuc2lvbnMvcHJvdmlkZXJzL2pzX2Jhc2VkX3Byb3ZpZGVyLmRhcnQnCikK
+          cHJvdmlkZXIgPSBwcm92aWRlcl9wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQoKaWYg
+          J3N0YXRpYyBjb25zdCBpbnQgX2lpZmVXcmFwcGVyVmVyc2lvbiA9IDI7JyBub3QgaW4gcHJvdmlk
+          ZXI6CiAgICBhbmNob3IgPSAnY2xhc3MgSnNCYXNlZFByb3ZpZGVyIGV4dGVuZHMgU2t5U3RyZWFt
+          UHJvdmlkZXIge1xuJwogICAgaWYgcHJvdmlkZXIuY291bnQoYW5jaG9yKSAhPSAxOgogICAgICAg
+          IHJhaXNlIFJ1bnRpbWVFcnJvcignSnNCYXNlZFByb3ZpZGVyIGNsYXNzIGFuY2hvciBub3QgZm91
+          bmQuJykKICAgIHByb3ZpZGVyID0gcHJvdmlkZXIucmVwbGFjZSgKICAgICAgICBhbmNob3IsCiAg
+          ICAgICAgYW5jaG9yICsgJyAgc3RhdGljIGNvbnN0IGludCBfaWlmZVdyYXBwZXJWZXJzaW9uID0g
+          MjtcblxuJywKICAgICAgICAxLAogICAgKQoKb2xkX3FiYyA9ICIgICAgcmV0dXJuICckZGlyJHNh
+          ZmVJZC5xYmMnOyIKbmV3X3FiYyA9ICIgICAgcmV0dXJuICckZGlyJHtzYWZlSWR9X3YkX2lpZmVX
+          cmFwcGVyVmVyc2lvbi5xYmMnOyIKaWYgb2xkX3FiYyBpbiBwcm92aWRlcjoKICAgIHByb3ZpZGVy
+          ID0gcHJvdmlkZXIucmVwbGFjZShvbGRfcWJjLCBuZXdfcWJjLCAxKQplbGlmIG5ld19xYmMgbm90
+          IGluIHByb3ZpZGVyOgogICAgcmFpc2UgUnVudGltZUVycm9yKCdRQkMgcGF0aCBhbmNob3Igbm90
+          IGZvdW5kLicpCgpleHBvcnRfYW5jaG9yID0gKAogICAgIiAgICAgICAgICAgICAgICAgICAgICBn
+          ZXRQcm92aWRlcnM6ICh0eXBlb2YgZ2V0UHJvdmlkZXJzICE9PSAiCiAgICAiJ3VuZGVmaW5lZCcp
+          ID8gZ2V0UHJvdmlkZXJzIDogKHR5cGVvZiBnbG9iYWxUaGlzLmdldFByb3ZpZGVycyAiCiAgICAi
+          IT09ICd1bmRlZmluZWQnID8gZ2xvYmFsVGhpcy5nZXRQcm92aWRlcnMgOiB1bmRlZmluZWQpLFxu
+          IgopCmV4cG9ydF9saW5lID0gKAogICAgIiAgICAgICAgICAgICAgICAgICAgICBnZXRTZXR0aW5n
+          czogKHR5cGVvZiBnZXRTZXR0aW5ncyAhPT0gIgogICAgIid1bmRlZmluZWQnKSA/IGdldFNldHRp
+          bmdzIDogKHR5cGVvZiBnbG9iYWxUaGlzLmdldFNldHRpbmdzICIKICAgICIhPT0gJ3VuZGVmaW5l
+          ZCcgPyBnbG9iYWxUaGlzLmdldFNldHRpbmdzIDogdW5kZWZpbmVkKSxcbiIKKQppZiBleHBvcnRf
+          bGluZSBub3QgaW4gcHJvdmlkZXI6CiAgICBpZiBwcm92aWRlci5jb3VudChleHBvcnRfYW5jaG9y
+          KSAhPSAxOgogICAgICAgIHJhaXNlIFJ1bnRpbWVFcnJvcignZ2V0UHJvdmlkZXJzIGV4cG9ydCBh
+          bmNob3Igbm90IGZvdW5kLicpCiAgICBwcm92aWRlciA9IHByb3ZpZGVyLnJlcGxhY2UoCiAgICAg
+          ICAgZXhwb3J0X2FuY2hvciwKICAgICAgICBleHBvcnRfYW5jaG9yICsgZXhwb3J0X2xpbmUsCiAg
+          ICAgICAgMSwKICAgICkKCmNsZWFudXBfYW5jaG9yID0gKAogICAgJyAgICAgICAgICAgICAgaWYg
+          KGdsb2JhbFRoaXMuZ2V0UHJvdmlkZXJzKSAnCiAgICAnZGVsZXRlIGdsb2JhbFRoaXMuZ2V0UHJv
+          dmlkZXJzO1xuJwopCmNsZWFudXBfbGluZSA9ICgKICAgICcgICAgICAgICAgICAgIGlmIChnbG9i
+          YWxUaGlzLmdldFNldHRpbmdzKSAnCiAgICAnZGVsZXRlIGdsb2JhbFRoaXMuZ2V0U2V0dGluZ3M7
+          XG4nCikKaWYgY2xlYW51cF9saW5lIG5vdCBpbiBwcm92aWRlcjoKICAgIGlmIHByb3ZpZGVyLmNv
+          dW50KGNsZWFudXBfYW5jaG9yKSAhPSAxOgogICAgICAgIHJhaXNlIFJ1bnRpbWVFcnJvcignZ2V0
+          UHJvdmlkZXJzIGNsZWFudXAgYW5jaG9yIG5vdCBmb3VuZC4nKQogICAgcHJvdmlkZXIgPSBwcm92
+          aWRlci5yZXBsYWNlKAogICAgICAgIGNsZWFudXBfYW5jaG9yLAogICAgICAgIGNsZWFudXBfYW5j
+          aG9yICsgY2xlYW51cF9saW5lLAogICAgICAgIDEsCiAgICApCgpzZXR0aW5nc19tZXRob2QgPSBy
+          JycnCiAgLy8vIENhbGxzIHRoZSBvcHRpb25hbCBKUyBgZ2V0U2V0dGluZ3MoKWAgZXhwb3J0Lgog
+          IC8vLwogIC8vLyBUaGUgcGx1Z2luIG1heSByZXR1cm4gZWl0aGVyIGEgbGlzdCBkaXJlY3RseSBv
+          cgogIC8vLyBgeyBzZXR0aW5nczogWy4uLl0gfWAuIEludmFsaWQgZGVmaW5pdGlvbnMgYXJlIGln
+          bm9yZWQuCiAgRnV0dXJlPExpc3Q8UGx1Z2luU2V0dGluZ0RlZmluaXRpb24+PiBnZXRTZXR0aW5n
+          cygpIGFzeW5jIHsKICAgIGF3YWl0IF9lbnN1cmVSZWFkeSgpOwogICAgaWYgKF9lcnJvciAhPSBu
+          dWxsKSByZXR1cm4gY29uc3QgW107CgogICAgcmV0dXJuIF9zZXJpYWxpemVkSW52b2tlKCgpIGFz
+          eW5jIHsKICAgICAgdHJ5IHsKICAgICAgICBmaW5hbCByZXN1bHQgPSBhd2FpdCBfanNFbmdpbmUu
+          aW52b2tlQXN5bmMoX2ZuKCdnZXRTZXR0aW5ncycpKTsKICAgICAgICBmaW5hbCBkeW5hbWljIHJh
+          d1NldHRpbmdzID0KICAgICAgICAgICAgcmVzdWx0IGlzIE1hcCAmJiByZXN1bHRbJ3NldHRpbmdz
+          J10gaXMgTGlzdAogICAgICAgICAgICA/IHJlc3VsdFsnc2V0dGluZ3MnXQogICAgICAgICAgICA6
+          IHJlc3VsdDsKCiAgICAgICAgaWYgKHJhd1NldHRpbmdzIGlzISBMaXN0KSByZXR1cm4gY29uc3Qg
+          W107CgogICAgICAgIHJldHVybiByYXdTZXR0aW5ncwogICAgICAgICAgICAudGFrZSgxMDApCiAg
+          ICAgICAgICAgIC53aGVyZVR5cGU8TWFwPGR5bmFtaWMsIGR5bmFtaWM+PigpCiAgICAgICAgICAg
+          IC5tYXAoCiAgICAgICAgICAgICAgKHJhdykgPT4gUGx1Z2luU2V0dGluZ0RlZmluaXRpb24uZnJv
+          bUpzb24oCiAgICAgICAgICAgICAgICBNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKHJhdyksCiAg
+          ICAgICAgICAgICAgKSwKICAgICAgICAgICAgKQogICAgICAgICAgICAud2hlcmUoKHNldHRpbmcp
+          ID0+IHNldHRpbmcua2V5LmlzTm90RW1wdHkpCiAgICAgICAgICAgIC50b0xpc3QoZ3Jvd2FibGU6
+          IGZhbHNlKTsKICAgICAgfSBjYXRjaCAoZXJyb3IpIHsKICAgICAgICBpZiAoa0RlYnVnTW9kZSkg
+          ewogICAgICAgICAgZGVidWdQcmludCgKICAgICAgICAgICAgJ0pzQmFzZWRQcm92aWRlcjogZ2V0
+          U2V0dGluZ3MgdW5hdmFpbGFibGUgZm9yICcKICAgICAgICAgICAgJyRfcGFja2FnZU5hbWU6ICRl
+          cnJvcicsCiAgICAgICAgICApOwogICAgICAgIH0KICAgICAgICByZXR1cm4gY29uc3QgW107CiAg
+          ICAgIH0KICAgIH0pOwogIH0KCicnJwoKaWYgJ0Z1dHVyZTxMaXN0PFBsdWdpblNldHRpbmdEZWZp
+          bml0aW9uPj4gZ2V0U2V0dGluZ3MoKSBhc3luYycgbm90IGluIHByb3ZpZGVyOgogICAgbWV0aG9k
+          X2FuY2hvciA9ICgKICAgICAgICAnICBAb3ZlcnJpZGVcbicKICAgICAgICAnICBGdXR1cmU8TWFw
+          PFN0cmluZywgTGlzdDxNdWx0aW1lZGlhSXRlbT4+PiBnZXRIb21lKCkgYXN5bmMgeycKICAgICkK
+          ICAgIGlmIHByb3ZpZGVyLmNvdW50KG1ldGhvZF9hbmNob3IpICE9IDE6CiAgICAgICAgcmFpc2Ug
+          UnVudGltZUVycm9yKCdnZXRIb21lIG1ldGhvZCBhbmNob3Igbm90IGZvdW5kLicpCiAgICBwcm92
+          aWRlciA9IHByb3ZpZGVyLnJlcGxhY2UoCiAgICAgICAgbWV0aG9kX2FuY2hvciwKICAgICAgICBz
+          ZXR0aW5nc19tZXRob2QgKyBtZXRob2RfYW5jaG9yLAogICAgICAgIDEsCiAgICApCgpwcm92aWRl
+          cl9wYXRoLndyaXRlX3RleHQocHJvdmlkZXIsIGVuY29kaW5nPSd1dGYtOCcpCgojIC0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LQojIDMuIE1hbmFnZXIgQVBJIGZvciBsb2FkaW5nIGFuZCBjYWNoaW5nIHNjcmlwdC1kZWZpbmVk
+          IHNldHRpbmdzCiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tCm1hbmFnZXJfcGF0aCA9IHJvb3QgLyAnbGliL2NvcmUvZXh0
+          ZW5zaW9ucy9leHRlbnNpb25fbWFuYWdlci5kYXJ0JwptYW5hZ2VyID0gbWFuYWdlcl9wYXRoLnJl
+          YWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQoKbWFwX2FuY2hvciA9ICgKICAgICcgIGZpbmFsIE1h
+          cDxTdHJpbmcsIExpc3Q8UGx1Z2luU3ViUHJvdmlkZXI+PiAnCiAgICAnX2R5bmFtaWNQcm92aWRl
+          cnNNYXAgPSB7fTtcbicKKQptYXBfYmxvY2sgPSAoCiAgICAnICBmaW5hbCBNYXA8U3RyaW5nLCBM
+          aXN0PFBsdWdpblNldHRpbmdEZWZpbml0aW9uPj4gJwogICAgJ19keW5hbWljU2V0dGluZ3NNYXAg
+          PSB7fTtcbicKICAgICcgIGZpbmFsIE1hcDxTdHJpbmcsIEpzQmFzZWRQcm92aWRlcj4gX3NldHRp
+          bmdzUHJvdmlkZXJzID0ge307XG4nCikKaWYgbWFwX2Jsb2NrIG5vdCBpbiBtYW5hZ2VyOgogICAg
+          aWYgbWFuYWdlci5jb3VudChtYXBfYW5jaG9yKSAhPSAxOgogICAgICAgIHJhaXNlIFJ1bnRpbWVF
+          cnJvcignRHluYW1pYyBwcm92aWRlcnMgbWFwIGFuY2hvciBub3QgZm91bmQuJykKICAgIG1hbmFn
+          ZXIgPSBtYW5hZ2VyLnJlcGxhY2UoCiAgICAgICAgbWFwX2FuY2hvciwKICAgICAgICBtYXBfYW5j
+          aG9yICsgbWFwX2Jsb2NrLAogICAgICAgIDEsCiAgICApCgptYW5hZ2VyX21ldGhvZHMgPSByJycn
+          CiAgLy8vIFJldHVybnMgc2V0dGluZ3MgZGVjbGFyZWQgYnkgdGhlIHBsdWdpbidzIG9wdGlvbmFs
+          IEpTCiAgLy8vIGBnZXRTZXR0aW5ncygpYCBmdW5jdGlvbi4gU3RhdGljIGBzZXR0aW5nc2AgaW4g
+          dGhlIG1hbmlmZXN0IGFyZQogIC8vLyBhbHNvIGFjY2VwdGVkLCB3aXRoIEpTIGRlZmluaXRpb25z
+          IHRha2luZyBwcmVjZWRlbmNlIGJ5IGtleS4KICBGdXR1cmU8TGlzdDxQbHVnaW5TZXR0aW5nRGVm
+          aW5pdGlvbj4+IGdldFNldHRpbmdzRm9yUGx1Z2luKAogICAgRXh0ZW5zaW9uUGx1Z2luIHBsdWdp
+          biwKICApIGFzeW5jIHsKICAgIGZpbmFsIGNhY2hlZCA9IF9keW5hbWljU2V0dGluZ3NNYXBbcGx1
+          Z2luLnBhY2thZ2VOYW1lXTsKICAgIGlmIChjYWNoZWQgIT0gbnVsbCkgcmV0dXJuIGNhY2hlZDsK
+          CiAgICBmaW5hbCBieUtleSA9IDxTdHJpbmcsIFBsdWdpblNldHRpbmdEZWZpbml0aW9uPnt9OwoK
+          ICAgIGZpbmFsIG1hbmlmZXN0U2V0dGluZ3MgPSBwbHVnaW4ubWFuaWZlc3RbJ3NldHRpbmdzJ107
+          CiAgICBpZiAobWFuaWZlc3RTZXR0aW5ncyBpcyBMaXN0KSB7CiAgICAgIGZvciAoZmluYWwgcmF3
+          IGluIG1hbmlmZXN0U2V0dGluZ3MKICAgICAgICAgIC50YWtlKDEwMCkKICAgICAgICAgIC53aGVy
+          ZVR5cGU8TWFwPGR5bmFtaWMsIGR5bmFtaWM+PigpKSB7CiAgICAgICAgZmluYWwgc2V0dGluZyA9
+          IFBsdWdpblNldHRpbmdEZWZpbml0aW9uLmZyb21Kc29uKAogICAgICAgICAgTWFwPFN0cmluZywg
+          ZHluYW1pYz4uZnJvbShyYXcpLAogICAgICAgICk7CiAgICAgICAgaWYgKHNldHRpbmcua2V5Lmlz
+          Tm90RW1wdHkpIHsKICAgICAgICAgIGJ5S2V5W3NldHRpbmcua2V5XSA9IHNldHRpbmc7CiAgICAg
+          ICAgfQogICAgICB9CiAgICB9CgogICAgdHJ5IHsKICAgICAgSnNCYXNlZFByb3ZpZGVyPyBwcm92
+          aWRlcjsKICAgICAgZmluYWwgbG9hZGVkID0gX2ZpcnN0TG9hZGVkUHJvdmlkZXIocGx1Z2luLnBh
+          Y2thZ2VOYW1lKTsKICAgICAgaWYgKGxvYWRlZCBpcyBKc0Jhc2VkUHJvdmlkZXIpIHsKICAgICAg
+          ICBwcm92aWRlciA9IGxvYWRlZDsKICAgICAgfSBlbHNlIHsKICAgICAgICBwcm92aWRlciA9IGF3
+          YWl0IF9jcmVhdGVTZXR0aW5nc1Byb3ZpZGVyKHBsdWdpbik7CiAgICAgIH0KCiAgICAgIGlmIChw
+          cm92aWRlciAhPSBudWxsKSB7CiAgICAgICAgZmluYWwgc2NyaXB0U2V0dGluZ3MgPSBhd2FpdCBw
+          cm92aWRlci5nZXRTZXR0aW5ncygpOwogICAgICAgIGZvciAoZmluYWwgc2V0dGluZyBpbiBzY3Jp
+          cHRTZXR0aW5ncykgewogICAgICAgICAgYnlLZXlbc2V0dGluZy5rZXldID0gc2V0dGluZzsKICAg
+          ICAgICB9CiAgICAgIH0KICAgIH0gY2F0Y2ggKGVycm9yKSB7CiAgICAgIGlmIChrRGVidWdNb2Rl
+          KSB7CiAgICAgICAgZGVidWdQcmludCgKICAgICAgICAgICdFeHRlbnNpb25NYW5hZ2VyOiBzZXR0
+          aW5ncyBsb2FkIGZhaWxlZCBmb3IgJwogICAgICAgICAgJyR7cGx1Z2luLnBhY2thZ2VOYW1lfTog
+          JGVycm9yJywKICAgICAgICApOwogICAgICB9CiAgICB9CgogICAgZmluYWwgcmVzdWx0ID0gYnlL
+          ZXkudmFsdWVzLnRvTGlzdChncm93YWJsZTogZmFsc2UpOwogICAgX2R5bmFtaWNTZXR0aW5nc01h
+          cFtwbHVnaW4ucGFja2FnZU5hbWVdID0gcmVzdWx0OwogICAgcmV0dXJuIHJlc3VsdDsKICB9Cgog
+          IEZ1dHVyZTxKc0Jhc2VkUHJvdmlkZXI/PiBfY3JlYXRlU2V0dGluZ3NQcm92aWRlcigKICAgIEV4
+          dGVuc2lvblBsdWdpbiBwbHVnaW4sCiAgKSBhc3luYyB7CiAgICBmaW5hbCBjYWNoZWQgPSBfc2V0
+          dGluZ3NQcm92aWRlcnNbcGx1Z2luLnBhY2thZ2VOYW1lXTsKICAgIGlmIChjYWNoZWQgIT0gbnVs
+          bCkgcmV0dXJuIGNhY2hlZDsKICAgIGlmIChfZW5naW5lID09IG51bGwgfHwgX3N0b3JhZ2VTZXJ2
+          aWNlID09IG51bGwpIHJldHVybiBudWxsOwoKICAgIGZpbmFsIHBhdGggPSBhd2FpdCBfc3RvcmFn
+          ZVNlcnZpY2UhLmdldFBsdWdpbkpzUGF0aChwbHVnaW4pOwogICAgaWYgKCFwYXRoLnN0YXJ0c1dp
+          dGgoJ2Fzc2V0cy8nKSAmJiAhYXdhaXQgRmlsZShwYXRoKS5leGlzdHMoKSkgewogICAgICByZXR1
+          cm4gbnVsbDsKICAgIH0KCiAgICBmaW5hbCBiYXNlTmFtZXNwYWNlID0gcGx1Z2luLnBhY2thZ2VO
+          YW1lLnJlcGxhY2VBbGwoCiAgICAgIFJlZ0V4cChyJ1teYS16QS1aMC05XScpLAogICAgICAnXycs
+          CiAgICApOwogICAgZmluYWwgY3VzdG9tQmFzZVVybCA9IHJlZgogICAgICAgIC5yZWFkKHNldHRp
+          bmdzUmVwb3NpdG9yeVByb3ZpZGVyKQogICAgICAgIC5nZXRDdXN0b21CYXNlVXJsKHBsdWdpbi5w
+          YWNrYWdlTmFtZSk7CgogICAgZmluYWwgcHJvdmlkZXIgPSBKc0Jhc2VkUHJvdmlkZXIoCiAgICAg
+          IF9lbmdpbmUhLAogICAgICBwYXRoLAogICAgICBwYWNrYWdlTmFtZTogcGx1Z2luLnBhY2thZ2VO
+          YW1lLAogICAgICBqc1BhY2thZ2VOYW1lOiBwbHVnaW4ucGFja2FnZU5hbWUsCiAgICAgIG5hbWVz
+          cGFjZTogJyR7YmFzZU5hbWVzcGFjZX1fX3NldHRpbmdzJywKICAgICAgbWFuaWZlc3Q6IHBsdWdp
+          bi5tYW5pZmVzdCwKICAgICAgY3VzdG9tQmFzZVVybDogY3VzdG9tQmFzZVVybCwKICAgICk7CiAg
+          ICBfc2V0dGluZ3NQcm92aWRlcnNbcGx1Z2luLnBhY2thZ2VOYW1lXSA9IHByb3ZpZGVyOwogICAg
+          cmV0dXJuIHByb3ZpZGVyOwogIH0KCiAgdm9pZCBfY2xlYXJTZXR0aW5nc1J1bnRpbWUoU3RyaW5n
+          IHBhY2thZ2VOYW1lKSB7CiAgICBfZHluYW1pY1NldHRpbmdzTWFwLnJlbW92ZShwYWNrYWdlTmFt
+          ZSk7CiAgICBmaW5hbCBwcm92aWRlciA9IF9zZXR0aW5nc1Byb3ZpZGVycy5yZW1vdmUocGFja2Fn
+          ZU5hbWUpOwogICAgZmluYWwgbmFtZXNwYWNlID0gcHJvdmlkZXI/Lm5hbWVzcGFjZTsKICAgIGlm
+          IChuYW1lc3BhY2UgIT0gbnVsbCAmJiBuYW1lc3BhY2UuaXNOb3RFbXB0eSkgewogICAgICBfZW5n
+          aW5lPy51bmxvYWQobmFtZXNwYWNlKTsKICAgIH0KICB9CgonJycKCmlmICdnZXRTZXR0aW5nc0Zv
+          clBsdWdpbignIG5vdCBpbiBtYW5hZ2VyOgogICAgbWV0aG9kX2FuY2hvciA9ICcgIEBvdmVycmlk
+          ZVxuICBMaXN0PFNreVN0cmVhbVByb3ZpZGVyPiBidWlsZCgpIHsnCiAgICBpZiBtYW5hZ2VyLmNv
+          dW50KG1ldGhvZF9hbmNob3IpICE9IDE6CiAgICAgICAgcmFpc2UgUnVudGltZUVycm9yKCdFeHRl
+          bnNpb25NYW5hZ2VyIGJ1aWxkIGFuY2hvciBub3QgZm91bmQuJykKICAgIG1hbmFnZXIgPSBtYW5h
+          Z2VyLnJlcGxhY2UoCiAgICAgICAgbWV0aG9kX2FuY2hvciwKICAgICAgICBtYW5hZ2VyX21ldGhv
+          ZHMgKyBtZXRob2RfYW5jaG9yLAogICAgICAgIDEsCiAgICApCgpvbGRfcmVsb2FkID0gcicnJyAg
+          RnV0dXJlPHZvaWQ+IHJlbG9hZFBsdWdpbihFeHRlbnNpb25QbHVnaW4gcGx1Z2luKSBhc3luYyB7
+          CiAgICBpZiAoX2VuZ2luZSA9PSBudWxsIHx8IF9zdG9yYWdlU2VydmljZSA9PSBudWxsKSByZXR1
+          cm47CiAgICBfcmVtb3ZlUHJvdmlkZXJzRm9yUGFja2FnZShwbHVnaW4ucGFja2FnZU5hbWUpOwog
+          ICAgZmluYWwgbG9hZGVkID0gYXdhaXQgX2xvYWRQbHVnaW4ocGx1Z2luKTsKICAgIGZvciAoZmlu
+          YWwgcCBpbiBsb2FkZWQpIHsKICAgICAgX2FkZFByb3ZpZGVyKHApOwogICAgfQogIH0KJycnCm5l
+          d19yZWxvYWQgPSByJycnICBGdXR1cmU8dm9pZD4gcmVsb2FkUGx1Z2luKEV4dGVuc2lvblBsdWdp
+          biBwbHVnaW4pIGFzeW5jIHsKICAgIGlmIChfZW5naW5lID09IG51bGwgfHwgX3N0b3JhZ2VTZXJ2
+          aWNlID09IG51bGwpIHJldHVybjsKICAgIF9jbGVhclNldHRpbmdzUnVudGltZShwbHVnaW4ucGFj
+          a2FnZU5hbWUpOwogICAgX3JlbW92ZVByb3ZpZGVyc0ZvclBhY2thZ2UocGx1Z2luLnBhY2thZ2VO
+          YW1lKTsKICAgIGZpbmFsIGxvYWRlZCA9IGF3YWl0IF9sb2FkUGx1Z2luKHBsdWdpbik7CiAgICBm
+          b3IgKGZpbmFsIHAgaW4gbG9hZGVkKSB7CiAgICAgIF9hZGRQcm92aWRlcihwKTsKICAgIH0KICB9
+          CicnJwppZiBvbGRfcmVsb2FkIGluIG1hbmFnZXI6CiAgICBtYW5hZ2VyID0gbWFuYWdlci5yZXBs
+          YWNlKG9sZF9yZWxvYWQsIG5ld19yZWxvYWQsIDEpCmVsaWYgJ19jbGVhclNldHRpbmdzUnVudGlt
+          ZShwbHVnaW4ucGFja2FnZU5hbWUpOycgbm90IGluIG1hbmFnZXI6CiAgICByYWlzZSBSdW50aW1l
+          RXJyb3IoJ3JlbG9hZFBsdWdpbiBhbmNob3Igbm90IGZvdW5kLicpCgptYW5hZ2VyX3BhdGgud3Jp
+          dGVfdGV4dChtYW5hZ2VyLCBlbmNvZGluZz0ndXRmLTgnKQoKIyAtLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyA0LiBGdWxs
+          IHNldHRpbmdzIHBhZ2UKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0Kc2V0dGluZ3Nfc2NyZWVuID0gcicnJ2ltcG9ydCAn
+          cGFja2FnZTpmbHV0dGVyL21hdGVyaWFsLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6Zmx1dHRlcl9y
+          aXZlcnBvZC9mbHV0dGVyX3JpdmVycG9kLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6c2t5c3RyZWFt
+          L2wxMG4vZ2VuZXJhdGVkL2FwcF9sb2NhbGl6YXRpb25zLmRhcnQnOwoKaW1wb3J0ICcuLi8uLi8u
+          Li9jb3JlL2V4dGVuc2lvbnMvZXh0ZW5zaW9uX21hbmFnZXIuZGFydCc7CmltcG9ydCAnLi4vLi4v
+          Li4vY29yZS9leHRlbnNpb25zL21vZGVscy9leHRlbnNpb25fcGx1Z2luLmRhcnQnOwppbXBvcnQg
+          Jy4uLy4uLy4uL2NvcmUvc3RvcmFnZS9leHRlbnNpb25fcmVwb3NpdG9yeS5kYXJ0JzsKaW1wb3J0
+          ICcuLi8uLi8uLi9jb3JlL3N0b3JhZ2Uvc2V0dGluZ3NfcmVwb3NpdG9yeS5kYXJ0JzsKaW1wb3J0
+          ICcuLi8uLi8uLi9zaGFyZWQvd2lkZ2V0cy9sb2FkaW5nX2luZGljYXRvci5kYXJ0JzsKCmNsYXNz
+          IFBsdWdpblNldHRpbmdzU2NyZWVuIGV4dGVuZHMgQ29uc3VtZXJTdGF0ZWZ1bFdpZGdldCB7CiAg
+          ZmluYWwgRXh0ZW5zaW9uUGx1Z2luIHBsdWdpbjsKCiAgY29uc3QgUGx1Z2luU2V0dGluZ3NTY3Jl
+          ZW4oe3N1cGVyLmtleSwgcmVxdWlyZWQgdGhpcy5wbHVnaW59KTsKCiAgQG92ZXJyaWRlCiAgQ29u
+          c3VtZXJTdGF0ZTxQbHVnaW5TZXR0aW5nc1NjcmVlbj4gY3JlYXRlU3RhdGUoKSA9PgogICAgICBf
+          UGx1Z2luU2V0dGluZ3NTY3JlZW5TdGF0ZSgpOwp9CgpjbGFzcyBfUGx1Z2luU2V0dGluZ3NTY3Jl
+          ZW5TdGF0ZQogICAgZXh0ZW5kcyBDb25zdW1lclN0YXRlPFBsdWdpblNldHRpbmdzU2NyZWVuPiB7
+          CiAgYm9vbCBfbG9hZGluZyA9IHRydWU7CiAgYm9vbCBfc2F2aW5nID0gZmFsc2U7CiAgU3RyaW5n
+          PyBfZXJyb3I7CiAgTGlzdDxQbHVnaW5TZXR0aW5nRGVmaW5pdGlvbj4gX2RlZmluaXRpb25zID0g
+          Y29uc3QgW107CiAgTGlzdDxQbHVnaW5TdWJQcm92aWRlcj4gX3Byb3ZpZGVycyA9IGNvbnN0IFtd
+          OwogIGZpbmFsIE1hcDxTdHJpbmcsIFN0cmluZz4gX3ZhbHVlcyA9IHt9OwogIGZpbmFsIE1hcDxT
+          dHJpbmcsIGJvb2w+IF9wcm92aWRlckVuYWJsZWQgPSB7fTsKICBmaW5hbCBNYXA8U3RyaW5nLCBU
+          ZXh0RWRpdGluZ0NvbnRyb2xsZXI+IF9jb250cm9sbGVycyA9IHt9OwogIFN0cmluZyBfc2VsZWN0
+          ZWREb21haW4gPSAnJzsKCiAgQG92ZXJyaWRlCiAgdm9pZCBpbml0U3RhdGUoKSB7CiAgICBzdXBl
+          ci5pbml0U3RhdGUoKTsKICAgIEZ1dHVyZS5taWNyb3Rhc2soX2xvYWQpOwogIH0KCiAgQG92ZXJy
+          aWRlCiAgdm9pZCBkaXNwb3NlKCkgewogICAgZm9yIChmaW5hbCBjb250cm9sbGVyIGluIF9jb250
+          cm9sbGVycy52YWx1ZXMpIHsKICAgICAgY29udHJvbGxlci5kaXNwb3NlKCk7CiAgICB9CiAgICBz
+          dXBlci5kaXNwb3NlKCk7CiAgfQoKICBGdXR1cmU8dm9pZD4gX2xvYWQoKSBhc3luYyB7CiAgICBp
+          ZiAobW91bnRlZCkgewogICAgICBzZXRTdGF0ZSgoKSB7CiAgICAgICAgX2xvYWRpbmcgPSB0cnVl
+          OwogICAgICAgIF9lcnJvciA9IG51bGw7CiAgICAgIH0pOwogICAgfQoKICAgIHRyeSB7CiAgICAg
+          IGZpbmFsIG1hbmFnZXIgPSByZWYucmVhZChleHRlbnNpb25NYW5hZ2VyUHJvdmlkZXIubm90aWZp
+          ZXIpOwogICAgICBmaW5hbCBkZWZpbml0aW9ucyA9IGF3YWl0IG1hbmFnZXIuZ2V0U2V0dGluZ3NG
+          b3JQbHVnaW4oCiAgICAgICAgd2lkZ2V0LnBsdWdpbiwKICAgICAgKTsKICAgICAgZmluYWwgcHJv
+          dmlkZXJzID0gbWFuYWdlci5nZXRQcm92aWRlcnNGb3JQbHVnaW4od2lkZ2V0LnBsdWdpbik7CiAg
+          ICAgIGZpbmFsIHN0b3JhZ2UgPSByZWYucmVhZChleHRlbnNpb25SZXBvc2l0b3J5UHJvdmlkZXIp
+          OwogICAgICBmaW5hbCBzZXR0aW5nc1JlcG9zaXRvcnkgPSByZWYucmVhZChzZXR0aW5nc1JlcG9z
+          aXRvcnlQcm92aWRlcik7CiAgICAgIGZpbmFsIHNhdmVkQmFzZVVybCA9IHNldHRpbmdzUmVwb3Np
+          dG9yeS5nZXRDdXN0b21CYXNlVXJsKAogICAgICAgIHdpZGdldC5wbHVnaW4ucGFja2FnZU5hbWUs
+          CiAgICAgICk7CgogICAgICBmb3IgKGZpbmFsIGNvbnRyb2xsZXIgaW4gX2NvbnRyb2xsZXJzLnZh
+          bHVlcykgewogICAgICAgIGNvbnRyb2xsZXIuZGlzcG9zZSgpOwogICAgICB9CiAgICAgIF9jb250
+          cm9sbGVycy5jbGVhcigpOwogICAgICBfdmFsdWVzLmNsZWFyKCk7CiAgICAgIF9wcm92aWRlckVu
+          YWJsZWQuY2xlYXIoKTsKCiAgICAgIGZvciAoZmluYWwgZGVmaW5pdGlvbiBpbiBkZWZpbml0aW9u
+          cykgewogICAgICAgIFN0cmluZyB2YWx1ZTsKICAgICAgICBpZiAoZGVmaW5pdGlvbi5pc0Jhc2VV
+          cmwpIHsKICAgICAgICAgIHZhbHVlID0KICAgICAgICAgICAgICBzYXZlZEJhc2VVcmwgPz8KICAg
+          ICAgICAgICAgICAoZGVmaW5pdGlvbi5kZWZhdWx0VmFsdWUuaXNOb3RFbXB0eQogICAgICAgICAg
+          ICAgICAgICA/IGRlZmluaXRpb24uZGVmYXVsdFZhbHVlCiAgICAgICAgICAgICAgICAgIDogKHdp
+          ZGdldC5wbHVnaW4ubWFuaWZlc3RbJ2Jhc2VVcmwnXT8udG9TdHJpbmcoKSA/PwogICAgICAgICAg
+          ICAgICAgICAgICAgICAnJykpOwogICAgICAgIH0gZWxzZSB7CiAgICAgICAgICB2YWx1ZSA9CiAg
+          ICAgICAgICAgICAgc3RvcmFnZS5nZXRFeHRlbnNpb25EYXRhKAogICAgICAgICAgICAgICAgJyR7
+          d2lkZ2V0LnBsdWdpbi5wYWNrYWdlTmFtZX06JHtkZWZpbml0aW9uLmtleX0nLAogICAgICAgICAg
+          ICAgICkgPz8KICAgICAgICAgICAgICBkZWZpbml0aW9uLmRlZmF1bHRWYWx1ZTsKICAgICAgICB9
+          CgogICAgICAgIGlmIChkZWZpbml0aW9uLnR5cGUgPT0gUGx1Z2luU2V0dGluZ1R5cGUuc2VsZWN0
+          ICYmCiAgICAgICAgICAgIGRlZmluaXRpb24ub3B0aW9ucy5pc05vdEVtcHR5ICYmCiAgICAgICAg
+          ICAgICFkZWZpbml0aW9uLm9wdGlvbnMuYW55KAogICAgICAgICAgICAgIChvcHRpb24pID0+IG9w
+          dGlvbi52YWx1ZSA9PSB2YWx1ZSwKICAgICAgICAgICAgKSkgewogICAgICAgICAgdmFsdWUgPSBk
+          ZWZpbml0aW9uLm9wdGlvbnMuZmlyc3QudmFsdWU7CiAgICAgICAgfQoKICAgICAgICBfdmFsdWVz
+          W2RlZmluaXRpb24ua2V5XSA9IHZhbHVlOwogICAgICAgIGlmIChkZWZpbml0aW9uLnR5cGUgPT0g
+          UGx1Z2luU2V0dGluZ1R5cGUudGV4dCB8fAogICAgICAgICAgICBkZWZpbml0aW9uLnR5cGUgPT0g
+          UGx1Z2luU2V0dGluZ1R5cGUudXJsKSB7CiAgICAgICAgICBfY29udHJvbGxlcnNbZGVmaW5pdGlv
+          bi5rZXldID0gVGV4dEVkaXRpbmdDb250cm9sbGVyKAogICAgICAgICAgICB0ZXh0OiB2YWx1ZSwK
+          ICAgICAgICAgICk7CiAgICAgICAgfQogICAgICB9CgogICAgICBmb3IgKGZpbmFsIHByb3ZpZGVy
+          IGluIHByb3ZpZGVycykgewogICAgICAgIGZpbmFsIHNhdmVkID0gc3RvcmFnZS5nZXRFeHRlbnNp
+          b25EYXRhKAogICAgICAgICAgJyR7d2lkZ2V0LnBsdWdpbi5wYWNrYWdlTmFtZX06JwogICAgICAg
+          ICAgJ19wcm92aWRlcl9lbmFibGVkXyR7cHJvdmlkZXIuaWR9JywKICAgICAgICApOwogICAgICAg
+          IF9wcm92aWRlckVuYWJsZWRbcHJvdmlkZXIuaWRdID0KICAgICAgICAgICAgc2F2ZWQgPT0gbnVs
+          bCA/IHRydWUgOiBzYXZlZCA9PSAndHJ1ZSc7CiAgICAgIH0KCiAgICAgIGZpbmFsIGRvbWFpbnMg
+          PSB3aWRnZXQucGx1Z2luLmRvbWFpbnMgPz8gY29uc3QgPFBsdWdpbkRvbWFpbj5bXTsKICAgICAg
+          X3NlbGVjdGVkRG9tYWluID0KICAgICAgICAgIHNhdmVkQmFzZVVybCA/PwogICAgICAgICAgKGRv
+          bWFpbnMuaXNOb3RFbXB0eQogICAgICAgICAgICAgID8gZG9tYWlucy5maXJzdC51cmwKICAgICAg
+          ICAgICAgICA6ICh3aWRnZXQucGx1Z2luLm1hbmlmZXN0WydiYXNlVXJsJ10/LnRvU3RyaW5nKCkg
+          Pz8gJycpKTsKCiAgICAgIGlmICghbW91bnRlZCkgcmV0dXJuOwogICAgICBzZXRTdGF0ZSgoKSB7
+          CiAgICAgICAgX2RlZmluaXRpb25zID0gZGVmaW5pdGlvbnM7CiAgICAgICAgX3Byb3ZpZGVycyA9
+          IHByb3ZpZGVyczsKICAgICAgICBfbG9hZGluZyA9IGZhbHNlOwogICAgICB9KTsKICAgIH0gY2F0
+          Y2ggKGVycm9yKSB7CiAgICAgIGlmICghbW91bnRlZCkgcmV0dXJuOwogICAgICBzZXRTdGF0ZSgo
+          KSB7CiAgICAgICAgX2Vycm9yID0gZXJyb3IudG9TdHJpbmcoKTsKICAgICAgICBfbG9hZGluZyA9
+          IGZhbHNlOwogICAgICB9KTsKICAgIH0KICB9CgogIGJvb2wgX2Jvb2xWYWx1ZShTdHJpbmcga2V5
+          KSB7CiAgICBmaW5hbCB2YWx1ZSA9IChfdmFsdWVzW2tleV0gPz8gJycpLnRyaW0oKS50b0xvd2Vy
+          Q2FzZSgpOwogICAgcmV0dXJuIHZhbHVlID09ICd0cnVlJyB8fAogICAgICAgIHZhbHVlID09ICcx
+          JyB8fAogICAgICAgIHZhbHVlID09ICd5ZXMnIHx8CiAgICAgICAgdmFsdWUgPT0gJ29uJzsKICB9
+          CgogIFN0cmluZyBfbm9ybWFsaXplZFVybChTdHJpbmcgcmF3KSB7CiAgICB2YXIgdmFsdWUgPSBy
+          YXcudHJpbSgpOwogICAgaWYgKHZhbHVlLmlzRW1wdHkpIHJldHVybiAnJzsKICAgIGlmICghUmVn
+          RXhwKHInXmh0dHBzPzovLycsIGNhc2VTZW5zaXRpdmU6IGZhbHNlKS5oYXNNYXRjaCh2YWx1ZSkp
+          IHsKICAgICAgdmFsdWUgPSAnaHR0cHM6Ly8kdmFsdWUnOwogICAgfQogICAgcmV0dXJuIHZhbHVl
+          LnJlcGxhY2VGaXJzdChSZWdFeHAocicvKyQnKSwgJycpOwogIH0KCiAgRnV0dXJlPHZvaWQ+IF9z
+          YXZlKCkgYXN5bmMgewogICAgaWYgKF9zYXZpbmcgfHwgX2xvYWRpbmcpIHJldHVybjsKICAgIHNl
+          dFN0YXRlKCgpID0+IF9zYXZpbmcgPSB0cnVlKTsKCiAgICB0cnkgewogICAgICBmaW5hbCBzdG9y
+          YWdlID0gcmVmLnJlYWQoZXh0ZW5zaW9uUmVwb3NpdG9yeVByb3ZpZGVyKTsKICAgICAgZmluYWwg
+          c2V0dGluZ3NSZXBvc2l0b3J5ID0gcmVmLnJlYWQoc2V0dGluZ3NSZXBvc2l0b3J5UHJvdmlkZXIp
+          OwogICAgICBmaW5hbCBtYW5hZ2VyID0gcmVmLnJlYWQoZXh0ZW5zaW9uTWFuYWdlclByb3ZpZGVy
+          Lm5vdGlmaWVyKTsKICAgICAgdmFyIHNob3VsZFJlbG9hZCA9IGZhbHNlOwogICAgICBmaW5hbCBo
+          YXNTY3JpcHRCYXNlVXJsID0gX2RlZmluaXRpb25zLmFueSgKICAgICAgICAoZGVmaW5pdGlvbikg
+          PT4gZGVmaW5pdGlvbi5pc0Jhc2VVcmwsCiAgICAgICk7CgogICAgICBmb3IgKGZpbmFsIGRlZmlu
+          aXRpb24gaW4gX2RlZmluaXRpb25zKSB7CiAgICAgICAgdmFyIHZhbHVlID0KICAgICAgICAgICAg
+          X2NvbnRyb2xsZXJzW2RlZmluaXRpb24ua2V5XT8udGV4dCA/PwogICAgICAgICAgICBfdmFsdWVz
+          W2RlZmluaXRpb24ua2V5XSA/PwogICAgICAgICAgICBkZWZpbml0aW9uLmRlZmF1bHRWYWx1ZTsK
+          CiAgICAgICAgaWYgKGRlZmluaXRpb24udHlwZSA9PSBQbHVnaW5TZXR0aW5nVHlwZS51cmwpIHsK
+          ICAgICAgICAgIHZhbHVlID0gX25vcm1hbGl6ZWRVcmwodmFsdWUpOwogICAgICAgIH0KCiAgICAg
+          ICAgaWYgKGRlZmluaXRpb24uaXNCYXNlVXJsKSB7CiAgICAgICAgICBhd2FpdCBzZXR0aW5nc1Jl
+          cG9zaXRvcnkuc2V0Q3VzdG9tQmFzZVVybCgKICAgICAgICAgICAgd2lkZ2V0LnBsdWdpbi5wYWNr
+          YWdlTmFtZSwKICAgICAgICAgICAgdmFsdWUuaXNFbXB0eSA/IG51bGwgOiB2YWx1ZSwKICAgICAg
+          ICAgICk7CiAgICAgICAgICBzaG91bGRSZWxvYWQgPSB0cnVlOwogICAgICAgIH0gZWxzZSB7CiAg
+          ICAgICAgICBhd2FpdCBzdG9yYWdlLnNldEV4dGVuc2lvbkRhdGEoCiAgICAgICAgICAgICcke3dp
+          ZGdldC5wbHVnaW4ucGFja2FnZU5hbWV9OiR7ZGVmaW5pdGlvbi5rZXl9JywKICAgICAgICAgICAg
+          dmFsdWUsCiAgICAgICAgICApOwogICAgICAgICAgc2hvdWxkUmVsb2FkID0KICAgICAgICAgICAg
+          ICBzaG91bGRSZWxvYWQgfHwgZGVmaW5pdGlvbi5yZWxvYWRPbkNoYW5nZTsKICAgICAgICB9CiAg
+          ICAgICAgX3ZhbHVlc1tkZWZpbml0aW9uLmtleV0gPSB2YWx1ZTsKICAgICAgfQoKICAgICAgaWYg
+          KCFoYXNTY3JpcHRCYXNlVXJsICYmCiAgICAgICAgICAod2lkZ2V0LnBsdWdpbi5kb21haW5zPy5p
+          c05vdEVtcHR5ID8/IGZhbHNlKSkgewogICAgICAgIGF3YWl0IHNldHRpbmdzUmVwb3NpdG9yeS5z
+          ZXRDdXN0b21CYXNlVXJsKAogICAgICAgICAgd2lkZ2V0LnBsdWdpbi5wYWNrYWdlTmFtZSwKICAg
+          ICAgICAgIF9zZWxlY3RlZERvbWFpbi5pc0VtcHR5ID8gbnVsbCA6IF9zZWxlY3RlZERvbWFpbiwK
+          ICAgICAgICApOwogICAgICAgIHNob3VsZFJlbG9hZCA9IHRydWU7CiAgICAgIH0KCiAgICAgIGZv
+          ciAoZmluYWwgcHJvdmlkZXIgaW4gX3Byb3ZpZGVycykgewogICAgICAgIGF3YWl0IHN0b3JhZ2Uu
+          c2V0RXh0ZW5zaW9uRGF0YSgKICAgICAgICAgICcke3dpZGdldC5wbHVnaW4ucGFja2FnZU5hbWV9
+          OicKICAgICAgICAgICdfcHJvdmlkZXJfZW5hYmxlZF8ke3Byb3ZpZGVyLmlkfScsCiAgICAgICAg
+          ICAoX3Byb3ZpZGVyRW5hYmxlZFtwcm92aWRlci5pZF0gPz8gdHJ1ZSkKICAgICAgICAgICAgICA/
+          ICd0cnVlJwogICAgICAgICAgICAgIDogJ2ZhbHNlJywKICAgICAgICApOwogICAgICAgIHNob3Vs
+          ZFJlbG9hZCA9IHRydWU7CiAgICAgIH0KCiAgICAgIGlmIChzaG91bGRSZWxvYWQpIHsKICAgICAg
+          ICBhd2FpdCBtYW5hZ2VyLnJlbG9hZFBsdWdpbih3aWRnZXQucGx1Z2luKTsKICAgICAgfQoKICAg
+          ICAgaWYgKCFtb3VudGVkKSByZXR1cm47CiAgICAgIFNjYWZmb2xkTWVzc2VuZ2VyLm9mKGNvbnRl
+          eHQpLnNob3dTbmFja0JhcigKICAgICAgICBjb25zdCBTbmFja0Jhcihjb250ZW50OiBUZXh0KCdF
+          eHRlbnNpb24gc2V0dGluZ3Mgc2F2ZWQnKSksCiAgICAgICk7CiAgICB9IGNhdGNoIChlcnJvcikg
+          ewogICAgICBpZiAoIW1vdW50ZWQpIHJldHVybjsKICAgICAgU2NhZmZvbGRNZXNzZW5nZXIub2Yo
+          Y29udGV4dCkuc2hvd1NuYWNrQmFyKAogICAgICAgIFNuYWNrQmFyKGNvbnRlbnQ6IFRleHQoJ0Zh
+          aWxlZCB0byBzYXZlIHNldHRpbmdzOiAkZXJyb3InKSksCiAgICAgICk7CiAgICB9IGZpbmFsbHkg
+          ewogICAgICBpZiAobW91bnRlZCkgc2V0U3RhdGUoKCkgPT4gX3NhdmluZyA9IGZhbHNlKTsKICAg
+          IH0KICB9CgogIFdpZGdldCBfc2VjdGlvblRpdGxlKEJ1aWxkQ29udGV4dCBjb250ZXh0LCBTdHJp
+          bmcgdGl0bGUpIHsKICAgIHJldHVybiBQYWRkaW5nKAogICAgICBwYWRkaW5nOiBjb25zdCBFZGdl
+          SW5zZXRzLm9ubHkodG9wOiA4LCBib3R0b206IDgpLAogICAgICBjaGlsZDogVGV4dCgKICAgICAg
+          ICB0aXRsZSwKICAgICAgICBzdHlsZTogVGhlbWUub2YoY29udGV4dCkudGV4dFRoZW1lLnRpdGxl
+          TWVkaXVtPy5jb3B5V2l0aCgKICAgICAgICAgIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQuYm9sZCwK
+          ICAgICAgICAgIGNvbG9yOiBUaGVtZS5vZihjb250ZXh0KS5jb2xvclNjaGVtZS5wcmltYXJ5LAog
+          ICAgICAgICksCiAgICAgICksCiAgICApOwogIH0KCiAgV2lkZ2V0IF9idWlsZFNldHRpbmcoCiAg
+          ICBCdWlsZENvbnRleHQgY29udGV4dCwKICAgIFBsdWdpblNldHRpbmdEZWZpbml0aW9uIGRlZmlu
+          aXRpb24sCiAgKSB7CiAgICBzd2l0Y2ggKGRlZmluaXRpb24udHlwZSkgewogICAgICBjYXNlIFBs
+          dWdpblNldHRpbmdUeXBlLnRvZ2dsZToKICAgICAgICByZXR1cm4gU3dpdGNoTGlzdFRpbGUoCiAg
+          ICAgICAgICBjb250ZW50UGFkZGluZzogRWRnZUluc2V0cy56ZXJvLAogICAgICAgICAgdGl0bGU6
+          IFRleHQoZGVmaW5pdGlvbi50aXRsZSksCiAgICAgICAgICBzdWJ0aXRsZTogZGVmaW5pdGlvbi5k
+          ZXNjcmlwdGlvbiA9PSBudWxsCiAgICAgICAgICAgICAgPyBudWxsCiAgICAgICAgICAgICAgOiBU
+          ZXh0KGRlZmluaXRpb24uZGVzY3JpcHRpb24hKSwKICAgICAgICAgIHZhbHVlOiBfYm9vbFZhbHVl
+          KGRlZmluaXRpb24ua2V5KSwKICAgICAgICAgIG9uQ2hhbmdlZDogX3NhdmluZwogICAgICAgICAg
+          ICAgID8gbnVsbAogICAgICAgICAgICAgIDogKHZhbHVlKSB7CiAgICAgICAgICAgICAgICAgIHNl
+          dFN0YXRlKCgpIHsKICAgICAgICAgICAgICAgICAgICBfdmFsdWVzW2RlZmluaXRpb24ua2V5XSA9
+          IHZhbHVlID8gJ3RydWUnIDogJ2ZhbHNlJzsKICAgICAgICAgICAgICAgICAgfSk7CiAgICAgICAg
+          ICAgICAgICB9LAogICAgICAgICk7CgogICAgICBjYXNlIFBsdWdpblNldHRpbmdUeXBlLnNlbGVj
+          dDoKICAgICAgICBmaW5hbCBjdXJyZW50ID0gX3ZhbHVlc1tkZWZpbml0aW9uLmtleV07CiAgICAg
+          ICAgZmluYWwgc2VsZWN0ZWQgPSBkZWZpbml0aW9uLm9wdGlvbnMuYW55KAogICAgICAgICAgKG9w
+          dGlvbikgPT4gb3B0aW9uLnZhbHVlID09IGN1cnJlbnQsCiAgICAgICAgKQogICAgICAgICAgICA/
+          IGN1cnJlbnQKICAgICAgICAgICAgOiBudWxsOwoKICAgICAgICByZXR1cm4gUGFkZGluZygKICAg
+          ICAgICAgIHBhZGRpbmc6IGNvbnN0IEVkZ2VJbnNldHMub25seShib3R0b206IDE2KSwKICAgICAg
+          ICAgIGNoaWxkOiBEcm9wZG93bkJ1dHRvbkZvcm1GaWVsZDxTdHJpbmc+KAogICAgICAgICAgICBr
+          ZXk6IFZhbHVlS2V5KCcke2RlZmluaXRpb24ua2V5fTokc2VsZWN0ZWQnKSwKICAgICAgICAgICAg
+          aW5pdGlhbFZhbHVlOiBzZWxlY3RlZCwKICAgICAgICAgICAgaXNFeHBhbmRlZDogdHJ1ZSwKICAg
+          ICAgICAgICAgZGVjb3JhdGlvbjogSW5wdXREZWNvcmF0aW9uKAogICAgICAgICAgICAgIGxhYmVs
+          VGV4dDogZGVmaW5pdGlvbi50aXRsZSwKICAgICAgICAgICAgICBoZWxwZXJUZXh0OiBkZWZpbml0
+          aW9uLmRlc2NyaXB0aW9uLAogICAgICAgICAgICAgIGJvcmRlcjogY29uc3QgT3V0bGluZUlucHV0
+          Qm9yZGVyKCksCiAgICAgICAgICAgICksCiAgICAgICAgICAgIGl0ZW1zOiBkZWZpbml0aW9uLm9w
+          dGlvbnMKICAgICAgICAgICAgICAgIC5tYXAoCiAgICAgICAgICAgICAgICAgIChvcHRpb24pID0+
+          IERyb3Bkb3duTWVudUl0ZW08U3RyaW5nPigKICAgICAgICAgICAgICAgICAgICB2YWx1ZTogb3B0
+          aW9uLnZhbHVlLAogICAgICAgICAgICAgICAgICAgIGNoaWxkOiBUZXh0KAogICAgICAgICAgICAg
+          ICAgICAgICAgb3B0aW9uLmxhYmVsLAogICAgICAgICAgICAgICAgICAgICAgb3ZlcmZsb3c6IFRl
+          eHRPdmVyZmxvdy5lbGxpcHNpcywKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAg
+          ICAgICApLAogICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgLnRvTGlzdChncm93YWJs
+          ZTogZmFsc2UpLAogICAgICAgICAgICBvbkNoYW5nZWQ6IF9zYXZpbmcKICAgICAgICAgICAgICAg
+          ID8gbnVsbAogICAgICAgICAgICAgICAgOiAodmFsdWUpIHsKICAgICAgICAgICAgICAgICAgICBp
+          ZiAodmFsdWUgPT0gbnVsbCkgcmV0dXJuOwogICAgICAgICAgICAgICAgICAgIHNldFN0YXRlKCgp
+          IHsKICAgICAgICAgICAgICAgICAgICAgIF92YWx1ZXNbZGVmaW5pdGlvbi5rZXldID0gdmFsdWU7
+          CiAgICAgICAgICAgICAgICAgICAgfSk7CiAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAp
+          LAogICAgICAgICk7CgogICAgICBjYXNlIFBsdWdpblNldHRpbmdUeXBlLnRleHQ6CiAgICAgIGNh
+          c2UgUGx1Z2luU2V0dGluZ1R5cGUudXJsOgogICAgICAgIHJldHVybiBQYWRkaW5nKAogICAgICAg
+          ICAgcGFkZGluZzogY29uc3QgRWRnZUluc2V0cy5vbmx5KGJvdHRvbTogMTYpLAogICAgICAgICAg
+          Y2hpbGQ6IFRleHRGaWVsZCgKICAgICAgICAgICAgY29udHJvbGxlcjogX2NvbnRyb2xsZXJzW2Rl
+          ZmluaXRpb24ua2V5XSwKICAgICAgICAgICAgZW5hYmxlZDogIV9zYXZpbmcsCiAgICAgICAgICAg
+          IGtleWJvYXJkVHlwZTogZGVmaW5pdGlvbi50eXBlID09IFBsdWdpblNldHRpbmdUeXBlLnVybAog
+          ICAgICAgICAgICAgICAgPyBUZXh0SW5wdXRUeXBlLnVybAogICAgICAgICAgICAgICAgOiBUZXh0
+          SW5wdXRUeXBlLnRleHQsCiAgICAgICAgICAgIGF1dG9jb3JyZWN0OiBkZWZpbml0aW9uLnR5cGUg
+          IT0gUGx1Z2luU2V0dGluZ1R5cGUudXJsLAogICAgICAgICAgICBlbmFibGVTdWdnZXN0aW9uczoK
+          ICAgICAgICAgICAgICAgIGRlZmluaXRpb24udHlwZSAhPSBQbHVnaW5TZXR0aW5nVHlwZS51cmws
+          CiAgICAgICAgICAgIGRlY29yYXRpb246IElucHV0RGVjb3JhdGlvbigKICAgICAgICAgICAgICBs
+          YWJlbFRleHQ6IGRlZmluaXRpb24udGl0bGUsCiAgICAgICAgICAgICAgaGVscGVyVGV4dDogZGVm
+          aW5pdGlvbi5kZXNjcmlwdGlvbiwKICAgICAgICAgICAgICBoaW50VGV4dDogZGVmaW5pdGlvbi50
+          eXBlID09IFBsdWdpblNldHRpbmdUeXBlLnVybAogICAgICAgICAgICAgICAgICA/ICdodHRwczov
+          L2V4YW1wbGUuY29tJwogICAgICAgICAgICAgICAgICA6IG51bGwsCiAgICAgICAgICAgICAgYm9y
+          ZGVyOiBjb25zdCBPdXRsaW5lSW5wdXRCb3JkZXIoKSwKICAgICAgICAgICAgKSwKICAgICAgICAg
+          ICksCiAgICAgICAgKTsKICAgIH0KICB9CgogIEBvdmVycmlkZQogIFdpZGdldCBidWlsZChCdWls
+          ZENvbnRleHQgY29udGV4dCkgewogICAgZmluYWwgbDEwbiA9IEFwcExvY2FsaXphdGlvbnMub2Yo
+          Y29udGV4dCkhOwogICAgZmluYWwgZG9tYWlucyA9CiAgICAgICAgd2lkZ2V0LnBsdWdpbi5kb21h
+          aW5zID8/IGNvbnN0IDxQbHVnaW5Eb21haW4+W107CiAgICBmaW5hbCBoYXNTY3JpcHRCYXNlVXJs
+          ID0gX2RlZmluaXRpb25zLmFueSgKICAgICAgKGRlZmluaXRpb24pID0+IGRlZmluaXRpb24uaXNC
+          YXNlVXJsLAogICAgKTsKICAgIGZpbmFsIGhhc0NvbnRlbnQgPQogICAgICAgIF9kZWZpbml0aW9u
+          cy5pc05vdEVtcHR5IHx8CiAgICAgICAgX3Byb3ZpZGVycy5pc05vdEVtcHR5IHx8CiAgICAgICAg
+          KGRvbWFpbnMuaXNOb3RFbXB0eSAmJiAhaGFzU2NyaXB0QmFzZVVybCk7CgogICAgcmV0dXJuIFNj
+          YWZmb2xkKAogICAgICBhcHBCYXI6IEFwcEJhcigKICAgICAgICB0aXRsZTogVGV4dChsMTBuLnBs
+          dWdpblNldHRpbmdzKHdpZGdldC5wbHVnaW4ubmFtZSkpLAogICAgICAgIGFjdGlvbnM6IFsKICAg
+          ICAgICAgIEljb25CdXR0b24oCiAgICAgICAgICAgIHRvb2x0aXA6ICdTYXZlJywKICAgICAgICAg
+          ICAgb25QcmVzc2VkOiBfbG9hZGluZyB8fCBfc2F2aW5nID8gbnVsbCA6IF9zYXZlLAogICAgICAg
+          ICAgICBpY29uOiBfc2F2aW5nCiAgICAgICAgICAgICAgICA/IGNvbnN0IEFwcExvYWRpbmdJbmRp
+          Y2F0b3IoCiAgICAgICAgICAgICAgICAgICAgY29uc3RyYWludHM6IEJveENvbnN0cmFpbnRzLnRp
+          Z2h0Rm9yKAogICAgICAgICAgICAgICAgICAgICAgd2lkdGg6IDIwLAogICAgICAgICAgICAgICAg
+          ICAgICAgaGVpZ2h0OiAyMCwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAg
+          ICApCiAgICAgICAgICAgICAgICA6IGNvbnN0IEljb24oSWNvbnMuc2F2ZV9vdXRsaW5lZCksCiAg
+          ICAgICAgICApLAogICAgICAgIF0sCiAgICAgICksCiAgICAgIGJvZHk6IF9sb2FkaW5nCiAgICAg
+          ICAgICA/IGNvbnN0IENlbnRlcihjaGlsZDogQXBwTG9hZGluZ0luZGljYXRvcigpKQogICAgICAg
+          ICAgOiBfZXJyb3IgIT0gbnVsbAogICAgICAgICAgPyBDZW50ZXIoCiAgICAgICAgICAgICAgY2hp
+          bGQ6IFBhZGRpbmcoCiAgICAgICAgICAgICAgICBwYWRkaW5nOiBjb25zdCBFZGdlSW5zZXRzLmFs
+          bCgyNCksCiAgICAgICAgICAgICAgICBjaGlsZDogQ29sdW1uKAogICAgICAgICAgICAgICAgICBt
+          YWluQXhpc1NpemU6IE1haW5BeGlzU2l6ZS5taW4sCiAgICAgICAgICAgICAgICAgIGNoaWxkcmVu
+          OiBbCiAgICAgICAgICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgIF9lcnJv
+          ciEsCiAgICAgICAgICAgICAgICAgICAgICB0ZXh0QWxpZ246IFRleHRBbGlnbi5jZW50ZXIsCiAg
+          ICAgICAgICAgICAgICAgICAgICBzdHlsZTogVGV4dFN0eWxlKAogICAgICAgICAgICAgICAgICAg
+          ICAgICBjb2xvcjogVGhlbWUub2YoY29udGV4dCkuY29sb3JTY2hlbWUuZXJyb3IsCiAgICAgICAg
+          ICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAg
+          ICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiAxMiksCiAgICAgICAgICAgICAgICAgICAgRmlsbGVk
+          QnV0dG9uKAogICAgICAgICAgICAgICAgICAgICAgb25QcmVzc2VkOiBfbG9hZCwKICAgICAgICAg
+          ICAgICAgICAgICAgIGNoaWxkOiBjb25zdCBUZXh0KCdSZXRyeScpLAogICAgICAgICAgICAgICAg
+          ICAgICksCiAgICAgICAgICAgICAgICAgIF0sCiAgICAgICAgICAgICAgICApLAogICAgICAgICAg
+          ICAgICksCiAgICAgICAgICAgICkKICAgICAgICAgIDogIWhhc0NvbnRlbnQKICAgICAgICAgID8g
+          Y29uc3QgQ2VudGVyKAogICAgICAgICAgICAgIGNoaWxkOiBQYWRkaW5nKAogICAgICAgICAgICAg
+          ICAgcGFkZGluZzogRWRnZUluc2V0cy5hbGwoMjQpLAogICAgICAgICAgICAgICAgY2hpbGQ6IFRl
+          eHQoCiAgICAgICAgICAgICAgICAgICdUaGlzIGV4dGVuc2lvbiBkb2VzIG5vdCBkZWZpbmUgY29u
+          ZmlndXJhYmxlIHNldHRpbmdzLicsCiAgICAgICAgICAgICAgICAgIHRleHRBbGlnbjogVGV4dEFs
+          aWduLmNlbnRlciwKICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgKSwKICAgICAgICAg
+          ICAgKQogICAgICAgICAgOiBMaXN0VmlldygKICAgICAgICAgICAgICBwYWRkaW5nOiBjb25zdCBF
+          ZGdlSW5zZXRzLmZyb21MVFJCKDE2LCA4LCAxNiwgMzIpLAogICAgICAgICAgICAgIGNoaWxkcmVu
+          OiBbCiAgICAgICAgICAgICAgICBpZiAoX2RlZmluaXRpb25zLmlzTm90RW1wdHkpIC4uLlsKICAg
+          ICAgICAgICAgICAgICAgX3NlY3Rpb25UaXRsZShjb250ZXh0LCAnRXh0ZW5zaW9uIHNldHRpbmdz
+          JyksCiAgICAgICAgICAgICAgICAgIC4uLl9kZWZpbml0aW9ucy5tYXAoCiAgICAgICAgICAgICAg
+          ICAgICAgKGRlZmluaXRpb24pID0+CiAgICAgICAgICAgICAgICAgICAgICAgIF9idWlsZFNldHRp
+          bmcoY29udGV4dCwgZGVmaW5pdGlvbiksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAg
+          ICAgICBdLAogICAgICAgICAgICAgICAgaWYgKGRvbWFpbnMuaXNOb3RFbXB0eSAmJiAhaGFzU2Ny
+          aXB0QmFzZVVybCkgLi4uWwogICAgICAgICAgICAgICAgICBfc2VjdGlvblRpdGxlKGNvbnRleHQs
+          ICdXZWJzaXRlIGFkZHJlc3MnKSwKICAgICAgICAgICAgICAgICAgUmFkaW9Hcm91cDxTdHJpbmc+
+          KAogICAgICAgICAgICAgICAgICAgIGdyb3VwVmFsdWU6IF9zZWxlY3RlZERvbWFpbiwKICAgICAg
+          ICAgICAgICAgICAgICBvbkNoYW5nZWQ6ICh2YWx1ZSkgewogICAgICAgICAgICAgICAgICAgICAg
+          aWYgKF9zYXZpbmcgfHwgdmFsdWUgPT0gbnVsbCkgcmV0dXJuOwogICAgICAgICAgICAgICAgICAg
+          ICAgc2V0U3RhdGUoKCkgPT4gX3NlbGVjdGVkRG9tYWluID0gdmFsdWUpOwogICAgICAgICAgICAg
+          ICAgICAgIH0sCiAgICAgICAgICAgICAgICAgICAgY2hpbGQ6IENvbHVtbigKICAgICAgICAgICAg
+          ICAgICAgICAgIGNoaWxkcmVuOiBkb21haW5zCiAgICAgICAgICAgICAgICAgICAgICAgICAgLm1h
+          cCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgIChkb21haW4pID0+IExpc3RUaWxlKAogICAg
+          ICAgICAgICAgICAgICAgICAgICAgICAgICBjb250ZW50UGFkZGluZzogRWRnZUluc2V0cy56ZXJv
+          LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICB0aXRsZTogVGV4dChkb21haW4ubmFtZSks
+          CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHN1YnRpdGxlOiBUZXh0KGRvbWFpbi51cmwp
+          LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBsZWFkaW5nOiBSYWRpbzxTdHJpbmc+KAog
+          ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHZhbHVlOiBkb21haW4udXJsLAogICAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBv
+          blRhcDogX3NhdmluZwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPyBudWxsCiAg
+          ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA6ICgpIHsKICAgICAgICAgICAgICAgICAg
+          ICAgICAgICAgICAgICAgICAgICBzZXRTdGF0ZSgKICAgICAgICAgICAgICAgICAgICAgICAgICAg
+          ICAgICAgICAgICAgICgpID0+IF9zZWxlY3RlZERvbWFpbiA9CiAgICAgICAgICAgICAgICAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgICAgZG9tYWluLnVybCwKICAgICAgICAgICAgICAgICAgICAg
+          ICAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB9
+          LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAg
+          ICApCiAgICAgICAgICAgICAgICAgICAgICAgICAgLnRvTGlzdChncm93YWJsZTogZmFsc2UpLAog
+          ICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAg
+          ICBdLAogICAgICAgICAgICAgICAgaWYgKF9wcm92aWRlcnMuaXNOb3RFbXB0eSkgLi4uWwogICAg
+          ICAgICAgICAgICAgICBfc2VjdGlvblRpdGxlKGNvbnRleHQsICdQcm92aWRlcnMnKSwKICAgICAg
+          ICAgICAgICAgICAgLi4uX3Byb3ZpZGVycy5tYXAoCiAgICAgICAgICAgICAgICAgICAgKHByb3Zp
+          ZGVyKSA9PiBTd2l0Y2hMaXN0VGlsZSgKICAgICAgICAgICAgICAgICAgICAgIGNvbnRlbnRQYWRk
+          aW5nOiBFZGdlSW5zZXRzLnplcm8sCiAgICAgICAgICAgICAgICAgICAgICB0aXRsZTogVGV4dChw
+          cm92aWRlci5uYW1lKSwKICAgICAgICAgICAgICAgICAgICAgIHN1YnRpdGxlOiBUZXh0KHByb3Zp
+          ZGVyLmlkKSwKICAgICAgICAgICAgICAgICAgICAgIHZhbHVlOgogICAgICAgICAgICAgICAgICAg
+          ICAgICAgIF9wcm92aWRlckVuYWJsZWRbcHJvdmlkZXIuaWRdID8/IHRydWUsCiAgICAgICAgICAg
+          ICAgICAgICAgICBvbkNoYW5nZWQ6IF9zYXZpbmcKICAgICAgICAgICAgICAgICAgICAgICAgICA/
+          IG51bGwKICAgICAgICAgICAgICAgICAgICAgICAgICA6ICh2YWx1ZSkgewogICAgICAgICAgICAg
+          ICAgICAgICAgICAgICAgICBzZXRTdGF0ZSgoKSB7CiAgICAgICAgICAgICAgICAgICAgICAgICAg
+          ICAgICAgX3Byb3ZpZGVyRW5hYmxlZFtwcm92aWRlci5pZF0gPQogICAgICAgICAgICAgICAgICAg
+          ICAgICAgICAgICAgICAgICB2YWx1ZTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgfSk7
+          CiAgICAgICAgICAgICAgICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICAgICAgICksCiAg
+          ICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICBdLAogICAgICAgICAgICAgICAgY29u
+          c3QgU2l6ZWRCb3goaGVpZ2h0OiAxNiksCiAgICAgICAgICAgICAgICBGaWxsZWRCdXR0b24uaWNv
+          bigKICAgICAgICAgICAgICAgICAgb25QcmVzc2VkOiBfc2F2aW5nID8gbnVsbCA6IF9zYXZlLAog
+          ICAgICAgICAgICAgICAgICBpY29uOiBjb25zdCBJY29uKEljb25zLnNhdmVfb3V0bGluZWQpLAog
+          ICAgICAgICAgICAgICAgICBsYWJlbDogY29uc3QgVGV4dCgnU2F2ZSBzZXR0aW5ncycpLAogICAg
+          ICAgICAgICAgICAgKSwKICAgICAgICAgICAgICBdLAogICAgICAgICAgICApLAogICAgKTsKICB9
+          Cn0KJycnCgpuZXdfc2NyZWVuX3BhdGggPSAoCiAgICByb290IC8KICAgICdsaWIvZmVhdHVyZXMv
+          ZXh0ZW5zaW9ucy9zY3JlZW5zL3BsdWdpbl9zZXR0aW5nc19zY3JlZW4uZGFydCcKKQpuZXdfc2Ny
+          ZWVuX3BhdGgud3JpdGVfdGV4dChzZXR0aW5nc19zY3JlZW4sIGVuY29kaW5nPSd1dGYtOCcpCgoj
+          IC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLQojIDUuIFNob3cgc2V0dGluZ3Mgb25seSB3aGVuIGNvbmZpZ3VyYWJsZSBjb250
+          ZW50IGV4aXN0cwojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLQpleHRlbnNpb25zX3BhdGggPSAoCiAgICByb290IC8gJ2xp
+          Yi9mZWF0dXJlcy9leHRlbnNpb25zL3NjcmVlbnMvZXh0ZW5zaW9uc19zY3JlZW4uZGFydCcKKQpl
+          eHRlbnNpb25zID0gZXh0ZW5zaW9uc19wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQpl
+          eHRlbnNpb25zID0gZXh0ZW5zaW9ucy5yZXBsYWNlKAogICAgImltcG9ydCAnLi4vd2lkZ2V0cy9w
+          bHVnaW5fc2V0dGluZ3NfZGlhbG9nLmRhcnQnO1xuIiwKICAgICJpbXBvcnQgJ3BsdWdpbl9zZXR0
+          aW5nc19zY3JlZW4uZGFydCc7XG4iLAopCgpzdGF0ZV9hbmNob3IgPSAnJydjbGFzcyBfUGx1Z2lu
+          VGlsZVN0YXRlIGV4dGVuZHMgQ29uc3VtZXJTdGF0ZTxfUGx1Z2luVGlsZT4gewogIGZpbmFsIEZv
+          Y3VzTm9kZSBfc2V0dGluZ3NGb2N1c05vZGUgPSBGb2N1c05vZGUoKTsKCiAgQG92ZXJyaWRlCiAg
+          dm9pZCBkaXNwb3NlKCkgewonJycKc3RhdGVfcmVwbGFjZW1lbnQgPSAnJydjbGFzcyBfUGx1Z2lu
+          VGlsZVN0YXRlIGV4dGVuZHMgQ29uc3VtZXJTdGF0ZTxfUGx1Z2luVGlsZT4gewogIGZpbmFsIEZv
+          Y3VzTm9kZSBfc2V0dGluZ3NGb2N1c05vZGUgPSBGb2N1c05vZGUoKTsKICBGdXR1cmU8TGlzdDxQ
+          bHVnaW5TZXR0aW5nRGVmaW5pdGlvbj4+PyBfc2V0dGluZ3NGdXR1cmU7CiAgU3RyaW5nPyBfc2V0
+          dGluZ3NGdXR1cmVQYWNrYWdlTmFtZTsKCiAgRnV0dXJlPExpc3Q8UGx1Z2luU2V0dGluZ0RlZmlu
+          aXRpb24+PiBfc2V0dGluZ3NGb3IoCiAgICBFeHRlbnNpb25QbHVnaW4gcGx1Z2luLAogICkgewog
+          ICAgaWYgKF9zZXR0aW5nc0Z1dHVyZSA9PSBudWxsIHx8CiAgICAgICAgX3NldHRpbmdzRnV0dXJl
+          UGFja2FnZU5hbWUgIT0gcGx1Z2luLnBhY2thZ2VOYW1lKSB7CiAgICAgIF9zZXR0aW5nc0Z1dHVy
+          ZVBhY2thZ2VOYW1lID0gcGx1Z2luLnBhY2thZ2VOYW1lOwogICAgICBfc2V0dGluZ3NGdXR1cmUg
+          PSByZWYKICAgICAgICAgIC5yZWFkKGV4dGVuc2lvbk1hbmFnZXJQcm92aWRlci5ub3RpZmllcikK
+          ICAgICAgICAgIC5nZXRTZXR0aW5nc0ZvclBsdWdpbihwbHVnaW4pOwogICAgfQogICAgcmV0dXJu
+          IF9zZXR0aW5nc0Z1dHVyZSE7CiAgfQoKICBAb3ZlcnJpZGUKICB2b2lkIGRpc3Bvc2UoKSB7Cicn
+          JwoKaWYgJ19zZXR0aW5nc0Z1dHVyZVBhY2thZ2VOYW1lJyBub3QgaW4gZXh0ZW5zaW9uczoKICAg
+          IGlmIGV4dGVuc2lvbnMuY291bnQoc3RhdGVfYW5jaG9yKSAhPSAxOgogICAgICAgIHJhaXNlIFJ1
+          bnRpbWVFcnJvcigKICAgICAgICAgICAgJ0V4cGVjdGVkIGV4YWN0bHkgb25lIF9QbHVnaW5UaWxl
+          U3RhdGUgYW5jaG9yLCBmb3VuZCAnCiAgICAgICAgICAgIGYne2V4dGVuc2lvbnMuY291bnQoc3Rh
+          dGVfYW5jaG9yKX0uJywKICAgICAgICApCiAgICBleHRlbnNpb25zID0gZXh0ZW5zaW9ucy5yZXBs
+          YWNlKAogICAgICAgIHN0YXRlX2FuY2hvciwKICAgICAgICBzdGF0ZV9yZXBsYWNlbWVudCwKICAg
+          ICAgICAxLAogICAgKQoKb2xkX2J1dHRvbl9wYXR0ZXJuID0gcmUuY29tcGlsZSgKICAgIHInJycg
+          ICAgICAgICAgICAgICAgLy8gU2V0dGluZ3MgYnV0dG9uIFwoc2hvd24gd2hlbiBwbHVnaW4gJycn
+          CiAgICByJycnZGVjbGFyZXMgZG9tYWlucywgc3RhdGljIHByb3ZpZGVycywgb3IgZHluYW1pYyBw
+          cm92aWRlcnMgJycnCiAgICByJycnZnJvbSBKU1wpXG4nJycKICAgIHInJycgICAgICAgICAgICAg
+          ICAgaWYgXChpc0luc3RhbGxlZCAmJltcc1xTXSo/JycnCiAgICByJycnICAgICAgICAgICAgICAg
+          ICAgICB9LFxuJycnCiAgICByJycnICAgICAgICAgICAgICAgICAgXCksXG5cbicnJwogICAgcicn
+          JyAgICAgICAgICAgICAgICAvLyBJbnN0YWxsIC8gZGVsZXRlIGJ1dHRvbicnJywKKQoKbmV3X2J1
+          dHRvbiA9IHInJycgICAgICAgICAgICAgICAgLy8gU2hvdyB0aGUgYnV0dG9uIG9ubHkgd2hlbiB0
+          aGUgZXh0ZW5zaW9uIGV4cG9zZXMKICAgICAgICAgICAgICAgIC8vIHNldHRpbmdzLCBkb21haW5z
+          LCBvciBwcm92aWRlcnMuIFdoaWxlIGdldFNldHRpbmdzKCkKICAgICAgICAgICAgICAgIC8vIGlz
+          IHJlc29sdmluZywgbm8gZW1wdHkgc2V0dGluZ3MgYnV0dG9uIGlzIGRpc3BsYXllZC4KICAgICAg
+          ICAgICAgICAgIGlmIChpc0luc3RhbGxlZCkKICAgICAgICAgICAgICAgICAgRnV0dXJlQnVpbGRl
+          cjxMaXN0PFBsdWdpblNldHRpbmdEZWZpbml0aW9uPj4oCiAgICAgICAgICAgICAgICAgICAgZnV0
+          dXJlOiBfc2V0dGluZ3NGb3IoaW5zdGFsbGVkUGx1Z2luISksCiAgICAgICAgICAgICAgICAgICAg
+          YnVpbGRlcjogKGNvbnRleHQsIHNuYXBzaG90KSB7CiAgICAgICAgICAgICAgICAgICAgICBmaW5h
+          bCBtYW5pZmVzdFNldHRpbmdzID0KICAgICAgICAgICAgICAgICAgICAgICAgICBpbnN0YWxsZWRQ
+          bHVnaW4ubWFuaWZlc3RbJ3NldHRpbmdzJ107CiAgICAgICAgICAgICAgICAgICAgICBmaW5hbCBo
+          YXNNYW5pZmVzdFNldHRpbmdzID0KICAgICAgICAgICAgICAgICAgICAgICAgICBtYW5pZmVzdFNl
+          dHRpbmdzIGlzIExpc3QgJiYKICAgICAgICAgICAgICAgICAgICAgICAgICBtYW5pZmVzdFNldHRp
+          bmdzLmlzTm90RW1wdHk7CiAgICAgICAgICAgICAgICAgICAgICBmaW5hbCBoYXNTY3JpcHRTZXR0
+          aW5ncyA9CiAgICAgICAgICAgICAgICAgICAgICAgICAgc25hcHNob3QuZGF0YT8uaXNOb3RFbXB0
+          eSA/PyBmYWxzZTsKICAgICAgICAgICAgICAgICAgICAgIGZpbmFsIGhhc0RvbWFpbnMgPQogICAg
+          ICAgICAgICAgICAgICAgICAgICAgIGluc3RhbGxlZFBsdWdpbi5kb21haW5zPy5pc05vdEVtcHR5
+          ID8/IGZhbHNlOwogICAgICAgICAgICAgICAgICAgICAgZmluYWwgaGFzU3RhdGljUHJvdmlkZXJz
+          ID0KICAgICAgICAgICAgICAgICAgICAgICAgICBpbnN0YWxsZWRQbHVnaW4ucHJvdmlkZXJzPy5p
+          c05vdEVtcHR5ID8/CiAgICAgICAgICAgICAgICAgICAgICAgICAgZmFsc2U7CgogICAgICAgICAg
+          ICAgICAgICAgICAgLy8gUmVidWlsZCB3aGVuIGR5bmFtaWMgcHJvdmlkZXJzIGZpbmlzaCBsb2Fk
+          aW5nLgogICAgICAgICAgICAgICAgICAgICAgZmluYWwgbG9hZGVkUHJvdmlkZXJzID0gcmVmLndh
+          dGNoKAogICAgICAgICAgICAgICAgICAgICAgICBleHRlbnNpb25NYW5hZ2VyUHJvdmlkZXIsCiAg
+          ICAgICAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgICAgICAgICAgZmluYWwgaGFzTG9h
+          ZGVkU3ViUHJvdmlkZXJzID0gbG9hZGVkUHJvdmlkZXJzLmFueSgKICAgICAgICAgICAgICAgICAg
+          ICAgICAgKHByb3ZpZGVyKSA9PgogICAgICAgICAgICAgICAgICAgICAgICAgICAgcHJvdmlkZXIu
+          cGFja2FnZU5hbWUuc3RhcnRzV2l0aCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJyR7
+          aW5zdGFsbGVkUGx1Z2luLnBhY2thZ2VOYW1lfTo6JywKICAgICAgICAgICAgICAgICAgICAgICAg
+          ICAgICksCiAgICAgICAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgICAgICAgICAgZmlu
+          YWwgaGFzRHluYW1pY1Byb3ZpZGVycyA9IHJlZgogICAgICAgICAgICAgICAgICAgICAgICAgIC5y
+          ZWFkKGV4dGVuc2lvbk1hbmFnZXJQcm92aWRlci5ub3RpZmllcikKICAgICAgICAgICAgICAgICAg
+          ICAgICAgICAuZ2V0UHJvdmlkZXJzRm9yUGx1Z2luKGluc3RhbGxlZFBsdWdpbikKICAgICAgICAg
+          ICAgICAgICAgICAgICAgICAuaXNOb3RFbXB0eTsKCiAgICAgICAgICAgICAgICAgICAgICBmaW5h
+          bCBoYXNTZXR0aW5ncyA9CiAgICAgICAgICAgICAgICAgICAgICAgICAgaGFzTWFuaWZlc3RTZXR0
+          aW5ncyB8fAogICAgICAgICAgICAgICAgICAgICAgICAgIGhhc1NjcmlwdFNldHRpbmdzIHx8CiAg
+          ICAgICAgICAgICAgICAgICAgICAgICAgaGFzRG9tYWlucyB8fAogICAgICAgICAgICAgICAgICAg
+          ICAgICAgIGhhc1N0YXRpY1Byb3ZpZGVycyB8fAogICAgICAgICAgICAgICAgICAgICAgICAgIGhh
+          c0R5bmFtaWNQcm92aWRlcnMgfHwKICAgICAgICAgICAgICAgICAgICAgICAgICBoYXNMb2FkZWRT
+          dWJQcm92aWRlcnM7CgogICAgICAgICAgICAgICAgICAgICAgaWYgKCFoYXNTZXR0aW5ncykgewog
+          ICAgICAgICAgICAgICAgICAgICAgICByZXR1cm4gY29uc3QgU2l6ZWRCb3guc2hyaW5rKCk7CiAg
+          ICAgICAgICAgICAgICAgICAgICB9CgogICAgICAgICAgICAgICAgICAgICAgcmV0dXJuIEljb25C
+          dXR0b24oCiAgICAgICAgICAgICAgICAgICAgICAgIGZvY3VzTm9kZTogX3NldHRpbmdzRm9jdXNO
+          b2RlLAogICAgICAgICAgICAgICAgICAgICAgICBpY29uOiBjb25zdCBJY29uKEljb25zLnNldHRp
+          bmdzX291dGxpbmVkKSwKICAgICAgICAgICAgICAgICAgICAgICAgdG9vbHRpcDogbDEwbi5zZXR0
+          aW5ncywKICAgICAgICAgICAgICAgICAgICAgICAgb25QcmVzc2VkOiAoKSBhc3luYyB7CiAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgYXdhaXQgTmF2aWdhdG9yLm9mKGNvbnRleHQpLnB1c2g8dm9p
+          ZD4oCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXRlcmlhbFBhZ2VSb3V0ZTx2b2lkPigK
+          ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgYnVpbGRlcjogKGNvbnRleHQpID0+CiAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQbHVnaW5TZXR0aW5nc1NjcmVlbigKICAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgcGx1Z2luOiBpbnN0YWxsZWRQbHVnaW4sCiAg
+          ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAg
+          ICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgICAgICAg
+          ICAgICAgIGlmIChjb250ZXh0Lm1vdW50ZWQpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAg
+          IF9zZXR0aW5nc0ZvY3VzTm9kZS5yZXF1ZXN0Rm9jdXMoKTsKICAgICAgICAgICAgICAgICAgICAg
+          ICAgICB9CiAgICAgICAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICAgICAgICAp
+          OwogICAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICAgICksCgogICAgICAgICAg
+          ICAgICAgLy8gSW5zdGFsbCAvIGRlbGV0ZSBidXR0b24nJycKCmlmICdGdXR1cmVCdWlsZGVyPExp
+          c3Q8UGx1Z2luU2V0dGluZ0RlZmluaXRpb24+Picgbm90IGluIGV4dGVuc2lvbnM6CiAgICBleHRl
+          bnNpb25zLCByZXBsYWNlZCA9IG9sZF9idXR0b25fcGF0dGVybi5zdWJuKAogICAgICAgIG5ld19i
+          dXR0b24sCiAgICAgICAgZXh0ZW5zaW9ucywKICAgICAgICBjb3VudD0xLAogICAgKQogICAgaWYg
+          cmVwbGFjZWQgIT0gMToKICAgICAgICByYWlzZSBSdW50aW1lRXJyb3IoCiAgICAgICAgICAgIGYn
+          RXhwZWN0ZWQgb25lIHNldHRpbmdzIGJ1dHRvbiBibG9jaywgcmVwbGFjZWQge3JlcGxhY2VkfS4n
+          CiAgICAgICAgKQoKZXh0ZW5zaW9uc19wYXRoLndyaXRlX3RleHQoZXh0ZW5zaW9ucywgZW5jb2Rp
+          bmc9J3V0Zi04JykKCm9sZF9kaWFsb2cgPSAoCiAgICByb290IC8KICAgICdsaWIvZmVhdHVyZXMv
+          ZXh0ZW5zaW9ucy93aWRnZXRzL3BsdWdpbl9zZXR0aW5nc19kaWFsb2cuZGFydCcKKQpvbGRfZGlh
+          bG9nLnVubGluayhtaXNzaW5nX29rPVRydWUpCgojIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQojIDYuIFN0YXRpYyB2ZXJp
+          ZmljYXRpb24gYmVmb3JlIEZsdXR0ZXIgYW5hbHlzaXMKIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+          LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KcmVxdWlyZWQgPSB7
+          CiAgICBtb2RlbF9wYXRoOiAoCiAgICAgICAgJ2NsYXNzIFBsdWdpblNldHRpbmdEZWZpbml0aW9u
+          JywKICAgICAgICAnZW51bSBQbHVnaW5TZXR0aW5nVHlwZScsCiAgICApLAogICAgcHJvdmlkZXJf
+          cGF0aDogKAogICAgICAgICdnZXRTZXR0aW5nczonLAogICAgICAgICdGdXR1cmU8TGlzdDxQbHVn
+          aW5TZXR0aW5nRGVmaW5pdGlvbj4+IGdldFNldHRpbmdzKCkgYXN5bmMnLAogICAgICAgICdfaWlm
+          ZVdyYXBwZXJWZXJzaW9uJywKICAgICksCiAgICBtYW5hZ2VyX3BhdGg6ICgKICAgICAgICAnZ2V0
+          U2V0dGluZ3NGb3JQbHVnaW4oJywKICAgICAgICAnX2NyZWF0ZVNldHRpbmdzUHJvdmlkZXIoJywK
+          ICAgICAgICAnX2NsZWFyU2V0dGluZ3NSdW50aW1lKCcsCiAgICApLAogICAgbmV3X3NjcmVlbl9w
+          YXRoOiAoCiAgICAgICAgJ2NsYXNzIFBsdWdpblNldHRpbmdzU2NyZWVuJywKICAgICAgICAnRHJv
+          cGRvd25CdXR0b25Gb3JtRmllbGQ8U3RyaW5nPicsCiAgICAgICAgJ1N3aXRjaExpc3RUaWxlJywK
+          ICAgICAgICAnVGV4dElucHV0VHlwZS51cmwnLAogICAgKSwKICAgIGV4dGVuc2lvbnNfcGF0aDog
+          KAogICAgICAgICJpbXBvcnQgJ3BsdWdpbl9zZXR0aW5nc19zY3JlZW4uZGFydCc7IiwKICAgICAg
+          ICAnUGx1Z2luU2V0dGluZ3NTY3JlZW4oJywKICAgICAgICAnRnV0dXJlQnVpbGRlcjxMaXN0PFBs
+          dWdpblNldHRpbmdEZWZpbml0aW9uPj4nLAogICAgICAgICdfc2V0dGluZ3NGdXR1cmVQYWNrYWdl
+          TmFtZScsCiAgICAgICAgJ2ZpbmFsIGhhc1NldHRpbmdzID0nLAogICAgICAgICdyZXR1cm4gY29u
+          c3QgU2l6ZWRCb3guc2hyaW5rKCk7JywKICAgICksCn0KCmZvciBwYXRoLCBuZWVkbGVzIGluIHJl
+          cXVpcmVkLml0ZW1zKCk6CiAgICBjb250ZW50cyA9IHBhdGgucmVhZF90ZXh0KGVuY29kaW5nPSd1
+          dGYtOCcpCiAgICBmb3IgbmVlZGxlIGluIG5lZWRsZXM6CiAgICAgICAgaWYgbmVlZGxlIG5vdCBp
+          biBjb250ZW50czoKICAgICAgICAgICAgcmFpc2UgUnVudGltZUVycm9yKGYnTWlzc2luZyB7bmVl
+          ZGxlIXJ9IGluIHtwYXRofS4nKQoKaWYgJ1BsdWdpblNldHRpbmdzRGlhbG9nKCcgaW4gZXh0ZW5z
+          aW9uczoKICAgIHJhaXNlIFJ1bnRpbWVFcnJvcignT2xkIHNldHRpbmdzIGRpYWxvZyByZWZlcmVu
+          Y2UgcmVtYWlucy4nKQoKcHJpbnQoJ0FkZGVkIHNjcmlwdC1kZWZpbmVkIGV4dGVuc2lvbiBzZXR0
+          aW5ncyBzdXBwb3J0LicpCg==
+          B64
+          base64 --decode /tmp/add_plugin_settings.py.b64 > /tmp/add_plugin_settings.py
+          python3 -m py_compile /tmp/add_plugin_settings.py
+
+      - name: Apply dynamic extension settings
+        shell: bash
+        run: python3 /tmp/add_plugin_settings.py
 
       - name: Generate code
         run: |
@@ -1185,18 +723,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           git config user.name 'github-actions[bot]'
           git config user.email \
             '41898282+github-actions[bot]@users.noreply.github.com'
-
           git add -A
-
           if git diff --cached --quiet; then
             echo 'No changes to commit.'
             exit 0
           fi
-
           git commit -m 'Add conditional script-defined extension settings'
           git push origin HEAD:main
-ء
