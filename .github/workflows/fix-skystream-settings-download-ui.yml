@@ -1,5 +1,5 @@
-# Revision 2: initialize Flutter test binding before creating Google Fonts themes.
-name: Fix settings, download UI, and SnackBars v2
+# Revision 3: test SnackBar colors without creating the Google Fonts text theme.
+name: Fix settings, download UI, and SnackBars v3
 
 on:
   workflow_dispatch:
@@ -144,32 +144,48 @@ jobs:
           diff --git a/lib/core/theme/app_theme.dart b/lib/core/theme/app_theme.dart
           --- a/lib/core/theme/app_theme.dart
           +++ b/lib/core/theme/app_theme.dart
-          @@ -147,6 +147,14 @@ class AppTheme {
+          @@ -23,6 +23,17 @@ class AppTheme {
+             static const Color lightTextSecondary = Color(0xFF5C5C5C); // onSurfaceVariant
+             static const Color lightCoral = Color(0xFFC63523); // Coral Accent
+           
+          +  static SnackBarThemeData snackBarThemeFor(ColorScheme colorScheme) {
+          +    final isDark = colorScheme.brightness == Brightness.dark;
+          +    return SnackBarThemeData(
+          +      backgroundColor: isDark ? surface : colorScheme.surfaceContainerHigh,
+          +      contentTextStyle: TextStyle(
+          +        color: isDark ? onSurface : colorScheme.onSurface,
+          +      ),
+          +      actionTextColor: colorScheme.primary,
+          +    );
+          +  }
+          +
+             static ThemeData createDarkTheme(ColorScheme? dynamicScheme) {
+               var colorScheme =
+                   dynamicScheme ??
+          @@ -147,6 +158,10 @@ class AppTheme {
                    landscapeLayout: BottomNavigationBarLandscapeLayout.spread,
                  ),
            
           +      // Keep SnackBars visually consistent with the dark application instead
           +      // of Material's default inverse (light) surface.
-          +      snackBarTheme: SnackBarThemeData(
-          +        backgroundColor: surface,
-          +        contentTextStyle: const TextStyle(color: onSurface),
-          +        actionTextColor: colorScheme.primary,
-          +      ),
+          +      snackBarTheme: snackBarThemeFor(colorScheme),
           +
                  // Input Decoration
                  inputDecorationTheme: InputDecorationTheme(
                    filled: true,
-          @@ -364,8 +372,8 @@ class AppTheme {
-           
-                 // SnackBar Theme
-                 snackBarTheme: SnackBarThemeData(
-          -        backgroundColor: colorScheme.onSurface,
-          -        contentTextStyle: TextStyle(color: colorScheme.surface),
-          +        backgroundColor: colorScheme.surfaceContainerHigh,
-          +        contentTextStyle: TextStyle(color: colorScheme.onSurface),
-                   actionTextColor: colorScheme.primary,
+          @@ -363,11 +378,7 @@ class AppTheme {
                  ),
            
+                 // SnackBar Theme
+          -      snackBarTheme: SnackBarThemeData(
+          -        backgroundColor: colorScheme.onSurface,
+          -        contentTextStyle: TextStyle(color: colorScheme.surface),
+          -        actionTextColor: colorScheme.primary,
+          -      ),
+          +      snackBarTheme: snackBarThemeFor(colorScheme),
+           
+                 // Ripple / Splash / Highlights
+                 splashColor: colorScheme.primary.withValues(alpha: 0.1),
           diff --git a/lib/features/extensions/providers/extensions_controller.dart b/lib/features/extensions/providers/extensions_controller.dart
           --- a/lib/features/extensions/providers/extensions_controller.dart
           +++ b/lib/features/extensions/providers/extensions_controller.dart
@@ -318,32 +334,36 @@ jobs:
           new file mode 100644
           --- /dev/null
           +++ b/test/core/theme/app_theme_test.dart
-          @@ -0,0 +1,29 @@
+          @@ -0,0 +1,33 @@
+          +import 'package:flutter/material.dart';
           +import 'package:flutter_test/flutter_test.dart';
           +import 'package:skystream/core/theme/app_theme.dart';
           +
           +void main() {
-          +  TestWidgetsFlutterBinding.ensureInitialized();
-          +
           +  test('dark SnackBars use the application surface colors', () {
-          +    final theme = AppTheme.createDarkTheme(null);
+          +    final colorScheme = ColorScheme.fromSeed(
+          +      seedColor: AppTheme.primary,
+          +      brightness: Brightness.dark,
+          +    );
+          +    final theme = AppTheme.snackBarThemeFor(colorScheme);
           +
-          +    expect(theme.snackBarTheme.backgroundColor, AppTheme.surface);
-          +    expect(theme.snackBarTheme.contentTextStyle?.color, AppTheme.onSurface);
+          +    expect(theme.backgroundColor, AppTheme.surface);
+          +    expect(theme.contentTextStyle?.color, AppTheme.onSurface);
           +  });
           +
           +  test(
           +    'light SnackBars use nearby surface colors instead of inverse colors',
           +    () {
-          +      final theme = AppTheme.createLightTheme(null);
+          +      final colorScheme = ColorScheme.fromSeed(seedColor: AppTheme.lightCoral);
+          +      final theme = AppTheme.snackBarThemeFor(colorScheme);
           +
           +      expect(
-          +        theme.snackBarTheme.backgroundColor,
-          +        theme.colorScheme.surfaceContainerHigh,
+          +        theme.backgroundColor,
+          +        colorScheme.surfaceContainerHigh,
           +      );
           +      expect(
-          +        theme.snackBarTheme.contentTextStyle?.color,
-          +        theme.colorScheme.onSurface,
+          +        theme.contentTextStyle?.color,
+          +        colorScheme.onSurface,
           +      );
           +    },
           +  );
