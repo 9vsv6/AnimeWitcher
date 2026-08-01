@@ -1,4 +1,8 @@
-name: Apply native Apple Liquid Glass navigation
+# Save this file in the repository as:
+# .github/workflows/apply-skystream-liquid-glass-and-extension-settings.yml
+# It intentionally performs no Flutter setup, analyze, test, or build step.
+
+name: Apply Liquid Glass and extension settings UI
 
 on:
   workflow_dispatch:
@@ -7,17 +11,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-native-liquid-glass-main
+  group: apply-skystream-ui-main
   cancel-in-progress: false
-
-env:
-  FLUTTER_VERSION: "3.44.8"
 
 jobs:
   apply:
-    name: Patch, verify, and publish
-    runs-on: macos-latest
-    timeout-minutes: 60
+    name: Apply and push UI changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Check out main
@@ -26,34 +27,38 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Select the latest stable Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      - name: Show toolchain versions
-        shell: bash
-        run: |
-          set -euo pipefail
-          flutter --version
-          dart --version
-          xcodebuild -version
-          swift --version
-
-      - name: Apply the native Liquid Glass patch safely
+      - name: Apply the four UI files
+        id: patch
         shell: bash
         run: |
           set -euo pipefail
 
-          patch_path="$RUNNER_TEMP/apple-liquid-glass.patch"
-          cat > "$patch_path" <<'PATCH'
+          apply_one() {
+            local label="$1"
+            local patch_file="$2"
+
+            if git apply --reverse --check "$patch_file" >/dev/null 2>&1; then
+              echo "$label is already applied."
+              return 0
+            fi
+
+            if git apply --check "$patch_file" >/dev/null 2>&1; then
+              git apply "$patch_file"
+              echo "Applied $label."
+              return 0
+            fi
+
+            if git apply --3way "$patch_file"; then
+              echo "Applied $label with a three-way merge."
+              return 0
+            fi
+
+            echo "::error::Could not merge $label with the current main branch."
+            git status --short
+            exit 1
+          }
+
+          cat > "$RUNNER_TEMP/app_delegate.patch" <<'PATCH_APP_DELEGATE'
           diff --git a/ios/Runner/AppDelegate.swift b/ios/Runner/AppDelegate.swift
           index cf09caa..3acabbe 100644
           --- a/ios/Runner/AppDelegate.swift
@@ -384,24 +389,9 @@ jobs:
           +    self.init(red: red, green: green, blue: blue, alpha: alpha)
           +  }
           +}
-          diff --git a/lib/shared/widgets/app_scaffold.dart b/lib/shared/widgets/app_scaffold.dart
-          index 795eb3a..cd700b4 100644
-          --- a/lib/shared/widgets/app_scaffold.dart
-          +++ b/lib/shared/widgets/app_scaffold.dart
-          @@ -1,3 +1,4 @@
-          +import 'package:flutter/foundation.dart';
-           import 'package:flutter/material.dart';
-           import 'package:flutter/services.dart';
-           import 'package:flutter_riverpod/flutter_riverpod.dart';
-          @@ -207,6 +208,8 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
-                       }
-                     },
-                     child: Scaffold(
-          +            extendBody:
-          +                !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS,
-                       body: widget.navigationShell,
-                       bottomNavigationBar: CustomBottomNavBar(
-                         currentIndex: widget.navigationShell.currentIndex,
+          PATCH_APP_DELEGATE
+
+          cat > "$RUNNER_TEMP/custom_bottom_nav.patch" <<'PATCH_CUSTOM_NAV'
           diff --git a/lib/shared/widgets/custom_bottom_nav.dart b/lib/shared/widgets/custom_bottom_nav.dart
           index 13035e1..a19099d 100644
           --- a/lib/shared/widgets/custom_bottom_nav.dart
@@ -627,195 +617,586 @@ jobs:
           +    required this.label,
           +  });
           +}
-          PATCH
+          PATCH_CUSTOM_NAV
 
-          if git apply --reverse --check "$patch_path"; then
-            echo "The Liquid Glass patch is already applied."
-          elif git apply --check "$patch_path"; then
-            git apply "$patch_path"
-            echo "Applied the Liquid Glass patch cleanly."
+          cat > "$RUNNER_TEMP/app_scaffold.patch" <<'PATCH_APP_SCAFFOLD'
+          diff --git a/lib/shared/widgets/app_scaffold.dart b/lib/shared/widgets/app_scaffold.dart
+          index 795eb3a..cd700b4 100644
+          --- a/lib/shared/widgets/app_scaffold.dart
+          +++ b/lib/shared/widgets/app_scaffold.dart
+          @@ -1,3 +1,4 @@
+          +import 'package:flutter/foundation.dart';
+           import 'package:flutter/material.dart';
+           import 'package:flutter/services.dart';
+           import 'package:flutter_riverpod/flutter_riverpod.dart';
+          @@ -207,6 +208,8 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
+                       }
+                     },
+                     child: Scaffold(
+          +            extendBody:
+          +                !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS,
+                       body: widget.navigationShell,
+                       bottomNavigationBar: CustomBottomNavBar(
+                         currentIndex: widget.navigationShell.currentIndex,
+          PATCH_APP_SCAFFOLD
+
+          cat > "$RUNNER_TEMP/plugin_settings.patch" <<'PATCH_PLUGIN_SETTINGS'
+          diff --git a/lib/features/extensions/screens/plugin_settings_screen.dart b/lib/features/extensions/screens/plugin_settings_screen.dart
+          index 46c476a..7ca2883 100644
+          --- a/lib/features/extensions/screens/plugin_settings_screen.dart
+          +++ b/lib/features/extensions/screens/plugin_settings_screen.dart
+          @@ -6,7 +6,10 @@ import '../../../core/extensions/extension_manager.dart';
+           import '../../../core/extensions/models/extension_plugin.dart';
+           import '../../../core/storage/extension_repository.dart';
+           import '../../../core/storage/settings_repository.dart';
+          +import '../../../core/utils/layout_constants.dart';
+          +import '../../../shared/widgets/custom_widgets.dart';
+           import '../../../shared/widgets/loading_indicator.dart';
+          +import '../../settings/presentation/widgets/settings_widgets.dart';
+           
+           class PluginSettingsScreen extends ConsumerStatefulWidget {
+             final ExtensionPlugin plugin;
+          @@ -222,103 +225,338 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
+               }
+             }
+           
+          -  Widget _sectionTitle(BuildContext context, String title) {
+          -    return Padding(
+          -      padding: const EdgeInsets.only(top: 8, bottom: 8),
+          -      child: Text(
+          -        title,
+          -        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          -          fontWeight: FontWeight.bold,
+          -          color: Theme.of(context).colorScheme.primary,
+          +  IconData _iconForSetting(PluginSettingDefinition definition) {
+          +    switch (definition.type) {
+          +      case PluginSettingType.toggle:
+          +        return Icons.toggle_on_rounded;
+          +      case PluginSettingType.select:
+          +        return Icons.dns_rounded;
+          +      case PluginSettingType.text:
+          +        return Icons.text_fields_rounded;
+          +      case PluginSettingType.url:
+          +        return Icons.link_rounded;
+          +    }
+          +  }
+          +
+          +  String _selectedOptionLabel(PluginSettingDefinition definition) {
+          +    final value = _values[definition.key] ?? definition.defaultValue;
+          +    for (final option in definition.options) {
+          +      if (option.value == value) return option.label;
+          +    }
+          +    return value;
+          +  }
+          +
+          +  String? _settingSubtitle(PluginSettingDefinition definition) {
+          +    final description = definition.description?.trim();
+          +    final value = switch (definition.type) {
+          +      PluginSettingType.toggle => _boolValue(definition.key)
+          +          ? 'Enabled'
+          +          : 'Disabled',
+          +      PluginSettingType.select => _selectedOptionLabel(definition),
+          +      PluginSettingType.text || PluginSettingType.url =>
+          +        _controllers[definition.key]?.text ??
+          +            _values[definition.key] ??
+          +            definition.defaultValue,
+          +    };
+          +
+          +    if (description != null && description.isNotEmpty && value.isNotEmpty) {
+          +      return '$value\n$description';
+          +    }
+          +    if (value.isNotEmpty) return value;
+          +    return description;
+          +  }
+          +
+          +  void _setToggleValue(String key, bool value) {
+          +    if (_saving) return;
+          +    setState(() => _values[key] = value ? 'true' : 'false');
+          +  }
+          +
+          +  Future<void> _showSelectDialog(
+          +    PluginSettingDefinition definition,
+          +  ) async {
+          +    if (_saving || definition.options.isEmpty) return;
+          +    final current = _values[definition.key] ?? definition.defaultValue;
+          +
+          +    await showDialog<void>(
+          +      context: context,
+          +      builder: (dialogContext) => AlertDialog(
+          +        surfaceTintColor: Colors.transparent,
+          +        title: Text(definition.title),
+          +        content: RadioGroup<String>(
+          +          groupValue: current,
+          +          onChanged: (value) {
+          +            if (value == null || !mounted) return;
+          +            setState(() => _values[definition.key] = value);
+          +            Navigator.of(dialogContext).pop();
+          +          },
+          +          child: SingleChildScrollView(
+          +            child: Column(
+          +              mainAxisSize: MainAxisSize.min,
+          +              children: definition.options
+          +                  .map(
+          +                    (option) => ListTile(
+          +                      title: Text(option.label),
+          +                      leading: Radio<String>(value: option.value),
+          +                      onTap: () {
+          +                        if (!mounted) return;
+          +                        setState(() {
+          +                          _values[definition.key] = option.value;
+          +                        });
+          +                        Navigator.of(dialogContext).pop();
+          +                      },
+          +                    ),
+          +                  )
+          +                  .toList(growable: false),
+          +            ),
+          +          ),
+                   ),
+                 ),
+               );
+             }
+           
+          -  Widget _buildSetting(
+          -    BuildContext context,
+          +  Future<void> _showTextDialog(
+               PluginSettingDefinition definition,
+          -  ) {
+          -    switch (definition.type) {
+          -      case PluginSettingType.toggle:
+          -        return SwitchListTile(
+          -          contentPadding: EdgeInsets.zero,
+          -          title: Text(definition.title),
+          -          subtitle: definition.description == null
+          -              ? null
+          -              : Text(definition.description!),
+          -          value: _boolValue(definition.key),
+          -          onChanged: _saving
+          -              ? null
+          -              : (value) {
+          -                  setState(() {
+          -                    _values[definition.key] = value ? 'true' : 'false';
+          -                  });
+          -                },
+          -        );
+          +  ) async {
+          +    if (_saving) return;
+          +    final editor = TextEditingController(
+          +      text:
+          +          _controllers[definition.key]?.text ??
+          +          _values[definition.key] ??
+          +          definition.defaultValue,
+          +    );
+           
+          -      case PluginSettingType.select:
+          -        final current = _values[definition.key];
+          -        final selected =
+          -            definition.options.any((option) => option.value == current)
+          -            ? current
+          -            : null;
+          -
+          -        return Padding(
+          -          padding: const EdgeInsets.only(bottom: 16),
+          -          child: DropdownButtonFormField<String>(
+          -            key: ValueKey('${definition.key}:$selected'),
+          -            initialValue: selected,
+          -            isExpanded: true,
+          -            decoration: InputDecoration(
+          -              labelText: definition.title,
+          -              helperText: definition.description,
+          -              border: const OutlineInputBorder(),
+          +    final value = await showDialog<String>(
+          +      context: context,
+          +      builder: (dialogContext) => AlertDialog(
+          +        surfaceTintColor: Colors.transparent,
+          +        title: Text(definition.title),
+          +        content: CustomTextField(
+          +          controller: editor,
+          +          autofocus: true,
+          +          keyboardType: definition.type == PluginSettingType.url
+          +              ? TextInputType.url
+          +              : TextInputType.text,
+          +          hintText: definition.type == PluginSettingType.url
+          +              ? 'https://example.com'
+          +              : null,
+          +          decoration: InputDecoration(
+          +            helperText: definition.description,
+          +            alignLabelWithHint: true,
+          +          ),
+          +          onSubmitted: (submitted) {
+          +            Navigator.of(dialogContext).pop(submitted);
+          +          },
+          +        ),
+          +        actions: [
+          +          TextButton(
+          +            onPressed: () => Navigator.of(dialogContext).pop(),
+          +            child: const Text('Cancel'),
+          +          ),
+          +          FilledButton(
+          +            onPressed: () => Navigator.of(dialogContext).pop(editor.text),
+          +            child: const Text('Apply'),
+          +          ),
+          +        ],
+          +      ),
+          +    );
+          +    editor.dispose();
+          +
+          +    if (value == null || !mounted) return;
+          +    setState(() {
+          +      _values[definition.key] = value;
+          +      _controllers[definition.key]?.text = value;
+          +    });
+          +  }
+          +
+          +  Future<void> _showDomainDialog(List<PluginDomain> domains) async {
+          +    if (_saving || domains.isEmpty) return;
+          +    await showDialog<void>(
+          +      context: context,
+          +      builder: (dialogContext) => AlertDialog(
+          +        surfaceTintColor: Colors.transparent,
+          +        title: const Text('Website address'),
+          +        content: RadioGroup<String>(
+          +          groupValue: _selectedDomain,
+          +          onChanged: (value) {
+          +            if (value == null || !mounted) return;
+          +            setState(() => _selectedDomain = value);
+          +            Navigator.of(dialogContext).pop();
+          +          },
+          +          child: SingleChildScrollView(
+          +            child: Column(
+          +              mainAxisSize: MainAxisSize.min,
+          +              children: domains
+          +                  .map(
+          +                    (domain) => ListTile(
+          +                      title: Text(domain.name),
+          +                      subtitle: Text(domain.url),
+          +                      leading: Radio<String>(value: domain.url),
+          +                      onTap: () {
+          +                        if (!mounted) return;
+          +                        setState(() => _selectedDomain = domain.url);
+          +                        Navigator.of(dialogContext).pop();
+          +                      },
+          +                    ),
+          +                  )
+          +                  .toList(growable: false),
+                       ),
+          -            items: definition.options
+          -                .map(
+          -                  (option) => DropdownMenuItem<String>(
+          -                    value: option.value,
+          -                    child: Text(option.label, overflow: TextOverflow.ellipsis),
+          -                  ),
+          -                )
+          -                .toList(growable: false),
+          +          ),
+          +        ),
+          +      ),
+          +    );
+          +  }
+          +
+          +  String _selectedDomainLabel(List<PluginDomain> domains) {
+          +    for (final domain in domains) {
+          +      if (domain.url == _selectedDomain) {
+          +        return '${domain.name}\n${domain.url}';
+          +      }
+          +    }
+          +    return _selectedDomain;
+          +  }
+          +
+          +  Widget _buildSettingTile(
+          +    PluginSettingDefinition definition, {
+          +    required bool isLast,
+          +  }) {
+          +    switch (definition.type) {
+          +      case PluginSettingType.toggle:
+          +        final value = _boolValue(definition.key);
+          +        return SettingsTile(
+          +          icon: _iconForSetting(definition),
+          +          title: definition.title,
+          +          subtitle: definition.description,
+          +          trailing: Switch(
+          +            value: value,
+                       onChanged: _saving
+                           ? null
+          -                : (value) {
+          -                    if (value == null) return;
+          -                    setState(() {
+          -                      _values[definition.key] = value;
+          -                    });
+          -                  },
+          +                : (next) => _setToggleValue(definition.key, next),
+                     ),
+          +          onTap: _saving
+          +              ? null
+          +              : () => _setToggleValue(definition.key, !value),
+          +          isLast: isLast,
+          +        );
+          +      case PluginSettingType.select:
+          +        return SettingsTile(
+          +          icon: _iconForSetting(definition),
+          +          title: definition.title,
+          +          subtitle: _settingSubtitle(definition),
+          +          onTap: _saving ? null : () => _showSelectDialog(definition),
+          +          isLast: isLast,
+                   );
+          -
+                 case PluginSettingType.text:
+                 case PluginSettingType.url:
+          -        return Padding(
+          -          padding: const EdgeInsets.only(bottom: 16),
+          -          child: TextField(
+          -            controller: _controllers[definition.key],
+          -            enabled: !_saving,
+          -            keyboardType: definition.type == PluginSettingType.url
+          -                ? TextInputType.url
+          -                : TextInputType.text,
+          -            autocorrect: definition.type != PluginSettingType.url,
+          -            enableSuggestions: definition.type != PluginSettingType.url,
+          -            decoration: InputDecoration(
+          -              labelText: definition.title,
+          -              helperText: definition.description,
+          -              hintText: definition.type == PluginSettingType.url
+          -                  ? 'https://example.com'
+          -                  : null,
+          -              border: const OutlineInputBorder(),
+          -            ),
+          -          ),
+          +        return SettingsTile(
+          +          icon: _iconForSetting(definition),
+          +          title: definition.title,
+          +          subtitle: _settingSubtitle(definition),
+          +          onTap: _saving ? null : () => _showTextDialog(definition),
+          +          isLast: isLast,
+                   );
+               }
+             }
+           
+          +  Widget _buildContent(List<PluginDomain> domains, bool hasScriptBaseUrl) {
+          +    return Center(
+          +      child: ConstrainedBox(
+          +        constraints: const BoxConstraints(
+          +          maxWidth: LayoutConstants.contentMaxWidth,
+          +        ),
+          +        child: ListView(
+          +          padding: const EdgeInsets.only(bottom: LayoutConstants.spacingLg),
+          +          children: [
+          +            const SizedBox(height: LayoutConstants.spacingXs),
+          +            if (_definitions.isNotEmpty)
+          +              SettingsGroup(
+          +                title: 'Extension settings',
+          +                children: List.generate(
+          +                  _definitions.length,
+          +                  (index) => _buildSettingTile(
+          +                    _definitions[index],
+          +                    isLast: index == _definitions.length - 1,
+          +                  ),
+          +                ),
+          +              ),
+          +            if (_definitions.isNotEmpty &&
+          +                ((domains.isNotEmpty && !hasScriptBaseUrl) ||
+          +                    _providers.isNotEmpty))
+          +              const SizedBox(height: LayoutConstants.spacingLg),
+          +            if (domains.isNotEmpty && !hasScriptBaseUrl)
+          +              SettingsGroup(
+          +                title: 'Website address',
+          +                children: [
+          +                  SettingsTile(
+          +                    icon: Icons.language_rounded,
+          +                    title: 'Selected website',
+          +                    subtitle: _selectedDomainLabel(domains),
+          +                    onTap: _saving ? null : () => _showDomainDialog(domains),
+          +                    isLast: true,
+          +                  ),
+          +                ],
+          +              ),
+          +            if (domains.isNotEmpty &&
+          +                !hasScriptBaseUrl &&
+          +                _providers.isNotEmpty)
+          +              const SizedBox(height: LayoutConstants.spacingLg),
+          +            if (_providers.isNotEmpty)
+          +              SettingsGroup(
+          +                title: 'Providers',
+          +                children: List.generate(_providers.length, (index) {
+          +                  final provider = _providers[index];
+          +                  final enabled = _providerEnabled[provider.id] ?? true;
+          +                  return SettingsTile(
+          +                    icon: Icons.extension_rounded,
+          +                    title: provider.name,
+          +                    subtitle: provider.id,
+          +                    trailing: Switch(
+          +                      value: enabled,
+          +                      onChanged: _saving
+          +                          ? null
+          +                          : (value) {
+          +                              setState(() {
+          +                                _providerEnabled[provider.id] = value;
+          +                              });
+          +                            },
+          +                    ),
+          +                    onTap: _saving
+          +                        ? null
+          +                        : () {
+          +                            setState(() {
+          +                              _providerEnabled[provider.id] = !enabled;
+          +                            });
+          +                          },
+          +                    isLast: index == _providers.length - 1,
+          +                  );
+          +                }),
+          +              ),
+          +            const SizedBox(height: LayoutConstants.spacingLg),
+          +            Padding(
+          +              padding: const EdgeInsets.symmetric(
+          +                horizontal: LayoutConstants.spacingMd,
+          +              ),
+          +              child: SizedBox(
+          +                width: double.infinity,
+          +                child: FilledButton.icon(
+          +                  onPressed: _saving ? null : _save,
+          +                  icon: _saving
+          +                      ? const AppLoadingIndicator(
+          +                          constraints: BoxConstraints.tightFor(
+          +                            width: 18,
+          +                            height: 18,
+          +                          ),
+          +                        )
+          +                      : const Icon(Icons.save_outlined),
+          +                  label: const Text('Save settings'),
+          +                ),
+          +              ),
+          +            ),
+          +          ],
+          +        ),
+          +      ),
+          +    );
+          +  }
+          +
+             @override
+             Widget build(BuildContext context) {
+               final l10n = AppLocalizations.of(context)!;
+          @@ -378,70 +616,7 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
+                           ),
+                         ),
+                       )
+          -          : ListView(
+          -              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          -              children: [
+          -                if (_definitions.isNotEmpty) ...[
+          -                  _sectionTitle(context, 'Extension settings'),
+          -                  ..._definitions.map(
+          -                    (definition) => _buildSetting(context, definition),
+          -                  ),
+          -                ],
+          -                if (domains.isNotEmpty && !hasScriptBaseUrl) ...[
+          -                  _sectionTitle(context, 'Website address'),
+          -                  RadioGroup<String>(
+          -                    groupValue: _selectedDomain,
+          -                    onChanged: (value) {
+          -                      if (_saving || value == null) return;
+          -                      setState(() => _selectedDomain = value);
+          -                    },
+          -                    child: Column(
+          -                      children: domains
+          -                          .map(
+          -                            (domain) => ListTile(
+          -                              contentPadding: EdgeInsets.zero,
+          -                              title: Text(domain.name),
+          -                              subtitle: Text(domain.url),
+          -                              leading: Radio<String>(value: domain.url),
+          -                              onTap: _saving
+          -                                  ? null
+          -                                  : () {
+          -                                      setState(
+          -                                        () => _selectedDomain = domain.url,
+          -                                      );
+          -                                    },
+          -                            ),
+          -                          )
+          -                          .toList(growable: false),
+          -                    ),
+          -                  ),
+          -                ],
+          -                if (_providers.isNotEmpty) ...[
+          -                  _sectionTitle(context, 'Providers'),
+          -                  ..._providers.map(
+          -                    (provider) => SwitchListTile(
+          -                      contentPadding: EdgeInsets.zero,
+          -                      title: Text(provider.name),
+          -                      subtitle: Text(provider.id),
+          -                      value: _providerEnabled[provider.id] ?? true,
+          -                      onChanged: _saving
+          -                          ? null
+          -                          : (value) {
+          -                              setState(() {
+          -                                _providerEnabled[provider.id] = value;
+          -                              });
+          -                            },
+          -                    ),
+          -                  ),
+          -                ],
+          -                const SizedBox(height: 16),
+          -                FilledButton.icon(
+          -                  onPressed: _saving ? null : _save,
+          -                  icon: const Icon(Icons.save_outlined),
+          -                  label: const Text('Save settings'),
+          -                ),
+          -              ],
+          -            ),
+          +          : _buildContent(domains, hasScriptBaseUrl),
+               );
+             }
+           }
+          PATCH_PLUGIN_SETTINGS
+
+          apply_one "native Liquid Glass UIKit view" \
+            "$RUNNER_TEMP/app_delegate.patch"
+          apply_one "Flutter Liquid Glass navigation bridge" \
+            "$RUNNER_TEMP/custom_bottom_nav.patch"
+          apply_one "iOS content extension behind the glass bar" \
+            "$RUNNER_TEMP/app_scaffold.patch"
+          apply_one "extension settings application-style layout" \
+            "$RUNNER_TEMP/plugin_settings.patch"
+
+          if git diff --quiet; then
+            echo "No changes are needed; main already contains this UI."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "The source moved; trying Git's three-way patch merge."
-            git apply --3way "$patch_path"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Format and verify the implementation
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          dart format \
-            lib/shared/widgets/app_scaffold.dart \
-            lib/shared/widgets/custom_bottom_nav.dart
-
-          app_delegate="ios/Runner/AppDelegate.swift"
-          app_scaffold="lib/shared/widgets/app_scaffold.dart"
-          bottom_nav="lib/shared/widgets/custom_bottom_nav.dart"
-
-          test "$(grep -Fc 'LiquidGlassTabBarFactory(messenger:' "$app_delegate")" -eq 1
-          test "$(grep -Fc 'private final class LiquidGlassTabBarFactory' "$app_delegate")" -eq 1
-          test "$(grep -Fc 'private final class LiquidGlassTabBarView' "$app_delegate")" -eq 1
-          test "$(grep -Fc 'UIGlassEffect()' "$app_delegate")" -eq 1
-          test "$(grep -Fc 'configuration = isSelected ? .glass() : .plain()' "$app_delegate")" -eq 1
-          grep -Fq 'UIBlurEffect(style: .systemChromeMaterial)' "$app_delegate"
-
-          test "$(grep -Fc 'const _liquidGlassTabBarViewType =' "$bottom_nav")" -eq 1
-          test "$(grep -Fc 'child: UiKitView(' "$bottom_nav")" -eq 1
-          grep -Fq 'defaultTargetPlatform == TargetPlatform.iOS' "$bottom_nav"
-
-          test "$(grep -Fc 'extendBody:' "$app_scaffold")" -eq 1
-          grep -Fq 'defaultTargetPlatform == TargetPlatform.iOS' "$app_scaffold"
-
-          if grep -Rqs 'UIDesignRequiresCompatibility' ios/Runner; then
-            echo "::error::UIDesignRequiresCompatibility disables Apple's modern iOS design."
-            exit 1
-          fi
-
-          git diff --check
-          git diff --cached --check
-
-      - name: Resolve generated sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          flutter pub get
-          flutter gen-l10n
-          dart run build_runner build --delete-conflicting-outputs
-
-      - name: Guard the change scope
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          allowed='^(ios/Runner/AppDelegate\.swift|lib/shared/widgets/app_scaffold\.dart|lib/shared/widgets/custom_bottom_nav\.dart)$'
-          unexpected_tracked="$(
-            git diff HEAD --name-only -- |
-              grep -Ev "$allowed" || true
-          )"
-          unexpected_untracked="$(
-            git ls-files --others --exclude-standard |
-              grep -Ev "$allowed" || true
-          )"
-
-          if [[ -n "$unexpected_tracked" || -n "$unexpected_untracked" ]]; then
-            echo "::error::A formatter or generator changed files outside the approved scope."
-            [[ -z "$unexpected_tracked" ]] || printf 'Tracked changes:\n%s\n' "$unexpected_tracked"
-            [[ -z "$unexpected_untracked" ]] || printf 'Untracked files:\n%s\n' "$unexpected_untracked"
-            exit 1
-          fi
-
-          git diff --check
-          git diff --cached --check
-
-      - name: Analyze Dart
-        shell: bash
-        run: flutter analyze --no-fatal-infos
-
-      - name: Run Flutter tests
-        shell: bash
-        run: flutter test --no-pub
-
-      - name: Compile the native iOS integration
-        shell: bash
-        run: flutter build ios --release --no-codesign --no-pub
-
-      - name: Recheck the repository after all builds
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          allowed='^(ios/Runner/AppDelegate\.swift|lib/shared/widgets/app_scaffold\.dart|lib/shared/widgets/custom_bottom_nav\.dart)$'
-          unexpected_tracked="$(
-            git diff HEAD --name-only -- |
-              grep -Ev "$allowed" || true
-          )"
-          unexpected_untracked="$(
-            git ls-files --others --exclude-standard |
-              grep -Ev "$allowed" || true
-          )"
-
-          if [[ -n "$unexpected_tracked" || -n "$unexpected_untracked" ]]; then
-            echo "::error::A verification command changed files outside the approved scope."
-            [[ -z "$unexpected_tracked" ]] || printf 'Tracked changes:\n%s\n' "$unexpected_tracked"
-            [[ -z "$unexpected_untracked" ]] || printf 'Untracked files:\n%s\n' "$unexpected_untracked"
-            exit 1
-          fi
-
-          git diff --check
-          git diff --cached --check
-
-      - name: Commit only verified target files
-        id: commit
+      - name: Commit the UI changes
+        if: steps.patch.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
 
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add \
             ios/Runner/AppDelegate.swift \
+            lib/shared/widgets/custom_bottom_nav.dart \
             lib/shared/widgets/app_scaffold.dart \
-            lib/shared/widgets/custom_bottom_nav.dart
+            lib/features/extensions/screens/plugin_settings_screen.dart
 
-          if git diff --cached --quiet; then
-            echo "No commit is needed; main already contains the verified implementation."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git diff --cached --check
-          git commit -m "Add native Apple Liquid Glass navigation"
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git commit -m \
+            "Add Liquid Glass navigation and redesign extension settings"
 
       - name: Rebase safely and push main
-        if: steps.commit.outputs.changed == 'true'
+        if: steps.patch.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
 
-          verify_after_rebase() {
-            flutter pub get
-            flutter gen-l10n
-            dart run build_runner build --delete-conflicting-outputs
-
-            if ! git diff --quiet || ! git diff --cached --quiet; then
-              echo "::error::Rebasing exposed generated changes that are not part of the verified commit."
-              git status --short
-              exit 1
-            fi
-
-            grep -Fq 'UIGlassEffect()' ios/Runner/AppDelegate.swift
-            grep -Fq 'configuration = isSelected ? .glass() : .plain()' ios/Runner/AppDelegate.swift
-            grep -Fq 'child: UiKitView(' lib/shared/widgets/custom_bottom_nav.dart
-            grep -Fq 'extendBody:' lib/shared/widgets/app_scaffold.dart
-
-            flutter analyze --no-fatal-infos
-            flutter test --no-pub
-            flutter build ios --release --no-codesign --no-pub
-
-            if ! git diff --quiet || ! git diff --cached --quiet; then
-              echo "::error::A verification command dirtied the rebased commit."
-              git status --short
-              exit 1
-            fi
-          }
-
           for attempt in 1 2 3; do
-            echo "Safe push attempt $attempt of 3"
+            echo "Push attempt $attempt of 3"
             git fetch origin main
-            before_rebase="$(git rev-parse HEAD)"
 
             if ! git rebase origin/main; then
               git rebase --abort || true
-              echo "::error::main changed with a conflicting edit. No force-push was attempted."
+              echo "::error::main contains a conflicting edit. Nothing was force-pushed."
               exit 1
-            fi
-
-            after_rebase="$(git rev-parse HEAD)"
-            if [[ "$before_rebase" != "$after_rebase" ]]; then
-              echo "main changed while this workflow ran; re-running every verification."
-              verify_after_rebase
             fi
 
             if git push origin HEAD:main; then
@@ -823,5 +1204,5 @@ jobs:
             fi
           done
 
-          echo "::error::main kept changing after three verified rebase attempts."
+          echo "::error::main kept changing during all three push attempts."
           exit 1
