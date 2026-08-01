@@ -714,17 +714,30 @@ class _PluginTile extends ConsumerStatefulWidget {
 class _PluginTileState extends ConsumerState<_PluginTile> {
   final FocusNode _settingsFocusNode = FocusNode();
   Future<List<PluginSettingDefinition>>? _settingsFuture;
-  String? _settingsFuturePackageName;
+  String? _settingsFutureIdentity;
+
+  String _settingsIdentity(ExtensionPlugin plugin) =>
+      '${plugin.packageName}:${plugin.version}:${plugin.sourceUrl}';
 
   Future<List<PluginSettingDefinition>> _settingsFor(ExtensionPlugin plugin) {
-    if (_settingsFuture == null ||
-        _settingsFuturePackageName != plugin.packageName) {
-      _settingsFuturePackageName = plugin.packageName;
+    final identity = _settingsIdentity(plugin);
+    if (_settingsFuture == null || _settingsFutureIdentity != identity) {
+      _settingsFutureIdentity = identity;
       _settingsFuture = ref
           .read(extensionManagerProvider.notifier)
           .getSettingsForPlugin(plugin);
     }
     return _settingsFuture!;
+  }
+
+  @override
+  void didUpdateWidget(covariant _PluginTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_settingsIdentity(oldWidget.plugin) !=
+        _settingsIdentity(widget.plugin)) {
+      _settingsFuture = null;
+      _settingsFutureIdentity = null;
+    }
   }
 
   @override
@@ -855,7 +868,7 @@ class _PluginTileState extends ConsumerState<_PluginTile> {
                 // is resolving, no empty settings button is displayed.
                 if (isInstalled)
                   FutureBuilder<List<PluginSettingDefinition>>(
-                    future: _settingsFor(installedPlugin!),
+                    future: _settingsFor(installedPlugin),
                     builder: (context, snapshot) {
                       final manifestSettings =
                           installedPlugin.manifest['settings'];
@@ -864,6 +877,8 @@ class _PluginTileState extends ConsumerState<_PluginTile> {
                           manifestSettings.isNotEmpty;
                       final hasScriptSettings =
                           snapshot.data?.isNotEmpty ?? false;
+                      final declaresScriptSettings =
+                          installedPlugin.manifest['hasSettings'] == true;
                       final hasDomains =
                           installedPlugin.domains?.isNotEmpty ?? false;
                       final hasStaticProviders =
@@ -886,6 +901,7 @@ class _PluginTileState extends ConsumerState<_PluginTile> {
                       final hasSettings =
                           hasManifestSettings ||
                           hasScriptSettings ||
+                          declaresScriptSettings ||
                           hasDomains ||
                           hasStaticProviders ||
                           hasDynamicProviders ||

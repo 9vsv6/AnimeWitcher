@@ -138,7 +138,14 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
     if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(value)) {
       value = 'https://$value';
     }
-    return value.replaceFirst(RegExp(r'/+$'), '');
+    value = value.replaceFirst(RegExp(r'/+$'), '');
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      throw const FormatException('Enter a valid HTTP or HTTPS URL');
+    }
+    return uri.origin;
   }
 
   Future<void> _save() async {

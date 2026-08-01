@@ -132,6 +132,12 @@ class ExtensionManager extends _$ExtensionManager {
     }
   }
 
+  void _clearPluginRuntime(String packageName) {
+    _pluginScriptFutures.remove(packageName);
+    _dynamicProvidersMap.remove(packageName);
+    _clearSettingsRuntime(packageName);
+  }
+
   @override
   List<SkyStreamProvider> build() {
     _engine = ref.watch(jsEngineProvider);
@@ -223,6 +229,7 @@ class ExtensionManager extends _$ExtensionManager {
             final existing = _firstLoadedProvider(plugin.packageName);
             if (existing != null &&
                 plugin.version.toString() != existing.version) {
+              _clearPluginRuntime(plugin.packageName);
               _removeProvidersForPackage(plugin.packageName);
               needsLoad = true;
             }
@@ -294,7 +301,7 @@ class ExtensionManager extends _$ExtensionManager {
   /// Reloads a plugin, picking up preference changes (domain switch, provider toggles).
   Future<void> reloadPlugin(ExtensionPlugin plugin) async {
     if (_engine == null || _storageService == null) return;
-    _clearSettingsRuntime(plugin.packageName);
+    _clearPluginRuntime(plugin.packageName);
     _removeProvidersForPackage(plugin.packageName);
     final loaded = await _loadPlugin(plugin);
     for (final p in loaded) {
@@ -315,10 +322,10 @@ class ExtensionManager extends _$ExtensionManager {
   /// Returns true if the user has enabled this sub-provider (default: true).
   bool _isSubProviderEnabled(String packageName, String providerId) {
     final storage = ref.read(extensionRepositoryProvider);
-    return storage.getExtensionData(
-          '$packageName:_provider_enabled_$providerId',
-        ) ==
-        'true';
+    final saved = storage.getExtensionData(
+      '$packageName:_provider_enabled_$providerId',
+    );
+    return saved == null || saved == 'true';
   }
 
   /// Registers shell providers for a plugin. JS is NOT evaluated here — it is
