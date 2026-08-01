@@ -299,7 +299,7 @@ private final class LiquidGlassTabBarView: UIView {
     effectView.translatesAutoresizingMaskIntoConstraints = false
     effectView.clipsToBounds = true
     if #available(iOS 26.0, *) {
-      effectView.cornerConfiguration = .fixed(36)
+    effectView.cornerConfiguration = .corners(radius: .fixed(36))
     } else {
       effectView.layer.cornerRadius = 36
       effectView.layer.cornerCurve = .continuous
