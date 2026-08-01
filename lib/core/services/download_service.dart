@@ -15,6 +15,7 @@ import '../domain/entity/multimedia_item.dart';
 import '../router/app_router.dart';
 import '../storage/storage_service.dart';
 import '../network/dio_client_provider.dart';
+import '../utils/file_size_formatter.dart';
 import 'download_continued_processing_service.dart';
 
 part 'download_service.g.dart';
@@ -49,18 +50,12 @@ class DownloadProgressData {
   String get downloadedSizeString {
     if (totalSize <= 0) return "Calculating...";
     if (progress <= 0) return "0 MB";
-    final double downloaded = (totalSize * progress) / (1024 * 1024);
-    if (downloaded > 1024) {
-      return "${(downloaded / 1024).toStringAsFixed(2)} GB";
-    }
-    return "${downloaded.toStringAsFixed(2)} MB";
+    return formatFileSize(totalSize * progress);
   }
 
   String get totalSizeString {
     if (totalSize <= 0) return "Unknown";
-    final double total = totalSize / (1024 * 1024);
-    if (total > 1024) return "${(total / 1024).toStringAsFixed(2)} GB";
-    return "${total.toStringAsFixed(2)} MB";
+    return formatFileSize(totalSize);
   }
 
   String get speedString {

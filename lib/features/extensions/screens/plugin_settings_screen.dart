@@ -224,7 +224,7 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
 
   Widget _sectionTitle(BuildContext context, String title) {
     return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 8),
+      padding: const EdgeInsets.only(top: 8, bottom: 16),
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -241,20 +241,23 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
   ) {
     switch (definition.type) {
       case PluginSettingType.toggle:
-        return SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(definition.title),
-          subtitle: definition.description == null
-              ? null
-              : Text(definition.description!),
-          value: _boolValue(definition.key),
-          onChanged: _saving
-              ? null
-              : (value) {
-                  setState(() {
-                    _values[definition.key] = value ? 'true' : 'false';
-                  });
-                },
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(definition.title),
+            subtitle: definition.description == null
+                ? null
+                : Text(definition.description!),
+            value: _boolValue(definition.key),
+            onChanged: _saving
+                ? null
+                : (value) {
+                    setState(() {
+                      _values[definition.key] = value ? 'true' : 'false';
+                    });
+                  },
+          ),
         );
 
       case PluginSettingType.select:
@@ -265,7 +268,7 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
             : null;
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 24),
           child: DropdownButtonFormField<String>(
             key: ValueKey('${definition.key}:$selected'),
             initialValue: selected,
@@ -297,7 +300,7 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
       case PluginSettingType.text:
       case PluginSettingType.url:
         return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 24),
           child: TextField(
             controller: _controllers[definition.key],
             enabled: !_saving,

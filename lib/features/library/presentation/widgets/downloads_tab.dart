@@ -12,6 +12,7 @@ import '../../../details/presentation/playback_launcher.dart';
 import '../downloads_provider.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/utils/file_size_formatter.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 
 class DownloadsTab extends ConsumerStatefulWidget {
@@ -394,7 +395,7 @@ class _DownloadItemTile extends ConsumerWidget {
                 Row(
                   textDirection: TextDirection.ltr,
                   children: [
-                    Flexible(
+                    Expanded(
                       child: Text(
                         _downloadedSizeText(),
                         maxLines: 1,
@@ -407,7 +408,7 @@ class _DownloadItemTile extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: LayoutConstants.spacingSm),
                     Text(
                       '${(progress.clamp(0.0, 1.0) * 100).floor()}%',
                       textAlign: TextAlign.end,
@@ -506,16 +507,10 @@ class _DownloadItemTile extends ConsumerWidget {
 
   String _downloadedSizeText() {
     final data = progressData;
-    if (data == null || data.totalSize <= 0) {
-      return '-- / -- MB';
-    }
-
-    final normalizedProgress = progress.clamp(0.0, 1.0).toDouble();
-    final totalMegabytes = data.totalSize / (1024 * 1024);
-    final downloadedMegabytes = totalMegabytes * normalizedProgress;
-
-    return '${downloadedMegabytes.toStringAsFixed(1)} / '
-        '${totalMegabytes.toStringAsFixed(1)} MB';
+    return formatDownloadSizePair(
+      totalBytes: data?.totalSize ?? -1,
+      progress: progress,
+    );
   }
 
   String _getStatusText(TaskStatus status, AppLocalizations l10n) {
