@@ -1,4 +1,5 @@
-name: Fix settings, download UI, and SnackBars
+# Revision 2: initialize Flutter test binding before creating Google Fonts themes.
+name: Fix settings, download UI, and SnackBars v2
 
 on:
   workflow_dispatch:
@@ -317,11 +318,13 @@ jobs:
           new file mode 100644
           --- /dev/null
           +++ b/test/core/theme/app_theme_test.dart
-          @@ -0,0 +1,27 @@
+          @@ -0,0 +1,29 @@
           +import 'package:flutter_test/flutter_test.dart';
           +import 'package:skystream/core/theme/app_theme.dart';
           +
           +void main() {
+          +  TestWidgetsFlutterBinding.ensureInitialized();
+          +
           +  test('dark SnackBars use the application surface colors', () {
           +    final theme = AppTheme.createDarkTheme(null);
           +
@@ -451,3 +454,4 @@ jobs:
           git commit -m "Fix settings, download progress, and SnackBar colors"
           git pull --rebase origin main
           git push origin HEAD:main
+
