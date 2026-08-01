@@ -26,6 +26,8 @@ class ExtensionManager extends _$ExtensionManager {
   // share the same JS file reuse the same Future so the file is read only once.
   final Map<String, Future<String?>> _pluginScriptFutures = {};
   final Map<String, List<PluginSubProvider>> _dynamicProvidersMap = {};
+  final Map<String, List<PluginSettingDefinition>> _dynamicSettingsMap = {};
+  final Map<String, JsBasedProvider> _settingsProviders = {};
 
   List<PluginSubProvider> getProvidersForPlugin(ExtensionPlugin plugin) {
     final dynamicList = _dynamicProvidersMap[plugin.packageName];
@@ -33,6 +35,101 @@ class ExtensionManager extends _$ExtensionManager {
       return dynamicList;
     }
     return plugin.providers ?? const [];
+  }
+
+  /// Returns settings declared by the plugin's optional JS
+  /// `getSettings()` function. Static `settings` in the manifest are
+  /// also accepted, with JS definitions taking precedence by key.
+  Future<List<PluginSettingDefinition>> getSettingsForPlugin(
+    ExtensionPlugin plugin,
+  ) async {
+    final cached = _dynamicSettingsMap[plugin.packageName];
+    if (cached != null) return cached;
+
+    final byKey = <String, PluginSettingDefinition>{};
+
+    final manifestSettings = plugin.manifest['settings'];
+    if (manifestSettings is List) {
+      for (final raw
+          in manifestSettings.take(100).whereType<Map<dynamic, dynamic>>()) {
+        final setting = PluginSettingDefinition.fromJson(
+          Map<String, dynamic>.from(raw),
+        );
+        if (setting.key.isNotEmpty) {
+          byKey[setting.key] = setting;
+        }
+      }
+    }
+
+    try {
+      JsBasedProvider? provider;
+      final loaded = _firstLoadedProvider(plugin.packageName);
+      if (loaded is JsBasedProvider) {
+        provider = loaded;
+      } else {
+        provider = await _createSettingsProvider(plugin);
+      }
+
+      if (provider != null) {
+        final scriptSettings = await provider.getSettings();
+        for (final setting in scriptSettings) {
+          byKey[setting.key] = setting;
+        }
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'ExtensionManager: settings load failed for '
+          '${plugin.packageName}: $error',
+        );
+      }
+    }
+
+    final result = byKey.values.toList(growable: false);
+    _dynamicSettingsMap[plugin.packageName] = result;
+    return result;
+  }
+
+  Future<JsBasedProvider?> _createSettingsProvider(
+    ExtensionPlugin plugin,
+  ) async {
+    final cached = _settingsProviders[plugin.packageName];
+    if (cached != null) return cached;
+    if (_engine == null || _storageService == null) return null;
+
+    final path = await _storageService!.getPluginJsPath(plugin);
+    if (!path.startsWith('assets/') && !await File(path).exists()) {
+      return null;
+    }
+
+    final baseNamespace = plugin.packageName.replaceAll(
+      RegExp(r'[^a-zA-Z0-9]'),
+      '_',
+    );
+    final customBaseUrl = ref
+        .read(settingsRepositoryProvider)
+        .getCustomBaseUrl(plugin.packageName);
+
+    final provider = JsBasedProvider(
+      _engine!,
+      path,
+      packageName: plugin.packageName,
+      jsPackageName: plugin.packageName,
+      namespace: '${baseNamespace}__settings',
+      manifest: plugin.manifest,
+      customBaseUrl: customBaseUrl,
+    );
+    _settingsProviders[plugin.packageName] = provider;
+    return provider;
+  }
+
+  void _clearSettingsRuntime(String packageName) {
+    _dynamicSettingsMap.remove(packageName);
+    final provider = _settingsProviders.remove(packageName);
+    final namespace = provider?.namespace;
+    if (namespace != null && namespace.isNotEmpty) {
+      _engine?.unload(namespace);
+    }
   }
 
   @override
@@ -197,6 +294,7 @@ class ExtensionManager extends _$ExtensionManager {
   /// Reloads a plugin, picking up preference changes (domain switch, provider toggles).
   Future<void> reloadPlugin(ExtensionPlugin plugin) async {
     if (_engine == null || _storageService == null) return;
+    _clearSettingsRuntime(plugin.packageName);
     _removeProvidersForPackage(plugin.packageName);
     final loaded = await _loadPlugin(plugin);
     for (final p in loaded) {

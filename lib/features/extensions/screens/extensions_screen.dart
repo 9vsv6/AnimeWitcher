@@ -6,7 +6,7 @@ import '../../../core/extensions/models/extension_repository.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../providers/extensions_controller.dart';
-import '../widgets/plugin_settings_dialog.dart';
+import 'plugin_settings_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
@@ -713,6 +713,19 @@ class _PluginTile extends ConsumerStatefulWidget {
 
 class _PluginTileState extends ConsumerState<_PluginTile> {
   final FocusNode _settingsFocusNode = FocusNode();
+  Future<List<PluginSettingDefinition>>? _settingsFuture;
+  String? _settingsFuturePackageName;
+
+  Future<List<PluginSettingDefinition>> _settingsFor(ExtensionPlugin plugin) {
+    if (_settingsFuture == null ||
+        _settingsFuturePackageName != plugin.packageName) {
+      _settingsFuturePackageName = plugin.packageName;
+      _settingsFuture = ref
+          .read(extensionManagerProvider.notifier)
+          .getSettingsForPlugin(plugin);
+    }
+    return _settingsFuture!;
+  }
 
   @override
   void dispose() {
@@ -837,28 +850,67 @@ class _PluginTileState extends ConsumerState<_PluginTile> {
                     },
                   ),
 
-                // Settings button (shown when plugin declares domains, static providers, or dynamic providers from JS)
-                if (isInstalled &&
-                    ((installedPlugin.domains?.isNotEmpty ?? false) ||
-                        (installedPlugin.providers?.isNotEmpty ?? false) ||
-                        ref
-                            .watch(extensionManagerProvider.notifier)
-                            .getProvidersForPlugin(installedPlugin)
-                            .isNotEmpty))
-                  IconButton(
-                    focusNode: _settingsFocusNode,
-                    icon: const Icon(Icons.settings),
-                    tooltip: l10n.settings,
-                    onPressed: () {
-                      showDialog<void>(
-                        context: context,
-                        builder: (context) =>
-                            PluginSettingsDialog(plugin: installedPlugin),
-                      ).then((_) {
-                        if (context.mounted) {
-                          _settingsFocusNode.requestFocus();
-                        }
-                      });
+                // Show the button only when the extension exposes
+                // settings, domains, or providers. While getSettings()
+                // is resolving, no empty settings button is displayed.
+                if (isInstalled)
+                  FutureBuilder<List<PluginSettingDefinition>>(
+                    future: _settingsFor(installedPlugin!),
+                    builder: (context, snapshot) {
+                      final manifestSettings =
+                          installedPlugin.manifest['settings'];
+                      final hasManifestSettings =
+                          manifestSettings is List &&
+                          manifestSettings.isNotEmpty;
+                      final hasScriptSettings =
+                          snapshot.data?.isNotEmpty ?? false;
+                      final hasDomains =
+                          installedPlugin.domains?.isNotEmpty ?? false;
+                      final hasStaticProviders =
+                          installedPlugin.providers?.isNotEmpty ?? false;
+
+                      // Rebuild when dynamic providers finish loading.
+                      final loadedProviders = ref.watch(
+                        extensionManagerProvider,
+                      );
+                      final hasLoadedSubProviders = loadedProviders.any(
+                        (provider) => provider.packageName.startsWith(
+                          '${installedPlugin.packageName}::',
+                        ),
+                      );
+                      final hasDynamicProviders = ref
+                          .read(extensionManagerProvider.notifier)
+                          .getProvidersForPlugin(installedPlugin)
+                          .isNotEmpty;
+
+                      final hasSettings =
+                          hasManifestSettings ||
+                          hasScriptSettings ||
+                          hasDomains ||
+                          hasStaticProviders ||
+                          hasDynamicProviders ||
+                          hasLoadedSubProviders;
+
+                      if (!hasSettings) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return IconButton(
+                        focusNode: _settingsFocusNode,
+                        icon: const Icon(Icons.settings_outlined),
+                        tooltip: l10n.settings,
+                        onPressed: () async {
+                          await Navigator.of(context).push<void>(
+                            MaterialPageRoute<void>(
+                              builder: (context) =>
+                                  PluginSettingsScreen(plugin: installedPlugin),
+                            ),
+                          );
+                          if (context.mounted) {
+                            _settingsFocusNode.requestFocus();
+                          }
+                        },
+                      );
                     },
                   ),
 

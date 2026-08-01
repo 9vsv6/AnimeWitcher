@@ -1,3 +1,110 @@
+enum PluginSettingType { toggle, select, text, url }
+
+class PluginSettingOption {
+  final String label;
+  final String value;
+
+  const PluginSettingOption({required this.label, required this.value});
+
+  factory PluginSettingOption.fromJson(dynamic raw) {
+    if (raw is Map) {
+      final json = Map<String, dynamic>.from(raw);
+      final value = (json['value'] ?? json['id'] ?? '').toString();
+      final label = (json['label'] ?? json['name'] ?? value).toString();
+      return PluginSettingOption(label: label, value: value);
+    }
+
+    final value = raw?.toString() ?? '';
+    return PluginSettingOption(label: value, value: value);
+  }
+}
+
+class PluginSettingDefinition {
+  final String key;
+  final String title;
+  final String? description;
+  final PluginSettingType type;
+  final String defaultValue;
+  final List<PluginSettingOption> options;
+  final bool reloadOnChange;
+  final bool isBaseUrl;
+
+  const PluginSettingDefinition({
+    required this.key,
+    required this.title,
+    required this.type,
+    this.description,
+    this.defaultValue = '',
+    this.options = const [],
+    this.reloadOnChange = true,
+    this.isBaseUrl = false,
+  });
+
+  factory PluginSettingDefinition.fromJson(Map<String, dynamic> json) {
+    final key = (json['key'] ?? json['id'] ?? '').toString().trim();
+    final rawType = (json['type'] ?? 'text').toString().trim().toLowerCase();
+
+    final PluginSettingType type;
+    switch (rawType) {
+      case 'bool':
+      case 'boolean':
+      case 'switch':
+      case 'toggle':
+        type = PluginSettingType.toggle;
+        break;
+      case 'select':
+      case 'dropdown':
+      case 'list':
+        type = PluginSettingType.select;
+        break;
+      case 'url':
+      case 'domain':
+        type = PluginSettingType.url;
+        break;
+      default:
+        type = PluginSettingType.text;
+        break;
+    }
+
+    final rawDefault =
+        json['defaultValue'] ?? json['default'] ?? json['value'] ?? '';
+    final defaultValue = rawDefault is bool
+        ? (rawDefault ? 'true' : 'false')
+        : rawDefault.toString();
+
+    final rawDescription = json['description']?.toString().trim();
+    final options = (json['options'] as List<dynamic>? ?? const [])
+        .take(100)
+        .map(PluginSettingOption.fromJson)
+        .where((option) => option.value.isNotEmpty)
+        .toList(growable: false);
+
+    final reloadValue = json['reloadOnChange'];
+    final baseUrlValue = json['isBaseUrl'] ?? json['baseUrl'];
+
+    return PluginSettingDefinition(
+      key: key,
+      title: (json['title'] ?? json['name'] ?? key).toString(),
+      description: rawDescription == null || rawDescription.isEmpty
+          ? null
+          : rawDescription,
+      type: type,
+      defaultValue: defaultValue,
+      options: options,
+      reloadOnChange: reloadValue is bool ? reloadValue : true,
+      isBaseUrl: baseUrlValue == true || key == 'base_url' || key == 'baseUrl',
+    );
+  }
+
+  bool get defaultBool {
+    final normalized = defaultValue.trim().toLowerCase();
+    return normalized == 'true' ||
+        normalized == '1' ||
+        normalized == 'yes' ||
+        normalized == 'on';
+  }
+}
+
 class PluginDomain {
   final String name;
   final String url;
