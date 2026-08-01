@@ -1,0 +1,1202 @@
+name: Add script-defined plugin settings v2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: add-script-defined-plugin-settings
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Add dynamic extension settings
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > /tmp/add_plugin_settings.py <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path.cwd()
+
+          # ------------------------------------------------------------------
+          # 1. Setting schema models
+          # ------------------------------------------------------------------
+          model_path = root / 'lib/core/extensions/models/extension_plugin.dart'
+          model = model_path.read_text(encoding='utf-8')
+
+          model_block = r'''enum PluginSettingType { toggle, select, text, url }
+
+          class PluginSettingOption {
+            final String label;
+            final String value;
+
+            const PluginSettingOption({required this.label, required this.value});
+
+            factory PluginSettingOption.fromJson(dynamic raw) {
+              if (raw is Map) {
+                final json = Map<String, dynamic>.from(raw);
+                final value = (json['value'] ?? json['id'] ?? '').toString();
+                final label = (json['label'] ?? json['name'] ?? value).toString();
+                return PluginSettingOption(label: label, value: value);
+              }
+
+              final value = raw?.toString() ?? '';
+              return PluginSettingOption(label: value, value: value);
+            }
+          }
+
+          class PluginSettingDefinition {
+            final String key;
+            final String title;
+            final String? description;
+            final PluginSettingType type;
+            final String defaultValue;
+            final List<PluginSettingOption> options;
+            final bool reloadOnChange;
+            final bool isBaseUrl;
+
+            const PluginSettingDefinition({
+              required this.key,
+              required this.title,
+              required this.type,
+              this.description,
+              this.defaultValue = '',
+              this.options = const [],
+              this.reloadOnChange = true,
+              this.isBaseUrl = false,
+            });
+
+            factory PluginSettingDefinition.fromJson(Map<String, dynamic> json) {
+              final key = (json['key'] ?? json['id'] ?? '').toString().trim();
+              final rawType = (json['type'] ?? 'text')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
+
+              final PluginSettingType type;
+              switch (rawType) {
+                case 'bool':
+                case 'boolean':
+                case 'switch':
+                case 'toggle':
+                  type = PluginSettingType.toggle;
+                  break;
+                case 'select':
+                case 'dropdown':
+                case 'list':
+                  type = PluginSettingType.select;
+                  break;
+                case 'url':
+                case 'domain':
+                  type = PluginSettingType.url;
+                  break;
+                default:
+                  type = PluginSettingType.text;
+                  break;
+              }
+
+              final rawDefault =
+                  json['defaultValue'] ?? json['default'] ?? json['value'] ?? '';
+              final defaultValue = rawDefault is bool
+                  ? (rawDefault ? 'true' : 'false')
+                  : rawDefault.toString();
+
+              final rawDescription = json['description']?.toString().trim();
+              final options = (json['options'] as List<dynamic>? ?? const [])
+                  .take(100)
+                  .map(PluginSettingOption.fromJson)
+                  .where((option) => option.value.isNotEmpty)
+                  .toList(growable: false);
+
+              final reloadValue = json['reloadOnChange'];
+              final baseUrlValue = json['isBaseUrl'] ?? json['baseUrl'];
+
+              return PluginSettingDefinition(
+                key: key,
+                title: (json['title'] ?? json['name'] ?? key).toString(),
+                description:
+                    rawDescription == null || rawDescription.isEmpty
+                    ? null
+                    : rawDescription,
+                type: type,
+                defaultValue: defaultValue,
+                options: options,
+                reloadOnChange: reloadValue is bool ? reloadValue : true,
+                isBaseUrl:
+                    baseUrlValue == true ||
+                    key == 'base_url' ||
+                    key == 'baseUrl',
+              );
+            }
+
+            bool get defaultBool {
+              final normalized = defaultValue.trim().toLowerCase();
+              return normalized == 'true' ||
+                  normalized == '1' ||
+                  normalized == 'yes' ||
+                  normalized == 'on';
+            }
+          }
+
+          '''
+
+          if 'class PluginSettingDefinition' not in model:
+              model = model_block + model
+              model_path.write_text(model, encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # 2. Export getSettings() from each namespaced JS plugin
+          # ------------------------------------------------------------------
+          provider_path = (
+              root / 'lib/core/extensions/providers/js_based_provider.dart'
+          )
+          provider = provider_path.read_text(encoding='utf-8')
+
+          if 'static const int _iifeWrapperVersion = 2;' not in provider:
+              anchor = 'class JsBasedProvider extends SkyStreamProvider {\n'
+              if provider.count(anchor) != 1:
+                  raise RuntimeError('JsBasedProvider class anchor not found.')
+              provider = provider.replace(
+                  anchor,
+                  anchor + '  static const int _iifeWrapperVersion = 2;\n\n',
+                  1,
+              )
+
+          old_qbc = "    return '$dir$safeId.qbc';"
+          new_qbc = "    return '$dir${safeId}_v$_iifeWrapperVersion.qbc';"
+          if old_qbc in provider:
+              provider = provider.replace(old_qbc, new_qbc, 1)
+          elif new_qbc not in provider:
+              raise RuntimeError('QBC path anchor not found.')
+
+          export_anchor = (
+              "                      getProviders: (typeof getProviders !== "
+              "'undefined') ? getProviders : (typeof globalThis.getProviders "
+              "!== 'undefined' ? globalThis.getProviders : undefined),\n"
+          )
+          export_line = (
+              "                      getSettings: (typeof getSettings !== "
+              "'undefined') ? getSettings : (typeof globalThis.getSettings "
+              "!== 'undefined' ? globalThis.getSettings : undefined),\n"
+          )
+          if export_line not in provider:
+              if provider.count(export_anchor) != 1:
+                  raise RuntimeError('getProviders export anchor not found.')
+              provider = provider.replace(
+                  export_anchor,
+                  export_anchor + export_line,
+                  1,
+              )
+
+          cleanup_anchor = (
+              '              if (globalThis.getProviders) '
+              'delete globalThis.getProviders;\n'
+          )
+          cleanup_line = (
+              '              if (globalThis.getSettings) '
+              'delete globalThis.getSettings;\n'
+          )
+          if cleanup_line not in provider:
+              if provider.count(cleanup_anchor) != 1:
+                  raise RuntimeError('getProviders cleanup anchor not found.')
+              provider = provider.replace(
+                  cleanup_anchor,
+                  cleanup_anchor + cleanup_line,
+                  1,
+              )
+
+          settings_method = r'''
+            /// Calls the optional JS `getSettings()` export.
+            ///
+            /// The plugin may return either a list directly or
+            /// `{ settings: [...] }`. Invalid definitions are ignored.
+            Future<List<PluginSettingDefinition>> getSettings() async {
+              await _ensureReady();
+              if (_error != null) return const [];
+
+              return _serializedInvoke(() async {
+                try {
+                  final result = await _jsEngine.invokeAsync(_fn('getSettings'));
+                  final dynamic rawSettings =
+                      result is Map && result['settings'] is List
+                      ? result['settings']
+                      : result;
+
+                  if (rawSettings is! List) return const [];
+
+                  return rawSettings
+                      .take(100)
+                      .whereType<Map<dynamic, dynamic>>()
+                      .map(
+                        (raw) => PluginSettingDefinition.fromJson(
+                          Map<String, dynamic>.from(raw),
+                        ),
+                      )
+                      .where((setting) => setting.key.isNotEmpty)
+                      .toList(growable: false);
+                } catch (error) {
+                  if (kDebugMode) {
+                    debugPrint(
+                      'JsBasedProvider: getSettings unavailable for '
+                      '$_packageName: $error',
+                    );
+                  }
+                  return const [];
+                }
+              });
+            }
+
+          '''
+
+          if 'Future<List<PluginSettingDefinition>> getSettings() async' not in provider:
+              method_anchor = (
+                  '  @override\n'
+                  '  Future<Map<String, List<MultimediaItem>>> getHome() async {'
+              )
+              if provider.count(method_anchor) != 1:
+                  raise RuntimeError('getHome method anchor not found.')
+              provider = provider.replace(
+                  method_anchor,
+                  settings_method + method_anchor,
+                  1,
+              )
+
+          provider_path.write_text(provider, encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # 3. Manager API for loading and caching script-defined settings
+          # ------------------------------------------------------------------
+          manager_path = root / 'lib/core/extensions/extension_manager.dart'
+          manager = manager_path.read_text(encoding='utf-8')
+
+          map_anchor = (
+              '  final Map<String, List<PluginSubProvider>> '
+              '_dynamicProvidersMap = {};\n'
+          )
+          map_block = (
+              '  final Map<String, List<PluginSettingDefinition>> '
+              '_dynamicSettingsMap = {};\n'
+              '  final Map<String, JsBasedProvider> _settingsProviders = {};\n'
+          )
+          if map_block not in manager:
+              if manager.count(map_anchor) != 1:
+                  raise RuntimeError('Dynamic providers map anchor not found.')
+              manager = manager.replace(
+                  map_anchor,
+                  map_anchor + map_block,
+                  1,
+              )
+
+          manager_methods = r'''
+            /// Returns settings declared by the plugin's optional JS
+            /// `getSettings()` function. Static `settings` in the manifest are
+            /// also accepted, with JS definitions taking precedence by key.
+            Future<List<PluginSettingDefinition>> getSettingsForPlugin(
+              ExtensionPlugin plugin,
+            ) async {
+              final cached = _dynamicSettingsMap[plugin.packageName];
+              if (cached != null) return cached;
+
+              final byKey = <String, PluginSettingDefinition>{};
+
+              final manifestSettings = plugin.manifest['settings'];
+              if (manifestSettings is List) {
+                for (final raw in manifestSettings
+                    .take(100)
+                    .whereType<Map<dynamic, dynamic>>()) {
+                  final setting = PluginSettingDefinition.fromJson(
+                    Map<String, dynamic>.from(raw),
+                  );
+                  if (setting.key.isNotEmpty) {
+                    byKey[setting.key] = setting;
+                  }
+                }
+              }
+
+              try {
+                JsBasedProvider? provider;
+                final loaded = _firstLoadedProvider(plugin.packageName);
+                if (loaded is JsBasedProvider) {
+                  provider = loaded;
+                } else {
+                  provider = await _createSettingsProvider(plugin);
+                }
+
+                if (provider != null) {
+                  final scriptSettings = await provider.getSettings();
+                  for (final setting in scriptSettings) {
+                    byKey[setting.key] = setting;
+                  }
+                }
+              } catch (error) {
+                if (kDebugMode) {
+                  debugPrint(
+                    'ExtensionManager: settings load failed for '
+                    '${plugin.packageName}: $error',
+                  );
+                }
+              }
+
+              final result = byKey.values.toList(growable: false);
+              _dynamicSettingsMap[plugin.packageName] = result;
+              return result;
+            }
+
+            Future<JsBasedProvider?> _createSettingsProvider(
+              ExtensionPlugin plugin,
+            ) async {
+              final cached = _settingsProviders[plugin.packageName];
+              if (cached != null) return cached;
+              if (_engine == null || _storageService == null) return null;
+
+              final path = await _storageService!.getPluginJsPath(plugin);
+              if (!path.startsWith('assets/') && !await File(path).exists()) {
+                return null;
+              }
+
+              final baseNamespace = plugin.packageName.replaceAll(
+                RegExp(r'[^a-zA-Z0-9]'),
+                '_',
+              );
+              final customBaseUrl = ref
+                  .read(settingsRepositoryProvider)
+                  .getCustomBaseUrl(plugin.packageName);
+
+              final provider = JsBasedProvider(
+                _engine!,
+                path,
+                packageName: plugin.packageName,
+                jsPackageName: plugin.packageName,
+                namespace: '${baseNamespace}__settings',
+                manifest: plugin.manifest,
+                customBaseUrl: customBaseUrl,
+              );
+              _settingsProviders[plugin.packageName] = provider;
+              return provider;
+            }
+
+            void _clearSettingsRuntime(String packageName) {
+              _dynamicSettingsMap.remove(packageName);
+              final provider = _settingsProviders.remove(packageName);
+              final namespace = provider?.namespace;
+              if (namespace != null && namespace.isNotEmpty) {
+                _engine?.unload(namespace);
+              }
+            }
+
+          '''
+
+          if 'getSettingsForPlugin(' not in manager:
+              method_anchor = '  @override\n  List<SkyStreamProvider> build() {'
+              if manager.count(method_anchor) != 1:
+                  raise RuntimeError('ExtensionManager build anchor not found.')
+              manager = manager.replace(
+                  method_anchor,
+                  manager_methods + method_anchor,
+                  1,
+              )
+
+          old_reload = r'''  Future<void> reloadPlugin(ExtensionPlugin plugin) async {
+              if (_engine == null || _storageService == null) return;
+              _removeProvidersForPackage(plugin.packageName);
+              final loaded = await _loadPlugin(plugin);
+              for (final p in loaded) {
+                _addProvider(p);
+              }
+            }
+          '''
+          new_reload = r'''  Future<void> reloadPlugin(ExtensionPlugin plugin) async {
+              if (_engine == null || _storageService == null) return;
+              _clearSettingsRuntime(plugin.packageName);
+              _removeProvidersForPackage(plugin.packageName);
+              final loaded = await _loadPlugin(plugin);
+              for (final p in loaded) {
+                _addProvider(p);
+              }
+            }
+          '''
+          if old_reload in manager:
+              manager = manager.replace(old_reload, new_reload, 1)
+          elif '_clearSettingsRuntime(plugin.packageName);' not in manager:
+              raise RuntimeError('reloadPlugin anchor not found.')
+
+          manager_path.write_text(manager, encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # 4. Full settings page
+          # ------------------------------------------------------------------
+          settings_screen = r'''import 'package:flutter/material.dart';
+          import 'package:flutter_riverpod/flutter_riverpod.dart';
+          import 'package:skystream/l10n/generated/app_localizations.dart';
+
+          import '../../../core/extensions/extension_manager.dart';
+          import '../../../core/extensions/models/extension_plugin.dart';
+          import '../../../core/storage/extension_repository.dart';
+          import '../../../core/storage/settings_repository.dart';
+          import '../../../shared/widgets/loading_indicator.dart';
+
+          class PluginSettingsScreen extends ConsumerStatefulWidget {
+            final ExtensionPlugin plugin;
+
+            const PluginSettingsScreen({super.key, required this.plugin});
+
+            @override
+            ConsumerState<PluginSettingsScreen> createState() =>
+                _PluginSettingsScreenState();
+          }
+
+          class _PluginSettingsScreenState
+              extends ConsumerState<PluginSettingsScreen> {
+            bool _loading = true;
+            bool _saving = false;
+            String? _error;
+            List<PluginSettingDefinition> _definitions = const [];
+            List<PluginSubProvider> _providers = const [];
+            final Map<String, String> _values = {};
+            final Map<String, bool> _providerEnabled = {};
+            final Map<String, TextEditingController> _controllers = {};
+            String _selectedDomain = '';
+
+            @override
+            void initState() {
+              super.initState();
+              Future.microtask(_load);
+            }
+
+            @override
+            void dispose() {
+              for (final controller in _controllers.values) {
+                controller.dispose();
+              }
+              super.dispose();
+            }
+
+            Future<void> _load() async {
+              if (mounted) {
+                setState(() {
+                  _loading = true;
+                  _error = null;
+                });
+              }
+
+              try {
+                final manager = ref.read(extensionManagerProvider.notifier);
+                final definitions = await manager.getSettingsForPlugin(
+                  widget.plugin,
+                );
+                final providers = manager.getProvidersForPlugin(widget.plugin);
+                final storage = ref.read(extensionRepositoryProvider);
+                final settingsRepository = ref.read(settingsRepositoryProvider);
+                final savedBaseUrl = settingsRepository.getCustomBaseUrl(
+                  widget.plugin.packageName,
+                );
+
+                for (final controller in _controllers.values) {
+                  controller.dispose();
+                }
+                _controllers.clear();
+                _values.clear();
+                _providerEnabled.clear();
+
+                for (final definition in definitions) {
+                  String value;
+                  if (definition.isBaseUrl) {
+                    value =
+                        savedBaseUrl ??
+                        (definition.defaultValue.isNotEmpty
+                            ? definition.defaultValue
+                            : (widget.plugin.manifest['baseUrl']?.toString() ??
+                                  ''));
+                  } else {
+                    value =
+                        storage.getExtensionData(
+                          '${widget.plugin.packageName}:${definition.key}',
+                        ) ??
+                        definition.defaultValue;
+                  }
+
+                  if (definition.type == PluginSettingType.select &&
+                      definition.options.isNotEmpty &&
+                      !definition.options.any(
+                        (option) => option.value == value,
+                      )) {
+                    value = definition.options.first.value;
+                  }
+
+                  _values[definition.key] = value;
+                  if (definition.type == PluginSettingType.text ||
+                      definition.type == PluginSettingType.url) {
+                    _controllers[definition.key] = TextEditingController(
+                      text: value,
+                    );
+                  }
+                }
+
+                for (final provider in providers) {
+                  final saved = storage.getExtensionData(
+                    '${widget.plugin.packageName}:'
+                    '_provider_enabled_${provider.id}',
+                  );
+                  _providerEnabled[provider.id] =
+                      saved == null ? true : saved == 'true';
+                }
+
+                final domains = widget.plugin.domains ?? const <PluginDomain>[];
+                _selectedDomain =
+                    savedBaseUrl ??
+                    (domains.isNotEmpty
+                        ? domains.first.url
+                        : (widget.plugin.manifest['baseUrl']?.toString() ?? ''));
+
+                if (!mounted) return;
+                setState(() {
+                  _definitions = definitions;
+                  _providers = providers;
+                  _loading = false;
+                });
+              } catch (error) {
+                if (!mounted) return;
+                setState(() {
+                  _error = error.toString();
+                  _loading = false;
+                });
+              }
+            }
+
+            bool _boolValue(String key) {
+              final value = (_values[key] ?? '').trim().toLowerCase();
+              return value == 'true' ||
+                  value == '1' ||
+                  value == 'yes' ||
+                  value == 'on';
+            }
+
+            String _normalizedUrl(String raw) {
+              var value = raw.trim();
+              if (value.isEmpty) return '';
+              if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(value)) {
+                value = 'https://$value';
+              }
+              return value.replaceFirst(RegExp(r'/+$'), '');
+            }
+
+            Future<void> _save() async {
+              if (_saving || _loading) return;
+              setState(() => _saving = true);
+
+              try {
+                final storage = ref.read(extensionRepositoryProvider);
+                final settingsRepository = ref.read(settingsRepositoryProvider);
+                final manager = ref.read(extensionManagerProvider.notifier);
+                var shouldReload = false;
+                final hasScriptBaseUrl = _definitions.any(
+                  (definition) => definition.isBaseUrl,
+                );
+
+                for (final definition in _definitions) {
+                  var value =
+                      _controllers[definition.key]?.text ??
+                      _values[definition.key] ??
+                      definition.defaultValue;
+
+                  if (definition.type == PluginSettingType.url) {
+                    value = _normalizedUrl(value);
+                  }
+
+                  if (definition.isBaseUrl) {
+                    await settingsRepository.setCustomBaseUrl(
+                      widget.plugin.packageName,
+                      value.isEmpty ? null : value,
+                    );
+                    shouldReload = true;
+                  } else {
+                    await storage.setExtensionData(
+                      '${widget.plugin.packageName}:${definition.key}',
+                      value,
+                    );
+                    shouldReload =
+                        shouldReload || definition.reloadOnChange;
+                  }
+                  _values[definition.key] = value;
+                }
+
+                if (!hasScriptBaseUrl &&
+                    (widget.plugin.domains?.isNotEmpty ?? false)) {
+                  await settingsRepository.setCustomBaseUrl(
+                    widget.plugin.packageName,
+                    _selectedDomain.isEmpty ? null : _selectedDomain,
+                  );
+                  shouldReload = true;
+                }
+
+                for (final provider in _providers) {
+                  await storage.setExtensionData(
+                    '${widget.plugin.packageName}:'
+                    '_provider_enabled_${provider.id}',
+                    (_providerEnabled[provider.id] ?? true)
+                        ? 'true'
+                        : 'false',
+                  );
+                  shouldReload = true;
+                }
+
+                if (shouldReload) {
+                  await manager.reloadPlugin(widget.plugin);
+                }
+
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Extension settings saved')),
+                );
+              } catch (error) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to save settings: $error')),
+                );
+              } finally {
+                if (mounted) setState(() => _saving = false);
+              }
+            }
+
+            Widget _sectionTitle(BuildContext context, String title) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              );
+            }
+
+            Widget _buildSetting(
+              BuildContext context,
+              PluginSettingDefinition definition,
+            ) {
+              switch (definition.type) {
+                case PluginSettingType.toggle:
+                  return SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(definition.title),
+                    subtitle: definition.description == null
+                        ? null
+                        : Text(definition.description!),
+                    value: _boolValue(definition.key),
+                    onChanged: _saving
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _values[definition.key] = value ? 'true' : 'false';
+                            });
+                          },
+                  );
+
+                case PluginSettingType.select:
+                  final current = _values[definition.key];
+                  final selected = definition.options.any(
+                    (option) => option.value == current,
+                  )
+                      ? current
+                      : null;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey('${definition.key}:$selected'),
+                      initialValue: selected,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: definition.title,
+                        helperText: definition.description,
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: definition.options
+                          .map(
+                            (option) => DropdownMenuItem<String>(
+                              value: option.value,
+                              child: Text(
+                                option.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: _saving
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              setState(() {
+                                _values[definition.key] = value;
+                              });
+                            },
+                    ),
+                  );
+
+                case PluginSettingType.text:
+                case PluginSettingType.url:
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: TextField(
+                      controller: _controllers[definition.key],
+                      enabled: !_saving,
+                      keyboardType: definition.type == PluginSettingType.url
+                          ? TextInputType.url
+                          : TextInputType.text,
+                      autocorrect: definition.type != PluginSettingType.url,
+                      enableSuggestions:
+                          definition.type != PluginSettingType.url,
+                      decoration: InputDecoration(
+                        labelText: definition.title,
+                        helperText: definition.description,
+                        hintText: definition.type == PluginSettingType.url
+                            ? 'https://example.com'
+                            : null,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  );
+              }
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              final l10n = AppLocalizations.of(context)!;
+              final domains =
+                  widget.plugin.domains ?? const <PluginDomain>[];
+              final hasScriptBaseUrl = _definitions.any(
+                (definition) => definition.isBaseUrl,
+              );
+              final hasContent =
+                  _definitions.isNotEmpty ||
+                  _providers.isNotEmpty ||
+                  (domains.isNotEmpty && !hasScriptBaseUrl);
+
+              return Scaffold(
+                appBar: AppBar(
+                  title: Text(l10n.pluginSettings(widget.plugin.name)),
+                  actions: [
+                    IconButton(
+                      tooltip: 'Save',
+                      onPressed: _loading || _saving ? null : _save,
+                      icon: _saving
+                          ? const AppLoadingIndicator(
+                              constraints: BoxConstraints.tightFor(
+                                width: 20,
+                                height: 20,
+                              ),
+                            )
+                          : const Icon(Icons.save_outlined),
+                    ),
+                  ],
+                ),
+                body: _loading
+                    ? const Center(child: AppLoadingIndicator())
+                    : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _error!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              FilledButton(
+                                onPressed: _load,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : !hasContent
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'This extension does not define configurable settings.',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                        children: [
+                          if (_definitions.isNotEmpty) ...[
+                            _sectionTitle(context, 'Extension settings'),
+                            ..._definitions.map(
+                              (definition) =>
+                                  _buildSetting(context, definition),
+                            ),
+                          ],
+                          if (domains.isNotEmpty && !hasScriptBaseUrl) ...[
+                            _sectionTitle(context, 'Website address'),
+                            RadioGroup<String>(
+                              groupValue: _selectedDomain,
+                              onChanged: (value) {
+                                if (_saving || value == null) return;
+                                setState(() => _selectedDomain = value);
+                              },
+                              child: Column(
+                                children: domains
+                                    .map(
+                                      (domain) => ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(domain.name),
+                                        subtitle: Text(domain.url),
+                                        leading: Radio<String>(
+                                          value: domain.url,
+                                        ),
+                                        onTap: _saving
+                                            ? null
+                                            : () {
+                                                setState(
+                                                  () => _selectedDomain =
+                                                      domain.url,
+                                                );
+                                              },
+                                      ),
+                                    )
+                                    .toList(growable: false),
+                              ),
+                            ),
+                          ],
+                          if (_providers.isNotEmpty) ...[
+                            _sectionTitle(context, 'Providers'),
+                            ..._providers.map(
+                              (provider) => SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(provider.name),
+                                subtitle: Text(provider.id),
+                                value:
+                                    _providerEnabled[provider.id] ?? true,
+                                onChanged: _saving
+                                    ? null
+                                    : (value) {
+                                        setState(() {
+                                          _providerEnabled[provider.id] =
+                                              value;
+                                        });
+                                      },
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _save,
+                            icon: const Icon(Icons.save_outlined),
+                            label: const Text('Save settings'),
+                          ),
+                        ],
+                      ),
+              );
+            }
+          }
+          '''
+
+          new_screen_path = (
+              root /
+              'lib/features/extensions/screens/plugin_settings_screen.dart'
+          )
+          new_screen_path.write_text(settings_screen, encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # 5. Show settings only when configurable content exists
+          # ------------------------------------------------------------------
+          extensions_path = (
+              root / 'lib/features/extensions/screens/extensions_screen.dart'
+          )
+          extensions = extensions_path.read_text(encoding='utf-8')
+          extensions = extensions.replace(
+              "import '../widgets/plugin_settings_dialog.dart';\n",
+              "import 'plugin_settings_screen.dart';\n",
+          )
+
+          state_anchor = '''class _PluginTileState extends ConsumerState<_PluginTile> {
+            final FocusNode _settingsFocusNode = FocusNode();
+
+            @override
+            void dispose() {
+          '''
+          state_replacement = '''class _PluginTileState extends ConsumerState<_PluginTile> {
+            final FocusNode _settingsFocusNode = FocusNode();
+            Future<List<PluginSettingDefinition>>? _settingsFuture;
+            String? _settingsFuturePackageName;
+
+            Future<List<PluginSettingDefinition>> _settingsFor(
+              ExtensionPlugin plugin,
+            ) {
+              if (_settingsFuture == null ||
+                  _settingsFuturePackageName != plugin.packageName) {
+                _settingsFuturePackageName = plugin.packageName;
+                _settingsFuture = ref
+                    .read(extensionManagerProvider.notifier)
+                    .getSettingsForPlugin(plugin);
+              }
+              return _settingsFuture!;
+            }
+
+            @override
+            void dispose() {
+          '''
+
+          if '_settingsFuturePackageName' not in extensions:
+              if extensions.count(state_anchor) != 1:
+                  raise RuntimeError(
+                      'Expected exactly one _PluginTileState anchor, found '
+                      f'{extensions.count(state_anchor)}.',
+                  )
+              extensions = extensions.replace(
+                  state_anchor,
+                  state_replacement,
+                  1,
+              )
+
+          old_button_pattern = re.compile(
+              r'''                // Settings button \(shown when plugin '''
+              r'''declares domains, static providers, or dynamic providers '''
+              r'''from JS\)\n'''
+              r'''                if \(isInstalled &&[\s\S]*?'''
+              r'''                    },\n'''
+              r'''                  \),\n\n'''
+              r'''                // Install / delete button''',
+          )
+
+          new_button = r'''                // Show the button only when the extension exposes
+                          // settings, domains, or providers. While getSettings()
+                          // is resolving, no empty settings button is displayed.
+                          if (isInstalled)
+                            FutureBuilder<List<PluginSettingDefinition>>(
+                              future: _settingsFor(installedPlugin!),
+                              builder: (context, snapshot) {
+                                final manifestSettings =
+                                    installedPlugin.manifest['settings'];
+                                final hasManifestSettings =
+                                    manifestSettings is List &&
+                                    manifestSettings.isNotEmpty;
+                                final hasScriptSettings =
+                                    snapshot.data?.isNotEmpty ?? false;
+                                final hasDomains =
+                                    installedPlugin.domains?.isNotEmpty ?? false;
+                                final hasStaticProviders =
+                                    installedPlugin.providers?.isNotEmpty ??
+                                    false;
+
+                                // Rebuild when dynamic providers finish loading.
+                                final loadedProviders = ref.watch(
+                                  extensionManagerProvider,
+                                );
+                                final hasLoadedSubProviders = loadedProviders.any(
+                                  (provider) =>
+                                      provider.packageName.startsWith(
+                                        '${installedPlugin.packageName}::',
+                                      ),
+                                );
+                                final hasDynamicProviders = ref
+                                    .read(extensionManagerProvider.notifier)
+                                    .getProvidersForPlugin(installedPlugin)
+                                    .isNotEmpty;
+
+                                final hasSettings =
+                                    hasManifestSettings ||
+                                    hasScriptSettings ||
+                                    hasDomains ||
+                                    hasStaticProviders ||
+                                    hasDynamicProviders ||
+                                    hasLoadedSubProviders;
+
+                                if (!hasSettings) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return IconButton(
+                                  focusNode: _settingsFocusNode,
+                                  icon: const Icon(Icons.settings_outlined),
+                                  tooltip: l10n.settings,
+                                  onPressed: () async {
+                                    await Navigator.of(context).push<void>(
+                                      MaterialPageRoute<void>(
+                                        builder: (context) =>
+                                            PluginSettingsScreen(
+                                              plugin: installedPlugin,
+                                            ),
+                                      ),
+                                    );
+                                    if (context.mounted) {
+                                      _settingsFocusNode.requestFocus();
+                                    }
+                                  },
+                                );
+                              },
+                            ),
+
+                          // Install / delete button'''
+
+          if 'FutureBuilder<List<PluginSettingDefinition>>' not in extensions:
+              extensions, replaced = old_button_pattern.subn(
+                  new_button,
+                  extensions,
+                  count=1,
+              )
+              if replaced != 1:
+                  raise RuntimeError(
+                      f'Expected one settings button block, replaced {replaced}.'
+                  )
+
+          extensions_path.write_text(extensions, encoding='utf-8')
+
+          old_dialog = (
+              root /
+              'lib/features/extensions/widgets/plugin_settings_dialog.dart'
+          )
+          old_dialog.unlink(missing_ok=True)
+
+          # ------------------------------------------------------------------
+          # 6. Static verification before Flutter analysis
+          # ------------------------------------------------------------------
+          required = {
+              model_path: (
+                  'class PluginSettingDefinition',
+                  'enum PluginSettingType',
+              ),
+              provider_path: (
+                  'getSettings:',
+                  'Future<List<PluginSettingDefinition>> getSettings() async',
+                  '_iifeWrapperVersion',
+              ),
+              manager_path: (
+                  'getSettingsForPlugin(',
+                  '_createSettingsProvider(',
+                  '_clearSettingsRuntime(',
+              ),
+              new_screen_path: (
+                  'class PluginSettingsScreen',
+                  'DropdownButtonFormField<String>',
+                  'SwitchListTile',
+                  'TextInputType.url',
+              ),
+              extensions_path: (
+                  "import 'plugin_settings_screen.dart';",
+                  'PluginSettingsScreen(',
+                  'FutureBuilder<List<PluginSettingDefinition>>',
+                  '_settingsFuturePackageName',
+                  'final hasSettings =',
+                  'return const SizedBox.shrink();',
+              ),
+          }
+
+          for path, needles in required.items():
+              contents = path.read_text(encoding='utf-8')
+              for needle in needles:
+                  if needle not in contents:
+                      raise RuntimeError(f'Missing {needle!r} in {path}.')
+
+          if 'PluginSettingsDialog(' in extensions:
+              raise RuntimeError('Old settings dialog reference remains.')
+
+          print('Added script-defined extension settings support.')
+          PY
+
+          python3 /tmp/add_plugin_settings.py
+
+      - name: Generate code
+        run: |
+          set -euo pipefail
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Format changed Dart files
+        run: |
+          dart format \
+            lib/core/extensions/models/extension_plugin.dart \
+            lib/core/extensions/providers/js_based_provider.dart \
+            lib/core/extensions/extension_manager.dart \
+            lib/features/extensions/screens/extensions_screen.dart \
+            lib/features/extensions/screens/plugin_settings_screen.dart
+
+      - name: Analyze extension settings integration
+        run: |
+          flutter analyze \
+            --no-fatal-warnings \
+            --no-fatal-infos \
+            lib/core/extensions/models/extension_plugin.dart \
+            lib/core/extensions/providers/js_based_provider.dart \
+            lib/core/extensions/extension_manager.dart \
+            lib/features/extensions/screens/extensions_screen.dart \
+            lib/features/extensions/screens/plugin_settings_screen.dart
+
+      - name: Verify diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test -f lib/features/extensions/screens/plugin_settings_screen.dart
+          test ! -f lib/features/extensions/widgets/plugin_settings_dialog.dart
+          grep -q 'PluginSettingsScreen' \
+            lib/features/extensions/screens/extensions_screen.dart
+          grep -q 'FutureBuilder<List<PluginSettingDefinition>>' \
+            lib/features/extensions/screens/extensions_screen.dart
+          grep -q 'final hasSettings =' \
+            lib/features/extensions/screens/extensions_screen.dart
+          grep -q 'return const SizedBox.shrink();' \
+            lib/features/extensions/screens/extensions_screen.dart
+          grep -q 'getSettingsForPlugin' \
+            lib/core/extensions/extension_manager.dart
+          grep -q 'getSettings:' \
+            lib/core/extensions/providers/js_based_provider.dart
+
+      - name: Remove one-time workflow
+        run: |
+          git rm --ignore-unmatch \
+            .github/workflows/add-script-defined-plugin-settings.yml
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name 'github-actions[bot]'
+          git config user.email \
+            '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+
+          git commit -m 'Add conditional script-defined extension settings'
+          git push origin HEAD:main
+ء
