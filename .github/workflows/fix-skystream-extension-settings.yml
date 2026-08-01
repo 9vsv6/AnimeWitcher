@@ -204,6 +204,13 @@ jobs:
               "                          hasDomains ||",
               "show only real settings buttons",
           )
+
+          screen = replace_required(
+              screen,
+              "future: _settingsFor(installedPlugin!),",
+              "future: _settingsFor(installedPlugin),",
+              "remove an unnecessary non-null assertion",
+          )
           write(screen_path, screen)
 
           settings_path = (
