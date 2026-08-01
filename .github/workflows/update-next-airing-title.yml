@@ -1,0 +1,140 @@
+name: Update next airing countdown title
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-next-airing-countdown-title
+  cancel-in-progress: false
+
+jobs:
+  update-next-airing-title:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.8
+          cache: true
+
+      - name: Apply the next airing title update
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "lib/features/details/presentation/widgets/"
+              "premium_details_widgets.dart"
+          )
+          text = path.read_text(encoding="utf-8")
+
+          old_header = (
+              "              Text(\n"
+              "                'Next episode in',\n"
+              "                style: Theme.of(\n"
+              "                  context,\n"
+              "                ).textTheme.titleSmall?.copyWith("
+              "fontWeight: FontWeight.bold),\n"
+              "              ),\n"
+          )
+          new_header = (
+              "              Expanded(\n"
+              "                child: Text(\n"
+              "                  '$episodeDescription in',\n"
+              "                  style: Theme.of(context).textTheme."
+              "titleSmall?.copyWith(\n"
+              "                    fontWeight: FontWeight.bold,\n"
+              "                  ),\n"
+              "                ),\n"
+              "              ),\n"
+          )
+          old_description = (
+              "          const SizedBox(height: 8),\n"
+              "          Text(\n"
+              "            episodeDescription,\n"
+              "            style: Theme.of(context).textTheme.bodyMedium,\n"
+              "          ),\n"
+              "          const SizedBox(height: 4),\n"
+          )
+          new_description = "          const SizedBox(height: 8),\n"
+
+          already_applied = (
+              new_header in text and old_description not in text
+          )
+          if already_applied:
+              print("The next airing title update is already applied.")
+          elif old_header not in text or old_description not in text:
+              raise SystemExit(
+                  f"Expected next airing widget block was not found in {path}"
+              )
+          else:
+              text = text.replace(old_header, new_header, 1)
+              text = text.replace(old_description, new_description, 1)
+              path.write_text(text, encoding="utf-8")
+              print("Updated the next airing countdown title.")
+          PY
+
+          dart format \
+            lib/features/details/presentation/widgets/premium_details_widgets.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find test -type f -name '*_test.dart' -print -quit | grep -q .; then
+            flutter test
+          else
+            echo "No Flutter tests found; skipping flutter test."
+          fi
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          target="lib/features/details/presentation/widgets/premium_details_widgets.dart"
+
+          if git diff --quiet -- "$target"; then
+            echo "No changes were needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$target"
+          git commit -m "Update next airing countdown title"
+
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main
+
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+
+            echo "Push attempt $attempt failed; retrying with latest main."
+          done
+
+          echo "Unable to push after 3 attempts."
+          exit 1
