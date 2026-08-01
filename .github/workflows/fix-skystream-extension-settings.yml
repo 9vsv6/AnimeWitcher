@@ -1,0 +1,399 @@
+name: Fix extension settings runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-extension-settings-runtime
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply settings runtime fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path_text, old, new, marker):
+              path = Path(path_text)
+              text = path.read_text(encoding="utf-8")
+              if new in text:
+                  print(f"already applied: {marker}")
+                  return
+              if old not in text:
+                  raise SystemExit(f"anchor not found for {marker}: {path}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+              print(f"applied: {marker}")
+
+          manager = "lib/core/extensions/extension_manager.dart"
+
+          replace_once(
+              manager,
+              """  void _clearSettingsRuntime(String packageName) {
+            _dynamicSettingsMap.remove(packageName);
+            final provider = _settingsProviders.remove(packageName);
+            final namespace = provider?.namespace;
+            if (namespace != null && namespace.isNotEmpty) {
+              _engine?.unload(namespace);
+            }
+          }
+          """,
+              """  void _clearSettingsRuntime(String packageName) {
+            _dynamicSettingsMap.remove(packageName);
+            final provider = _settingsProviders.remove(packageName);
+            final namespace = provider?.namespace;
+            if (namespace != null && namespace.isNotEmpty) {
+              _engine?.unload(namespace);
+            }
+          }
+
+          void _clearPluginRuntime(String packageName) {
+            _pluginScriptFutures.remove(packageName);
+            _dynamicProvidersMap.remove(packageName);
+            _clearSettingsRuntime(packageName);
+          }
+          """,
+              "clear all per-plugin caches",
+          )
+
+          replace_once(
+              manager,
+              """            if (existing != null &&
+                      plugin.version.toString() != existing.version) {
+                    _removeProvidersForPackage(plugin.packageName);
+                    needsLoad = true;
+                  }
+          """,
+              """            if (existing != null &&
+                      plugin.version.toString() != existing.version) {
+                    _clearPluginRuntime(plugin.packageName);
+                    _removeProvidersForPackage(plugin.packageName);
+                    needsLoad = true;
+                  }
+          """,
+              "invalidate caches when an extension version changes",
+          )
+
+          replace_once(
+              manager,
+              """  Future<void> reloadPlugin(ExtensionPlugin plugin) async {
+            if (_engine == null || _storageService == null) return;
+            _clearSettingsRuntime(plugin.packageName);
+            _removeProvidersForPackage(plugin.packageName);
+          """,
+              """  Future<void> reloadPlugin(ExtensionPlugin plugin) async {
+            if (_engine == null || _storageService == null) return;
+            _clearPluginRuntime(plugin.packageName);
+            _removeProvidersForPackage(plugin.packageName);
+          """,
+              "reload the current script instead of a stale cached copy",
+          )
+
+          replace_once(
+              manager,
+              """  bool _isSubProviderEnabled(String packageName, String providerId) {
+            final storage = ref.read(extensionRepositoryProvider);
+            return storage.getExtensionData(
+                  '$packageName:_provider_enabled_$providerId',
+                ) ==
+                'true';
+          }
+          """,
+              """  bool _isSubProviderEnabled(String packageName, String providerId) {
+            final storage = ref.read(extensionRepositoryProvider);
+            final saved = storage.getExtensionData(
+              '$packageName:_provider_enabled_$providerId',
+            );
+            return saved == null || saved == 'true';
+          }
+          """,
+              "make sub-providers enabled by default",
+          )
+
+          screen = "lib/features/extensions/screens/extensions_screen.dart"
+          replace_once(
+              screen,
+              """  Future<List<PluginSettingDefinition>>? _settingsFuture;
+            String? _settingsFuturePackageName;
+
+            Future<List<PluginSettingDefinition>> _settingsFor(ExtensionPlugin plugin) {
+              if (_settingsFuture == null ||
+                  _settingsFuturePackageName != plugin.packageName) {
+                _settingsFuturePackageName = plugin.packageName;
+                _settingsFuture = ref
+                    .read(extensionManagerProvider.notifier)
+                    .getSettingsForPlugin(plugin);
+              }
+              return _settingsFuture!;
+            }
+          """,
+              """  Future<List<PluginSettingDefinition>>? _settingsFuture;
+            String? _settingsFutureIdentity;
+
+            String _settingsIdentity(ExtensionPlugin plugin) =>
+                '${plugin.packageName}:${plugin.version}:${plugin.sourceUrl}';
+
+            Future<List<PluginSettingDefinition>> _settingsFor(ExtensionPlugin plugin) {
+              final identity = _settingsIdentity(plugin);
+              if (_settingsFuture == null || _settingsFutureIdentity != identity) {
+                _settingsFutureIdentity = identity;
+                _settingsFuture = ref
+                    .read(extensionManagerProvider.notifier)
+                    .getSettingsForPlugin(plugin);
+              }
+              return _settingsFuture!;
+            }
+
+            @override
+            void didUpdateWidget(covariant _PluginTile oldWidget) {
+              super.didUpdateWidget(oldWidget);
+              if (_settingsIdentity(oldWidget.plugin) !=
+                  _settingsIdentity(widget.plugin)) {
+                _settingsFuture = null;
+                _settingsFutureIdentity = null;
+              }
+            }
+          """,
+              "refresh the settings probe after extension updates",
+          )
+
+          replace_once(
+              screen,
+              """                      final hasScriptSettings =
+                                snapshot.data?.isNotEmpty ?? false;
+                            final hasDomains =
+          """,
+              """                      final hasScriptSettings =
+                                snapshot.data?.isNotEmpty ?? false;
+                            final declaresScriptSettings =
+                                installedPlugin.manifest['hasSettings'] == true;
+                            final hasDomains =
+          """,
+              "recognize the lightweight hasSettings manifest flag",
+          )
+
+          replace_once(
+              screen,
+              """                          hasManifestSettings ||
+                                hasScriptSettings ||
+                                hasDomains ||
+          """,
+              """                          hasManifestSettings ||
+                                hasScriptSettings ||
+                                declaresScriptSettings ||
+                                hasDomains ||
+          """,
+              "show settings only for declared or discovered configuration",
+          )
+
+          settings_screen = (
+              "lib/features/extensions/screens/plugin_settings_screen.dart"
+          )
+          replace_once(
+              settings_screen,
+              """  String _normalizedUrl(String raw) {
+            var value = raw.trim();
+            if (value.isEmpty) return '';
+            if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(value)) {
+              value = 'https://$value';
+            }
+            return value.replaceFirst(RegExp(r'/+$'), '');
+          }
+          """,
+              """  String _normalizedUrl(String raw) {
+            var value = raw.trim();
+            if (value.isEmpty) return '';
+            if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(value)) {
+              value = 'https://$value';
+            }
+            value = value.replaceFirst(RegExp(r'/+$'), '');
+            final uri = Uri.tryParse(value);
+            if (uri == null ||
+                (uri.scheme != 'http' && uri.scheme != 'https') ||
+                uri.host.isEmpty) {
+              throw const FormatException('Enter a valid HTTP or HTTPS URL');
+            }
+            return uri.origin;
+          }
+          """,
+              "validate and normalize custom website URLs",
+          )
+
+          old_save = """      for (final definition in _definitions) {
+                var value =
+                    _controllers[definition.key]?.text ??
+                    _values[definition.key] ??
+                    definition.defaultValue;
+
+                if (definition.type == PluginSettingType.url) {
+                  value = _normalizedUrl(value);
+                }
+
+                if (definition.isBaseUrl) {
+                  await settingsRepository.setCustomBaseUrl(
+                    widget.plugin.packageName,
+                    value.isEmpty ? null : value,
+                  );
+                  shouldReload = true;
+                } else {
+                  await storage.setExtensionData(
+                    '${widget.plugin.packageName}:${definition.key}',
+                    value,
+                  );
+                  shouldReload = shouldReload || definition.reloadOnChange;
+                }
+                _values[definition.key] = value;
+              }
+
+              if (!hasScriptBaseUrl && (widget.plugin.domains?.isNotEmpty ?? false)) {
+                await settingsRepository.setCustomBaseUrl(
+                  widget.plugin.packageName,
+                  _selectedDomain.isEmpty ? null : _selectedDomain,
+                );
+                shouldReload = true;
+              }
+
+              for (final provider in _providers) {
+                await storage.setExtensionData(
+                  '${widget.plugin.packageName}:'
+                  '_provider_enabled_${provider.id}',
+                  (_providerEnabled[provider.id] ?? true) ? 'true' : 'false',
+                );
+                shouldReload = true;
+              }
+          """
+          new_save = """      for (final definition in _definitions) {
+                var value =
+                    _controllers[definition.key]?.text ??
+                    _values[definition.key] ??
+                    definition.defaultValue;
+
+                if (definition.type == PluginSettingType.url) {
+                  value = _normalizedUrl(value);
+                }
+
+                if (definition.isBaseUrl) {
+                  final previous = settingsRepository.getCustomBaseUrl(
+                    widget.plugin.packageName,
+                  );
+                  final next = value.isEmpty ? null : value;
+                  if (previous != next) {
+                    await settingsRepository.setCustomBaseUrl(
+                      widget.plugin.packageName,
+                      next,
+                    );
+                    shouldReload = true;
+                  }
+                } else {
+                  final storageKey =
+                      '${widget.plugin.packageName}:${definition.key}';
+                  final previous = storage.getExtensionData(storageKey);
+                  if (previous != value) {
+                    await storage.setExtensionData(storageKey, value);
+                    shouldReload = shouldReload || definition.reloadOnChange;
+                  }
+                }
+                _values[definition.key] = value;
+                final controller = _controllers[definition.key];
+                if (controller != null && controller.text != value) {
+                  controller.text = value;
+                }
+              }
+
+              if (!hasScriptBaseUrl && (widget.plugin.domains?.isNotEmpty ?? false)) {
+                final previous = settingsRepository.getCustomBaseUrl(
+                  widget.plugin.packageName,
+                );
+                final next = _selectedDomain.isEmpty ? null : _selectedDomain;
+                if (previous != next) {
+                  await settingsRepository.setCustomBaseUrl(
+                    widget.plugin.packageName,
+                    next,
+                  );
+                  shouldReload = true;
+                }
+              }
+
+              for (final provider in _providers) {
+                final storageKey =
+                    '${widget.plugin.packageName}:'
+                    '_provider_enabled_${provider.id}';
+                final next = (_providerEnabled[provider.id] ?? true)
+                    ? 'true'
+                    : 'false';
+                final previous = storage.getExtensionData(storageKey);
+                if (previous != next) {
+                  await storage.setExtensionData(storageKey, next);
+                  shouldReload = true;
+                }
+              }
+          """
+          replace_once(
+              settings_screen,
+              old_save,
+              new_save,
+              "save only changed values and avoid unnecessary reloads",
+          )
+
+          replace_once(
+              "pubspec.yaml",
+              "version: 2.6.5+1",
+              "version: 2.6.6+1",
+              "bump the corrected app build to 2.6.6",
+          )
+          PY
+
+      - name: Format changed Dart files
+        run: >-
+          dart format
+          lib/core/extensions/extension_manager.dart
+          lib/features/extensions/screens/extensions_screen.dart
+          lib/features/extensions/screens/plugin_settings_screen.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No changes were needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            pubspec.yaml \
+            lib/core/extensions/extension_manager.dart \
+            lib/features/extensions/screens/extensions_screen.dart \
+            lib/features/extensions/screens/plugin_settings_screen.dart
+          git commit -m "Fix extension settings runtime and cache handling"
+          git push origin HEAD:main
