@@ -1,21 +1,50 @@
-enum PluginSettingType { toggle, select, text, url }
+import 'dart:convert';
+
+enum PluginSettingType { toggle, toggleGroup, select, text, url }
 
 class PluginSettingOption {
   final String label;
   final String value;
+  final String? description;
+  final String? icon;
+  final String defaultValue;
 
-  const PluginSettingOption({required this.label, required this.value});
+  const PluginSettingOption({
+    required this.label,
+    required this.value,
+    this.description,
+    this.icon,
+    this.defaultValue = 'false',
+  });
 
   factory PluginSettingOption.fromJson(dynamic raw) {
     if (raw is Map) {
       final json = Map<String, dynamic>.from(raw);
       final value = (json['value'] ?? json['id'] ?? '').toString();
       final label = (json['label'] ?? json['name'] ?? value).toString();
-      return PluginSettingOption(label: label, value: value);
+      final rawDefault =
+          json['defaultValue'] ?? json['default'] ?? json['enabled'] ?? false;
+      return PluginSettingOption(
+        label: label,
+        value: value,
+        description: json['description']?.toString(),
+        icon: json['icon']?.toString(),
+        defaultValue: rawDefault is bool
+            ? (rawDefault ? 'true' : 'false')
+            : rawDefault.toString(),
+      );
     }
 
     final value = raw?.toString() ?? '';
     return PluginSettingOption(label: value, value: value);
+  }
+
+  bool get defaultBool {
+    final normalized = defaultValue.trim().toLowerCase();
+    return normalized == 'true' ||
+        normalized == '1' ||
+        normalized == 'yes' ||
+        normalized == 'on';
   }
 }
 
@@ -57,6 +86,13 @@ class PluginSettingDefinition {
       case 'list':
         type = PluginSettingType.select;
         break;
+      case 'toggle_group':
+      case 'togglegroup':
+      case 'multi_toggle':
+      case 'multitoggle':
+      case 'switch_group':
+        type = PluginSettingType.toggleGroup;
+        break;
       case 'url':
       case 'domain':
         type = PluginSettingType.url;
@@ -68,9 +104,14 @@ class PluginSettingDefinition {
 
     final rawDefault =
         json['defaultValue'] ?? json['default'] ?? json['value'] ?? '';
-    final defaultValue = rawDefault is bool
-        ? (rawDefault ? 'true' : 'false')
-        : rawDefault.toString();
+    final String defaultValue;
+    if (rawDefault is bool) {
+      defaultValue = rawDefault ? 'true' : 'false';
+    } else if (rawDefault is Map || rawDefault is List) {
+      defaultValue = jsonEncode(rawDefault);
+    } else {
+      defaultValue = rawDefault.toString();
+    }
 
     final rawDescription = json['description']?.toString().trim();
     final options = (json['options'] as List<dynamic>? ?? const [])
