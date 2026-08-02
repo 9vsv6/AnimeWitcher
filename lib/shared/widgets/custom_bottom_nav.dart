@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
-const _liquidGlassTabBarViewType =
-    'dev.akash.skystream/liquid_glass_tab_bar';
+const _nativeAppleTabBarViewType =
+    'dev.akash.skystream/native_apple_tab_bar';
 
 class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -48,7 +48,7 @@ class CustomBottomNavBar extends StatelessWidget {
     ];
 
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      return _NativeLiquidGlassBottomNavBar(
+      return _NativeAppleBottomNavBar(
         currentIndex: currentIndex,
         labels: destinations.map((destination) => destination.label).toList(),
         onTap: onTap,
@@ -82,28 +82,28 @@ class CustomBottomNavBar extends StatelessWidget {
   }
 }
 
-class _NativeLiquidGlassBottomNavBar extends StatefulWidget {
+class _NativeAppleBottomNavBar extends StatefulWidget {
   final int currentIndex;
   final List<String> labels;
   final ValueChanged<int> onTap;
 
-  const _NativeLiquidGlassBottomNavBar({
+  const _NativeAppleBottomNavBar({
     required this.currentIndex,
     required this.labels,
     required this.onTap,
   });
 
   @override
-  State<_NativeLiquidGlassBottomNavBar> createState() =>
-      _NativeLiquidGlassBottomNavBarState();
+  State<_NativeAppleBottomNavBar> createState() =>
+      _NativeAppleBottomNavBarState();
 }
 
-class _NativeLiquidGlassBottomNavBarState
-    extends State<_NativeLiquidGlassBottomNavBar> {
+class _NativeAppleBottomNavBarState
+    extends State<_NativeAppleBottomNavBar> {
   MethodChannel? _channel;
 
   @override
-  void didUpdateWidget(covariant _NativeLiquidGlassBottomNavBar oldWidget) {
+  void didUpdateWidget(covariant _NativeAppleBottomNavBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentIndex != widget.currentIndex) {
       _channel?.invokeMethod<void>('setSelectedIndex', widget.currentIndex);
@@ -112,7 +112,7 @@ class _NativeLiquidGlassBottomNavBarState
 
   void _onPlatformViewCreated(int viewId) {
     _channel?.setMethodCallHandler(null);
-    final channel = MethodChannel('${_liquidGlassTabBarViewType}_$viewId');
+    final channel = MethodChannel('${_nativeAppleTabBarViewType}_$viewId');
     _channel = channel;
     channel.setMethodCallHandler((call) async {
       if (call.method == 'onTap') {
@@ -144,12 +144,11 @@ class _NativeLiquidGlassBottomNavBarState
 
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(14, 0, 14, 6),
       child: SizedBox(
         height: 64,
         child: UiKitView(
           key: ValueKey(appearanceKey),
-          viewType: _liquidGlassTabBarViewType,
+          viewType: _nativeAppleTabBarViewType,
           creationParams: <String, Object>{
             'selectedIndex': widget.currentIndex,
             'labels': widget.labels,
