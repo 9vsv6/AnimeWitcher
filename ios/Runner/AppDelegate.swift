@@ -539,7 +539,7 @@ private final class LiquidGlassTabBarView: UIView, UIGestureRecognizerDelegate {
     selectionIndicatorView.layer.cornerRadius = indicatorFrame.height / 2
   }
 
-  func gestureRecognizerShouldBegin(
+    override func gestureRecognizerShouldBegin(
     _ gestureRecognizer: UIGestureRecognizer
   ) -> Bool {
     guard let panGesture = gestureRecognizer as? UIPanGestureRecognizer else {
