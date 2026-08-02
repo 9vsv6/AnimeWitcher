@@ -1,0 +1,88 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    name: Build unsigned iOS IPA
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show tool versions
+        run: |
+          flutter --version
+          dart --version
+          xcodebuild -version
+          pod --version
+
+      - name: Install dependencies and generate code
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Create dart-defines file
+        shell: bash
+        run: |
+          cat > dart-defines.json << 'JSON_EOF'
+          {
+            "TMDB_API_KEY": "${{ secrets.TMDB_API_KEY }}",
+            "SIMKL_CLIENT_ID": "${{ secrets.SIMKL_CLIENT_ID }}",
+            "SIMKL_CLIENT_SECRET": "${{ secrets.SIMKL_CLIENT_SECRET }}",
+            "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
+            "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
+            "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
+            "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
+            "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
+            "ANIMESKIP_CLIENT_ID": "${{ secrets.ANIMESKIP_CLIENT_ID }}"
+          }
+          JSON_EOF
+
+      - name: Build iOS app without code signing
+        run: |
+          flutter build ios             --release             --no-codesign             --dart-define-from-file=dart-defines.json
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          APP_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml | cut -d+ -f1)"
+          IPA_NAME="skystream-ios-unsigned-v${APP_VERSION}.ipa"
+
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_NAME"
+
+          echo "IPA_NAME=$IPA_NAME" >> "$GITHUB_ENV"
+          ls -lh "$IPA_NAME"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skystream-ios-unsigned
+          path: ${{ env.IPA_NAME }}
+          if-no-files-found: error
+          retention-days: 14

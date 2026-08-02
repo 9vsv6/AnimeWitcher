@@ -12,6 +12,7 @@ import '../../../details/presentation/playback_launcher.dart';
 import '../downloads_provider.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/utils/file_size_formatter.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 
 class DownloadsTab extends ConsumerStatefulWidget {
@@ -353,7 +354,9 @@ class _DownloadItemTile extends ConsumerWidget {
               ),
               if (!isInsideGroup &&
                   item.episode != null &&
-                  item.item.contentType == MultimediaContentType.series) ...[
+                  (item.item.contentType == MultimediaContentType.series ||
+                      item.item.contentType ==
+                          MultimediaContentType.anime)) ...[
                 const SizedBox(height: 2),
                 Text(
                   'S${item.episode!.season} E${item.episode!.episode}: ${item.episode!.name}',
@@ -389,6 +392,35 @@ class _DownloadItemTile extends ConsumerWidget {
               ),
               const SizedBox(height: LayoutConstants.spacingSm),
               if (!isDone) ...[
+                Row(
+                  textDirection: TextDirection.ltr,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _downloadedSizeText(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.start,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: LayoutConstants.spacingSm),
+                    Text(
+                      '${(progress.clamp(0.0, 1.0) * 100).floor()}%',
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 LinearProgressIndicator(
                   value: progress,
                   backgroundColor: theme.dividerColor.withValues(alpha: 0.1),
@@ -473,6 +505,14 @@ class _DownloadItemTile extends ConsumerWidget {
     );
   }
 
+  String _downloadedSizeText() {
+    final data = progressData;
+    return formatDownloadSizePair(
+      totalBytes: data?.totalSize ?? -1,
+      progress: progress,
+    );
+  }
+
   String _getStatusText(TaskStatus status, AppLocalizations l10n) {
     switch (status) {
       case TaskStatus.enqueued:
@@ -518,7 +558,12 @@ class _DownloadItemTile extends ConsumerWidget {
       unawaited(
         ref
             .read(playbackLauncherProvider)
-            .play(context, file.path, baseItem: item.item),
+            .play(
+              context,
+              file.path,
+              baseItem: item.item,
+              episode: item.episode,
+            ),
       );
     }
   }
