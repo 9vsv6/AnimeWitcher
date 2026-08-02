@@ -1,0 +1,287 @@
+name: Move provider selector to the Home title
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: move-provider-selector-to-home-title
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Move provider selection into the Home title
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/features/home/presentation/home_screen.dart")
+          source = path.read_text(encoding="utf-8")
+
+          applied_marker = (
+              "// Mobile layout: the provider selector lives in the AppBar title."
+          )
+          old_fab_marker = (
+              "      floatingActionButton: ValueListenableBuilder<bool>(\n"
+          )
+
+          already_applied = (
+              applied_marker in source
+              and old_fab_marker not in source
+              and "_isFabExtended" not in source
+              and "activeProvider?.name ?? l10n.none" in source
+              and "label:\n              '${l10n.selectProvider}: " in source
+          )
+          if already_applied:
+              print("The provider selector is already in the Home title.")
+              raise SystemExit(0)
+
+          def replace_once(old: str, new: str, description: str) -> None:
+              global source
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f"Expected one {description}, found {count}. "
+                      "main has changed; no file was written."
+                  )
+              source = source.replace(old, new, 1)
+
+          replace_once(
+              "import 'package:flutter/rendering.dart';\n",
+              "",
+              "flutter/rendering.dart import",
+          )
+          replace_once(
+              "  final ValueNotifier<bool> _isFabExtended = "
+              "ValueNotifier<bool>(true);\n",
+              "",
+              "provider FAB state field",
+          )
+          replace_once(
+              "    // On widescreen there is no mobile AppBar "
+              "(opacity notifier) and no FAB\n"
+              "    // (extended notifier). Skip all work to avoid per-frame "
+              "overhead that\n"
+              "    // can stall the rendering pipeline during bounce / "
+              "direction-change.\n",
+              "    // On widescreen there is no mobile AppBar opacity to "
+              "update. Skip\n"
+              "    // this work to avoid per-frame overhead during bounce or "
+              "direction changes.\n",
+              "widescreen scroll comment",
+          )
+          replace_once(
+              "\n"
+              "    if (_scrollController.position.userScrollDirection ==\n"
+              "            ScrollDirection.reverse &&\n"
+              "        _isFabExtended.value) {\n"
+              "      _isFabExtended.value = false;\n"
+              "    } else if (_scrollController.position.userScrollDirection ==\n"
+              "            ScrollDirection.forward &&\n"
+              "        !_isFabExtended.value) {\n"
+              "      _isFabExtended.value = true;\n"
+              "    }\n",
+              "",
+              "provider FAB scroll animation",
+          )
+          replace_once(
+              "    _isFabExtended.dispose();\n",
+              "",
+              "provider FAB disposal",
+          )
+          replace_once(
+              "    // Mobile layout: existing AppBar + FAB\n"
+              "    return Scaffold(\n",
+              "    final activeProvider = ref.watch(activeProviderProvider);\n"
+              "\n"
+              "    // Mobile layout: the provider selector lives in the "
+              "AppBar title.\n"
+              "    return Scaffold(\n",
+              "mobile layout entry",
+          )
+
+          provider_title = "\n".join(
+              (
+                  "        title: Semantics(",
+                  "          button: true,",
+                  "          excludeSemantics: true,",
+                  "          label:",
+                  "              '${l10n.selectProvider}: "
+                  "${activeProvider?.name ?? l10n.none}',",
+                  "          child: Tooltip(",
+                  "            message: l10n.selectProvider,",
+                  "            child: InkWell(",
+                  "              borderRadius: BorderRadius.circular(12),",
+                  "              onTap: () => _showProviderSelector(context, ref),",
+                  "              child: Padding(",
+                  "                padding: const EdgeInsets.symmetric(",
+                  "                  horizontal: 4,",
+                  "                  vertical: 8,",
+                  "                ),",
+                  "                child: Row(",
+                  "                  mainAxisSize: MainAxisSize.min,",
+                  "                  children: [",
+                  "                    Flexible(",
+                  "                      child: Text(",
+                  "                        activeProvider?.name ?? l10n.none,",
+                  "                        maxLines: 1,",
+                  "                        overflow: TextOverflow.ellipsis,",
+                  "                      ),",
+                  "                    ),",
+                  "                    const SizedBox(width: 4),",
+                  "                    Icon(",
+                  "                      Icons.keyboard_arrow_down_rounded,",
+                  "                      size: 20,",
+                  "                      color: Theme.of(context).colorScheme.primary,",
+                  "                    ),",
+                  "                  ],",
+                  "                ),",
+                  "              ),",
+                  "            ),",
+                  "          ),",
+                  "        ),",
+                  "",
+              )
+          )
+          replace_once(
+              "        title: Text(l10n.appTitle),\n",
+              provider_title,
+              "fixed SkyStream AppBar title",
+          )
+
+          fab_start = source.find(old_fab_marker)
+          body_marker = "      body: _buildBody(\n"
+          body_start = source.find(body_marker, fab_start)
+          if fab_start == -1 or body_start == -1:
+              raise SystemExit(
+                  "Could not locate the complete mobile provider FAB. "
+                  "main has changed; no file was written."
+              )
+          source = source[:fab_start] + source[body_start:]
+
+          required = (
+              applied_marker,
+              "final activeProvider = ref.watch(activeProviderProvider);",
+              "activeProvider?.name ?? l10n.none",
+              "onTap: () => _showProviderSelector(context, ref),",
+              "void _showProviderSelector(BuildContext context, WidgetRef ref)",
+          )
+          missing = [marker for marker in required if marker not in source]
+          forbidden = (
+              "_isFabExtended",
+              old_fab_marker,
+              "title: Text(l10n.appTitle)",
+              "ScrollDirection.",
+          )
+          remaining = [marker for marker in forbidden if marker in source]
+          if missing or remaining:
+              raise SystemExit(
+                  f"Post-change validation failed. Missing={missing}; "
+                  f"remaining={remaining}. No file was written."
+              )
+
+          path.write_text(source, encoding="utf-8")
+          print(f"Updated {path}.")
+          PY
+
+          if git diff --quiet -- \
+            lib/features/home/presentation/home_screen.dart; then
+            echo "No source changes are needed."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify the focused source change
+        if: steps.apply.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git diff --check
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/features/home/presentation/home_screen.dart")
+          source = path.read_text(encoding="utf-8")
+
+          checks = {
+              "fixed SkyStream title removed": "title: Text(l10n.appTitle)" not in source,
+              "old bottom provider control removed": "_isFabExtended" not in source
+                  and "floatingActionButton: ValueListenableBuilder<bool>(" not in source,
+              "current provider name shown": "activeProvider?.name ?? l10n.none" in source,
+              "title opens existing selector": (
+                  "onTap: () => _showProviderSelector(context, ref)," in source
+                  and "void _showProviderSelector(BuildContext context, WidgetRef ref)" in source
+              ),
+              "provider data logic retained": (
+                  "extManager.getAllProviders()" in source
+                  and ".read(activeProviderProvider.notifier)" in source
+                  and "ref.invalidate(homeDataProvider);" in source
+              ),
+          }
+
+          failed = [name for name, passed in checks.items() if not passed]
+          if failed:
+              raise SystemExit("Source verification failed: " + ", ".join(failed))
+
+          print("Focused source verification passed.")
+          PY
+
+          changed_files="$(git diff --name-only)"
+          expected_file="lib/features/home/presentation/home_screen.dart"
+          if [ "$changed_files" != "$expected_file" ]; then
+            echo "::error::Unexpected files changed:"
+            printf '%s\n' "$changed_files"
+            exit 1
+          fi
+
+          git diff --stat
+          git diff -- lib/features/home/presentation/home_screen.dart
+
+      - name: Commit and push the Home provider picker
+        if: steps.apply.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- lib/features/home/presentation/home_screen.dart
+          git commit -m "Move provider selector to Home title"
+
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt of 3"
+            git fetch --no-tags origin main
+
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::Could not rebase the focused Home change onto the latest main."
+              exit 1
+            fi
+
+            if git push origin HEAD:main; then
+              echo "Provider selector update pushed to main."
+              exit 0
+            fi
+          done
+
+          echo "::error::Push failed after 3 attempts. No force push was used."
+          exit 1
