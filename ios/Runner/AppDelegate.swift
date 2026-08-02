@@ -249,7 +249,7 @@ private final class LiquidGlassTabBarPlatformView: NSObject, FlutterPlatformView
   }
 }
 
-private final class LiquidGlassTabBarView: UIView {
+private final class LiquidGlassTabBarView: UIView, UIGestureRecognizerDelegate {
   private static let defaultLabels = [
     "Home",
     "Search",
@@ -275,17 +275,22 @@ private final class LiquidGlassTabBarView: UIView {
   ]
 
   private let effectView: UIVisualEffectView
+  private let selectionIndicatorView = UIView()
   private let stackView = UIStackView()
+  private let selectionFeedbackGenerator = UISelectionFeedbackGenerator()
   private var buttons: [UIButton] = []
   private var labels = LiquidGlassTabBarView.defaultLabels
   private var selectedIndex = 0
+  private var dragStartIndex: Int?
   private var accentColor = UIColor.systemBlue
 
   var onSelected: ((Int) -> Void)?
 
   override init(frame: CGRect) {
     if #available(iOS 26.0, *) {
-      effectView = UIVisualEffectView(effect: UIGlassEffect())
+      let glassEffect = UIGlassEffect()
+      glassEffect.isInteractive = true
+      effectView = UIVisualEffectView(effect: glassEffect)
     } else {
       effectView = UIVisualEffectView(
         effect: UIBlurEffect(style: .systemChromeMaterial)
@@ -299,17 +304,22 @@ private final class LiquidGlassTabBarView: UIView {
     effectView.translatesAutoresizingMaskIntoConstraints = false
     effectView.clipsToBounds = true
     if #available(iOS 26.0, *) {
-    effectView.cornerConfiguration = .corners(radius: .fixed(36))
+      effectView.cornerConfiguration = .corners(radius: .fixed(30))
     } else {
-      effectView.layer.cornerRadius = 36
+      effectView.layer.cornerRadius = 30
       effectView.layer.cornerCurve = .continuous
     }
     addSubview(effectView)
 
+    selectionIndicatorView.isUserInteractionEnabled = false
+    selectionIndicatorView.backgroundColor = accentColor.withAlphaComponent(0.14)
+    selectionIndicatorView.layer.cornerCurve = .continuous
+    effectView.contentView.addSubview(selectionIndicatorView)
+
     stackView.axis = .horizontal
     stackView.alignment = .fill
     stackView.distribution = .fillEqually
-    stackView.spacing = 4
+    stackView.spacing = 2
     stackView.translatesAutoresizingMaskIntoConstraints = false
     effectView.contentView.addSubview(stackView)
 
@@ -320,19 +330,19 @@ private final class LiquidGlassTabBarView: UIView {
       effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
       stackView.topAnchor.constraint(
         equalTo: effectView.contentView.topAnchor,
-        constant: 5
+        constant: 3
       ),
       stackView.leadingAnchor.constraint(
         equalTo: effectView.contentView.leadingAnchor,
-        constant: 7
+        constant: 6
       ),
       stackView.trailingAnchor.constraint(
         equalTo: effectView.contentView.trailingAnchor,
-        constant: -7
+        constant: -6
       ),
       stackView.bottomAnchor.constraint(
         equalTo: effectView.contentView.bottomAnchor,
-        constant: -5
+        constant: -3
       ),
     ])
 
@@ -347,10 +357,25 @@ private final class LiquidGlassTabBarView: UIView {
       stackView.addArrangedSubview(button)
       buttons.append(button)
     }
+
+    let panGesture = UIPanGestureRecognizer(
+      target: self,
+      action: #selector(handleSelectionPan(_:))
+    )
+    panGesture.cancelsTouchesInView = true
+    panGesture.delegate = self
+    addGestureRecognizer(panGesture)
   }
 
   required init?(coder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    if dragStartIndex == nil {
+      positionSelectionIndicator(animated: false)
+    }
   }
 
   func apply(arguments: [String: Any]) {
@@ -362,6 +387,7 @@ private final class LiquidGlassTabBarView: UIView {
     if let colorNumber = arguments["accentColor"] as? NSNumber {
       accentColor = UIColor(argb: colorNumber.uint32Value)
     }
+    selectionIndicatorView.backgroundColor = accentColor.withAlphaComponent(0.14)
 
     switch arguments["brightness"] as? String {
     case "dark":
@@ -372,17 +398,28 @@ private final class LiquidGlassTabBarView: UIView {
       overrideUserInterfaceStyle = .unspecified
     }
 
-    semanticContentAttribute = arguments["textDirection"] as? String == "rtl"
-      ? .forceRightToLeft
-      : .forceLeftToRight
+    let semanticDirection: UISemanticContentAttribute =
+      arguments["textDirection"] as? String == "rtl"
+        ? .forceRightToLeft
+        : .forceLeftToRight
+    semanticContentAttribute = semanticDirection
+    stackView.semanticContentAttribute = semanticDirection
 
     let index = (arguments["selectedIndex"] as? NSNumber)?.intValue ?? 0
-    setSelectedIndex(index, notifyFlutter: false)
+    setSelectedIndex(index, notifyFlutter: false, animated: false)
   }
 
-  func setSelectedIndex(_ index: Int, notifyFlutter: Bool) {
-    selectedIndex = min(max(index, 0), buttons.count - 1)
+  func setSelectedIndex(
+    _ index: Int,
+    notifyFlutter: Bool,
+    animated: Bool = true
+  ) {
+    guard !buttons.isEmpty else { return }
+    let nextIndex = min(max(index, 0), buttons.count - 1)
+    let changed = nextIndex != selectedIndex
+    selectedIndex = nextIndex
     updateButtons()
+    positionSelectionIndicator(animated: animated && changed)
     if notifyFlutter {
       onSelected?(selectedIndex)
     }
@@ -391,39 +428,31 @@ private final class LiquidGlassTabBarView: UIView {
   private func updateButtons() {
     for (index, button) in buttons.enumerated() {
       let isSelected = index == selectedIndex
-      var configuration: UIButton.Configuration
-
-      if #available(iOS 26.0, *) {
-        configuration = isSelected ? .glass() : .plain()
-      } else {
-        configuration = isSelected ? .tinted() : .plain()
-        if isSelected {
-          configuration.baseBackgroundColor = accentColor.withAlphaComponent(
-            0.18
-          )
-        }
-      }
+      var configuration = UIButton.Configuration.plain()
 
       let symbolName = isSelected
         ? LiquidGlassTabBarView.selectedSymbols[index]
         : LiquidGlassTabBarView.symbols[index]
       let symbolConfiguration = UIImage.SymbolConfiguration(
-        pointSize: 22,
+        pointSize: 20,
         weight: isSelected ? .semibold : .regular
       )
-
-      configuration.image = UIImage(
+      let symbolImage = UIImage(
         systemName: symbolName,
         withConfiguration: symbolConfiguration
       )
+
+      configuration.image = isSelected
+        ? symbolImage?.withTintColor(accentColor, renderingMode: .alwaysOriginal)
+        : symbolImage
       configuration.title = labels[index]
       configuration.imagePlacement = .top
-      configuration.imagePadding = 2
+      configuration.imagePadding = 1
       configuration.contentInsets = NSDirectionalEdgeInsets(
-        top: 5,
-        leading: 3,
-        bottom: 5,
-        trailing: 3
+        top: 3,
+        leading: 2,
+        bottom: 3,
+        trailing: 2
       )
       configuration.baseForegroundColor = isSelected
         ? accentColor
@@ -433,12 +462,13 @@ private final class LiquidGlassTabBarView: UIView {
         UIConfigurationTextAttributesTransformer { attributes in
           var updated = attributes
           updated.font = UIFont.systemFont(
-            ofSize: 11,
+            ofSize: 10,
             weight: isSelected ? .semibold : .medium
           )
           return updated
         }
 
+      button.tintColor = isSelected ? accentColor : .secondaryLabel
       button.configuration = configuration
       button.accessibilityLabel = labels[index]
       button.accessibilityTraits = isSelected
@@ -447,7 +477,120 @@ private final class LiquidGlassTabBarView: UIView {
     }
   }
 
+  private func selectionFrame(for index: Int) -> CGRect? {
+    guard buttons.indices.contains(index) else { return nil }
+    let frame = buttons[index].convert(
+      buttons[index].bounds,
+      to: effectView.contentView
+    ).insetBy(dx: 1, dy: 0)
+    guard frame.width > 0, frame.height > 0 else { return nil }
+    return frame
+  }
+
+  private func positionSelectionIndicator(animated: Bool) {
+    guard let targetFrame = selectionFrame(for: selectedIndex) else { return }
+
+    let updates = {
+      self.selectionIndicatorView.frame = targetFrame
+      self.selectionIndicatorView.layer.cornerRadius = targetFrame.height / 2
+    }
+
+    if animated && !UIAccessibility.isReduceMotionEnabled {
+      UIView.animate(
+        withDuration: 0.22,
+        delay: 0,
+        usingSpringWithDamping: 0.82,
+        initialSpringVelocity: 0,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: updates
+      )
+    } else {
+      updates()
+    }
+  }
+
+  private func indexForLocation(_ location: CGPoint) -> Int? {
+    guard !buttons.isEmpty else { return nil }
+    let pointInStack = stackView.convert(location, from: self)
+    return buttons.enumerated().min { lhs, rhs in
+      abs(lhs.element.frame.midX - pointInStack.x)
+        < abs(rhs.element.frame.midX - pointInStack.x)
+    }?.offset
+  }
+
+  private func previewSelection(at location: CGPoint) {
+    guard let index = indexForLocation(location) else { return }
+
+    if index != selectedIndex {
+      selectedIndex = index
+      updateButtons()
+      selectionFeedbackGenerator.selectionChanged()
+      selectionFeedbackGenerator.prepare()
+    }
+
+    guard var indicatorFrame = selectionFrame(for: index) else { return }
+    let pointInContent = effectView.contentView.convert(location, from: self)
+    let halfWidth = indicatorFrame.width / 2
+    let minimumCenterX = stackView.frame.minX + halfWidth
+    let maximumCenterX = stackView.frame.maxX - halfWidth
+    let centerX = min(max(pointInContent.x, minimumCenterX), maximumCenterX)
+    indicatorFrame.origin.x = centerX - halfWidth
+    selectionIndicatorView.frame = indicatorFrame
+    selectionIndicatorView.layer.cornerRadius = indicatorFrame.height / 2
+  }
+
+  func gestureRecognizerShouldBegin(
+    _ gestureRecognizer: UIGestureRecognizer
+  ) -> Bool {
+    guard let panGesture = gestureRecognizer as? UIPanGestureRecognizer else {
+      return true
+    }
+    let velocity = panGesture.velocity(in: self)
+    return abs(velocity.x) > abs(velocity.y)
+  }
+
+  @objc private func handleSelectionPan(_ gesture: UIPanGestureRecognizer) {
+    let location = gesture.location(in: self)
+
+    switch gesture.state {
+    case .began:
+      dragStartIndex = selectedIndex
+      selectionFeedbackGenerator.prepare()
+      previewSelection(at: location)
+
+    case .changed:
+      previewSelection(at: location)
+
+    case .ended:
+      previewSelection(at: location)
+      let startingIndex = dragStartIndex
+      dragStartIndex = nil
+      positionSelectionIndicator(animated: true)
+      if startingIndex != selectedIndex {
+        onSelected?(selectedIndex)
+      }
+
+    case .cancelled, .failed:
+      let startingIndex = dragStartIndex
+      dragStartIndex = nil
+      if let startingIndex {
+        setSelectedIndex(
+          startingIndex,
+          notifyFlutter: false,
+          animated: true
+        )
+      }
+
+    default:
+      break
+    }
+  }
+
   @objc private func didTapButton(_ sender: UIButton) {
+    if sender.tag != selectedIndex {
+      selectionFeedbackGenerator.prepare()
+      selectionFeedbackGenerator.selectionChanged()
+    }
     setSelectedIndex(sender.tag, notifyFlutter: true)
   }
 }

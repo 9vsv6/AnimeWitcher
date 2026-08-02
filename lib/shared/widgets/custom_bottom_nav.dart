@@ -144,9 +144,9 @@ class _NativeLiquidGlassBottomNavBarState
 
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      minimum: const EdgeInsets.fromLTRB(14, 0, 14, 6),
       child: SizedBox(
-        height: 72,
+        height: 64,
         child: UiKitView(
           key: ValueKey(appearanceKey),
           viewType: _liquidGlassTabBarViewType,
