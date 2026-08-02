@@ -1,0 +1,577 @@
+name: Replace custom glass with native Apple tab bar
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: replace-custom-glass-with-native-apple-tab-bar
+  cancel-in-progress: false
+
+jobs:
+  apply-native-tab-bar:
+    name: Apply native UITabBar implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Confirm clean main checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "main"
+          test -z "$(git status --short)"
+
+      - name: Replace the custom glass implementation
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          swift_path = Path("ios/Runner/AppDelegate.swift")
+          dart_path = Path("lib/shared/widgets/custom_bottom_nav.dart")
+
+          swift = swift_path.read_text(encoding="utf-8")
+          dart = dart_path.read_text(encoding="utf-8")
+
+          old_swift_factory = (
+              "private final class LiquidGlassTabBarFactory: "
+              "NSObject, FlutterPlatformViewFactory"
+          )
+          new_swift_factory = (
+              "private final class NativeAppleTabBarFactory: "
+              "NSObject, FlutterPlatformViewFactory"
+          )
+          old_dart_widget = (
+              "class _NativeLiquidGlassBottomNavBar extends StatefulWidget"
+          )
+          new_dart_widget = (
+              "class _NativeAppleBottomNavBar extends StatefulWidget"
+          )
+
+          old_markers = [
+              old_swift_factory in swift,
+              "private let liquidGlassTabBarViewType =" in swift,
+              old_dart_widget in dart,
+              "const _liquidGlassTabBarViewType =" in dart,
+          ]
+          new_markers = [
+              new_swift_factory in swift,
+              "private let nativeAppleTabBarViewType =" in swift,
+              new_dart_widget in dart,
+              "const _nativeAppleTabBarViewType =" in dart,
+          ]
+
+          if any(old_markers) and any(new_markers):
+              raise SystemExit(
+                  "Refusing to modify a partially migrated native tab bar."
+              )
+
+          old_state = all(old_markers)
+          new_state = all(new_markers)
+          if not old_state and not new_state:
+              raise SystemExit(
+                  "The current main branch does not match the supported old "
+                  "or new tab-bar structure."
+              )
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f"Expected one {label}; found {count}. No files were written."
+                  )
+              return source.replace(old, new, 1)
+
+          native_tab_bar_block = r'''private final class NativeAppleTabBarFactory: NSObject, FlutterPlatformViewFactory {
+            private let messenger: FlutterBinaryMessenger
+
+            init(messenger: FlutterBinaryMessenger) {
+              self.messenger = messenger
+              super.init()
+            }
+
+            func create(
+              withFrame frame: CGRect,
+              viewIdentifier viewId: Int64,
+              arguments args: Any?
+            ) -> FlutterPlatformView {
+              NativeAppleTabBarPlatformView(
+                frame: frame,
+                viewId: viewId,
+                arguments: args,
+                messenger: messenger
+              )
+            }
+
+            func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+              FlutterStandardMessageCodec.sharedInstance()
+            }
+          }
+
+          private final class NativeAppleTabBarPlatformView: NSObject, FlutterPlatformView {
+            private let tabBarView: NativeAppleTabBarView
+            private let channel: FlutterMethodChannel
+
+            init(
+              frame: CGRect,
+              viewId: Int64,
+              arguments: Any?,
+              messenger: FlutterBinaryMessenger
+            ) {
+              tabBarView = NativeAppleTabBarView(frame: frame)
+              channel = FlutterMethodChannel(
+                name: "\(nativeAppleTabBarViewType)_\(viewId)",
+                binaryMessenger: messenger
+              )
+              super.init()
+
+              tabBarView.apply(arguments: arguments as? [String: Any] ?? [:])
+              tabBarView.onSelected = { [weak self] index in
+                self?.channel.invokeMethod("onTap", arguments: index)
+              }
+
+              channel.setMethodCallHandler {
+                [weak tabBarView = self.tabBarView] call, result in
+                DispatchQueue.main.async {
+                  guard let tabBarView = tabBarView else {
+                    result(false)
+                    return
+                  }
+
+                  switch call.method {
+                  case "setSelectedIndex":
+                    guard let index = (call.arguments as? NSNumber)?.intValue else {
+                      result(
+                        FlutterError(
+                          code: "INVALID_INDEX",
+                          message: "A selected tab index is required.",
+                          details: nil
+                        )
+                      )
+                      return
+                    }
+                    tabBarView.setSelectedIndex(index, notifyFlutter: false)
+                    result(true)
+
+                  default:
+                    result(FlutterMethodNotImplemented)
+                  }
+                }
+              }
+            }
+
+            func view() -> UIView {
+              tabBarView
+            }
+
+            deinit {
+              channel.setMethodCallHandler(nil)
+            }
+          }
+
+          private final class NativeAppleTabBarView: UIView, UITabBarDelegate {
+            private static let defaultLabels = [
+              "Home",
+              "Search",
+              "Explore",
+              "Library",
+              "Settings",
+            ]
+
+            private static let symbols = [
+              "house",
+              "magnifyingglass",
+              "safari",
+              "play.rectangle.on.rectangle",
+              "gearshape",
+            ]
+
+            private static let selectedSymbols = [
+              "house.fill",
+              "magnifyingglass",
+              "safari.fill",
+              "play.rectangle.on.rectangle.fill",
+              "gearshape.fill",
+            ]
+
+            // UITabBar owns its material, selection lens, motion, and interactions.
+            // Deliberately do not install a custom effect, background, or indicator.
+            private let tabBar = UITabBar()
+            private var labels = NativeAppleTabBarView.defaultLabels
+            private var selectedIndex = 0
+            private var accentColor = UIColor.systemBlue
+
+            var onSelected: ((Int) -> Void)?
+
+            override init(frame: CGRect) {
+              super.init(frame: frame)
+              backgroundColor = .clear
+              isOpaque = false
+
+              tabBar.translatesAutoresizingMaskIntoConstraints = false
+              tabBar.delegate = self
+              addSubview(tabBar)
+
+              NSLayoutConstraint.activate([
+                tabBar.topAnchor.constraint(equalTo: topAnchor),
+                tabBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+                tabBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+                tabBar.bottomAnchor.constraint(equalTo: bottomAnchor),
+              ])
+
+              rebuildItems()
+            }
+
+            required init?(coder: NSCoder) {
+              fatalError("init(coder:) has not been implemented")
+            }
+
+            func apply(arguments: [String: Any]) {
+              if let suppliedLabels = arguments["labels"] as? [String],
+                 suppliedLabels.count == NativeAppleTabBarView.symbols.count {
+                labels = suppliedLabels
+                rebuildItems()
+              }
+
+              if let colorNumber = arguments["accentColor"] as? NSNumber {
+                accentColor = UIColor(argb: colorNumber.uint32Value)
+              }
+              tabBar.tintColor = accentColor
+              tabBar.unselectedItemTintColor = .secondaryLabel
+
+              switch arguments["brightness"] as? String {
+              case "dark":
+                overrideUserInterfaceStyle = .dark
+              case "light":
+                overrideUserInterfaceStyle = .light
+              default:
+                overrideUserInterfaceStyle = .unspecified
+              }
+
+              let semanticDirection: UISemanticContentAttribute =
+                arguments["textDirection"] as? String == "rtl"
+                  ? .forceRightToLeft
+                  : .forceLeftToRight
+              semanticContentAttribute = semanticDirection
+              tabBar.semanticContentAttribute = semanticDirection
+
+              let index = (arguments["selectedIndex"] as? NSNumber)?.intValue ?? 0
+              setSelectedIndex(index, notifyFlutter: false)
+            }
+
+            func setSelectedIndex(_ index: Int, notifyFlutter: Bool) {
+              guard let items = tabBar.items, !items.isEmpty else { return }
+              let nextIndex = min(max(index, 0), items.count - 1)
+              selectedIndex = nextIndex
+              tabBar.selectedItem = items[nextIndex]
+
+              if notifyFlutter {
+                onSelected?(nextIndex)
+              }
+            }
+
+            func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+              guard let items = tabBar.items,
+                    items.indices.contains(item.tag) else { return }
+              selectedIndex = item.tag
+              onSelected?(selectedIndex)
+            }
+
+            private func rebuildItems() {
+              let items = NativeAppleTabBarView.symbols.enumerated().map {
+                index, symbolName in
+                let item = UITabBarItem(
+                  title: labels[index],
+                  image: UIImage(systemName: symbolName),
+                  selectedImage: UIImage(
+                    systemName: NativeAppleTabBarView.selectedSymbols[index]
+                  )
+                )
+                item.tag = index
+                item.accessibilityIdentifier = "main-tab-\(index)"
+                return item
+              }
+
+              tabBar.setItems(items, animated: false)
+              setSelectedIndex(selectedIndex, notifyFlutter: false)
+            }
+          }'''
+
+          if old_state:
+              swift = replace_once(
+                  swift,
+                  "private let liquidGlassTabBarViewType =\n"
+                  '  "dev.akash.skystream/liquid_glass_tab_bar"',
+                  "private let nativeAppleTabBarViewType =\n"
+                  '  "dev.akash.skystream/native_apple_tab_bar"',
+                  "Swift platform-view type constant",
+              )
+              swift = replace_once(
+                  swift,
+                  "      LiquidGlassTabBarFactory("
+                  "messenger: applicationRegistrar.messenger()),\n"
+                  "      withId: liquidGlassTabBarViewType",
+                  "      NativeAppleTabBarFactory("
+                  "messenger: applicationRegistrar.messenger()),\n"
+                  "      withId: nativeAppleTabBarViewType",
+                  "Swift platform-view registration",
+              )
+
+              block_start = swift.find(old_swift_factory)
+              block_end = swift.find("private extension UIColor", block_start)
+              if block_start < 0 or block_end < 0:
+                  raise SystemExit(
+                      "Could not isolate the old custom tab-bar block. "
+                      "No files were written."
+                  )
+              swift = (
+                  swift[:block_start]
+                  + native_tab_bar_block
+                  + "\n\n"
+                  + swift[block_end:]
+              )
+
+              dart = replace_once(
+                  dart,
+                  "const _liquidGlassTabBarViewType =\n"
+                  "    'dev.akash.skystream/liquid_glass_tab_bar';",
+                  "const _nativeAppleTabBarViewType =\n"
+                  "    'dev.akash.skystream/native_apple_tab_bar';",
+                  "Dart platform-view type constant",
+              )
+              if dart.count("_NativeLiquidGlassBottomNavBar") < 4:
+                  raise SystemExit(
+                      "The old Dart native widget structure is incomplete. "
+                      "No files were written."
+                  )
+              dart = dart.replace(
+                  "_NativeLiquidGlassBottomNavBar",
+                  "_NativeAppleBottomNavBar",
+              )
+              dart = dart.replace(
+                  "_liquidGlassTabBarViewType",
+                  "_nativeAppleTabBarViewType",
+              )
+              dart = replace_once(
+                  dart,
+                  "      minimum: const EdgeInsets.fromLTRB(14, 0, 14, 6),\n",
+                  "",
+                  "custom Flutter padding around the native tab bar",
+              )
+
+          def require_once(source: str, needle: str, label: str) -> None:
+              count = source.count(needle)
+              if count != 1:
+                  raise SystemExit(f"Expected one {label}; found {count}.")
+
+          require_once(swift, new_swift_factory, "native Swift factory")
+          require_once(
+              swift,
+              "private final class NativeAppleTabBarView: UIView, UITabBarDelegate",
+              "native UITabBar view",
+          )
+          require_once(swift, "private let tabBar = UITabBar()", "UITabBar")
+          require_once(
+              swift,
+              "func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem)",
+              "UITabBar delegate callback",
+          )
+          require_once(
+              swift,
+              'name: "\\(nativeAppleTabBarViewType)_\\(viewId)"',
+              "native method channel",
+          )
+          require_once(
+              swift,
+              'self?.channel.invokeMethod("onTap", arguments: index)',
+              "native-to-Flutter selection callback",
+          )
+          require_once(
+              swift,
+              "tabBar.tintColor = accentColor",
+              "theme accent application",
+          )
+
+          forbidden_swift = [
+              "LiquidGlassTabBarFactory",
+              "LiquidGlassTabBarView",
+              "liquidGlassTabBarViewType",
+              "UIGlassEffect",
+              "UIVisualEffectView",
+              "selectionIndicatorView",
+              "UIPanGestureRecognizer",
+              "gestureRecognizerShouldBegin",
+              "UIButton.Configuration",
+              "UITabBarAppearance",
+          ]
+          for forbidden in forbidden_swift:
+              if forbidden in swift:
+                  raise SystemExit(
+                      f"Custom tab-bar implementation remains: {forbidden}"
+                  )
+
+          require_once(dart, new_dart_widget, "native Dart widget")
+          require_once(
+              dart,
+              "const _nativeAppleTabBarViewType =",
+              "Dart native view constant",
+          )
+          require_once(dart, "child: UiKitView(", "iOS platform view")
+          require_once(
+              dart,
+              "if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)",
+              "iOS-only branch",
+          )
+          require_once(dart, "child: NavigationBar(", "non-iOS fallback")
+          if dart.count("      _BottomNavDestination(") != 5:
+              raise SystemExit("Expected exactly five navigation destinations.")
+
+          forbidden_dart = [
+              "_NativeLiquidGlassBottomNavBar",
+              "_liquidGlassTabBarViewType",
+              "EdgeInsets.fromLTRB(14, 0, 14, 6)",
+          ]
+          for forbidden in forbidden_dart:
+              if forbidden in dart:
+                  raise SystemExit(f"Old Dart navigation code remains: {forbidden}")
+
+          if old_state:
+              swift_path.write_text(swift, encoding="utf-8")
+              dart_path.write_text(dart, encoding="utf-8")
+              print("Replaced the custom glass bar with Apple's UITabBar.")
+          else:
+              print("Apple's native UITabBar is already installed.")
+          PY
+
+          if git diff --quiet -- \
+            ios/Runner/AppDelegate.swift \
+            lib/shared/widgets/custom_bottom_nav.dart; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify architecture and source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          swift_file="ios/Runner/AppDelegate.swift"
+          nav_file="lib/shared/widgets/custom_bottom_nav.dart"
+          scaffold_file="lib/shared/widgets/app_scaffold.dart"
+          router_file="lib/core/router/app_router.dart"
+
+          test "$(grep -Fc 'private let tabBar = UITabBar()' "$swift_file")" -eq 1
+          test "$(grep -Fc 'UIView, UITabBarDelegate' "$swift_file")" -eq 1
+          test "$(grep -Fc 'didSelect item: UITabBarItem' "$swift_file")" -eq 1
+          test "$(grep -Fc 'invokeMethod("onTap", arguments: index)' "$swift_file")" -eq 1
+          test "$(grep -Fc 'case "setSelectedIndex"' "$swift_file")" -eq 1
+          test "$(grep -Fc 'tabBar.tintColor = accentColor' "$swift_file")" -eq 1
+          test "$(grep -Fc 'tabBar.unselectedItemTintColor = .secondaryLabel' "$swift_file")" -eq 1
+
+          if grep -Eq \
+            'UIGlassEffect|UIVisualEffectView|selectionIndicatorView|UIPanGestureRecognizer|gestureRecognizerShouldBegin|UIButton\.Configuration|UITabBarAppearance' \
+            "$swift_file"; then
+            echo "::error::A custom glass, indicator, gesture, or appearance override remains."
+            exit 1
+          fi
+
+          test "$(grep -Fc 'child: UiKitView(' "$nav_file")" -eq 1
+          test "$(grep -Fc 'child: NavigationBar(' "$nav_file")" -eq 1
+          test "$(grep -Fc 'TargetPlatform.iOS' "$nav_file")" -eq 1
+          test "$(grep -Fc "'selectedIndex': widget.currentIndex" "$nav_file")" -eq 1
+          test "$(grep -Fc "'labels': widget.labels" "$nav_file")" -eq 1
+          test "$(grep -Fc "'accentColor': accentColor.toARGB32()" "$nav_file")" -eq 1
+          test "$(grep -Fc "'brightness': theme.brightness.name" "$nav_file")" -eq 1
+          test "$(grep -Fc "'textDirection': textDirection.name" "$nav_file")" -eq 1
+
+          grep -Fq 'widget.navigationShell.goBranch(' "$scaffold_file"
+          test "$(grep -Fc 'bottomNavigationBar: CustomBottomNavBar(' "$scaffold_file")" -eq 1
+          test "$(grep -Fc 'extendBody:' "$scaffold_file")" -eq 1
+          test "$(grep -Fc 'TypedStatefulShellBranch<' "$router_file")" -eq 5
+
+          git diff --check
+
+          mapfile -t changed_files < <(git diff --name-only)
+          if [[ "${{ steps.apply.outputs.changed }}" == "true" ]]; then
+            test "${#changed_files[@]}" -eq 2
+            test "${changed_files[0]}" = "ios/Runner/AppDelegate.swift"
+            test "${changed_files[1]}" = "lib/shared/widgets/custom_bottom_nav.dart"
+          else
+            test "${#changed_files[@]}" -eq 0
+          fi
+
+      - name: Commit changes
+        if: steps.apply.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            ios/Runner/AppDelegate.swift \
+            lib/shared/widgets/custom_bottom_nav.dart
+          git commit -m "Use native Apple tab bar on iOS"
+
+      - name: Rebase and push main safely
+        if: steps.apply.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          verify_rebased_source() {
+            local swift_file="ios/Runner/AppDelegate.swift"
+            local nav_file="lib/shared/widgets/custom_bottom_nav.dart"
+            local scaffold_file="lib/shared/widgets/app_scaffold.dart"
+
+            grep -Fq 'private let tabBar = UITabBar()' "$swift_file"
+            grep -Fq 'UIView, UITabBarDelegate' "$swift_file"
+            grep -Fq 'didSelect item: UITabBarItem' "$swift_file"
+            grep -Fq 'invokeMethod("onTap", arguments: index)' "$swift_file"
+            grep -Fq 'case "setSelectedIndex"' "$swift_file"
+            grep -Fq 'const _nativeAppleTabBarViewType =' "$nav_file"
+            grep -Fq 'child: UiKitView(' "$nav_file"
+            grep -Fq 'child: NavigationBar(' "$nav_file"
+            grep -Fq 'widget.navigationShell.goBranch(' "$scaffold_file"
+
+            if grep -Eq \
+              'UIGlassEffect|UIVisualEffectView|selectionIndicatorView|UIPanGestureRecognizer|gestureRecognizerShouldBegin|UIButton\.Configuration|UITabBarAppearance' \
+              "$swift_file"; then
+              return 1
+            fi
+          }
+
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::main changed in a conflicting area; no push was made."
+              exit 1
+            fi
+
+            if ! verify_rebased_source; then
+              echo "::error::Source invariants changed during rebase; no push was made."
+              exit 1
+            fi
+
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::Could not push after three safe retries."
+              exit 1
+            fi
+          done
