@@ -7,6 +7,8 @@ const _nativeAppleTabBarViewType =
     'dev.akash.skystream/native_apple_tab_bar';
 
 class CustomBottomNavBar extends StatelessWidget {
+  static const double iosContentHeight = 64;
+
   final int currentIndex;
   final void Function(int) onTap;
 
@@ -142,23 +144,21 @@ class _NativeAppleBottomNavBarState
       Object.hashAll(widget.labels),
     );
 
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        height: 64,
-        child: UiKitView(
-          key: ValueKey(appearanceKey),
-          viewType: _nativeAppleTabBarViewType,
-          creationParams: <String, Object>{
-            'selectedIndex': widget.currentIndex,
-            'labels': widget.labels,
-            'accentColor': accentColor.toARGB32(),
-            'brightness': theme.brightness.name,
-            'textDirection': textDirection.name,
-          },
-          creationParamsCodec: const StandardMessageCodec(),
-          onPlatformViewCreated: _onPlatformViewCreated,
-        ),
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return SizedBox(
+      height: CustomBottomNavBar.iosContentHeight + bottomInset,
+      child: UiKitView(
+        key: ValueKey(appearanceKey),
+        viewType: _nativeAppleTabBarViewType,
+        creationParams: <String, Object>{
+          'selectedIndex': widget.currentIndex,
+          'labels': widget.labels,
+          'accentColor': accentColor.toARGB32(),
+          'brightness': theme.brightness.name,
+          'textDirection': textDirection.name,
+        },
+        creationParamsCodec: const StandardMessageCodec(),
+        onPlatformViewCreated: _onPlatformViewCreated,
       ),
     );
   }

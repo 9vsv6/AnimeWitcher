@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/widgets/cards_wrapper.dart';
+import '../../../shared/widgets/custom_bottom_nav.dart';
 import '../data/explore_tmdb_provider.dart';
 import '../data/explore_mode_provider.dart';
 import 'anilist_explore_screen.dart';
@@ -262,64 +264,73 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                   )
                 : _buildScrollView(context),
           ),
-          floatingActionButton: ValueListenableBuilder<bool>(
-            valueListenable: _isFabExtended,
-            builder: (context, isFabExtended, _) {
-              final isAnime = ref.watch(exploreModeProvider);
-              return Material(
-                elevation: 4,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Theme.of(context).colorScheme.surfaceDim
-                    : Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
+          floatingActionButton: Padding(
+            padding: EdgeInsets.only(
+              bottom: !kIsWeb &&
+                      defaultTargetPlatform == TargetPlatform.iOS
+                  ? CustomBottomNavBar.iosContentHeight +
+                        LayoutConstants.spacingSm
+                  : 0,
+            ),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _isFabExtended,
+              builder: (context, isFabExtended, _) {
+                final isAnime = ref.watch(exploreModeProvider);
+                return Material(
+                  elevation: 4,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Theme.of(context).colorScheme.surfaceDim
+                      : Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    ref
-                        .read(exploreModeProvider.notifier)
-                        .setAnimeMode(!isAnime);
-                  },
-                  child: Container(
-                    height: 56,
-                    constraints: const BoxConstraints(minWidth: 56),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isFabExtended ? 16 : 0,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          isAnime ? Icons.arrow_back : Icons.explore,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          child: SizedBox(
-                            width: isFabExtended ? null : 0,
-                            child: isFabExtended
-                                ? Padding(
-                                    padding: const EdgeInsets.only(left: 12),
-                                    child: Text(
-                                      isAnime ? 'Go Back' : 'Explore Anime',
-                                      style: TextStyle(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurface,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  )
-                                : null,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      ref
+                          .read(exploreModeProvider.notifier)
+                          .setAnimeMode(!isAnime);
+                    },
+                    child: Container(
+                      height: 56,
+                      constraints: const BoxConstraints(minWidth: 56),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isFabExtended ? 16 : 0,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            isAnime ? Icons.arrow_back : Icons.explore,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
-                        ),
-                      ],
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            child: SizedBox(
+                              width: isFabExtended ? null : 0,
+                              child: isFabExtended
+                                  ? Padding(
+                                      padding: const EdgeInsets.only(left: 12),
+                                      child: Text(
+                                        isAnime ? 'Go Back' : 'Explore Anime',
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       },
