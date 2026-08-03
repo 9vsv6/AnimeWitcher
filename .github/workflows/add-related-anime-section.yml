@@ -1,4 +1,4 @@
-name: Add Related Anime Section V3
+name: Add Related Anime Section V4
 
 on:
   workflow_dispatch:
@@ -562,6 +562,9 @@ jobs:
       - name: Generate localization files
         run: flutter gen-l10n
 
+      - name: Generate Riverpod and other build files
+        run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Format changed Dart files
         run: |
           dart format             lib/core/domain/entity/multimedia_item.dart             lib/features/details/presentation/details_screen.dart             lib/features/details/presentation/widgets/premium_details_widgets.dart             test/core/domain/entity/multimedia_item_related_test.dart
@@ -599,7 +602,8 @@ jobs:
       - name: Remove one-time workflows
         run: |
           git rm --ignore-unmatch             .github/workflows/add-related-anime-section.yml             .github/workflows/add-related-anime-section-v2.yml \
-            .github/workflows/add-related-anime-section-v3.yml
+            .github/workflows/add-related-anime-section-v3.yml \
+            .github/workflows/add-related-anime-section-v4.yml
 
       - name: Commit and push verified changes
         shell: bash
