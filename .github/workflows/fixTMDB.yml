@@ -6,8 +6,13 @@ name: Fix TMDB copyWith and Build iOS
 permissions:
   contents: write
 
+concurrency:
+  group: fix-tmdb-copywith-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   fix-and-build:
+    name: Patch, generate code, and build unsigned IPA
     runs-on: macos-15
 
     steps:
@@ -25,13 +30,14 @@ jobs:
           cache: true
 
       - name: Fix TmdbDetails copyWith
-        shell: python
+        shell: bash
         run: |
+          python3 <<'PY'
           from pathlib import Path
 
           path = Path("lib/core/models/tmdb_details.dart")
-          original = path.read_text(encoding="utf-8")
-          text = original
+          text = path.read_text(encoding="utf-8")
+          original = text
 
           def block(lines):
               return "\n".join(lines) + "\n"
@@ -54,17 +60,17 @@ jobs:
 
           replace_once(
               block([
-                  "      super.source,",
-                  "      super.nextAiring,",
-                  "      dynamic sourceItem,",
+                  "    super.source,",
+                  "    super.nextAiring,",
+                  "    dynamic sourceItem,",
               ]),
               block([
-                  "      super.source,",
-                  "      super.nextAiring,",
-                  "      super.related,",
-                  "      super.relationLabel,",
-                  "      super.relationType,",
-                  "      dynamic sourceItem,",
+                  "    super.source,",
+                  "    super.nextAiring,",
+                  "    super.related,",
+                  "    super.relationLabel,",
+                  "    super.relationType,",
+                  "    dynamic sourceItem,",
               ]),
               "Constructor parameters",
           )
@@ -88,17 +94,17 @@ jobs:
 
           replace_once(
               block([
-                  "        source: source ?? this.source,",
-                  "        nextAiring: nextAiring ?? this.nextAiring,",
-                  "        tmdbId: tmdbId ?? this.tmdbId,",
+                  "      source: source ?? this.source,",
+                  "      nextAiring: nextAiring ?? this.nextAiring,",
+                  "      tmdbId: tmdbId ?? this.tmdbId,",
               ]),
               block([
-                  "        source: source ?? this.source,",
-                  "        nextAiring: nextAiring ?? this.nextAiring,",
-                  "        related: related ?? this.related,",
-                  "        relationLabel: relationLabel ?? this.relationLabel,",
-                  "        relationType: relationType ?? this.relationType,",
-                  "        tmdbId: tmdbId ?? this.tmdbId,",
+                  "      source: source ?? this.source,",
+                  "      nextAiring: nextAiring ?? this.nextAiring,",
+                  "      related: related ?? this.related,",
+                  "      relationLabel: relationLabel ?? this.relationLabel,",
+                  "      relationType: relationType ?? this.relationType,",
+                  "      tmdbId: tmdbId ?? this.tmdbId,",
               ]),
               "copyWith forwarding",
           )
@@ -108,23 +114,70 @@ jobs:
               print(f"Updated {path}")
           else:
               print("Fix already exists.")
+          PY
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run code generation
+      - name: Generate Dart files
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Format fixed file
         run: dart format lib/core/models/tmdb_details.dart
 
-      - name: Analyze project
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+      - name: Verify TMDB model
+        run: dart analyze lib/core/models/tmdb_details.dart
+
+      - name: Create temporary Dart defines
+        shell: bash
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open("dart-defines.json", "w", encoding="utf-8") as file:
+              json.dump(
+                  {"TMDB_API_KEY": os.environ.get("TMDB_API_KEY", "")},
+                  file,
+              )
+          PY
+
+      - name: Build unsigned iOS app
+        run: |
+          flutter build ios \
+            --release \
+            --no-codesign \
+            --dart-define-from-file=dart-defines.json
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          rm -rf Payload skystream-ios-unsigned.ipa
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload skystream-ios-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: skystream-ios-unsigned
+          path: skystream-ios-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Commit source fix
         shell: bash
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add lib/core/models/tmdb_details.dart
-          git diff --staged --quiet || (git commit -m "Fix TMDB copyWith" && git push)
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: sync TmdbDetails copyWith relation fields"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
