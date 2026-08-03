@@ -1,44 +1,30 @@
 name: Fix TMDB copyWith and Build iOS
 
-on:
+'on':
   workflow_dispatch:
 
 permissions:
   contents: write
 
-concurrency:
-  group: fix-tmdb-copywith-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   fix-and-build:
-    name: Patch, verify, and build unsigned IPA
     runs-on: macos-15
 
     steps:
-      - name: Checkout selected branch
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: Select Xcode 26.6 when available
-        shell: bash
-        run: |
-          if [ -d "/Applications/Xcode_26.6.app/Contents/Developer" ]; then
-            sudo xcode-select -s "/Applications/Xcode_26.6.app/Contents/Developer"
-          fi
-
-          xcodebuild -version
-
-      - name: Set up Flutter 3.44.8
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
           channel: stable
           cache: true
 
-      - name: Patch TmdbDetails relation fields
+      - name: Fix TmdbDetails copyWith
         shell: bash
         run: |
           python3 <<'PY'
@@ -48,7 +34,10 @@ jobs:
           text = path.read_text(encoding="utf-8")
           original = text
 
-          def replace_once(old: str, new: str, label: str) -> None:
+          def block(lines):
+              return "\n".join(lines) + "\n"
+
+          def replace_once(old, new, label):
               global text
 
               if new in text:
@@ -58,97 +47,99 @@ jobs:
               count = text.count(old)
               if count != 1:
                   raise SystemExit(
-                      f"{label}: expected exactly one matching block, found {count}. "
-                      "The file may have changed; inspect it before retrying."
+                      f"{label}: expected one matching block, found {count}"
                   )
 
               text = text.replace(old, new, 1)
               print(f"{label}: applied")
 
           replace_once(
-              """    super.source,
-    super.nextAiring,
-    dynamic sourceItem,
-""",
-              """    super.source,
-    super.nextAiring,
-    super.related,
-    super.relationLabel,
-    super.relationType,
-    dynamic sourceItem,
-""",
-              "Constructor relation parameters",
+              block([
+                  "    super.source,",
+                  "    super.nextAiring,",
+                  "    dynamic sourceItem,",
+              ]),
+              block([
+                  "    super.source,",
+                  "    super.nextAiring,",
+                  "    super.related,",
+                  "    super.relationLabel,",
+                  "    super.relationType,",
+                  "    dynamic sourceItem,",
+              ]),
+              "Constructor parameters",
           )
 
           replace_once(
-              """    List<Trailer>? trailers,
-    List<MultimediaItem>? recommendations,
-    Map<String, String>? syncData,
-""",
-              """    List<Trailer>? trailers,
-    List<MultimediaItem>? recommendations,
-    List<MultimediaItem>? related,
-    String? relationLabel,
-    String? relationType,
-    Map<String, String>? syncData,
-""",
-              "copyWith relation parameters",
+              block([
+                  "    List<Trailer>? trailers,",
+                  "    List<MultimediaItem>? recommendations,",
+                  "    Map<String, String>? syncData,",
+              ]),
+              block([
+                  "    List<Trailer>? trailers,",
+                  "    List<MultimediaItem>? recommendations,",
+                  "    List<MultimediaItem>? related,",
+                  "    String? relationLabel,",
+                  "    String? relationType,",
+                  "    Map<String, String>? syncData,",
+              ]),
+              "copyWith parameters",
           )
 
           replace_once(
-              """      source: source ?? this.source,
-      nextAiring: nextAiring ?? this.nextAiring,
-      tmdbId: tmdbId ?? this.tmdbId,
-""",
-              """      source: source ?? this.source,
-      nextAiring: nextAiring ?? this.nextAiring,
-      related: related ?? this.related,
-      relationLabel: relationLabel ?? this.relationLabel,
-      relationType: relationType ?? this.relationType,
-      tmdbId: tmdbId ?? this.tmdbId,
-""",
-              "copyWith relation forwarding",
+              block([
+                  "      source: source ?? this.source,",
+                  "      nextAiring: nextAiring ?? this.nextAiring,",
+                  "      tmdbId: tmdbId ?? this.tmdbId,",
+              ]),
+              block([
+                  "      source: source ?? this.source,",
+                  "      nextAiring: nextAiring ?? this.nextAiring,",
+                  "      related: related ?? this.related,",
+                  "      relationLabel: relationLabel ?? this.relationLabel,",
+                  "      relationType: relationType ?? this.relationType,",
+                  "      tmdbId: tmdbId ?? this.tmdbId,",
+              ]),
+              "copyWith forwarding",
           )
 
           if text != original:
               path.write_text(text, encoding="utf-8")
               print(f"Updated {path}")
           else:
-              print("No source changes were needed.")
+              print("Fix already exists.")
           PY
 
-      - name: Install Flutter dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Format patched file
+      - name: Format fixed file
         run: dart format lib/core/models/tmdb_details.dart
 
-      - name: Analyze affected files
+      - name: Analyze project
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Commit source fix
+        shell: bash
         run: |
-          flutter analyze \
-            --no-fatal-warnings \
-            --no-fatal-infos \
-            lib/core/domain/entity/multimedia_item.dart \
-            lib/core/models/tmdb_details.dart
+          git add lib/core/models/tmdb_details.dart
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "fix: sync TmdbDetails copyWith relation fields"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
 
       - name: Create temporary Dart defines
         shell: bash
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
-          python3 <<'PY'
-          import json
-          import os
-
-          # Empty value is enough for compilation while the secret is pending.
-          # TMDB features require the real key at runtime.
-          defines = {
-              "TMDB_API_KEY": os.environ.get("TMDB_API_KEY", "")
-          }
-
-          with open("dart-defines.json", "w", encoding="utf-8") as file:
-              json.dump(defines, file)
-          PY
+          python3 -c 'import json, os; json.dump({"TMDB_API_KEY": os.environ.get("TMDB_API_KEY", "")}, open("dart-defines.json", "w"))'
 
       - name: Build unsigned iOS app
         run: |
@@ -172,18 +163,3 @@ jobs:
           path: skystream-ios-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
-
-      - name: Commit source fix
-        shell: bash
-        run: |
-          git add lib/core/models/tmdb_details.dart
-
-          if git diff --cached --quiet; then
-            echo "The source fix is already present; nothing to commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "fix: sync TmdbDetails copyWith relation fields"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
