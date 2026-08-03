@@ -91,15 +91,7 @@ class _DeveloperOptionsScreenState
                 subtitle: l10n.viewLogsSubtitle,
                 isLast: true,
                 onTap: () {
-                  if (kDebugMode) {
-                    unawaited(const AppLogsRoute().push<void>(context));
-                  } else {
-                    ref
-                        .read(notificationServiceProvider)
-                        .showInfo(
-                          'Log tracking requires a debug build to work',
-                        );
-                  }
+                  unawaited(const AppLogsRoute().push<void>(context));
                 },
               ),
             ],

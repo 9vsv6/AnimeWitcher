@@ -1,7 +1,8 @@
 import 'package:talker_flutter/talker_flutter.dart';
-import 'package:flutter/foundation.dart';
 
 /// Global Talker instance for logging across the app.
 final talker = TalkerFlutter.init(
-  settings: TalkerSettings(enabled: kDebugMode),
+  // Keep provider and JavaScript plugin diagnostics available
+  // in release builds.
+  settings: TalkerSettings(enabled: true),
 );
