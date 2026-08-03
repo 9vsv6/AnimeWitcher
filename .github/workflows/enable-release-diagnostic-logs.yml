@@ -22,50 +22,40 @@ jobs:
           python3 <<'PY'
           from pathlib import Path
 
-          def replace_once(path: str, old: str, new: str, label: str) -> None:
-              file = Path(path)
-              text = file.read_text(encoding="utf-8")
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(
-                      f"{label}: expected exactly one match in {path}, found {count}"
-                  )
-              file.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-          logger_path = "lib/core/logger/app_logger.dart"
-          developer_path = (
+          logger_path = Path("lib/core/logger/app_logger.dart")
+          developer_path = Path(
               "lib/features/settings/presentation/"
               "developer_options_screen.dart"
           )
 
-          # Talker currently uses kDebugMode, which completely disables
-          # collection in profile/release builds. Keep Talker enabled so
-          # JS console logs and [AWDIAG] entries are retained.
-          replace_once(
-              logger_path,
-              "import 'package:flutter/foundation.dart';\n",
-              "",
-              "remove unused foundation import",
-          )
+          logger = logger_path.read_text(encoding="utf-8")
+          developer = developer_path.read_text(encoding="utf-8")
 
-          replace_once(
-              logger_path,
-              """final talker = TalkerFlutter.init(
+          old_logger = """final talker = TalkerFlutter.init(
             settings: TalkerSettings(enabled: kDebugMode),
-          );""",
-              """final talker = TalkerFlutter.init(
-            // Keep in-app diagnostic history available in release builds.
-            // This is required for provider and JavaScript plugin diagnostics.
+          );"""
+          new_logger = """final talker = TalkerFlutter.init(
+            // Keep provider and JavaScript plugin diagnostics available
+            // in release builds.
             settings: TalkerSettings(enabled: true),
-          );""",
-              "enable Talker in release",
-          )
+          );"""
 
-          # The logs screen is safe to expose in release. Do not unlock the
-          # separate asset-loading option or any other debug-only feature.
-          replace_once(
-              developer_path,
-              """                onTap: () {
+          if old_logger in logger:
+              logger = logger.replace(old_logger, new_logger, 1)
+          elif "TalkerSettings(enabled: true)" not in logger:
+              raise SystemExit(
+                  "Could not find the Talker enabled setting."
+              )
+
+          # kDebugMode is no longer used in app_logger.dart.
+          if "kDebugMode" not in logger:
+              logger = logger.replace(
+                  "import 'package:flutter/foundation.dart';\n",
+                  "",
+                  1,
+              )
+
+          old_on_tap = """                onTap: () {
                             if (kDebugMode) {
                               unawaited(const AppLogsRoute().push<void>(context));
                             } else {
@@ -75,21 +65,53 @@ jobs:
                                     'Log tracking requires a debug build to work',
                                   );
                             }
-                          },""",
-              """                onTap: () {
-                            unawaited(const AppLogsRoute().push<void>(context));
-                          },""",
-              "allow release View Logs navigation",
-          )
+                          },"""
 
-          # notificationServiceProvider was only used by the removed release
-          # warning. Remove its now-unused import.
-          replace_once(
-              developer_path,
-              "import '../../../core/services/notification_service.dart';\n",
-              "",
-              "remove unused notification service import",
+          new_on_tap = """                onTap: () {
+                            unawaited(
+                              const AppLogsRoute().push<void>(context),
+                            );
+                          },"""
+
+          if old_on_tap in developer:
+              developer = developer.replace(
+                  old_on_tap,
+                  new_on_tap,
+                  1,
+              )
+          elif (
+              "const AppLogsRoute().push<void>(context)" not in developer
+              or "Log tracking requires a debug build to work" in developer
+          ):
+              raise SystemExit(
+                  "Could not safely patch the View Logs action."
+              )
+
+          # notificationServiceProvider is still used by
+          # _toggleAssetLoading. Keep/restore its import.
+          notification_import = (
+              "import '../../../core/services/"
+              "notification_service.dart';\n"
           )
+          if (
+              "notificationServiceProvider" in developer
+              and notification_import not in developer
+          ):
+              anchor = (
+                  "import '../../../core/router/app_router.dart';\n"
+              )
+              if anchor not in developer:
+                  raise SystemExit(
+                      "Could not restore notification service import."
+                  )
+              developer = developer.replace(
+                  anchor,
+                  anchor + notification_import,
+                  1,
+              )
+
+          logger_path.write_text(logger, encoding="utf-8")
+          developer_path.write_text(developer, encoding="utf-8")
 
           print("Release diagnostic logging patch applied.")
           PY
@@ -109,6 +131,10 @@ jobs:
             lib/core/logger/app_logger.dart \
             lib/features/settings/presentation/developer_options_screen.dart
 
+      - name: Generate Riverpod and router files
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+
       - name: Validate patch
         shell: bash
         run: |
@@ -127,16 +153,25 @@ jobs:
               "Talker enabled in release":
                   "TalkerSettings(enabled: true)" in logger,
               "View Logs always opens":
-                  "unawaited(const AppLogsRoute().push<void>(context));"
+                  "const AppLogsRoute().push<void>(context)"
                   in developer,
               "Old release warning removed":
                   "Log tracking requires a debug build to work"
                   not in developer,
               "Asset loading remains debug-only":
                   "if (kDebugMode)" in developer,
+              "Notification provider import retained":
+                  (
+                      "notification_service.dart" in developer
+                      and "notificationServiceProvider" in developer
+                  ),
           }
 
-          failed = [name for name, passed in checks.items() if not passed]
+          failed = [
+              name for name, passed in checks.items()
+              if not passed
+          ]
+
           for name, passed in checks.items():
               print(f"{'OK' if passed else 'FAIL'}: {name}")
 
@@ -146,14 +181,20 @@ jobs:
               )
           PY
 
-          git diff --check
+          git diff --check -- \
+            lib/core/logger/app_logger.dart \
+            lib/features/settings/presentation/developer_options_screen.dart
+
           flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Commit changes
         shell: bash
         run: |
-          if git diff --quiet; then
-            echo "No changes to commit."
+          if git diff --quiet -- \
+            lib/core/logger/app_logger.dart \
+            lib/features/settings/presentation/developer_options_screen.dart
+          then
+            echo "No source changes to commit."
             exit 0
           fi
 
@@ -165,5 +206,6 @@ jobs:
             lib/core/logger/app_logger.dart \
             lib/features/settings/presentation/developer_options_screen.dart
 
-          git commit -m "feat: enable diagnostic logs in release builds"
+          git commit -m \
+            "feat: enable diagnostic logs in release builds"
           git push
