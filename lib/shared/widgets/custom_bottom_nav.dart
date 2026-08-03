@@ -1,14 +1,10 @@
-import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
-const _nativeAppleTabBarViewType =
-    'dev.akash.skystream/native_apple_tab_bar';
-
 class CustomBottomNavBar extends StatelessWidget {
-  static const double iosContentHeight = 64;
-
   final int currentIndex;
   final void Function(int) onTap;
 
@@ -17,6 +13,12 @@ class CustomBottomNavBar extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
   });
+
+  static const double height = 64;
+
+  /// The pill's offset from the screen bottom (matching 4c-app convention).
+  static double bottomInsetFor(BuildContext context) =>
+      math.max(MediaQuery.viewPaddingOf(context).bottom - 8, 12);
 
   @override
   Widget build(BuildContext context) {
@@ -49,116 +51,161 @@ class CustomBottomNavBar extends StatelessWidget {
       ),
     ];
 
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      return _NativeAppleBottomNavBar(
-        currentIndex: currentIndex,
-        labels: destinations.map((destination) => destination.label).toList(),
-        onTap: onTap,
-      );
-    }
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final count = destinations.length;
 
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(color: colorScheme.surface),
-      child: NavigationBar(
-        selectedIndex: currentIndex,
-        onDestinationSelected: onTap,
-        backgroundColor: Colors.transparent,
-        indicatorColor: colorScheme.primary.withValues(alpha: 0.15),
-        elevation: 0,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
-        height: 65,
-        destinations: [
-          for (final destination in destinations)
-            NavigationDestination(
-              icon: Icon(destination.icon),
-              selectedIcon: Icon(
-                destination.selectedIcon,
-                color: colorScheme.primary,
-              ),
-              label: destination.label,
+    // Sliding highlight indicator
+    final highlight = AnimatedAlign(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      alignment: count <= 1
+          ? Alignment.center
+          : Alignment(-1 + 2 * (currentIndex / (count - 1)), 0),
+      child: FractionallySizedBox(
+        widthFactor: count == 0 ? 1 : 1 / count,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular((height - 12) / 2),
+              color: colorScheme.primary.withValues(alpha: 0.15),
             ),
-        ],
+          ),
+        ),
       ),
+    );
+
+    final tabs = <Widget>[
+      for (final (i, d) in destinations.indexed)
+        Expanded(
+          child: _NavTabCell(
+            destination: d,
+            isSelected: i == currentIndex,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onTap(i);
+            },
+          ),
+        ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fullWidth = constraints.maxWidth.clamp(0.0, 420.0);
+        return Align(
+          alignment: Alignment.bottomCenter,
+          heightFactor: 1,
+          child: Container(
+            width: fullWidth,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(height / 2),
+              border: Border.all(
+                color: isDark
+                    ? theme.dividerColor.withValues(alpha: 0.3)
+                    : colorScheme.outline.withValues(alpha: 0.15),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(height / 2),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(
+                  height: height,
+                  color: colorScheme.surface.withValues(alpha: 0.8),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      highlight,
+                      Row(children: tabs),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
-class _NativeAppleBottomNavBar extends StatefulWidget {
-  final int currentIndex;
-  final List<String> labels;
-  final ValueChanged<int> onTap;
+class _NavTabCell extends StatefulWidget {
+  final _BottomNavDestination destination;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-  const _NativeAppleBottomNavBar({
-    required this.currentIndex,
-    required this.labels,
+  const _NavTabCell({
+    required this.destination,
+    required this.isSelected,
     required this.onTap,
   });
 
   @override
-  State<_NativeAppleBottomNavBar> createState() =>
-      _NativeAppleBottomNavBarState();
+  State<_NavTabCell> createState() => _NavTabCellState();
 }
 
-class _NativeAppleBottomNavBarState
-    extends State<_NativeAppleBottomNavBar> {
-  MethodChannel? _channel;
-
-  @override
-  void didUpdateWidget(covariant _NativeAppleBottomNavBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentIndex != widget.currentIndex) {
-      _channel?.invokeMethod<void>('setSelectedIndex', widget.currentIndex);
-    }
-  }
-
-  void _onPlatformViewCreated(int viewId) {
-    _channel?.setMethodCallHandler(null);
-    final channel = MethodChannel('${_nativeAppleTabBarViewType}_$viewId');
-    _channel = channel;
-    channel.setMethodCallHandler((call) async {
-      if (call.method == 'onTap') {
-        final index = call.arguments as int?;
-        if (index != null && mounted) {
-          widget.onTap(index);
-        }
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _channel?.setMethodCallHandler(null);
-    super.dispose();
-  }
+class _NavTabCellState extends State<_NavTabCell> {
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final accentColor = theme.colorScheme.primary;
-    final textDirection = Directionality.of(context);
-    final appearanceKey = Object.hash(
-      theme.brightness,
-      accentColor.toARGB32(),
-      textDirection,
-      Object.hashAll(widget.labels),
-    );
+    final colorScheme = Theme.of(context).colorScheme;
 
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    return SizedBox(
-      height: CustomBottomNavBar.iosContentHeight + bottomInset,
-      child: UiKitView(
-        key: ValueKey(appearanceKey),
-        viewType: _nativeAppleTabBarViewType,
-        creationParams: <String, Object>{
-          'selectedIndex': widget.currentIndex,
-          'labels': widget.labels,
-          'accentColor': accentColor.toARGB32(),
-          'brightness': theme.brightness.name,
-          'textDirection': textDirection.name,
-        },
-        creationParamsCodec: const StandardMessageCodec(),
-        onPlatformViewCreated: _onPlatformViewCreated,
+    return Semantics(
+      button: true,
+      selected: widget.isSelected,
+      label: widget.destination.label,
+      child: Tooltip(
+        message: widget.destination.label,
+        child: Focus(
+          onFocusChange: (focused) => setState(() => _isFocused = focused),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: _isFocused
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(
+                      color: colorScheme.primary,
+                      width: 2.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colorScheme.primary.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  )
+                : null,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(26),
+              focusColor: Colors.transparent,
+              hoverColor: colorScheme.primary.withValues(alpha: 0.08),
+              onTap: widget.onTap,
+              child: Center(
+                child: Icon(
+                  widget.isSelected
+                      ? widget.destination.selectedIcon
+                      : widget.destination.icon,
+                  color: widget.isSelected
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

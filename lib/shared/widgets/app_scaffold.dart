@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -208,12 +207,19 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
             }
           },
           child: Scaffold(
-            extendBody:
-                !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS,
+            resizeToAvoidBottomInset: false,
+            extendBody: true,
             body: widget.navigationShell,
-            bottomNavigationBar: CustomBottomNavBar(
-              currentIndex: widget.navigationShell.currentIndex,
-              onTap: (index) => _onItemTapped(index, context),
+            bottomNavigationBar: Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                bottom: CustomBottomNavBar.bottomInsetFor(context),
+              ),
+              child: CustomBottomNavBar(
+                currentIndex: widget.navigationShell.currentIndex,
+                onTap: (index) => _onItemTapped(index, context),
+              ),
             ),
           ),
         );

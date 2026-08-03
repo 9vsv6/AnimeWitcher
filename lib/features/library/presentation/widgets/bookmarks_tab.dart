@@ -35,7 +35,12 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
       LibraryError(message: final msg) => Center(child: Text(msg)),
       LibraryEmpty() => _buildEmpty(context),
       LibrarySuccess(items: final items) => GridView.builder(
-        padding: const EdgeInsets.all(LayoutConstants.spacingMd),
+        padding: const EdgeInsets.fromLTRB(
+          LayoutConstants.spacingMd,
+          LayoutConstants.spacingMd,
+          LayoutConstants.spacingMd,
+          100,
+        ),
         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: totalHeight,
           childAspectRatio: 2 / 3.4,
