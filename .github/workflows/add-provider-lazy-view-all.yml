@@ -1,4 +1,4 @@
-name: Add provider lazy View All (fixed)
+name: Add provider lazy View All (generated files fix)
 
 on:
   workflow_dispatch:
@@ -36,6 +36,9 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Resolve dependencies
+        run: flutter pub get
+
       - name: Format changed files
         run: |
           dart format \
@@ -47,9 +50,13 @@ jobs:
             lib/features/explore/presentation/widgets/media_horizontal_list.dart \
             lib/features/home/presentation/home_screen.dart
 
+      - name: Generate Riverpod and router files
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+
       - name: Validate project
         run: |
-          flutter pub get
+          git diff --check
           flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Commit changes
@@ -63,14 +70,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add \
-            lib/core/extensions/base_provider.dart \
-            lib/core/extensions/providers/js_based_provider.dart \
-            lib/features/explore/presentation/controllers/view_all_controller.dart \
-            lib/features/explore/presentation/view_all_screen.dart \
-            lib/core/router/app_router.dart \
-            lib/features/explore/presentation/widgets/media_horizontal_list.dart \
-            lib/features/home/presentation/home_screen.dart
+          git add -A
 
           git commit -m "feat: lazy-load provider View All sections"
           git push
