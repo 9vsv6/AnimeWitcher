@@ -29,7 +29,7 @@ class CloudflareBypass {
   }
 
   static const _tag = '[CF Bypass]';
-  static const _cfErrorCodes = [403, 503];
+  static const _cfErrorCodes = [403, 429, 503];
   static const _cfServers = ['cloudflare-nginx', 'cloudflare'];
   static const _timeout = Duration(seconds: 60);
   static const _navTimeout = Duration(seconds: 20);
@@ -91,23 +91,43 @@ class CloudflareBypass {
   // Detection
   // ---------------------------------------------------------------------------
 
+  bool _looksLikeBrowserChallenge(String body) {
+    final source = body.toLowerCase();
+    if (source.isEmpty) return false;
+
+    return source.contains('just a moment') ||
+        source.contains('checking your browser') ||
+        source.contains('browser verification') ||
+        source.contains('verify you are human') ||
+        source.contains('verifying you are human') ||
+        source.contains('making sure you are not a bot') ||
+        source.contains("making sure you're not a bot") ||
+        source.contains('enable javascript and cookies to continue') ||
+        source.contains('attention required') ||
+        source.contains('cf-mitigated') ||
+        source.contains('_cf_chl_opt') ||
+        source.contains('challenge-platform') ||
+        source.contains('challenge-form') ||
+        source.contains('cf-turnstile');
+  }
+
   bool isCloudflareChallenge(
     int? statusCode,
     Map<String, dynamic> headers,
     String body,
   ) {
-    if (statusCode == null || !_cfErrorCodes.contains(statusCode)) return false;
+    // Managed browser challenges can return HTTP 200, as Animerco does.
+    // Detect the challenge HTML first, then use status/headers as support.
+    if (!_looksLikeBrowserChallenge(body)) return false;
 
-    final server = _headerValue(headers, 'server');
-    if (server == null ||
-        !_cfServers.any((s) => server.toLowerCase().contains(s))) {
-      return false;
-    }
+    final server = (_headerValue(headers, 'server') ?? '').toLowerCase();
+    final hasCloudflareHeaders =
+        _cfServers.any(server.contains) ||
+        _headerValue(headers, 'cf-ray') != null ||
+        _headerValue(headers, 'cf-mitigated') != null;
 
-    return body.contains('Just a moment') ||
-        body.contains('cf-mitigated') ||
-        body.contains('_cf_chl_opt') ||
-        body.contains('challenge-platform');
+    final code = statusCode ?? 0;
+    return hasCloudflareHeaders || _cfErrorCodes.contains(code) || code == 200;
   }
 
   // ---------------------------------------------------------------------------
@@ -149,9 +169,7 @@ class CloudflareBypass {
       }
       try {
         final html = await cachedView.navigate(url);
-        if (html != null &&
-            !html.contains('_cf_chl_opt') &&
-            !html.contains('Just a moment')) {
+        if (html != null && !_looksLikeBrowserChallenge(html)) {
           return CfResult(body: html, statusCode: 200, finalUrl: url);
         }
         if (kDebugMode) {
@@ -232,15 +250,42 @@ class CloudflareBypass {
         final isClear = await controller.evaluateJavascript(
           source: '''
           (function(){
-            var t = document.title || '';
-            var hasChallenge =
-                t === 'Just a moment...' ||
-                t.toLowerCase().indexOf('cloudflare') !== -1 ||
+            var t = (document.title || '').toLowerCase();
+            var bodyText = (
+              document.body && document.body.innerText
+                ? document.body.innerText
+                : ''
+            ).toLowerCase();
+
+            var titleChallenge =
+                t.indexOf('just a moment') !== -1 ||
+                t.indexOf('checking your browser') !== -1 ||
+                t.indexOf('browser verification') !== -1 ||
+                t.indexOf('attention required') !== -1 ||
+                t.indexOf('verify you are human') !== -1 ||
+                t.indexOf('verifying you are human') !== -1 ||
+                t.indexOf('cloudflare') !== -1;
+
+            var bodyChallenge =
+                bodyText.indexOf('checking your browser') !== -1 ||
+                bodyText.indexOf('browser verification') !== -1 ||
+                bodyText.indexOf('enable javascript and cookies to continue') !== -1 ||
+                bodyText.indexOf('verify you are human') !== -1 ||
+                bodyText.indexOf('verifying you are human') !== -1 ||
+                bodyText.indexOf('making sure you are not a bot') !== -1 ||
+                bodyText.indexOf("making sure you're not a bot") !== -1;
+
+            var domChallenge =
                 !!document.getElementById('challenge-form') ||
                 !!document.querySelector('[data-translate="checking_browser"]') ||
                 !!document.querySelector('.cf-mitigated-content') ||
+                !!document.querySelector('.cf-turnstile') ||
+                !!document.querySelector('[src*="challenge-platform"]') ||
                 typeof window._cf_chl_opt !== 'undefined';
-            return hasChallenge ? '0' : '1';
+
+            return (titleChallenge || bodyChallenge || domChallenge)
+                ? '0'
+                : '1';
           })()
         ''',
         );
@@ -252,7 +297,11 @@ class CloudflareBypass {
           source: 'document.documentElement.outerHTML',
         );
         final body = html?.toString();
-        if (body == null || body.isEmpty) return;
+        if (body == null ||
+            body.length < 500 ||
+            _looksLikeBrowserChallenge(body)) {
+          return;
+        }
 
         result = CfResult(
           body: body,
