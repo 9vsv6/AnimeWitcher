@@ -408,7 +408,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
               }
             }
 
-            return result;
+            return Dpad(child: result);
           },
         );
 
@@ -422,7 +422,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
             }
             return KeyEventResult.ignored;
           },
-          child: DpadNavigator(child: materialApp),
+          child: materialApp,
         );
 
         if (Platform.isMacOS) {
