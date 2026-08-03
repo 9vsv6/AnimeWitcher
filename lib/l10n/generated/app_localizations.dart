@@ -2574,6 +2574,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Episodes button'**
   String get showEpisodes;
+
+  /// No description provided for @relatedAnime.
+  ///
+  /// In en, this message translates to:
+  /// **'Related Anime'**
+  String get relatedAnime;
 }
 
 class _AppLocalizationsDelegate

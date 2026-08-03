@@ -101,6 +101,22 @@ class MultimediaItem {
   final List<Actor>? cast;
   final List<Trailer>? trailers;
   final List<MultimediaItem>? recommendations;
+
+  /// Entries that belong to the same franchise.
+  ///
+  /// This is independent from [recommendations], which contains
+  /// similar titles.
+  final List<MultimediaItem>? related;
+
+  /// Text shown on a related title poster badge.
+  ///
+  /// Examples: Previous, Next, Movie, OVA, Side Story.
+  final String? relationLabel;
+
+  /// Optional machine-readable relationship value.
+  ///
+  /// Examples: PREQUEL, SEQUEL, SIDE_STORY, SPIN_OFF.
+  final String? relationType;
   final Map<String, String>? syncData;
   final String? playbackPolicy;
   final bool isAdult;
@@ -131,6 +147,9 @@ class MultimediaItem {
     this.cast,
     this.trailers,
     this.recommendations,
+    this.related,
+    this.relationLabel,
+    this.relationType,
     this.syncData,
     this.playbackPolicy,
     this.isAdult = false,
@@ -145,6 +164,31 @@ class MultimediaItem {
                return a.episode.compareTo(b.episode);
              }))
            : null;
+
+  static List<MultimediaItem>? _parseItemList(dynamic raw) {
+    if (raw is! List) return null;
+
+    final items = <MultimediaItem>[];
+    for (final value in raw) {
+      if (value is! Map) continue;
+
+      try {
+        items.add(MultimediaItem.fromJson(Map<String, dynamic>.from(value)));
+      } catch (_) {
+        // One malformed related/recommendation item must not make the
+        // whole details page fail.
+      }
+    }
+
+    return items.isEmpty ? null : items;
+  }
+
+  static String? _parseOptionalString(dynamic raw) {
+    if (raw == null || raw is Map || raw is List) return null;
+
+    final value = raw.toString().trim();
+    return value.isEmpty ? null : value;
+  }
 
   factory MultimediaItem.fromJson(Map<String, dynamic> json) {
     if (json.containsKey('media_type') &&
@@ -213,15 +257,19 @@ class MultimediaItem {
                 )
                 .toList()
           : null,
-      recommendations: json['recommendations'] != null
-          ? (json['recommendations'] as List)
-                .map<MultimediaItem>(
-                  (r) => MultimediaItem.fromJson(
-                    Map<String, dynamic>.from(r as Map),
-                  ),
-                )
-                .toList()
-          : null,
+
+      recommendations: _parseItemList(json['recommendations']),
+      related: _parseItemList(json['related'] ?? json['relations']),
+      relationLabel: _parseOptionalString(
+        json['relationLabel'] ??
+            json['relation_label'] ??
+            json['relationBadge'] ??
+            json['relation_badge'] ??
+            json['relation'],
+      ),
+      relationType: _parseOptionalString(
+        json['relationType'] ?? json['relation_type'],
+      ),
       syncData: json['syncData'] != null
           ? Map<String, String>.from(json['syncData'] as Map)
           : null,
@@ -343,6 +391,9 @@ class MultimediaItem {
     List<Actor>? cast,
     List<Trailer>? trailers,
     List<MultimediaItem>? recommendations,
+    List<MultimediaItem>? related,
+    String? relationLabel,
+    String? relationType,
     Map<String, String>? syncData,
     String? playbackPolicy,
     bool? isAdult,
@@ -372,6 +423,9 @@ class MultimediaItem {
       cast: cast ?? this.cast,
       trailers: trailers ?? this.trailers,
       recommendations: recommendations ?? this.recommendations,
+      related: related ?? this.related,
+      relationLabel: relationLabel ?? this.relationLabel,
+      relationType: relationType ?? this.relationType,
       syncData: syncData ?? this.syncData,
       playbackPolicy: playbackPolicy ?? this.playbackPolicy,
       isAdult: isAdult ?? this.isAdult,
@@ -404,6 +458,9 @@ class MultimediaItem {
       'cast': cast?.map((a) => a.toJson()).toList(),
       'trailers': trailers?.map((t) => t.toJson()).toList(),
       'recommendations': recommendations?.map((r) => r.toJson()).toList(),
+      'related': related?.map((r) => r.toJson()).toList(),
+      'relationLabel': relationLabel,
+      'relationType': relationType,
       'syncData': syncData,
       'playbackPolicy': playbackPolicy,
       'isAdult': isAdult,

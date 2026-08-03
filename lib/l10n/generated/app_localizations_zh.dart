@@ -1282,6 +1282,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get showEpisodes => 'Episodes button';
+
+  @override
+  String get relatedAnime => 'Related Anime';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).

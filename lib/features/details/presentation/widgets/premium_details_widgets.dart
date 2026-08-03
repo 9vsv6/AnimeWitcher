@@ -217,10 +217,7 @@ class MetadataBar extends ConsumerWidget {
 class NextAiringWidget extends StatefulWidget {
   final NextAiring nextAiring;
 
-  const NextAiringWidget({
-    super.key,
-    required this.nextAiring,
-  });
+  const NextAiringWidget({super.key, required this.nextAiring});
 
   @override
   State<NextAiringWidget> createState() => _NextAiringWidgetState();
@@ -288,14 +285,8 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
   String _formatCountdown(Duration duration) {
     final days = duration.inDays;
     final hours = duration.inHours.remainder(24).toString().padLeft(2, '0');
-    final minutes = duration.inMinutes
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
-    final seconds = duration.inSeconds
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
 
     if (days > 0) {
       return '$days days  $hours:$minutes:$seconds';
@@ -347,9 +338,9 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
               Expanded(
                 child: Text(
                   '$episodeDescription in',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -543,12 +534,92 @@ class TrailersSection extends StatelessWidget {
 class RecommendationsCarousel extends StatelessWidget {
   final List<MultimediaItem> items;
   final void Function(MultimediaItem) onItemTap;
+  final String title;
+  final bool showRelationBadge;
 
   const RecommendationsCarousel({
     super.key,
     required this.items,
     required this.onItemTap,
+    this.title = "More Like This",
+    this.showRelationBadge = false,
   });
+
+  String? _relationBadgeLabel(BuildContext context, MultimediaItem item) {
+    final explicit = item.relationLabel?.trim();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+
+    // Compatibility with the current WitAnime extension version,
+    // which stores the relation label in description.
+    final legacy = item.description?.trim();
+    const knownLegacyLabels = <String>{
+      'previous',
+      'next',
+      'movie',
+      'ova',
+      'ona',
+      'special',
+      'side story',
+      'spin-off',
+      'alternative',
+      'summary',
+      'parent',
+      'compilation',
+      'adaptation',
+      'related',
+      'السابق',
+      'التالي',
+      'فيلم',
+      'أوفا',
+      'قصة جانبية',
+      'عمل مشتق',
+      'نسخة بديلة',
+      'ملخص',
+      'العمل الأصلي',
+      'تجميعة',
+      'اقتباس مرتبط',
+      'عمل مرتبط',
+      'عمل مرتبط بالشخصيات',
+      'موسم سابق',
+      'موسم لاحق',
+    };
+    if (legacy != null && knownLegacyLabels.contains(legacy.toLowerCase())) {
+      return legacy;
+    }
+
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final relation = item.relationType?.trim().toUpperCase();
+
+    switch (relation) {
+      case 'PREQUEL':
+        return isArabic ? 'السابق' : 'Previous';
+      case 'SEQUEL':
+        return isArabic ? 'التالي' : 'Next';
+      case 'SIDE_STORY':
+        return isArabic ? 'قصة جانبية' : 'Side Story';
+      case 'SPIN_OFF':
+        return isArabic ? 'عمل مشتق' : 'Spin-off';
+      case 'ALTERNATIVE':
+        return isArabic ? 'نسخة بديلة' : 'Alternative';
+      case 'SUMMARY':
+        return isArabic ? 'ملخص' : 'Summary';
+      case 'PARENT':
+        return isArabic ? 'العمل الأصلي' : 'Parent';
+      case 'COMPILATION':
+        return isArabic ? 'تجميعة' : 'Compilation';
+      case 'ADAPTATION':
+        return isArabic ? 'اقتباس' : 'Adaptation';
+    }
+
+    if (item.contentType == MultimediaContentType.movie) {
+      return isArabic ? 'فيلم' : 'Movie';
+    }
+
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -562,7 +633,7 @@ class RecommendationsCarousel extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Text(
-            "More Like This",
+            title,
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -576,6 +647,10 @@ class RecommendationsCarousel extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final item = items[index];
+              final relationBadge = showRelationBadge
+                  ? _relationBadgeLabel(context, item)
+                  : null;
+
               return CardsWrapper(
                 onTap: () => onItemTap(item),
                 child: SizedBox(
@@ -586,17 +661,63 @@ class RecommendationsCarousel extends StatelessWidget {
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(
-                            imageUrl:
-                                AppImageFallbacks.poster(
-                                  item.posterUrl,
-                                  label: item.title,
-                                ) ??
-                                '',
-                            fit: BoxFit.cover,
-                            width: cardWidth,
-                            errorWidget: (_, _, _) =>
-                                ThumbnailErrorPlaceholder(label: item.title),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              CachedNetworkImage(
+                                imageUrl:
+                                    AppImageFallbacks.poster(
+                                      item.posterUrl,
+                                      label: item.title,
+                                    ) ??
+                                    '',
+                                fit: BoxFit.cover,
+                                width: cardWidth,
+                                errorWidget: (_, _, _) =>
+                                    ThumbnailErrorPlaceholder(
+                                      label: item.title,
+                                    ),
+                              ),
+                              if (relationBadge != null)
+                                Positioned(
+                                  top: 8,
+                                  left: 8,
+                                  child: Container(
+                                    constraints: BoxConstraints(
+                                      maxWidth: cardWidth - 16,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      borderRadius: BorderRadius.circular(6),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Colors.black38,
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      relationBadge,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onPrimary,
+                                        fontSize: isLarge ? 12 : 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),

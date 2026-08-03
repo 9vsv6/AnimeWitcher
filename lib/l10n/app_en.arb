@@ -616,5 +616,6 @@
   "showResize": "Resize button",
   "showRotate": "Rotate button",
   "showPlaybackSpeed": "Playback speed button",
-  "showEpisodes": "Episodes button"
+  "showEpisodes": "Episodes button",
+  "relatedAnime": "Related Anime"
 }

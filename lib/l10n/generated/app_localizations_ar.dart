@@ -1316,6 +1316,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get showEpisodes => 'Episodes button';
+
+  @override
+  String get relatedAnime => 'أنمي ذات صلة';
 }
 
 /// The translations for Arabic (`ar_apc`).

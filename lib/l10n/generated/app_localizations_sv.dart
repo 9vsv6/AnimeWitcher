@@ -1315,4 +1315,7 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get showEpisodes => 'Episodes button';
+
+  @override
+  String get relatedAnime => 'Related Anime';
 }

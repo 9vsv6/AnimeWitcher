@@ -417,6 +417,53 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   //  DESKTOP / TV  — Immersive hero layout
   // ─────────────────────────────────────────────────────────────────
 
+  String _mediaIdentity(MultimediaItem item) {
+    final url = item.url.trim();
+    if (url.isNotEmpty) return 'url:$url';
+
+    return [
+      item.provider ?? '',
+      item.title.trim().toLowerCase(),
+      item.year?.toString() ?? '',
+      item.contentType.name,
+    ].join('|');
+  }
+
+  MultimediaItem _inheritProvider(MultimediaItem parent, MultimediaItem child) {
+    final childProvider = child.provider?.trim();
+    if (childProvider != null && childProvider.isNotEmpty) {
+      return child;
+    }
+
+    final parentProvider = parent.provider?.trim();
+    if (parentProvider == null || parentProvider.isEmpty) {
+      return child;
+    }
+
+    return child.copyWith(provider: parentProvider);
+  }
+
+  List<MultimediaItem> _uniqueMediaItems(List<MultimediaItem>? items) {
+    if (items == null || items.isEmpty) {
+      return const <MultimediaItem>[];
+    }
+
+    final seen = <String>{};
+    return items
+        .where((item) => seen.add(_mediaIdentity(item)))
+        .toList(growable: false);
+  }
+
+  List<MultimediaItem> _recommendationsWithoutRelated(MultimediaItem item) {
+    final relatedKeys = _uniqueMediaItems(
+      item.related,
+    ).map(_mediaIdentity).toSet();
+
+    return _uniqueMediaItems(item.recommendations)
+        .where((value) => !relatedKeys.contains(_mediaIdentity(value)))
+        .toList(growable: false);
+  }
+
   Widget _buildDesktopLayout(
     BuildContext context,
     MultimediaItem item,
@@ -503,6 +550,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     bool isMovie,
     AppLocalizations l10n,
   ) {
+    final relatedItems = _uniqueMediaItems(item.related);
+    final recommendations = _recommendationsWithoutRelated(item);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -539,12 +589,27 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           TrailersSection(trailers: item.trailers!),
         ],
 
-        // Recommendations
-        if (item.recommendations != null &&
-            item.recommendations!.isNotEmpty) ...[
+        // Provider-defined entries from the same anime franchise.
+        if (relatedItems.isNotEmpty) ...[
           const SizedBox(height: 32),
           RecommendationsCarousel(
-            items: item.recommendations!,
+            title: l10n.relatedAnime,
+            items: relatedItems,
+            showRelationBadge: true,
+            onItemTap: (relatedItem) {
+              final target = _inheritProvider(item, relatedItem);
+              DetailsRoute(
+                $extra: DetailsRouteExtra(item: target),
+              ).push<void>(context);
+            },
+          ),
+        ],
+
+        // Similar titles remain separate from franchise relations.
+        if (recommendations.isNotEmpty) ...[
+          const SizedBox(height: 32),
+          RecommendationsCarousel(
+            items: recommendations,
             onItemTap: (rec) {
               DetailsRoute(
                 $extra: DetailsRouteExtra(item: rec),
@@ -566,6 +631,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     bool isMovie,
     AppLocalizations l10n,
   ) {
+    final relatedItems = _uniqueMediaItems(item.related);
+    final recommendations = _recommendationsWithoutRelated(item);
+
     return [
       SliverToBoxAdapter(
         child: Padding(
@@ -705,11 +773,25 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                 const SizedBox(height: 32),
                 TrailersSection(trailers: item.trailers!),
               ],
-              if (item.recommendations != null &&
-                  item.recommendations!.isNotEmpty) ...[
+
+              if (relatedItems.isNotEmpty) ...[
                 const SizedBox(height: 32),
                 RecommendationsCarousel(
-                  items: item.recommendations!,
+                  title: l10n.relatedAnime,
+                  items: relatedItems,
+                  showRelationBadge: true,
+                  onItemTap: (relatedItem) {
+                    final target = _inheritProvider(item, relatedItem);
+                    DetailsRoute(
+                      $extra: DetailsRouteExtra(item: target),
+                    ).push<void>(context);
+                  },
+                ),
+              ],
+              if (recommendations.isNotEmpty) ...[
+                const SizedBox(height: 32),
+                RecommendationsCarousel(
+                  items: recommendations,
                   onItemTap: (rec) {
                     DetailsRoute(
                       $extra: DetailsRouteExtra(item: rec),
@@ -717,6 +799,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                   },
                 ),
               ],
+
               const SizedBox(height: 50),
             ],
           ),
