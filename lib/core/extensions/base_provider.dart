@@ -25,6 +25,16 @@ abstract class SkyStreamProvider {
   Future<List<MultimediaItem>> search(String query, {CancelToken? cancelToken});
   // Returns categorized content (Section Name -> Items)
   Future<Map<String, List<MultimediaItem>>> getHome();
+
+  /// Loads the complete content for one provider home section.
+  ///
+  /// Providers that do not support lazy sections automatically fall
+  /// back to their existing [getHome] result.
+  Future<List<MultimediaItem>> getHomeSection(String sectionName) async {
+    final home = await getHome();
+    return home[sectionName] ?? const <MultimediaItem>[];
+  }
+
   Future<MultimediaItem> getDetails(String url);
 
   // Returns list of video streams (urls)

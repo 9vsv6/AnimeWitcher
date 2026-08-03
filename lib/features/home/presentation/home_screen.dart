@@ -322,7 +322,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       );
     }
 
-    if (ref.watch(activeProviderProvider) == null) {
+    final activeProvider = ref.watch(activeProviderProvider);
+    if (activeProvider == null) {
       return _buildNoProviderState(context, l10n, isWidescreen: isWidescreen);
     }
 
@@ -425,6 +426,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       mediaList: entry.value,
                       category: ViewAllCategory.providerContent,
                       showViewAll: true,
+                      loadViewAll: () =>
+                          activeProvider.getHomeSection(entry.key),
                       onTap: (item) {
                         DetailsRoute(
                           $extra: DetailsRouteExtra(item: item),

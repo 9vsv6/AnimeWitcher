@@ -35,12 +35,16 @@ class ViewAllScreen extends ConsumerStatefulWidget {
   /// DetailsRoute instead of TmdbDetailsRoute).
   final void Function(MultimediaItem item)? onTap;
 
+  /// Loads the complete provider section after View All opens.
+  final Future<List<MultimediaItem>> Function()? loadItems;
+
   const ViewAllScreen({
     super.key,
     required this.title,
     required this.initialMediaList,
     required this.category,
     this.onTap,
+    this.loadItems,
   });
 
   @override
@@ -59,11 +63,40 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
       _checkAspectRatio();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(viewAllControllerProvider(widget.category).notifier)
-          .init(widget.initialMediaList);
-      _checkInitialFill();
+      final controller = ref.read(
+        viewAllControllerProvider(widget.category).notifier,
+      );
+      controller.init(widget.initialMediaList);
+
+      if (widget.category == ViewAllCategory.providerContent &&
+          widget.loadItems != null) {
+        _loadProviderContent();
+      } else {
+        _checkInitialFill();
+      }
     });
+  }
+
+  Future<void> _loadProviderContent() async {
+    final loader = widget.loadItems;
+    if (loader == null) return;
+
+    final controller = ref.read(
+      viewAllControllerProvider(widget.category).notifier,
+    );
+    controller.setProviderContentLoading(true);
+
+    try {
+      final loaded = await loader();
+      if (!mounted) return;
+
+      controller.replaceProviderContent(
+        loaded.isNotEmpty ? loaded : widget.initialMediaList,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      controller.replaceProviderContent(widget.initialMediaList);
+    }
   }
 
   Future<void> _checkAspectRatio() async {

@@ -174,11 +174,13 @@ class ViewAllRouteExtra {
     required this.initialMediaList,
     required this.category,
     this.onTap,
+    this.loadItems,
   });
   final String title;
   final List<MultimediaItem> initialMediaList;
   final ViewAllCategory category;
   final void Function(MultimediaItem item)? onTap;
+  final Future<List<MultimediaItem>> Function()? loadItems;
 }
 
 // --- Full Screen Routes ---
@@ -233,6 +235,7 @@ class ViewAllRoute extends GoRouteData with $ViewAllRoute {
       initialMediaList: $extra.initialMediaList,
       category: $extra.category,
       onTap: $extra.onTap,
+      loadItems: $extra.loadItems,
     );
   }
 }

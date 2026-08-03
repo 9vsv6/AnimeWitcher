@@ -84,7 +84,7 @@ Future<List<R>> _processInChunks<T, R>(
 }
 
 class JsBasedProvider extends SkyStreamProvider {
-  static const int _iifeWrapperVersion = 2;
+  static const int _iifeWrapperVersion = 3;
 
   final JsEngineService _jsEngine;
   final String _scriptPath;
@@ -220,6 +220,7 @@ class JsBasedProvider extends SkyStreamProvider {
 
                   return {
                       getHome: (typeof getHome !== 'undefined') ? getHome : (typeof globalThis.getHome !== 'undefined' ? globalThis.getHome : undefined),
+                      getHomeSection: (typeof getHomeSection !== 'undefined') ? getHomeSection : (typeof globalThis.getHomeSection !== 'undefined' ? globalThis.getHomeSection : undefined),
                       search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
                       load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
                       loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (typeof globalThis.loadStreams !== 'undefined' ? globalThis.loadStreams : undefined),
@@ -230,6 +231,7 @@ class JsBasedProvider extends SkyStreamProvider {
               globalThis['$_namespace'] = exports;
 
               if (globalThis.getHome) delete globalThis.getHome;
+              if (globalThis.getHomeSection) delete globalThis.getHomeSection;
               if (globalThis.search) delete globalThis.search;
               if (globalThis.load) delete globalThis.load;
               if (globalThis.loadStreams) delete globalThis.loadStreams;
@@ -523,6 +525,41 @@ class JsBasedProvider extends SkyStreamProvider {
         throw Exception("Failed to load home content: $e");
       }
     });
+  }
+
+  @override
+  Future<List<MultimediaItem>> getHomeSection(String sectionName) async {
+    await _ensureReady();
+    if (_error != null) {
+      throw JsPluginException("INIT_ERROR", _error!);
+    }
+
+    try {
+      return await _serializedInvoke(() async {
+        final result = await _jsEngine.invokeAsync(_fn('getHomeSection'), [
+          sectionName,
+        ]);
+
+        if (result is List) {
+          final bounded = result.length > _kMaxResultListLength
+              ? result.sublist(0, _kMaxResultListLength)
+              : result;
+          return await compute(_parseSearchResults, bounded);
+        }
+
+        throw StateError('getHomeSection is not exported by this plugin');
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'JsBasedProvider: getHomeSection unavailable for '
+          '$_packageName/$sectionName: $error',
+        );
+      }
+
+      final home = await getHome();
+      return home[sectionName] ?? const <MultimediaItem>[];
+    }
   }
 
   @override

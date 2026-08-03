@@ -56,6 +56,21 @@ class ViewAllController extends _$ViewAllController {
     }
   }
 
+  void setProviderContentLoading(bool value) {
+    if (category != ViewAllCategory.providerContent) return;
+    state = state.copyWith(isLoading: value, hasMore: false);
+  }
+
+  void replaceProviderContent(List<MultimediaItem> items) {
+    if (category != ViewAllCategory.providerContent) return;
+    state = state.copyWith(
+      items: List<MultimediaItem>.from(items),
+      page: 1,
+      isLoading: false,
+      hasMore: false,
+    );
+  }
+
   Future<void> fetchNextPage() async {
     if (state.isLoading || !state.hasMore) return;
 
