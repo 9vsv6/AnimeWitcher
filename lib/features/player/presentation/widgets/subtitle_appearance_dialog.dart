@@ -283,9 +283,7 @@ class DpadColorCircle extends StatelessWidget {
       },
       child: DpadFocusable(
         onSelect: onTap,
-        child: const SizedBox.shrink(),
-        builder: (context, state, child) {
-          final isFocused = state.focused;
+        builder: (context, isFocused, child) {
           final size = isFocused ? 38.0 : 28.0;
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
@@ -345,9 +343,7 @@ class DpadButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return DpadFocusable(
       onSelect: onPressed,
-      child: const SizedBox.shrink(),
-      builder: (context, state, child) {
-        final isFocused = state.focused;
+      builder: (context, isFocused, child) {
         final baseColor = isPrimary
             ? HotstarPlayerStyle.accent
             : Colors.transparent;

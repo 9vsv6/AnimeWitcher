@@ -1,4 +1,4 @@
-# Changelogs - v2.7.5
+# Changelogs - v2.7.6
 
 ### ✨ *New Features & Enhancements*
 

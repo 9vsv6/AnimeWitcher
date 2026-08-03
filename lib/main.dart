@@ -408,7 +408,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
               }
             }
 
-            return Dpad(child: result);
+            return result;
           },
         );
 
