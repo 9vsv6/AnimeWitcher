@@ -12,8 +12,11 @@ concurrency:
 
 jobs:
   fix-and-build:
-    name: Patch, generate code, and build unsigned IPA
+    name: Patch and build unsigned IPA
     runs-on: macos-15
+
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
 
     steps:
       - name: Checkout repository
@@ -21,6 +24,13 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+
+      - name: Verify Xcode 26.3
+        shell: bash
+        run: |
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          echo "iOS SDK: $(xcrun --sdk iphoneos --show-sdk-version)"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -120,7 +130,7 @@ jobs:
         run: flutter pub get
 
       - name: Generate Dart files
-        run: dart run build_runner build --delete-conflicting-outputs
+        run: dart run build_runner build
 
       - name: Format fixed file
         run: dart format lib/core/models/tmdb_details.dart
@@ -128,7 +138,22 @@ jobs:
       - name: Verify TMDB model
         run: dart analyze lib/core/models/tmdb_details.dart
 
-      - name: Create temporary Dart defines
+      - name: Commit source fix
+        shell: bash
+        run: |
+          git add lib/core/models/tmdb_details.dart
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: sync TmdbDetails copyWith relation fields"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Create Dart defines
         shell: bash
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
@@ -166,18 +191,3 @@ jobs:
           path: skystream-ios-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
-
-      - name: Commit source fix
-        shell: bash
-        run: |
-          git add lib/core/models/tmdb_details.dart
-
-          if git diff --cached --quiet; then
-            echo "Nothing to commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "fix: sync TmdbDetails copyWith relation fields"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
