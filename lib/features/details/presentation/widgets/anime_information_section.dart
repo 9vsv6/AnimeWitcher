@@ -117,7 +117,9 @@ class AnimeInformationSection extends StatelessWidget {
         for (final row in rows) ...[
           if (row.any((value) => value != null))
             Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              // The section is inside a vertically unbounded scroll view.
+              // Stretch would request an infinite height at runtime.
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var index = 0; index < row.length; index++) ...[
                   if (row[index] != null)

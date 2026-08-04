@@ -844,6 +844,40 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
     required this.isMovie,
   });
 
+  Widget _buildEpisodeRow(
+    List<Episode> episodes,
+    int rowIndex,
+    int crossAxisCount,
+  ) {
+    final startIndex = rowIndex * crossAxisCount;
+    final endIndex = (startIndex + crossAxisCount).clamp(0, episodes.length);
+    final rowEpisodes = episodes.sublist(startIndex, endIndex);
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < crossAxisCount; index++)
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: index == 0 ? 0 : 8,
+                  right: index == crossAxisCount - 1 ? 0 : 8,
+                ),
+                child: index < rowEpisodes.length
+                    ? EpisodeCard(
+                            episode: rowEpisodes[index],
+                            parentItem: parentItem,
+                          )
+                          as Widget
+                    : const SizedBox.shrink(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (isMovie) return const SizedBox.shrink();
@@ -853,20 +887,17 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
 
     if (episodes.isEmpty) return const SizedBox.shrink();
 
-    // Apply Language Filter
     if (detailsState.selectedDubStatus != DubStatus.none) {
       episodes = episodes
-          .where((e) => e.dubStatus == detailsState.selectedDubStatus)
-          .toList();
+          .where(
+            (episode) => episode.dubStatus == detailsState.selectedDubStatus,
+          )
+          .toList(growable: false);
     }
 
-    // Episode list UI v2: show every filtered episode without range batching.
-    List<Episode> displayedEpisodes = List<Episode>.from(episodes);
-
-    // Apply sorting to the complete filtered list.
-    if (!detailsState.isAscending) {
-      displayedEpisodes = displayedEpisodes.reversed.toList();
-    }
+    final displayedEpisodes = detailsState.isAscending
+        ? List<Episode>.from(episodes, growable: false)
+        : episodes.reversed.toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -891,55 +922,42 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
         ),
         LayoutBuilder(
           builder: (context, constraints) {
-            final double crossAxisExtent = constraints.maxWidth;
-            final int crossAxisCount = (crossAxisExtent / 480).ceil().clamp(
+            final crossAxisCount = (constraints.maxWidth / 480).ceil().clamp(
               1,
               5,
             );
-            final int rowCount = (displayedEpisodes.length / crossAxisCount)
-                .ceil();
+            final rowCount = (displayedEpisodes.length / crossAxisCount).ceil();
 
-            return Column(
-              children: List.generate(rowCount, (rowIndex) {
-                final int startIndex = rowIndex * crossAxisCount;
-                final int endIndex = (startIndex + crossAxisCount).clamp(
-                  0,
-                  displayedEpisodes.length,
-                );
-                final rowEpisodes = displayedEpisodes.sublist(
-                  startIndex,
-                  endIndex,
-                );
+            // Small lists remain compact. Large lists receive a bounded,
+            // independently scrollable viewport so ListView can recycle rows.
+            final maximumHeight = (MediaQuery.sizeOf(context).height * 0.72)
+                .clamp(420.0, 820.0)
+                .toDouble();
+            final desiredHeight =
+                (rowCount * 220.0) +
+                (rowCount > 1 ? (rowCount - 1) * 16.0 : 0.0);
+            final listHeight = desiredHeight < maximumHeight
+                ? desiredHeight
+                : maximumHeight;
 
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: rowIndex < rowCount - 1 ? 16 : 0,
+            return SizedBox(
+              height: listHeight,
+              child: Scrollbar(
+                child: ListView.separated(
+                  primary: false,
+                  padding: EdgeInsets.zero,
+                  cacheExtent: 700,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  itemCount: rowCount,
+                  separatorBuilder: (_, _) => const SizedBox(height: 16),
+                  itemBuilder: (context, rowIndex) => _buildEpisodeRow(
+                    displayedEpisodes,
+                    rowIndex,
+                    crossAxisCount,
                   ),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var i = 0; i < crossAxisCount; i++)
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.only(
-                                left: i == 0 ? 0 : 8,
-                                right: i == crossAxisCount - 1 ? 0 : 8,
-                              ),
-                              child: i < rowEpisodes.length
-                                  ? EpisodeCard(
-                                          episode: rowEpisodes[i],
-                                          parentItem: parentItem,
-                                        )
-                                        as Widget
-                                  : const SizedBox.shrink(),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
+                ),
+              ),
             );
           },
         ),

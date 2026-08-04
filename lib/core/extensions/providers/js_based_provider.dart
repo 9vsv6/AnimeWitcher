@@ -607,6 +607,13 @@ class JsBasedProvider extends SkyStreamProvider {
     return MultimediaItem.fromJson(map);
   }
 
+  bool _isMissingExportError(Object error, String exportName) {
+    final message = error.toString();
+    final qualifiedName = _fn(exportName);
+    return message.contains('Function $qualifiedName not found') ||
+        message.contains('Function $exportName not found');
+  }
+
   @override
   Future<MultimediaItem> getDetails(String url) async {
     await _ensureReady();
@@ -615,27 +622,28 @@ class JsBasedProvider extends SkyStreamProvider {
     try {
       dynamic result;
 
-      // New split API. Missing functions are intentionally silent so every
-      // existing extension continues to work through the legacy `load` export.
       try {
         result = await _jsEngine.invokeAsync(_fn('loadDetails'), [url]);
-      } catch (_) {
-        result = null;
-      }
+      } catch (error) {
+        if (!_isMissingExportError(error, 'loadDetails')) {
+          rethrow;
+        }
 
-      if (result is! Map) {
+        // Legacy extensions export only `load`.
         result = await _jsEngine.invokeAsync(_fn('load'), [url]);
       }
 
       return _detailFromPluginResult(result, url);
-    } on JsPluginException catch (e) {
-      if (kDebugMode) debugPrint("JsPluginException in getDetails: $e");
-      talker.error("JsPluginException in getDetails: $e");
+    } on JsPluginException catch (error) {
+      if (kDebugMode) {
+        debugPrint("JsPluginException in getDetails: $error");
+      }
+      talker.error("JsPluginException in getDetails: $error");
       rethrow;
-    } catch (e) {
-      if (kDebugMode) debugPrint("Error in getDetails: $e");
-      talker.error("Error in getDetails: $e");
-      return MultimediaItem(title: "Error: $e", url: url, posterUrl: "");
+    } catch (error) {
+      if (kDebugMode) debugPrint("Error in getDetails: $error");
+      talker.error("Error in getDetails: $error");
+      rethrow;
     }
   }
 
@@ -646,10 +654,16 @@ class JsBasedProvider extends SkyStreamProvider {
 
     try {
       dynamic result;
+
       try {
         result = await _jsEngine.invokeAsync(_fn('loadEpisodes'), [url]);
-      } catch (_) {
-        result = null;
+      } catch (error) {
+        if (!_isMissingExportError(error, 'loadEpisodes')) {
+          rethrow;
+        }
+
+        // Legacy extensions keep episodes inside `load`/getDetails.
+        return await super.getEpisodes(url);
       }
 
       dynamic rawEpisodes = result;
@@ -657,27 +671,35 @@ class JsBasedProvider extends SkyStreamProvider {
         rawEpisodes = result['episodes'];
       }
 
-      if (rawEpisodes is List) {
-        final bounded = rawEpisodes.length > _kMaxResultListLength
-            ? rawEpisodes.sublist(0, _kMaxResultListLength)
-            : rawEpisodes;
-
-        return bounded
-            .whereType<Map>()
-            .map((raw) => Episode.fromJson(Map<String, dynamic>.from(raw)))
-            .toList(growable: false);
+      if (rawEpisodes is! List) {
+        throw StateError('Extension returned invalid episode data.');
       }
 
-      // A provider that only implements the old API is still supported.
-      return await super.getEpisodes(url);
-    } on JsPluginException catch (e) {
-      if (kDebugMode) debugPrint("JsPluginException in getEpisodes: $e");
-      talker.error("JsPluginException in getEpisodes: $e");
+      final bounded = rawEpisodes.length > _kMaxResultListLength
+          ? rawEpisodes.sublist(0, _kMaxResultListLength)
+          : rawEpisodes;
+
+      if (kDebugMode && rawEpisodes.length > _kMaxResultListLength) {
+        debugPrint(
+          '[$_packageName] loadEpisodes returned ${rawEpisodes.length} '
+          'entries; capping to $_kMaxResultListLength.',
+        );
+      }
+
+      return bounded
+          .whereType<Map>()
+          .map((raw) => Episode.fromJson(Map<String, dynamic>.from(raw)))
+          .toList(growable: false);
+    } on JsPluginException catch (error) {
+      if (kDebugMode) {
+        debugPrint("JsPluginException in getEpisodes: $error");
+      }
+      talker.error("JsPluginException in getEpisodes: $error");
       rethrow;
-    } catch (e) {
-      if (kDebugMode) debugPrint("Error in getEpisodes: $e");
-      talker.error("Error in getEpisodes: $e");
-      return await super.getEpisodes(url);
+    } catch (error) {
+      if (kDebugMode) debugPrint("Error in getEpisodes: $error");
+      talker.error("Error in getEpisodes: $error");
+      rethrow;
     }
   }
 
