@@ -237,81 +237,164 @@ class CloudflareBypass {
     final holder = _ViewHolder();
     CfResult? result;
     bool solved = false;
+    bool checking = false;
     InAppWebViewController? capturedController;
 
-    Future<void> checkSolved(
-      InAppWebViewController controller,
-      String? currentUrl,
-    ) async {
-      if (solved) return;
+    // SKYSTREAM_MEDIAFIRE_READY_V2
+// Do not serialize MediaFire while its post-challenge document is still
+// incomplete. The final CDN URL is placed in #downloadButton[href].
+// This function is also used by cached WebView navigations, so it must
+// continue completing holder.hostView after the initial solve.
+Future<void> checkSolved(
+  InAppWebViewController controller,
+  String? currentUrl,
+) async {
+  if (checking) return;
+
+  // During the tiny interval after the first capture and before the
+  // cached _HostWebView is installed, ignore duplicate callbacks.
+  if (solved && holder.hostView == null) return;
+
+  checking = true;
+  try {
+    const readinessScript = r'''
+    (function(){
+      var t = (document.title || '').toLowerCase();
+      var bodyText = (
+        document.body && document.body.innerText
+          ? document.body.innerText
+          : ''
+      ).toLowerCase();
+
+      var titleChallenge =
+          t.indexOf('just a moment') !== -1 ||
+          t.indexOf('checking your browser') !== -1 ||
+          t.indexOf('browser verification') !== -1 ||
+          t.indexOf('attention required') !== -1 ||
+          t.indexOf('verify you are human') !== -1 ||
+          t.indexOf('verifying you are human') !== -1 ||
+          t.indexOf('cloudflare') !== -1;
+
+      var bodyChallenge =
+          bodyText.indexOf('checking your browser') !== -1 ||
+          bodyText.indexOf('browser verification') !== -1 ||
+          bodyText.indexOf('enable javascript and cookies to continue') !== -1 ||
+          bodyText.indexOf('verify you are human') !== -1 ||
+          bodyText.indexOf('verifying you are human') !== -1 ||
+          bodyText.indexOf('making sure you are not a bot') !== -1 ||
+          bodyText.indexOf("making sure you're not a bot") !== -1;
+
+      var domChallenge =
+          !!document.getElementById('challenge-form') ||
+          !!document.querySelector('[data-translate="checking_browser"]') ||
+          !!document.querySelector('.cf-mitigated-content') ||
+          !!document.querySelector('.cf-turnstile') ||
+          !!document.querySelector('[src*="challenge-platform"]') ||
+          typeof window._cf_chl_opt !== 'undefined';
+
+      if (titleChallenge || bodyChallenge || domChallenge) {
+        return '0';
+      }
+
+      var host = (location.hostname || '').toLowerCase();
+      var isMediaFire =
+          host === 'mediafire.com' ||
+          host.slice(-14) === '.mediafire.com';
+
+      // Preserve the previous behavior for every other website.
+      if (!isMediaFire) return '1';
+
+      // MediaFire can clear the challenge before the actual file page
+      // finishes replacing the transitional document.
+      if (document.readyState !== 'complete') return '0';
+
+      var button =
+          document.querySelector('#downloadButton') ||
+          document.querySelector('a[aria-label="Download file"]') ||
+          document.querySelector('a.input.popsok');
+      if (!button) return '0';
+
+      var href =
+          button.getAttribute('href') ||
+          button.href ||
+          '';
+      var direct =
+          /^https:\/\/download[^.]*\.mediafire\.com\//i.test(href) ||
+          /^https:\/\/[^/]+\.mediafireusercontent\.com\//i.test(href);
+      if (!direct) return '0';
+
+      // Give plugin.js a stable fallback marker in addition to the
+      // ordinary #downloadButton[href] attribute.
       try {
-        // Cheap check: one tiny JS call, no DOM serialization.
-        // Returns '1' when the CF challenge is gone, '0' while it's active.
-        final isClear = await controller.evaluateJavascript(
-          source: '''
-          (function(){
-            var t = (document.title || '').toLowerCase();
-            var bodyText = (
-              document.body && document.body.innerText
-                ? document.body.innerText
-                : ''
-            ).toLowerCase();
-
-            var titleChallenge =
-                t.indexOf('just a moment') !== -1 ||
-                t.indexOf('checking your browser') !== -1 ||
-                t.indexOf('browser verification') !== -1 ||
-                t.indexOf('attention required') !== -1 ||
-                t.indexOf('verify you are human') !== -1 ||
-                t.indexOf('verifying you are human') !== -1 ||
-                t.indexOf('cloudflare') !== -1;
-
-            var bodyChallenge =
-                bodyText.indexOf('checking your browser') !== -1 ||
-                bodyText.indexOf('browser verification') !== -1 ||
-                bodyText.indexOf('enable javascript and cookies to continue') !== -1 ||
-                bodyText.indexOf('verify you are human') !== -1 ||
-                bodyText.indexOf('verifying you are human') !== -1 ||
-                bodyText.indexOf('making sure you are not a bot') !== -1 ||
-                bodyText.indexOf("making sure you're not a bot") !== -1;
-
-            var domChallenge =
-                !!document.getElementById('challenge-form') ||
-                !!document.querySelector('[data-translate="checking_browser"]') ||
-                !!document.querySelector('.cf-mitigated-content') ||
-                !!document.querySelector('.cf-turnstile') ||
-                !!document.querySelector('[src*="challenge-platform"]') ||
-                typeof window._cf_chl_opt !== 'undefined';
-
-            return (titleChallenge || bodyChallenge || domChallenge)
-                ? '0'
-                : '1';
-          })()
-        ''',
+        document.documentElement.setAttribute(
+          'data-skystream-mediafire-direct',
+          href
         );
-
-        if (isClear != '1') return;
-
-        // Challenge cleared — fetch full HTML exactly once.
-        final html = await controller.evaluateJavascript(
-          source: 'document.documentElement.outerHTML',
-        );
-        final body = html?.toString();
-        if (body == null ||
-            body.length < 500 ||
-            _looksLikeBrowserChallenge(body)) {
-          return;
-        }
-
-        result = CfResult(
-          body: body,
-          statusCode: 200,
-          finalUrl: currentUrl ?? url,
-        );
-        solved = true;
-        holder.hostView?.onLoaded(body);
       } catch (_) {}
+
+      return '1';
+    })()
+    ''';
+
+    var isReady = await controller.evaluateJavascript(
+      source: readinessScript,
+    );
+    if (isReady != '1') return;
+
+    final effectiveUrl = currentUrl ?? url;
+    final effectiveHost =
+        Uri.tryParse(effectiveUrl)?.host.toLowerCase() ?? '';
+    final isMediaFire =
+        effectiveHost == 'mediafire.com' ||
+        effectiveHost.endsWith('.mediafire.com');
+
+    if (isMediaFire) {
+      // Ensure the final href/HTML has settled after the challenge.
+      await Future<void>.delayed(
+        const Duration(milliseconds: 450),
+      );
+      isReady = await controller.evaluateJavascript(
+        source: readinessScript,
+      );
+      if (isReady != '1') return;
     }
+
+    final html = await controller.evaluateJavascript(
+      source: 'document.documentElement.outerHTML',
+    );
+    final body = html?.toString();
+    if (body == null ||
+        body.length < 500 ||
+        _looksLikeBrowserChallenge(body)) {
+      return;
+    }
+
+    if (kDebugMode && isMediaFire) {
+      debugPrint(
+        '$_tag MediaFire final HTML captured '
+        '(${body.length} chars) from $effectiveUrl',
+      );
+    }
+
+    result = CfResult(
+      body: body,
+      statusCode: 200,
+      finalUrl: effectiveUrl,
+    );
+
+    if (!solved) solved = true;
+
+    // Completes cached navigate() calls. It is harmless during the
+    // first solve because holder.hostView is installed afterward.
+    holder.hostView?.onLoaded(body);
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('$_tag readiness check failed: $e');
+    }
+  } finally {
+    checking = false;
+  }
+}
 
     final headless = HeadlessInAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(url)),
