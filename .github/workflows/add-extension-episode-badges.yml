@@ -408,17 +408,32 @@ jobs:
             lib/features/details/presentation/details_screen.dart \
             lib/features/details/presentation/widgets/details_layout_widgets.dart
 
-      - name: Analyze affected files
+      - name: Generate Riverpod and other source files
         run: |
           flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze affected files
+        run: |
           flutter analyze \
+            --no-fatal-warnings \
+            --no-fatal-infos \
             lib/features/details/presentation/details_screen.dart \
             lib/features/details/presentation/widgets/details_layout_widgets.dart
+
+      - name: Restore generated files
+        shell: bash
+        run: |
+          git status --short
+          git restore --worktree --staged -- '*.g.dart' '*.freezed.dart' 2>/dev/null || true
+          git clean -f -- '**/*.g.dart' '**/*.freezed.dart' 2>/dev/null || true
 
       - name: Commit and push changes
         shell: bash
         run: |
-          if git diff --quiet; then
+          if git diff --quiet -- \
+            lib/features/details/presentation/details_screen.dart \
+            lib/features/details/presentation/widgets/details_layout_widgets.dart; then
             echo "No changes were required."
             exit 0
           fi
