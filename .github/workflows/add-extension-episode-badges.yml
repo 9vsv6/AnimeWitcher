@@ -1,4 +1,4 @@
-name: Simplify episode list UI
+name: Improve anime details metadata
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: simplify-episode-list-ui-${{ github.ref }}
+  group: improve-anime-details-metadata-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   patch:
-    name: Show all episodes and improve details tabs
+    name: Update details metadata and episode badges
     runs-on: ubuntu-latest
 
     steps:
@@ -27,386 +27,559 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Apply episode UI changes
+      - name: Apply UI changes
         shell: bash
         run: |
           python3 <<'PY'
           from pathlib import Path
           import re
 
-          details_screen = Path(
-              "lib/features/details/presentation/details_screen.dart"
+          premium = Path(
+              "lib/features/details/presentation/widgets/premium_details_widgets.dart"
           )
-          layout_widgets = Path(
+          info = Path(
+              "lib/features/details/presentation/widgets/anime_information_section.dart"
+          )
+          layout = Path(
               "lib/features/details/presentation/widgets/details_layout_widgets.dart"
           )
+          card = Path("lib/shared/widgets/multimedia_card.dart")
 
-          for path in (details_screen, layout_widgets):
+          for path in (premium, info, layout, card):
               if not path.is_file():
                   raise SystemExit(f"Required file was not found: {path}")
 
-          # ---------------------------------------------------------------
-          # details_screen.dart
-          # ---------------------------------------------------------------
-          text = details_screen.read_text(encoding="utf-8")
-
-          tabs_marker = (
-              "// Episode UI v2: equal-width tabs without selected checkmarks."
+          # ---------------------------------------------------------------------------
+          # 1. Top metadata: add age rating and episode count with plugin fallbacks.
+          # ---------------------------------------------------------------------------
+          text = premium.read_text(encoding="utf-8")
+          metadata_marker = (
+              "// Details metadata v2: age rating and episode count use plugin fallbacks."
           )
-          if tabs_marker not in text:
-              tabs_pattern = re.compile(
-                  r"  Widget _buildDetailsPageTabs\("
-                  r"[\s\S]*?"
-                  r"\n  Widget _episodeLoadStatus\("
-              )
 
-              tabs_replacement = r'''  Widget _buildDetailsPageTabs(
-              BuildContext context,
-              AsyncValue<List<Episode>> episodesState,
-            ) {
+          if metadata_marker not in text:
+              anchor = '''    final showTypeBadge =
+                  !isLoading || (contentType != MultimediaContentType.movie);
+
+              return Wrap(
+          '''
+              replacement = '''    final showTypeBadge =
+                  !isLoading || (contentType != MultimediaContentType.movie);
+
+              // Details metadata v2: age rating and episode count use plugin fallbacks.
+              String? clean(dynamic raw) {
+                if (raw == null) return null;
+                final value = raw.toString().trim();
+                if (value.isEmpty || value.toLowerCase() == 'null') return null;
+                return value;
+              }
+
+              final syncData = item.syncData ?? const <String, String>{};
+              final ageRating = clean(syncData['awAge']) ?? clean(item.contentRating);
+              final providerEpisodeCount = clean(syncData['awEpisodes']);
+              final loadedEpisodeCount = item.episodes?.length ?? 0;
               final isArabic =
                   Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-              final episodeCount = episodesState.asData?.value.length ?? 0;
-              final episodeLabel = episodeCount > 0
-                  ? '${isArabic ? 'الحلقات' : 'Episodes'} ($episodeCount)'
-                  : isArabic
-                  ? 'الحلقات'
-                  : 'Episodes';
+              final episodeCount = providerEpisodeCount ??
+                  (loadedEpisodeCount > 0
+                      ? isArabic
+                          ? '$loadedEpisodeCount حلقة'
+                          : '$loadedEpisodeCount episodes'
+                      : null);
 
-              // Episode UI v2: equal-width tabs without selected checkmarks.
-              Widget tab({
-                required bool selected,
-                required Widget leading,
-                required String label,
-                required VoidCallback onTap,
-              }) {
-                return ChoiceChip(
-                  selected: selected,
-                  showCheckmark: false,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  label: SizedBox(
-          width: double.infinity,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              leading,
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
-          ),
-                  ),
-                  onSelected: (_) => onTap(),
-                );
-              }
+              return Wrap(
+          '''
+              if anchor not in text:
+                  raise SystemExit("Could not locate MetadataBar setup block.")
+              text = text.replace(anchor, replacement, 1)
 
-              return Row(
-                children: [
-                  Expanded(
-          child: tab(
-            selected: _selectedDetailsTab == 0,
-            leading: const Icon(Icons.info_outline_rounded, size: 21),
-            label: isArabic ? 'التفاصيل' : 'Details',
-            onTap: () {
-              if (_selectedDetailsTab == 0) return;
-              setState(() => _selectedDetailsTab = 0);
-            },
-          ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-          child: tab(
-            selected: _selectedDetailsTab == 1,
-            leading: episodesState.isLoading
-                ? const SizedBox.square(
-                    dimension: 19,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.video_library_outlined, size: 21),
-            label: episodeLabel,
-            onTap: () {
-              if (_selectedDetailsTab == 1) return;
-              setState(() => _selectedDetailsTab = 1);
-            },
-          ),
-                  ),
-                ],
-              );
+              rating_pattern = re.compile(
+                  r'''        if \(item\.contentRating != null\)
+                    _buildBorderedInfo\(context, item\.contentRating!\)
+                  else if \(isLoading\)
+                    ShimmerPlaceholder\.rectangular\(
+                      width: 60,
+                      height: 20,
+                      borderRadius: 4,
+                    \),
+          '''
+              )
+              rating_replacement = '''        if (ageRating != null)
+                    _buildBorderedInfo(context, ageRating)
+                  else if (isLoading)
+                    ShimmerPlaceholder.rectangular(
+                      width: 60,
+                      height: 20,
+                      borderRadius: 4,
+                    ),
+          '''
+              text, count = rating_pattern.subn(rating_replacement, text, count=1)
+              if count != 1:
+                  raise SystemExit("Could not replace the existing age-rating badge.")
+
+              duration_block = '''        if (item.duration != null)
+                    _buildIconInfo(context, Icons.timer_outlined, "${item.duration}m")
+                  else if (isLoading)
+                    ShimmerPlaceholder.rectangular(
+                      width: 60,
+                      height: 20,
+                      borderRadius: 4,
+                    ),
+
+          '''
+              episode_block = '''        if (item.duration != null)
+                    _buildIconInfo(context, Icons.timer_outlined, "${item.duration}m")
+                  else if (isLoading)
+                    ShimmerPlaceholder.rectangular(
+                      width: 60,
+                      height: 20,
+                      borderRadius: 4,
+                    ),
+
+                  if (episodeCount != null)
+                    _buildIconInfo(
+                      context,
+                      Icons.video_library_outlined,
+                      episodeCount,
+                    )
+                  else if (isLoading)
+                    ShimmerPlaceholder.rectangular(
+                      width: 70,
+                      height: 20,
+                      borderRadius: 4,
+                    ),
+
+          '''
+              if duration_block not in text:
+                  raise SystemExit("Could not locate the duration metadata block.")
+              text = text.replace(duration_block, episode_block, 1)
+
+          premium.write_text(text, encoding="utf-8")
+
+          # ---------------------------------------------------------------------------
+          # 2. Compact Anime Information section in the requested order.
+          # ---------------------------------------------------------------------------
+          info.write_text(
+              r'''import 'package:flutter/material.dart';
+
+          import '../../../../core/domain/entity/multimedia_item.dart';
+
+          class AnimeInformationSection extends StatelessWidget {
+            final MultimediaItem item;
+
+            const AnimeInformationSection({super.key, required this.item});
+
+            String? _clean(dynamic raw) {
+              if (raw == null) return null;
+              final value = raw.toString().trim();
+              if (value.isEmpty || value.toLowerCase() == 'null') return null;
+              return value;
             }
 
-            Widget _episodeLoadStatus('''
-
-              text, count = tabs_pattern.subn(tabs_replacement, text, count=1)
-              if count != 1:
-                  raise SystemExit(
-                      "Could not locate _buildDetailsPageTabs in "
-                      f"{details_screen}"
-                  )
-
-          loading_marker = (
-              "// Episode UI v2: keep the loading state centered horizontally."
-          )
-          if loading_marker not in text:
-              loading_pattern = re.compile(
-                  r"    if \(episodesState\.isLoading\) \{"
-                  r"[\s\S]*?"
-                  r"\n    \}"
-                  r"\n\n    if \(episodesState\.hasError\)"
-              )
-
-              loading_replacement = r'''    if (episodesState.isLoading) {
-                // Episode UI v2: keep the loading state centered horizontally.
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 36),
-                  child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const AppLoadingIndicator(),
-              const SizedBox(height: 12),
-              Text(
-                isArabic
-                    ? 'يتم تحميل الحلقات في الخلفية…'
-                    : 'Episodes are loading in the background…',
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-                  ),
-                );
+            String? _read(Map<String, String> data, List<String> keys) {
+              for (final key in keys) {
+                final value = _clean(data[key]);
+                if (value != null) return value;
               }
+              return null;
+            }
 
-              if (episodesState.hasError)'''
-
-              text, count = loading_pattern.subn(
-                  loading_replacement,
-                  text,
-                  count=1,
-              )
-              if count != 1:
-                  raise SystemExit(
-                      "Could not locate the episode loading block in "
-                      f"{details_screen}"
-                  )
-
-          details_screen.write_text(text, encoding="utf-8")
-
-          # ---------------------------------------------------------------
-          # details_layout_widgets.dart
-          # ---------------------------------------------------------------
-          text = layout_widgets.read_text(encoding="utf-8")
-
-          list_marker = (
-              "// Episode list UI v2: show every filtered episode without "
-              "range batching."
-          )
-          if list_marker not in text:
-              batching_pattern = re.compile(
-                  r"    // Apply Batching \(FIRST\)\n"
-                  r"    const int batchSize = 20;\n"
-                  r"    final int start = "
-                  r"detailsState\.selectedRangeIndex \* batchSize;\n"
-                  r"    final int end = "
-                  r"\(start \+ batchSize\)\.clamp\(0, episodes\.length\);\n"
-                  r"    List<Episode> displayedEpisodes = "
-                  r"episodes\.sublist\(start, end\);\n\n"
-                  r"    // Apply Sorting "
-                  r"\(SECOND - only on the batch\)"
-              )
-
-              batching_replacement = r'''    // Episode list UI v2: show every filtered episode without range batching.
-              List<Episode> displayedEpisodes = List<Episode>.from(episodes);
-
-              // Apply sorting to the complete filtered list.'''
-
-              text, count = batching_pattern.subn(
-                  batching_replacement,
-                  text,
-              )
-              if count != 3:
-                  raise SystemExit(
-                      "Expected to remove batching from 3 episode views, "
-                      f"but changed {count} in {layout_widgets}"
-                  )
-
-              filter_call_pattern = re.compile(
-                  r"(?P<base>[ \t]*)DetailsEpisodeFilterBar\(\n"
-                  r"(?P<arg>[ \t]*)itemUrl: itemUrl,\n"
-                  r"\s*totalEpisodes: episodes\.length,\n"
-                  r"\s*batchSize: batchSize,\n"
-                  r"\s*\)"
-              )
-
-              def simplify_filter_call(match):
-                  base = match.group("base")
-                  arg = match.group("arg")
-                  return (
-                      f"{base}DetailsEpisodeFilterBar(\n"
-                      f"{arg}itemUrl: itemUrl,\n"
-                      f"{base})"
-                  )
-
-              text, count = filter_call_pattern.subn(
-                  simplify_filter_call,
-                  text,
-              )
-              if count != 3:
-                  raise SystemExit(
-                      "Expected to simplify 3 DetailsEpisodeFilterBar calls, "
-                      f"but changed {count} in {layout_widgets}"
-                  )
-
-              filter_class_pattern = re.compile(
-                  r"class DetailsEpisodeFilterBar extends ConsumerWidget \{"
-                  r"[\s\S]*?"
-                  r"\n\}\n\nclass _LanguageButton"
-              )
-
-              filter_class_replacement = r'''class DetailsEpisodeFilterBar extends ConsumerWidget {
-            final String itemUrl;
-
-            const DetailsEpisodeFilterBar({
-              super.key,
-              required this.itemUrl,
-            });
+            String _status(bool isArabic) {
+              switch (item.status) {
+                case ShowStatus.completed:
+                  return isArabic ? 'مكتمل' : 'Completed';
+                case ShowStatus.upcoming:
+                  return isArabic ? 'قادم' : 'Upcoming';
+                case ShowStatus.ongoing:
+                  return isArabic ? 'مستمر' : 'Ongoing';
+              }
+            }
 
             @override
-            Widget build(BuildContext context, WidgetRef ref) {
-              final detailsState = ref.watch(detailsControllerProvider(itemUrl));
-              final bool isAscending = detailsState.isAscending;
-              final DubStatus selectedDub = detailsState.selectedDubStatus;
+            Widget build(BuildContext context) {
+              final isArabic =
+                  Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+              final data = item.syncData ?? const <String, String>{};
 
-              final allEpisodes =
-                  detailsState.seasonMap[detailsState.selectedSeason] ?? [];
+              _AnimeInfoEntry? entry(
+                String ar,
+                String en,
+                dynamic value,
+                IconData icon,
+              ) {
+                final cleaned = _clean(value);
+                if (cleaned == null) return null;
+                return _AnimeInfoEntry(
+                  label: isArabic ? ar : en,
+                  value: cleaned,
+                  icon: icon,
+                );
+              }
 
-              final hasDub = allEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
-              final hasSub = allEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
-              final isMixed = hasDub && hasSub;
-
-              return SizedBox(
-                height: 40,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-          if (isMixed) ...[
-            _buildLanguageToggle(context, ref, selectedDub),
-            const SizedBox(width: 8),
-          ],
-          Material(
-            color: Colors.transparent,
-            child: Ink(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () => ref
-                    .read(detailsControllerProvider(itemUrl).notifier)
-                    .toggleSort(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Icon(
-                    Icons.swap_vert_rounded,
-                    size: 22,
-                    color: isAscending
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
+              final rows = <List<_AnimeInfoEntry?>>[
+                [
+                  entry(
+                    'الحالة',
+                    'Status',
+                    _read(data, const ['awState']) ?? _status(isArabic),
+                    Icons.wifi_tethering_rounded,
                   ),
-                ),
-              ),
-            ),
-          ),
-                  ],
-                ),
-              );
-            }
+                  entry(
+                    'موسم العرض',
+                    'Airing season',
+                    _read(data, const ['awSeason']),
+                    Icons.calendar_month_rounded,
+                  ),
+                ],
+                [
+                  entry(
+                    'بداية العرض',
+                    'Start date',
+                    _read(data, const ['awStartDate']),
+                    Icons.play_circle_outline_rounded,
+                  ),
+                  entry(
+                    'نهاية العرض',
+                    'End date',
+                    _read(data, const ['awEndDate']),
+                    Icons.stop_circle_outlined,
+                  ),
+                ],
+                [
+                  entry(
+                    'المصدر',
+                    'Source',
+                    _read(data, const ['awSource']) ?? item.source,
+                    Icons.menu_book_rounded,
+                  ),
+                  entry(
+                    'الاستديو',
+                    'Studio',
+                    _read(data, const ['awStudio']),
+                    Icons.apartment_rounded,
+                  ),
+                ],
+              ];
 
-            Widget _buildLanguageToggle(
-              BuildContext context,
-              WidgetRef ref,
-              DubStatus selected,
-            ) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                padding: const EdgeInsets.all(4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-          _LanguageButton(
-            label: AppLocalizations.of(context)!.sub,
-            isSelected: selected == DubStatus.subbed,
-            onTap: () => ref
-                .read(detailsControllerProvider(itemUrl).notifier)
-                .setDubStatus(DubStatus.subbed),
-          ),
-          const SizedBox(width: 4),
-          _LanguageButton(
-            label: AppLocalizations.of(context)!.dub,
-            isSelected: selected == DubStatus.dubbed,
-            onTap: () => ref
-                .read(detailsControllerProvider(itemUrl).notifier)
-                .setDubStatus(DubStatus.dubbed),
-          ),
+              final englishTitle = entry(
+                'العنوان الإنجليزي',
+                'English title',
+                _read(data, const ['awEnglishTitle']),
+                Icons.translate_rounded,
+              );
+
+              final hasRows = rows.any((row) => row.any((value) => value != null));
+              if (!hasRows && englishTitle == null) return const SizedBox.shrink();
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isArabic ? 'معلومات الأنمي' : 'Anime information',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 10),
+                  for (final row in rows) ...[
+                    if (row.any((value) => value != null))
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var index = 0; index < row.length; index++) ...[
+                            if (row[index] != null)
+                              Expanded(child: _AnimeInfoCard(entry: row[index]!)),
+                            if (index == 0 && row[0] != null && row[1] != null)
+                              const SizedBox(width: 8),
+                          ],
+                        ],
+                      ),
+                    if (row.any((value) => value != null)) const SizedBox(height: 8),
                   ],
-                ),
+                  if (englishTitle != null)
+                    SizedBox(
+                      width: double.infinity,
+                      child: _AnimeInfoCard(entry: englishTitle),
+                    ),
+                ],
               );
             }
           }
 
-          class _LanguageButton'''
+          class _AnimeInfoEntry {
+            final String label;
+            final String value;
+            final IconData icon;
 
-              text, count = filter_class_pattern.subn(
-                  filter_class_replacement,
+            const _AnimeInfoEntry({
+              required this.label,
+              required this.value,
+              required this.icon,
+            });
+          }
+
+          class _AnimeInfoCard extends StatelessWidget {
+            final _AnimeInfoEntry entry;
+
+            const _AnimeInfoCard({required this.entry});
+
+            @override
+            Widget build(BuildContext context) {
+              final colors = Theme.of(context).colorScheme;
+
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(
+                    color: colors.outlineVariant.withValues(alpha: 0.45),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(entry.icon, size: 18, color: colors.primary),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entry.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: colors.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            SelectableText(
+                              entry.value,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+          }
+          ''',
+              encoding="utf-8",
+          )
+
+          # ---------------------------------------------------------------------------
+          # 3. Remove Preferred Quality from the details page.
+          # ---------------------------------------------------------------------------
+          text = layout.read_text(encoding="utf-8")
+          quality_marker = "// Preferred quality is configured globally in Settings."
+
+          if quality_marker not in text:
+              text = text.replace(
+                  "import '../../../settings/presentation/player_settings_provider.dart';\n",
+                  "",
+                  1,
+              )
+              text = text.replace(
+                  "import '../../../../core/utils/stream_quality_sorter.dart';\n",
+                  "",
+                  1,
+              )
+
+              wifi_block = '''    final isWifiFuture = useMemoized(() => isOnWifi());
+              final isWifiSnapshot = useFuture(isWifiFuture);
+              final onWifi = isWifiSnapshot.data ?? true;
+
+          '''
+              if wifi_block not in text:
+                  raise SystemExit("Could not locate Wi-Fi quality state.")
+              text = text.replace(wifi_block, "", 1)
+
+              quality_pattern = re.compile(
+                  r'''    // Dynamic quality preference selector button
+          [\s\S]*?
+              // Download feature: only for single episode VOD content'''
+              )
+              text, count = quality_pattern.subn(
+                  '''    // Preferred quality is configured globally in Settings.
+
+              // Download feature: only for single episode VOD content''',
                   text,
                   count=1,
               )
               if count != 1:
-                  raise SystemExit(
-                      "Could not replace DetailsEpisodeFilterBar in "
-                      f"{layout_widgets}"
-                  )
+                  raise SystemExit("Could not locate Preferred Quality selector.")
 
-          forbidden = [
-              "const int batchSize = 20;",
-              "episodes.sublist(start, end)",
-              "DropdownButton<int>(",
-          ]
-          remaining = [value for value in forbidden if value in text]
-          if remaining:
-              raise SystemExit(
-                  "Episode range UI still contains: " + ", ".join(remaining)
+              children_block = '''        progressWidget,
+                  qualityBtn,
+                  const SizedBox(height: LayoutConstants.spacingSm),
+                  actionRow,
+          '''
+              replacement = '''        progressWidget,
+                  actionRow,
+          '''
+              if children_block not in text:
+                  raise SystemExit("Could not remove Preferred Quality from action layout.")
+              text = text.replace(children_block, replacement, 1)
+
+          layout.write_text(text, encoding="utf-8")
+
+          # ---------------------------------------------------------------------------
+          # 4. Theme-colored episode badge pinned to the right.
+          # ---------------------------------------------------------------------------
+          text = card.read_text(encoding="utf-8")
+          badge_marker = (
+              "// Episode badge UI v2: use the active theme and pin to the right."
+          )
+
+          if badge_marker not in text:
+              old_build_call = '''          child: isInside
+                        ? _buildInsideMode(imageWidget, titleTextStyle, badgeText)
+                        : _buildBelowMode(imageWidget, titleTextStyle, badgeText),
+          '''
+              new_build_call = '''          child: isInside
+                        ? _buildInsideMode(
+                            context,
+                            imageWidget,
+                            titleTextStyle,
+                            badgeText,
+                          )
+                        : _buildBelowMode(
+                            context,
+                            imageWidget,
+                            titleTextStyle,
+                            badgeText,
+                          ),
+          '''
+              if old_build_call not in text:
+                  raise SystemExit("Could not locate multimedia card mode calls.")
+              text = text.replace(old_build_call, new_build_call, 1)
+
+              badge_pattern = re.compile(
+                  r'''  Widget _buildEpisodeBadge\(String text\) \{
+          [\s\S]*?
+            \}
+
+            Widget _buildBelowMode\('''
+              )
+              badge_replacement = r'''  Widget _buildEpisodeBadge(BuildContext context, String text) {
+              // Episode badge UI v2: use the active theme and pin to the right.
+              final colors = Theme.of(context).colorScheme;
+
+              return Container(
+                constraints: const BoxConstraints(maxWidth: 108),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(
+                    color: colors.primaryContainer.withValues(alpha: 0.85),
+                    width: 0.8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.shadow.withValues(alpha: 0.28),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.onPrimary,
+                    fontSize: 12,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+            }
+
+            Widget _buildBelowMode('''
+              text, count = badge_pattern.subn(badge_replacement, text, count=1)
+              if count != 1:
+                  raise SystemExit("Could not replace episode badge style.")
+
+              text = text.replace(
+                  '''  Widget _buildBelowMode(
+              Widget imageWidget,
+          ''',
+                  '''  Widget _buildBelowMode(
+              BuildContext context,
+              Widget imageWidget,
+          ''',
+                  1,
+              )
+              text = text.replace(
+                  '''  Widget _buildInsideMode(
+              Widget imageWidget,
+          ''',
+                  '''  Widget _buildInsideMode(
+              BuildContext context,
+              Widget imageWidget,
+          ''',
+                  1,
               )
 
-          layout_widgets.write_text(text, encoding="utf-8")
+              below_position = '''                Positioned(
+                            left: 8,
+                            bottom: 8,
+                            child: _buildEpisodeBadge(badgeText),
+          '''
+              below_replacement = '''                Positioned(
+                            right: 8,
+                            bottom: 8,
+                            child: _buildEpisodeBadge(context, badgeText),
+          '''
+              if below_position not in text:
+                  raise SystemExit("Could not locate lower episode badge position.")
+              text = text.replace(below_position, below_replacement, 1)
 
-          print("Episode UI patch applied successfully.")
+              inside_position = '''          Positioned(
+                      left: 8,
+                      bottom: (titleTextStyle.fontSize ?? 14) + 30,
+                      child: _buildEpisodeBadge(badgeText),
+          '''
+              inside_replacement = '''          Positioned(
+                      right: 8,
+                      bottom: (titleTextStyle.fontSize ?? 14) + 30,
+                      child: _buildEpisodeBadge(context, badgeText),
+          '''
+              if inside_position not in text:
+                  raise SystemExit("Could not locate inside episode badge position.")
+              text = text.replace(inside_position, inside_replacement, 1)
+
+          card.write_text(text, encoding="utf-8")
+
+          print("Details metadata, quality selector, information layout, and badges updated.")
           PY
 
       - name: Format changed Dart files
         run: |
           dart format \
-            lib/features/details/presentation/details_screen.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart
+            lib/features/details/presentation/widgets/premium_details_widgets.dart \
+            lib/features/details/presentation/widgets/anime_information_section.dart \
+            lib/features/details/presentation/widgets/details_layout_widgets.dart \
+            lib/shared/widgets/multimedia_card.dart
 
       - name: Check patch
         run: |
           git diff --check
           git diff -- \
-            lib/features/details/presentation/details_screen.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart
+            lib/features/details/presentation/widgets/premium_details_widgets.dart \
+            lib/features/details/presentation/widgets/anime_information_section.dart \
+            lib/features/details/presentation/widgets/details_layout_widgets.dart \
+            lib/shared/widgets/multimedia_card.dart
 
       - name: Generate Riverpod and other source files
         run: |
@@ -418,22 +591,28 @@ jobs:
           flutter analyze \
             --no-fatal-warnings \
             --no-fatal-infos \
-            lib/features/details/presentation/details_screen.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart
+            lib/features/details/presentation/widgets/premium_details_widgets.dart \
+            lib/features/details/presentation/widgets/anime_information_section.dart \
+            lib/features/details/presentation/widgets/details_layout_widgets.dart \
+            lib/shared/widgets/multimedia_card.dart
 
       - name: Restore generated files
         shell: bash
         run: |
-          git status --short
           git restore --worktree --staged -- '*.g.dart' '*.freezed.dart' 2>/dev/null || true
           git clean -f -- '**/*.g.dart' '**/*.freezed.dart' 2>/dev/null || true
 
       - name: Commit and push changes
         shell: bash
         run: |
-          if git diff --quiet -- \
-            lib/features/details/presentation/details_screen.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart; then
+          FILES=(
+            lib/features/details/presentation/widgets/premium_details_widgets.dart
+            lib/features/details/presentation/widgets/anime_information_section.dart
+            lib/features/details/presentation/widgets/details_layout_widgets.dart
+            lib/shared/widgets/multimedia_card.dart
+          )
+
+          if git diff --quiet -- "${FILES[@]}"; then
             echo "No changes were required."
             exit 0
           fi
@@ -441,9 +620,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add \
-            lib/features/details/presentation/details_screen.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart
-
-          git commit -m "refactor: show all episodes and improve details tabs"
+          git add "${FILES[@]}"
+          git commit -m "refactor: improve anime metadata and episode badges"
           git push
