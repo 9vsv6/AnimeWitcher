@@ -65,12 +65,6 @@ class AnimeInformationSection extends StatelessWidget {
       Icons.menu_book_rounded,
     );
     add(
-      'النوع',
-      'Type',
-      _read(data, const ['awType']),
-      Icons.category_outlined,
-    );
-    add(
       'الحالة',
       'Status',
       _read(data, const ['awState']) ?? _status(isArabic),
@@ -87,12 +81,6 @@ class AnimeInformationSection extends StatelessWidget {
       'Season number',
       _read(data, const ['awSeasonNumber']),
       Icons.format_list_numbered_rounded,
-    );
-    add(
-      'سنة العرض',
-      'Year',
-      _read(data, const ['awYear']) ?? item.year,
-      Icons.event_rounded,
     );
     add(
       'تاريخ البداية',
@@ -125,66 +113,8 @@ class AnimeInformationSection extends StatelessWidget {
       _read(data, const ['awAge']) ?? item.contentRating,
       Icons.shield_outlined,
     );
-    add(
-      'تقييم MAL',
-      'MAL score',
-      _read(data, const ['awMalScore']) ??
-          (item.score == null ? null : item.score!.toStringAsFixed(2)),
-      Icons.star_rounded,
-    );
-    add(
-      'ترتيب MAL',
-      'MAL rank',
-      _read(data, const ['awMalRank']),
-      Icons.emoji_events_outlined,
-    );
-    add(
-      'مصوتو MAL',
-      'MAL scoring users',
-      _read(data, const ['awMalScoringUsers']),
-      Icons.groups_2_outlined,
-    );
-    add(
-      'تقييم AnimeWitcher',
-      'AnimeWitcher score',
-      _read(data, const ['awScore']),
-      Icons.auto_awesome_rounded,
-    );
-    add(
-      'عدد التقييمات',
-      'Ratings count',
-      _read(data, const ['awRatingsCount']),
-      Icons.how_to_vote_outlined,
-    );
-    add(
-      'المشاهدات',
-      'Views',
-      _read(data, const ['awViews']),
-      Icons.visibility_outlined,
-    );
-    add(
-      'المفضلة',
-      'Favorites',
-      _read(data, const ['awFavorites']),
-      Icons.favorite_border_rounded,
-    );
-    add(
-      'MAL ID',
-      'MAL ID',
-      _read(data, const ['malId', 'mal_id']),
-      Icons.badge_outlined,
-    );
-    add(
-      'AniList ID',
-      'AniList ID',
-      _read(data, const ['anilistId', 'anilist_id']),
-      Icons.fingerprint_rounded,
-    );
 
-    if (entries.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
+    if (entries.isEmpty) return const SizedBox.shrink();
     final colors = Theme.of(context).colorScheme;
 
     return Column(
