@@ -1,4 +1,4 @@
-name: Improve anime details metadata
+name: Fix details stability and episode loading
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: improve-anime-details-metadata-${{ github.ref }}
+  group: fix-details-stability-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   patch:
-    name: Update details metadata and episode badges
+    name: Apply and verify details fixes
     runs-on: ubuntu-latest
 
     steps:
@@ -27,559 +27,368 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Apply UI changes
+      - name: Apply stability fixes
         shell: bash
         run: |
           python3 <<'PY'
           from pathlib import Path
           import re
 
-          premium = Path(
-              "lib/features/details/presentation/widgets/premium_details_widgets.dart"
-          )
-          info = Path(
+          anime_info = Path(
               "lib/features/details/presentation/widgets/anime_information_section.dart"
           )
           layout = Path(
               "lib/features/details/presentation/widgets/details_layout_widgets.dart"
           )
-          card = Path("lib/shared/widgets/multimedia_card.dart")
+          js_provider = Path(
+              "lib/core/extensions/providers/js_based_provider.dart"
+          )
 
-          for path in (premium, info, layout, card):
+          for path in (anime_info, layout, js_provider):
               if not path.is_file():
                   raise SystemExit(f"Required file was not found: {path}")
 
           # ---------------------------------------------------------------------------
-          # 1. Top metadata: add age rating and episode count with plugin fallbacks.
+          # 1. Avoid an unbounded-height Row in the compact anime information section.
           # ---------------------------------------------------------------------------
-          text = premium.read_text(encoding="utf-8")
-          metadata_marker = (
-              "// Details metadata v2: age rating and episode count use plugin fallbacks."
-          )
-
-          if metadata_marker not in text:
-              anchor = '''    final showTypeBadge =
-                  !isLoading || (contentType != MultimediaContentType.movie);
-
-              return Wrap(
+          text = anime_info.read_text(encoding="utf-8")
+          old = '''          if (row.any((value) => value != null))
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
           '''
-              replacement = '''    final showTypeBadge =
-                  !isLoading || (contentType != MultimediaContentType.movie);
-
-              // Details metadata v2: age rating and episode count use plugin fallbacks.
-              String? clean(dynamic raw) {
-                if (raw == null) return null;
-                final value = raw.toString().trim();
-                if (value.isEmpty || value.toLowerCase() == 'null') return null;
-                return value;
-              }
-
-              final syncData = item.syncData ?? const <String, String>{};
-              final ageRating = clean(syncData['awAge']) ?? clean(item.contentRating);
-              final providerEpisodeCount = clean(syncData['awEpisodes']);
-              final loadedEpisodeCount = item.episodes?.length ?? 0;
-              final isArabic =
-                  Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-              final episodeCount = providerEpisodeCount ??
-                  (loadedEpisodeCount > 0
-                      ? isArabic
-                          ? '$loadedEpisodeCount حلقة'
-                          : '$loadedEpisodeCount episodes'
-                      : null);
-
-              return Wrap(
+          new = '''          if (row.any((value) => value != null))
+                      Row(
+                        // The section is inside a vertically unbounded scroll view.
+                        // Stretch would request an infinite height at runtime.
+                        crossAxisAlignment: CrossAxisAlignment.start,
           '''
-              if anchor not in text:
-                  raise SystemExit("Could not locate MetadataBar setup block.")
-              text = text.replace(anchor, replacement, 1)
 
-              rating_pattern = re.compile(
-                  r'''        if \(item\.contentRating != null\)
-                    _buildBorderedInfo\(context, item\.contentRating!\)
-                  else if \(isLoading\)
-                    ShimmerPlaceholder\.rectangular\(
-                      width: 60,
-                      height: 20,
-                      borderRadius: 4,
-                    \),
-          '''
-              )
-              rating_replacement = '''        if (ageRating != null)
-                    _buildBorderedInfo(context, ageRating)
-                  else if (isLoading)
-                    ShimmerPlaceholder.rectangular(
-                      width: 60,
-                      height: 20,
-                      borderRadius: 4,
-                    ),
-          '''
-              text, count = rating_pattern.subn(rating_replacement, text, count=1)
-              if count != 1:
-                  raise SystemExit("Could not replace the existing age-rating badge.")
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif "crossAxisAlignment: CrossAxisAlignment.start" not in text:
+              raise SystemExit("Could not locate the anime information row alignment.")
 
-              duration_block = '''        if (item.duration != null)
-                    _buildIconInfo(context, Icons.timer_outlined, "${item.duration}m")
-                  else if (isLoading)
-                    ShimmerPlaceholder.rectangular(
-                      width: 60,
-                      height: 20,
-                      borderRadius: 4,
-                    ),
-
-          '''
-              episode_block = '''        if (item.duration != null)
-                    _buildIconInfo(context, Icons.timer_outlined, "${item.duration}m")
-                  else if (isLoading)
-                    ShimmerPlaceholder.rectangular(
-                      width: 60,
-                      height: 20,
-                      borderRadius: 4,
-                    ),
-
-                  if (episodeCount != null)
-                    _buildIconInfo(
-                      context,
-                      Icons.video_library_outlined,
-                      episodeCount,
-                    )
-                  else if (isLoading)
-                    ShimmerPlaceholder.rectangular(
-                      width: 70,
-                      height: 20,
-                      borderRadius: 4,
-                    ),
-
-          '''
-              if duration_block not in text:
-                  raise SystemExit("Could not locate the duration metadata block.")
-              text = text.replace(duration_block, episode_block, 1)
-
-          premium.write_text(text, encoding="utf-8")
+          anime_info.write_text(text, encoding="utf-8")
 
           # ---------------------------------------------------------------------------
-          # 2. Compact Anime Information section in the requested order.
+          # 2. Keep the desktop/TV episode list virtualized.
+          #
+          # The desktop hero is a SingleChildScrollView, so a shrink-wrapped GridView or
+          # ListView would still eagerly build every episode. A bounded inner ListView
+          # keeps the same single episode list while recycling off-screen rows.
           # ---------------------------------------------------------------------------
-          info.write_text(
-              r'''import 'package:flutter/material.dart';
+          text = layout.read_text(encoding="utf-8")
+          class_marker = "class DetailsDesktopEpisodeColumn extends ConsumerWidget {"
+          start = text.find(class_marker)
+          if start < 0:
+              raise SystemExit("Could not locate DetailsDesktopEpisodeColumn.")
 
-          import '../../../../core/domain/entity/multimedia_item.dart';
+          new_class = r'''class DetailsDesktopEpisodeColumn extends ConsumerWidget {
+            final MultimediaItem parentItem;
+            final String itemUrl;
+            final bool isMovie;
 
-          class AnimeInformationSection extends StatelessWidget {
-            final MultimediaItem item;
+            const DetailsDesktopEpisodeColumn({
+              super.key,
+              required this.parentItem,
+              required this.itemUrl,
+              required this.isMovie,
+            });
 
-            const AnimeInformationSection({super.key, required this.item});
+            Widget _buildEpisodeRow(
+              List<Episode> episodes,
+              int rowIndex,
+              int crossAxisCount,
+            ) {
+              final startIndex = rowIndex * crossAxisCount;
+              final endIndex = (startIndex + crossAxisCount).clamp(0, episodes.length);
+              final rowEpisodes = episodes.sublist(startIndex, endIndex);
 
-            String? _clean(dynamic raw) {
-              if (raw == null) return null;
-              final value = raw.toString().trim();
-              if (value.isEmpty || value.toLowerCase() == 'null') return null;
-              return value;
-            }
-
-            String? _read(Map<String, String> data, List<String> keys) {
-              for (final key in keys) {
-                final value = _clean(data[key]);
-                if (value != null) return value;
-              }
-              return null;
-            }
-
-            String _status(bool isArabic) {
-              switch (item.status) {
-                case ShowStatus.completed:
-                  return isArabic ? 'مكتمل' : 'Completed';
-                case ShowStatus.upcoming:
-                  return isArabic ? 'قادم' : 'Upcoming';
-                case ShowStatus.ongoing:
-                  return isArabic ? 'مستمر' : 'Ongoing';
-              }
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var index = 0; index < crossAxisCount; index++)
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            left: index == 0 ? 0 : 8,
+                            right: index == crossAxisCount - 1 ? 0 : 8,
+                          ),
+                          child: index < rowEpisodes.length
+                              ? EpisodeCard(
+                                      episode: rowEpisodes[index],
+                                      parentItem: parentItem,
+                                    )
+                                    as Widget
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
+                  ],
+                ),
+              );
             }
 
             @override
-            Widget build(BuildContext context) {
-              final isArabic =
-                  Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-              final data = item.syncData ?? const <String, String>{};
+            Widget build(BuildContext context, WidgetRef ref) {
+              if (isMovie) return const SizedBox.shrink();
 
-              _AnimeInfoEntry? entry(
-                String ar,
-                String en,
-                dynamic value,
-                IconData icon,
-              ) {
-                final cleaned = _clean(value);
-                if (cleaned == null) return null;
-                return _AnimeInfoEntry(
-                  label: isArabic ? ar : en,
-                  value: cleaned,
-                  icon: icon,
-                );
+              final detailsState = ref.watch(detailsControllerProvider(itemUrl));
+              var episodes = detailsState.seasonMap[detailsState.selectedSeason] ?? [];
+
+              if (episodes.isEmpty) return const SizedBox.shrink();
+
+              if (detailsState.selectedDubStatus != DubStatus.none) {
+                episodes = episodes
+                    .where((episode) => episode.dubStatus == detailsState.selectedDubStatus)
+                    .toList(growable: false);
               }
 
-              final rows = <List<_AnimeInfoEntry?>>[
-                [
-                  entry(
-                    'الحالة',
-                    'Status',
-                    _read(data, const ['awState']) ?? _status(isArabic),
-                    Icons.wifi_tethering_rounded,
-                  ),
-                  entry(
-                    'موسم العرض',
-                    'Airing season',
-                    _read(data, const ['awSeason']),
-                    Icons.calendar_month_rounded,
-                  ),
-                ],
-                [
-                  entry(
-                    'بداية العرض',
-                    'Start date',
-                    _read(data, const ['awStartDate']),
-                    Icons.play_circle_outline_rounded,
-                  ),
-                  entry(
-                    'نهاية العرض',
-                    'End date',
-                    _read(data, const ['awEndDate']),
-                    Icons.stop_circle_outlined,
-                  ),
-                ],
-                [
-                  entry(
-                    'المصدر',
-                    'Source',
-                    _read(data, const ['awSource']) ?? item.source,
-                    Icons.menu_book_rounded,
-                  ),
-                  entry(
-                    'الاستديو',
-                    'Studio',
-                    _read(data, const ['awStudio']),
-                    Icons.apartment_rounded,
-                  ),
-                ],
-              ];
-
-              final englishTitle = entry(
-                'العنوان الإنجليزي',
-                'English title',
-                _read(data, const ['awEnglishTitle']),
-                Icons.translate_rounded,
-              );
-
-              final hasRows = rows.any((row) => row.any((value) => value != null));
-              if (!hasRows && englishTitle == null) return const SizedBox.shrink();
+              final displayedEpisodes = detailsState.isAscending
+                  ? List<Episode>.from(episodes, growable: false)
+                  : episodes.reversed.toList(growable: false);
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    isArabic ? 'معلومات الأنمي' : 'Anime information',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  for (final row in rows) ...[
-                    if (row.any((value) => value != null))
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var index = 0; index < row.length; index++) ...[
-                            if (row[index] != null)
-                              Expanded(child: _AnimeInfoCard(entry: row[index]!)),
-                            if (index == 0 && row[0] != null && row[1] != null)
-                              const SizedBox(width: 8),
-                          ],
-                        ],
-                      ),
-                    if (row.any((value) => value != null)) const SizedBox(height: 8),
-                  ],
-                  if (englishTitle != null)
-                    SizedBox(
-                      width: double.infinity,
-                      child: _AnimeInfoCard(entry: englishTitle),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 12,
+                      children: [
+                        Text(
+                          AppLocalizations.of(context)!.episodes,
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        DetailsEpisodeFilterBar(itemUrl: itemUrl),
+                      ],
                     ),
+                  ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = (constraints.maxWidth / 480).ceil().clamp(
+                        1,
+                        5,
+                      );
+                      final rowCount = (displayedEpisodes.length / crossAxisCount).ceil();
+
+                      // Small lists remain compact. Large lists receive a bounded,
+                      // independently scrollable viewport so ListView can recycle rows.
+                      final maximumHeight =
+                          (MediaQuery.sizeOf(context).height * 0.72)
+                              .clamp(420.0, 820.0)
+                              .toDouble();
+                      final desiredHeight =
+                          (rowCount * 220.0) +
+                          (rowCount > 1 ? (rowCount - 1) * 16.0 : 0.0);
+                      final listHeight = desiredHeight < maximumHeight
+                          ? desiredHeight
+                          : maximumHeight;
+
+                      return SizedBox(
+                        height: listHeight,
+                        child: Scrollbar(
+                          child: ListView.separated(
+                            primary: false,
+                            padding: EdgeInsets.zero,
+                            cacheExtent: 700,
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
+                            itemCount: rowCount,
+                            separatorBuilder: (_, _) => const SizedBox(height: 16),
+                            itemBuilder: (context, rowIndex) => _buildEpisodeRow(
+                              displayedEpisodes,
+                              rowIndex,
+                              crossAxisCount,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               );
             }
           }
-
-          class _AnimeInfoEntry {
-            final String label;
-            final String value;
-            final IconData icon;
-
-            const _AnimeInfoEntry({
-              required this.label,
-              required this.value,
-              required this.icon,
-            });
-          }
-
-          class _AnimeInfoCard extends StatelessWidget {
-            final _AnimeInfoEntry entry;
-
-            const _AnimeInfoCard({required this.entry});
-
-            @override
-            Widget build(BuildContext context) {
-              final colors = Theme.of(context).colorScheme;
-
-              return DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(
-                    color: colors.outlineVariant.withValues(alpha: 0.45),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(entry.icon, size: 18, color: colors.primary),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              entry.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: colors.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            SelectableText(
-                              entry.value,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-          }
-          ''',
-              encoding="utf-8",
-          )
-
-          # ---------------------------------------------------------------------------
-          # 3. Remove Preferred Quality from the details page.
-          # ---------------------------------------------------------------------------
-          text = layout.read_text(encoding="utf-8")
-          quality_marker = "// Preferred quality is configured globally in Settings."
-
-          if quality_marker not in text:
-              text = text.replace(
-                  "import '../../../settings/presentation/player_settings_provider.dart';\n",
-                  "",
-                  1,
-              )
-              text = text.replace(
-                  "import '../../../../core/utils/stream_quality_sorter.dart';\n",
-                  "",
-                  1,
-              )
-
-              wifi_block = '''    final isWifiFuture = useMemoized(() => isOnWifi());
-              final isWifiSnapshot = useFuture(isWifiFuture);
-              final onWifi = isWifiSnapshot.data ?? true;
-
           '''
-              if wifi_block not in text:
-                  raise SystemExit("Could not locate Wi-Fi quality state.")
-              text = text.replace(wifi_block, "", 1)
 
-              quality_pattern = re.compile(
-                  r'''    // Dynamic quality preference selector button
-          [\s\S]*?
-              // Download feature: only for single episode VOD content'''
-              )
-              text, count = quality_pattern.subn(
-                  '''    // Preferred quality is configured globally in Settings.
-
-              // Download feature: only for single episode VOD content''',
-                  text,
-                  count=1,
-              )
-              if count != 1:
-                  raise SystemExit("Could not locate Preferred Quality selector.")
-
-              children_block = '''        progressWidget,
-                  qualityBtn,
-                  const SizedBox(height: LayoutConstants.spacingSm),
-                  actionRow,
-          '''
-              replacement = '''        progressWidget,
-                  actionRow,
-          '''
-              if children_block not in text:
-                  raise SystemExit("Could not remove Preferred Quality from action layout.")
-              text = text.replace(children_block, replacement, 1)
-
+          # This class is intentionally the final declaration in the current file.
+          text = text[:start] + new_class
           layout.write_text(text, encoding="utf-8")
 
           # ---------------------------------------------------------------------------
-          # 4. Theme-colored episode badge pinned to the right.
+          # 3. Fall back only when a split API export is absent.
+          #
+          # Real network/parsing/JavaScript errors must reach DetailsController so the
+          # existing error state and Retry button are used instead of silently calling
+          # the legacy API again.
           # ---------------------------------------------------------------------------
-          text = card.read_text(encoding="utf-8")
-          badge_marker = (
-              "// Episode badge UI v2: use the active theme and pin to the right."
+          text = js_provider.read_text(encoding="utf-8")
+
+          limit_match = re.search(
+              r"const int _kMaxResultListLength\s*=\s*(\d+)\s*;",
+              text,
           )
-
-          if badge_marker not in text:
-              old_build_call = '''          child: isInside
-                        ? _buildInsideMode(imageWidget, titleTextStyle, badgeText)
-                        : _buildBelowMode(imageWidget, titleTextStyle, badgeText),
-          '''
-              new_build_call = '''          child: isInside
-                        ? _buildInsideMode(
-                            context,
-                            imageWidget,
-                            titleTextStyle,
-                            badgeText,
-                          )
-                        : _buildBelowMode(
-                            context,
-                            imageWidget,
-                            titleTextStyle,
-                            badgeText,
-                          ),
-          '''
-              if old_build_call not in text:
-                  raise SystemExit("Could not locate multimedia card mode calls.")
-              text = text.replace(old_build_call, new_build_call, 1)
-
-              badge_pattern = re.compile(
-                  r'''  Widget _buildEpisodeBadge\(String text\) \{
-          [\s\S]*?
-            \}
-
-            Widget _buildBelowMode\('''
+          if limit_match is None:
+              raise SystemExit("Could not verify the plugin result limit.")
+          if int(limit_match.group(1)) < 2000:
+              raise SystemExit(
+                  "_kMaxResultListLength is too small for long-running anime series."
               )
-              badge_replacement = r'''  Widget _buildEpisodeBadge(BuildContext context, String text) {
-              // Episode badge UI v2: use the active theme and pin to the right.
-              final colors = Theme.of(context).colorScheme;
 
-              return Container(
-                constraints: const BoxConstraints(maxWidth: 108),
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(
-                    color: colors.primaryContainer.withValues(alpha: 0.85),
-                    width: 0.8,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colors.shadow.withValues(alpha: 0.28),
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.onPrimary,
-                    fontSize: 12,
-                    height: 1,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              );
+          section_start = text.find("  MultimediaItem _detailFromPluginResult")
+          section_end = text.find(
+              "  @override\n  Future<List<StreamResult>> loadStreams",
+              section_start,
+          )
+          if section_start < 0 or section_end < 0:
+              raise SystemExit("Could not locate the split details/episodes API section.")
+
+          replacement = r'''  MultimediaItem _detailFromPluginResult(dynamic result, String url) {
+              if (result is! Map) {
+                throw StateError('Extension returned invalid detail data.');
+              }
+
+              final map = Map<String, dynamic>.from(result);
+              if (map['url'] == null || map['url'].toString().isEmpty) {
+                map['url'] = url;
+              }
+              return MultimediaItem.fromJson(map);
             }
 
-            Widget _buildBelowMode('''
-              text, count = badge_pattern.subn(badge_replacement, text, count=1)
-              if count != 1:
-                  raise SystemExit("Could not replace episode badge style.")
+            bool _isMissingExportError(Object error, String exportName) {
+              final message = error.toString();
+              final qualifiedName = _fn(exportName);
+              return message.contains('Function $qualifiedName not found') ||
+                  message.contains('Function $exportName not found');
+            }
 
-              text = text.replace(
-                  '''  Widget _buildBelowMode(
-              Widget imageWidget,
-          ''',
-                  '''  Widget _buildBelowMode(
-              BuildContext context,
-              Widget imageWidget,
-          ''',
-                  1,
-              )
-              text = text.replace(
-                  '''  Widget _buildInsideMode(
-              Widget imageWidget,
-          ''',
-                  '''  Widget _buildInsideMode(
-              BuildContext context,
-              Widget imageWidget,
-          ''',
-                  1,
-              )
+            @override
+            Future<MultimediaItem> getDetails(String url) async {
+              await _ensureReady();
+              if (_error != null) throw JsPluginException("INIT_ERROR", _error!);
 
-              below_position = '''                Positioned(
-                            left: 8,
-                            bottom: 8,
-                            child: _buildEpisodeBadge(badgeText),
+              try {
+                dynamic result;
+
+                try {
+                  result = await _jsEngine.invokeAsync(_fn('loadDetails'), [url]);
+                } catch (error) {
+                  if (!_isMissingExportError(error, 'loadDetails')) {
+                    rethrow;
+                  }
+
+                  // Legacy extensions export only `load`.
+                  result = await _jsEngine.invokeAsync(_fn('load'), [url]);
+                }
+
+                return _detailFromPluginResult(result, url);
+              } on JsPluginException catch (error) {
+                if (kDebugMode) {
+                  debugPrint("JsPluginException in getDetails: $error");
+                }
+                talker.error("JsPluginException in getDetails: $error");
+                rethrow;
+              } catch (error) {
+                if (kDebugMode) debugPrint("Error in getDetails: $error");
+                talker.error("Error in getDetails: $error");
+                rethrow;
+              }
+            }
+
+            @override
+            Future<List<Episode>> getEpisodes(String url) async {
+              await _ensureReady();
+              if (_error != null) throw JsPluginException("INIT_ERROR", _error!);
+
+              try {
+                dynamic result;
+
+                try {
+                  result = await _jsEngine.invokeAsync(_fn('loadEpisodes'), [url]);
+                } catch (error) {
+                  if (!_isMissingExportError(error, 'loadEpisodes')) {
+                    rethrow;
+                  }
+
+                  // Legacy extensions keep episodes inside `load`/getDetails.
+                  return await super.getEpisodes(url);
+                }
+
+                dynamic rawEpisodes = result;
+                if (result is Map && result['episodes'] is List) {
+                  rawEpisodes = result['episodes'];
+                }
+
+                if (rawEpisodes is! List) {
+                  throw StateError('Extension returned invalid episode data.');
+                }
+
+                final bounded = rawEpisodes.length > _kMaxResultListLength
+                    ? rawEpisodes.sublist(0, _kMaxResultListLength)
+                    : rawEpisodes;
+
+                if (kDebugMode && rawEpisodes.length > _kMaxResultListLength) {
+                  debugPrint(
+                    '[$_packageName] loadEpisodes returned ${rawEpisodes.length} '
+                    'entries; capping to $_kMaxResultListLength.',
+                  );
+                }
+
+                return bounded
+                    .whereType<Map>()
+                    .map((raw) => Episode.fromJson(Map<String, dynamic>.from(raw)))
+                    .toList(growable: false);
+              } on JsPluginException catch (error) {
+                if (kDebugMode) {
+                  debugPrint("JsPluginException in getEpisodes: $error");
+                }
+                talker.error("JsPluginException in getEpisodes: $error");
+                rethrow;
+              } catch (error) {
+                if (kDebugMode) debugPrint("Error in getEpisodes: $error");
+                talker.error("Error in getEpisodes: $error");
+                rethrow;
+              }
+            }
+
           '''
-              below_replacement = '''                Positioned(
-                            right: 8,
-                            bottom: 8,
-                            child: _buildEpisodeBadge(context, badgeText),
-          '''
-              if below_position not in text:
-                  raise SystemExit("Could not locate lower episode badge position.")
-              text = text.replace(below_position, below_replacement, 1)
 
-              inside_position = '''          Positioned(
-                      left: 8,
-                      bottom: (titleTextStyle.fontSize ?? 14) + 30,
-                      child: _buildEpisodeBadge(badgeText),
-          '''
-              inside_replacement = '''          Positioned(
-                      right: 8,
-                      bottom: (titleTextStyle.fontSize ?? 14) + 30,
-                      child: _buildEpisodeBadge(context, badgeText),
-          '''
-              if inside_position not in text:
-                  raise SystemExit("Could not locate inside episode badge position.")
-              text = text.replace(inside_position, inside_replacement, 1)
+          text = text[:section_start] + replacement + text[section_end:]
+          js_provider.write_text(text, encoding="utf-8")
 
-          card.write_text(text, encoding="utf-8")
-
-          print("Details metadata, quality selector, information layout, and badges updated.")
+          print("Fixed anime information constraints, desktop episode virtualization, and split API error handling.")
           PY
 
-      - name: Format changed Dart files
+      - name: Format affected files
         run: |
           dart format \
-            lib/features/details/presentation/widgets/premium_details_widgets.dart \
             lib/features/details/presentation/widgets/anime_information_section.dart \
             lib/features/details/presentation/widgets/details_layout_widgets.dart \
-            lib/shared/widgets/multimedia_card.dart
+            lib/core/extensions/providers/js_based_provider.dart
 
-      - name: Check patch
+      - name: Validate patch markers
+        shell: bash
         run: |
+          grep -F "crossAxisAlignment: CrossAxisAlignment.start" \
+            lib/features/details/presentation/widgets/anime_information_section.dart
+          grep -F "ListView.separated" \
+            lib/features/details/presentation/widgets/details_layout_widgets.dart
+          grep -F "_isMissingExportError" \
+            lib/core/extensions/providers/js_based_provider.dart
+          if grep -Fq "return await super.getEpisodes(url);" \
+            lib/core/extensions/providers/js_based_provider.dart; then
+            echo "Legacy fallback is present for a missing loadEpisodes export."
+          else
+            echo "Legacy loadEpisodes fallback is missing."
+            exit 1
+          fi
           git diff --check
-          git diff -- \
-            lib/features/details/presentation/widgets/premium_details_widgets.dart \
-            lib/features/details/presentation/widgets/anime_information_section.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart \
-            lib/shared/widgets/multimedia_card.dart
 
       - name: Generate Riverpod and other source files
         run: |
@@ -591,10 +400,9 @@ jobs:
           flutter analyze \
             --no-fatal-warnings \
             --no-fatal-infos \
-            lib/features/details/presentation/widgets/premium_details_widgets.dart \
             lib/features/details/presentation/widgets/anime_information_section.dart \
             lib/features/details/presentation/widgets/details_layout_widgets.dart \
-            lib/shared/widgets/multimedia_card.dart
+            lib/core/extensions/providers/js_based_provider.dart
 
       - name: Restore generated files
         shell: bash
@@ -602,14 +410,20 @@ jobs:
           git restore --worktree --staged -- '*.g.dart' '*.freezed.dart' 2>/dev/null || true
           git clean -f -- '**/*.g.dart' '**/*.freezed.dart' 2>/dev/null || true
 
+      - name: Show final diff
+        run: |
+          git diff -- \
+            lib/features/details/presentation/widgets/anime_information_section.dart \
+            lib/features/details/presentation/widgets/details_layout_widgets.dart \
+            lib/core/extensions/providers/js_based_provider.dart
+
       - name: Commit and push changes
         shell: bash
         run: |
           FILES=(
-            lib/features/details/presentation/widgets/premium_details_widgets.dart
             lib/features/details/presentation/widgets/anime_information_section.dart
             lib/features/details/presentation/widgets/details_layout_widgets.dart
-            lib/shared/widgets/multimedia_card.dart
+            lib/core/extensions/providers/js_based_provider.dart
           )
 
           if git diff --quiet -- "${FILES[@]}"; then
@@ -619,7 +433,6 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add "${FILES[@]}"
-          git commit -m "refactor: improve anime metadata and episode badges"
+          git commit -m "fix: stabilize details and virtualize episode lists"
           git push
