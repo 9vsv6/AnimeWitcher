@@ -24,6 +24,28 @@ class MetadataBar extends ConsumerWidget {
     final showTypeBadge =
         !isLoading || (contentType != MultimediaContentType.movie);
 
+    // Details metadata v2: age rating and episode count use plugin fallbacks.
+    String? clean(dynamic raw) {
+      if (raw == null) return null;
+      final value = raw.toString().trim();
+      if (value.isEmpty || value.toLowerCase() == 'null') return null;
+      return value;
+    }
+
+    final syncData = item.syncData ?? const <String, String>{};
+    final ageRating = clean(syncData['awAge']) ?? clean(item.contentRating);
+    final providerEpisodeCount = clean(syncData['awEpisodes']);
+    final loadedEpisodeCount = item.episodes?.length ?? 0;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final episodeCount =
+        providerEpisodeCount ??
+        (loadedEpisodeCount > 0
+            ? isArabic
+                  ? '$loadedEpisodeCount حلقة'
+                  : '$loadedEpisodeCount episodes'
+            : null);
+
     return Wrap(
       spacing: 12,
       runSpacing: 8,
@@ -58,8 +80,8 @@ class MetadataBar extends ConsumerWidget {
             borderRadius: 4,
           ),
 
-        if (item.contentRating != null)
-          _buildBorderedInfo(context, item.contentRating!)
+        if (ageRating != null)
+          _buildBorderedInfo(context, ageRating)
         else if (isLoading)
           ShimmerPlaceholder.rectangular(
             width: 60,
@@ -72,6 +94,15 @@ class MetadataBar extends ConsumerWidget {
         else if (isLoading)
           ShimmerPlaceholder.rectangular(
             width: 60,
+            height: 20,
+            borderRadius: 4,
+          ),
+
+        if (episodeCount != null)
+          _buildIconInfo(context, Icons.video_library_outlined, episodeCount)
+        else if (isLoading)
+          ShimmerPlaceholder.rectangular(
+            width: 70,
             height: 20,
             borderRadius: 4,
           ),

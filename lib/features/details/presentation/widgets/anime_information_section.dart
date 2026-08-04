@@ -38,84 +38,71 @@ class AnimeInformationSection extends StatelessWidget {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final data = item.syncData ?? const <String, String>{};
-    final entries = <({String label, String value, IconData icon})>[];
 
-    void add(String ar, String en, dynamic value, IconData icon) {
+    _AnimeInfoEntry? entry(String ar, String en, dynamic value, IconData icon) {
       final cleaned = _clean(value);
-      if (cleaned == null) return;
-      entries.add((label: isArabic ? ar : en, value: cleaned, icon: icon));
+      if (cleaned == null) return null;
+      return _AnimeInfoEntry(
+        label: isArabic ? ar : en,
+        value: cleaned,
+        icon: icon,
+      );
     }
 
-    add(
+    final rows = <List<_AnimeInfoEntry?>>[
+      [
+        entry(
+          'الحالة',
+          'Status',
+          _read(data, const ['awState']) ?? _status(isArabic),
+          Icons.wifi_tethering_rounded,
+        ),
+        entry(
+          'موسم العرض',
+          'Airing season',
+          _read(data, const ['awSeason']),
+          Icons.calendar_month_rounded,
+        ),
+      ],
+      [
+        entry(
+          'بداية العرض',
+          'Start date',
+          _read(data, const ['awStartDate']),
+          Icons.play_circle_outline_rounded,
+        ),
+        entry(
+          'نهاية العرض',
+          'End date',
+          _read(data, const ['awEndDate']),
+          Icons.stop_circle_outlined,
+        ),
+      ],
+      [
+        entry(
+          'المصدر',
+          'Source',
+          _read(data, const ['awSource']) ?? item.source,
+          Icons.menu_book_rounded,
+        ),
+        entry(
+          'الاستديو',
+          'Studio',
+          _read(data, const ['awStudio']),
+          Icons.apartment_rounded,
+        ),
+      ],
+    ];
+
+    final englishTitle = entry(
       'العنوان الإنجليزي',
       'English title',
       _read(data, const ['awEnglishTitle']),
       Icons.translate_rounded,
     );
-    add(
-      'الاستديو',
-      'Studio',
-      _read(data, const ['awStudio']),
-      Icons.apartment_rounded,
-    );
-    add(
-      'المصدر',
-      'Source',
-      _read(data, const ['awSource']) ?? item.source,
-      Icons.menu_book_rounded,
-    );
-    add(
-      'الحالة',
-      'Status',
-      _read(data, const ['awState']) ?? _status(isArabic),
-      Icons.wifi_tethering_rounded,
-    );
-    add(
-      'موسم العرض',
-      'Airing season',
-      _read(data, const ['awSeason']),
-      Icons.calendar_month_rounded,
-    );
-    add(
-      'رقم الموسم',
-      'Season number',
-      _read(data, const ['awSeasonNumber']),
-      Icons.format_list_numbered_rounded,
-    );
-    add(
-      'تاريخ البداية',
-      'Start date',
-      _read(data, const ['awStartDate']),
-      Icons.play_circle_outline_rounded,
-    );
-    add(
-      'تاريخ النهاية',
-      'End date',
-      _read(data, const ['awEndDate']),
-      Icons.stop_circle_outlined,
-    );
-    add(
-      'عدد الحلقات',
-      'Episodes',
-      _read(data, const ['awEpisodes']),
-      Icons.video_library_outlined,
-    );
-    add(
-      'مدة الحلقة',
-      'Episode duration',
-      _read(data, const ['awDuration']) ??
-          (item.duration == null ? null : '${item.duration} min'),
-      Icons.schedule_rounded,
-    );
-    add(
-      'التصنيف العمري',
-      'Age rating',
-      _read(data, const ['awAge']) ?? item.contentRating,
-      Icons.shield_outlined,
-    );
 
-    if (entries.isEmpty) return const SizedBox.shrink();
-    final colors = Theme.of(context).colorScheme;
+    final hasRows = rows.any((row) => row.any((value) => value != null));
+    if (!hasRows && englishTitle == null) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -126,77 +113,94 @@ class AnimeInformationSection extends StatelessWidget {
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            const spacing = 10.0;
-            final columns = constraints.maxWidth >= 760
-                ? 3
-                : constraints.maxWidth >= 480
-                ? 2
-                : 1;
-            final width =
-                (constraints.maxWidth - (spacing * (columns - 1))) / columns;
-
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
+        const SizedBox(height: 10),
+        for (final row in rows) ...[
+          if (row.any((value) => value != null))
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final entry in entries)
-                  SizedBox(
-                    width: width,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainerHighest.withValues(
-                          alpha: 0.55,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: colors.outlineVariant.withValues(alpha: 0.45),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(entry.icon, size: 21, color: colors.primary),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    entry.label,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelMedium
-                                        ?.copyWith(
-                                          color: colors.onSurfaceVariant,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  SelectableText(
-                                    entry.value,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                for (var index = 0; index < row.length; index++) ...[
+                  if (row[index] != null)
+                    Expanded(child: _AnimeInfoCard(entry: row[index]!)),
+                  if (index == 0 && row[0] != null && row[1] != null)
+                    const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          if (row.any((value) => value != null)) const SizedBox(height: 8),
+        ],
+        if (englishTitle != null)
+          SizedBox(
+            width: double.infinity,
+            child: _AnimeInfoCard(entry: englishTitle),
+          ),
+      ],
+    );
+  }
+}
+
+class _AnimeInfoEntry {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _AnimeInfoEntry({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+}
+
+class _AnimeInfoCard extends StatelessWidget {
+  final _AnimeInfoEntry entry;
+
+  const _AnimeInfoCard({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(entry.icon, size: 18, color: colors.primary),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-              ],
-            );
-          },
+                  const SizedBox(height: 2),
+                  SelectableText(
+                    entry.value,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

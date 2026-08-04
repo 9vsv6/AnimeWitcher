@@ -87,34 +87,51 @@ class MultimediaCard extends ConsumerWidget {
         child: SizedBox(
           width: cardWidth,
           child: isInside
-              ? _buildInsideMode(imageWidget, titleTextStyle, badgeText)
-              : _buildBelowMode(imageWidget, titleTextStyle, badgeText),
+              ? _buildInsideMode(
+                  context,
+                  imageWidget,
+                  titleTextStyle,
+                  badgeText,
+                )
+              : _buildBelowMode(
+                  context,
+                  imageWidget,
+                  titleTextStyle,
+                  badgeText,
+                ),
         ),
       ),
     );
   }
 
-  Widget _buildEpisodeBadge(String text) {
+  Widget _buildEpisodeBadge(BuildContext context, String text) {
+    // Episode badge UI v2: use the active theme and pin to the right.
+    final colors = Theme.of(context).colorScheme;
+
     return Container(
       constraints: const BoxConstraints(maxWidth: 108),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.78),
+        color: colors.primary.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(7),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.18),
+          color: colors.primaryContainer.withValues(alpha: 0.85),
           width: 0.8,
         ),
-        boxShadow: const [
-          BoxShadow(color: Colors.black45, blurRadius: 5, offset: Offset(0, 2)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow.withValues(alpha: 0.28),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Text(
         text,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: colors.onPrimary,
           fontSize: 12,
           height: 1,
           fontWeight: FontWeight.w700,
@@ -124,6 +141,7 @@ class MultimediaCard extends ConsumerWidget {
   }
 
   Widget _buildBelowMode(
+    BuildContext context,
     Widget imageWidget,
     TextStyle titleTextStyle,
     String? badgeText,
@@ -138,9 +156,9 @@ class MultimediaCard extends ConsumerWidget {
               imageWidget,
               if (badgeText != null)
                 Positioned(
-                  left: 8,
+                  right: 8,
                   bottom: 8,
-                  child: _buildEpisodeBadge(badgeText),
+                  child: _buildEpisodeBadge(context, badgeText),
                 ),
             ],
           ),
@@ -157,6 +175,7 @@ class MultimediaCard extends ConsumerWidget {
   }
 
   Widget _buildInsideMode(
+    BuildContext context,
     Widget imageWidget,
     TextStyle titleTextStyle,
     String? badgeText,
@@ -193,9 +212,9 @@ class MultimediaCard extends ConsumerWidget {
         ),
         if (badgeText != null)
           Positioned(
-            left: 8,
+            right: 8,
             bottom: (titleTextStyle.fontSize ?? 14) + 30,
-            child: _buildEpisodeBadge(badgeText),
+            child: _buildEpisodeBadge(context, badgeText),
           ),
       ],
     );
