@@ -36,6 +36,7 @@ class TmdbDetails extends MultimediaItem {
     String? genresStr,
     super.imdbId,
     super.source,
+    super.episodeBadge,
     super.nextAiring,
     super.related,
     super.relationLabel,
@@ -306,6 +307,7 @@ class TmdbDetails extends MultimediaItem {
     int? tmdbId,
     String? imdbId,
     String? source,
+    String? episodeBadge,
     // Subclass specific fields:
     int? id,
     String? mediaType,
@@ -348,6 +350,7 @@ class TmdbDetails extends MultimediaItem {
       genresStr: genresStr ?? this.genresStr,
       imdbId: imdbId ?? this.imdbId,
       source: source ?? this.source,
+      episodeBadge: episodeBadge ?? this.episodeBadge,
       nextAiring: nextAiring ?? this.nextAiring,
       related: related ?? this.related,
       relationLabel: relationLabel ?? this.relationLabel,

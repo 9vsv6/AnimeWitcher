@@ -15,6 +15,11 @@ class MultimediaCard extends ConsumerWidget {
   final bool isPortrait;
   final FocusNode? focusNode;
 
+  /// Fully formatted text supplied by the provider.
+  ///
+  /// This widget displays the string unchanged.
+  final String? episodeBadge;
+
   const MultimediaCard({
     super.key,
     required this.imageUrl,
@@ -23,6 +28,7 @@ class MultimediaCard extends ConsumerWidget {
     required this.heroTag,
     this.isPortrait = true,
     this.focusNode,
+    this.episodeBadge,
   });
 
   @override
@@ -36,6 +42,11 @@ class MultimediaCard extends ConsumerWidget {
       generalSettingsProvider.select((s) => s.titlePosition),
     );
     final isInside = titlePosition == 'inside';
+    final normalizedEpisodeBadge = episodeBadge?.trim();
+    final badgeText =
+        normalizedEpisodeBadge == null || normalizedEpisodeBadge.isEmpty
+        ? null
+        : normalizedEpisodeBadge;
 
     final imageWidget = Hero(
       tag: heroTag,
@@ -76,18 +87,64 @@ class MultimediaCard extends ConsumerWidget {
         child: SizedBox(
           width: cardWidth,
           child: isInside
-              ? _buildInsideMode(imageWidget, titleTextStyle)
-              : _buildBelowMode(imageWidget, titleTextStyle),
+              ? _buildInsideMode(imageWidget, titleTextStyle, badgeText)
+              : _buildBelowMode(imageWidget, titleTextStyle, badgeText),
         ),
       ),
     );
   }
 
-  Widget _buildBelowMode(Widget imageWidget, TextStyle titleTextStyle) {
+  Widget _buildEpisodeBadge(String text) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 108),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.18),
+          width: 0.8,
+        ),
+        boxShadow: const [
+          BoxShadow(color: Colors.black45, blurRadius: 5, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          height: 1,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBelowMode(
+    Widget imageWidget,
+    TextStyle titleTextStyle,
+    String? badgeText,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: imageWidget),
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              imageWidget,
+              if (badgeText != null)
+                Positioned(
+                  left: 8,
+                  bottom: 8,
+                  child: _buildEpisodeBadge(badgeText),
+                ),
+            ],
+          ),
+        ),
         const SizedBox(height: 8),
         Text(
           title,
@@ -99,7 +156,11 @@ class MultimediaCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildInsideMode(Widget imageWidget, TextStyle titleTextStyle) {
+  Widget _buildInsideMode(
+    Widget imageWidget,
+    TextStyle titleTextStyle,
+    String? badgeText,
+  ) {
     return Stack(
       children: [
         Positioned.fill(child: imageWidget),
@@ -130,6 +191,12 @@ class MultimediaCard extends ConsumerWidget {
             ),
           ),
         ),
+        if (badgeText != null)
+          Positioned(
+            left: 8,
+            bottom: (titleTextStyle.fontSize ?? 14) + 30,
+            child: _buildEpisodeBadge(badgeText),
+          ),
       ],
     );
   }

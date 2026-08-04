@@ -127,6 +127,12 @@ class MultimediaItem {
   final String? imdbId;
   final String? source;
 
+  /// Provider-defined text displayed over a media poster.
+  ///
+  /// SkyStream renders this value unchanged. The extension decides
+  /// the language and format.
+  final String? episodeBadge;
+
   MultimediaItem({
     required this.title,
     required this.url,
@@ -158,6 +164,7 @@ class MultimediaItem {
     this.tmdbId,
     this.imdbId,
     this.source,
+    this.episodeBadge,
   }) : episodes = episodes != null
            ? (List<Episode>.from(episodes)..sort((a, b) {
                if (a.season != b.season) return a.season.compareTo(b.season);
@@ -284,6 +291,12 @@ class MultimediaItem {
       tmdbId: json['tmdbId'] as int?,
       imdbId: json['imdbId'] as String?,
       source: json['source'] as String?,
+      episodeBadge: _parseOptionalString(
+        json['episodeBadge'] ??
+            json['episode_badge'] ??
+            json['badgeText'] ??
+            json['badge_text'],
+      ),
     );
   }
 
@@ -402,6 +415,7 @@ class MultimediaItem {
     int? tmdbId,
     String? imdbId,
     String? source,
+    String? episodeBadge,
   }) {
     return MultimediaItem(
       title: title ?? this.title,
@@ -434,6 +448,7 @@ class MultimediaItem {
       tmdbId: tmdbId ?? this.tmdbId,
       imdbId: imdbId ?? this.imdbId,
       source: source ?? this.source,
+      episodeBadge: episodeBadge ?? this.episodeBadge,
     );
   }
 
@@ -469,6 +484,7 @@ class MultimediaItem {
       'imdbId': imdbId,
       'streams': streams?.map((s) => s.toJson()).toList(),
       'source': source,
+      'episodeBadge': episodeBadge,
     };
   }
 
@@ -483,6 +499,7 @@ class MultimediaItem {
           provider == other.provider &&
           tmdbId == other.tmdbId &&
           imdbId == other.imdbId &&
+          episodeBadge == other.episodeBadge &&
           const MapEquality<String, String>().equals(syncData, other.syncData);
 
   @override
@@ -493,6 +510,7 @@ class MultimediaItem {
       (provider?.hashCode ?? 0) ^
       (tmdbId?.hashCode ?? 0) ^
       (imdbId?.hashCode ?? 0) ^
+      (episodeBadge?.hashCode ?? 0) ^
       const MapEquality<String, String>().hash(syncData);
 }
 
