@@ -1,0 +1,195 @@
+name: Add extension episode badges
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: extension-episode-badges-main
+  cancel-in-progress: false
+
+jobs:
+  apply-episode-badges:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Add extension-controlled episode badges
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > /tmp/apply_episode_badges.py.b64 <<'B64'
+          CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKClJPT1QgPSBQYXRoLmN3ZCgpCk1P
+          REVMID0gUk9PVCAvICJsaWIvY29yZS9kb21haW4vZW50aXR5L211bHRpbWVkaWFfaXRlbS5kYXJ0
+          IgoKZGVmIHJlYWQocGF0aDogUGF0aCkgLT4gc3RyOgogICAgaWYgbm90IHBhdGguaXNfZmlsZSgp
+          OgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJSZXF1aXJlZCBmaWxlIGlzIG1pc3Npbmc6IHtw
+          YXRofSIpCiAgICByZXR1cm4gcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKCmRlZiB3
+          cml0ZShwYXRoOiBQYXRoLCB2YWx1ZTogc3RyKSAtPiBOb25lOgogICAgcGF0aC53cml0ZV90ZXh0
+          KHZhbHVlLCBlbmNvZGluZz0idXRmLTgiKQoKZGVmIHJlcGxhY2Vfb25jZSh0ZXh0OiBzdHIsIG9s
+          ZDogc3RyLCBuZXc6IHN0ciwgbGFiZWw6IHN0cikgLT4gc3RyOgogICAgY291bnQgPSB0ZXh0LmNv
+          dW50KG9sZCkKICAgIGlmIGNvdW50ICE9IDE6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdChmInts
+          YWJlbH06IGV4cGVjdGVkIG9uZSBhbmNob3IsIGZvdW5kIHtjb3VudH0iKQogICAgcmV0dXJuIHRl
+          eHQucmVwbGFjZShvbGQsIG5ldywgMSkKCm1vZGVsID0gcmVhZChNT0RFTCkKCmlmICJmaW5hbCBT
+          dHJpbmc/IGVwaXNvZGVCYWRnZTsiIG5vdCBpbiBtb2RlbDoKICAgIG1vZGVsID0gcmVwbGFjZV9v
+          bmNlKAogICAgICAgIG1vZGVsLAogICAgICAgICIgIGZpbmFsIFN0cmluZz8gc291cmNlO1xuIiwK
+          ICAgICAgICAiICBmaW5hbCBTdHJpbmc/IHNvdXJjZTtcblxuIgogICAgICAgICIgIC8vLyBMb2Nh
+          bGl6ZWQgcG9zdGVyLWJhZGdlIHRleHQgc3VwcGxpZWQgYnkgdGhlIGV4dGVuc2lvbi5cbiIKICAg
+          ICAgICAiICAvLy8gRXhhbXBsZXM6IGDYrdmE2YLYqSA1YCwgYEVQIDVgLCBgRTA1YC5cbiIKICAg
+          ICAgICAiICAvLy8gU2t5U3RyZWFtIGRpc3BsYXlzIGl0IHZlcmJhdGltLlxuIgogICAgICAgICIg
+          IGZpbmFsIFN0cmluZz8gZXBpc29kZUJhZGdlO1xuIiwKICAgICAgICAiZXBpc29kZUJhZGdlIGZp
+          ZWxkIiwKICAgICkKICAgIG1vZGVsID0gcmVwbGFjZV9vbmNlKAogICAgICAgIG1vZGVsLAogICAg
+          ICAgICIgICAgdGhpcy5zb3VyY2UsXG4gIH0pIDogZXBpc29kZXMgPSBlcGlzb2RlcyAhPSBudWxs
+          XG4iLAogICAgICAgICIgICAgdGhpcy5zb3VyY2UsXG4iCiAgICAgICAgIiAgICB0aGlzLmVwaXNv
+          ZGVCYWRnZSxcbiIKICAgICAgICAiICB9KSA6IGVwaXNvZGVzID0gZXBpc29kZXMgIT0gbnVsbFxu
+          IiwKICAgICAgICAiZXBpc29kZUJhZGdlIGNvbnN0cnVjdG9yIiwKICAgICkKICAgIG1vZGVsID0g
+          cmVwbGFjZV9vbmNlKAogICAgICAgIG1vZGVsLAogICAgICAgICIgICAgICBzb3VyY2U6IGpzb25b
+          J3NvdXJjZSddIGFzIFN0cmluZz8sXG4gICAgKTtcbiIsCiAgICAgICAgIiAgICAgIHNvdXJjZTog
+          anNvblsnc291cmNlJ10gYXMgU3RyaW5nPyxcbiIKICAgICAgICAiICAgICAgZXBpc29kZUJhZGdl
+          OiBfcGFyc2VPcHRpb25hbFN0cmluZyhcbiIKICAgICAgICAiICAgICAgICBqc29uWydlcGlzb2Rl
+          QmFkZ2UnXSA/PyBqc29uWydlcGlzb2RlX2JhZGdlJ10sXG4iCiAgICAgICAgIiAgICAgICksXG4i
+          CiAgICAgICAgIiAgICApO1xuIiwKICAgICAgICAiZXBpc29kZUJhZGdlIGZyb21Kc29uIiwKICAg
+          ICkKICAgIG1vZGVsID0gcmVwbGFjZV9vbmNlKAogICAgICAgIG1vZGVsLAogICAgICAgICIgICAg
+          U3RyaW5nPyBzb3VyY2UsXG4gIH0pIHtcbiIsCiAgICAgICAgIiAgICBTdHJpbmc/IHNvdXJjZSxc
+          biIKICAgICAgICAiICAgIFN0cmluZz8gZXBpc29kZUJhZGdlLFxuIgogICAgICAgICIgIH0pIHtc
+          biIsCiAgICAgICAgImVwaXNvZGVCYWRnZSBjb3B5V2l0aCBzaWduYXR1cmUiLAogICAgKQogICAg
+          bW9kZWwgPSByZXBsYWNlX29uY2UoCiAgICAgICAgbW9kZWwsCiAgICAgICAgIiAgICAgIHNvdXJj
+          ZTogc291cmNlID8/IHRoaXMuc291cmNlLFxuICAgICk7XG4iLAogICAgICAgICIgICAgICBzb3Vy
+          Y2U6IHNvdXJjZSA/PyB0aGlzLnNvdXJjZSxcbiIKICAgICAgICAiICAgICAgZXBpc29kZUJhZGdl
+          OiBlcGlzb2RlQmFkZ2UgPz8gdGhpcy5lcGlzb2RlQmFkZ2UsXG4iCiAgICAgICAgIiAgICApO1xu
+          IiwKICAgICAgICAiZXBpc29kZUJhZGdlIGNvcHlXaXRoIHZhbHVlIiwKICAgICkKICAgIG1vZGVs
+          ID0gcmVwbGFjZV9vbmNlKAogICAgICAgIG1vZGVsLAogICAgICAgICIgICAgICAnc291cmNlJzog
+          c291cmNlLFxuIiwKICAgICAgICAiICAgICAgJ3NvdXJjZSc6IHNvdXJjZSxcbiIKICAgICAgICAi
+          ICAgICAgJ2VwaXNvZGVCYWRnZSc6IGVwaXNvZGVCYWRnZSxcbiIsCiAgICAgICAgImVwaXNvZGVC
+          YWRnZSB0b0pzb24iLAogICAgKQoKd3JpdGUoTU9ERUwsIG1vZGVsKQoKZGVmIG1hdGNoaW5nX3Bh
+          cmVuKHRleHQ6IHN0ciwgb3Blbl9pbmRleDogaW50KSAtPiBpbnQ6CiAgICBkZXB0aCA9IDAKICAg
+          IHF1b3RlID0gTm9uZQogICAgZXNjYXBlZCA9IEZhbHNlCiAgICBmb3IgaSBpbiByYW5nZShvcGVu
+          X2luZGV4LCBsZW4odGV4dCkpOgogICAgICAgIGNoID0gdGV4dFtpXQogICAgICAgIGlmIHF1b3Rl
+          IGlzIG5vdCBOb25lOgogICAgICAgICAgICBpZiBlc2NhcGVkOgogICAgICAgICAgICAgICAgZXNj
+          YXBlZCA9IEZhbHNlCiAgICAgICAgICAgIGVsaWYgY2ggPT0gIlxcIjoKICAgICAgICAgICAgICAg
+          IGVzY2FwZWQgPSBUcnVlCiAgICAgICAgICAgIGVsaWYgY2ggPT0gcXVvdGU6CiAgICAgICAgICAg
+          ICAgICBxdW90ZSA9IE5vbmUKICAgICAgICAgICAgY29udGludWUKICAgICAgICBpZiBjaCBpbiAo
+          IiciLCAnIicpOgogICAgICAgICAgICBxdW90ZSA9IGNoCiAgICAgICAgZWxpZiBjaCA9PSAiKCI6
+          CiAgICAgICAgICAgIGRlcHRoICs9IDEKICAgICAgICBlbGlmIGNoID09ICIpIjoKICAgICAgICAg
+          ICAgZGVwdGggLT0gMQogICAgICAgICAgICBpZiBkZXB0aCA9PSAwOgogICAgICAgICAgICAgICAg
+          cmV0dXJuIGkKICAgIHJldHVybiAtMQoKZXhjbHVkZWQgPSB7ImRldGFpbHMiLCAicGxheWVyIiwg
+          ImRvd25sb2FkIiwgImRvd25sb2FkcyIsICJ0cmFja2luZyJ9CnJvb3RzID0gW1JPT1QgLyAibGli
+          L2ZlYXR1cmVzIiwgUk9PVCAvICJsaWIvc2hhcmVkIl0KZmlsZXMgPSBbXQpmb3Igcm9vdCBpbiBy
+          b290czoKICAgIGlmIHJvb3QuZXhpc3RzKCk6CiAgICAgICAgZmlsZXMuZXh0ZW5kKHJvb3Qucmds
+          b2IoIiouZGFydCIpKQoKcGF0Y2hlZF9maWxlcyA9IFtdCnBhdGNoZWRfY2FsbHMgPSAwCgpmb3Ig
+          cGF0aCBpbiBmaWxlczoKICAgIHBhcnRzID0ge3AubG93ZXIoKSBmb3IgcCBpbiBwYXRoLnJlbGF0
+          aXZlX3RvKFJPT1QpLnBhcnRzfQogICAgaWYgcGFydHMgJiBleGNsdWRlZDoKICAgICAgICBjb250
+          aW51ZQoKICAgIHNvdXJjZSA9IHBhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCiAgICBp
+          ZiAiQ2FjaGVkTmV0d29ya0ltYWdlKCIgbm90IGluIHNvdXJjZSBvciAiLnBvc3RlclVybCIgbm90
+          IGluIHNvdXJjZToKICAgICAgICBjb250aW51ZQogICAgaWYgIi5lcGlzb2RlQmFkZ2UgIT0gbnVs
+          bCIgaW4gc291cmNlOgogICAgICAgIGNvbnRpbnVlCgogICAgcmVwbGFjZW1lbnRzID0gW10KICAg
+          IGN1cnNvciA9IDAKICAgIHdoaWxlIFRydWU6CiAgICAgICAgc3RhcnQgPSBzb3VyY2UuZmluZCgi
+          Q2FjaGVkTmV0d29ya0ltYWdlKCIsIGN1cnNvcikKICAgICAgICBpZiBzdGFydCA8IDA6CiAgICAg
+          ICAgICAgIGJyZWFrCiAgICAgICAgb3Blbl9pbmRleCA9IHNvdXJjZS5maW5kKCIoIiwgc3RhcnQp
+          CiAgICAgICAgZW5kID0gbWF0Y2hpbmdfcGFyZW4oc291cmNlLCBvcGVuX2luZGV4KQogICAgICAg
+          IGlmIGVuZCA8IDA6CiAgICAgICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJVbmJhbGFuY2VkIENh
+          Y2hlZE5ldHdvcmtJbWFnZSBjYWxsOiB7cGF0aH0iKQoKICAgICAgICBleHByZXNzaW9uID0gc291
+          cmNlW3N0YXJ0OmVuZCArIDFdCiAgICAgICAgbWF0Y2ggPSByZS5zZWFyY2goCiAgICAgICAgICAg
+          IHIiXGIoW0EtWmEtel9dW0EtWmEtejAtOV9dKilcLnBvc3RlclVybFxiIiwKICAgICAgICAgICAg
+          ZXhwcmVzc2lvbiwKICAgICAgICApCiAgICAgICAgaWYgbm90IG1hdGNoOgogICAgICAgICAgICBj
+          dXJzb3IgPSBlbmQgKyAxCiAgICAgICAgICAgIGNvbnRpbnVlCgogICAgICAgIHZhcmlhYmxlID0g
+          bWF0Y2guZ3JvdXAoMSkKICAgICAgICByZXBsYWNlbWVudCA9IGYiIiJTdGFjaygKICAgICAgICAg
+          ICAgICAgICAgY2xpcEJlaGF2aW9yOiBDbGlwLm5vbmUsCiAgICAgICAgICAgICAgICAgIGNoaWxk
+          cmVuOiBbCiAgICAgICAgICAgICAgICAgICAge2V4cHJlc3Npb259LAogICAgICAgICAgICAgICAg
+          ICAgIGlmICh7dmFyaWFibGV9LmVwaXNvZGVCYWRnZSAhPSBudWxsICYmCiAgICAgICAgICAgICAg
+          ICAgICAgICAgIHt2YXJpYWJsZX0uZXBpc29kZUJhZGdlIS50cmltKCkuaXNOb3RFbXB0eSkKICAg
+          ICAgICAgICAgICAgICAgICAgIFBvc2l0aW9uZWQoCiAgICAgICAgICAgICAgICAgICAgICAgIGxl
+          ZnQ6IDgsCiAgICAgICAgICAgICAgICAgICAgICAgIGJvdHRvbTogOCwKICAgICAgICAgICAgICAg
+          ICAgICAgICAgY2hpbGQ6IElnbm9yZVBvaW50ZXIoCiAgICAgICAgICAgICAgICAgICAgICAgICAg
+          Y2hpbGQ6IENvbnRhaW5lcigKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNvbnN0cmFpbnRz
+          OiBjb25zdCBCb3hDb25zdHJhaW50cyhtaW5XaWR0aDogMjgpLAogICAgICAgICAgICAgICAgICAg
+          ICAgICAgICAgcGFkZGluZzogY29uc3QgRWRnZUluc2V0cy5zeW1tZXRyaWMoCiAgICAgICAgICAg
+          ICAgICAgICAgICAgICAgICAgIGhvcml6b250YWw6IDgsCiAgICAgICAgICAgICAgICAgICAgICAg
+          ICAgICAgIHZlcnRpY2FsOiA0LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgIGRlY29yYXRpb246IEJveERlY29yYXRpb24oCiAgICAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgIGNvbG9yOiBDb2xvcnMuYmxhY2sud2l0aFZhbHVlcyhhbHBo
+          YTogMC43OCksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9y
+          ZGVyUmFkaXVzLmNpcmN1bGFyKDgpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBib3Jk
+          ZXI6IEJvcmRlci5hbGwoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IENv
+          bG9ycy53aGl0ZS53aXRoVmFsdWVzKGFscGhhOiAwLjE2KSwKICAgICAgICAgICAgICAgICAgICAg
+          ICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAg
+          ICAgICAgICAgICAgICBjaGlsZDogVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg
+          e3ZhcmlhYmxlfS5lcGlzb2RlQmFkZ2UhLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBt
+          YXhMaW5lczogMSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgb3ZlcmZsb3c6IFRleHRP
+          dmVyZmxvdy5lbGxpcHNpcywKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgdGV4dEFsaWdu
+          OiBUZXh0QWxpZ24uY2VudGVyLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBzdHlsZTog
+          Y29uc3QgVGV4dFN0eWxlKAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNvbG9yOiBD
+          b2xvcnMud2hpdGUsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZm9udFNpemU6IDEy
+          LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGhlaWdodDogMS4wLAogICAgICAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQudzcwMCwKICAgICAg
+          ICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICks
+          CiAgICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgKSwK
+          ICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIF0sCiAgICAgICAgICAg
+          ICAgICApIiIiCiAgICAgICAgcmVwbGFjZW1lbnRzLmFwcGVuZCgoc3RhcnQsIGVuZCArIDEsIHJl
+          cGxhY2VtZW50KSkKICAgICAgICBjdXJzb3IgPSBlbmQgKyAxCgogICAgaWYgbm90IHJlcGxhY2Vt
+          ZW50czoKICAgICAgICBjb250aW51ZQoKICAgIGZvciBzdGFydCwgZW5kLCByZXBsYWNlbWVudCBp
+          biByZXZlcnNlZChyZXBsYWNlbWVudHMpOgogICAgICAgIHNvdXJjZSA9IHNvdXJjZVs6c3RhcnRd
+          ICsgcmVwbGFjZW1lbnQgKyBzb3VyY2VbZW5kOl0KCiAgICBwYXRoLndyaXRlX3RleHQoc291cmNl
+          LCBlbmNvZGluZz0idXRmLTgiKQogICAgcGF0Y2hlZF9maWxlcy5hcHBlbmQoc3RyKHBhdGgucmVs
+          YXRpdmVfdG8oUk9PVCkpKQogICAgcGF0Y2hlZF9jYWxscyArPSBsZW4ocmVwbGFjZW1lbnRzKQoK
+          aWYgcGF0Y2hlZF9jYWxscyA9PSAwOgogICAgY2FuZGlkYXRlcyA9IFtdCiAgICBmb3IgcGF0aCBp
+          biBmaWxlczoKICAgICAgICByYXcgPSBwYXRoLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiLCBl
+          cnJvcnM9Imlnbm9yZSIpCiAgICAgICAgaWYgIi5wb3N0ZXJVcmwiIGluIHJhdzoKICAgICAgICAg
+          ICAgY2FuZGlkYXRlcy5hcHBlbmQoc3RyKHBhdGgucmVsYXRpdmVfdG8oUk9PVCkpKQogICAgcmFp
+          c2UgU3lzdGVtRXhpdCgKICAgICAgICAiTm8gcG9zdGVyLWNhcmQgaW1hZ2Ugd2FzIHBhdGNoZWQu
+          IENhbmRpZGF0ZSBmaWxlczpcbi0gIgogICAgICAgICsgIlxuLSAiLmpvaW4oY2FuZGlkYXRlc1s6
+          NTBdKQogICAgKQoKcHJpbnQoIk11bHRpbWVkaWFJdGVtLmVwaXNvZGVCYWRnZTogT0siKQpwcmlu
+          dChmIlBvc3RlciBpbWFnZSBjYWxscyBwYXRjaGVkOiB7cGF0Y2hlZF9jYWxsc30iKQpmb3IgcGF0
+          aCBpbiBwYXRjaGVkX2ZpbGVzOgogICAgcHJpbnQoZiIgIC0ge3BhdGh9IikK
+          B64
+
+          base64 --decode /tmp/apply_episode_badges.py.b64 > /tmp/apply_episode_badges.py
+          python3 /tmp/apply_episode_badges.py
+
+      - name: Format
+        run: dart format lib
+
+      - name: Regenerate generated files
+        run: |
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Validate
+        run: |
+          git diff --check
+          flutter analyze
+          flutter test
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet; then
+            echo "No changes were required."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add lib
+          git commit -m "feat: show extension-provided episode badges"
+          git push origin HEAD:main
