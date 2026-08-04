@@ -37,6 +37,15 @@ abstract class SkyStreamProvider {
 
   Future<MultimediaItem> getDetails(String url);
 
+  /// Loads episodes independently from the metadata/details request.
+  ///
+  /// Older providers remain compatible because the default implementation
+  /// falls back to [getDetails] and extracts its embedded episodes.
+  Future<List<Episode>> getEpisodes(String url) async {
+    final details = await getDetails(url);
+    return details.episodes ?? const <Episode>[];
+  }
+
   // Returns list of video streams (urls)
   Future<List<StreamResult>> loadStreams(String url);
 }

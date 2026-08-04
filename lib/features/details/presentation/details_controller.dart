@@ -32,6 +32,7 @@ String episodeSelectionKey(Episode episode) {
 
 class DetailsState {
   final AsyncValue<MultimediaItem?> details;
+  final AsyncValue<List<Episode>> episodes;
   final Map<int, List<Episode>> seasonMap;
   final int selectedSeason;
   final bool isMovie;
@@ -45,6 +46,7 @@ class DetailsState {
 
   const DetailsState({
     this.details = const AsyncLoading(),
+    this.episodes = const AsyncLoading(),
     this.seasonMap = const {},
     this.selectedSeason = 1,
     this.isMovie = false,
@@ -59,6 +61,7 @@ class DetailsState {
 
   DetailsState copyWith({
     AsyncValue<MultimediaItem?>? details,
+    AsyncValue<List<Episode>>? episodes,
     Map<int, List<Episode>>? seasonMap,
     int? selectedSeason,
     bool? isMovie,
@@ -72,6 +75,7 @@ class DetailsState {
   }) {
     return DetailsState(
       details: details ?? this.details,
+      episodes: episodes ?? this.episodes,
       seasonMap: seasonMap ?? this.seasonMap,
       selectedSeason: selectedSeason ?? this.selectedSeason,
       isMovie: isMovie ?? this.isMovie,
@@ -88,6 +92,10 @@ class DetailsState {
 
 @riverpod
 class DetailsController extends _$DetailsController {
+  Future<void>? _episodesLoadFuture;
+  SkyStreamProvider? _lastEpisodesProvider;
+  String? _lastEpisodesUrl;
+
   @override
   DetailsState build(String itemUrl) {
     ref.listen(activeDownloadsProvider, (prev, next) {
@@ -111,7 +119,10 @@ class DetailsController extends _$DetailsController {
         }
 
         // Re-check episodes
-        final episodes = details.episodes ?? [];
+        final episodes =
+            state.episodes.asData?.value ??
+            details.episodes ??
+            const <Episode>[];
         for (final ep in episodes) {
           if (finishingUrls.contains(ep.url)) {
             ref
@@ -125,14 +136,22 @@ class DetailsController extends _$DetailsController {
     ref.listen(watchHistoryProvider, (prev, next) {
       final details = state.details.asData?.value;
       if (details != null) {
-        _processEpisodes(details.episodes, details, isInitial: false);
+        _processEpisodes(
+          state.episodes.asData?.value ?? details.episodes,
+          details,
+          isInitial: false,
+        );
       }
     });
 
     ref.listen(episodeWatchRevisionProvider, (prev, next) {
       final details = state.details.asData?.value;
       if (details != null) {
-        _processEpisodes(details.episodes, details, isInitial: false);
+        _processEpisodes(
+          state.episodes.asData?.value ?? details.episodes,
+          details,
+          isInitial: false,
+        );
       }
     });
 
@@ -261,7 +280,11 @@ class DetailsController extends _$DetailsController {
   Future<void> loadDetails(MultimediaItem item, {bool autoPlay = false}) async {
     if (state.details is AsyncData) return;
 
-    state = state.copyWith(details: const AsyncLoading());
+    state = state.copyWith(
+      details: const AsyncLoading(),
+      episodes: const AsyncLoading(),
+      item: item,
+    );
 
     final active = ref.read(activeProviderProvider);
     final manager = ref.read(extensionManagerProvider.notifier);
@@ -283,8 +306,15 @@ class DetailsController extends _$DetailsController {
           );
         }
 
-        _processEpisodes(itemToUse.episodes, itemToUse);
-        state = state.copyWith(details: AsyncData(itemToUse));
+        final sorted =
+            _processEpisodes(itemToUse.episodes, itemToUse, isInitial: true) ??
+            const <Episode>[];
+        final rendered = itemToUse.copyWith(episodes: sorted);
+        state = state.copyWith(
+          details: AsyncData(rendered),
+          episodes: AsyncData(sorted),
+          item: rendered,
+        );
         return;
       }
 
@@ -300,38 +330,107 @@ class DetailsController extends _$DetailsController {
       }
 
       provider ??= active;
-
-      if (provider != null) {
-        final fetchedItem = await provider.getDetails(item.url);
-        if (!ref.mounted) return;
-
-        final withProvider = fetchedItem.copyWith(
-          provider: provider.packageName,
-          tmdbId: fetchedItem.tmdbId ?? item.tmdbId,
-          imdbId: fetchedItem.imdbId ?? item.imdbId,
-        );
-
-        // Immediately render the UI with raw provider details so it's not blocked
-        final sortedEpisodes = _processEpisodes(
-          withProvider.episodes,
-          withProvider,
-          isInitial: true,
-        );
-        state = state.copyWith(
-          details: AsyncData(withProvider.copyWith(episodes: sortedEpisodes)),
-          item: withProvider.copyWith(episodes: sortedEpisodes),
-        );
-
-        // Run Metadata Resolution in background silently (fire-and-forget).
-        unawaited(_resolveMetadataInBackground(withProvider));
-      } else {
+      if (provider == null) {
         throw Exception("No provider selected or found for this item");
       }
+
+      final fetchedItem = await provider.getDetails(item.url);
+      if (!ref.mounted) return;
+
+      final withProvider = fetchedItem.copyWith(
+        provider: provider.packageName,
+        tmdbId: fetchedItem.tmdbId ?? item.tmdbId,
+        imdbId: fetchedItem.imdbId ?? item.imdbId,
+      );
+
+      final inlineEpisodes = withProvider.episodes ?? const <Episode>[];
+      if (inlineEpisodes.isNotEmpty) {
+        final sorted =
+            _processEpisodes(inlineEpisodes, withProvider, isInitial: true) ??
+            const <Episode>[];
+        final rendered = withProvider.copyWith(episodes: sorted);
+
+        state = state.copyWith(
+          details: AsyncData(rendered),
+          episodes: AsyncData(sorted),
+          item: rendered,
+        );
+      } else {
+        // Metadata is ready. Render it now and let episodes continue loading
+        // independently without blocking the details page.
+        _processEpisodes(null, withProvider, isInitial: true);
+        final rendered = withProvider.copyWith(episodes: const <Episode>[]);
+
+        state = state.copyWith(
+          details: AsyncData(rendered),
+          episodes: const AsyncLoading(),
+          item: rendered,
+        );
+
+        _lastEpisodesProvider = provider;
+        _lastEpisodesUrl = item.url;
+        _episodesLoadFuture = _loadEpisodesInBackground(
+          provider,
+          item.url,
+          rendered,
+        );
+        unawaited(_episodesLoadFuture!);
+      }
+
+      // Existing ID resolution remains fire-and-forget.
+      unawaited(_resolveMetadataInBackground(withProvider));
     } catch (e, st) {
       if (ref.mounted) {
         state = state.copyWith(details: AsyncError(e, st));
       }
     }
+  }
+
+  Future<void> _loadEpisodesInBackground(
+    SkyStreamProvider provider,
+    String url,
+    MultimediaItem contextItem,
+  ) async {
+    try {
+      final fetchedEpisodes = await provider.getEpisodes(url);
+      if (!ref.mounted) return;
+
+      final sorted =
+          _processEpisodes(fetchedEpisodes, contextItem, isInitial: true) ??
+          const <Episode>[];
+
+      final currentDetails = state.details.asData?.value ?? contextItem;
+      final merged = currentDetails.copyWith(episodes: sorted);
+
+      state = state.copyWith(
+        details: AsyncData(merged),
+        episodes: AsyncData(sorted),
+        item: merged,
+      );
+    } catch (error, stackTrace) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        episodes: AsyncError(error, stackTrace),
+        seasonMap: const {},
+        selectedEpisodeKeys: const <String>{},
+      );
+    } finally {
+      _episodesLoadFuture = null;
+    }
+  }
+
+  Future<void> retryEpisodes() async {
+    final provider = _lastEpisodesProvider;
+    final url = _lastEpisodesUrl;
+    final details = state.details.asData?.value;
+
+    if (provider == null || url == null || details == null) {
+      return;
+    }
+
+    state = state.copyWith(episodes: const AsyncLoading());
+    _episodesLoadFuture = _loadEpisodesInBackground(provider, url, details);
+    await _episodesLoadFuture;
   }
 
   Future<void> _resolveMetadataInBackground(MultimediaItem withProvider) async {
@@ -577,6 +676,13 @@ class DetailsController extends _$DetailsController {
     Episode? specificEpisode,
     String? overrideUrl,
   }) async {
+    if (state.episodes.isLoading && _episodesLoadFuture != null) {
+      await _episodesLoadFuture;
+      if (!ref.mounted) return;
+    }
+
+    details = state.details.asData?.value ?? details;
+
     if (overrideUrl != null) {
       await ref
           .read(playbackLauncherProvider)

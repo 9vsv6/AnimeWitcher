@@ -21,6 +21,7 @@ import 'details_controller.dart';
 import "widgets/details_layout_widgets.dart";
 import "widgets/details_desktop_hero.dart";
 import "widgets/premium_details_widgets.dart";
+import "widgets/anime_information_section.dart";
 import "../../../shared/widgets/expandable_text.dart";
 import "../../../shared/widgets/loading_indicator.dart";
 import 'package:skystream/l10n/generated/app_localizations.dart';
@@ -37,6 +38,7 @@ class DetailsScreen extends ConsumerStatefulWidget {
 
 class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   bool _didTriggerAutoPlay = false;
+  int _selectedDetailsTab = 0;
 
   Future<void> _copyAnimeTitle(BuildContext context, String title) async {
     await Clipboard.setData(ClipboardData(text: title));
@@ -73,9 +75,19 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
       if (!widget.autoPlay || _didTriggerAutoPlay) return;
       final prevState = prev ?? const DetailsState();
       final nextState = next;
-      if (prevState.details.isLoading != true || !nextState.details.hasValue) {
+      final wasReady =
+          prevState.details.hasValue &&
+          prevState.episodes.hasValue &&
+          (prevState.episodes.value?.isNotEmpty ?? false);
+      final isReady =
+          nextState.details.hasValue &&
+          nextState.episodes.hasValue &&
+          (nextState.episodes.value?.isNotEmpty ?? false);
+
+      if (wasReady || !isReady) {
         return;
       }
+
       final item = nextState.details.value!;
       _didTriggerAutoPlay = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -99,6 +111,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
       detailsControllerProvider(widget.item.url).select((s) => s.details),
     );
     final details = detailsAsync.value;
+    final episodesAsync = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.episodes),
+    );
     final isMovie = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
     );
@@ -118,6 +133,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         item,
         details,
         detailsAsync,
+        episodesAsync,
         isMovie,
         isBookmarked,
         libraryNotifier,
@@ -128,7 +144,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
 
     // ── Mobile: SliverAppBar-based layout (unchanged) ──
     return Scaffold(
-      bottomNavigationBar: selectedEpisodeCount == 0
+      bottomNavigationBar:
+          selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       body: CustomScrollView(
@@ -262,6 +279,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             item,
             details,
             detailsAsync,
+            episodesAsync,
             isMovie,
             l10n,
           ),
@@ -469,6 +487,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     MultimediaItem item,
     MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
+    AsyncValue<List<Episode>> episodesState,
     bool isMovie,
     bool isBookmarked,
     dynamic libraryNotifier,
@@ -479,7 +498,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     final textColor = Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
-      bottomNavigationBar: selectedEpisodeCount == 0
+      bottomNavigationBar:
+          selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       extendBodyBehindAppBar: true,
@@ -533,6 +553,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           item,
           details,
           detailsState,
+          episodesState,
           isMovie,
           l10n,
         ),
@@ -540,13 +561,118 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     );
   }
 
-  /// Content rendered below the hero section: season chips, episodes,
-  /// cast, trailers, and recommendations.
+  Widget _buildDetailsPageTabs(
+    BuildContext context,
+    AsyncValue<List<Episode>> episodesState,
+  ) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final episodeCount = episodesState.asData?.value.length ?? 0;
+    final episodeLabel = episodeCount > 0
+        ? '${isArabic ? 'الحلقات' : 'Episodes'} ($episodeCount)'
+        : isArabic
+        ? 'الحلقات'
+        : 'Episodes';
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        ChoiceChip(
+          selected: _selectedDetailsTab == 0,
+          avatar: const Icon(Icons.info_outline_rounded, size: 19),
+          label: Text(isArabic ? 'التفاصيل' : 'Details'),
+          onSelected: (_) {
+            if (_selectedDetailsTab == 0) return;
+            setState(() => _selectedDetailsTab = 0);
+          },
+        ),
+        ChoiceChip(
+          selected: _selectedDetailsTab == 1,
+          avatar: episodesState.isLoading
+              ? const SizedBox.square(
+                  dimension: 17,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.video_library_outlined, size: 19),
+          label: Text(episodeLabel),
+          onSelected: (_) {
+            if (_selectedDetailsTab == 1) return;
+            setState(() => _selectedDetailsTab = 1);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _episodeLoadStatus(
+    BuildContext context,
+    AsyncValue<List<Episode>> episodesState,
+  ) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+
+    if (episodesState.isLoading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AppLoadingIndicator(),
+            const SizedBox(height: 12),
+            Text(
+              isArabic
+                  ? 'يتم تحميل الحلقات في الخلفية…'
+                  : 'Episodes are loading in the background…',
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (episodesState.hasError) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isArabic ? 'تعذر تحميل الحلقات' : 'Could not load episodes',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: () {
+                ref
+                    .read(detailsControllerProvider(widget.item.url).notifier)
+                    .retryEpisodes();
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(isArabic ? 'إعادة المحاولة' : 'Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final episodes = episodesState.asData?.value ?? const <Episode>[];
+    if (episodes.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        child: Text(isArabic ? 'لا توجد حلقات متاحة' : 'No episodes available'),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  /// Content rendered below the desktop hero.
   Widget _buildDesktopContentBelow(
     BuildContext context,
     MultimediaItem item,
     MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
+    AsyncValue<List<Episode>> episodesState,
     bool isMovie,
     AppLocalizations l10n,
   ) {
@@ -556,66 +682,74 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Loading / Error / Season chips
-        if (detailsState is AsyncLoading)
-          const Center(child: AppLoadingIndicator())
-        else if (detailsState is AsyncError)
-          Text(
-            "Error: ${detailsState.error}",
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          )
-        else if (!isMovie && details?.episodes != null)
-          DetailsSeasonListWrapper(itemUrl: widget.item.url),
-
-        const SizedBox(height: 16),
-
-        // Episode grid (non-sliver version)
-        DetailsDesktopEpisodeColumn(
-          parentItem: item,
-          itemUrl: widget.item.url,
-          isMovie: isMovie,
-        ),
-
-        const SizedBox(height: 32),
-
-        // Cast
-        if (item.cast != null && item.cast!.isNotEmpty) ...[
-          CastCarousel(cast: item.cast!),
+        if (!isMovie) ...[
+          _buildDetailsPageTabs(context, episodesState),
+          const SizedBox(height: 24),
         ],
 
-        // Trailers
-        if (item.trailers != null && item.trailers!.isNotEmpty) ...[
-          const SizedBox(height: 32),
-          TrailersSection(trailers: item.trailers!),
-        ],
+        if (_selectedDetailsTab == 0 || isMovie) ...[
+          AnimeInformationSection(item: item),
 
-        // Provider-defined entries from the same anime franchise.
-        if (relatedItems.isNotEmpty) ...[
-          const SizedBox(height: 32),
-          RecommendationsCarousel(
-            title: l10n.relatedAnime,
-            items: relatedItems,
-            showRelationBadge: true,
-            onItemTap: (relatedItem) {
-              final target = _inheritProvider(item, relatedItem);
-              DetailsRoute(
-                $extra: DetailsRouteExtra(item: target),
-              ).push<void>(context);
-            },
-          ),
-        ],
+          if (isMovie) ...[
+            const SizedBox(height: 24),
+            _episodeLoadStatus(context, episodesState),
+            if (episodesState.hasValue &&
+                (episodesState.value?.isNotEmpty ?? false))
+              DetailsDesktopEpisodeColumn(
+                parentItem: item,
+                itemUrl: widget.item.url,
+                isMovie: true,
+              ),
+          ],
 
-        // Similar titles remain separate from franchise relations.
-        if (recommendations.isNotEmpty) ...[
-          const SizedBox(height: 32),
-          RecommendationsCarousel(
-            items: recommendations,
-            onItemTap: (rec) {
-              DetailsRoute(
-                $extra: DetailsRouteExtra(item: rec),
-              ).push<void>(context);
-            },
-          ),
+          if (item.cast != null && item.cast!.isNotEmpty) ...[
+            const SizedBox(height: 32),
+            CastCarousel(cast: item.cast!),
+          ],
+
+          if (item.trailers != null && item.trailers!.isNotEmpty) ...[
+            const SizedBox(height: 32),
+            TrailersSection(trailers: item.trailers!),
+          ],
+
+          if (relatedItems.isNotEmpty) ...[
+            const SizedBox(height: 32),
+            RecommendationsCarousel(
+              title: l10n.relatedAnime,
+              items: relatedItems,
+              showRelationBadge: true,
+              onItemTap: (relatedItem) {
+                final target = _inheritProvider(item, relatedItem);
+                DetailsRoute(
+                  $extra: DetailsRouteExtra(item: target),
+                ).push<void>(context);
+              },
+            ),
+          ],
+
+          if (recommendations.isNotEmpty) ...[
+            const SizedBox(height: 32),
+            RecommendationsCarousel(
+              items: recommendations,
+              onItemTap: (rec) {
+                DetailsRoute(
+                  $extra: DetailsRouteExtra(item: rec),
+                ).push<void>(context);
+              },
+            ),
+          ],
+        ] else ...[
+          _episodeLoadStatus(context, episodesState),
+          if (episodesState.hasValue &&
+              (episodesState.value?.isNotEmpty ?? false)) ...[
+            if (!isMovie) DetailsSeasonListWrapper(itemUrl: widget.item.url),
+            const SizedBox(height: 16),
+            DetailsDesktopEpisodeColumn(
+              parentItem: item,
+              itemUrl: widget.item.url,
+              isMovie: isMovie,
+            ),
+          ],
         ],
 
         const SizedBox(height: 100),
@@ -628,13 +762,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     MultimediaItem item,
     MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
+    AsyncValue<List<Episode>> episodesState,
     bool isMovie,
     AppLocalizations l10n,
   ) {
     final relatedItems = _uniqueMediaItems(item.related);
     final recommendations = _recommendationsWithoutRelated(item);
+    final showDetailsPage = _selectedDetailsTab == 0 || isMovie;
+    final episodeReady =
+        episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
 
-    return [
+    final slivers = <Widget>[
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -730,81 +868,126 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 32),
-              if (detailsState is AsyncLoading)
-                const Center(child: AppLoadingIndicator())
-              else if (detailsState is AsyncError)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Theme.of(
+              if (detailsState.hasError) ...[
+                const SizedBox(height: 18),
+                Text(
+                  AppLocalizations.of(
                     context,
-                  ).colorScheme.error.withValues(alpha: 0.1),
-                  child: Text(
-                    AppLocalizations.of(
-                      context,
-                    )!.errorPrefix(detailsState.error.toString()),
-                  ),
-                )
-              else if (!isMovie && details?.episodes != null)
-                DetailsSeasonListWrapper(itemUrl: widget.item.url),
-            ],
-          ),
-        ),
-      ),
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        sliver: SliverDetailsEpisodeList(
-          parentItem: item,
-          itemUrl: widget.item.url,
-          isMovie: isMovie,
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (item.cast != null && item.cast!.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                CastCarousel(cast: item.cast!),
-              ],
-              if (item.trailers != null && item.trailers!.isNotEmpty) ...[
-                const SizedBox(height: 32),
-                TrailersSection(trailers: item.trailers!),
-              ],
-
-              if (relatedItems.isNotEmpty) ...[
-                const SizedBox(height: 32),
-                RecommendationsCarousel(
-                  title: l10n.relatedAnime,
-                  items: relatedItems,
-                  showRelationBadge: true,
-                  onItemTap: (relatedItem) {
-                    final target = _inheritProvider(item, relatedItem);
-                    DetailsRoute(
-                      $extra: DetailsRouteExtra(item: target),
-                    ).push<void>(context);
-                  },
+                  )!.errorPrefix(detailsState.error.toString()),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ],
-              if (recommendations.isNotEmpty) ...[
-                const SizedBox(height: 32),
-                RecommendationsCarousel(
-                  items: recommendations,
-                  onItemTap: (rec) {
-                    DetailsRoute(
-                      $extra: DetailsRouteExtra(item: rec),
-                    ).push<void>(context);
-                  },
-                ),
+              if (!isMovie) ...[
+                const SizedBox(height: 28),
+                _buildDetailsPageTabs(context, episodesState),
               ],
-
-              const SizedBox(height: 50),
             ],
           ),
         ),
       ),
     ];
+
+    if (showDetailsPage) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimeInformationSection(item: item),
+
+                if (isMovie) ...[
+                  const SizedBox(height: 20),
+                  _episodeLoadStatus(context, episodesState),
+                ],
+
+                if (item.cast != null && item.cast!.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  CastCarousel(cast: item.cast!),
+                ],
+                if (item.trailers != null && item.trailers!.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  TrailersSection(trailers: item.trailers!),
+                ],
+                if (relatedItems.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  RecommendationsCarousel(
+                    title: l10n.relatedAnime,
+                    items: relatedItems,
+                    showRelationBadge: true,
+                    onItemTap: (relatedItem) {
+                      final target = _inheritProvider(item, relatedItem);
+                      DetailsRoute(
+                        $extra: DetailsRouteExtra(item: target),
+                      ).push<void>(context);
+                    },
+                  ),
+                ],
+                if (recommendations.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  RecommendationsCarousel(
+                    items: recommendations,
+                    onItemTap: (rec) {
+                      DetailsRoute(
+                        $extra: DetailsRouteExtra(item: rec),
+                      ).push<void>(context);
+                    },
+                  ),
+                ],
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      if (isMovie && episodeReady) {
+        slivers.add(
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            sliver: SliverDetailsEpisodeList(
+              parentItem: item,
+              itemUrl: widget.item.url,
+              isMovie: true,
+            ),
+          ),
+        );
+      }
+    } else {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _episodeLoadStatus(context, episodesState),
+                if (episodeReady)
+                  DetailsSeasonListWrapper(itemUrl: widget.item.url),
+                if (episodeReady) const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      if (episodeReady) {
+        slivers.add(
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            sliver: SliverDetailsEpisodeList(
+              parentItem: item,
+              itemUrl: widget.item.url,
+              isMovie: false,
+            ),
+          ),
+        );
+      }
+
+      slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 50)));
+    }
+
+    return slivers;
   }
 }

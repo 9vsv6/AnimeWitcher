@@ -595,20 +595,39 @@ class JsBasedProvider extends SkyStreamProvider {
     });
   }
 
+  MultimediaItem _detailFromPluginResult(dynamic result, String url) {
+    if (result is! Map) {
+      throw StateError('Extension returned invalid detail data.');
+    }
+
+    final map = Map<String, dynamic>.from(result);
+    if (map['url'] == null || map['url'].toString().isEmpty) {
+      map['url'] = url;
+    }
+    return MultimediaItem.fromJson(map);
+  }
+
   @override
   Future<MultimediaItem> getDetails(String url) async {
     await _ensureReady();
     if (_error != null) throw JsPluginException("INIT_ERROR", _error!);
+
     try {
-      final result = await _jsEngine.invokeAsync(_fn('load'), [url]);
-      if (result is Map) {
-        final map = Map<String, dynamic>.from(result);
-        if (map['url'] == null || map['url'].toString().isEmpty) {
-          map['url'] = url;
-        }
-        return MultimediaItem.fromJson(map);
+      dynamic result;
+
+      // New split API. Missing functions are intentionally silent so every
+      // existing extension continues to work through the legacy `load` export.
+      try {
+        result = await _jsEngine.invokeAsync(_fn('loadDetails'), [url]);
+      } catch (_) {
+        result = null;
       }
-      throw Exception("Extension returned invalid detail data.");
+
+      if (result is! Map) {
+        result = await _jsEngine.invokeAsync(_fn('load'), [url]);
+      }
+
+      return _detailFromPluginResult(result, url);
     } on JsPluginException catch (e) {
       if (kDebugMode) debugPrint("JsPluginException in getDetails: $e");
       talker.error("JsPluginException in getDetails: $e");
@@ -617,6 +636,48 @@ class JsBasedProvider extends SkyStreamProvider {
       if (kDebugMode) debugPrint("Error in getDetails: $e");
       talker.error("Error in getDetails: $e");
       return MultimediaItem(title: "Error: $e", url: url, posterUrl: "");
+    }
+  }
+
+  @override
+  Future<List<Episode>> getEpisodes(String url) async {
+    await _ensureReady();
+    if (_error != null) throw JsPluginException("INIT_ERROR", _error!);
+
+    try {
+      dynamic result;
+      try {
+        result = await _jsEngine.invokeAsync(_fn('loadEpisodes'), [url]);
+      } catch (_) {
+        result = null;
+      }
+
+      dynamic rawEpisodes = result;
+      if (result is Map && result['episodes'] is List) {
+        rawEpisodes = result['episodes'];
+      }
+
+      if (rawEpisodes is List) {
+        final bounded = rawEpisodes.length > _kMaxResultListLength
+            ? rawEpisodes.sublist(0, _kMaxResultListLength)
+            : rawEpisodes;
+
+        return bounded
+            .whereType<Map>()
+            .map((raw) => Episode.fromJson(Map<String, dynamic>.from(raw)))
+            .toList(growable: false);
+      }
+
+      // A provider that only implements the old API is still supported.
+      return await super.getEpisodes(url);
+    } on JsPluginException catch (e) {
+      if (kDebugMode) debugPrint("JsPluginException in getEpisodes: $e");
+      talker.error("JsPluginException in getEpisodes: $e");
+      rethrow;
+    } catch (e) {
+      if (kDebugMode) debugPrint("Error in getEpisodes: $e");
+      talker.error("Error in getEpisodes: $e");
+      return await super.getEpisodes(url);
     }
   }
 
