@@ -480,13 +480,10 @@ class SliverDetailsDesktopEpisodeGrid extends ConsumerWidget {
           .toList();
     }
 
-    // Apply Batching (FIRST)
-    const int batchSize = 20;
-    final int start = detailsState.selectedRangeIndex * batchSize;
-    final int end = (start + batchSize).clamp(0, episodes.length);
-    List<Episode> displayedEpisodes = episodes.sublist(start, end);
+    // Episode list UI v2: show every filtered episode without range batching.
+    List<Episode> displayedEpisodes = List<Episode>.from(episodes);
 
-    // Apply Sorting (SECOND - only on the batch)
+    // Apply sorting to the complete filtered list.
     if (!detailsState.isAscending) {
       displayedEpisodes = displayedEpisodes.reversed.toList();
     }
@@ -508,11 +505,7 @@ class SliverDetailsDesktopEpisodeGrid extends ConsumerWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                DetailsEpisodeFilterBar(
-                  itemUrl: itemUrl,
-                  totalEpisodes: episodes.length,
-                  batchSize: batchSize,
-                ),
+                DetailsEpisodeFilterBar(itemUrl: itemUrl),
               ],
             ),
           ),
@@ -603,13 +596,10 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
           .toList();
     }
 
-    // Apply Batching (FIRST)
-    const int batchSize = 20;
-    final int start = detailsState.selectedRangeIndex * batchSize;
-    final int end = (start + batchSize).clamp(0, episodes.length);
-    List<Episode> displayedEpisodes = episodes.sublist(start, end);
+    // Episode list UI v2: show every filtered episode without range batching.
+    List<Episode> displayedEpisodes = List<Episode>.from(episodes);
 
-    // Apply Sorting (SECOND - only on the batch)
+    // Apply sorting to the complete filtered list.
     if (!detailsState.isAscending) {
       displayedEpisodes = displayedEpisodes.reversed.toList();
     }
@@ -631,11 +621,7 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
-                DetailsEpisodeFilterBar(
-                  itemUrl: itemUrl,
-                  totalEpisodes: episodes.length,
-                  batchSize: batchSize,
-                ),
+                DetailsEpisodeFilterBar(itemUrl: itemUrl),
               ],
             ),
           ),
@@ -655,30 +641,17 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
 
 class DetailsEpisodeFilterBar extends ConsumerWidget {
   final String itemUrl;
-  final int totalEpisodes;
-  final int batchSize;
 
-  const DetailsEpisodeFilterBar({
-    super.key,
-    required this.itemUrl,
-    required this.totalEpisodes,
-    required this.batchSize,
-  });
+  const DetailsEpisodeFilterBar({super.key, required this.itemUrl});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detailsState = ref.watch(detailsControllerProvider(itemUrl));
-    final int selectedIndex = detailsState.selectedRangeIndex;
     final bool isAscending = detailsState.isAscending;
     final DubStatus selectedDub = detailsState.selectedDubStatus;
 
     final allEpisodes =
         detailsState.seasonMap[detailsState.selectedSeason] ?? [];
-    final filteredEpisodes = selectedDub == DubStatus.none
-        ? allEpisodes
-        : allEpisodes.where((e) => e.dubStatus == selectedDub).toList();
-
-    final int batchCount = (filteredEpisodes.length / batchSize).ceil();
 
     final hasDub = allEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
     final hasSub = allEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
@@ -692,66 +665,6 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
         children: [
           if (isMixed) ...[
             _buildLanguageToggle(context, ref, selectedDub),
-            const SizedBox(width: 8),
-          ],
-          if (filteredEpisodes.length > batchSize) ...[
-            Focus(
-              child: Builder(
-                builder: (context) {
-                  final isFocused = Focus.of(context).hasFocus;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isFocused ? Colors.white : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: Center(
-                      child: DropdownButton<int>(
-                        value: selectedIndex,
-                        dropdownColor: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHigh,
-                        underline: const SizedBox(),
-                        elevation: 4,
-                        borderRadius: BorderRadius.circular(12),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                        icon: Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 20,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        items: List.generate(batchCount, (index) {
-                          final start = index * batchSize + 1;
-                          final end = ((index + 1) * batchSize).clamp(
-                            1,
-                            filteredEpisodes.length,
-                          );
-                          return DropdownMenuItem(
-                            value: index,
-                            child: Text("$start-$end"),
-                          );
-                        }),
-                        onChanged: (val) {
-                          if (val != null) {
-                            ref
-                                .read(
-                                  detailsControllerProvider(itemUrl).notifier,
-                                )
-                                .setRangeIndex(val);
-                          }
-                        },
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
             const SizedBox(width: 8),
           ],
           Material(
@@ -1020,13 +933,10 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
           .toList();
     }
 
-    // Apply Batching (FIRST)
-    const int batchSize = 20;
-    final int start = detailsState.selectedRangeIndex * batchSize;
-    final int end = (start + batchSize).clamp(0, episodes.length);
-    List<Episode> displayedEpisodes = episodes.sublist(start, end);
+    // Episode list UI v2: show every filtered episode without range batching.
+    List<Episode> displayedEpisodes = List<Episode>.from(episodes);
 
-    // Apply Sorting (SECOND - only on the batch)
+    // Apply sorting to the complete filtered list.
     if (!detailsState.isAscending) {
       displayedEpisodes = displayedEpisodes.reversed.toList();
     }
@@ -1048,11 +958,7 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              DetailsEpisodeFilterBar(
-                itemUrl: itemUrl,
-                totalEpisodes: episodes.length,
-                batchSize: batchSize,
-              ),
+              DetailsEpisodeFilterBar(itemUrl: itemUrl),
             ],
           ),
         ),

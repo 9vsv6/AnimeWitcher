@@ -574,32 +574,69 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         ? 'الحلقات'
         : 'Episodes';
 
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        ChoiceChip(
-          selected: _selectedDetailsTab == 0,
-          avatar: const Icon(Icons.info_outline_rounded, size: 19),
-          label: Text(isArabic ? 'التفاصيل' : 'Details'),
-          onSelected: (_) {
-            if (_selectedDetailsTab == 0) return;
-            setState(() => _selectedDetailsTab = 0);
-          },
+    // Episode UI v2: equal-width tabs without selected checkmarks.
+    Widget tab({
+      required bool selected,
+      required Widget leading,
+      required String label,
+      required VoidCallback onTap,
+    }) {
+      return ChoiceChip(
+        selected: selected,
+        showCheckmark: false,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        label: SizedBox(
+          width: double.infinity,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              leading,
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
         ),
-        ChoiceChip(
-          selected: _selectedDetailsTab == 1,
-          avatar: episodesState.isLoading
-              ? const SizedBox.square(
-                  dimension: 17,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.video_library_outlined, size: 19),
-          label: Text(episodeLabel),
-          onSelected: (_) {
-            if (_selectedDetailsTab == 1) return;
-            setState(() => _selectedDetailsTab = 1);
-          },
+        onSelected: (_) => onTap(),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: tab(
+            selected: _selectedDetailsTab == 0,
+            leading: const Icon(Icons.info_outline_rounded, size: 21),
+            label: isArabic ? 'التفاصيل' : 'Details',
+            onTap: () {
+              if (_selectedDetailsTab == 0) return;
+              setState(() => _selectedDetailsTab = 0);
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: tab(
+            selected: _selectedDetailsTab == 1,
+            leading: episodesState.isLoading
+                ? const SizedBox.square(
+                    dimension: 19,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.video_library_outlined, size: 21),
+            label: episodeLabel,
+            onTap: () {
+              if (_selectedDetailsTab == 1) return;
+              setState(() => _selectedDetailsTab = 1);
+            },
+          ),
         ),
       ],
     );
@@ -613,19 +650,24 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     if (episodesState.isLoading) {
+      // Episode UI v2: keep the loading state centered horizontally.
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 36),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const AppLoadingIndicator(),
-            const SizedBox(height: 12),
-            Text(
-              isArabic
-                  ? 'يتم تحميل الحلقات في الخلفية…'
-                  : 'Episodes are loading in the background…',
-            ),
-          ],
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const AppLoadingIndicator(),
+              const SizedBox(height: 12),
+              Text(
+                isArabic
+                    ? 'يتم تحميل الحلقات في الخلفية…'
+                    : 'Episodes are loading in the background…',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       );
     }
