@@ -1,4 +1,4 @@
-name: Clean anime information cards
+name: Fix MediaFire Cloudflare HTML capture
 
 on:
   workflow_dispatch:
@@ -6,156 +6,249 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: clean-anime-information-cards-main
-  cancel-in-progress: false
-
 jobs:
-  clean-anime-information:
+  patch-mediafire-capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
 
     steps:
-      - name: Checkout main
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
+          persist-credentials: true
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Generate localization and Riverpod files
-        run: |
-          flutter gen-l10n
-          dart run build_runner build --delete-conflicting-outputs
-
-      - name: Replace anime information section
+      - name: Patch Cloudflare HTML readiness
         shell: bash
         run: |
-          set -euo pipefail
-          cat > /tmp/anime_information_section.dart.b64 <<'B64'
-          aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CgppbXBvcnQgJy4uLy4uLy4uLy4uL2NvcmUvZG9tYWluL2VudGl0eS9tdWx0aW1lZGlh
-          X2l0ZW0uZGFydCc7CgpjbGFzcyBBbmltZUluZm9ybWF0aW9uU2VjdGlvbiBleHRlbmRzIFN0YXRlbGVzc1dpZGdldCB7CiAgZmluYWwgTXVsdGltZWRpYUl0
-          ZW0gaXRlbTsKCiAgY29uc3QgQW5pbWVJbmZvcm1hdGlvblNlY3Rpb24oe3N1cGVyLmtleSwgcmVxdWlyZWQgdGhpcy5pdGVtfSk7CgogIFN0cmluZz8gX2Ns
-          ZWFuKGR5bmFtaWMgcmF3KSB7CiAgICBpZiAocmF3ID09IG51bGwpIHJldHVybiBudWxsOwogICAgZmluYWwgdmFsdWUgPSByYXcudG9TdHJpbmcoKS50cmlt
-          KCk7CiAgICBpZiAodmFsdWUuaXNFbXB0eSB8fCB2YWx1ZS50b0xvd2VyQ2FzZSgpID09ICdudWxsJykgcmV0dXJuIG51bGw7CiAgICByZXR1cm4gdmFsdWU7
-          CiAgfQoKICBTdHJpbmc/IF9yZWFkKE1hcDxTdHJpbmcsIFN0cmluZz4gZGF0YSwgTGlzdDxTdHJpbmc+IGtleXMpIHsKICAgIGZvciAoZmluYWwga2V5IGlu
-          IGtleXMpIHsKICAgICAgZmluYWwgdmFsdWUgPSBfY2xlYW4oZGF0YVtrZXldKTsKICAgICAgaWYgKHZhbHVlICE9IG51bGwpIHJldHVybiB2YWx1ZTsKICAg
-          IH0KICAgIHJldHVybiBudWxsOwogIH0KCiAgU3RyaW5nIF9zdGF0dXMoYm9vbCBpc0FyYWJpYykgewogICAgc3dpdGNoIChpdGVtLnN0YXR1cykgewogICAg
-          ICBjYXNlIFNob3dTdGF0dXMuY29tcGxldGVkOgogICAgICAgIHJldHVybiBpc0FyYWJpYyA/ICfZhdmD2KrZhdmEJyA6ICdDb21wbGV0ZWQnOwogICAgICBj
-          YXNlIFNob3dTdGF0dXMudXBjb21pbmc6CiAgICAgICAgcmV0dXJuIGlzQXJhYmljID8gJ9mC2KfYr9mFJyA6ICdVcGNvbWluZyc7CiAgICAgIGNhc2UgU2hv
-          d1N0YXR1cy5vbmdvaW5nOgogICAgICAgIHJldHVybiBpc0FyYWJpYyA/ICfZhdiz2KrZhdixJyA6ICdPbmdvaW5nJzsKICAgIH0KICB9CgogIEBvdmVycmlk
-          ZQogIFdpZGdldCBidWlsZChCdWlsZENvbnRleHQgY29udGV4dCkgewogICAgZmluYWwgaXNBcmFiaWMgPQogICAgICAgIExvY2FsaXphdGlvbnMubG9jYWxl
-          T2YoY29udGV4dCkubGFuZ3VhZ2VDb2RlLnRvTG93ZXJDYXNlKCkgPT0gJ2FyJzsKICAgIGZpbmFsIGRhdGEgPSBpdGVtLnN5bmNEYXRhID8/IGNvbnN0IDxT
-          dHJpbmcsIFN0cmluZz57fTsKICAgIGZpbmFsIGVudHJpZXMgPSA8KHtTdHJpbmcgbGFiZWwsIFN0cmluZyB2YWx1ZSwgSWNvbkRhdGEgaWNvbn0pPltdOwoK
-          ICAgIHZvaWQgYWRkKFN0cmluZyBhciwgU3RyaW5nIGVuLCBkeW5hbWljIHZhbHVlLCBJY29uRGF0YSBpY29uKSB7CiAgICAgIGZpbmFsIGNsZWFuZWQgPSBf
-          Y2xlYW4odmFsdWUpOwogICAgICBpZiAoY2xlYW5lZCA9PSBudWxsKSByZXR1cm47CiAgICAgIGVudHJpZXMuYWRkKChsYWJlbDogaXNBcmFiaWMgPyBhciA6
-          IGVuLCB2YWx1ZTogY2xlYW5lZCwgaWNvbjogaWNvbikpOwogICAgfQoKICAgIGFkZCgKICAgICAgJ9in2YTYudmG2YjYp9mGINin2YTYpdmG2KzZhNmK2LLZ
-          iicsCiAgICAgICdFbmdsaXNoIHRpdGxlJywKICAgICAgX3JlYWQoZGF0YSwgY29uc3QgWydhd0VuZ2xpc2hUaXRsZSddKSwKICAgICAgSWNvbnMudHJhbnNs
-          YXRlX3JvdW5kZWQsCiAgICApOwogICAgYWRkKAogICAgICAn2KfZhNin2LPYqtiv2YrZiCcsCiAgICAgICdTdHVkaW8nLAogICAgICBfcmVhZChkYXRhLCBj
-          b25zdCBbJ2F3U3R1ZGlvJ10pLAogICAgICBJY29ucy5hcGFydG1lbnRfcm91bmRlZCwKICAgICk7CiAgICBhZGQoCiAgICAgICfYp9mE2YXYtdiv2LEnLAog
-          ICAgICAnU291cmNlJywKICAgICAgX3JlYWQoZGF0YSwgY29uc3QgWydhd1NvdXJjZSddKSA/PyBpdGVtLnNvdXJjZSwKICAgICAgSWNvbnMubWVudV9ib29r
-          X3JvdW5kZWQsCiAgICApOwogICAgYWRkKAogICAgICAn2KfZhNit2KfZhNipJywKICAgICAgJ1N0YXR1cycsCiAgICAgIF9yZWFkKGRhdGEsIGNvbnN0IFsn
-          YXdTdGF0ZSddKSA/PyBfc3RhdHVzKGlzQXJhYmljKSwKICAgICAgSWNvbnMud2lmaV90ZXRoZXJpbmdfcm91bmRlZCwKICAgICk7CiAgICBhZGQoCiAgICAg
-          ICfZhdmI2LPZhSDYp9mE2LnYsdi2JywKICAgICAgJ0FpcmluZyBzZWFzb24nLAogICAgICBfcmVhZChkYXRhLCBjb25zdCBbJ2F3U2Vhc29uJ10pLAogICAg
-          ICBJY29ucy5jYWxlbmRhcl9tb250aF9yb3VuZGVkLAogICAgKTsKICAgIGFkZCgKICAgICAgJ9ix2YLZhSDYp9mE2YXZiNiz2YUnLAogICAgICAnU2Vhc29u
-          IG51bWJlcicsCiAgICAgIF9yZWFkKGRhdGEsIGNvbnN0IFsnYXdTZWFzb25OdW1iZXInXSksCiAgICAgIEljb25zLmZvcm1hdF9saXN0X251bWJlcmVkX3Jv
-          dW5kZWQsCiAgICApOwogICAgYWRkKAogICAgICAn2KrYp9ix2YrYriDYp9mE2KjYr9in2YrYqScsCiAgICAgICdTdGFydCBkYXRlJywKICAgICAgX3JlYWQo
-          ZGF0YSwgY29uc3QgWydhd1N0YXJ0RGF0ZSddKSwKICAgICAgSWNvbnMucGxheV9jaXJjbGVfb3V0bGluZV9yb3VuZGVkLAogICAgKTsKICAgIGFkZCgKICAg
-          ICAgJ9iq2KfYsdmK2K4g2KfZhNmG2YfYp9mK2KknLAogICAgICAnRW5kIGRhdGUnLAogICAgICBfcmVhZChkYXRhLCBjb25zdCBbJ2F3RW5kRGF0ZSddKSwK
-          ICAgICAgSWNvbnMuc3RvcF9jaXJjbGVfb3V0bGluZWQsCiAgICApOwogICAgYWRkKAogICAgICAn2LnYr9ivINin2YTYrdmE2YLYp9iqJywKICAgICAgJ0Vw
-          aXNvZGVzJywKICAgICAgX3JlYWQoZGF0YSwgY29uc3QgWydhd0VwaXNvZGVzJ10pLAogICAgICBJY29ucy52aWRlb19saWJyYXJ5X291dGxpbmVkLAogICAg
-          KTsKICAgIGFkZCgKICAgICAgJ9mF2K/YqSDYp9mE2K3ZhNmC2KknLAogICAgICAnRXBpc29kZSBkdXJhdGlvbicsCiAgICAgIF9yZWFkKGRhdGEsIGNvbnN0
-          IFsnYXdEdXJhdGlvbiddKSA/PwogICAgICAgICAgKGl0ZW0uZHVyYXRpb24gPT0gbnVsbCA/IG51bGwgOiAnJHtpdGVtLmR1cmF0aW9ufSBtaW4nKSwKICAg
-          ICAgSWNvbnMuc2NoZWR1bGVfcm91bmRlZCwKICAgICk7CiAgICBhZGQoCiAgICAgICfYp9mE2KrYtdmG2YrZgSDYp9mE2LnZhdix2YonLAogICAgICAnQWdl
-          IHJhdGluZycsCiAgICAgIF9yZWFkKGRhdGEsIGNvbnN0IFsnYXdBZ2UnXSkgPz8gaXRlbS5jb250ZW50UmF0aW5nLAogICAgICBJY29ucy5zaGllbGRfb3V0
-          bGluZWQsCiAgICApOwoKICAgIGlmIChlbnRyaWVzLmlzRW1wdHkpIHJldHVybiBjb25zdCBTaXplZEJveC5zaHJpbmsoKTsKICAgIGZpbmFsIGNvbG9ycyA9
-          IFRoZW1lLm9mKGNvbnRleHQpLmNvbG9yU2NoZW1lOwoKICAgIHJldHVybiBDb2x1bW4oCiAgICAgIGNyb3NzQXhpc0FsaWdubWVudDogQ3Jvc3NBeGlzQWxp
-          Z25tZW50LnN0YXJ0LAogICAgICBjaGlsZHJlbjogWwogICAgICAgIFRleHQoCiAgICAgICAgICBpc0FyYWJpYyA/ICfZhdi52YTZiNmF2KfYqiDYp9mE2KPZ
-          htmF2YonIDogJ0FuaW1lIGluZm9ybWF0aW9uJywKICAgICAgICAgIHN0eWxlOiBUaGVtZS5vZihjb250ZXh0KQogICAgICAgICAgICAgIC50ZXh0VGhlbWUK
-          ICAgICAgICAgICAgICAudGl0bGVMYXJnZQogICAgICAgICAgICAgID8uY29weVdpdGgoZm9udFdlaWdodDogRm9udFdlaWdodC53NzAwKSwKICAgICAgICAp
-          LAogICAgICAgIGNvbnN0IFNpemVkQm94KGhlaWdodDogMTQpLAogICAgICAgIExheW91dEJ1aWxkZXIoCiAgICAgICAgICBidWlsZGVyOiAoY29udGV4dCwg
-          Y29uc3RyYWludHMpIHsKICAgICAgICAgICAgY29uc3Qgc3BhY2luZyA9IDEwLjA7CiAgICAgICAgICAgIGZpbmFsIGNvbHVtbnMgPSBjb25zdHJhaW50cy5t
-          YXhXaWR0aCA+PSA3NjAKICAgICAgICAgICAgICAgID8gMwogICAgICAgICAgICAgICAgOiBjb25zdHJhaW50cy5tYXhXaWR0aCA+PSA0ODAKICAgICAgICAg
-          ICAgICAgID8gMgogICAgICAgICAgICAgICAgOiAxOwogICAgICAgICAgICBmaW5hbCB3aWR0aCA9CiAgICAgICAgICAgICAgICAoY29uc3RyYWludHMubWF4
-          V2lkdGggLSAoc3BhY2luZyAqIChjb2x1bW5zIC0gMSkpKSAvIGNvbHVtbnM7CgogICAgICAgICAgICByZXR1cm4gV3JhcCgKICAgICAgICAgICAgICBzcGFj
-          aW5nOiBzcGFjaW5nLAogICAgICAgICAgICAgIHJ1blNwYWNpbmc6IHNwYWNpbmcsCiAgICAgICAgICAgICAgY2hpbGRyZW46IFsKICAgICAgICAgICAgICAg
-          IGZvciAoZmluYWwgZW50cnkgaW4gZW50cmllcykKICAgICAgICAgICAgICAgICAgU2l6ZWRCb3goCiAgICAgICAgICAgICAgICAgICAgd2lkdGg6IHdpZHRo
-          LAogICAgICAgICAgICAgICAgICAgIGNoaWxkOiBEZWNvcmF0ZWRCb3goCiAgICAgICAgICAgICAgICAgICAgICBkZWNvcmF0aW9uOiBCb3hEZWNvcmF0aW9u
-          KAogICAgICAgICAgICAgICAgICAgICAgICBjb2xvcjogY29sb3JzLnN1cmZhY2VDb250YWluZXJIaWdoZXN0LndpdGhWYWx1ZXMoCiAgICAgICAgICAgICAg
-          ICAgICAgICAgICAgYWxwaGE6IDAuNTUsCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czog
-          Qm9yZGVyUmFkaXVzLmNpcmN1bGFyKDE0KSwKICAgICAgICAgICAgICAgICAgICAgICAgYm9yZGVyOiBCb3JkZXIuYWxsKAogICAgICAgICAgICAgICAgICAg
-          ICAgICAgIGNvbG9yOiBjb2xvcnMub3V0bGluZVZhcmlhbnQud2l0aFZhbHVlcyhhbHBoYTogMC40NSksCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAg
-          ICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgY2hpbGQ6IFBhZGRpbmcoCiAgICAgICAgICAgICAgICAgICAgICAgIHBhZGRp
-          bmc6IGNvbnN0IEVkZ2VJbnNldHMuYWxsKDEyKSwKICAgICAgICAgICAgICAgICAgICAgICAgY2hpbGQ6IFJvdygKICAgICAgICAgICAgICAgICAgICAgICAg
-          ICBjcm9zc0F4aXNBbGlnbm1lbnQ6IENyb3NzQXhpc0FsaWdubWVudC5zdGFydCwKICAgICAgICAgICAgICAgICAgICAgICAgICBjaGlsZHJlbjogWwogICAg
-          ICAgICAgICAgICAgICAgICAgICAgICAgSWNvbihlbnRyeS5pY29uLCBzaXplOiAyMSwgY29sb3I6IGNvbG9ycy5wcmltYXJ5KSwKICAgICAgICAgICAgICAg
-          ICAgICAgICAgICAgIGNvbnN0IFNpemVkQm94KHdpZHRoOiAxMCksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBFeHBhbmRlZCgKICAgICAgICAgICAg
-          ICAgICAgICAgICAgICAgICAgY2hpbGQ6IENvbHVtbigKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjcm9zc0F4aXNBbGlnbm1lbnQ6IENyb3Nz
-          QXhpc0FsaWdubWVudC5zdGFydCwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICAgICAgICAgICAgICAg
-          ICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZW50cnkubGFiZWwsCiAgICAgICAgICAgICAgICAgICAgICAgICAg
-          ICAgICAgICAgIHN0eWxlOiBUaGVtZS5vZihjb250ZXh0KQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLnRleHRUaGVtZQogICAg
-          ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLmxhYmVsTWVkaXVtCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA/
-          LmNvcHlXaXRoKAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjb2xvcjogY29sb3JzLm9uU3VyZmFjZVZhcmlhbnQsCiAgICAg
-          ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQudzYwMCwKICAgICAgICAgICAgICAgICAgICAgICAg
-          ICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg
-          Y29uc3QgU2l6ZWRCb3goaGVpZ2h0OiAzKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFNlbGVjdGFibGVUZXh0KAogICAgICAgICAgICAg
-          ICAgICAgICAgICAgICAgICAgICAgICBlbnRyeS52YWx1ZSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc3R5bGU6IFRoZW1lLm9mKGNv
-          bnRleHQpCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAudGV4dFRoZW1lCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg
-          ICAgICAgICAuYm9keU1lZGl1bQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPy5jb3B5V2l0aChmb250V2VpZ2h0OiBGb250V2Vp
-          Z2h0Lnc2MDApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBdLAogICAgICAg
-          ICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgICBdLAogICAg
-          ICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAp
-          LAogICAgICAgICAgICAgIF0sCiAgICAgICAgICAgICk7CiAgICAgICAgICB9LAogICAgICAgICksCiAgICAgIF0sCiAgICApOwogIH0KfQo=
-          B64
-          tr -d '[:space:]' < /tmp/anime_information_section.dart.b64 \
-            | base64 --decode \
-            > lib/features/details/presentation/widgets/anime_information_section.dart
+          python3 <<'PY'
+          from pathlib import Path
 
-      - name: Format
-        run: dart format lib/features/details/presentation/widgets/anime_information_section.dart
+          path = Path("lib/core/network/cloudflare_bypass.dart")
+          if not path.exists():
+              raise SystemExit(f"Missing target file: {path}")
 
-      - name: Verify removed and retained cards
+          text = path.read_text(encoding="utf-8")
+          marker = "SKYSTREAM_MEDIAFIRE_READY_V2"
+
+          if marker in text:
+              print("MediaFire readiness patch is already applied.")
+              raise SystemExit(0)
+
+          solved_anchor = "    bool solved = false;\n"
+          if solved_anchor not in text:
+              raise SystemExit("Could not find the solved-state anchor")
+
+          if "    bool checking = false;\n" not in text:
+              text = text.replace(
+                  solved_anchor,
+                  solved_anchor + "    bool checking = false;\n",
+                  1,
+              )
+
+          start_marker = "    Future<void> checkSolved(\n"
+          end_marker = "\n    final headless = HeadlessInAppWebView("
+          start = text.find(start_marker)
+          if start < 0:
+              raise SystemExit("Could not find checkSolved()")
+
+          end = text.find(end_marker, start)
+          if end < 0:
+              raise SystemExit("Could not find the end of checkSolved()")
+
+          replacement = r"""    // SKYSTREAM_MEDIAFIRE_READY_V2
+          // Do not serialize MediaFire while its post-challenge document is still
+          // incomplete. The final CDN URL is placed in #downloadButton[href].
+          // This function is also used by cached WebView navigations, so it must
+          // continue completing holder.hostView after the initial solve.
+          Future<void> checkSolved(
+            InAppWebViewController controller,
+            String? currentUrl,
+          ) async {
+            if (checking) return;
+
+            // During the tiny interval after the first capture and before the
+            // cached _HostWebView is installed, ignore duplicate callbacks.
+            if (solved && holder.hostView == null) return;
+
+            checking = true;
+            try {
+              const readinessScript = r'''
+              (function(){
+                var t = (document.title || '').toLowerCase();
+                var bodyText = (
+                  document.body && document.body.innerText
+                    ? document.body.innerText
+                    : ''
+                ).toLowerCase();
+
+                var titleChallenge =
+                    t.indexOf('just a moment') !== -1 ||
+                    t.indexOf('checking your browser') !== -1 ||
+                    t.indexOf('browser verification') !== -1 ||
+                    t.indexOf('attention required') !== -1 ||
+                    t.indexOf('verify you are human') !== -1 ||
+                    t.indexOf('verifying you are human') !== -1 ||
+                    t.indexOf('cloudflare') !== -1;
+
+                var bodyChallenge =
+                    bodyText.indexOf('checking your browser') !== -1 ||
+                    bodyText.indexOf('browser verification') !== -1 ||
+                    bodyText.indexOf('enable javascript and cookies to continue') !== -1 ||
+                    bodyText.indexOf('verify you are human') !== -1 ||
+                    bodyText.indexOf('verifying you are human') !== -1 ||
+                    bodyText.indexOf('making sure you are not a bot') !== -1 ||
+                    bodyText.indexOf("making sure you're not a bot") !== -1;
+
+                var domChallenge =
+                    !!document.getElementById('challenge-form') ||
+                    !!document.querySelector('[data-translate="checking_browser"]') ||
+                    !!document.querySelector('.cf-mitigated-content') ||
+                    !!document.querySelector('.cf-turnstile') ||
+                    !!document.querySelector('[src*="challenge-platform"]') ||
+                    typeof window._cf_chl_opt !== 'undefined';
+
+                if (titleChallenge || bodyChallenge || domChallenge) {
+                  return '0';
+                }
+
+                var host = (location.hostname || '').toLowerCase();
+                var isMediaFire =
+                    host === 'mediafire.com' ||
+                    host.slice(-14) === '.mediafire.com';
+
+                // Preserve the previous behavior for every other website.
+                if (!isMediaFire) return '1';
+
+                // MediaFire can clear the challenge before the actual file page
+                // finishes replacing the transitional document.
+                if (document.readyState !== 'complete') return '0';
+
+                var button =
+                    document.querySelector('#downloadButton') ||
+                    document.querySelector('a[aria-label="Download file"]') ||
+                    document.querySelector('a.input.popsok');
+                if (!button) return '0';
+
+                var href =
+                    button.getAttribute('href') ||
+                    button.href ||
+                    '';
+                var direct =
+                    /^https:\/\/download[^.]*\.mediafire\.com\//i.test(href) ||
+                    /^https:\/\/[^/]+\.mediafireusercontent\.com\//i.test(href);
+                if (!direct) return '0';
+
+                // Give plugin.js a stable fallback marker in addition to the
+                // ordinary #downloadButton[href] attribute.
+                try {
+                  document.documentElement.setAttribute(
+                    'data-skystream-mediafire-direct',
+                    href
+                  );
+                } catch (_) {}
+
+                return '1';
+              })()
+              ''';
+
+              var isReady = await controller.evaluateJavascript(
+                source: readinessScript,
+              );
+              if (isReady != '1') return;
+
+              final effectiveUrl = currentUrl ?? url;
+              final effectiveHost =
+                  Uri.tryParse(effectiveUrl)?.host.toLowerCase() ?? '';
+              final isMediaFire =
+                  effectiveHost == 'mediafire.com' ||
+                  effectiveHost.endsWith('.mediafire.com');
+
+              if (isMediaFire) {
+                // Ensure the final href/HTML has settled after the challenge.
+                await Future<void>.delayed(
+                  const Duration(milliseconds: 450),
+                );
+                isReady = await controller.evaluateJavascript(
+                  source: readinessScript,
+                );
+                if (isReady != '1') return;
+              }
+
+              final html = await controller.evaluateJavascript(
+                source: 'document.documentElement.outerHTML',
+              );
+              final body = html?.toString();
+              if (body == null ||
+                  body.length < 500 ||
+                  _looksLikeBrowserChallenge(body)) {
+                return;
+              }
+
+              if (kDebugMode && isMediaFire) {
+                debugPrint(
+                  '$_tag MediaFire final HTML captured '
+                  '(${body.length} chars) from $effectiveUrl',
+                );
+              }
+
+              result = CfResult(
+                body: body,
+                statusCode: 200,
+                finalUrl: effectiveUrl,
+              );
+
+              if (!solved) solved = true;
+
+              // Completes cached navigate() calls. It is harmless during the
+              // first solve because holder.hostView is installed afterward.
+              holder.hostView?.onLoaded(body);
+            } catch (e) {
+              if (kDebugMode) {
+                debugPrint('$_tag readiness check failed: $e');
+              }
+            } finally {
+              checking = false;
+            }
+          }
+          """
+
+          text = text[:start] + replacement + text[end:]
+
+          required = (
+              marker,
+              "document.readyState !== 'complete'",
+              "data-skystream-mediafire-direct",
+              "holder.hostView?.onLoaded(body)",
+              "bool checking = false",
+          )
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit(f"Patch verification failed: {missing}")
+
+          path.write_text(text, encoding="utf-8")
+          print(f"Patched {path}")
+          PY
+
+      - name: Verify generated change
         shell: bash
         run: |
-          set -euo pipefail
-          file="lib/features/details/presentation/widgets/anime_information_section.dart"
-          for removed in awType awYear awMalScore awMalRank awMalScoringUsers awScore awRatingsCount awViews awFavorites malId anilistId; do
-            if grep -Fq "$removed" "$file"; then
-              echo "Removed card is still present: $removed"
-              exit 1
-            fi
-          done
-          for kept in awEnglishTitle awStudio awSource awState awSeason awStartDate awEpisodes awDuration awAge; do
-            grep -Fq "$kept" "$file"
-          done
+          grep -n "SKYSTREAM_MEDIAFIRE_READY_V2" lib/core/network/cloudflare_bypass.dart
+          grep -n "data-skystream-mediafire-direct" lib/core/network/cloudflare_bypass.dart
+          grep -n "document.readyState" lib/core/network/cloudflare_bypass.dart
+          git diff --check
+          git diff --stat
 
-      - name: Check diff
-        run: git diff --check
-
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Commit changes
+      - name: Commit and push
         shell: bash
         run: |
-          set -euo pipefail
-          git add lib/features/details/presentation/widgets/anime_information_section.dart
-          if git diff --cached --quiet; then
-            echo "No source changes were required."
+          if git diff --quiet; then
+            echo "No changes to commit."
             exit 0
           fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "refactor: simplify anime information page"
-          git push origin main
+          git add lib/core/network/cloudflare_bypass.dart
+          git commit -m "fix: wait for final MediaFire download HTML"
+          git push origin "HEAD:${{ github.ref_name }}"
