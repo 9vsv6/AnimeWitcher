@@ -133,13 +133,15 @@ class HomeSearchDelegate extends SearchDelegate<void> {
     _filters = selected;
     onFiltersChanged?.call(selected);
 
-    // A plain field change does not rebuild SearchDelegate on its own.
-    // Notify it so the results refresh immediately for the new filters.
-    notifyListeners();
+    // Force SearchDelegate to rebuild even when it is already displaying
+    // results. Toggling its body mode avoids requiring the user to focus or
+    // submit the query again after changing filters.
+    showSuggestions(context);
     _dismissKeyboard(context);
-    showResults(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) _dismissKeyboard(context);
+      if (!context.mounted) return;
+      showResults(context);
+      _dismissKeyboard(context);
     });
   }
 
