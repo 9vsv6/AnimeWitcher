@@ -1294,7 +1294,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cacheCleared => 'Cache cleared';
 
   @override
-  String get calculating => 'Calculating…';
+  String get calculating => 'جارٍ الحساب…';
 
   @override
   String get playerControls => 'Player Controls';
@@ -2547,7 +2547,7 @@ class AppLocalizationsArApc extends AppLocalizationsAr {
   String get cacheCleared => 'Cache cleared';
 
   @override
-  String get calculating => 'Calculating…';
+  String get calculating => 'جارٍ الحساب…';
 
   @override
   String get playerControls => 'Player Controls';

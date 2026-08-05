@@ -17,8 +17,9 @@ class DownloadsScreen extends ConsumerWidget {
     final isWidescreen = isTv || context.isTabletOrLarger;
     final title = AppLocalizations.of(context)!.downloads;
 
+    final Widget page;
     if (isWidescreen) {
-      return Scaffold(
+      page = Scaffold(
         backgroundColor: Colors.transparent,
         body: Column(
           children: [
@@ -42,11 +43,16 @@ class DownloadsScreen extends ConsumerWidget {
           ],
         ),
       );
+    } else {
+      page = Scaffold(
+        appBar: AppBar(title: Text(title)),
+        body: const DownloadsTab(),
+      );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: const DownloadsTab(),
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: page,
     );
   }
 }

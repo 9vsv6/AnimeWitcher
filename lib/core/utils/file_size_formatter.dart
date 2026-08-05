@@ -53,6 +53,6 @@ String formatDownloadSizePair({
   final downloaded = total * normalizedProgress;
   final digits = unit == 'B' ? 0 : fractionDigits;
 
-  return '${downloaded.toStringAsFixed(digits)} / '
+  return '${downloaded.toStringAsFixed(digits)} $unit / '
       '${total.toStringAsFixed(digits)} $unit';
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:background_downloader/background_downloader.dart';
 import '../../../../core/services/download_service.dart';
+import '../../../../core/utils/file_size_formatter.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 class DownloadProgressDialog extends ConsumerWidget {
@@ -30,11 +31,13 @@ class DownloadProgressDialog extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
-        child: Padding(
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -84,7 +87,12 @@ class DownloadProgressDialog extends ConsumerWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    "${data.downloadedSizeString} / ${data.totalSizeString}",
+                    formatDownloadSizePair(
+                      totalBytes: data.totalSize,
+                      progress: data.progress,
+                      fractionDigits: 2,
+                    ),
+                    textDirection: TextDirection.ltr,
                   ),
                 ],
               ),
@@ -97,12 +105,17 @@ class DownloadProgressDialog extends ConsumerWidget {
                     Icons.speed_rounded,
                     l10n.speed,
                     data.speedString,
+                    valueTextDirection: TextDirection.ltr,
                   ),
                   _buildInfoItem(
                     context,
                     Icons.timer_outlined,
                     l10n.remaining,
-                    data.timeRemainingString,
+                    _formatTimeRemaining(context, data, l10n),
+                    valueTextDirection:
+                        Localizations.localeOf(context).languageCode == 'ar'
+                        ? TextDirection.rtl
+                        : TextDirection.ltr,
                   ),
                 ],
               ),
@@ -150,6 +163,7 @@ class DownloadProgressDialog extends ConsumerWidget {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -157,8 +171,9 @@ class DownloadProgressDialog extends ConsumerWidget {
     BuildContext context,
     IconData icon,
     String label,
-    String value,
-  ) {
+    String value, {
+    TextDirection? valueTextDirection,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -168,6 +183,10 @@ class DownloadProgressDialog extends ConsumerWidget {
             const SizedBox(width: 4),
             Text(
               label,
+              textDirection:
+                  Localizations.localeOf(context).languageCode == 'ar'
+                  ? TextDirection.rtl
+                  : TextDirection.ltr,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -177,12 +196,99 @@ class DownloadProgressDialog extends ConsumerWidget {
         const SizedBox(height: 4),
         Text(
           value,
+          textDirection: valueTextDirection ?? TextDirection.ltr,
           style: Theme.of(
             context,
           ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
     );
+  }
+
+  String _formatTimeRemaining(
+    BuildContext context,
+    DownloadProgressData data,
+    AppLocalizations l10n,
+  ) {
+    if (data.status == TaskStatus.paused) return '---';
+    if (data.progress >= 1.0) return l10n.statusFinished;
+    if (data.timeRemaining.inSeconds <= 0) return l10n.calculating;
+
+    final duration = data.timeRemaining;
+    if (Localizations.localeOf(context).languageCode == 'ar') {
+      if (duration.inHours > 0) {
+        final parts = <String>[
+          _formatArabicUnit(
+            duration.inHours,
+            singular: 'ساعة',
+            dual: 'ساعتان',
+            plural: 'ساعات',
+          ),
+        ];
+        final minutes = duration.inMinutes % 60;
+        if (minutes > 0) {
+          parts.add(
+            _formatArabicUnit(
+              minutes,
+              singular: 'دقيقة',
+              dual: 'دقيقتان',
+              plural: 'دقائق',
+            ),
+          );
+        }
+        return parts.join(' و');
+      }
+
+      if (duration.inMinutes > 0) {
+        final parts = <String>[
+          _formatArabicUnit(
+            duration.inMinutes,
+            singular: 'دقيقة',
+            dual: 'دقيقتان',
+            plural: 'دقائق',
+          ),
+        ];
+        final seconds = duration.inSeconds % 60;
+        if (seconds > 0) {
+          parts.add(
+            _formatArabicUnit(
+              seconds,
+              singular: 'ثانية',
+              dual: 'ثانيتان',
+              plural: 'ثوانٍ',
+            ),
+          );
+        }
+        return parts.join(' و');
+      }
+
+      return _formatArabicUnit(
+        duration.inSeconds,
+        singular: 'ثانية',
+        dual: 'ثانيتان',
+        plural: 'ثوانٍ',
+      );
+    }
+
+    if (duration.inHours > 0) {
+      return '${duration.inHours}h ${duration.inMinutes % 60}m';
+    }
+    if (duration.inMinutes > 0) {
+      return '${duration.inMinutes}m ${duration.inSeconds % 60}s';
+    }
+    return '${duration.inSeconds}s';
+  }
+
+  String _formatArabicUnit(
+    int value, {
+    required String singular,
+    required String dual,
+    required String plural,
+  }) {
+    if (value == 1) return singular;
+    if (value == 2) return dual;
+    if (value >= 3 && value <= 10) return '$value $plural';
+    return '$value $singular';
   }
 
   static void show(BuildContext context, String title, String trackingUrl) {

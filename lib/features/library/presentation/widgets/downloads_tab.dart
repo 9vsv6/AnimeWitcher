@@ -398,6 +398,7 @@ class _DownloadItemTile extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         _downloadedSizeText(),
+                        textDirection: TextDirection.ltr,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.start,
@@ -411,6 +412,7 @@ class _DownloadItemTile extends ConsumerWidget {
                     const SizedBox(width: LayoutConstants.spacingSm),
                     Text(
                       '${(progress.clamp(0.0, 1.0) * 100).floor()}%',
+                      textDirection: TextDirection.ltr,
                       textAlign: TextAlign.end,
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontSize: 10,
@@ -430,6 +432,7 @@ class _DownloadItemTile extends ConsumerWidget {
                 if (progressData != null && isWorking)
                   Text(
                     progressData!.speedString,
+                    textDirection: TextDirection.ltr,
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontSize: 10,
                       color: theme.colorScheme.onSurfaceVariant,
