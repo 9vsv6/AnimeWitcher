@@ -1,4 +1,4 @@
-name: Apply AnimeWitcher search filters v4
+name: Apply AnimeWitcher search filters v5
 
 on:
   workflow_dispatch:
@@ -264,7 +264,7 @@ jobs:
                 final result = await _serializedInvoke(
                   () => _jsEngine.invokeAsync(_fn('getSearchFilters')),
                 );
-                if (result is Map) {
+                if (result is Map<Object?, Object?>) {
                   return ProviderSearchFilterOptions.fromJson(
           Map<String, dynamic>.from(result),
                   );
@@ -976,10 +976,7 @@ jobs:
               return _providerSearchFilters;
             }
 
-            Future<void> _showProviderSearchFilters(
-              BuildContext context,
-              WidgetRef ref,
-            ) async {
+            Future<void> _showProviderSearchFilters(WidgetRef ref) async {
               final provider = ref.read(activeProviderProvider);
               if (provider == null || _isLoadingProviderSearchFilters) return;
 
@@ -1056,7 +1053,7 @@ jobs:
                   )
               parameters = (
                   '                onShowSearchFilters: () =>\n'
-                  '                    _showProviderSearchFilters(context, ref),\n'
+                  '                    _showProviderSearchFilters(ref),\n'
                   '                searchFilters: activeSearchFilters,\n'
                   '                isFilterLoading: _isLoadingProviderSearchFilters,\n'
               )
@@ -1074,7 +1071,7 @@ jobs:
                     Padding(
                       padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
                       child: CardsWrapper(
-                        onTap: () => _showProviderSearchFilters(context, ref),
+                        onTap: () => _showProviderSearchFilters(ref),
                         borderRadius: BorderRadius.circular(50),
                         child: CircleAvatar(
                           backgroundColor: activeSearchFilters.isNotEmpty
