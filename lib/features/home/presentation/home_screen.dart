@@ -566,6 +566,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       mediaList: entry.value,
                       category: ViewAllCategory.providerContent,
                       showViewAll: true,
+                      fixedPhysicalDirection: true,
                       loadViewAllPage: (offset, limit) =>
                           activeProvider.getHomeSectionPage(
                             entry.key,
@@ -1164,8 +1165,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final imageHeight = cardWidth / (2 / 3);
     final listHeight = imageHeight + 40.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Title Placeholder
         Padding(
@@ -1217,6 +1220,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
       ],
+      ),
     );
   }
 }

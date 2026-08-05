@@ -38,11 +38,14 @@ class _SyncedProgressSectionState extends ConsumerState<SyncedProgressSection> {
     if (widget.items.isEmpty) return const SizedBox.shrink();
 
     final isLarge = context.isTabletOrLarger;
+    final localeDirection = Directionality.of(context);
     final double width = isLarge ? 360.0 : 280.0;
     final double listHeight = isLarge ? 200.0 : 150.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: EdgeInsets.fromLTRB(
@@ -57,6 +60,8 @@ class _SyncedProgressSectionState extends ConsumerState<SyncedProgressSection> {
             children: [
               Text(
                 widget.title,
+                textDirection: localeDirection,
+                textAlign: TextAlign.left,
                 style: TextStyle(
                   fontSize: isLarge ? 24 : 20,
                   fontWeight: FontWeight.bold,
@@ -93,16 +98,19 @@ class _SyncedProgressSectionState extends ConsumerState<SyncedProgressSection> {
               itemExtent: width + (isLarge ? 24.0 : 12.0),
               itemBuilder: (context, index) {
                 final item = widget.items[index];
-                return Padding(
-                  padding: EdgeInsets.only(right: isLarge ? 24.0 : 12.0),
-                  child: SyncedProgressCard(
-                    key: ValueKey(
-                      '${item.tmdbId}_${item.imdbId}_${item.title}',
+                return Directionality(
+                  textDirection: localeDirection,
+                  child: Padding(
+                    padding: EdgeInsets.only(right: isLarge ? 24.0 : 12.0),
+                    child: SyncedProgressCard(
+                      key: ValueKey(
+                        '${item.tmdbId}_${item.imdbId}_${item.title}',
+                      ),
+                      item: item,
+                      width: width,
+                      isLarge: isLarge,
+                      onTap: () => widget.onItemTap(item),
                     ),
-                    item: item,
-                    width: width,
-                    isLarge: isLarge,
-                    onTap: () => widget.onItemTap(item),
                   ),
                 );
               },
@@ -110,6 +118,7 @@ class _SyncedProgressSectionState extends ConsumerState<SyncedProgressSection> {
           ),
         ),
       ],
+      ),
     );
   }
 }

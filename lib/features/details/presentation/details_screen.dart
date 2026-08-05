@@ -81,9 +81,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             distance >= _tabSwipeDistanceThreshold ||
             velocity >= _tabSwipeVelocityThreshold;
 
-        if (swipeLeft && _selectedDetailsTab != 1) {
+        final isRtl = Directionality.of(context) == TextDirection.rtl;
+        final swipeTowardEpisodes = isRtl ? swipeLeft : swipeRight;
+        final swipeTowardDetails = isRtl ? swipeRight : swipeLeft;
+
+        if (swipeTowardEpisodes && _selectedDetailsTab != 1) {
           setState(() => _selectedDetailsTab = 1);
-        } else if (swipeRight && _selectedDetailsTab != 0) {
+        } else if (swipeTowardDetails && _selectedDetailsTab != 0) {
           setState(() => _selectedDetailsTab = 0);
         }
       },

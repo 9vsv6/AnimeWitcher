@@ -19,6 +19,7 @@ class MediaHorizontalList extends StatefulWidget {
   final ViewAllCategory category;
   final void Function(MultimediaItem)? onTap;
   final bool showViewAll;
+  final bool fixedPhysicalDirection;
   final String? heroTagPrefix;
   final Future<ProviderMediaPage> Function(int offset, int limit)?
   loadViewAllPage;
@@ -30,6 +31,7 @@ class MediaHorizontalList extends StatefulWidget {
     required this.category,
     this.onTap,
     this.showViewAll = true,
+    this.fixedPhysicalDirection = false,
     this.heroTagPrefix,
     this.loadViewAllPage,
   });
@@ -135,6 +137,10 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
   Widget build(BuildContext context) {
     if (widget.mediaList.isEmpty) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context)!;
+    final localeDirection = Directionality.of(context);
+    final layoutDirection = widget.fixedPhysicalDirection
+        ? TextDirection.ltr
+        : localeDirection;
 
     final isDesktop = context.isDesktop;
 
@@ -145,8 +151,10 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     final double imageHeight = cardWidth / (_isPortrait ? (2 / 3) : (16 / 9));
     final double listHeight = imageHeight + 40.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Directionality(
+      textDirection: layoutDirection,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Header Row
         Padding(
@@ -171,6 +179,8 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                   children: [
                     Text(
                       widget.title,
+                      textDirection: localeDirection,
+                      textAlign: TextAlign.left,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -238,6 +248,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                       children: [
                         Text(
                           l10n.viewAll,
+                          textDirection: localeDirection,
                           style: TextStyle(
                             color: Theme.of(
                               context,
@@ -290,27 +301,30 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                   final uniqueTag =
                       '${prefix}_${widget.title}_${item.id}_${itemTitle.hashCode}_$index';
 
-                  return Padding(
-                    padding: EdgeInsets.only(right: spacing),
-                    child: MultimediaCard(
-                      imageUrl: imageUrl,
-                      title: itemTitle,
-                      episodeBadge: item.episodeBadge,
-                      heroTag: uniqueTag,
-                      isPortrait: _isPortrait,
-                      onTap: () {
-                        if (widget.onTap != null) {
-                          widget.onTap!(item);
-                        } else {
-                          TmdbDetailsRoute(
-                            movieId: item.id,
-                            mediaType: item.tmdbMediaType,
-                            heroTag: uniqueTag,
-                            placeholderPoster: imageUrl,
-                            source: item.source,
-                          ).push<void>(context);
-                        }
-                      },
+                  return Directionality(
+                    textDirection: localeDirection,
+                    child: Padding(
+                      padding: EdgeInsets.only(right: spacing),
+                      child: MultimediaCard(
+                        imageUrl: imageUrl,
+                        title: itemTitle,
+                        episodeBadge: item.episodeBadge,
+                        heroTag: uniqueTag,
+                        isPortrait: _isPortrait,
+                        onTap: () {
+                          if (widget.onTap != null) {
+                            widget.onTap!(item);
+                          } else {
+                            TmdbDetailsRoute(
+                              movieId: item.id,
+                              mediaType: item.tmdbMediaType,
+                              heroTag: uniqueTag,
+                              placeholderPoster: imageUrl,
+                              source: item.source,
+                            ).push<void>(context);
+                          }
+                        },
+                      ),
                     ),
                   );
                 },
@@ -319,6 +333,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
           ),
         ),
       ],
+      ),
     );
   }
 }

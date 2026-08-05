@@ -42,12 +42,15 @@ class _ContinueWatchingSectionState
     if (widget.items.isEmpty) return const SizedBox.shrink();
 
     final isLarge = context.isTabletOrLarger;
+    final localeDirection = Directionality.of(context);
 
     final double width = isLarge ? 360.0 : 280.0;
     final double listHeight = isLarge ? 200.0 : 150.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: EdgeInsets.fromLTRB(
@@ -66,6 +69,8 @@ class _ContinueWatchingSectionState
                   children: [
                     Text(
                       widget.title,
+                      textDirection: localeDirection,
+                      textAlign: TextAlign.left,
                       style: TextStyle(
                         fontSize: isLarge ? 24 : 20,
                         fontWeight: FontWeight.bold,
@@ -138,6 +143,7 @@ class _ContinueWatchingSectionState
                         const SizedBox(width: 8),
                         Text(
                           AppLocalizations.of(context)!.clearAll,
+                          textDirection: localeDirection,
                           style: const TextStyle(
                             color: Colors.red,
                             fontSize: 14,
@@ -173,13 +179,16 @@ class _ContinueWatchingSectionState
                   itemExtent: width + spacing,
                   itemBuilder: (context, index) {
                     final historyItem = widget.items[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(right: spacing),
-                      child: ContinueWatchingCard(
-                        key: ValueKey(historyItem.item.url),
-                        historyItem: historyItem,
-                        width: width,
-                        isLarge: isLarge,
+                    return Directionality(
+                      textDirection: localeDirection,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: spacing),
+                        child: ContinueWatchingCard(
+                          key: ValueKey(historyItem.item.url),
+                          historyItem: historyItem,
+                          width: width,
+                          isLarge: isLarge,
+                        ),
                       ),
                     );
                   },
@@ -189,6 +198,7 @@ class _ContinueWatchingSectionState
           ),
         ),
       ],
+      ),
     );
   }
 }
