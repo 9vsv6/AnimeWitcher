@@ -281,7 +281,6 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
   @override
   void didUpdateWidget(covariant NextAiringWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-
     if (oldWidget.nextAiring.unixTime != widget.nextAiring.unixTime) {
       _startCountdown();
     }
@@ -289,60 +288,21 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
 
   Duration _calculateRemaining() {
     final difference = _airingDate.difference(DateTime.now().toUtc());
-
-    if (difference.isNegative) {
-      return Duration.zero;
-    }
-
-    return difference;
+    return difference.isNegative ? Duration.zero : difference;
   }
 
   void _startCountdown() {
     _timer?.cancel();
     _remaining = _calculateRemaining();
-
-    if (_remaining == Duration.zero) {
-      return;
-    }
+    if (_remaining == Duration.zero) return;
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       final remaining = _calculateRemaining();
+      if (!mounted) return;
 
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _remaining = remaining;
-      });
-
-      if (remaining == Duration.zero) {
-        _timer?.cancel();
-      }
+      setState(() => _remaining = remaining);
+      if (remaining == Duration.zero) _timer?.cancel();
     });
-  }
-
-  String _formatCountdown(BuildContext context, Duration duration) {
-    final days = duration.inDays;
-    final hours = duration.inHours.remainder(24).toString().padLeft(2, '0');
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-
-    if (days > 0) {
-      late final String dayText;
-      if (!_isArabicDetailsLocale(context)) {
-        dayText = '$days days';
-      } else if (days == 1) {
-        dayText = 'يوم واحد';
-      } else if (days == 2) {
-        dayText = 'يومان';
-      } else {
-        dayText = '$days أيام';
-      }
-      return '$dayText  $hours:$minutes:$seconds';
-    }
-
-    return '$hours:$minutes:$seconds';
   }
 
   @override
@@ -351,24 +311,67 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
     super.dispose();
   }
 
+  Widget _buildCountdownCard(
+    BuildContext context, {
+    required String value,
+    required String label,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 92),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.45)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value,
+              textDirection: TextDirection.ltr,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 9),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final season = widget.nextAiring.season;
-    final isArabic = _isArabicDetailsLocale(context);
-    late final String episodeDescription;
-    if (season == null) {
-      episodeDescription = isArabic
-          ? 'الحلقة ${widget.nextAiring.episode}'
-          : 'Episode ${widget.nextAiring.episode}';
-    } else {
-      episodeDescription = isArabic
-          ? 'الحلقة ${widget.nextAiring.episode} من الموسم $season'
-          : 'Episode ${widget.nextAiring.episode} of Season $season';
+    if (season == null || season <= 0 || widget.nextAiring.episode <= 0) {
+      return const SizedBox.shrink();
     }
 
-    final countdownText = _remaining == Duration.zero
-        ? _detailsText(context, english: 'Airing now', arabic: 'تُعرض الآن')
-        : _formatCountdown(context, _remaining);
+    final isArabic = _isArabicDetailsLocale(context);
+    final heading = isArabic
+        ? 'حلقة ${widget.nextAiring.episode} من موسم $season في'
+        : 'Episode ${widget.nextAiring.episode} of Season $season in';
+
+    final days = _remaining.inDays.toString();
+    final hours = _remaining.inHours.remainder(24).toString().padLeft(2, '0');
+    final minutes = _remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = _remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
 
     return Container(
       width: double.infinity,
@@ -377,41 +380,65 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
         color: Theme.of(
           context,
         ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.timer_outlined,
-                size: 20,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  isArabic ? '$episodeDescription بعد' : '$episodeDescription in',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            countdownText,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
+          Directionality(
+            textDirection: Directionality.of(context),
+            child: Text(
+              heading,
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
+          const SizedBox(height: 14),
+          if (_remaining == Duration.zero)
+            Text(
+              _detailsText(context, english: 'Airing now', arabic: 'تُعرض الآن'),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            )
+          else
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                children: [
+                  _buildCountdownCard(
+                    context,
+                    value: days,
+                    label: isArabic ? 'يوم' : 'Days',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCountdownCard(
+                    context,
+                    value: hours,
+                    label: isArabic ? 'ساعة' : 'Hours',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCountdownCard(
+                    context,
+                    value: minutes,
+                    label: isArabic ? 'دقيقة' : 'Minutes',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCountdownCard(
+                    context,
+                    value: seconds,
+                    label: isArabic ? 'ثانية' : 'Seconds',
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

@@ -1056,68 +1056,78 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Hero(
-                    tag: 'poster_${item.url}',
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CachedNetworkImage(
-                        imageUrl:
-                            AppImageFallbacks.poster(
-                              item.posterUrl,
-                              label: item.title,
-                            ) ??
-                            '',
-                        width: 100,
-                        height: 150,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, _, _) =>
-                            ThumbnailErrorPlaceholder(label: item.title),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Hero(
+                      tag: 'poster_${item.url}',
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          imageUrl:
+                              AppImageFallbacks.poster(
+                                item.posterUrl,
+                                label: item.title,
+                              ) ??
+                              '',
+                          width: 100,
+                          height: 150,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, _, _) =>
+                              ThumbnailErrorPlaceholder(label: item.title),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onLongPress: () =>
-                              _copyAnimeTitle(context, item.title),
-                          child: item.logoUrl != null
-                              ? CachedNetworkImage(
-                                  imageUrl: item.logoUrl!,
-                                  height: 50,
-                                  fit: BoxFit.contain,
-                                  alignment: Alignment.centerLeft,
-                                  errorWidget: (_, _, _) => Text(
-                                    item.title,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                )
-                              : Text(
-                                  item.title,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Directionality(
+                        textDirection: Directionality.of(context),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onLongPress: () =>
+                                  _copyAnimeTitle(context, item.title),
+                              child: item.logoUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: item.logoUrl!,
+                                      height: 50,
+                                      fit: BoxFit.contain,
+                                      alignment: Alignment.centerLeft,
+                                      errorWidget: (_, _, _) => Text(
+                                        item.title,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                    )
+                                  : Text(
+                                      item.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                            ),
+                            const SizedBox(height: 8),
+                            MetadataBar(
+                              item: item,
+                              isLoading: detailsState is AsyncLoading,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        MetadataBar(
-                          item: item,
-                          isLoading: detailsState is AsyncLoading,
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               DetailsActionButtons(
