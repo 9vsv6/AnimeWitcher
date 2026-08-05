@@ -226,6 +226,14 @@ abstract class SkyStreamProvider {
     return details.recommendations ?? const <MultimediaItem>[];
   }
 
+  /// Loads the next-airing entry independently from the main details request.
+  ///
+  /// Providers should return null until episode, time, and season are all known.
+  Future<NextAiring?> getNextAiring(String url) async {
+    final details = await getDetails(url);
+    return details.nextAiring;
+  }
+
   /// Loads episodes independently from the metadata/details request.
   ///
   /// Older providers remain compatible because the default implementation

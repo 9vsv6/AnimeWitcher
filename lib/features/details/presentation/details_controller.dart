@@ -400,6 +400,14 @@ class DetailsController extends _$DetailsController {
             generation,
           ),
         );
+        unawaited(
+          _loadNextAiringInBackground(
+            provider,
+            item.url,
+            item,
+            generation,
+          ),
+        );
       }
     } catch (error, stackTrace) {
       if (!ref.mounted || generation != _loadGeneration) return;
@@ -437,6 +445,7 @@ class DetailsController extends _$DetailsController {
       final currentRelated = state.related.asData?.value ?? current.related;
       final currentRecommendations =
           state.recommendations.asData?.value ?? current.recommendations;
+      final currentNextAiring = current.nextAiring;
 
       final rendered = withProvider.copyWith(
         episodes: currentEpisodes,
@@ -450,6 +459,9 @@ class DetailsController extends _$DetailsController {
         recommendations: independent
             ? currentRecommendations
             : (withProvider.recommendations ?? currentRecommendations),
+        nextAiring: independent
+            ? currentNextAiring
+            : (withProvider.nextAiring ?? currentNextAiring),
       );
 
       if (currentEpisodes == null || currentEpisodes.isEmpty) {
@@ -629,6 +641,37 @@ class DetailsController extends _$DetailsController {
       state = state.copyWith(
         related: AsyncError<List<MultimediaItem>>(error, stackTrace),
       );
+    }
+  }
+
+  Future<void> _loadNextAiringInBackground(
+    SkyStreamProvider provider,
+    String url,
+    MultimediaItem contextItem,
+    int generation,
+  ) async {
+    try {
+      final value = await provider.getNextAiring(url);
+      if (!ref.mounted || generation != _loadGeneration || value == null) {
+        return;
+      }
+      if (value.episode <= 0 ||
+          value.unixTime <= 0 ||
+          (value.season ?? 0) <= 0) {
+        return;
+      }
+
+      final current = state.item ?? contextItem;
+      if (current.url != contextItem.url) return;
+      final updated = current.copyWith(nextAiring: value);
+      state = state.copyWith(
+        details: state.details.hasValue ? AsyncData(updated) : null,
+        item: updated,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Next-airing loading failed: $error');
+      }
     }
   }
 

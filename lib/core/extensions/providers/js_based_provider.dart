@@ -84,7 +84,7 @@ Future<List<R>> _processInChunks<T, R>(
 }
 
 class JsBasedProvider extends SkyStreamProvider {
-  static const int _iifeWrapperVersion = 7;
+  static const int _iifeWrapperVersion = 8;
 
   final JsEngineService _jsEngine;
   final String _scriptPath;
@@ -244,6 +244,7 @@ class JsBasedProvider extends SkyStreamProvider {
                       loadTrailers: (typeof loadTrailers !== 'undefined') ? loadTrailers : (typeof globalThis.loadTrailers !== 'undefined' ? globalThis.loadTrailers : undefined),
                       loadRelated: (typeof loadRelated !== 'undefined') ? loadRelated : (typeof globalThis.loadRelated !== 'undefined' ? globalThis.loadRelated : undefined),
                       loadRecommendations: (typeof loadRecommendations !== 'undefined') ? loadRecommendations : (typeof globalThis.loadRecommendations !== 'undefined' ? globalThis.loadRecommendations : undefined),
+                      loadNextAiring: (typeof loadNextAiring !== 'undefined') ? loadNextAiring : (typeof globalThis.loadNextAiring !== 'undefined' ? globalThis.loadNextAiring : undefined),
                       loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (typeof globalThis.loadStreams !== 'undefined' ? globalThis.loadStreams : undefined),
                       getProviders: (typeof getProviders !== 'undefined') ? getProviders : (typeof globalThis.getProviders !== 'undefined' ? globalThis.getProviders : undefined),
                       getSettings: (typeof getSettings !== 'undefined') ? getSettings : (typeof globalThis.getSettings !== 'undefined' ? globalThis.getSettings : undefined),
@@ -267,6 +268,7 @@ class JsBasedProvider extends SkyStreamProvider {
               if (globalThis.loadTrailers) delete globalThis.loadTrailers;
               if (globalThis.loadRelated) delete globalThis.loadRelated;
               if (globalThis.loadRecommendations) delete globalThis.loadRecommendations;
+              if (globalThis.loadNextAiring) delete globalThis.loadNextAiring;
               if (globalThis.loadStreams) delete globalThis.loadStreams;
               if (globalThis.getProviders) delete globalThis.getProviders;
               if (globalThis.getSettings) delete globalThis.getSettings;
@@ -1114,6 +1116,35 @@ class JsBasedProvider extends SkyStreamProvider {
         debugPrint('[$_packageName] recommendation loading failed: $error');
       }
       rethrow;
+    }
+  }
+
+  @override
+  Future<NextAiring?> getNextAiring(String url) async {
+    try {
+      final result = await _invokeOptionalDetailExport('loadNextAiring', url);
+      dynamic raw = result;
+      if (result is Map<Object?, Object?> &&
+          result['nextAiring'] is Map<Object?, Object?>) {
+        raw = result['nextAiring'];
+      }
+      if (raw is! Map<Object?, Object?>) return null;
+
+      final value = NextAiring.fromJson(Map<String, dynamic>.from(raw));
+      if (value.episode <= 0 ||
+          value.unixTime <= 0 ||
+          (value.season ?? 0) <= 0) {
+        return null;
+      }
+      return value;
+    } catch (error) {
+      if (_isMissingExportError(error, 'loadNextAiring')) {
+        return super.getNextAiring(url);
+      }
+      if (kDebugMode) {
+        debugPrint('[$_packageName] next-airing loading failed: $error');
+      }
+      return null;
     }
   }
 
