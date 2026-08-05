@@ -1,4 +1,4 @@
-name: Apply AnimeWitcher search filters
+name: Apply AnimeWitcher search filters v2
 
 on:
   workflow_dispatch:
