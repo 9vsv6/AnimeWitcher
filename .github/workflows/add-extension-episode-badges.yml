@@ -162,31 +162,34 @@ jobs:
           # JS provider: expose optional getSearchFilters/searchWithFilters.
           # ------------------------------------------------------------------
           js = JS_PROVIDER.read_text(encoding='utf-8')
+          # Match one stable line at a time instead of a whitespace-sensitive
+          # multi-line block. dart format changes indentation, but not these lines.
+          search_export_line = "                      search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),\n"
           js = replace_once(
               js,
-              '''                      search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
-                      load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
-          ''',
-              '''                      getSearchFilters: (typeof getSearchFilters !== 'undefined') ? getSearchFilters : (typeof globalThis.getSearchFilters !== 'undefined' ? globalThis.getSearchFilters : undefined),
-                      searchWithFilters: (typeof searchWithFilters !== 'undefined') ? searchWithFilters : (typeof globalThis.searchWithFilters !== 'undefined' ? globalThis.searchWithFilters : undefined),
-                      search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
-                      load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
-          ''',
+              search_export_line,
+              "                      getSearchFilters: (typeof getSearchFilters !== 'undefined') ? getSearchFilters : (typeof globalThis.getSearchFilters !== 'undefined' ? globalThis.getSearchFilters : undefined),\n"
+              "                      searchWithFilters: (typeof searchWithFilters !== 'undefined') ? searchWithFilters : (typeof globalThis.searchWithFilters !== 'undefined' ? globalThis.searchWithFilters : undefined),\n"
+              + search_export_line,
               'JS IIFE filter exports',
           )
+
+          search_cleanup_line = "              if (globalThis.search) delete globalThis.search;\n"
           js = replace_once(
               js,
-              '''              if (globalThis.getHomeSection) delete globalThis.getHomeSection;
-              if (globalThis.search) delete globalThis.search;
-              if (globalThis.load) delete globalThis.load;
-          ''',
-              '''              if (globalThis.getHomeSection) delete globalThis.getHomeSection;
-              if (globalThis.getSearchFilters) delete globalThis.getSearchFilters;
-              if (globalThis.searchWithFilters) delete globalThis.searchWithFilters;
-              if (globalThis.search) delete globalThis.search;
-              if (globalThis.load) delete globalThis.load;
-          ''',
+              search_cleanup_line,
+              "              if (globalThis.getSearchFilters) delete globalThis.getSearchFilters;\n"
+              "              if (globalThis.searchWithFilters) delete globalThis.searchWithFilters;\n"
+              + search_cleanup_line,
               'JS IIFE filter cleanup',
+          )
+
+          # The namespaced IIFE changed, so invalidate old QuickJS bytecode.
+          js = replace_once(
+              js,
+              '  static const int _iifeWrapperVersion = 3;\n',
+              '  static const int _iifeWrapperVersion = 4;\n',
+              'JS IIFE wrapper version',
           )
 
           js_search_anchor = '''  @override
