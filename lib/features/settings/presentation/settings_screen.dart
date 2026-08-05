@@ -10,6 +10,7 @@ import '../../../core/theme/theme_provider.dart';
 import '../../../core/utils/stream_quality_sorter.dart';
 import 'widgets/settings_widgets.dart';
 import 'widgets/settings_dialogs.dart';
+import 'widgets/taskbar_customization_dialog.dart';
 import 'player_settings_provider.dart';
 import 'general_settings_provider.dart';
 import 'app_version_provider.dart';
@@ -76,6 +77,8 @@ class SettingsScreen extends ConsumerWidget {
         const PlayerSettings();
 
     final l10n = AppLocalizations.of(context)!;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     final platform = Theme.of(context).platform;
     final isDesktopOS =
@@ -131,6 +134,21 @@ class SettingsScreen extends ConsumerWidget {
                     context,
                     ref,
                     generalSettings.defaultHomeScreen,
+                  ),
+                ),
+                SettingsTile(
+                  icon: Icons.dashboard_customize_rounded,
+                  title: isArabic
+                      ? 'تخصيص شريط المهام'
+                      : 'Customize taskbar',
+                  subtitle: isArabic
+                      ? 'ترتيب العناصر وإخفاؤها أو إظهارها'
+                      : 'Reorder, hide, or show taskbar items',
+                  onTap: () => showTaskbarCustomizationDialog(
+                    context,
+                    ref,
+                    generalSettings.taskbarOrder,
+                    generalSettings.hiddenTaskbarItems,
                   ),
                 ),
                 SettingsTile(

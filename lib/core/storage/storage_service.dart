@@ -167,6 +167,29 @@ class StorageService {
         as String;
   }
 
+  Future<void> setTaskbarOrder(List<String> order) async {
+    await _settingsBox.put('taskbar_order', List<String>.from(order));
+  }
+
+  List<String> getTaskbarOrder() {
+    final value = _settingsBox.get('taskbar_order');
+    if (value is! List) return const <String>[];
+    return value.map((item) => item.toString()).toList(growable: false);
+  }
+
+  Future<void> setHiddenTaskbarItems(Set<String> hidden) async {
+    await _settingsBox.put(
+      'hidden_taskbar_items',
+      hidden.toList(growable: false),
+    );
+  }
+
+  Set<String> getHiddenTaskbarItems() {
+    final value = _settingsBox.get('hidden_taskbar_items');
+    if (value is! List) return const <String>{};
+    return value.map((item) => item.toString()).toSet();
+  }
+
   Future<void> setTitlePosition(String position) async {
     await _settingsBox.put('title_position', position);
   }

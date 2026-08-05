@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import '../../../../core/services/external_player_service.dart';
+import '../../../../core/navigation/taskbar_destination.dart';
 import '../../../../core/network/doh_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 import '../../../../core/theme/theme_provider.dart';
@@ -44,18 +45,7 @@ String getResizeModeLabel(String mode, AppLocalizations l10n) {
 
 /// Returns a human-readable label for a home screen route.
 String getHomeScreenLabel(String route, AppLocalizations l10n) {
-  switch (route) {
-    case '/home':
-      return l10n.home;
-    case '/explore':
-      return l10n.explore;
-    case '/search':
-      return l10n.search;
-    case '/library':
-      return l10n.library;
-    default:
-      return l10n.home;
-  }
+  return taskbarDestinationForRoute(route)?.label(l10n) ?? l10n.home;
 }
 
 /// Shows a dialog to pick the default home screen.
@@ -65,12 +55,18 @@ void showDefaultHomeScreenDialog(
   String current,
 ) {
   final l10n = AppLocalizations.of(context)!;
-  final options = <Map<String, String>>[
-    {'label': l10n.home, 'route': '/home'},
-    {'label': l10n.explore, 'route': '/explore'},
-    {'label': l10n.search, 'route': '/search'},
-    {'label': l10n.library, 'route': '/library'},
-  ];
+  final settings = ref.read(generalSettingsProvider);
+  final options = visibleTaskbarDestinations(
+    settings.taskbarOrder,
+    settings.hiddenTaskbarItems,
+  )
+      .map(
+        (destination) => <String, String>{
+          'label': destination.label(l10n),
+          'route': destination.route,
+        },
+      )
+      .toList(growable: false);
 
   showDialog<void>(
     context: context,

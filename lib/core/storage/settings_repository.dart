@@ -37,6 +37,17 @@ class SettingsRepository {
     return _storageService.getDefaultHomeScreen();
   }
 
+  Future<void> setTaskbarOrder(List<String> order) =>
+      _storageService.setTaskbarOrder(order);
+
+  List<String> getTaskbarOrder() => _storageService.getTaskbarOrder();
+
+  Future<void> setHiddenTaskbarItems(Set<String> hidden) =>
+      _storageService.setHiddenTaskbarItems(hidden);
+
+  Set<String> getHiddenTaskbarItems() =>
+      _storageService.getHiddenTaskbarItems();
+
   Future<void> setTitlePosition(String position) async {
     await _storageService.setTitlePosition(position);
   }

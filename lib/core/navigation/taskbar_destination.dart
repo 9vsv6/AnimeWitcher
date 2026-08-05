@@ -1,0 +1,138 @@
+import 'package:flutter/material.dart';
+import 'package:skystream/l10n/generated/app_localizations.dart';
+
+enum TaskbarDestination {
+  home,
+  search,
+  explore,
+  library,
+  downloads,
+  settings;
+
+  String get id => name;
+
+  int get branchIndex => switch (this) {
+    TaskbarDestination.home => 0,
+    TaskbarDestination.search => 1,
+    TaskbarDestination.explore => 2,
+    TaskbarDestination.library => 3,
+    TaskbarDestination.downloads => 4,
+    TaskbarDestination.settings => 5,
+  };
+
+  String get route => switch (this) {
+    TaskbarDestination.home => '/home',
+    TaskbarDestination.search => '/search',
+    TaskbarDestination.explore => '/explore',
+    TaskbarDestination.library => '/library',
+    TaskbarDestination.downloads => '/downloads',
+    TaskbarDestination.settings => '/settings',
+  };
+
+  IconData get icon => switch (this) {
+    TaskbarDestination.home => Icons.home_outlined,
+    TaskbarDestination.search => Icons.search_outlined,
+    TaskbarDestination.explore => Icons.explore_outlined,
+    TaskbarDestination.library => Icons.video_library_outlined,
+    TaskbarDestination.downloads => Icons.download_for_offline_outlined,
+    TaskbarDestination.settings => Icons.settings_outlined,
+  };
+
+  IconData get selectedIcon => switch (this) {
+    TaskbarDestination.home => Icons.home,
+    TaskbarDestination.search => Icons.search,
+    TaskbarDestination.explore => Icons.explore,
+    TaskbarDestination.library => Icons.video_library,
+    TaskbarDestination.downloads => Icons.download_for_offline_rounded,
+    TaskbarDestination.settings => Icons.settings,
+  };
+
+  String label(AppLocalizations l10n) => switch (this) {
+    TaskbarDestination.home => l10n.home,
+    TaskbarDestination.search => l10n.search,
+    TaskbarDestination.explore => l10n.explore,
+    TaskbarDestination.library => l10n.library,
+    TaskbarDestination.downloads => l10n.downloads,
+    TaskbarDestination.settings => l10n.settings,
+  };
+}
+
+const List<String> defaultTaskbarOrderIds = <String>[
+  'home',
+  'search',
+  'explore',
+  'library',
+  'downloads',
+  'settings',
+];
+
+TaskbarDestination? taskbarDestinationFromId(String id) {
+  for (final destination in TaskbarDestination.values) {
+    if (destination.id == id) return destination;
+  }
+  return null;
+}
+
+TaskbarDestination? taskbarDestinationForRoute(String route) {
+  for (final destination in TaskbarDestination.values) {
+    if (destination.route == route) return destination;
+  }
+  return null;
+}
+
+List<TaskbarDestination> normalizeTaskbarOrder(Iterable<String> storedIds) {
+  final result = <TaskbarDestination>[];
+  final seen = <TaskbarDestination>{};
+
+  for (final id in storedIds) {
+    final destination = taskbarDestinationFromId(id);
+    if (destination != null && seen.add(destination)) {
+      result.add(destination);
+    }
+  }
+
+  for (final destination in TaskbarDestination.values) {
+    if (seen.add(destination)) result.add(destination);
+  }
+
+  return List<TaskbarDestination>.unmodifiable(result);
+}
+
+Set<String> normalizeHiddenTaskbarItems(Iterable<String> storedIds) {
+  final valid = TaskbarDestination.values.map((value) => value.id).toSet();
+  return Set<String>.unmodifiable(
+    storedIds.where(
+      (id) => id != TaskbarDestination.settings.id && valid.contains(id),
+    ),
+  );
+}
+
+List<TaskbarDestination> visibleTaskbarDestinations(
+  Iterable<String> orderIds,
+  Iterable<String> hiddenIds,
+) {
+  final hidden = normalizeHiddenTaskbarItems(hiddenIds);
+  return normalizeTaskbarOrder(orderIds)
+      .where(
+        (destination) =>
+            destination == TaskbarDestination.settings ||
+            !hidden.contains(destination.id),
+      )
+      .toList(growable: false);
+}
+
+String resolveInitialTaskbarRoute(
+  String preferredRoute,
+  Iterable<String> orderIds,
+  Iterable<String> hiddenIds,
+) {
+  final preferred = taskbarDestinationForRoute(preferredRoute);
+  final hidden = normalizeHiddenTaskbarItems(hiddenIds);
+  if (preferred != null &&
+      (preferred == TaskbarDestination.settings ||
+          !hidden.contains(preferred.id))) {
+    return preferred.route;
+  }
+
+  return visibleTaskbarDestinations(orderIds, hiddenIds).first.route;
+}

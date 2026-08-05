@@ -1,0 +1,133 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/navigation/taskbar_destination.dart';
+import '../../../../l10n/generated/app_localizations.dart';
+import '../general_settings_provider.dart';
+
+Future<void> showTaskbarCustomizationDialog(
+  BuildContext context,
+  WidgetRef ref,
+  List<String> currentOrder,
+  Set<String> currentHidden,
+) async {
+  final l10n = AppLocalizations.of(context)!;
+  final isArabic =
+      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+  var order = normalizeTaskbarOrder(currentOrder).toList(growable: true);
+  var hidden = normalizeHiddenTaskbarItems(currentHidden).toSet();
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) {
+        final maxHeight = (MediaQuery.sizeOf(context).height * 0.68)
+            .clamp(360.0, 560.0)
+            .toDouble();
+
+        return AlertDialog(
+          surfaceTintColor: Colors.transparent,
+          title: Text(isArabic ? 'تخصيص شريط المهام' : 'Customize taskbar'),
+          content: SizedBox(
+            width: 520,
+            height: maxHeight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isArabic
+                      ? 'اسحب العناصر لتغيير ترتيبها، وأخفِ ما لا تحتاجه. الإعدادات تبقى ظاهرة دائمًا.'
+                      : 'Drag items to reorder them and hide anything you do not need. Settings always remains visible.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ReorderableListView.builder(
+                    buildDefaultDragHandles: false,
+                    itemCount: order.length,
+                    onReorder: (oldIndex, newIndex) {
+                      setState(() {
+                        if (newIndex > oldIndex) newIndex -= 1;
+                        final item = order.removeAt(oldIndex);
+                        order.insert(newIndex, item);
+                      });
+                    },
+                    itemBuilder: (context, index) {
+                      final destination = order[index];
+                      final isSettings =
+                          destination == TaskbarDestination.settings;
+                      final visible =
+                          isSettings || !hidden.contains(destination.id);
+
+                      return Card(
+                        key: ValueKey(destination.id),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: Icon(destination.icon),
+                          title: Text(destination.label(l10n)),
+                          subtitle: isSettings
+                              ? Text(
+                                  isArabic
+                                      ? 'لا يمكن إخفاؤها'
+                                      : 'Cannot be hidden',
+                                )
+                              : null,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Switch(
+                                value: visible,
+                                onChanged: isSettings
+                                    ? null
+                                    : (value) {
+                                        setState(() {
+                                          if (value) {
+                                            hidden.remove(destination.id);
+                                          } else {
+                                            hidden.add(destination.id);
+                                          }
+                                        });
+                                      },
+                              ),
+                              ReorderableDragStartListener(
+                                index: index,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(Icons.drag_handle_rounded),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () async {
+                await ref
+                    .read(generalSettingsProvider.notifier)
+                    .setTaskbarPreferences(
+                      order.map((destination) => destination.id).toList(),
+                      hidden,
+                    );
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+              child: Text(l10n.save),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}

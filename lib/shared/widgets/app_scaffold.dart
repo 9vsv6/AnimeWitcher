@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:skystream/core/navigation/taskbar_destination.dart';
 import 'package:skystream/core/providers/device_info_provider.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
@@ -45,20 +46,8 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
   }
 
   int _getRouteIndex(String route) {
-    switch (route) {
-      case '/home':
-        return 0;
-      case '/search':
-        return 1;
-      case '/explore':
-        return 2;
-      case '/library':
-        return 3;
-      case '/settings':
-        return 4;
-      default:
-        return 0;
-    }
+    return taskbarDestinationForRoute(route)?.branchIndex ??
+        TaskbarDestination.home.branchIndex;
   }
 
   // Intercepts D-pad LEFT only when the currently focused widget has no
@@ -98,10 +87,12 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
   @override
   Widget build(BuildContext context) {
     final deviceProfileAsync = ref.watch(deviceProfileProvider);
-    final defaultHome = ref.watch(
-      generalSettingsProvider.select((s) => s.defaultHomeScreen),
+    final generalSettings = ref.watch(generalSettingsProvider);
+    final defaultIndex = _getRouteIndex(generalSettings.defaultHomeScreen);
+    final taskbarDestinations = visibleTaskbarDestinations(
+      generalSettings.taskbarOrder,
+      generalSettings.hiddenTaskbarItems,
     );
-    final defaultIndex = _getRouteIndex(defaultHome);
     final isAtDefaultHome = widget.navigationShell.currentIndex == defaultIndex;
 
     return deviceProfileAsync.when(
@@ -217,8 +208,10 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                 bottom: CustomBottomNavBar.bottomInsetFor(context),
               ),
               child: CustomBottomNavBar(
-                currentIndex: widget.navigationShell.currentIndex,
-                onTap: (index) => _onItemTapped(index, context),
+                currentBranchIndex: widget.navigationShell.currentIndex,
+                destinations: taskbarDestinations,
+                onTap: (destination) =>
+                    _onItemTapped(destination.branchIndex, context),
               ),
             ),
           ),

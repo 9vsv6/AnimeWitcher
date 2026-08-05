@@ -5,6 +5,7 @@ import 'package:skystream/features/home/presentation/home_screen.dart';
 import 'package:skystream/features/search/presentation/search_screen.dart';
 import '../../features/explore/presentation/explore_screen.dart';
 import 'package:skystream/features/library/presentation/library_screen.dart';
+import 'package:skystream/features/library/presentation/downloads_screen.dart';
 import 'package:skystream/features/settings/presentation/settings_screen.dart';
 import '../../features/extensions/screens/extensions_screen.dart';
 import '../../features/settings/presentation/developer_options_screen.dart';
@@ -13,6 +14,7 @@ import '../../features/details/presentation/tmdb_movie_details_screen.dart';
 import '../../features/explore/presentation/view_all_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
 import '../domain/entity/multimedia_item.dart';
+import '../navigation/taskbar_destination.dart';
 import '../extensions/base_provider.dart';
 import 'package:skystream/shared/widgets/app_scaffold.dart';
 import '../../core/storage/settings_repository.dart';
@@ -37,6 +39,9 @@ part 'app_router.g.dart';
     ),
     TypedStatefulShellBranch<LibraryBranchData>(
       routes: [TypedGoRoute<LibraryRoute>(path: '/library')],
+    ),
+    TypedStatefulShellBranch<DownloadsBranchData>(
+      routes: [TypedGoRoute<DownloadsRoute>(path: '/downloads')],
     ),
     TypedStatefulShellBranch<SettingsBranchData>(
       routes: [
@@ -105,6 +110,17 @@ class LibraryRoute extends GoRouteData with $LibraryRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       const LibraryScreen();
+}
+
+class DownloadsBranchData extends StatefulShellBranchData {
+  const DownloadsBranchData();
+}
+
+class DownloadsRoute extends GoRouteData with $DownloadsRoute {
+  const DownloadsRoute();
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      const DownloadsScreen();
 }
 
 class SettingsBranchData extends StatefulShellBranchData {
@@ -262,7 +278,12 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 @Riverpod(keepAlive: true)
 GoRouter appRouter(Ref ref) {
-  final initial = ref.read(settingsRepositoryProvider).getDefaultHomeScreen();
+  final repository = ref.read(settingsRepositoryProvider);
+  final initial = resolveInitialTaskbarRoute(
+    repository.getDefaultHomeScreen(),
+    repository.getTaskbarOrder(),
+    repository.getHiddenTaskbarItems(),
+  );
 
   return GoRouter(
     initialLocation: initial,

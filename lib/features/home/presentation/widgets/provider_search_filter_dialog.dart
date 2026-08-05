@@ -166,19 +166,9 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                         unselectedLabelColor: colors.onSurfaceVariant,
                         tabs: [
                           _FilterTab(
-                            icon: Icons.wifi_tethering_rounded,
-                            label: _isArabic ? 'الحالة' : 'Status',
-                            active: _statuses.isNotEmpty,
-                          ),
-                          _FilterTab(
-                            icon: Icons.category_outlined,
-                            label: _isArabic ? 'النوع' : 'Type',
-                            active: _types.isNotEmpty,
-                          ),
-                          _FilterTab(
-                            icon: Icons.shield_outlined,
-                            label: _isArabic ? 'العمر' : 'Age',
-                            active: _ageRatings.isNotEmpty,
+                            icon: Icons.local_offer_outlined,
+                            label: _isArabic ? 'التصنيفات' : 'Genres',
+                            active: _genres.isNotEmpty,
                           ),
                           _FilterTab(
                             icon: Icons.calendar_today_outlined,
@@ -186,9 +176,19 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                             active: _years.isNotEmpty,
                           ),
                           _FilterTab(
-                            icon: Icons.local_offer_outlined,
-                            label: _isArabic ? 'التصنيف' : 'Genre',
-                            active: _genres.isNotEmpty,
+                            icon: Icons.shield_outlined,
+                            label: _isArabic ? 'العمر' : 'Age',
+                            active: _ageRatings.isNotEmpty,
+                          ),
+                          _FilterTab(
+                            icon: Icons.category_outlined,
+                            label: _isArabic ? 'النوع' : 'Type',
+                            active: _types.isNotEmpty,
+                          ),
+                          _FilterTab(
+                            icon: Icons.wifi_tethering_rounded,
+                            label: _isArabic ? 'الحالة' : 'Status',
+                            active: _statuses.isNotEmpty,
                           ),
                         ],
                       ),
@@ -200,9 +200,22 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                     controller: _tabController,
                     children: [
                       _MultiSelectGrid(
-                        values: widget.options.statuses,
-                        selected: _statuses,
-                        onToggle: (value) => _toggle(_statuses, value),
+                        values: widget.options.genres,
+                        selected: _genres,
+                        onToggle: (value) => _toggle(_genres, value),
+                        crossAxisCount: 3,
+                        compact: true,
+                      ),
+                      _MultiSelectGrid(
+                        values: widget.options.years,
+                        selected: _years,
+                        onToggle: (value) => _toggle(_years, value),
+                        crossAxisCount: 3,
+                      ),
+                      _MultiSelectGrid(
+                        values: widget.options.ageRatings,
+                        selected: _ageRatings,
+                        onToggle: (value) => _toggle(_ageRatings, value),
                         crossAxisCount: 2,
                       ),
                       _MultiSelectGrid(
@@ -212,23 +225,10 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                         crossAxisCount: 2,
                       ),
                       _MultiSelectGrid(
-                        values: widget.options.ageRatings,
-                        selected: _ageRatings,
-                        onToggle: (value) => _toggle(_ageRatings, value),
+                        values: widget.options.statuses,
+                        selected: _statuses,
+                        onToggle: (value) => _toggle(_statuses, value),
                         crossAxisCount: 2,
-                      ),
-                      _MultiSelectGrid(
-                        values: widget.options.years,
-                        selected: _years,
-                        onToggle: (value) => _toggle(_years, value),
-                        crossAxisCount: 3,
-                      ),
-                      _MultiSelectGrid(
-                        values: widget.options.genres,
-                        selected: _genres,
-                        onToggle: (value) => _toggle(_genres, value),
-                        crossAxisCount: 3,
-                        compact: true,
                       ),
                     ],
                   ),

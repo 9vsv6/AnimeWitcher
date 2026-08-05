@@ -5,17 +5,17 @@ import '../../../core/providers/device_info_provider.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../l10n/generated/app_localizations.dart';
-import 'widgets/bookmarks_tab.dart';
+import 'widgets/downloads_tab.dart';
 
-class LibraryScreen extends ConsumerWidget {
-  const LibraryScreen({super.key});
+class DownloadsScreen extends ConsumerWidget {
+  const DownloadsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;
-    final title = AppLocalizations.of(context)!.library;
+    final title = AppLocalizations.of(context)!.downloads;
 
     if (isWidescreen) {
       return Scaffold(
@@ -38,7 +38,7 @@ class LibraryScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const Expanded(child: BookmarksTab()),
+            const Expanded(child: DownloadsTab()),
           ],
         ),
       );
@@ -46,7 +46,7 @@ class LibraryScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      body: const BookmarksTab(),
+      body: const DownloadsTab(),
     );
   }
 }

@@ -1,78 +1,61 @@
 import 'dart:math' as math;
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skystream/core/navigation/taskbar_destination.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 class CustomBottomNavBar extends StatelessWidget {
-  final int currentIndex;
-  final void Function(int) onTap;
+  final int currentBranchIndex;
+  final List<TaskbarDestination> destinations;
+  final ValueChanged<TaskbarDestination> onTap;
 
   const CustomBottomNavBar({
     super.key,
-    required this.currentIndex,
+    required this.currentBranchIndex,
+    required this.destinations,
     required this.onTap,
   });
 
   static const double height = 64;
 
-  /// The pill's offset from the screen bottom (matching 4c-app convention).
   static double bottomInsetFor(BuildContext context) =>
       math.max(MediaQuery.viewPaddingOf(context).bottom - 8, 12);
 
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context)!;
-    final destinations = <_BottomNavDestination>[
-      _BottomNavDestination(
-        icon: Icons.home_outlined,
-        selectedIcon: Icons.home,
-        label: localizations.home,
-      ),
-      _BottomNavDestination(
-        icon: Icons.search_outlined,
-        selectedIcon: Icons.search,
-        label: localizations.search,
-      ),
-      _BottomNavDestination(
-        icon: Icons.explore_outlined,
-        selectedIcon: Icons.explore,
-        label: localizations.explore,
-      ),
-      _BottomNavDestination(
-        icon: Icons.video_library_outlined,
-        selectedIcon: Icons.video_library,
-        label: localizations.library,
-      ),
-      _BottomNavDestination(
-        icon: Icons.settings_outlined,
-        selectedIcon: Icons.settings,
-        label: localizations.settings,
-      ),
-    ];
-
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final count = destinations.length;
+    final selectedIndex = destinations.indexWhere(
+      (destination) => destination.branchIndex == currentBranchIndex,
+    );
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-    final visualIndex = isRtl ? count - 1 - currentIndex : currentIndex;
+    final visualIndex = selectedIndex < 0
+        ? 0
+        : (isRtl ? count - 1 - selectedIndex : selectedIndex);
 
-    // Sliding highlight indicator follows the physical tab position in RTL.
-    final highlight = AnimatedAlign(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      alignment: count <= 1
-          ? Alignment.center
-          : Alignment(-1 + 2 * (visualIndex / (count - 1)), 0),
-      child: FractionallySizedBox(
-        widthFactor: count == 0 ? 1 : 1 / count,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular((height - 12) / 2),
-              color: colorScheme.primary.withValues(alpha: 0.15),
+    final highlight = AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: selectedIndex < 0 ? 0 : 1,
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: count <= 1
+            ? Alignment.center
+            : Alignment(-1 + 2 * (visualIndex / (count - 1)), 0),
+        child: FractionallySizedBox(
+          widthFactor: count == 0 ? 1 : 1 / count,
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular((height - 12) / 2),
+                color: colorScheme.primary.withValues(alpha: 0.15),
+              ),
             ),
           ),
         ),
@@ -80,14 +63,15 @@ class CustomBottomNavBar extends StatelessWidget {
     );
 
     final tabs = <Widget>[
-      for (final (i, d) in destinations.indexed)
+      for (final destination in destinations)
         Expanded(
           child: _NavTabCell(
-            destination: d,
-            isSelected: i == currentIndex,
+            destination: destination,
+            label: destination.label(localizations),
+            isSelected: destination.branchIndex == currentBranchIndex,
             onTap: () {
               HapticFeedback.selectionClick();
-              onTap(i);
+              onTap(destination);
             },
           ),
         ),
@@ -142,12 +126,14 @@ class CustomBottomNavBar extends StatelessWidget {
 }
 
 class _NavTabCell extends StatefulWidget {
-  final _BottomNavDestination destination;
+  final TaskbarDestination destination;
+  final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _NavTabCell({
     required this.destination,
+    required this.label,
     required this.isSelected,
     required this.onTap,
   });
@@ -166,9 +152,9 @@ class _NavTabCellState extends State<_NavTabCell> {
     return Semantics(
       button: true,
       selected: widget.isSelected,
-      label: widget.destination.label,
+      label: widget.label,
       child: Tooltip(
-        message: widget.destination.label,
+        message: widget.label,
         child: Focus(
           onFocusChange: (focused) => setState(() => _isFocused = focused),
           child: AnimatedContainer(
@@ -178,7 +164,7 @@ class _NavTabCellState extends State<_NavTabCell> {
                     borderRadius: BorderRadius.circular(26),
                     border: Border.all(
                       color: colorScheme.primary,
-                      width: 2.0,
+                      width: 2,
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -211,16 +197,4 @@ class _NavTabCellState extends State<_NavTabCell> {
       ),
     );
   }
-}
-
-class _BottomNavDestination {
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
-
-  const _BottomNavDestination({
-    required this.icon,
-    required this.selectedIcon,
-    required this.label,
-  });
 }
