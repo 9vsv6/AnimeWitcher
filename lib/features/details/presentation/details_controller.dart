@@ -113,6 +113,7 @@ class DetailsController extends _$DetailsController {
   String? _lastEpisodesUrl;
   bool _loadStarted = false;
   int _loadGeneration = 0;
+  int? _aniZipSeasonHint;
 
   @override
   DetailsState build(String itemUrl) {
@@ -299,6 +300,7 @@ class DetailsController extends _$DetailsController {
     if (_loadStarted) return;
     _loadStarted = true;
     final generation = ++_loadGeneration;
+    _aniZipSeasonHint = null;
 
     state = state.copyWith(
       details: const AsyncLoading(),
@@ -655,15 +657,19 @@ class DetailsController extends _$DetailsController {
       if (!ref.mounted || generation != _loadGeneration || value == null) {
         return;
       }
-      if (value.episode <= 0 ||
-          value.unixTime <= 0 ||
-          (value.season ?? 0) <= 0) {
+      if (value.episode <= 0 || value.unixTime <= 0) {
         return;
       }
 
       final current = state.item ?? contextItem;
       if (current.url != contextItem.url) return;
-      final updated = current.copyWith(nextAiring: value);
+      final providerSeason = (value.season ?? 0) > 0 ? value.season! : 1;
+      final normalized = NextAiring(
+        episode: value.episode,
+        unixTime: value.unixTime,
+        season: _aniZipSeasonHint ?? providerSeason,
+      );
+      final updated = current.copyWith(nextAiring: normalized);
       state = state.copyWith(
         details: state.details.hasValue ? AsyncData(updated) : null,
         item: updated,
@@ -721,6 +727,41 @@ class DetailsController extends _$DetailsController {
     );
   }
 
+  int? _seasonHintFromEpisodeMetadata(
+    List<Episode> metadata,
+    NextAiring? nextAiring,
+  ) {
+    final valid = metadata.where((episode) => episode.season > 0).toList();
+    if (valid.isEmpty) return null;
+
+    if (nextAiring != null && nextAiring.episode > 0) {
+      final targets = <int>[nextAiring.episode, nextAiring.episode - 1];
+      for (final target in targets) {
+        if (target <= 0) continue;
+        for (final episode in valid) {
+          if (episode.episode == target) return episode.season;
+        }
+      }
+    }
+
+    final counts = <int, int>{};
+    for (final episode in valid) {
+      counts.update(episode.season, (count) => count + 1, ifAbsent: () => 1);
+    }
+
+    int? bestSeason;
+    var bestCount = 0;
+    for (final entry in counts.entries) {
+      if (entry.value > bestCount ||
+          (entry.value == bestCount &&
+              (bestSeason == null || entry.key > bestSeason))) {
+        bestSeason = entry.key;
+        bestCount = entry.value;
+      }
+    }
+    return bestSeason;
+  }
+
   Future<void> _loadEpisodeMetadataInBackground(
     SkyStreamProvider provider,
     String url,
@@ -735,6 +776,14 @@ class DetailsController extends _$DetailsController {
 
       final currentItem = state.item;
       if (currentItem == null || currentItem.url != contextItem.url) return;
+
+      final seasonHint = _seasonHintFromEpisodeMetadata(
+        metadata,
+        currentItem.nextAiring,
+      );
+      if (seasonHint != null && seasonHint > 0) {
+        _aniZipSeasonHint = seasonHint;
+      }
 
       final currentEpisodes =
           state.episodes.asData?.value ??
@@ -761,19 +810,38 @@ class DetailsController extends _$DetailsController {
         }
         return merged;
       }).toList(growable: false);
-      if (!changed || !ref.mounted) return;
+      final currentNextAiring = currentItem.nextAiring;
+      final resolvedSeason = _aniZipSeasonHint;
+      final nextAiringChanged =
+          currentNextAiring != null &&
+          resolvedSeason != null &&
+          resolvedSeason > 0 &&
+          currentNextAiring.season != resolvedSeason;
+      final updatedNextAiring = nextAiringChanged
+          ? NextAiring(
+              episode: currentNextAiring.episode,
+              unixTime: currentNextAiring.unixTime,
+              season: resolvedSeason,
+            )
+          : currentNextAiring;
+
+      if ((!changed && !nextAiringChanged) || !ref.mounted) return;
 
       final canPreserveSelectedSeason = enriched.any(
         (episode) => episode.season == state.selectedSeason,
       );
-      final processed =
-          _processEpisodes(
-            enriched,
-            currentItem,
-            isInitial: !canPreserveSelectedSeason,
-          ) ??
-          enriched;
-      final updatedItem = currentItem.copyWith(episodes: processed);
+      final processed = changed
+          ? (_processEpisodes(
+                  enriched,
+                  currentItem,
+                  isInitial: !canPreserveSelectedSeason,
+                ) ??
+                enriched)
+          : currentEpisodes;
+      final updatedItem = currentItem.copyWith(
+        episodes: processed,
+        nextAiring: updatedNextAiring,
+      );
       state = state.copyWith(
         details: state.details.hasValue ? AsyncData(updatedItem) : null,
         episodes: AsyncData(processed),
