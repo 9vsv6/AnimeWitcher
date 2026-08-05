@@ -76,11 +76,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
       final prevState = prev ?? const DetailsState();
       final nextState = next;
       final wasReady =
-          prevState.details.hasValue &&
           prevState.episodes.hasValue &&
           (prevState.episodes.value?.isNotEmpty ?? false);
       final isReady =
-          nextState.details.hasValue &&
           nextState.episodes.hasValue &&
           (nextState.episodes.value?.isNotEmpty ?? false);
 
@@ -88,7 +86,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         return;
       }
 
-      final item = nextState.details.value!;
+      final item = nextState.item ?? nextState.details.value ?? widget.item;
       _didTriggerAutoPlay = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
@@ -114,10 +112,27 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     final episodesAsync = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.episodes),
     );
+    final castAsync = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.cast),
+    );
+    final trailersAsync = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.trailers),
+    );
+    final relatedAsync = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.related),
+    );
+    final recommendationsAsync = ref.watch(
+      detailsControllerProvider(
+        widget.item.url,
+      ).select((s) => s.recommendations),
+    );
+    final currentItem = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.item),
+    );
     final isMovie = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
     );
-    final item = details ?? widget.item;
+    final item = currentItem ?? details ?? widget.item;
     final selectedEpisodeCount = ref.watch(
       detailsControllerProvider(
         widget.item.url,
@@ -134,6 +149,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         details,
         detailsAsync,
         episodesAsync,
+        castAsync,
+        trailersAsync,
+        relatedAsync,
+        recommendationsAsync,
         isMovie,
         isBookmarked,
         libraryNotifier,
@@ -283,6 +302,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             details,
             detailsAsync,
             episodesAsync,
+            castAsync,
+            trailersAsync,
+            relatedAsync,
+            recommendationsAsync,
             isMovie,
             l10n,
           ),
@@ -475,14 +498,127 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         .toList(growable: false);
   }
 
-  List<MultimediaItem> _recommendationsWithoutRelated(MultimediaItem item) {
-    final relatedKeys = _uniqueMediaItems(
-      item.related,
-    ).map(_mediaIdentity).toSet();
-
-    return _uniqueMediaItems(item.recommendations)
+  List<MultimediaItem> _recommendationsWithoutRelatedLists(
+    List<MultimediaItem>? recommendations,
+    List<MultimediaItem>? related,
+  ) {
+    final relatedKeys = _uniqueMediaItems(related).map(_mediaIdentity).toSet();
+    return _uniqueMediaItems(recommendations)
         .where((value) => !relatedKeys.contains(_mediaIdentity(value)))
         .toList(growable: false);
+  }
+
+  Widget _sectionLoadingPlaceholder(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 18),
+          const Center(child: AppLoadingIndicator()),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildIndependentDetailSections(
+    BuildContext context,
+    MultimediaItem item,
+    AppLocalizations l10n,
+    AsyncValue<List<Actor>> castState,
+    AsyncValue<List<Trailer>> trailersState,
+    AsyncValue<List<MultimediaItem>> relatedState,
+    AsyncValue<List<MultimediaItem>> recommendationsState,
+  ) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final cast = castState.asData?.value ?? item.cast ?? const <Actor>[];
+    final trailers =
+        trailersState.asData?.value ?? item.trailers ?? const <Trailer>[];
+    final related = _uniqueMediaItems(
+      relatedState.asData?.value ?? item.related,
+    );
+    final recommendations = _recommendationsWithoutRelatedLists(
+      recommendationsState.asData?.value ?? item.recommendations,
+      related,
+    );
+    final widgets = <Widget>[];
+
+    if (cast.isNotEmpty) {
+      widgets.addAll([const SizedBox(height: 32), CastCarousel(cast: cast)]);
+    } else if (castState.isLoading) {
+      widgets.add(
+        _sectionLoadingPlaceholder(
+          context,
+          isArabic ? 'طاقم الشخصيات' : 'Cast',
+        ),
+      );
+    }
+
+    if (trailers.isNotEmpty) {
+      widgets.addAll([
+        const SizedBox(height: 32),
+        TrailersSection(trailers: trailers),
+      ]);
+    } else if (trailersState.isLoading) {
+      widgets.add(
+        _sectionLoadingPlaceholder(
+          context,
+          isArabic ? 'العرض الدعائي' : 'Trailers & Extras',
+        ),
+      );
+    }
+
+    if (related.isNotEmpty) {
+      widgets.addAll([
+        const SizedBox(height: 32),
+        RecommendationsCarousel(
+          title: l10n.relatedAnime,
+          items: related,
+          showRelationBadge: true,
+          onItemTap: (relatedItem) {
+            final target = _inheritProvider(item, relatedItem);
+            DetailsRoute(
+              $extra: DetailsRouteExtra(item: target),
+            ).push<void>(context);
+          },
+        ),
+      ]);
+    } else if (relatedState.isLoading) {
+      widgets.add(
+        _sectionLoadingPlaceholder(context, l10n.relatedAnime),
+      );
+    }
+
+    if (recommendations.isNotEmpty) {
+      widgets.addAll([
+        const SizedBox(height: 32),
+        RecommendationsCarousel(
+          items: recommendations,
+          onItemTap: (recommendation) {
+            final target = _inheritProvider(item, recommendation);
+            DetailsRoute(
+              $extra: DetailsRouteExtra(item: target),
+            ).push<void>(context);
+          },
+        ),
+      ]);
+    } else if (recommendationsState.isLoading) {
+      widgets.add(
+        _sectionLoadingPlaceholder(
+          context,
+          isArabic ? 'المزيد مثل هذا' : 'More Like This',
+        ),
+      );
+    }
+
+    return widgets;
   }
 
   Widget _buildDesktopLayout(
@@ -491,6 +627,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
     AsyncValue<List<Episode>> episodesState,
+    AsyncValue<List<Actor>> castState,
+    AsyncValue<List<Trailer>> trailersState,
+    AsyncValue<List<MultimediaItem>> relatedState,
+    AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
     bool isBookmarked,
     dynamic libraryNotifier,
@@ -553,7 +693,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
       body: DetailsDesktopHero(
         displayItem: item,
         baseItem: widget.item,
-        details: details,
+        details: item,
         detailsState: detailsState,
         isMovie: isMovie,
         itemUrl: widget.item.url,
@@ -563,6 +703,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           details,
           detailsState,
           episodesState,
+          castState,
+          trailersState,
+          relatedState,
+          recommendationsState,
           isMovie,
           l10n,
         ),
@@ -827,11 +971,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
     AsyncValue<List<Episode>> episodesState,
+    AsyncValue<List<Actor>> castState,
+    AsyncValue<List<Trailer>> trailersState,
+    AsyncValue<List<MultimediaItem>> relatedState,
+    AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
     AppLocalizations l10n,
   ) {
-    final relatedItems = _uniqueMediaItems(item.related);
-    final recommendations = _recommendationsWithoutRelated(item);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -858,42 +1004,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
               ),
           ],
 
-          if (item.cast != null && item.cast!.isNotEmpty) ...[
-            const SizedBox(height: 32),
-            CastCarousel(cast: item.cast!),
-          ],
-
-          if (item.trailers != null && item.trailers!.isNotEmpty) ...[
-            const SizedBox(height: 32),
-            TrailersSection(trailers: item.trailers!),
-          ],
-
-          if (relatedItems.isNotEmpty) ...[
-            const SizedBox(height: 32),
-            RecommendationsCarousel(
-              title: l10n.relatedAnime,
-              items: relatedItems,
-              showRelationBadge: true,
-              onItemTap: (relatedItem) {
-                final target = _inheritProvider(item, relatedItem);
-                DetailsRoute(
-                  $extra: DetailsRouteExtra(item: target),
-                ).push<void>(context);
-              },
-            ),
-          ],
-
-          if (recommendations.isNotEmpty) ...[
-            const SizedBox(height: 32),
-            RecommendationsCarousel(
-              items: recommendations,
-              onItemTap: (rec) {
-                DetailsRoute(
-                  $extra: DetailsRouteExtra(item: rec),
-                ).push<void>(context);
-              },
-            ),
-          ],
+          ..._buildIndependentDetailSections(
+            context,
+            item,
+            l10n,
+            castState,
+            trailersState,
+            relatedState,
+            recommendationsState,
+          ),
         ] else ...[
           _episodeLoadStatus(context, episodesState),
           if (episodesState.hasValue &&
@@ -919,11 +1038,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
     AsyncValue<List<Episode>> episodesState,
+    AsyncValue<List<Actor>> castState,
+    AsyncValue<List<Trailer>> trailersState,
+    AsyncValue<List<MultimediaItem>> relatedState,
+    AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
     AppLocalizations l10n,
   ) {
-    final relatedItems = _uniqueMediaItems(item.related);
-    final recommendations = _recommendationsWithoutRelated(item);
     final showDetailsPage = _selectedDetailsTab == 0 || isMovie;
     final episodeReady =
         episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
@@ -1001,7 +1122,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
               const SizedBox(height: 24),
               DetailsActionButtons(
                 item: widget.item,
-                details: details,
+                details: item,
                 itemUrl: widget.item.url,
               ),
               if (item.nextAiring != null) ...[
@@ -1033,39 +1154,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                   _episodeLoadStatus(context, episodesState),
                 ],
 
-                if (item.cast != null && item.cast!.isNotEmpty) ...[
-                  const SizedBox(height: 32),
-                  CastCarousel(cast: item.cast!),
-                ],
-                if (item.trailers != null && item.trailers!.isNotEmpty) ...[
-                  const SizedBox(height: 32),
-                  TrailersSection(trailers: item.trailers!),
-                ],
-                if (relatedItems.isNotEmpty) ...[
-                  const SizedBox(height: 32),
-                  RecommendationsCarousel(
-                    title: l10n.relatedAnime,
-                    items: relatedItems,
-                    showRelationBadge: true,
-                    onItemTap: (relatedItem) {
-                      final target = _inheritProvider(item, relatedItem);
-                      DetailsRoute(
-                        $extra: DetailsRouteExtra(item: target),
-                      ).push<void>(context);
-                    },
-                  ),
-                ],
-                if (recommendations.isNotEmpty) ...[
-                  const SizedBox(height: 32),
-                  RecommendationsCarousel(
-                    items: recommendations,
-                    onItemTap: (rec) {
-                      DetailsRoute(
-                        $extra: DetailsRouteExtra(item: rec),
-                      ).push<void>(context);
-                    },
-                  ),
-                ],
+                ..._buildIndependentDetailSections(
+                  context,
+                  item,
+                  l10n,
+                  castState,
+                  trailersState,
+                  relatedState,
+                  recommendationsState,
+                ),
                 const SizedBox(height: 40),
               ],
             ),

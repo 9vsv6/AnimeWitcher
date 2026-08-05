@@ -198,6 +198,34 @@ abstract class SkyStreamProvider {
 
   Future<MultimediaItem> getDetails(String url);
 
+  /// Whether this provider exposes optional detail sections through separate
+  /// requests. Controllers can then render every section as soon as it arrives.
+  bool get supportsIndependentDetailSections => false;
+
+  /// Loads cast independently from the main metadata request.
+  Future<List<Actor>> getCast(String url) async {
+    final details = await getDetails(url);
+    return details.cast ?? const <Actor>[];
+  }
+
+  /// Loads trailers independently from the main metadata request.
+  Future<List<Trailer>> getTrailers(String url) async {
+    final details = await getDetails(url);
+    return details.trailers ?? const <Trailer>[];
+  }
+
+  /// Loads franchise-related titles independently.
+  Future<List<MultimediaItem>> getRelated(String url) async {
+    final details = await getDetails(url);
+    return details.related ?? const <MultimediaItem>[];
+  }
+
+  /// Loads similar recommendations independently.
+  Future<List<MultimediaItem>> getRecommendations(String url) async {
+    final details = await getDetails(url);
+    return details.recommendations ?? const <MultimediaItem>[];
+  }
+
   /// Loads episodes independently from the metadata/details request.
   ///
   /// Older providers remain compatible because the default implementation

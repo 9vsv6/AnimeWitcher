@@ -84,7 +84,7 @@ Future<List<R>> _processInChunks<T, R>(
 }
 
 class JsBasedProvider extends SkyStreamProvider {
-  static const int _iifeWrapperVersion = 6;
+  static const int _iifeWrapperVersion = 7;
 
   final JsEngineService _jsEngine;
   final String _scriptPath;
@@ -231,6 +231,10 @@ class JsBasedProvider extends SkyStreamProvider {
                       loadDetails: (typeof loadDetails !== 'undefined') ? loadDetails : (typeof globalThis.loadDetails !== 'undefined' ? globalThis.loadDetails : undefined),
                       loadEpisodes: (typeof loadEpisodes !== 'undefined') ? loadEpisodes : (typeof globalThis.loadEpisodes !== 'undefined' ? globalThis.loadEpisodes : undefined),
                       loadEpisodeMetadata: (typeof loadEpisodeMetadata !== 'undefined') ? loadEpisodeMetadata : (typeof globalThis.loadEpisodeMetadata !== 'undefined' ? globalThis.loadEpisodeMetadata : undefined),
+                      loadCast: (typeof loadCast !== 'undefined') ? loadCast : (typeof globalThis.loadCast !== 'undefined' ? globalThis.loadCast : undefined),
+                      loadTrailers: (typeof loadTrailers !== 'undefined') ? loadTrailers : (typeof globalThis.loadTrailers !== 'undefined' ? globalThis.loadTrailers : undefined),
+                      loadRelated: (typeof loadRelated !== 'undefined') ? loadRelated : (typeof globalThis.loadRelated !== 'undefined' ? globalThis.loadRelated : undefined),
+                      loadRecommendations: (typeof loadRecommendations !== 'undefined') ? loadRecommendations : (typeof globalThis.loadRecommendations !== 'undefined' ? globalThis.loadRecommendations : undefined),
                       loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (typeof globalThis.loadStreams !== 'undefined' ? globalThis.loadStreams : undefined),
                       getProviders: (typeof getProviders !== 'undefined') ? getProviders : (typeof globalThis.getProviders !== 'undefined' ? globalThis.getProviders : undefined),
                       getSettings: (typeof getSettings !== 'undefined') ? getSettings : (typeof globalThis.getSettings !== 'undefined' ? globalThis.getSettings : undefined),
@@ -250,6 +254,10 @@ class JsBasedProvider extends SkyStreamProvider {
               if (globalThis.loadDetails) delete globalThis.loadDetails;
               if (globalThis.loadEpisodes) delete globalThis.loadEpisodes;
               if (globalThis.loadEpisodeMetadata) delete globalThis.loadEpisodeMetadata;
+              if (globalThis.loadCast) delete globalThis.loadCast;
+              if (globalThis.loadTrailers) delete globalThis.loadTrailers;
+              if (globalThis.loadRelated) delete globalThis.loadRelated;
+              if (globalThis.loadRecommendations) delete globalThis.loadRecommendations;
               if (globalThis.loadStreams) delete globalThis.loadStreams;
               if (globalThis.getProviders) delete globalThis.getProviders;
               if (globalThis.getSettings) delete globalThis.getSettings;
@@ -818,6 +826,9 @@ class JsBasedProvider extends SkyStreamProvider {
   }
 
   @override
+  bool get supportsIndependentDetailSections => true;
+
+  @override
   Future<MultimediaItem> getDetails(String url) async {
     await _ensureReady();
     if (_error != null) throw JsPluginException("INIT_ERROR", _error!);
@@ -937,6 +948,117 @@ class JsBasedProvider extends SkyStreamProvider {
       }
       talker.error('Episode metadata enrichment failed: $error');
       return const <Episode>[];
+    }
+  }
+
+  Future<dynamic> _invokeOptionalDetailExport(
+    String exportName,
+    String url,
+  ) async {
+    await _ensureReady();
+    if (_error != null) {
+      throw JsPluginException("INIT_ERROR", _error!);
+    }
+    return _jsEngine.invokeAsync(_fn(exportName), [url]);
+  }
+
+  List<T> _parseOptionalList<T>(
+    dynamic result,
+    String mapKey,
+    T Function(Map<String, dynamic>) parser,
+  ) {
+    dynamic raw = result;
+    if (result is Map<Object?, Object?> && result[mapKey] is List) {
+      raw = result[mapKey];
+    }
+    if (raw is! List) return List<T>.empty(growable: false);
+    final bounded = raw.length > _kMaxResultListLength
+        ? raw.sublist(0, _kMaxResultListLength)
+        : raw;
+    return bounded
+        .whereType<Map<Object?, Object?>>()
+        .map((value) => parser(Map<String, dynamic>.from(value)))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<Actor>> getCast(String url) async {
+    try {
+      final result = await _invokeOptionalDetailExport('loadCast', url);
+      return _parseOptionalList(
+        result,
+        'cast',
+        (json) => Actor.fromJson(json),
+      );
+    } catch (error) {
+      if (_isMissingExportError(error, 'loadCast')) {
+        return super.getCast(url);
+      }
+      if (kDebugMode) debugPrint('[$_packageName] cast loading failed: $error');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<Trailer>> getTrailers(String url) async {
+    try {
+      final result = await _invokeOptionalDetailExport('loadTrailers', url);
+      return _parseOptionalList(
+        result,
+        'trailers',
+        (json) => Trailer.fromJson(json),
+      );
+    } catch (error) {
+      if (_isMissingExportError(error, 'loadTrailers')) {
+        return super.getTrailers(url);
+      }
+      if (kDebugMode) {
+        debugPrint('[$_packageName] trailer loading failed: $error');
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<MultimediaItem>> getRelated(String url) async {
+    try {
+      final result = await _invokeOptionalDetailExport('loadRelated', url);
+      return _parseOptionalList(
+        result,
+        'related',
+        (json) => MultimediaItem.fromJson(json),
+      );
+    } catch (error) {
+      if (_isMissingExportError(error, 'loadRelated')) {
+        return super.getRelated(url);
+      }
+      if (kDebugMode) {
+        debugPrint('[$_packageName] related loading failed: $error');
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<MultimediaItem>> getRecommendations(String url) async {
+    try {
+      final result = await _invokeOptionalDetailExport(
+        'loadRecommendations',
+        url,
+      );
+      return _parseOptionalList(
+        result,
+        'recommendations',
+        (json) => MultimediaItem.fromJson(json),
+      );
+    } catch (error) {
+      if (_isMissingExportError(error, 'loadRecommendations')) {
+        return super.getRecommendations(url);
+      }
+      if (kDebugMode) {
+        debugPrint('[$_packageName] recommendation loading failed: $error');
+      }
+      rethrow;
     }
   }
 

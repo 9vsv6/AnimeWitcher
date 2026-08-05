@@ -33,6 +33,10 @@ String episodeSelectionKey(Episode episode) {
 class DetailsState {
   final AsyncValue<MultimediaItem?> details;
   final AsyncValue<List<Episode>> episodes;
+  final AsyncValue<List<Actor>> cast;
+  final AsyncValue<List<Trailer>> trailers;
+  final AsyncValue<List<MultimediaItem>> related;
+  final AsyncValue<List<MultimediaItem>> recommendations;
   final Map<int, List<Episode>> seasonMap;
   final int selectedSeason;
   final bool isMovie;
@@ -47,6 +51,10 @@ class DetailsState {
   const DetailsState({
     this.details = const AsyncLoading(),
     this.episodes = const AsyncLoading(),
+    this.cast = const AsyncLoading(),
+    this.trailers = const AsyncLoading(),
+    this.related = const AsyncLoading(),
+    this.recommendations = const AsyncLoading(),
     this.seasonMap = const {},
     this.selectedSeason = 1,
     this.isMovie = false,
@@ -62,6 +70,10 @@ class DetailsState {
   DetailsState copyWith({
     AsyncValue<MultimediaItem?>? details,
     AsyncValue<List<Episode>>? episodes,
+    AsyncValue<List<Actor>>? cast,
+    AsyncValue<List<Trailer>>? trailers,
+    AsyncValue<List<MultimediaItem>>? related,
+    AsyncValue<List<MultimediaItem>>? recommendations,
     Map<int, List<Episode>>? seasonMap,
     int? selectedSeason,
     bool? isMovie,
@@ -76,6 +88,10 @@ class DetailsState {
     return DetailsState(
       details: details ?? this.details,
       episodes: episodes ?? this.episodes,
+      cast: cast ?? this.cast,
+      trailers: trailers ?? this.trailers,
+      related: related ?? this.related,
+      recommendations: recommendations ?? this.recommendations,
       seasonMap: seasonMap ?? this.seasonMap,
       selectedSeason: selectedSeason ?? this.selectedSeason,
       isMovie: isMovie ?? this.isMovie,
@@ -95,6 +111,8 @@ class DetailsController extends _$DetailsController {
   Future<void>? _episodesLoadFuture;
   SkyStreamProvider? _lastEpisodesProvider;
   String? _lastEpisodesUrl;
+  bool _loadStarted = false;
+  int _loadGeneration = 0;
 
   @override
   DetailsState build(String itemUrl) {
@@ -278,12 +296,21 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> loadDetails(MultimediaItem item, {bool autoPlay = false}) async {
-    if (state.details is AsyncData) return;
+    if (_loadStarted) return;
+    _loadStarted = true;
+    final generation = ++_loadGeneration;
 
     state = state.copyWith(
       details: const AsyncLoading(),
       episodes: const AsyncLoading(),
+      cast: const AsyncLoading(),
+      trailers: const AsyncLoading(),
+      related: const AsyncLoading(),
+      recommendations: const AsyncLoading(),
       item: item,
+      isMovie:
+          item.contentType == MultimediaContentType.movie ||
+          item.contentType == MultimediaContentType.livestream,
     );
 
     final active = ref.read(activeProviderProvider);
@@ -313,6 +340,12 @@ class DetailsController extends _$DetailsController {
         state = state.copyWith(
           details: AsyncData(rendered),
           episodes: AsyncData(sorted),
+          cast: AsyncData(rendered.cast ?? const <Actor>[]),
+          trailers: AsyncData(rendered.trailers ?? const <Trailer>[]),
+          related: AsyncData(rendered.related ?? const <MultimediaItem>[]),
+          recommendations: AsyncData(
+            rendered.recommendations ?? const <MultimediaItem>[],
+          ),
           item: rendered,
         );
         return;
@@ -322,10 +355,14 @@ class DetailsController extends _$DetailsController {
       if (item.provider != null) {
         try {
           provider = manager.getAllProviders().firstWhere(
-            (p) => p.packageName == item.provider || p.name == item.provider,
+            (candidate) =>
+                candidate.packageName == item.provider ||
+                candidate.name == item.provider,
           );
-        } catch (e) {
-          if (kDebugMode) debugPrint('DetailsController.loadDetails: $e');
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint('DetailsController.loadDetails: $error');
+          }
         }
       }
 
@@ -334,94 +371,289 @@ class DetailsController extends _$DetailsController {
         throw Exception("No provider selected or found for this item");
       }
 
-      final fetchedItem = await provider.getDetails(item.url);
-      if (!ref.mounted) return;
+      _lastEpisodesProvider = provider;
+      _lastEpisodesUrl = item.url;
+
+      // Every part starts immediately. No request waits for another request.
+      unawaited(_loadBasicDetails(provider, item, generation));
+      _episodesLoadFuture = _loadEpisodesInBackground(
+        provider,
+        item.url,
+        item,
+        generation,
+      );
+      unawaited(_episodesLoadFuture!);
+
+      if (provider.supportsIndependentDetailSections) {
+        unawaited(_loadCastInBackground(provider, item.url, item, generation));
+        unawaited(
+          _loadTrailersInBackground(provider, item.url, item, generation),
+        );
+        unawaited(
+          _loadRelatedInBackground(provider, item.url, item, generation),
+        );
+        unawaited(
+          _loadRecommendationsInBackground(
+            provider,
+            item.url,
+            item,
+            generation,
+          ),
+        );
+      }
+    } catch (error, stackTrace) {
+      if (!ref.mounted || generation != _loadGeneration) return;
+      final asyncError = AsyncError<MultimediaItem?>(error, stackTrace);
+      state = state.copyWith(
+        details: asyncError,
+        episodes: AsyncError<List<Episode>>(error, stackTrace),
+        cast: AsyncError<List<Actor>>(error, stackTrace),
+        trailers: AsyncError<List<Trailer>>(error, stackTrace),
+        related: AsyncError<List<MultimediaItem>>(error, stackTrace),
+        recommendations: AsyncError<List<MultimediaItem>>(error, stackTrace),
+      );
+    }
+  }
+
+  Future<void> _loadBasicDetails(
+    SkyStreamProvider provider,
+    MultimediaItem initialItem,
+    int generation,
+  ) async {
+    try {
+      final fetchedItem = await provider.getDetails(initialItem.url);
+      if (!ref.mounted || generation != _loadGeneration) return;
 
       final withProvider = fetchedItem.copyWith(
         provider: provider.packageName,
-        tmdbId: fetchedItem.tmdbId ?? item.tmdbId,
-        imdbId: fetchedItem.imdbId ?? item.imdbId,
+        tmdbId: fetchedItem.tmdbId ?? initialItem.tmdbId,
+        imdbId: fetchedItem.imdbId ?? initialItem.imdbId,
+      );
+      final current = state.item ?? initialItem;
+      final currentEpisodes = state.episodes.asData?.value ?? current.episodes;
+      final independent = provider.supportsIndependentDetailSections;
+      final currentCast = state.cast.asData?.value ?? current.cast;
+      final currentTrailers = state.trailers.asData?.value ?? current.trailers;
+      final currentRelated = state.related.asData?.value ?? current.related;
+      final currentRecommendations =
+          state.recommendations.asData?.value ?? current.recommendations;
+
+      final rendered = withProvider.copyWith(
+        episodes: currentEpisodes,
+        cast: independent ? currentCast : (withProvider.cast ?? currentCast),
+        trailers: independent
+            ? currentTrailers
+            : (withProvider.trailers ?? currentTrailers),
+        related: independent
+            ? currentRelated
+            : (withProvider.related ?? currentRelated),
+        recommendations: independent
+            ? currentRecommendations
+            : (withProvider.recommendations ?? currentRecommendations),
       );
 
-      final inlineEpisodes = withProvider.episodes ?? const <Episode>[];
-      if (inlineEpisodes.isNotEmpty) {
-        final sorted =
-            _processEpisodes(inlineEpisodes, withProvider, isInitial: true) ??
-            const <Episode>[];
-        final rendered = withProvider.copyWith(episodes: sorted);
+      if (currentEpisodes == null || currentEpisodes.isEmpty) {
+        _processEpisodes(null, rendered, isInitial: true);
+      }
 
-        state = state.copyWith(
-          details: AsyncData(rendered),
-          episodes: AsyncData(sorted),
-          item: rendered,
-        );
-        unawaited(
-          _loadEpisodeMetadataInBackground(provider, item.url, rendered),
-        );
-      } else {
-        // Metadata is ready. Render it now and let episodes continue loading
-        // independently without blocking the details page.
-        _processEpisodes(null, withProvider, isInitial: true);
-        final rendered = withProvider.copyWith(episodes: const <Episode>[]);
+      state = state.copyWith(
+        details: AsyncData(rendered),
+        item: rendered,
+        cast: independent
+            ? null
+            : AsyncData(rendered.cast ?? const <Actor>[]),
+        trailers: independent
+            ? null
+            : AsyncData(rendered.trailers ?? const <Trailer>[]),
+        related: independent
+            ? null
+            : AsyncData(rendered.related ?? const <MultimediaItem>[]),
+        recommendations: independent
+            ? null
+            : AsyncData(
+                rendered.recommendations ?? const <MultimediaItem>[],
+              ),
+      );
 
-        state = state.copyWith(
-          details: AsyncData(rendered),
-          episodes: const AsyncLoading(),
-          item: rendered,
-        );
-
-        _lastEpisodesProvider = provider;
-        _lastEpisodesUrl = item.url;
-        _episodesLoadFuture = _loadEpisodesInBackground(
+      final inlineEpisodes = fetchedItem.episodes ?? const <Episode>[];
+      if (inlineEpisodes.isNotEmpty && state.episodes is! AsyncData) {
+        _applyEpisodes(
           provider,
-          item.url,
+          initialItem.url,
           rendered,
+          inlineEpisodes,
+          generation,
         );
-        unawaited(_episodesLoadFuture!);
       }
 
-      // Existing ID resolution remains fire-and-forget.
-      unawaited(_resolveMetadataInBackground(withProvider));
-    } catch (e, st) {
-      if (ref.mounted) {
-        state = state.copyWith(details: AsyncError(e, st));
-      }
+      unawaited(_resolveMetadataInBackground(rendered));
+    } catch (error, stackTrace) {
+      if (!ref.mounted || generation != _loadGeneration) return;
+      state = state.copyWith(
+        details: AsyncError<MultimediaItem?>(error, stackTrace),
+        cast: provider.supportsIndependentDetailSections
+            ? null
+            : AsyncError<List<Actor>>(error, stackTrace),
+        trailers: provider.supportsIndependentDetailSections
+            ? null
+            : AsyncError<List<Trailer>>(error, stackTrace),
+        related: provider.supportsIndependentDetailSections
+            ? null
+            : AsyncError<List<MultimediaItem>>(error, stackTrace),
+        recommendations: provider.supportsIndependentDetailSections
+            ? null
+            : AsyncError<List<MultimediaItem>>(error, stackTrace),
+      );
     }
+  }
+
+  void _applyEpisodes(
+    SkyStreamProvider provider,
+    String url,
+    MultimediaItem contextItem,
+    List<Episode> fetchedEpisodes,
+    int generation,
+  ) {
+    if (!ref.mounted || generation != _loadGeneration) return;
+    final current = state.item ?? contextItem;
+    final sorted =
+        _processEpisodes(fetchedEpisodes, current, isInitial: true) ??
+        const <Episode>[];
+    final merged = current.copyWith(episodes: sorted);
+    state = state.copyWith(
+      details: state.details.hasValue ? AsyncData(merged) : null,
+      episodes: AsyncData(sorted),
+      item: merged,
+    );
+    unawaited(
+      _loadEpisodeMetadataInBackground(
+        provider,
+        url,
+        merged,
+        generation,
+      ),
+    );
   }
 
   Future<void> _loadEpisodesInBackground(
     SkyStreamProvider provider,
     String url,
     MultimediaItem contextItem,
+    int generation,
   ) async {
     try {
       final fetchedEpisodes = await provider.getEpisodes(url);
-      if (!ref.mounted) return;
-
-      final sorted =
-          _processEpisodes(fetchedEpisodes, contextItem, isInitial: true) ??
-          const <Episode>[];
-
-      final currentDetails = state.details.asData?.value ?? contextItem;
-      final merged = currentDetails.copyWith(episodes: sorted);
-
-      state = state.copyWith(
-        details: AsyncData(merged),
-        episodes: AsyncData(sorted),
-        item: merged,
+      if (!ref.mounted || generation != _loadGeneration) return;
+      _applyEpisodes(
+        provider,
+        url,
+        contextItem,
+        fetchedEpisodes,
+        generation,
       );
-
-      // Optional artwork/season enrichment starts only after episodes render.
-      unawaited(_loadEpisodeMetadataInBackground(provider, url, merged));
     } catch (error, stackTrace) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || generation != _loadGeneration) return;
       state = state.copyWith(
-        episodes: AsyncError(error, stackTrace),
+        episodes: AsyncError<List<Episode>>(error, stackTrace),
         seasonMap: const {},
         selectedEpisodeKeys: const <String>{},
       );
     } finally {
-      _episodesLoadFuture = null;
+      if (generation == _loadGeneration) {
+        _episodesLoadFuture = null;
+      }
+    }
+  }
+
+  Future<void> _loadCastInBackground(
+    SkyStreamProvider provider,
+    String url,
+    MultimediaItem contextItem,
+    int generation,
+  ) async {
+    try {
+      final value = await provider.getCast(url);
+      if (!ref.mounted || generation != _loadGeneration) return;
+      final updated = (state.item ?? contextItem).copyWith(cast: value);
+      state = state.copyWith(
+        cast: AsyncData(value),
+        details: state.details.hasValue ? AsyncData(updated) : null,
+        item: updated,
+      );
+    } catch (error, stackTrace) {
+      if (!ref.mounted || generation != _loadGeneration) return;
+      state = state.copyWith(cast: AsyncError<List<Actor>>(error, stackTrace));
+    }
+  }
+
+  Future<void> _loadTrailersInBackground(
+    SkyStreamProvider provider,
+    String url,
+    MultimediaItem contextItem,
+    int generation,
+  ) async {
+    try {
+      final value = await provider.getTrailers(url);
+      if (!ref.mounted || generation != _loadGeneration) return;
+      final updated = (state.item ?? contextItem).copyWith(trailers: value);
+      state = state.copyWith(
+        trailers: AsyncData(value),
+        details: state.details.hasValue ? AsyncData(updated) : null,
+        item: updated,
+      );
+    } catch (error, stackTrace) {
+      if (!ref.mounted || generation != _loadGeneration) return;
+      state = state.copyWith(
+        trailers: AsyncError<List<Trailer>>(error, stackTrace),
+      );
+    }
+  }
+
+  Future<void> _loadRelatedInBackground(
+    SkyStreamProvider provider,
+    String url,
+    MultimediaItem contextItem,
+    int generation,
+  ) async {
+    try {
+      final value = await provider.getRelated(url);
+      if (!ref.mounted || generation != _loadGeneration) return;
+      final updated = (state.item ?? contextItem).copyWith(related: value);
+      state = state.copyWith(
+        related: AsyncData(value),
+        details: state.details.hasValue ? AsyncData(updated) : null,
+        item: updated,
+      );
+    } catch (error, stackTrace) {
+      if (!ref.mounted || generation != _loadGeneration) return;
+      state = state.copyWith(
+        related: AsyncError<List<MultimediaItem>>(error, stackTrace),
+      );
+    }
+  }
+
+  Future<void> _loadRecommendationsInBackground(
+    SkyStreamProvider provider,
+    String url,
+    MultimediaItem contextItem,
+    int generation,
+  ) async {
+    try {
+      final value = await provider.getRecommendations(url);
+      if (!ref.mounted || generation != _loadGeneration) return;
+      final updated = (state.item ?? contextItem).copyWith(
+        recommendations: value,
+      );
+      state = state.copyWith(
+        recommendations: AsyncData(value),
+        details: state.details.hasValue ? AsyncData(updated) : null,
+        item: updated,
+      );
+    } catch (error, stackTrace) {
+      if (!ref.mounted || generation != _loadGeneration) return;
+      state = state.copyWith(
+        recommendations: AsyncError<List<MultimediaItem>>(error, stackTrace),
+      );
     }
   }
 
@@ -450,17 +682,20 @@ class DetailsController extends _$DetailsController {
     SkyStreamProvider provider,
     String url,
     MultimediaItem contextItem,
+    int generation,
   ) async {
     try {
       final metadata = await provider.getEpisodeMetadata(url);
-      if (!ref.mounted || metadata.isEmpty) return;
+      if (!ref.mounted || generation != _loadGeneration || metadata.isEmpty) {
+        return;
+      }
 
-      final currentDetails = state.details.asData?.value;
-      if (currentDetails == null || currentDetails.url != contextItem.url) return;
+      final currentItem = state.item;
+      if (currentItem == null || currentItem.url != contextItem.url) return;
 
       final currentEpisodes =
           state.episodes.asData?.value ??
-          currentDetails.episodes ??
+          currentItem.episodes ??
           const <Episode>[];
       if (currentEpisodes.isEmpty) return;
 
@@ -491,15 +726,15 @@ class DetailsController extends _$DetailsController {
       final processed =
           _processEpisodes(
             enriched,
-            currentDetails,
+            currentItem,
             isInitial: !canPreserveSelectedSeason,
           ) ??
           enriched;
-      final updatedDetails = currentDetails.copyWith(episodes: processed);
+      final updatedItem = currentItem.copyWith(episodes: processed);
       state = state.copyWith(
-        details: AsyncData(updatedDetails),
+        details: state.details.hasValue ? AsyncData(updatedItem) : null,
         episodes: AsyncData(processed),
-        item: updatedDetails,
+        item: updatedItem,
       );
     } catch (error) {
       // Optional enrichment must never replace successfully loaded episodes.
@@ -512,14 +747,20 @@ class DetailsController extends _$DetailsController {
   Future<void> retryEpisodes() async {
     final provider = _lastEpisodesProvider;
     final url = _lastEpisodesUrl;
-    final details = state.details.asData?.value;
+    final currentItem = state.item;
 
-    if (provider == null || url == null || details == null) {
+    if (provider == null || url == null || currentItem == null) {
       return;
     }
 
     state = state.copyWith(episodes: const AsyncLoading());
-    _episodesLoadFuture = _loadEpisodesInBackground(provider, url, details);
+    final generation = _loadGeneration;
+    _episodesLoadFuture = _loadEpisodesInBackground(
+      provider,
+      url,
+      currentItem,
+      generation,
+    );
     await _episodesLoadFuture;
   }
 
