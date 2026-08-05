@@ -6,10 +6,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
-import '../../../../shared/widgets/expandable_text.dart';
 import 'premium_details_widgets.dart';
 import 'details_layout_widgets.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
 
 /// Immersive desktop/TV hero for non-TMDB details.
 ///
@@ -51,8 +49,6 @@ class DetailsDesktopHero extends ConsumerWidget {
     final theme = Theme.of(context);
     final scaffoldColor = theme.scaffoldBackgroundColor;
     final textColor = theme.colorScheme.onSurface;
-    final textSecondary = textColor.withValues(alpha: 0.7);
-    final l10n = AppLocalizations.of(context)!;
 
     final backdropUrl =
         AppImageFallbacks.optional(displayItem.bannerUrl) ??
@@ -181,19 +177,6 @@ class DetailsDesktopHero extends ConsumerWidget {
                       MetadataBar(
                         item: displayItem,
                         isLoading: detailsState is AsyncLoading,
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Synopsis
-                      ExpandableText(
-                        text: displayItem.description ?? l10n.noDescription,
-                        maxLines: 4,
-                        style: TextStyle(
-                          color: textSecondary,
-                          fontSize: 16,
-                          height: 1.5,
-                        ),
                       ),
 
                       // Next airing (for currently-airing shows)

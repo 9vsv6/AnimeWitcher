@@ -708,6 +708,109 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     return const SizedBox.shrink();
   }
 
+  List<String> _normalizedGenres(MultimediaItem item) {
+    final seen = <String>{};
+    final genres = <String>[];
+
+    for (final rawTag in item.tags ?? const <String>[]) {
+      for (final candidate in rawTag.split(RegExp(r'[,،|/]'))) {
+        final genre = candidate.trim();
+        if (genre.isEmpty) continue;
+
+        final key = genre.toLowerCase();
+        if (seen.add(key)) {
+          genres.add(genre);
+        }
+      }
+    }
+
+    return genres;
+  }
+
+  Widget _buildSynopsisAndGenres(
+    BuildContext context,
+    MultimediaItem item,
+    AsyncValue<MultimediaItem?> detailsState,
+    AppLocalizations l10n,
+  ) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final genres = _normalizedGenres(item);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.synopsis,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ExpandableText(
+          text: item.description ?? l10n.noDescription,
+          maxLines: 4,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.textTheme.bodyMedium?.color,
+            height: 1.5,
+          ),
+        ),
+        if (detailsState.hasError) ...[
+          const SizedBox(height: 18),
+          Text(
+            l10n.errorPrefix(detailsState.error.toString()),
+            style: TextStyle(color: colors.error),
+          ),
+        ],
+        if (genres.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          Text(
+            isArabic ? 'التصنيفات' : 'Genres',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final genre in genres)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.primary.withValues(alpha: 0.18),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      genre,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colors.onPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   /// Content rendered below the desktop hero.
   Widget _buildDesktopContentBelow(
     BuildContext context,
@@ -730,6 +833,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         ],
 
         if (_selectedDetailsTab == 0 || isMovie) ...[
+          _buildSynopsisAndGenres(context, item, detailsState, l10n),
+          const SizedBox(height: 28),
           AnimeInformationSection(item: item),
 
           if (isMovie) ...[
@@ -895,34 +1000,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                 NextAiringWidget(nextAiring: item.nextAiring!),
               ],
               const SizedBox(height: 24),
-              Text(
-                l10n.synopsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              ExpandableText(
-                text: item.description ?? l10n.noDescription,
-                maxLines: 4,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).textTheme.bodyMedium?.color,
-                  height: 1.5,
-                ),
-              ),
-              if (detailsState.hasError) ...[
-                const SizedBox(height: 18),
-                Text(
-                  AppLocalizations.of(
-                    context,
-                  )!.errorPrefix(detailsState.error.toString()),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-              if (!isMovie) ...[
-                const SizedBox(height: 28),
-                _buildDetailsPageTabs(context, episodesState),
-              ],
+              if (!isMovie) _buildDetailsPageTabs(context, episodesState),
             ],
           ),
         ),
@@ -937,6 +1015,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _buildSynopsisAndGenres(context, item, detailsState, l10n),
+                const SizedBox(height: 28),
                 AnimeInformationSection(item: item),
 
                 if (isMovie) ...[
