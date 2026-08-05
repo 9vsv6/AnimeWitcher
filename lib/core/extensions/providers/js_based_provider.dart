@@ -84,7 +84,7 @@ Future<List<R>> _processInChunks<T, R>(
 }
 
 class JsBasedProvider extends SkyStreamProvider {
-  static const int _iifeWrapperVersion = 5;
+  static const int _iifeWrapperVersion = 6;
 
   final JsEngineService _jsEngine;
   final String _scriptPath;
@@ -228,6 +228,9 @@ class JsBasedProvider extends SkyStreamProvider {
                       searchPage: (typeof searchPage !== 'undefined') ? searchPage : (typeof globalThis.searchPage !== 'undefined' ? globalThis.searchPage : undefined),
                       search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
                       load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
+                      loadDetails: (typeof loadDetails !== 'undefined') ? loadDetails : (typeof globalThis.loadDetails !== 'undefined' ? globalThis.loadDetails : undefined),
+                      loadEpisodes: (typeof loadEpisodes !== 'undefined') ? loadEpisodes : (typeof globalThis.loadEpisodes !== 'undefined' ? globalThis.loadEpisodes : undefined),
+                      loadEpisodeMetadata: (typeof loadEpisodeMetadata !== 'undefined') ? loadEpisodeMetadata : (typeof globalThis.loadEpisodeMetadata !== 'undefined' ? globalThis.loadEpisodeMetadata : undefined),
                       loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (typeof globalThis.loadStreams !== 'undefined' ? globalThis.loadStreams : undefined),
                       getProviders: (typeof getProviders !== 'undefined') ? getProviders : (typeof globalThis.getProviders !== 'undefined' ? globalThis.getProviders : undefined),
                       getSettings: (typeof getSettings !== 'undefined') ? getSettings : (typeof globalThis.getSettings !== 'undefined' ? globalThis.getSettings : undefined),
@@ -244,6 +247,9 @@ class JsBasedProvider extends SkyStreamProvider {
               if (globalThis.searchPage) delete globalThis.searchPage;
               if (globalThis.search) delete globalThis.search;
               if (globalThis.load) delete globalThis.load;
+              if (globalThis.loadDetails) delete globalThis.loadDetails;
+              if (globalThis.loadEpisodes) delete globalThis.loadEpisodes;
+              if (globalThis.loadEpisodeMetadata) delete globalThis.loadEpisodeMetadata;
               if (globalThis.loadStreams) delete globalThis.loadStreams;
               if (globalThis.getProviders) delete globalThis.getProviders;
               if (globalThis.getSettings) delete globalThis.getSettings;
