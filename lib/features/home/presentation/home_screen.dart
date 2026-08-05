@@ -269,7 +269,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Mobile layout: existing AppBar + FAB
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
         systemOverlayStyle: overlayStyle,
         forceMaterialTransparency: true,
         backgroundColor: Colors.transparent,
@@ -426,6 +430,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             },
           ),
         ],
+      ),
+        ),
       ),
       body: _buildBody(
         context,

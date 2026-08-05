@@ -10,6 +10,7 @@ import 'package:dpad/dpad.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
 import '../player_controller.dart';
 import 'hotstar_player_style.dart';
+import 'player_ltr.dart';
 
 // Unified settings card container that highlights border when any of its children are focused
 class DpadSettingCard extends StatelessWidget {
@@ -574,7 +575,8 @@ class _SubtitleAppearanceDialogState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PlayerLtr(
+      child: Scaffold(
       backgroundColor: HotstarPlayerStyle.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -667,7 +669,7 @@ class _SubtitleAppearanceDialogState
           );
         },
       ),
-    );
+    ));
   }
 
   Widget _buildSectionHeader(String title) {
@@ -947,7 +949,7 @@ class _SubtitleAppearanceDialogState
 
   void _showFontSizePicker() {
     final sizeList = List<int>.generate(55, (i) => i + 6);
-    showDialog<void>(
+    showPlayerDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -1022,7 +1024,7 @@ class _SubtitleAppearanceDialogState
   }
 
   void _showTypefacePicker() {
-    showDialog<void>(
+    showPlayerDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -1207,7 +1209,7 @@ class _SubtitleAppearanceDialogState
   void _showEdgeTypePicker() {
     final edgeTypes = ["None", "Outline", "Depressed", "Drop Shadow", "Raised"];
 
-    showDialog<void>(
+    showPlayerDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -1408,7 +1410,7 @@ class _SubtitleAppearanceDialogState
 
   void _showBackgroundRadiusPicker() {
     final steps = List<int>.generate(10, (i) => (i + 1) * 5);
-    showDialog<void>(
+    showPlayerDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -1539,7 +1541,7 @@ class _SubtitleAppearanceDialogState
       (9, "SSA 9 - Top Right"),
     ];
 
-    showDialog<void>(
+    showPlayerDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(

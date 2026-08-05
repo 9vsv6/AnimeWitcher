@@ -17,6 +17,7 @@ import 'hotstar_player_style.dart';
 import '../../../../core/utils/stream_quality_sorter.dart';
 import 'subtitle_sync_dialog.dart';
 import 'subtitle_appearance_dialog.dart';
+import 'player_ltr.dart';
 
 class _TrackDialogResult {
   final String? audioId;
@@ -142,7 +143,7 @@ class PlayerBottomSheets {
     String? selectedSubtitleId = originalSubtitleId;
     bool subtitlesOff = snapshot.subtitlesOffSelected;
 
-    return showDialog<_PlayerOptionsResult>(
+    return showPlayerDialog<_PlayerOptionsResult>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.92),
       builder: (ctx) {
@@ -388,7 +389,7 @@ class PlayerBottomSheets {
     final sliderDivisions = ((sliderMax - 0.25) / 0.05).round();
     double selectedSpeed = currentSpeed.clamp(0.25, sliderMax).toDouble();
 
-    showDialog<void>(
+    showPlayerDialog<void>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
@@ -638,7 +639,7 @@ class PlayerBottomSheets {
 
   static void _showSubtitleOptions(BuildContext context) {
     final parentContext = context;
-    showDialog<void>(
+    showPlayerDialog<void>(
       context: context,
       builder: (ctx) {
         return Consumer(
@@ -856,7 +857,7 @@ class PlayerBottomSheets {
 
     final scrollController = ScrollController();
 
-    showDialog<void>(
+    showPlayerDialog<void>(
       context: context,
       builder: (ctx) {
         final theme = Theme.of(ctx);

@@ -20,6 +20,7 @@ import '../../../../core/providers/device_info_provider.dart';
 import '../../../../features/settings/presentation/player_settings_provider.dart';
 import 'widgets/skystream_player_controls.dart';
 import 'widgets/hotstar_player_style.dart';
+import 'widgets/player_ltr.dart';
 import 'player_controller.dart';
 import 'player_gesture_handler.dart';
 
@@ -537,7 +538,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
 
     if (errorMessage != null) {
-      return Scaffold(
+      return PlayerLtr(
+        child: Scaffold(
         body: SafeArea(
           child: Stack(
             children: [
@@ -591,10 +593,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             ],
           ),
         ),
-      );
+      ));
     }
 
-    return ValueListenableBuilder<bool>(
+    return PlayerLtr(
+      child: ValueListenableBuilder<bool>(
       valueListenable: _controlsVisible,
       builder: (context, controlsVisible, _) {
         return PopScope(
@@ -751,7 +754,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ),
         );
       },
-    );
+    ));
   }
 }
 

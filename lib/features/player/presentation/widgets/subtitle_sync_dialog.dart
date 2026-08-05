@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import 'package:collection/collection.dart';
 import '../player_controller.dart';
 import 'hotstar_player_style.dart';
+import 'player_ltr.dart';
 
 class SubtitleCue {
   final int startTimeMs;
@@ -834,7 +835,8 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PlayerLtr(
+      child: Scaffold(
       backgroundColor: HotstarPlayerStyle.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -870,7 +872,7 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
