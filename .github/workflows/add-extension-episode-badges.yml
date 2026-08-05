@@ -1,4 +1,4 @@
-name: Fix details stability and episode loading
+name: Apply details tabs, synopsis, and genres UI
 
 on:
   workflow_dispatch:
@@ -6,13 +6,8 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: fix-details-stability-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  patch:
-    name: Apply and verify details fixes
+  apply-details-ui:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,415 +19,297 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: '3.44.8'
           cache: true
 
-      - name: Apply stability fixes
+      - name: Apply details UI changes
         shell: bash
         run: |
           python3 <<'PY'
           from pathlib import Path
-          import re
 
-          anime_info = Path(
-              "lib/features/details/presentation/widgets/anime_information_section.dart"
-          )
-          layout = Path(
-              "lib/features/details/presentation/widgets/details_layout_widgets.dart"
-          )
-          js_provider = Path(
-              "lib/core/extensions/providers/js_based_provider.dart"
+          DETAILS_PATH = Path('lib/features/details/presentation/details_screen.dart')
+          HERO_PATH = Path(
+              'lib/features/details/presentation/widgets/details_desktop_hero.dart'
           )
 
-          for path in (anime_info, layout, js_provider):
-              if not path.is_file():
-                  raise SystemExit(f"Required file was not found: {path}")
 
-          # ---------------------------------------------------------------------------
-          # 1. Avoid an unbounded-height Row in the compact anime information section.
-          # ---------------------------------------------------------------------------
-          text = anime_info.read_text(encoding="utf-8")
-          old = '''          if (row.any((value) => value != null))
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-          '''
-          new = '''          if (row.any((value) => value != null))
-                      Row(
-                        // The section is inside a vertically unbounded scroll view.
-                        // Stretch would request an infinite height at runtime.
-                        crossAxisAlignment: CrossAxisAlignment.start,
-          '''
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              return text.replace(old, new, 1)
 
-          if old in text:
-              text = text.replace(old, new, 1)
-          elif "crossAxisAlignment: CrossAxisAlignment.start" not in text:
-              raise SystemExit("Could not locate the anime information row alignment.")
 
-          anime_info.write_text(text, encoding="utf-8")
+          def insert_before_once(text: str, marker: str, insertion: str, label: str) -> str:
+              count = text.count(marker)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one marker, found {count}')
+              return text.replace(marker, insertion + marker, 1)
 
-          # ---------------------------------------------------------------------------
-          # 2. Keep the desktop/TV episode list virtualized.
-          #
-          # The desktop hero is a SingleChildScrollView, so a shrink-wrapped GridView or
-          # ListView would still eagerly build every episode. A bounded inner ListView
-          # keeps the same single episode list while recycling off-screen rows.
-          # ---------------------------------------------------------------------------
-          text = layout.read_text(encoding="utf-8")
-          class_marker = "class DetailsDesktopEpisodeColumn extends ConsumerWidget {"
-          start = text.find(class_marker)
-          if start < 0:
-              raise SystemExit("Could not locate DetailsDesktopEpisodeColumn.")
 
-          new_class = r'''class DetailsDesktopEpisodeColumn extends ConsumerWidget {
-            final MultimediaItem parentItem;
-            final String itemUrl;
-            final bool isMovie;
+          details = DETAILS_PATH.read_text(encoding='utf-8')
 
-            const DetailsDesktopEpisodeColumn({
-              super.key,
-              required this.parentItem,
-              required this.itemUrl,
-              required this.isMovie,
-            });
+          helper_marker = '  /// Content rendered below the desktop hero.\n'
+          helper_code = r'''  List<String> _normalizedGenres(MultimediaItem item) {
+              final seen = <String>{};
+              final genres = <String>[];
 
-            Widget _buildEpisodeRow(
-              List<Episode> episodes,
-              int rowIndex,
-              int crossAxisCount,
-            ) {
-              final startIndex = rowIndex * crossAxisCount;
-              final endIndex = (startIndex + crossAxisCount).clamp(0, episodes.length);
-              final rowEpisodes = episodes.sublist(startIndex, endIndex);
+              for (final rawTag in item.tags ?? const <String>[]) {
+                for (final candidate in rawTag.split(RegExp(r'[,،|/]'))) {
+                  final genre = candidate.trim();
+                  if (genre.isEmpty) continue;
 
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var index = 0; index < crossAxisCount; index++)
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            left: index == 0 ? 0 : 8,
-                            right: index == crossAxisCount - 1 ? 0 : 8,
-                          ),
-                          child: index < rowEpisodes.length
-                              ? EpisodeCard(
-                                      episode: rowEpisodes[index],
-                                      parentItem: parentItem,
-                                    )
-                                    as Widget
-                              : const SizedBox.shrink(),
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            }
-
-            @override
-            Widget build(BuildContext context, WidgetRef ref) {
-              if (isMovie) return const SizedBox.shrink();
-
-              final detailsState = ref.watch(detailsControllerProvider(itemUrl));
-              var episodes = detailsState.seasonMap[detailsState.selectedSeason] ?? [];
-
-              if (episodes.isEmpty) return const SizedBox.shrink();
-
-              if (detailsState.selectedDubStatus != DubStatus.none) {
-                episodes = episodes
-                    .where((episode) => episode.dubStatus == detailsState.selectedDubStatus)
-                    .toList(growable: false);
+                  final key = genre.toLowerCase();
+                  if (seen.add(key)) {
+                    genres.add(genre);
+                  }
+                }
               }
 
-              final displayedEpisodes = detailsState.isAscending
-                  ? List<Episode>.from(episodes, growable: false)
-                  : episodes.reversed.toList(growable: false);
+              return genres;
+            }
+
+            Widget _buildSynopsisAndGenres(
+              BuildContext context,
+              MultimediaItem item,
+              AsyncValue<MultimediaItem?> detailsState,
+              AppLocalizations l10n,
+            ) {
+              final theme = Theme.of(context);
+              final colors = theme.colorScheme;
+              final isArabic =
+                  Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+              final genres = _normalizedGenres(item);
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: LayoutConstants.spacingMd),
-                    child: Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      runSpacing: 12,
-                      children: [
-                        Text(
-                          AppLocalizations.of(context)!.episodes,
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        DetailsEpisodeFilterBar(itemUrl: itemUrl),
-                      ],
+                  Text(
+                    l10n.synopsis,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final crossAxisCount = (constraints.maxWidth / 480).ceil().clamp(
-                        1,
-                        5,
-                      );
-                      final rowCount = (displayedEpisodes.length / crossAxisCount).ceil();
-
-                      // Small lists remain compact. Large lists receive a bounded,
-                      // independently scrollable viewport so ListView can recycle rows.
-                      final maximumHeight =
-                          (MediaQuery.sizeOf(context).height * 0.72)
-                              .clamp(420.0, 820.0)
-                              .toDouble();
-                      final desiredHeight =
-                          (rowCount * 220.0) +
-                          (rowCount > 1 ? (rowCount - 1) * 16.0 : 0.0);
-                      final listHeight = desiredHeight < maximumHeight
-                          ? desiredHeight
-                          : maximumHeight;
-
-                      return SizedBox(
-                        height: listHeight,
-                        child: Scrollbar(
-                          child: ListView.separated(
-                            primary: false,
-                            padding: EdgeInsets.zero,
-                            cacheExtent: 700,
-                            keyboardDismissBehavior:
-                                ScrollViewKeyboardDismissBehavior.onDrag,
-                            itemCount: rowCount,
-                            separatorBuilder: (_, _) => const SizedBox(height: 16),
-                            itemBuilder: (context, rowIndex) => _buildEpisodeRow(
-                              displayedEpisodes,
-                              rowIndex,
-                              crossAxisCount,
+                  const SizedBox(height: 8),
+                  ExpandableText(
+                    text: item.description ?? l10n.noDescription,
+                    maxLines: 4,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.textTheme.bodyMedium?.color,
+                      height: 1.5,
+                    ),
+                  ),
+                  if (detailsState.hasError) ...[
+                    const SizedBox(height: 18),
+                    Text(
+                      l10n.errorPrefix(detailsState.error.toString()),
+                      style: TextStyle(color: colors.error),
+                    ),
+                  ],
+                  if (genres.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+                    Text(
+                      isArabic ? 'التصنيفات' : 'Genres',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final genre in genres)
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colors.primary,
+                              borderRadius: BorderRadius.circular(999),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colors.primary.withValues(alpha: 0.18),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 10,
+                              ),
+                              child: Text(
+                                genre,
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: colors.onPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                      ],
+                    ),
+                  ],
                 ],
               );
             }
-          }
-          '''
-
-          # This class is intentionally the final declaration in the current file.
-          text = text[:start] + new_class
-          layout.write_text(text, encoding="utf-8")
-
-          # ---------------------------------------------------------------------------
-          # 3. Fall back only when a split API export is absent.
-          #
-          # Real network/parsing/JavaScript errors must reach DetailsController so the
-          # existing error state and Retry button are used instead of silently calling
-          # the legacy API again.
-          # ---------------------------------------------------------------------------
-          text = js_provider.read_text(encoding="utf-8")
-
-          limit_match = re.search(
-              r"const int _kMaxResultListLength\s*=\s*(\d+)\s*;",
-              text,
-          )
-          if limit_match is None:
-              raise SystemExit("Could not verify the plugin result limit.")
-          if int(limit_match.group(1)) < 2000:
-              raise SystemExit(
-                  "_kMaxResultListLength is too small for long-running anime series."
-              )
-
-          section_start = text.find("  MultimediaItem _detailFromPluginResult")
-          section_end = text.find(
-              "  @override\n  Future<List<StreamResult>> loadStreams",
-              section_start,
-          )
-          if section_start < 0 or section_end < 0:
-              raise SystemExit("Could not locate the split details/episodes API section.")
-
-          replacement = r'''  MultimediaItem _detailFromPluginResult(dynamic result, String url) {
-              if (result is! Map) {
-                throw StateError('Extension returned invalid detail data.');
-              }
-
-              final map = Map<String, dynamic>.from(result);
-              if (map['url'] == null || map['url'].toString().isEmpty) {
-                map['url'] = url;
-              }
-              return MultimediaItem.fromJson(map);
-            }
-
-            bool _isMissingExportError(Object error, String exportName) {
-              final message = error.toString();
-              final qualifiedName = _fn(exportName);
-              return message.contains('Function $qualifiedName not found') ||
-                  message.contains('Function $exportName not found');
-            }
-
-            @override
-            Future<MultimediaItem> getDetails(String url) async {
-              await _ensureReady();
-              if (_error != null) throw JsPluginException("INIT_ERROR", _error!);
-
-              try {
-                dynamic result;
-
-                try {
-                  result = await _jsEngine.invokeAsync(_fn('loadDetails'), [url]);
-                } catch (error) {
-                  if (!_isMissingExportError(error, 'loadDetails')) {
-                    rethrow;
-                  }
-
-                  // Legacy extensions export only `load`.
-                  result = await _jsEngine.invokeAsync(_fn('load'), [url]);
-                }
-
-                return _detailFromPluginResult(result, url);
-              } on JsPluginException catch (error) {
-                if (kDebugMode) {
-                  debugPrint("JsPluginException in getDetails: $error");
-                }
-                talker.error("JsPluginException in getDetails: $error");
-                rethrow;
-              } catch (error) {
-                if (kDebugMode) debugPrint("Error in getDetails: $error");
-                talker.error("Error in getDetails: $error");
-                rethrow;
-              }
-            }
-
-            @override
-            Future<List<Episode>> getEpisodes(String url) async {
-              await _ensureReady();
-              if (_error != null) throw JsPluginException("INIT_ERROR", _error!);
-
-              try {
-                dynamic result;
-
-                try {
-                  result = await _jsEngine.invokeAsync(_fn('loadEpisodes'), [url]);
-                } catch (error) {
-                  if (!_isMissingExportError(error, 'loadEpisodes')) {
-                    rethrow;
-                  }
-
-                  // Legacy extensions keep episodes inside `load`/getDetails.
-                  return await super.getEpisodes(url);
-                }
-
-                dynamic rawEpisodes = result;
-                if (result is Map && result['episodes'] is List) {
-                  rawEpisodes = result['episodes'];
-                }
-
-                if (rawEpisodes is! List) {
-                  throw StateError('Extension returned invalid episode data.');
-                }
-
-                final bounded = rawEpisodes.length > _kMaxResultListLength
-                    ? rawEpisodes.sublist(0, _kMaxResultListLength)
-                    : rawEpisodes;
-
-                if (kDebugMode && rawEpisodes.length > _kMaxResultListLength) {
-                  debugPrint(
-                    '[$_packageName] loadEpisodes returned ${rawEpisodes.length} '
-                    'entries; capping to $_kMaxResultListLength.',
-                  );
-                }
-
-                return bounded
-                    .whereType<Map>()
-                    .map((raw) => Episode.fromJson(Map<String, dynamic>.from(raw)))
-                    .toList(growable: false);
-              } on JsPluginException catch (error) {
-                if (kDebugMode) {
-                  debugPrint("JsPluginException in getEpisodes: $error");
-                }
-                talker.error("JsPluginException in getEpisodes: $error");
-                rethrow;
-              } catch (error) {
-                if (kDebugMode) debugPrint("Error in getEpisodes: $error");
-                talker.error("Error in getEpisodes: $error");
-                rethrow;
-              }
-            }
 
           '''
 
-          text = text[:section_start] + replacement + text[section_end:]
-          js_provider.write_text(text, encoding="utf-8")
+          details = insert_before_once(
+              details,
+              helper_marker,
+              helper_code,
+              'insert synopsis and genres helpers',
+          )
 
-          print("Fixed anime information constraints, desktop episode virtualization, and split API error handling.")
+          # Desktop/TV: tabs already sit above the details content. Insert the synopsis
+          # and genre chips inside that details branch, before the information cards.
+          desktop_branch = '        if (_selectedDetailsTab == 0 || isMovie) ...[\n'
+          desktop_start = details.index(desktop_branch)
+          desktop_info = '          AnimeInformationSection(item: item),\n'
+          desktop_info_index = details.index(desktop_info, desktop_start)
+          desktop_replacement = (
+              '          _buildSynopsisAndGenres(context, item, detailsState, l10n),\n'
+              '          const SizedBox(height: 28),\n'
+              + desktop_info
+          )
+          details = (
+              details[:desktop_info_index]
+              + desktop_replacement
+              + details[desktop_info_index + len(desktop_info):]
+          )
+
+          # Mobile: remove the synopsis from the always-visible hero portion and leave
+          # the tabs directly above the tab-specific content.
+          mobile_synopsis_start_marker = (
+              '              const SizedBox(height: 24),\n'
+              '              Text(\n'
+              '                l10n.synopsis,\n'
+          )
+          mobile_synopsis_start = details.index(mobile_synopsis_start_marker)
+          mobile_tabs_block = (
+              '              if (!isMovie) ...[\n'
+              '                const SizedBox(height: 28),\n'
+              '                _buildDetailsPageTabs(context, episodesState),\n'
+              '              ],\n'
+          )
+          mobile_tabs_start = details.index(mobile_tabs_block, mobile_synopsis_start)
+          mobile_tabs_end = mobile_tabs_start + len(mobile_tabs_block)
+          mobile_tabs_replacement = (
+              '              const SizedBox(height: 24),\n'
+              '              if (!isMovie) _buildDetailsPageTabs(context, episodesState),\n'
+          )
+          details = (
+              details[:mobile_synopsis_start]
+              + mobile_tabs_replacement
+              + details[mobile_tabs_end:]
+          )
+
+          # Mobile details tab: synopsis -> genres -> anime information. Because this
+          # lives under showDetailsPage, all three disappear when Episodes is selected.
+          mobile_details_start = details.index('    if (showDetailsPage) {\n')
+          mobile_info = '                AnimeInformationSection(item: item),\n'
+          mobile_info_index = details.index(mobile_info, mobile_details_start)
+          mobile_replacement = (
+              '                _buildSynopsisAndGenres(context, item, detailsState, l10n),\n'
+              '                const SizedBox(height: 28),\n'
+              + mobile_info
+          )
+          details = (
+              details[:mobile_info_index]
+              + mobile_replacement
+              + details[mobile_info_index + len(mobile_info):]
+          )
+
+          DETAILS_PATH.write_text(details, encoding='utf-8')
+
+          # Desktop hero previously rendered the synopsis outside the Details tab.
+          # Remove it there so it is shown only by the shared details content above.
+          hero = HERO_PATH.read_text(encoding='utf-8')
+          hero = replace_once(
+              hero,
+              "import '../../../../shared/widgets/expandable_text.dart';\n",
+              '',
+              'remove desktop expandable text import',
+          )
+          hero = replace_once(
+              hero,
+              "import 'package:skystream/l10n/generated/app_localizations.dart';\n",
+              '',
+              'remove desktop localization import',
+          )
+          hero = replace_once(
+              hero,
+              "    final textSecondary = textColor.withValues(alpha: 0.7);\n"
+              "    final l10n = AppLocalizations.of(context)!;\n",
+              '',
+              'remove desktop synopsis local variables',
+          )
+
+          hero_synopsis_block = '''                      const SizedBox(height: 20),
+
+                                // Synopsis
+                                ExpandableText(
+                                  text: displayItem.description ?? l10n.noDescription,
+                                  maxLines: 4,
+                                  style: TextStyle(
+                                    color: textSecondary,
+                                    fontSize: 16,
+                                    height: 1.5,
+                                  ),
+                                ),
+
+                                // Next airing (for currently-airing shows)
+                                if (displayItem.nextAiring != null) ...[
+                                  const SizedBox(height: 20),
+                                  NextAiringWidget(nextAiring: displayItem.nextAiring!),
+                                ],
+          '''
+          hero_next_airing = '''                      // Next airing (for currently-airing shows)
+                                if (displayItem.nextAiring != null) ...[
+                                  const SizedBox(height: 20),
+                                  NextAiringWidget(nextAiring: displayItem.nextAiring!),
+                                ],
+          '''
+          hero = replace_once(
+              hero,
+              hero_synopsis_block,
+              hero_next_airing,
+              'move desktop synopsis into details tab',
+          )
+
+          HERO_PATH.write_text(hero, encoding='utf-8')
           PY
 
-      - name: Format affected files
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Format changed files
         run: |
           dart format \
-            lib/features/details/presentation/widgets/anime_information_section.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart \
-            lib/core/extensions/providers/js_based_provider.dart
+            lib/features/details/presentation/details_screen.dart \
+            lib/features/details/presentation/widgets/details_desktop_hero.dart
 
-      - name: Validate patch markers
-        shell: bash
-        run: |
-          grep -F "crossAxisAlignment: CrossAxisAlignment.start" \
-            lib/features/details/presentation/widgets/anime_information_section.dart
-          grep -F "ListView.separated" \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart
-          grep -F "_isMissingExportError" \
-            lib/core/extensions/providers/js_based_provider.dart
-          if grep -Fq "return await super.getEpisodes(url);" \
-            lib/core/extensions/providers/js_based_provider.dart; then
-            echo "Legacy fallback is present for a missing loadEpisodes export."
-          else
-            echo "Legacy loadEpisodes fallback is missing."
-            exit 1
-          fi
-          git diff --check
-
-      - name: Generate Riverpod and other source files
-        run: |
-          flutter pub get
-          dart run build_runner build --delete-conflicting-outputs
-
-      - name: Analyze affected files
+      - name: Analyze changed files
         run: |
           flutter analyze \
-            --no-fatal-warnings \
-            --no-fatal-infos \
-            lib/features/details/presentation/widgets/anime_information_section.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart \
-            lib/core/extensions/providers/js_based_provider.dart
-
-      - name: Restore generated files
-        shell: bash
-        run: |
-          git restore --worktree --staged -- '*.g.dart' '*.freezed.dart' 2>/dev/null || true
-          git clean -f -- '**/*.g.dart' '**/*.freezed.dart' 2>/dev/null || true
-
-      - name: Show final diff
-        run: |
-          git diff -- \
-            lib/features/details/presentation/widgets/anime_information_section.dart \
-            lib/features/details/presentation/widgets/details_layout_widgets.dart \
-            lib/core/extensions/providers/js_based_provider.dart
+            lib/features/details/presentation/details_screen.dart \
+            lib/features/details/presentation/widgets/details_desktop_hero.dart
 
       - name: Commit and push changes
         shell: bash
         run: |
-          FILES=(
-            lib/features/details/presentation/widgets/anime_information_section.dart
-            lib/features/details/presentation/widgets/details_layout_widgets.dart
-            lib/core/extensions/providers/js_based_provider.dart
-          )
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            lib/features/details/presentation/details_screen.dart \
+            lib/features/details/presentation/widgets/details_desktop_hero.dart
 
-          if git diff --quiet -- "${FILES[@]}"; then
-            echo "No changes were required."
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${FILES[@]}"
-          git commit -m "fix: stabilize details and virtualize episode lists"
-          git push
+          git commit -m "feat(details): move synopsis into details tab and add genre chips"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
