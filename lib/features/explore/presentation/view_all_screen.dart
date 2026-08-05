@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '../../../../core/router/app_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/extensions/base_provider.dart';
+import '../../../../core/router/app_router.dart';
+import '../../../../core/utils/image_utils.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
-
 import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../../shared/widgets/shimmer_placeholder.dart';
-import '../../../../core/domain/entity/multimedia_item.dart';
-import '../../../../core/utils/image_utils.dart';
 import 'controllers/view_all_controller.dart';
 
 enum ViewAllCategory {
@@ -22,7 +22,6 @@ enum ViewAllCategory {
   trending,
 
   /// Provider-sourced content from the home screen.
-  /// No TMDB pagination — shows only the initial list.
   providerContent,
 }
 
@@ -30,13 +29,11 @@ class ViewAllScreen extends ConsumerStatefulWidget {
   final String title;
   final List<MultimediaItem> initialMediaList;
   final ViewAllCategory category;
-
-  /// Custom tap handler for items (used by provider content to go to
-  /// DetailsRoute instead of TmdbDetailsRoute).
   final void Function(MultimediaItem item)? onTap;
 
-  /// Loads the complete provider section after View All opens.
-  final Future<List<MultimediaItem>> Function()? loadItems;
+  /// Loads exactly one provider page. The page is requested only when the
+  /// user approaches the bottom, so View All never downloads the full catalog.
+  final Future<ProviderMediaPage> Function(int offset, int limit)? loadPage;
 
   const ViewAllScreen({
     super.key,
@@ -44,7 +41,7 @@ class ViewAllScreen extends ConsumerStatefulWidget {
     required this.initialMediaList,
     required this.category,
     this.onTap,
-    this.loadItems,
+    this.loadPage,
   });
 
   @override
@@ -52,50 +49,102 @@ class ViewAllScreen extends ConsumerStatefulWidget {
 }
 
 class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
+  static const int _providerPageSize = 30;
+
   final ScrollController _scrollController = ScrollController();
+  final List<MultimediaItem> _providerItems = <MultimediaItem>[];
+  final Set<String> _providerSeen = <String>{};
+
   bool _isPortrait = true;
+  bool _providerLoading = false;
+  bool _providerHasMore = true;
+  int _providerOffset = 0;
+
+  bool get _isProvider => widget.category == ViewAllCategory.providerContent;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+
+    for (final item in widget.initialMediaList) {
+      final key = _itemKey(item);
+      if (_providerSeen.add(key)) _providerItems.add(item);
+    }
+
     if (widget.initialMediaList.isNotEmpty) {
       _checkAspectRatio();
     }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isProvider) {
+        _providerHasMore = widget.loadPage != null;
+        if (_providerHasMore) _loadNextProviderPage();
+        return;
+      }
+
       final controller = ref.read(
         viewAllControllerProvider(widget.category).notifier,
       );
       controller.init(widget.initialMediaList);
-
-      if (widget.category == ViewAllCategory.providerContent &&
-          widget.loadItems != null) {
-        _loadProviderContent();
-      } else {
-        _checkInitialFill();
-      }
+      _checkInitialFill();
     });
   }
 
-  Future<void> _loadProviderContent() async {
-    final loader = widget.loadItems;
-    if (loader == null) return;
+  String _itemKey(MultimediaItem item) {
+    final url = item.url.trim();
+    if (url.isNotEmpty) return url;
+    return '${item.id}|${item.title}|${item.posterUrl}';
+  }
 
-    final controller = ref.read(
-      viewAllControllerProvider(widget.category).notifier,
-    );
-    controller.setProviderContentLoading(true);
+  Future<void> _loadNextProviderPage() async {
+    final loader = widget.loadPage;
+    if (!_isProvider ||
+        loader == null ||
+        _providerLoading ||
+        !_providerHasMore) {
+      return;
+    }
+
+    final requestedOffset = _providerOffset;
+    setState(() => _providerLoading = true);
 
     try {
-      final loaded = await loader();
+      final page = await loader(requestedOffset, _providerPageSize);
       if (!mounted) return;
 
-      controller.replaceProviderContent(
-        loaded.isNotEmpty ? loaded : widget.initialMediaList,
+      for (final item in page.items) {
+        if (_providerSeen.add(_itemKey(item))) {
+          _providerItems.add(item);
+        }
+      }
+
+      setState(() {
+        _providerOffset = page.nextOffset > requestedOffset
+            ? page.nextOffset
+            : requestedOffset + _providerPageSize;
+        _providerHasMore = page.hasMore;
+        _providerLoading = false;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _ensureProviderFill(),
       );
     } catch (_) {
       if (!mounted) return;
-      controller.replaceProviderContent(widget.initialMediaList);
+      setState(() {
+        _providerLoading = false;
+        _providerHasMore = false;
+      });
+    }
+  }
+
+  void _ensureProviderFill() {
+    if (!mounted || !_providerHasMore || _providerLoading) return;
+    if (!_scrollController.hasClients ||
+        _scrollController.position.maxScrollExtent <
+            _scrollController.position.viewportDimension * 0.65) {
+      _loadNextProviderPage();
     }
   }
 
@@ -105,14 +154,12 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
     if (url.isEmpty) return;
     final isPortrait = await ImageUtils.isImagePortrait(url);
     if (mounted && _isPortrait != isPortrait) {
-      setState(() {
-        _isPortrait = isPortrait;
-      });
+      setState(() => _isPortrait = isPortrait);
     }
   }
 
   void _checkInitialFill() {
-    if (!context.mounted) return;
+    if (!context.mounted || _isProvider) return;
     if (_scrollController.hasClients &&
         _scrollController.position.maxScrollExtent <= 0) {
       final state = ref.read(viewAllControllerProvider(widget.category));
@@ -131,15 +178,16 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels <
+        _scrollController.position.maxScrollExtent - 500) {
+      return;
+    }
+
+    if (_isProvider) {
+      _loadNextProviderPage();
+    } else {
       ref
           .read(viewAllControllerProvider(widget.category).notifier)
           .fetchNextPage();
@@ -147,27 +195,41 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final ViewAllState state = ref.watch(
-      viewAllControllerProvider(widget.category),
-    );
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
 
-    // Calculate aspect ratio dynamically
+  @override
+  Widget build(BuildContext context) {
+    final ViewAllState? controllerState = _isProvider
+        ? null
+        : ref.watch(viewAllControllerProvider(widget.category));
+
+    if (!_isProvider) {
+      ref.listen(viewAllControllerProvider(widget.category), (previous, next) {
+        if (next.items.isEmpty && !next.isLoading && next.page == 1) {
+          _checkInitialFill();
+        }
+      });
+    }
+
+    final items = _isProvider ? _providerItems : controllerState!.items;
+    final isLoading = _isProvider
+        ? _providerLoading
+        : controllerState!.isLoading;
+
     final isDesktop = context.isDesktop;
     final maxExtent = isDesktop
         ? (_isPortrait ? 240.0 : 340.0)
         : (_isPortrait ? 150.0 : 220.0);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final crossAxisCount = (screenWidth / maxExtent).ceil();
+    final crossAxisCount = (screenWidth / maxExtent).ceil().clamp(1, 20);
     final childAspectRatio = _isPortrait ? 0.55 : 1.35;
 
-    ref.listen(viewAllControllerProvider(widget.category), (previous, next) {
-      if (next.items.isEmpty && !next.isLoading && next.page == 1) {
-        _checkInitialFill();
-      }
-    });
-
-    final scaffold = Scaffold(
+    return Scaffold(
       appBar: AppBar(
         title: Text(
           widget.title,
@@ -188,7 +250,7 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
               Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
               Theme.of(context).scaffoldBackgroundColor,
             ],
-            stops: const [0.0, 0.3],
+            stops: const [0, 0.3],
           ),
         ),
         child: GridView.builder(
@@ -201,22 +263,21 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
           ),
-          itemCount:
-              state.items.length + (state.isLoading ? crossAxisCount : 0),
+          itemCount: items.length + (isLoading ? crossAxisCount : 0),
           itemBuilder: (context, index) {
-            if (index >= state.items.length) {
+            if (index >= items.length) {
               return ShimmerPlaceholder(borderRadius: 12);
             }
 
-            final item = state.items[index];
+            final item = items[index];
             final imageUrl = item.posterImageUrl;
-            final itemTitle = item.title;
             final uniqueTag =
                 'view_all_${widget.category.name}_${item.id}_$index';
 
             return MultimediaCard(
+              key: ValueKey(_itemKey(item)),
               imageUrl: imageUrl,
-              title: itemTitle,
+              title: item.title,
               episodeBadge: item.episodeBadge,
               heroTag: uniqueTag,
               isPortrait: _isPortrait,
@@ -238,7 +299,5 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
         ),
       ),
     );
-
-    return scaffold;
   }
 }

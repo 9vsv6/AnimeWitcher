@@ -13,6 +13,7 @@ import '../../features/details/presentation/tmdb_movie_details_screen.dart';
 import '../../features/explore/presentation/view_all_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
 import '../domain/entity/multimedia_item.dart';
+import '../extensions/base_provider.dart';
 import 'package:skystream/shared/widgets/app_scaffold.dart';
 import '../../core/storage/settings_repository.dart';
 import 'package:talker_flutter/talker_flutter.dart';
@@ -174,13 +175,13 @@ class ViewAllRouteExtra {
     required this.initialMediaList,
     required this.category,
     this.onTap,
-    this.loadItems,
+    this.loadPage,
   });
   final String title;
   final List<MultimediaItem> initialMediaList;
   final ViewAllCategory category;
   final void Function(MultimediaItem item)? onTap;
-  final Future<List<MultimediaItem>> Function()? loadItems;
+  final Future<ProviderMediaPage> Function(int offset, int limit)? loadPage;
 }
 
 // --- Full Screen Routes ---
@@ -235,7 +236,7 @@ class ViewAllRoute extends GoRouteData with $ViewAllRoute {
       initialMediaList: $extra.initialMediaList,
       category: $extra.category,
       onTap: $extra.onTap,
-      loadItems: $extra.loadItems,
+      loadPage: $extra.loadPage,
     );
   }
 }

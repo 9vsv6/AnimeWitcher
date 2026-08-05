@@ -82,6 +82,18 @@ class ProviderSearchFilters {
   }
 }
 
+class ProviderMediaPage {
+  final List<MultimediaItem> items;
+  final int nextOffset;
+  final bool hasMore;
+
+  const ProviderMediaPage({
+    required this.items,
+    required this.nextOffset,
+    required this.hasMore,
+  });
+}
+
 abstract class SkyStreamProvider {
   /// Unique Package Name (from plugin.json)
   String get packageName;
@@ -117,6 +129,37 @@ abstract class SkyStreamProvider {
     return search(query, cancelToken: cancelToken);
   }
 
+  /// Loads one search page. Older providers remain compatible through
+  /// a bounded slice of their existing search result.
+  Future<ProviderMediaPage> searchPage(
+    String query,
+    ProviderSearchFilters filters, {
+    int offset = 0,
+    int limit = 30,
+    CancelToken? cancelToken,
+  }) async {
+    final safeOffset = offset < 0 ? 0 : offset;
+    final safeLimit = limit.clamp(1, 100).toInt();
+    final all = await searchWithFilters(
+      query,
+      filters,
+      cancelToken: cancelToken,
+    );
+    if (safeOffset >= all.length) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
+    final end = (safeOffset + safeLimit).clamp(0, all.length).toInt();
+    return ProviderMediaPage(
+      items: all.sublist(safeOffset, end),
+      nextOffset: end,
+      hasMore: end < all.length,
+    );
+  }
+
   // Returns categorized content (Section Name -> Items)
   Future<Map<String, List<MultimediaItem>>> getHome();
 
@@ -127,6 +170,30 @@ abstract class SkyStreamProvider {
   Future<List<MultimediaItem>> getHomeSection(String sectionName) async {
     final home = await getHome();
     return home[sectionName] ?? const <MultimediaItem>[];
+  }
+
+  /// Loads one provider Home section page.
+  Future<ProviderMediaPage> getHomeSectionPage(
+    String sectionName, {
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    final safeOffset = offset < 0 ? 0 : offset;
+    final safeLimit = limit.clamp(1, 100).toInt();
+    final all = await getHomeSection(sectionName);
+    if (safeOffset >= all.length) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
+    final end = (safeOffset + safeLimit).clamp(0, all.length).toInt();
+    return ProviderMediaPage(
+      items: all.sublist(safeOffset, end),
+      nextOffset: end,
+      hasMore: end < all.length,
+    );
   }
 
   Future<MultimediaItem> getDetails(String url);

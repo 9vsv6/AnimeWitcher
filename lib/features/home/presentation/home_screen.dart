@@ -133,6 +133,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _providerSearchFilters = const ProviderSearchFilters();
     }
 
+    ProviderSearchFilters? selectedForSearch;
     setState(() => _isLoadingProviderSearchFilters = true);
     try {
       final options =
@@ -166,6 +167,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       );
 
       if (!mounted || selected == null) return;
+      selectedForSearch = selected;
       setState(() {
         _providerSearchFilterOwner = provider.packageName;
         _providerSearchFilters = selected;
@@ -175,6 +177,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         setState(() => _isLoadingProviderSearchFilters = false);
       }
     }
+
+    final selected = selectedForSearch;
+    if (!mounted) return;
+
+    await showSearch<void>(
+      context: context,
+      delegate: HomeSearchDelegate(
+        filters: selected,
+        openWithoutKeyboard: true,
+        onFiltersChanged: (updated) {
+          if (!mounted) return;
+          setState(() {
+            _providerSearchFilterOwner = provider.packageName;
+            _providerSearchFilters = updated;
+          });
+        },
+      ),
+      useRootNavigator: false,
+      maintainState: true,
+    );
   }
 
   @override
@@ -531,8 +553,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       mediaList: entry.value,
                       category: ViewAllCategory.providerContent,
                       showViewAll: true,
-                      loadViewAll: () =>
-                          activeProvider.getHomeSection(entry.key),
+                      loadViewAllPage: (offset, limit) =>
+                          activeProvider.getHomeSectionPage(
+                            entry.key,
+                            offset: offset,
+                            limit: limit,
+                          ),
                       onTap: (item) {
                         DetailsRoute(
                           $extra: DetailsRouteExtra(item: item),

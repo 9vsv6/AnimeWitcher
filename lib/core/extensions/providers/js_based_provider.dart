@@ -84,7 +84,7 @@ Future<List<R>> _processInChunks<T, R>(
 }
 
 class JsBasedProvider extends SkyStreamProvider {
-  static const int _iifeWrapperVersion = 4;
+  static const int _iifeWrapperVersion = 5;
 
   final JsEngineService _jsEngine;
   final String _scriptPath;
@@ -221,8 +221,11 @@ class JsBasedProvider extends SkyStreamProvider {
                   return {
                       getHome: (typeof getHome !== 'undefined') ? getHome : (typeof globalThis.getHome !== 'undefined' ? globalThis.getHome : undefined),
                       getHomeSection: (typeof getHomeSection !== 'undefined') ? getHomeSection : (typeof globalThis.getHomeSection !== 'undefined' ? globalThis.getHomeSection : undefined),
+                      getHomeSectionPage: (typeof getHomeSectionPage !== 'undefined') ? getHomeSectionPage : (typeof globalThis.getHomeSectionPage !== 'undefined' ? globalThis.getHomeSectionPage : undefined),
                       getSearchFilters: (typeof getSearchFilters !== 'undefined') ? getSearchFilters : (typeof globalThis.getSearchFilters !== 'undefined' ? globalThis.getSearchFilters : undefined),
                       searchWithFilters: (typeof searchWithFilters !== 'undefined') ? searchWithFilters : (typeof globalThis.searchWithFilters !== 'undefined' ? globalThis.searchWithFilters : undefined),
+                      searchWithFiltersPage: (typeof searchWithFiltersPage !== 'undefined') ? searchWithFiltersPage : (typeof globalThis.searchWithFiltersPage !== 'undefined' ? globalThis.searchWithFiltersPage : undefined),
+                      searchPage: (typeof searchPage !== 'undefined') ? searchPage : (typeof globalThis.searchPage !== 'undefined' ? globalThis.searchPage : undefined),
                       search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
                       load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
                       loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (typeof globalThis.loadStreams !== 'undefined' ? globalThis.loadStreams : undefined),
@@ -234,8 +237,11 @@ class JsBasedProvider extends SkyStreamProvider {
 
               if (globalThis.getHome) delete globalThis.getHome;
               if (globalThis.getHomeSection) delete globalThis.getHomeSection;
+              if (globalThis.getHomeSectionPage) delete globalThis.getHomeSectionPage;
               if (globalThis.getSearchFilters) delete globalThis.getSearchFilters;
               if (globalThis.searchWithFilters) delete globalThis.searchWithFilters;
+              if (globalThis.searchWithFiltersPage) delete globalThis.searchWithFiltersPage;
+              if (globalThis.searchPage) delete globalThis.searchPage;
               if (globalThis.search) delete globalThis.search;
               if (globalThis.load) delete globalThis.load;
               if (globalThis.loadStreams) delete globalThis.loadStreams;
@@ -532,6 +538,43 @@ class JsBasedProvider extends SkyStreamProvider {
     });
   }
 
+  Future<ProviderMediaPage> _parseProviderPage(
+    dynamic result,
+    int requestedOffset,
+    int requestedLimit,
+  ) async {
+    if (result is! Map<Object?, Object?>) {
+      throw StateError('Extension returned invalid page data.');
+    }
+
+    final map = Map<String, dynamic>.from(result);
+    final rawItems = map['items'] ?? map['data'];
+    if (rawItems is! List) {
+      throw StateError('Extension page did not contain an item list.');
+    }
+
+    final bounded = rawItems.length > _kMaxResultListLength
+        ? rawItems.sublist(0, _kMaxResultListLength)
+        : rawItems;
+    final items = await compute(_parseSearchResults, bounded);
+    final parsedNext = int.tryParse(
+      (map['nextOffset'] ?? map['next_offset'] ?? '').toString(),
+    );
+    final nextOffset = parsedNext != null && parsedNext > requestedOffset
+        ? parsedNext
+        : requestedOffset + requestedLimit;
+    final hasMoreValue = map['hasMore'] ?? map['has_more'];
+    final hasMore = hasMoreValue is bool
+        ? hasMoreValue
+        : hasMoreValue.toString().toLowerCase() == 'true';
+
+    return ProviderMediaPage(
+      items: items,
+      nextOffset: nextOffset,
+      hasMore: hasMore,
+    );
+  }
+
   @override
   Future<List<MultimediaItem>> getHomeSection(String sectionName) async {
     await _ensureReady();
@@ -564,6 +607,38 @@ class JsBasedProvider extends SkyStreamProvider {
 
       final home = await getHome();
       return home[sectionName] ?? const <MultimediaItem>[];
+    }
+  }
+
+  @override
+  Future<ProviderMediaPage> getHomeSectionPage(
+    String sectionName, {
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    await _ensureReady();
+    if (_error != null) throw JsPluginException('INIT_ERROR', _error!);
+
+    try {
+      return await _serializedInvoke(() async {
+        final result = await _jsEngine.invokeAsync(
+          _fn('getHomeSectionPage'),
+          <dynamic>[sectionName, offset, limit],
+        );
+        return _parseProviderPage(result, offset, limit);
+      });
+    } catch (error) {
+      if (!_isMissingExportError(error, 'getHomeSectionPage') && kDebugMode) {
+        debugPrint(
+          'JsBasedProvider: getHomeSectionPage failed for '
+          '$_packageName/$sectionName: $error',
+        );
+      }
+      return super.getHomeSectionPage(
+        sectionName,
+        offset: offset,
+        limit: limit,
+      );
     }
   }
 
@@ -629,6 +704,58 @@ class JsBasedProvider extends SkyStreamProvider {
       }
       talker.error('Error in filtered search: $error');
       return <MultimediaItem>[];
+    }
+  }
+
+  @override
+  Future<ProviderMediaPage> searchPage(
+    String query,
+    ProviderSearchFilters filters, {
+    int offset = 0,
+    int limit = 30,
+    CancelToken? cancelToken,
+  }) async {
+    await _ensureReady();
+    if (_error != null) throw JsPluginException('INIT_ERROR', _error!);
+
+    try {
+      return await _serializedInvoke(() async {
+        dynamic result;
+        try {
+          result = await _jsEngine.invokeAsync(
+            _fn('searchWithFiltersPage'),
+            <dynamic>[query, filters.toJson(), offset, limit],
+            cancelToken,
+          );
+        } catch (error) {
+          if (!_isMissingExportError(error, 'searchWithFiltersPage')) {
+            rethrow;
+          }
+          if (filters.isNotEmpty) rethrow;
+          result = await _jsEngine.invokeAsync(_fn('searchPage'), <dynamic>[
+            query,
+            offset,
+            limit,
+          ], cancelToken);
+        }
+        return _parseProviderPage(result, offset, limit);
+      });
+    } catch (error) {
+      if (kDebugMode &&
+          !_isMissingExportError(error, 'searchWithFiltersPage') &&
+          !_isMissingExportError(error, 'searchPage')) {
+        debugPrint(
+          'JsBasedProvider: paged search failed for '
+          '$_packageName: $error',
+        );
+      }
+      return super.searchPage(
+        query,
+        filters,
+        offset: offset,
+        limit: limit,
+        cancelToken: cancelToken,
+      );
     }
   }
 

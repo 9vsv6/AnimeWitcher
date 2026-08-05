@@ -10,6 +10,7 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 import '../view_all_screen.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/extensions/base_provider.dart';
 import '../../../../core/utils/image_utils.dart';
 
 class MediaHorizontalList extends StatefulWidget {
@@ -19,7 +20,8 @@ class MediaHorizontalList extends StatefulWidget {
   final void Function(MultimediaItem)? onTap;
   final bool showViewAll;
   final String? heroTagPrefix;
-  final Future<List<MultimediaItem>> Function()? loadViewAll;
+  final Future<ProviderMediaPage> Function(int offset, int limit)?
+  loadViewAllPage;
 
   const MediaHorizontalList({
     super.key,
@@ -29,7 +31,7 @@ class MediaHorizontalList extends StatefulWidget {
     this.onTap,
     this.showViewAll = true,
     this.heroTagPrefix,
-    this.loadViewAll,
+    this.loadViewAllPage,
   });
 
   @override
@@ -216,7 +218,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                         initialMediaList: widget.mediaList,
                         category: widget.category,
                         onTap: widget.onTap,
-                        loadItems: widget.loadViewAll,
+                        loadPage: widget.loadViewAllPage,
                       ),
                     ).push<void>(context);
                   },

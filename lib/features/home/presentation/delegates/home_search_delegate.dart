@@ -1,23 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/router/app_router.dart';
-import '../../../../core/extensions/extension_manager.dart';
+
+import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
-import '../../../../core/utils/image_fallbacks.dart';
-import '../../../search/presentation/search_provider.dart';
-import 'package:skystream/shared/widgets/multimedia_card.dart';
-import '../../../../shared/widgets/loading_indicator.dart';
+import '../../../../core/extensions/extension_manager.dart';
 import '../../../../core/providers/device_info_provider.dart';
+import '../../../../core/router/app_router.dart';
+import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
+import '../../../../shared/widgets/loading_indicator.dart';
+import '../../../../shared/widgets/multimedia_card.dart';
+import '../../../search/presentation/search_provider.dart';
+import '../widgets/provider_search_filter_dialog.dart';
 
 class HomeSearchDelegate extends SearchDelegate<void> {
   final String? initialQuery;
-  final ProviderSearchFilters filters;
+  final bool openWithoutKeyboard;
+  final ValueChanged<ProviderSearchFilters>? onFiltersChanged;
+
+  ProviderSearchFilters _filters;
+  ProviderSearchFilterOptions? _filterOptions;
+  bool _loadingFilterOptions = false;
+  bool _keyboardSuppressed = false;
 
   HomeSearchDelegate({
     this.initialQuery,
-    this.filters = const ProviderSearchFilters(),
-  }) : super(
+    ProviderSearchFilters filters = const ProviderSearchFilters(),
+    this.openWithoutKeyboard = false,
+    this.onFiltersChanged,
+  }) : _filters = filters,
+       super(
          searchFieldLabel: filters.isEmpty
              ? 'Search movies, series...'
              : 'Search within filtered results...',
@@ -26,6 +39,79 @@ class HomeSearchDelegate extends SearchDelegate<void> {
     if (initialQuery != null) {
       query = initialQuery!;
     }
+  }
+
+  ProviderSearchFilters get filters => _filters;
+
+  void _dismissKeyboard(BuildContext context) {
+    FocusScope.of(context).unfocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  }
+
+  void _suppressInitialKeyboard(BuildContext context) {
+    if (!openWithoutKeyboard || _keyboardSuppressed) return;
+    _keyboardSuppressed = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      _dismissKeyboard(context);
+      Future<void>.delayed(const Duration(milliseconds: 120), () {
+        if (context.mounted) _dismissKeyboard(context);
+      });
+    });
+  }
+
+  Future<void> _openFilters(BuildContext context) async {
+    if (_loadingFilterOptions) return;
+
+    final container = ProviderScope.containerOf(context, listen: false);
+    final provider = container.read(activeProviderProvider);
+    if (provider == null) return;
+
+    _loadingFilterOptions = true;
+
+    late ProviderSearchFilterOptions options;
+    try {
+      options = _filterOptions ?? await provider.getSearchFilterOptions();
+      _filterOptions = options;
+    } finally {
+      _loadingFilterOptions = false;
+    }
+
+    if (!context.mounted) return;
+    if (options.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              Localizations.localeOf(context).languageCode == 'ar'
+                  ? 'هذه الإضافة لا توفر فلاتر بحث'
+                  : 'This provider does not expose search filters',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+
+    _dismissKeyboard(context);
+    final selected = await showDialog<ProviderSearchFilters>(
+      context: context,
+      builder: (dialogContext) =>
+          ProviderSearchFilterDialog(options: options, initialValue: _filters),
+    );
+
+    if (!context.mounted || selected == null) return;
+
+    _filters = selected;
+    onFiltersChanged?.call(selected);
+
+    _dismissKeyboard(context);
+    showResults(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) _dismissKeyboard(context);
+    });
   }
 
   @override
@@ -59,7 +145,59 @@ class HomeSearchDelegate extends SearchDelegate<void> {
 
   @override
   List<Widget>? buildActions(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
     return [
+      IconButton(
+        tooltip: Localizations.localeOf(context).languageCode == 'ar'
+            ? 'فلاتر البحث'
+            : 'Search filters',
+        onPressed: _loadingFilterOptions ? null : () => _openFilters(context),
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _loadingFilterOptions
+                ? SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: colors.primary,
+                    ),
+                  )
+                : Icon(
+                    Icons.tune_rounded,
+                    color: _filters.isNotEmpty
+                        ? colors.primary
+                        : colors.onSurface,
+                  ),
+            if (_filters.isNotEmpty && !_loadingFilterOptions)
+              Positioned(
+                right: -8,
+                top: -8,
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 17,
+                    minHeight: 17,
+                  ),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_filters.count}',
+                    style: TextStyle(
+                      color: colors.onPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
       if (query.isNotEmpty)
         IconButton(
           icon: const Icon(Icons.clear),
@@ -82,20 +220,24 @@ class HomeSearchDelegate extends SearchDelegate<void> {
 
   @override
   Widget buildResults(BuildContext context) {
-    if (query.isEmpty && filters.isEmpty) return const SizedBox.shrink();
-    return _HomeSearchResults(query: query, filters: filters);
+    _suppressInitialKeyboard(context);
+    if (query.isEmpty && _filters.isEmpty) return const SizedBox.shrink();
+    return _HomeSearchResults(query: query, filters: _filters);
   }
 
   @override
   Widget buildSuggestions(BuildContext context) {
+    _suppressInitialKeyboard(context);
+
     if (query.isEmpty) {
-      if (filters.isEmpty) return const SizedBox.shrink();
-      return _HomeSearchResults(query: query, filters: filters);
+      if (_filters.isEmpty) return const SizedBox.shrink();
+      return _HomeSearchResults(query: query, filters: _filters);
     }
+
     return _HomeSearchSuggestions(
       query: query,
-      onSelect: (val) {
-        query = val;
+      onSelect: (value) {
+        query = value;
         showResults(context);
       },
     );
@@ -177,9 +319,7 @@ class _HomeSearchSuggestionsState
             trailing: IconButton(
               tooltip: 'Fill query',
               icon: const Icon(Icons.north_west_rounded),
-              onPressed: () {
-                widget.onSelect(suggestion);
-              },
+              onPressed: () => widget.onSelect(suggestion),
             ),
             onTap: () => widget.onSelect(suggestion),
           ),
@@ -200,13 +340,24 @@ class _HomeSearchResults extends ConsumerStatefulWidget {
 }
 
 class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
-  bool isLoading = true;
-  ProviderSearchResult? result;
+  static const int _pageSize = 30;
+
+  final ScrollController _scrollController = ScrollController();
+  final List<MultimediaItem> _items = <MultimediaItem>[];
+  final Set<String> _seen = <String>{};
+
+  bool _isInitialLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _offset = 0;
+  int _generation = 0;
+  String? _providerId;
 
   @override
   void initState() {
     super.initState();
-    _performSearch();
+    _scrollController.addListener(_onScroll);
+    _resetAndLoad();
   }
 
   @override
@@ -215,53 +366,123 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
     if (oldWidget.query != widget.query ||
         oldWidget.filters.toJson().toString() !=
             widget.filters.toJson().toString()) {
-      _performSearch();
+      _resetAndLoad();
     }
   }
 
-  Future<void> _performSearch() async {
-    setState(() {
-      isLoading = true;
-      result = null;
-    });
+  @override
+  void dispose() {
+    _generation += 1;
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
 
-    final SkyStreamProvider? provider = ref.read(activeProviderProvider);
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 600) {
+      _loadNextPage();
+    }
+  }
+
+  void _resetAndLoad() {
+    _generation += 1;
+    setState(() {
+      _items.clear();
+      _seen.clear();
+      _offset = 0;
+      _hasMore = true;
+      _isInitialLoading = true;
+      _isLoadingMore = false;
+      _providerId = null;
+    });
+    _loadNextPage();
+  }
+
+  String _itemKey(MultimediaItem item) {
+    final url = item.url.trim();
+    if (url.isNotEmpty) return url;
+    return '${item.id}|${item.title}|${item.posterUrl}';
+  }
+
+  Future<void> _loadNextPage() async {
+    if (!_hasMore || _isLoadingMore) return;
+
+    final provider = ref.read(activeProviderProvider);
     if (provider == null) {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isInitialLoading = false;
+          _hasMore = false;
+        });
+      }
       return;
     }
 
+    final generation = _generation;
+    final requestedOffset = _offset;
+
+    setState(() {
+      _isLoadingMore = true;
+      _providerId = provider.packageName;
+    });
+
     try {
-      final rawResults = await provider.searchWithFilters(
+      final page = await provider.searchPage(
         widget.query,
         widget.filters,
+        offset: requestedOffset,
+        limit: _pageSize,
       );
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-          result = ProviderSearchResult(
-            providerId: provider.packageName,
-            providerName: provider.name,
-            results: rawResults.toList(),
-          );
-        });
+
+      if (!mounted || generation != _generation) return;
+
+      for (final item in page.items) {
+        if (_seen.add(_itemKey(item))) {
+          _items.add(item);
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+
+      final nextOffset = page.nextOffset > requestedOffset
+          ? page.nextOffset
+          : requestedOffset + _pageSize;
+
+      setState(() {
+        _offset = nextOffset;
+        _hasMore = page.hasMore;
+        _isInitialLoading = false;
+        _isLoadingMore = false;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) => _ensureFilled());
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _isInitialLoading = false;
+        _isLoadingMore = false;
+        _hasMore = false;
+      });
+    }
+  }
+
+  void _ensureFilled() {
+    if (!mounted || !_hasMore || _isLoadingMore) return;
+    if (!_scrollController.hasClients ||
+        _scrollController.position.maxScrollExtent <
+            _scrollController.position.viewportDimension * 0.65) {
+      _loadNextPage();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
+    if (_isInitialLoading && _items.isEmpty) {
       return const Center(child: AppLoadingIndicator());
     }
 
-    if (result == null || result!.results.isEmpty) {
+    if (_items.isEmpty && !_hasMore) {
       final profile = ref.watch(deviceProfileProvider).asData?.value;
       final isTv = profile?.isTv == true || context.isTv;
       final isWidescreen = isTv || context.isTabletOrLarger;
@@ -277,7 +498,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
               'No Results Found',
               style: TextStyle(
                 fontFamily: nativeFont,
-                fontSize: 16.0,
+                fontSize: 16,
                 fontWeight: FontWeight.w400,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -295,10 +516,12 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       );
     }
 
-    final isLarge = MediaQuery.of(context).size.width > 600;
+    final isLarge = MediaQuery.sizeOf(context).width > 600;
     final maxExtent = isLarge ? 200.0 : 130.0;
+    final footerCount = _isLoadingMore ? 1 : 0;
 
     return GridView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.all(16),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: maxExtent,
@@ -306,13 +529,18 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
         crossAxisSpacing: 12,
         mainAxisSpacing: 16,
       ),
-      itemCount: result!.results.length,
+      itemCount: _items.length + footerCount,
       itemBuilder: (context, index) {
-        final item = result!.results[index];
-        final uniqueTag = 'search_${result!.providerId}_${item.url}_$index';
+        if (index >= _items.length) {
+          return const Center(child: AppLoadingIndicator());
+        }
+
+        final item = _items[index];
+        final providerId = _providerId ?? 'provider';
+        final uniqueTag = 'search_${providerId}_${item.url}_$index';
 
         return MultimediaCard(
-          key: ValueKey(item.url),
+          key: ValueKey(_itemKey(item)),
           imageUrl: AppImageFallbacks.poster(item.posterUrl, label: item.title),
           title: item.title,
           heroTag: uniqueTag,
