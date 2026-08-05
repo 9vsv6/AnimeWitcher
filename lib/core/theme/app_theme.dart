@@ -18,7 +18,7 @@ class _FixedLtrCupertinoPageTransitionsBuilder
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Builder(
-        builder: (ltrContext) => const CupertinoPageTransitionsBuilder()
+        builder: (ltrContext) => CupertinoPageTransitionsBuilder()
             .buildTransitions<T>(
               route,
               ltrContext,
