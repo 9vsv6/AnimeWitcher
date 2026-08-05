@@ -1,4 +1,4 @@
-name: Apply AnimeWitcher search filters v5
+name: Apply AnimeWitcher search filters v6
 
 on:
   workflow_dispatch:
@@ -327,6 +327,31 @@ jobs:
               js_filter_methods + js_search_anchor,
               'JS provider filter methods',
           )
+
+          # The file already contains several legacy raw Map casts such as
+          # `e as Map`. Since this workflow analyzes the whole file with
+          # strict_raw_type enabled, those pre-existing casts also fail CI.
+          # Type every raw Map cast without touching casts that already have
+          # explicit type arguments.
+          js, raw_map_cast_count = re.subn(
+              r'\bas Map\b(?!\s*<)',
+              'as Map<Object?, Object?>',
+              js,
+          )
+          if raw_map_cast_count == 0:
+              print('No legacy raw Map casts needed conversion')
+          else:
+              print(f'Typed {raw_map_cast_count} legacy raw Map casts')
+
+          remaining_raw_map_casts = re.findall(
+              r'\bas Map\b(?!\s*<)',
+              js,
+          )
+          if remaining_raw_map_casts:
+              raise SystemExit(
+                  'Raw Map casts remain in js_based_provider.dart after patch'
+              )
+
           JS_PROVIDER.write_text(js, encoding='utf-8')
 
 
