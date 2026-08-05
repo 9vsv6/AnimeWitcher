@@ -1134,11 +1134,7 @@ class JsBasedProvider extends SkyStreamProvider {
       if (value.episode <= 0 || value.unixTime <= 0) {
         return null;
       }
-      return NextAiring(
-        episode: value.episode,
-        unixTime: value.unixTime,
-        season: (value.season ?? 0) > 0 ? value.season : 1,
-      );
+      return value;
     } catch (error) {
       if (_isMissingExportError(error, 'loadNextAiring')) {
         return super.getNextAiring(url);

@@ -358,8 +358,7 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final season = widget.nextAiring.season;
-    if (season == null || season <= 0 || widget.nextAiring.episode <= 0) {
+    if (widget.nextAiring.episode <= 0) {
       return const SizedBox.shrink();
     }
 
