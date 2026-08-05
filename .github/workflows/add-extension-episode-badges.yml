@@ -1,4 +1,4 @@
-name: Apply details tabs, synopsis, and genres UI
+name: Apply AnimeWitcher search filters
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 jobs:
-  apply-details-ui:
+  apply-search-filters:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,264 +22,1071 @@ jobs:
           flutter-version: '3.44.8'
           cache: true
 
-      - name: Apply details UI changes
+      - name: Apply provider search filter support
         shell: bash
         run: |
           python3 <<'PY'
           from pathlib import Path
 
-          DETAILS_PATH = Path('lib/features/details/presentation/details_screen.dart')
-          HERO_PATH = Path(
-              'lib/features/details/presentation/widgets/details_desktop_hero.dart'
-          )
+          BASE = Path('lib/core/extensions/base_provider.dart')
+          JS_PROVIDER = Path('lib/core/extensions/providers/js_based_provider.dart')
+          HOME = Path('lib/features/home/presentation/home_screen.dart')
+          SEARCH = Path('lib/features/home/presentation/delegates/home_search_delegate.dart')
+          HEADER = Path('lib/features/home/presentation/widgets/dashboard_header_bar.dart')
+          DIALOG = Path('lib/features/home/presentation/widgets/provider_search_filter_dialog.dart')
 
 
           def replace_once(text: str, old: str, new: str, label: str) -> str:
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+                  raise SystemExit(f'{label}: expected one match, found {count}')
               return text.replace(old, new, 1)
 
 
-          def insert_before_once(text: str, marker: str, insertion: str, label: str) -> str:
-              count = text.count(marker)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected exactly one marker, found {count}')
-              return text.replace(marker, insertion + marker, 1)
+          # ------------------------------------------------------------------
+          # Base provider: generic filter contracts with backward-compatible
+          # default implementations for providers that do not support filters.
+          # ------------------------------------------------------------------
+          base = BASE.read_text(encoding='utf-8')
+          model_anchor = 'enum ProviderType { movie, series, anime, livestream, other }\n\n'
+          models = r'''enum ProviderType { movie, series, anime, livestream, other }
+
+          class ProviderSearchFilterOptions {
+            final List<String> statuses;
+            final List<String> types;
+            final List<String> ageRatings;
+            final List<String> years;
+            final List<String> genres;
+
+            const ProviderSearchFilterOptions({
+              this.statuses = const <String>[],
+              this.types = const <String>[],
+              this.ageRatings = const <String>[],
+              this.years = const <String>[],
+              this.genres = const <String>[],
+            });
+
+            bool get isEmpty =>
+                statuses.isEmpty &&
+                types.isEmpty &&
+                ageRatings.isEmpty &&
+                years.isEmpty &&
+                genres.isEmpty;
+
+            factory ProviderSearchFilterOptions.fromJson(Map<String, dynamic> json) {
+              List<String> read(String key) {
+                final value = json[key];
+                if (value is! List) return const <String>[];
+                return value
+          .map((entry) => entry.toString().trim())
+          .where((entry) => entry.isNotEmpty)
+          .toSet()
+          .toList(growable: false);
+              }
+
+              return ProviderSearchFilterOptions(
+                statuses: read('statuses'),
+                types: read('types'),
+                ageRatings: read('ageRatings'),
+                years: read('years'),
+                genres: read('genres'),
+              );
+            }
+          }
+
+          class ProviderSearchFilters {
+            final Set<String> statuses;
+            final Set<String> types;
+            final Set<String> ageRatings;
+            final Set<String> years;
+            final Set<String> genres;
+
+            const ProviderSearchFilters({
+              this.statuses = const <String>{},
+              this.types = const <String>{},
+              this.ageRatings = const <String>{},
+              this.years = const <String>{},
+              this.genres = const <String>{},
+            });
+
+            bool get isEmpty => count == 0;
+            bool get isNotEmpty => !isEmpty;
+
+            int get count =>
+                statuses.length +
+                types.length +
+                ageRatings.length +
+                years.length +
+                genres.length;
+
+            Map<String, dynamic> toJson() {
+              return <String, dynamic>{
+                'statuses': statuses.toList(growable: false),
+                'types': types.toList(growable: false),
+                'ageRatings': ageRatings.toList(growable: false),
+                'years': years.toList(growable: false),
+                'genres': genres.toList(growable: false),
+              };
+            }
+          }
+
+          '''
+          base = replace_once(base, model_anchor, models, 'base provider models')
+
+          search_anchor = '''  Future<List<MultimediaItem>> search(String query, {CancelToken? cancelToken});
+            // Returns categorized content (Section Name -> Items)
+          '''
+          search_api = '''  Future<List<MultimediaItem>> search(String query, {CancelToken? cancelToken});
+
+            /// Optional provider-defined search filter values.
+            Future<ProviderSearchFilterOptions> getSearchFilterOptions() async {
+              return const ProviderSearchFilterOptions();
+            }
+
+            /// Filtered search falls back to normal text search for older providers.
+            Future<List<MultimediaItem>> searchWithFilters(
+              String query,
+              ProviderSearchFilters filters, {
+              CancelToken? cancelToken,
+            }) {
+              return search(query, cancelToken: cancelToken);
+            }
+
+            // Returns categorized content (Section Name -> Items)
+          '''
+          base = replace_once(base, search_anchor, search_api, 'base provider API')
+          BASE.write_text(base, encoding='utf-8')
 
 
-          details = DETAILS_PATH.read_text(encoding='utf-8')
+          # ------------------------------------------------------------------
+          # JS provider: expose optional getSearchFilters/searchWithFilters.
+          # ------------------------------------------------------------------
+          js = JS_PROVIDER.read_text(encoding='utf-8')
+          js = replace_once(
+              js,
+              '''                      search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
+                      load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
+          ''',
+              '''                      getSearchFilters: (typeof getSearchFilters !== 'undefined') ? getSearchFilters : (typeof globalThis.getSearchFilters !== 'undefined' ? globalThis.getSearchFilters : undefined),
+                      searchWithFilters: (typeof searchWithFilters !== 'undefined') ? searchWithFilters : (typeof globalThis.searchWithFilters !== 'undefined' ? globalThis.searchWithFilters : undefined),
+                      search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
+                      load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
+          ''',
+              'JS IIFE filter exports',
+          )
+          js = replace_once(
+              js,
+              '''              if (globalThis.getHomeSection) delete globalThis.getHomeSection;
+              if (globalThis.search) delete globalThis.search;
+              if (globalThis.load) delete globalThis.load;
+          ''',
+              '''              if (globalThis.getHomeSection) delete globalThis.getHomeSection;
+              if (globalThis.getSearchFilters) delete globalThis.getSearchFilters;
+              if (globalThis.searchWithFilters) delete globalThis.searchWithFilters;
+              if (globalThis.search) delete globalThis.search;
+              if (globalThis.load) delete globalThis.load;
+          ''',
+              'JS IIFE filter cleanup',
+          )
 
-          helper_marker = '  /// Content rendered below the desktop hero.\n'
-          helper_code = r'''  List<String> _normalizedGenres(MultimediaItem item) {
-              final seen = <String>{};
-              final genres = <String>[];
+          js_search_anchor = '''  @override
+            Future<List<MultimediaItem>> search(
+              String query, {
+              CancelToken? cancelToken,
+            }) async {
+          '''
+          js_filter_methods = r'''  @override
+            Future<ProviderSearchFilterOptions> getSearchFilterOptions() async {
+              await _ensureReady();
+              if (_error != null) return const ProviderSearchFilterOptions();
 
-              for (final rawTag in item.tags ?? const <String>[]) {
-                for (final candidate in rawTag.split(RegExp(r'[,،|/]'))) {
-                  final genre = candidate.trim();
-                  if (genre.isEmpty) continue;
-
-                  final key = genre.toLowerCase();
-                  if (seen.add(key)) {
-                    genres.add(genre);
+              try {
+                final result = await _serializedInvoke(
+                  () => _jsEngine.invokeAsync(_fn('getSearchFilters')),
+                );
+                if (result is Map) {
+                  return ProviderSearchFilterOptions.fromJson(
+          Map<String, dynamic>.from(result),
+                  );
+                }
+              } catch (error) {
+                if (!_isMissingExportError(error, 'getSearchFilters')) {
+                  if (kDebugMode) {
+          debugPrint(
+            'JsBasedProvider: getSearchFilters failed for $_packageName: $error',
+          );
                   }
                 }
               }
 
-              return genres;
+              return const ProviderSearchFilterOptions();
             }
 
-            Widget _buildSynopsisAndGenres(
-              BuildContext context,
-              MultimediaItem item,
-              AsyncValue<MultimediaItem?> detailsState,
-              AppLocalizations l10n,
-            ) {
+            @override
+            Future<List<MultimediaItem>> searchWithFilters(
+              String query,
+              ProviderSearchFilters filters, {
+              CancelToken? cancelToken,
+            }) async {
+              if (filters.isEmpty) {
+                return search(query, cancelToken: cancelToken);
+              }
+
+              await _ensureReady();
+              if (_error != null) throw JsPluginException('INIT_ERROR', _error!);
+
+              try {
+                return await _serializedInvoke(() async {
+                  final result = await _jsEngine.invokeAsync(
+          _fn('searchWithFilters'),
+          <dynamic>[query, filters.toJson()],
+          cancelToken,
+                  );
+                  if (result is! List) return <MultimediaItem>[];
+                  final bounded = result.length > _kMaxResultListLength
+            ? result.sublist(0, _kMaxResultListLength)
+            : result;
+                  return compute(_parseSearchResults, bounded);
+                });
+              } catch (error) {
+                if (_isMissingExportError(error, 'searchWithFilters')) {
+                  return search(query, cancelToken: cancelToken);
+                }
+                if (kDebugMode) {
+                  debugPrint('Error in filtered search: $error');
+                }
+                talker.error('Error in filtered search: $error');
+                return <MultimediaItem>[];
+              }
+            }
+
+          '''
+          js = replace_once(
+              js,
+              js_search_anchor,
+              js_filter_methods + js_search_anchor,
+              'JS provider filter methods',
+          )
+          JS_PROVIDER.write_text(js, encoding='utf-8')
+
+
+          # ------------------------------------------------------------------
+          # Provider filter dialog. Visual structure follows the existing
+          # UnifiedFilterDialog; every filter is multi-select and genres use
+          # exactly three cells per row.
+          # ------------------------------------------------------------------
+          DIALOG.parent.mkdir(parents=True, exist_ok=True)
+          DIALOG.write_text(r'''import 'dart:ui';
+
+          import 'package:flutter/material.dart';
+
+          import '../../../../core/extensions/base_provider.dart';
+          import '../../../../core/utils/layout_constants.dart';
+
+          class ProviderSearchFilterDialog extends StatefulWidget {
+            final ProviderSearchFilterOptions options;
+            final ProviderSearchFilters initialValue;
+
+            const ProviderSearchFilterDialog({
+              super.key,
+              required this.options,
+              required this.initialValue,
+            });
+
+            @override
+            State<ProviderSearchFilterDialog> createState() =>
+                _ProviderSearchFilterDialogState();
+          }
+
+          class _ProviderSearchFilterDialogState
+              extends State<ProviderSearchFilterDialog>
+              with SingleTickerProviderStateMixin {
+            late final TabController _tabController;
+            late Set<String> _statuses;
+            late Set<String> _types;
+            late Set<String> _ageRatings;
+            late Set<String> _years;
+            late Set<String> _genres;
+
+            bool get _isArabic =>
+                Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+
+            @override
+            void initState() {
+              super.initState();
+              _tabController = TabController(length: 5, vsync: this);
+              _statuses = {...widget.initialValue.statuses};
+              _types = {...widget.initialValue.types};
+              _ageRatings = {...widget.initialValue.ageRatings};
+              _years = {...widget.initialValue.years};
+              _genres = {...widget.initialValue.genres};
+            }
+
+            @override
+            void dispose() {
+              _tabController.dispose();
+              super.dispose();
+            }
+
+            void _toggle(Set<String> target, String value) {
+              setState(() {
+                if (!target.add(value)) target.remove(value);
+              });
+            }
+
+            void _clearAll() {
+              setState(() {
+                _statuses.clear();
+                _types.clear();
+                _ageRatings.clear();
+                _years.clear();
+                _genres.clear();
+              });
+            }
+
+            ProviderSearchFilters get _value => ProviderSearchFilters(
+              statuses: {..._statuses},
+              types: {..._types},
+              ageRatings: {..._ageRatings},
+              years: {..._years},
+              genres: {..._genres},
+            );
+
+            @override
+            Widget build(BuildContext context) {
               final theme = Theme.of(context);
               final colors = theme.colorScheme;
-              final isArabic =
-                  Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-              final genres = _normalizedGenres(item);
+              final height = MediaQuery.sizeOf(context).height * 0.82;
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.synopsis,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
+              return BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Dialog(
+                  backgroundColor: Colors.transparent,
+                  insetPadding: const EdgeInsets.all(20),
+                  child: Container(
+          width: double.infinity,
+          height: height.clamp(520.0, 720.0).toDouble(),
+          constraints: const BoxConstraints(maxWidth: 560),
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: theme.dividerColor.withValues(alpha: 0.5),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.28),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: theme.dividerColor),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  ExpandableText(
-                    text: item.description ?? l10n.noDescription,
-                    maxLines: 4,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.textTheme.bodyMedium?.color,
-                      height: 1.5,
-                    ),
-                  ),
-                  if (detailsState.hasError) ...[
-                    const SizedBox(height: 18),
-                    Text(
-                      l10n.errorPrefix(detailsState.error.toString()),
-                      style: TextStyle(color: colors.error),
-                    ),
-                  ],
-                  if (genres.isNotEmpty) ...[
-                    const SizedBox(height: 28),
-                    Text(
-                      isArabic ? 'التصنيفات' : 'Genres',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        for (final genre in genres)
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colors.primary,
-                              borderRadius: BorderRadius.circular(999),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: colors.primary.withValues(alpha: 0.18),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Row(
+                          children: [
+                            Icon(Icons.tune_rounded, color: colors.primary, size: 28),
+                            const SizedBox(width: LayoutConstants.spacingSm),
+                            Text(
+                              _isArabic ? 'فلاتر البحث' : 'Search filters',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: 10,
-                              ),
-                              child: Text(
-                                genre,
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: colors.onPrimary,
-                                  fontWeight: FontWeight.w700,
+                            const Spacer(),
+                            if (_value.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colors.primary.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(50),
+                                ),
+                                child: Text(
+                                  '${_value.count}',
+                                  style: TextStyle(
+                                    color: colors.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
+                            IconButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TabBar(
+                        controller: _tabController,
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        indicatorColor: colors.primary,
+                        labelColor: colors.primary,
+                        unselectedLabelColor: colors.onSurfaceVariant,
+                        tabs: [
+                          _FilterTab(
+                            icon: Icons.wifi_tethering_rounded,
+                            label: _isArabic ? 'الحالة' : 'Status',
+                            active: _statuses.isNotEmpty,
+                          ),
+                          _FilterTab(
+                            icon: Icons.category_outlined,
+                            label: _isArabic ? 'النوع' : 'Type',
+                            active: _types.isNotEmpty,
+                          ),
+                          _FilterTab(
+                            icon: Icons.shield_outlined,
+                            label: _isArabic ? 'العمر' : 'Age',
+                            active: _ageRatings.isNotEmpty,
+                          ),
+                          _FilterTab(
+                            icon: Icons.calendar_today_outlined,
+                            label: _isArabic ? 'السنة' : 'Year',
+                            active: _years.isNotEmpty,
+                          ),
+                          _FilterTab(
+                            icon: Icons.local_offer_outlined,
+                            label: _isArabic ? 'التصنيف' : 'Genre',
+                            active: _genres.isNotEmpty,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _MultiSelectGrid(
+                        values: widget.options.statuses,
+                        selected: _statuses,
+                        onToggle: (value) => _toggle(_statuses, value),
+                        crossAxisCount: 2,
+                      ),
+                      _MultiSelectGrid(
+                        values: widget.options.types,
+                        selected: _types,
+                        onToggle: (value) => _toggle(_types, value),
+                        crossAxisCount: 2,
+                      ),
+                      _MultiSelectGrid(
+                        values: widget.options.ageRatings,
+                        selected: _ageRatings,
+                        onToggle: (value) => _toggle(_ageRatings, value),
+                        crossAxisCount: 2,
+                      ),
+                      _MultiSelectGrid(
+                        values: widget.options.years,
+                        selected: _years,
+                        onToggle: (value) => _toggle(_years, value),
+                        crossAxisCount: 3,
+                      ),
+                      _MultiSelectGrid(
+                        values: widget.options.genres,
+                        selected: _genres,
+                        onToggle: (value) => _toggle(_genres, value),
+                        crossAxisCount: 3,
+                        compact: true,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(LayoutConstants.spacingMd),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: _value.isEmpty ? null : _clearAll,
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: Text(_isArabic ? 'مسح الكل' : 'Clear all'),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(_value),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colors.primary,
+                            foregroundColor: colors.onPrimary,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                      ],
-                    ),
+                          child: Text(
+                            _isArabic ? 'تطبيق' : 'Apply',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+                  ),
+                ),
+              );
+            }
+          }
+
+          class _FilterTab extends StatelessWidget {
+            final IconData icon;
+            final String label;
+            final bool active;
+
+            const _FilterTab({
+              required this.icon,
+              required this.label,
+              required this.active,
+            });
+
+            @override
+            Widget build(BuildContext context) {
+              return Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(icon, size: 20),
+              if (active)
+                const Positioned(
+                  right: -3,
+                  top: -3,
+                  child: CircleAvatar(
+                    radius: 4,
+                    backgroundColor: Colors.redAccent,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 7),
+          Text(label),
                   ],
-                ],
+                ),
+              );
+            }
+          }
+
+          class _MultiSelectGrid extends StatelessWidget {
+            final List<String> values;
+            final Set<String> selected;
+            final ValueChanged<String> onToggle;
+            final int crossAxisCount;
+            final bool compact;
+
+            const _MultiSelectGrid({
+              required this.values,
+              required this.selected,
+              required this.onToggle,
+              required this.crossAxisCount,
+              this.compact = false,
+            });
+
+            @override
+            Widget build(BuildContext context) {
+              final colors = Theme.of(context).colorScheme;
+
+              return GridView.builder(
+                padding: const EdgeInsets.all(LayoutConstants.spacingMd),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: compact ? 2.05 : 2.5,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: values.length,
+                itemBuilder: (context, index) {
+                  final value = values[index];
+                  final isSelected = selected.contains(value);
+
+                  return InkWell(
+          onTap: () => onToggle(value),
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? colors.primary.withValues(alpha: 0.2)
+                  : colors.onSurface.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isSelected
+                    ? colors.primary
+                    : colors.outlineVariant.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  size: compact ? 17 : 19,
+                  color: isSelected
+                      ? colors.primary
+                      : colors.onSurfaceVariant.withValues(alpha: 0.55),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    value,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: compact ? 11.5 : 13,
+                      color: isSelected ? colors.primary : colors.onSurface,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+                  );
+                },
+              );
+            }
+          }
+          ''', encoding='utf-8')
+
+
+          # ------------------------------------------------------------------
+          # Search delegate: pass selected filters to the active provider and
+          # allow a filter-only search with an empty text query.
+          # ------------------------------------------------------------------
+          search = SEARCH.read_text(encoding='utf-8')
+          search = replace_once(
+              search,
+              '''class HomeSearchDelegate extends SearchDelegate<void> {
+            final String? initialQuery;
+
+            HomeSearchDelegate({this.initialQuery})
+              : super(
+                  searchFieldLabel: 'Search movies, series...',
+          ''',
+              '''class HomeSearchDelegate extends SearchDelegate<void> {
+            final String? initialQuery;
+            final ProviderSearchFilters filters;
+
+            HomeSearchDelegate({
+              this.initialQuery,
+              this.filters = const ProviderSearchFilters(),
+            }) : super(
+                  searchFieldLabel: filters.isEmpty
+            ? 'Search movies, series...'
+            : 'Search within filtered results...',
+          ''',
+              'search delegate constructor',
+          )
+          search = replace_once(
+              search,
+              '''  Widget buildResults(BuildContext context) {
+              if (query.isEmpty) return const SizedBox.shrink();
+              return _HomeSearchResults(query: query);
+            }
+
+            @override
+            Widget buildSuggestions(BuildContext context) {
+              if (query.isEmpty) return const SizedBox.shrink();
+              return _HomeSearchSuggestions(
+          ''',
+              '''  Widget buildResults(BuildContext context) {
+              if (query.isEmpty && filters.isEmpty) return const SizedBox.shrink();
+              return _HomeSearchResults(query: query, filters: filters);
+            }
+
+            @override
+            Widget buildSuggestions(BuildContext context) {
+              if (query.isEmpty) {
+                if (filters.isEmpty) return const SizedBox.shrink();
+                return _HomeSearchResults(query: query, filters: filters);
+              }
+              return _HomeSearchSuggestions(
+          ''',
+              'search delegate filtered results',
+          )
+          search = replace_once(
+              search,
+              '''class _HomeSearchResults extends ConsumerStatefulWidget {
+            final String query;
+
+            const _HomeSearchResults({required this.query});
+          ''',
+              '''class _HomeSearchResults extends ConsumerStatefulWidget {
+            final String query;
+            final ProviderSearchFilters filters;
+
+            const _HomeSearchResults({
+              required this.query,
+              required this.filters,
+            });
+          ''',
+              'search results fields',
+          )
+          search = replace_once(
+              search,
+              '''    if (oldWidget.query != widget.query) {
+                _performSearch();
+              }
+          ''',
+              '''    if (oldWidget.query != widget.query ||
+                  oldWidget.filters.toJson().toString() !=
+            widget.filters.toJson().toString()) {
+                _performSearch();
+              }
+          ''',
+              'search results refresh',
+          )
+          search = replace_once(
+              search,
+              '''      final rawResults = await provider.search(widget.query);
+          ''',
+              '''      final rawResults = await provider.searchWithFilters(
+                  widget.query,
+                  widget.filters,
+                );
+          ''',
+              'filtered provider search call',
+          )
+          SEARCH.write_text(search, encoding='utf-8')
+
+
+          # ------------------------------------------------------------------
+          # Widescreen dashboard header.
+          # ------------------------------------------------------------------
+          header = HEADER.read_text(encoding='utf-8')
+          header = replace_once(
+              header,
+              "import 'package:skystream/core/extensions/extension_manager.dart';\n",
+              "import 'package:skystream/core/extensions/extension_manager.dart';\nimport 'package:skystream/core/extensions/base_provider.dart';\n",
+              'dashboard header import',
+          )
+          header = replace_once(
+              header,
+              '''  final VoidCallback onShowProviderSelector;
+
+            /// Called when the user taps the left arrow (carousel previous).
+          ''',
+              '''  final VoidCallback onShowProviderSelector;
+            final VoidCallback onShowSearchFilters;
+            final ProviderSearchFilters searchFilters;
+            final bool isFilterLoading;
+
+            /// Called when the user taps the left arrow (carousel previous).
+          ''',
+              'dashboard header fields',
+          )
+          header = replace_once(
+              header,
+              '''    required this.searchFocusNode,
+              required this.onShowProviderSelector,
+              this.onPrevious,
+          ''',
+              '''    required this.searchFocusNode,
+              required this.onShowProviderSelector,
+              required this.onShowSearchFilters,
+              required this.searchFilters,
+              required this.isFilterLoading,
+              this.onPrevious,
+          ''',
+              'dashboard header constructor',
+          )
+          header = replace_once(
+              header,
+              '''          const SizedBox(width: 16),
+
+          // Capsule search bar
+          ''',
+              '''          const SizedBox(width: 12),
+
+          CardsWrapper(
+            scaleFactor: 1.01,
+            onTap: onShowSearchFilters,
+            borderRadius: BorderRadius.circular(50),
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: searchFilters.isNotEmpty
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.3,
+                      ),
+              ),
+              child: isFilterLoading
+                  ? SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: searchFilters.isNotEmpty
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.primary,
+                      ),
+                    )
+                  : Icon(
+                      Icons.tune_rounded,
+                      color: searchFilters.isNotEmpty
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSurfaceVariant,
+                      size: 18,
+                    ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Capsule search bar
+          ''',
+              'dashboard filter button',
+          )
+          header = replace_once(
+              header,
+              'delegate: HomeSearchDelegate(),',
+              'delegate: HomeSearchDelegate(filters: searchFilters),',
+              'dashboard filtered search delegate',
+          )
+          HEADER.write_text(header, encoding='utf-8')
+
+
+          # ------------------------------------------------------------------
+          # Home screen: filter button before Search, provider-scoped state,
+          # and the same support for widescreen.
+          # ------------------------------------------------------------------
+          home = HOME.read_text(encoding='utf-8')
+          home = replace_once(
+              home,
+              "import 'widgets/dashboard_header_bar.dart';\n",
+              "import 'widgets/dashboard_header_bar.dart';\nimport 'widgets/provider_search_filter_dialog.dart';\n",
+              'home filter dialog import',
+          )
+          home = replace_once(
+              home,
+              '''  final FocusNode _firstActionFocusNode = FocusNode();
+
+            /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
+          ''',
+              '''  final FocusNode _firstActionFocusNode = FocusNode();
+            ProviderSearchFilters _providerSearchFilters =
+                const ProviderSearchFilters();
+            String? _providerSearchFilterOwner;
+            bool _isLoadingProviderSearchFilters = false;
+            final Map<String, ProviderSearchFilterOptions> _searchFilterOptionsCache = {};
+
+            /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
+          ''',
+              'home filter state',
+          )
+
+          build_anchor = '  @override\n  Widget build(BuildContext context) {\n'
+          helpers = r'''  ProviderSearchFilters _filtersFor(SkyStreamProvider? provider) {
+              if (provider == null || _providerSearchFilterOwner != provider.packageName) {
+                return const ProviderSearchFilters();
+              }
+              return _providerSearchFilters;
+            }
+
+            void _openProviderSearch(
+              BuildContext context,
+              SkyStreamProvider? provider,
+            ) {
+              unawaited(
+                showSearch<void>(
+                  context: context,
+                  delegate: HomeSearchDelegate(filters: _filtersFor(provider)),
+                  useRootNavigator: false,
+                  maintainState: true,
+                ),
               );
             }
 
+            Future<void> _showProviderSearchFilters(
+              BuildContext context,
+              WidgetRef ref,
+            ) async {
+              final provider = ref.read(activeProviderProvider);
+              if (provider == null || _isLoadingProviderSearchFilters) return;
+
+              if (_providerSearchFilterOwner != provider.packageName) {
+                _providerSearchFilterOwner = provider.packageName;
+                _providerSearchFilters = const ProviderSearchFilters();
+              }
+
+              setState(() => _isLoadingProviderSearchFilters = true);
+              try {
+                final options = _searchFilterOptionsCache[provider.packageName] ??
+          await provider.getSearchFilterOptions();
+                _searchFilterOptionsCache[provider.packageName] = options;
+
+                if (!mounted) return;
+                if (options.isEmpty) {
+                  ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                Localizations.localeOf(context).languageCode == 'ar'
+                    ? 'هذه الإضافة لا توفر فلاتر بحث'
+                    : 'This provider does not expose search filters',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+                  return;
+                }
+
+                final selected = await showDialog<ProviderSearchFilters>(
+                  context: context,
+                  builder: (dialogContext) => ProviderSearchFilterDialog(
+          options: options,
+          initialValue: _providerSearchFilters,
+                  ),
+                );
+
+                if (!mounted || selected == null) return;
+                setState(() {
+                  _providerSearchFilterOwner = provider.packageName;
+                  _providerSearchFilters = selected;
+                });
+              } finally {
+                if (mounted) {
+                  setState(() => _isLoadingProviderSearchFilters = false);
+                }
+              }
+            }
+
           '''
+          home = replace_once(home, build_anchor, helpers + build_anchor, 'home filter helpers')
+          home = replace_once(
+              home,
+              '''    final l10n = AppLocalizations.of(context)!;
 
-          details = insert_before_once(
-              details,
-              helper_marker,
-              helper_code,
-              'insert synopsis and genres helpers',
-          )
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+          ''',
+              '''    final l10n = AppLocalizations.of(context)!;
+              final activeProvider = ref.watch(activeProviderProvider);
+              final activeSearchFilters = _filtersFor(activeProvider);
 
-          # Desktop/TV: tabs already sit above the details content. Insert the synopsis
-          # and genre chips inside that details branch, before the information cards.
-          desktop_branch = '        if (_selectedDetailsTab == 0 || isMovie) ...[\n'
-          desktop_start = details.index(desktop_branch)
-          desktop_info = '          AnimeInformationSection(item: item),\n'
-          desktop_info_index = details.index(desktop_info, desktop_start)
-          desktop_replacement = (
-              '          _buildSynopsisAndGenres(context, item, detailsState, l10n),\n'
-              '          const SizedBox(height: 28),\n'
-              + desktop_info
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+          ''',
+              'home active filters',
           )
-          details = (
-              details[:desktop_info_index]
-              + desktop_replacement
-              + details[desktop_info_index + len(desktop_info):]
-          )
-
-          # Mobile: remove the synopsis from the always-visible hero portion and leave
-          # the tabs directly above the tab-specific content.
-          mobile_synopsis_start_marker = (
-              '              const SizedBox(height: 24),\n'
-              '              Text(\n'
-              '                l10n.synopsis,\n'
-          )
-          mobile_synopsis_start = details.index(mobile_synopsis_start_marker)
-          mobile_tabs_block = (
-              '              if (!isMovie) ...[\n'
-              '                const SizedBox(height: 28),\n'
-              '                _buildDetailsPageTabs(context, episodesState),\n'
-              '              ],\n'
-          )
-          mobile_tabs_start = details.index(mobile_tabs_block, mobile_synopsis_start)
-          mobile_tabs_end = mobile_tabs_start + len(mobile_tabs_block)
-          mobile_tabs_replacement = (
-              '              const SizedBox(height: 24),\n'
-              '              if (!isMovie) _buildDetailsPageTabs(context, episodesState),\n'
-          )
-          details = (
-              details[:mobile_synopsis_start]
-              + mobile_tabs_replacement
-              + details[mobile_tabs_end:]
+          home = replace_once(
+              home,
+              '''                onShowProviderSelector: () =>
+                    _showProviderSelector(context, ref),
+                onPrevious: _carouselController != null
+          ''',
+              '''                onShowProviderSelector: () =>
+                    _showProviderSelector(context, ref),
+                onShowSearchFilters: () =>
+                    _showProviderSearchFilters(context, ref),
+                searchFilters: activeSearchFilters,
+                isFilterLoading: _isLoadingProviderSearchFilters,
+                onPrevious: _carouselController != null
+          ''',
+              'widescreen filter parameters',
           )
 
-          # Mobile details tab: synopsis -> genres -> anime information. Because this
-          # lives under showDetailsPage, all three disappear when Episodes is selected.
-          mobile_details_start = details.index('    if (showDetailsPage) {\n')
-          mobile_info = '                AnimeInformationSection(item: item),\n'
-          mobile_info_index = details.index(mobile_info, mobile_details_start)
-          mobile_replacement = (
-              '                _buildSynopsisAndGenres(context, item, detailsState, l10n),\n'
-              '                const SizedBox(height: 28),\n'
-              + mobile_info
-          )
-          details = (
-              details[:mobile_info_index]
-              + mobile_replacement
-              + details[mobile_info_index + len(mobile_info):]
-          )
-
-          DETAILS_PATH.write_text(details, encoding='utf-8')
-
-          # Desktop hero previously rendered the synopsis outside the Details tab.
-          # Remove it there so it is shown only by the shared details content above.
-          hero = HERO_PATH.read_text(encoding='utf-8')
-          hero = replace_once(
-              hero,
-              "import '../../../../shared/widgets/expandable_text.dart';\n",
-              '',
-              'remove desktop expandable text import',
-          )
-          hero = replace_once(
-              hero,
-              "import 'package:skystream/l10n/generated/app_localizations.dart';\n",
-              '',
-              'remove desktop localization import',
-          )
-          hero = replace_once(
-              hero,
-              "    final textSecondary = textColor.withValues(alpha: 0.7);\n"
-              "    final l10n = AppLocalizations.of(context)!;\n",
-              '',
-              'remove desktop synopsis local variables',
-          )
-
-          hero_synopsis_block = '''                      const SizedBox(height: 20),
-
-                                // Synopsis
-                                ExpandableText(
-                                  text: displayItem.description ?? l10n.noDescription,
-                                  maxLines: 4,
-                                  style: TextStyle(
-                                    color: textSecondary,
-                                    fontSize: 16,
-                                    height: 1.5,
-                                  ),
-                                ),
-
-                                // Next airing (for currently-airing shows)
-                                if (displayItem.nextAiring != null) ...[
-                                  const SizedBox(height: 20),
-                                  NextAiringWidget(nextAiring: displayItem.nextAiring!),
-                                ],
+          mobile_search_anchor = '''        actions: [
+          // 1. Search Action Button
           '''
-          hero_next_airing = '''                      // Next airing (for currently-airing shows)
-                                if (displayItem.nextAiring != null) ...[
-                                  const SizedBox(height: 20),
-                                  NextAiringWidget(nextAiring: displayItem.nextAiring!),
-                                ],
+          mobile_filter_button = '''        actions: [
+          // Search filters use the active provider's own supported values.
+          Padding(
+            padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
+            child: CardsWrapper(
+              onTap: () => _showProviderSearchFilters(context, ref),
+              borderRadius: BorderRadius.circular(50),
+              child: CircleAvatar(
+                backgroundColor: activeSearchFilters.isNotEmpty
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.1),
+                radius: 18,
+                child: _isLoadingProviderSearchFilters
+                    ? SizedBox.square(
+                        dimension: 17,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: activeSearchFilters.isNotEmpty
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                      )
+                    : Icon(
+                        Icons.tune_rounded,
+                        color: activeSearchFilters.isNotEmpty
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurface,
+                        size: 18,
+                      ),
+              ),
+            ),
+          ),
+
+          // 1. Search Action Button
           '''
-          hero = replace_once(
-              hero,
-              hero_synopsis_block,
-              hero_next_airing,
-              'move desktop synopsis into details tab',
+          home = replace_once(
+              home,
+              mobile_search_anchor,
+              mobile_filter_button,
+              'mobile filter button',
           )
 
-          HERO_PATH.write_text(hero, encoding='utf-8')
+          old_search_tap = '''              onTap: () {
+                unawaited(
+                  showSearch<void>(
+                    context: context,
+                    delegate: HomeSearchDelegate(),
+                    useRootNavigator: false,
+                    maintainState: true,
+                  ),
+                );
+              },
+          '''
+          new_search_tap = '''              onTap: () => _openProviderSearch(
+                context,
+                activeProvider,
+              ),
+          '''
+          home = replace_once(
+              home,
+              old_search_tap,
+              new_search_tap,
+              'mobile filtered search tap',
+          )
+          HOME.write_text(home, encoding='utf-8')
           PY
 
       - name: Install dependencies
@@ -288,31 +1095,42 @@ jobs:
       - name: Generate Riverpod code
         run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: Format changed files
+      - name: Format changed Dart files
         run: |
           dart format \
-            lib/features/details/presentation/details_screen.dart \
-            lib/features/details/presentation/widgets/details_desktop_hero.dart
+            lib/core/extensions/base_provider.dart \
+            lib/core/extensions/providers/js_based_provider.dart \
+            lib/features/home/presentation/home_screen.dart \
+            lib/features/home/presentation/delegates/home_search_delegate.dart \
+            lib/features/home/presentation/widgets/dashboard_header_bar.dart \
+            lib/features/home/presentation/widgets/provider_search_filter_dialog.dart
 
       - name: Analyze changed files
         run: |
           flutter analyze \
-            lib/features/details/presentation/details_screen.dart \
-            lib/features/details/presentation/widgets/details_desktop_hero.dart
+            lib/core/extensions/base_provider.dart \
+            lib/core/extensions/providers/js_based_provider.dart \
+            lib/features/home/presentation/home_screen.dart \
+            lib/features/home/presentation/delegates/home_search_delegate.dart \
+            lib/features/home/presentation/widgets/dashboard_header_bar.dart \
+            lib/features/home/presentation/widgets/provider_search_filter_dialog.dart
 
-      - name: Commit and push changes
+      - name: Commit changes
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            lib/features/details/presentation/details_screen.dart \
-            lib/features/details/presentation/widgets/details_desktop_hero.dart
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
+          if git diff --quiet; then
+            echo "No changes to commit"
             exit 0
           fi
 
-          git commit -m "feat(details): move synopsis into details tab and add genre chips"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            lib/core/extensions/base_provider.dart \
+            lib/core/extensions/providers/js_based_provider.dart \
+            lib/features/home/presentation/home_screen.dart \
+            lib/features/home/presentation/delegates/home_search_delegate.dart \
+            lib/features/home/presentation/widgets/dashboard_header_bar.dart \
+            lib/features/home/presentation/widgets/provider_search_filter_dialog.dart
+          git commit -m "Add provider search filters"
+          git push
