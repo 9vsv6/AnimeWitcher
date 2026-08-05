@@ -16,7 +16,7 @@ import '../../logger/app_logger.dart';
 // Top-level function for compute() isolate
 Map<String, List<MultimediaItem>> _parseHomeResults(dynamic result) {
   final map = <String, List<MultimediaItem>>{};
-  if (result is Map) {
+  if (result is Map<Object?, Object?>) {
     result.forEach((key, value) {
       if (value is List) {
         map[key.toString()] = value
@@ -84,7 +84,7 @@ Future<List<R>> _processInChunks<T, R>(
 }
 
 class JsBasedProvider extends SkyStreamProvider {
-  static const int _iifeWrapperVersion = 3;
+  static const int _iifeWrapperVersion = 4;
 
   final JsEngineService _jsEngine;
   final String _scriptPath;
@@ -221,6 +221,8 @@ class JsBasedProvider extends SkyStreamProvider {
                   return {
                       getHome: (typeof getHome !== 'undefined') ? getHome : (typeof globalThis.getHome !== 'undefined' ? globalThis.getHome : undefined),
                       getHomeSection: (typeof getHomeSection !== 'undefined') ? getHomeSection : (typeof globalThis.getHomeSection !== 'undefined' ? globalThis.getHomeSection : undefined),
+                      getSearchFilters: (typeof getSearchFilters !== 'undefined') ? getSearchFilters : (typeof globalThis.getSearchFilters !== 'undefined' ? globalThis.getSearchFilters : undefined),
+                      searchWithFilters: (typeof searchWithFilters !== 'undefined') ? searchWithFilters : (typeof globalThis.searchWithFilters !== 'undefined' ? globalThis.searchWithFilters : undefined),
                       search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
                       load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
                       loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (typeof globalThis.loadStreams !== 'undefined' ? globalThis.loadStreams : undefined),
@@ -232,6 +234,8 @@ class JsBasedProvider extends SkyStreamProvider {
 
               if (globalThis.getHome) delete globalThis.getHome;
               if (globalThis.getHomeSection) delete globalThis.getHomeSection;
+              if (globalThis.getSearchFilters) delete globalThis.getSearchFilters;
+              if (globalThis.searchWithFilters) delete globalThis.searchWithFilters;
               if (globalThis.search) delete globalThis.search;
               if (globalThis.load) delete globalThis.load;
               if (globalThis.loadStreams) delete globalThis.loadStreams;
@@ -463,7 +467,8 @@ class JsBasedProvider extends SkyStreamProvider {
     return _serializedInvoke(() async {
       try {
         final result = await _jsEngine.invokeAsync(_fn('getSettings'));
-        final dynamic rawSettings = result is Map && result['settings'] is List
+        final dynamic rawSettings =
+            result is Map<Object?, Object?> && result['settings'] is List
             ? result['settings']
             : result;
 
@@ -498,7 +503,7 @@ class JsBasedProvider extends SkyStreamProvider {
     return _serializedInvoke(() async {
       try {
         final result = await _jsEngine.invokeAsync(_fn('getHome'));
-        if (result is Map) {
+        if (result is Map<Object?, Object?>) {
           // Bound the per-section list size before crossing the isolate
           // boundary. Audit M25 — a plugin returning 100k items per section
           // would otherwise force compute() to serialise all of it.
@@ -563,6 +568,71 @@ class JsBasedProvider extends SkyStreamProvider {
   }
 
   @override
+  Future<ProviderSearchFilterOptions> getSearchFilterOptions() async {
+    await _ensureReady();
+    if (_error != null) return const ProviderSearchFilterOptions();
+
+    try {
+      final result = await _serializedInvoke(
+        () => _jsEngine.invokeAsync(_fn('getSearchFilters')),
+      );
+      if (result is Map<Object?, Object?>) {
+        return ProviderSearchFilterOptions.fromJson(
+          Map<String, dynamic>.from(result),
+        );
+      }
+    } catch (error) {
+      if (!_isMissingExportError(error, 'getSearchFilters')) {
+        if (kDebugMode) {
+          debugPrint(
+            'JsBasedProvider: getSearchFilters failed for $_packageName: $error',
+          );
+        }
+      }
+    }
+
+    return const ProviderSearchFilterOptions();
+  }
+
+  @override
+  Future<List<MultimediaItem>> searchWithFilters(
+    String query,
+    ProviderSearchFilters filters, {
+    CancelToken? cancelToken,
+  }) async {
+    if (filters.isEmpty) {
+      return search(query, cancelToken: cancelToken);
+    }
+
+    await _ensureReady();
+    if (_error != null) throw JsPluginException('INIT_ERROR', _error!);
+
+    try {
+      return await _serializedInvoke(() async {
+        final result = await _jsEngine.invokeAsync(
+          _fn('searchWithFilters'),
+          <dynamic>[query, filters.toJson()],
+          cancelToken,
+        );
+        if (result is! List) return <MultimediaItem>[];
+        final bounded = result.length > _kMaxResultListLength
+            ? result.sublist(0, _kMaxResultListLength)
+            : result;
+        return compute(_parseSearchResults, bounded);
+      });
+    } catch (error) {
+      if (_isMissingExportError(error, 'searchWithFilters')) {
+        return search(query, cancelToken: cancelToken);
+      }
+      if (kDebugMode) {
+        debugPrint('Error in filtered search: $error');
+      }
+      talker.error('Error in filtered search: $error');
+      return <MultimediaItem>[];
+    }
+  }
+
+  @override
   Future<List<MultimediaItem>> search(
     String query, {
     CancelToken? cancelToken,
@@ -596,7 +666,7 @@ class JsBasedProvider extends SkyStreamProvider {
   }
 
   MultimediaItem _detailFromPluginResult(dynamic result, String url) {
-    if (result is! Map) {
+    if (result is! Map<Object?, Object?>) {
       throw StateError('Extension returned invalid detail data.');
     }
 
@@ -667,7 +737,7 @@ class JsBasedProvider extends SkyStreamProvider {
       }
 
       dynamic rawEpisodes = result;
-      if (result is Map && result['episodes'] is List) {
+      if (result is Map<Object?, Object?> && result['episodes'] is List) {
         rawEpisodes = result['episodes'];
       }
 
@@ -687,7 +757,7 @@ class JsBasedProvider extends SkyStreamProvider {
       }
 
       return bounded
-          .whereType<Map>()
+          .whereType<Map<Object?, Object?>>()
           .map((raw) => Episode.fromJson(Map<String, dynamic>.from(raw)))
           .toList(growable: false);
     } on JsPluginException catch (error) {
@@ -731,7 +801,7 @@ class JsBasedProvider extends SkyStreamProvider {
           return _processInChunks(bounded, _kStreamFanoutConcurrency, (
             e,
           ) async {
-            final map = Map<String, dynamic>.from(e as Map);
+            final map = Map<String, dynamic>.from(e as Map<Object?, Object?>);
             String finalUrl = map['url'] as String;
 
             // MAGIC M3U8 HANDLING
@@ -761,7 +831,9 @@ class JsBasedProvider extends SkyStreamProvider {
                 final realUrl = utf8.decode(realUrlBytes);
 
                 Map<String, String>? sticky = map['headers'] != null
-                    ? Map<String, String>.from(map['headers'] as Map)
+                    ? Map<String, String>.from(
+                        map['headers'] as Map<Object?, Object?>,
+                      )
                     : null;
 
                 if (mainUrl.isNotEmpty) {
@@ -831,9 +903,13 @@ class JsBasedProvider extends SkyStreamProvider {
 
                 final String realUrl = config['url'] as String;
                 Map<String, String>? sticky = config['headers'] != null
-                    ? Map<String, String>.from(config['headers'] as Map)
+                    ? Map<String, String>.from(
+                        config['headers'] as Map<Object?, Object?>,
+                      )
                     : (map['headers'] != null
-                          ? Map<String, String>.from(map['headers'] as Map)
+                          ? Map<String, String>.from(
+                              map['headers'] as Map<Object?, Object?>,
+                            )
                           : null);
 
                 if (mainUrl.isNotEmpty) {
@@ -907,13 +983,17 @@ class JsBasedProvider extends SkyStreamProvider {
               url: finalUrl,
               source: (map['source'] as String?) ?? "Auto",
               headers: map['headers'] != null
-                  ? Map<String, String>.from(map['headers'] as Map)
+                  ? Map<String, String>.from(
+                      map['headers'] as Map<Object?, Object?>,
+                    )
                   : null,
               subtitles: map['subtitles'] != null
                   ? (map['subtitles'] as List)
                         .map(
                           (s) => SubtitleFile.fromJson(
-                            Map<String, dynamic>.from(s as Map),
+                            Map<String, dynamic>.from(
+                              s as Map<Object?, Object?>,
+                            ),
                           ),
                         )
                         .toList()

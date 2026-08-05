@@ -31,6 +31,7 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import 'dart:async';
 import 'widgets/dashboard_header_bar.dart';
+import 'widgets/provider_search_filter_dialog.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -59,6 +60,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
   final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
   final FocusNode _firstActionFocusNode = FocusNode();
+  ProviderSearchFilters _providerSearchFilters = const ProviderSearchFilters();
+  String? _providerSearchFilterOwner;
+  bool _isLoadingProviderSearchFilters = false;
+  final Map<String, ProviderSearchFilterOptions> _searchFilterOptionsCache = {};
 
   /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
   /// Used by DashboardHeaderBar arrows.
@@ -111,6 +116,67 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.dispose();
   }
 
+  ProviderSearchFilters _filtersFor(SkyStreamProvider? provider) {
+    if (provider == null ||
+        _providerSearchFilterOwner != provider.packageName) {
+      return const ProviderSearchFilters();
+    }
+    return _providerSearchFilters;
+  }
+
+  Future<void> _showProviderSearchFilters(WidgetRef ref) async {
+    final provider = ref.read(activeProviderProvider);
+    if (provider == null || _isLoadingProviderSearchFilters) return;
+
+    if (_providerSearchFilterOwner != provider.packageName) {
+      _providerSearchFilterOwner = provider.packageName;
+      _providerSearchFilters = const ProviderSearchFilters();
+    }
+
+    setState(() => _isLoadingProviderSearchFilters = true);
+    try {
+      final options =
+          _searchFilterOptionsCache[provider.packageName] ??
+          await provider.getSearchFilterOptions();
+      _searchFilterOptionsCache[provider.packageName] = options;
+
+      if (!mounted) return;
+      if (options.isEmpty) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                Localizations.localeOf(context).languageCode == 'ar'
+                    ? 'هذه الإضافة لا توفر فلاتر بحث'
+                    : 'This provider does not expose search filters',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
+
+      final selected = await showDialog<ProviderSearchFilters>(
+        context: context,
+        builder: (dialogContext) => ProviderSearchFilterDialog(
+          options: options,
+          initialValue: _providerSearchFilters,
+        ),
+      );
+
+      if (!mounted || selected == null) return;
+      setState(() {
+        _providerSearchFilterOwner = provider.packageName;
+        _providerSearchFilters = selected;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingProviderSearchFilters = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -119,6 +185,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final syncedProgressAsync = ref.watch(syncedProgressProvider);
     final generalSettings = ref.watch(generalSettingsProvider);
     final l10n = AppLocalizations.of(context)!;
+    final activeProvider = ref.watch(activeProviderProvider);
+    final activeSearchFilters = _filtersFor(activeProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final overlayStyle = isDark
@@ -149,6 +217,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 searchFocusNode: _firstActionFocusNode,
                 onShowProviderSelector: () =>
                     _showProviderSelector(context, ref),
+                onShowSearchFilters: () => _showProviderSearchFilters(ref),
+                searchFilters: activeSearchFilters,
+                isFilterLoading: _isLoadingProviderSearchFilters,
                 onPrevious: _carouselController != null
                     ? () => _carouselController!.previousPage()
                     : null,
@@ -195,6 +266,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ),
         title: Text(l10n.appTitle),
         actions: [
+          // Search filters use the active provider's own supported values.
+          Padding(
+            padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
+            child: CardsWrapper(
+              onTap: () => _showProviderSearchFilters(ref),
+              borderRadius: BorderRadius.circular(50),
+              child: CircleAvatar(
+                backgroundColor: activeSearchFilters.isNotEmpty
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.1),
+                radius: 18,
+                child: _isLoadingProviderSearchFilters
+                    ? SizedBox.square(
+                        dimension: 17,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: activeSearchFilters.isNotEmpty
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                      )
+                    : Icon(
+                        Icons.tune_rounded,
+                        color: activeSearchFilters.isNotEmpty
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurface,
+                        size: 18,
+                      ),
+              ),
+            ),
+          ),
+
           // 1. Search Action Button
           Padding(
             padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
@@ -204,7 +309,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 unawaited(
                   showSearch<void>(
                     context: context,
-                    delegate: HomeSearchDelegate(),
+                    delegate: HomeSearchDelegate(filters: activeSearchFilters),
                     useRootNavigator: false,
                     maintainState: true,
                   ),

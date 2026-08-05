@@ -12,12 +12,17 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 
 class HomeSearchDelegate extends SearchDelegate<void> {
   final String? initialQuery;
+  final ProviderSearchFilters filters;
 
-  HomeSearchDelegate({this.initialQuery})
-    : super(
-        searchFieldLabel: 'Search movies, series...',
-        searchFieldStyle: null,
-      ) {
+  HomeSearchDelegate({
+    this.initialQuery,
+    this.filters = const ProviderSearchFilters(),
+  }) : super(
+         searchFieldLabel: filters.isEmpty
+             ? 'Search movies, series...'
+             : 'Search within filtered results...',
+         searchFieldStyle: null,
+       ) {
     if (initialQuery != null) {
       query = initialQuery!;
     }
@@ -77,13 +82,16 @@ class HomeSearchDelegate extends SearchDelegate<void> {
 
   @override
   Widget buildResults(BuildContext context) {
-    if (query.isEmpty) return const SizedBox.shrink();
-    return _HomeSearchResults(query: query);
+    if (query.isEmpty && filters.isEmpty) return const SizedBox.shrink();
+    return _HomeSearchResults(query: query, filters: filters);
   }
 
   @override
   Widget buildSuggestions(BuildContext context) {
-    if (query.isEmpty) return const SizedBox.shrink();
+    if (query.isEmpty) {
+      if (filters.isEmpty) return const SizedBox.shrink();
+      return _HomeSearchResults(query: query, filters: filters);
+    }
     return _HomeSearchSuggestions(
       query: query,
       onSelect: (val) {
@@ -183,8 +191,9 @@ class _HomeSearchSuggestionsState
 
 class _HomeSearchResults extends ConsumerStatefulWidget {
   final String query;
+  final ProviderSearchFilters filters;
 
-  const _HomeSearchResults({required this.query});
+  const _HomeSearchResults({required this.query, required this.filters});
 
   @override
   ConsumerState<_HomeSearchResults> createState() => _HomeSearchResultsState();
@@ -203,7 +212,9 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
   @override
   void didUpdateWidget(covariant _HomeSearchResults oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.query != widget.query) {
+    if (oldWidget.query != widget.query ||
+        oldWidget.filters.toJson().toString() !=
+            widget.filters.toJson().toString()) {
       _performSearch();
     }
   }
@@ -221,7 +232,10 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
     }
 
     try {
-      final rawResults = await provider.search(widget.query);
+      final rawResults = await provider.searchWithFilters(
+        widget.query,
+        widget.filters,
+      );
       if (mounted) {
         setState(() {
           isLoading = false;

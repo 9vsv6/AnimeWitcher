@@ -3,6 +3,85 @@ import '../domain/entity/multimedia_item.dart';
 
 enum ProviderType { movie, series, anime, livestream, other }
 
+class ProviderSearchFilterOptions {
+  final List<String> statuses;
+  final List<String> types;
+  final List<String> ageRatings;
+  final List<String> years;
+  final List<String> genres;
+
+  const ProviderSearchFilterOptions({
+    this.statuses = const <String>[],
+    this.types = const <String>[],
+    this.ageRatings = const <String>[],
+    this.years = const <String>[],
+    this.genres = const <String>[],
+  });
+
+  bool get isEmpty =>
+      statuses.isEmpty &&
+      types.isEmpty &&
+      ageRatings.isEmpty &&
+      years.isEmpty &&
+      genres.isEmpty;
+
+  factory ProviderSearchFilterOptions.fromJson(Map<String, dynamic> json) {
+    List<String> read(String key) {
+      final value = json[key];
+      if (value is! List) return const <String>[];
+      return value
+          .map((entry) => entry.toString().trim())
+          .where((entry) => entry.isNotEmpty)
+          .toSet()
+          .toList(growable: false);
+    }
+
+    return ProviderSearchFilterOptions(
+      statuses: read('statuses'),
+      types: read('types'),
+      ageRatings: read('ageRatings'),
+      years: read('years'),
+      genres: read('genres'),
+    );
+  }
+}
+
+class ProviderSearchFilters {
+  final Set<String> statuses;
+  final Set<String> types;
+  final Set<String> ageRatings;
+  final Set<String> years;
+  final Set<String> genres;
+
+  const ProviderSearchFilters({
+    this.statuses = const <String>{},
+    this.types = const <String>{},
+    this.ageRatings = const <String>{},
+    this.years = const <String>{},
+    this.genres = const <String>{},
+  });
+
+  bool get isEmpty => count == 0;
+  bool get isNotEmpty => !isEmpty;
+
+  int get count =>
+      statuses.length +
+      types.length +
+      ageRatings.length +
+      years.length +
+      genres.length;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'statuses': statuses.toList(growable: false),
+      'types': types.toList(growable: false),
+      'ageRatings': ageRatings.toList(growable: false),
+      'years': years.toList(growable: false),
+      'genres': genres.toList(growable: false),
+    };
+  }
+}
+
 abstract class SkyStreamProvider {
   /// Unique Package Name (from plugin.json)
   String get packageName;
@@ -23,6 +102,21 @@ abstract class SkyStreamProvider {
 
   // Key methods providers must implement
   Future<List<MultimediaItem>> search(String query, {CancelToken? cancelToken});
+
+  /// Optional provider-defined search filter values.
+  Future<ProviderSearchFilterOptions> getSearchFilterOptions() async {
+    return const ProviderSearchFilterOptions();
+  }
+
+  /// Filtered search falls back to normal text search for older providers.
+  Future<List<MultimediaItem>> searchWithFilters(
+    String query,
+    ProviderSearchFilters filters, {
+    CancelToken? cancelToken,
+  }) {
+    return search(query, cancelToken: cancelToken);
+  }
+
   // Returns categorized content (Section Name -> Items)
   Future<Map<String, List<MultimediaItem>>> getHome();
 

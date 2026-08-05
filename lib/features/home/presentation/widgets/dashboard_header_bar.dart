@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/extensions/extension_manager.dart';
+import 'package:skystream/core/extensions/base_provider.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/features/home/presentation/delegates/home_search_delegate.dart';
@@ -15,6 +16,9 @@ import 'dart:async';
 class DashboardHeaderBar extends ConsumerWidget {
   final FocusNode searchFocusNode;
   final VoidCallback onShowProviderSelector;
+  final VoidCallback onShowSearchFilters;
+  final ProviderSearchFilters searchFilters;
+  final bool isFilterLoading;
 
   /// Called when the user taps the left arrow (carousel previous).
   final VoidCallback? onPrevious;
@@ -26,6 +30,9 @@ class DashboardHeaderBar extends ConsumerWidget {
     super.key,
     required this.searchFocusNode,
     required this.onShowProviderSelector,
+    required this.onShowSearchFilters,
+    required this.searchFilters,
+    required this.isFilterLoading,
     this.onPrevious,
     this.onNext,
   });
@@ -84,6 +91,44 @@ class DashboardHeaderBar extends ConsumerWidget {
 
           const SizedBox(width: 16),
 
+          CardsWrapper(
+            scaleFactor: 1.01,
+            onTap: onShowSearchFilters,
+            borderRadius: BorderRadius.circular(50),
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: searchFilters.isNotEmpty
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.3,
+                      ),
+              ),
+              child: isFilterLoading
+                  ? SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: searchFilters.isNotEmpty
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.primary,
+                      ),
+                    )
+                  : Icon(
+                      Icons.tune_rounded,
+                      color: searchFilters.isNotEmpty
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSurfaceVariant,
+                      size: 18,
+                    ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
           // Capsule search bar
           Expanded(
             child: CardsWrapper(
@@ -93,7 +138,7 @@ class DashboardHeaderBar extends ConsumerWidget {
                 unawaited(
                   showSearch<void>(
                     context: context,
-                    delegate: HomeSearchDelegate(),
+                    delegate: HomeSearchDelegate(filters: searchFilters),
                     useRootNavigator: false,
                     maintainState: true,
                   ),
