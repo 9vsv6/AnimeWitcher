@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/l10n/generated/app_localizations.dart';
 
 class ExpandableText extends StatefulWidget {
   final String text;
@@ -34,18 +35,23 @@ class _ExpandableTextState extends State<ExpandableText> {
   int? _cachedMaxLines;
   double? _cachedMaxWidth;
   TextStyle? _cachedStyle;
+  TextDirection? _cachedTextDirection;
 
-  bool _recomputeIfNeeded(BoxConstraints constraints) {
+  bool _recomputeIfNeeded(
+    BoxConstraints constraints,
+    TextDirection textDirection,
+  ) {
     if (_cachedText == widget.text &&
         _cachedMaxLines == widget.maxLines &&
         _cachedMaxWidth == constraints.maxWidth &&
-        _cachedStyle == widget.style) {
+        _cachedStyle == widget.style &&
+        _cachedTextDirection == textDirection) {
       return _didExceedMaxLines;
     }
     final textPainter = TextPainter(
       text: TextSpan(text: widget.text, style: widget.style),
       maxLines: widget.maxLines,
-      textDirection: TextDirection.ltr,
+      textDirection: textDirection,
     )..layout(maxWidth: constraints.maxWidth);
     _didExceedMaxLines = textPainter.didExceedMaxLines;
     textPainter.dispose();
@@ -53,16 +59,22 @@ class _ExpandableTextState extends State<ExpandableText> {
     _cachedMaxLines = widget.maxLines;
     _cachedMaxWidth = constraints.maxWidth;
     _cachedStyle = widget.style;
+    _cachedTextDirection = textDirection;
     return _didExceedMaxLines;
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final textDirection = Directionality.of(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isTruncated = _recomputeIfNeeded(constraints);
+        final isTruncated = _recomputeIfNeeded(
+          constraints,
+          textDirection,
+        );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,7 +139,7 @@ class _ExpandableTextState extends State<ExpandableText> {
                           : null,
                     ),
                     child: Text(
-                      _isExpanded ? 'Show less' : 'Read more',
+                      _isExpanded ? l10n.showLess : l10n.showMore,
                       style: TextStyle(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.bold,

@@ -379,11 +379,25 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Extension settings saved')));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(
+            Localizations.localeOf(context).languageCode == 'ar'
+                ? 'تم حفظ إعدادات الإضافة'
+                : 'Extension settings saved',
+          ),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save settings: $error')),
+        SnackBar(
+          content: Text(
+            Localizations.localeOf(context).languageCode == 'ar'
+                ? 'فشل حفظ الإعدادات: $error'
+                : 'Failed to save settings: $error',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -734,7 +748,7 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
                           ),
                         )
                       : const Icon(Icons.save_outlined),
-                  label: const Text('Save settings'),
+                  label: Text(AppLocalizations.of(context)!.save),
                 ),
               ),
             ),
@@ -757,19 +771,31 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
         (domains.isNotEmpty && !hasScriptBaseUrl);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.pluginSettings(widget.plugin.name)),
-        actions: [
-          IconButton(
-            tooltip: 'Save',
-            onPressed: _loading || _saving ? null : _save,
-            icon: _saving
-                ? const AppLoadingIndicator(
-                    constraints: BoxConstraints.tightFor(width: 20, height: 20),
-                  )
-                : const Icon(Icons.save_outlined),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            title: Directionality(
+              textDirection: Directionality.of(context),
+              child: Text(l10n.pluginSettings(widget.plugin.name)),
+            ),
+            actions: [
+              IconButton(
+                tooltip: l10n.save,
+                onPressed: _loading || _saving ? null : _save,
+                icon: _saving
+                    ? const AppLoadingIndicator(
+                        constraints: BoxConstraints.tightFor(
+                          width: 20,
+                          height: 20,
+                        ),
+                      )
+                    : const Icon(Icons.save_outlined),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
       body: _loading
           ? const Center(child: AppLoadingIndicator())

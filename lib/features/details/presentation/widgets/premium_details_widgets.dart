@@ -12,6 +12,15 @@ import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'details_layout_widgets.dart';
 
+bool _isArabicDetailsLocale(BuildContext context) =>
+    Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+
+String _detailsText(
+  BuildContext context, {
+  required String english,
+  required String arabic,
+}) => _isArabicDetailsLocale(context) ? arabic : english;
+
 class MetadataBar extends ConsumerWidget {
   final MultimediaItem item;
   final bool isLoading;
@@ -313,14 +322,24 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
     });
   }
 
-  String _formatCountdown(Duration duration) {
+  String _formatCountdown(BuildContext context, Duration duration) {
     final days = duration.inDays;
     final hours = duration.inHours.remainder(24).toString().padLeft(2, '0');
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
 
     if (days > 0) {
-      return '$days days  $hours:$minutes:$seconds';
+      late final String dayText;
+      if (!_isArabicDetailsLocale(context)) {
+        dayText = '$days days';
+      } else if (days == 1) {
+        dayText = 'يوم واحد';
+      } else if (days == 2) {
+        dayText = 'يومان';
+      } else {
+        dayText = '$days أيام';
+      }
+      return '$dayText  $hours:$minutes:$seconds';
     }
 
     return '$hours:$minutes:$seconds';
@@ -335,13 +354,21 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
   @override
   Widget build(BuildContext context) {
     final season = widget.nextAiring.season;
-    final episodeDescription = season == null
-        ? 'Episode ${widget.nextAiring.episode}'
-        : 'Episode ${widget.nextAiring.episode} of Season $season';
+    final isArabic = _isArabicDetailsLocale(context);
+    late final String episodeDescription;
+    if (season == null) {
+      episodeDescription = isArabic
+          ? 'الحلقة ${widget.nextAiring.episode}'
+          : 'Episode ${widget.nextAiring.episode}';
+    } else {
+      episodeDescription = isArabic
+          ? 'الحلقة ${widget.nextAiring.episode} من الموسم $season'
+          : 'Episode ${widget.nextAiring.episode} of Season $season';
+    }
 
     final countdownText = _remaining == Duration.zero
-        ? 'Airing now'
-        : _formatCountdown(_remaining);
+        ? _detailsText(context, english: 'Airing now', arabic: 'تُعرض الآن')
+        : _formatCountdown(context, _remaining);
 
     return Container(
       width: double.infinity,
@@ -368,7 +395,7 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '$episodeDescription in',
+                  isArabic ? '$episodeDescription بعد' : '$episodeDescription in',
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
@@ -403,7 +430,7 @@ class CastCarousel extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Text(
-            "Cast",
+            _detailsText(context, english: 'Cast', arabic: 'طاقم الشخصيات'),
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -473,7 +500,11 @@ class TrailersSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Text(
-            "Trailers & Extras",
+            _detailsText(
+              context,
+              english: 'Trailers & Extras',
+              arabic: 'الإعلانات والمقاطع الإضافية',
+            ),
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -533,9 +564,13 @@ class TrailersSection extends StatelessWidget {
                             color: Colors.black87,
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text(
-                            "Trailer",
-                            style: TextStyle(
+                          child: Text(
+                            _detailsText(
+                              context,
+                              english: 'Trailer',
+                              arabic: 'إعلان',
+                            ),
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
@@ -565,14 +600,14 @@ class TrailersSection extends StatelessWidget {
 class RecommendationsCarousel extends StatelessWidget {
   final List<MultimediaItem> items;
   final void Function(MultimediaItem) onItemTap;
-  final String title;
+  final String? title;
   final bool showRelationBadge;
 
   const RecommendationsCarousel({
     super.key,
     required this.items,
     required this.onItemTap,
-    this.title = "More Like This",
+    this.title,
     this.showRelationBadge = false,
   });
 
@@ -664,7 +699,12 @@ class RecommendationsCarousel extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Text(
-            title,
+            title ??
+                _detailsText(
+                  context,
+                  english: 'More Like This',
+                  arabic: 'المزيد مثل هذا',
+                ),
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),

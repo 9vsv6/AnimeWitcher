@@ -1,7 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+class _FixedLtrCupertinoPageTransitionsBuilder
+    extends PageTransitionsBuilder {
+  const _FixedLtrCupertinoPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final contentDirection = Directionality.of(context);
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Builder(
+        builder: (ltrContext) => const CupertinoPageTransitionsBuilder()
+            .buildTransitions<T>(
+              route,
+              ltrContext,
+              animation,
+              secondaryAnimation,
+              Directionality(
+                textDirection: contentDirection,
+                child: child,
+              ),
+            ),
+      ),
+    );
+  }
+}
+
 class AppTheme {
+  static final PageTransitionsTheme _pageTransitionsTheme =
+      PageTransitionsTheme(
+        builders: <TargetPlatform, PageTransitionsBuilder>{
+          ...const PageTransitionsTheme().builders,
+          TargetPlatform.iOS:
+              const _FixedLtrCupertinoPageTransitionsBuilder(),
+        },
+      );
   // Premium Colors
   static const Color background = Color(0xFF0F0F13); // Deep dark blue-grey
   static const Color surface = Color(0xFF18181F);
@@ -48,6 +89,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      pageTransitionsTheme: _pageTransitionsTheme,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: const Color(
         0xFF000000,
@@ -223,6 +265,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      pageTransitionsTheme: _pageTransitionsTheme,
       brightness: Brightness.light,
       scaffoldBackgroundColor: colorScheme.surface,
 

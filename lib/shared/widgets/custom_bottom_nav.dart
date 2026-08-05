@@ -55,14 +55,16 @@ class CustomBottomNavBar extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final count = destinations.length;
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final visualIndex = isRtl ? count - 1 - currentIndex : currentIndex;
 
-    // Sliding highlight indicator
+    // Sliding highlight indicator follows the physical tab position in RTL.
     final highlight = AnimatedAlign(
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
       alignment: count <= 1
           ? Alignment.center
-          : Alignment(-1 + 2 * (currentIndex / (count - 1)), 0),
+          : Alignment(-1 + 2 * (visualIndex / (count - 1)), 0),
       child: FractionallySizedBox(
         widthFactor: count == 0 ? 1 : 1 / count,
         child: Padding(

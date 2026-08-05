@@ -150,12 +150,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
-            stretch: true,
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            flexibleSpace: FlexibleSpaceBar(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: SliverAppBar(
+              pinned: true,
+              expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
+              stretch: true,
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [
                 StretchMode.zoomBackground,
                 StretchMode.blurBackground,
@@ -273,6 +275,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
               ),
               const SizedBox(width: 8),
             ],
+              ),
           ),
           ..._buildMobileSlivers(
             context,
@@ -503,43 +506,49 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        // Back button — D-pad reachable (Up from Play)
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
-          style: IconButton.styleFrom(
-            backgroundColor: isDark ? Colors.black45 : Colors.white54,
-            foregroundColor: textColor,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            // Back button — D-pad reachable (Up from Play)
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => context.pop(),
+              style: IconButton.styleFrom(
+                backgroundColor: isDark ? Colors.black45 : Colors.white54,
+                foregroundColor: textColor,
+              ),
+            ),
+            actions: [
+              // Bookmark — D-pad reachable
+              IconButton(
+                icon: Icon(
+                  isBookmarked
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
+                  color: isBookmarked
+                      ? Theme.of(context).colorScheme.primary
+                      : textColor,
+                ),
+                onPressed: () {
+                  if (isBookmarked) {
+                    libraryNotifier.removeItem(item.url);
+                  } else {
+                    libraryNotifier.addItem(item);
+                  }
+                },
+                style: IconButton.styleFrom(
+                  backgroundColor: isDark ? Colors.black45 : Colors.white54,
+                  foregroundColor: textColor,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
         ),
-        actions: [
-          // Bookmark — D-pad reachable
-          IconButton(
-            icon: Icon(
-              isBookmarked
-                  ? Icons.bookmark_rounded
-                  : Icons.bookmark_border_rounded,
-              color: isBookmarked
-                  ? Theme.of(context).colorScheme.primary
-                  : textColor,
-            ),
-            onPressed: () {
-              if (isBookmarked) {
-                libraryNotifier.removeItem(item.url);
-              } else {
-                libraryNotifier.addItem(item);
-              }
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: isDark ? Colors.black45 : Colors.white54,
-              foregroundColor: textColor,
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: DetailsDesktopHero(
         displayItem: item,
