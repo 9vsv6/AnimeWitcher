@@ -355,6 +355,9 @@ class DetailsController extends _$DetailsController {
           episodes: AsyncData(sorted),
           item: rendered,
         );
+        unawaited(
+          _loadEpisodeMetadataInBackground(provider, item.url, rendered),
+        );
       } else {
         // Metadata is ready. Render it now and let episodes continue loading
         // independently without blocking the details page.
@@ -407,6 +410,9 @@ class DetailsController extends _$DetailsController {
         episodes: AsyncData(sorted),
         item: merged,
       );
+
+      // Optional artwork/season enrichment starts only after episodes render.
+      unawaited(_loadEpisodeMetadataInBackground(provider, url, merged));
     } catch (error, stackTrace) {
       if (!ref.mounted) return;
       state = state.copyWith(
@@ -416,6 +422,90 @@ class DetailsController extends _$DetailsController {
       );
     } finally {
       _episodesLoadFuture = null;
+    }
+  }
+
+  Episode _mergeEpisodeMetadata(Episode source, Episode metadata) {
+    final metadataPoster = metadata.posterUrl?.trim();
+    return Episode(
+      name: source.name,
+      url: source.url,
+      season: metadata.season > 0 ? metadata.season : source.season,
+      episode: metadata.episode > 0 ? metadata.episode : source.episode,
+      description: source.description,
+      posterUrl: metadataPoster != null && metadataPoster.isNotEmpty
+          ? metadataPoster
+          : source.posterUrl,
+      headers: source.headers,
+      rating: source.rating,
+      runtime: source.runtime,
+      airDate: source.airDate,
+      dubStatus: source.dubStatus,
+      playbackPolicy: source.playbackPolicy,
+      streams: source.streams,
+    );
+  }
+
+  Future<void> _loadEpisodeMetadataInBackground(
+    SkyStreamProvider provider,
+    String url,
+    MultimediaItem contextItem,
+  ) async {
+    try {
+      final metadata = await provider.getEpisodeMetadata(url);
+      if (!ref.mounted || metadata.isEmpty) return;
+
+      final currentDetails = state.details.asData?.value;
+      if (currentDetails == null || currentDetails.url != contextItem.url) return;
+
+      final currentEpisodes =
+          state.episodes.asData?.value ??
+          currentDetails.episodes ??
+          const <Episode>[];
+      if (currentEpisodes.isEmpty) return;
+
+      final byUrl = <String, Episode>{};
+      final byNumber = <int, Episode>{};
+      for (final item in metadata) {
+        if (item.url.isNotEmpty) byUrl[item.url] = item;
+        if (item.episode > 0) byNumber[item.episode] = item;
+      }
+
+      var changed = false;
+      final enriched = currentEpisodes.map((episode) {
+        final match = byUrl[episode.url] ?? byNumber[episode.episode];
+        if (match == null) return episode;
+        final merged = _mergeEpisodeMetadata(episode, match);
+        if (merged.season != episode.season ||
+            merged.episode != episode.episode ||
+            merged.posterUrl != episode.posterUrl) {
+          changed = true;
+        }
+        return merged;
+      }).toList(growable: false);
+      if (!changed || !ref.mounted) return;
+
+      final canPreserveSelectedSeason = enriched.any(
+        (episode) => episode.season == state.selectedSeason,
+      );
+      final processed =
+          _processEpisodes(
+            enriched,
+            currentDetails,
+            isInitial: !canPreserveSelectedSeason,
+          ) ??
+          enriched;
+      final updatedDetails = currentDetails.copyWith(episodes: processed);
+      state = state.copyWith(
+        details: AsyncData(updatedDetails),
+        episodes: AsyncData(processed),
+        item: updatedDetails,
+      );
+    } catch (error) {
+      // Optional enrichment must never replace successfully loaded episodes.
+      if (kDebugMode) {
+        debugPrint('Episode metadata enrichment failed: $error');
+      }
     }
   }
 

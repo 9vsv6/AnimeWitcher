@@ -207,6 +207,13 @@ abstract class SkyStreamProvider {
     return details.episodes ?? const <Episode>[];
   }
 
+  /// Loads optional episode artwork and season/episode numbering separately.
+  ///
+  /// This must never be required for rendering the initial episode list.
+  Future<List<Episode>> getEpisodeMetadata(String url) async {
+    return const <Episode>[];
+  }
+
   // Returns list of video streams (urls)
   Future<List<StreamResult>> loadStreams(String url);
 }

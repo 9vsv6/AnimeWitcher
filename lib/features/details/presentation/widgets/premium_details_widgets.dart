@@ -503,7 +503,7 @@ class TrailersSection extends StatelessWidget {
             _detailsText(
               context,
               english: 'Trailers & Extras',
-              arabic: 'الإعلانات والمقاطع الإضافية',
+              arabic: 'العرض الدعائي',
             ),
             style: Theme.of(
               context,

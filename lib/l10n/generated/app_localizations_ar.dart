@@ -270,7 +270,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get selectProvider => 'اختر المزود';
 
   @override
-  String get searchHint => 'ابحث عن أفلام وسلاسل...';
+  String get searchHint => 'ابحث عن أفلام ومسلسلات...';
 
   @override
   String get searchFavoriteContent => 'ابحث عن محتواك المفضل';
@@ -1318,7 +1318,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get showEpisodes => 'Episodes button';
 
   @override
-  String get relatedAnime => 'أنمي ذات صلة';
+  String get relatedAnime => 'ذات صلة';
 }
 
 /// The translations for Arabic (`ar_apc`).
@@ -1562,7 +1562,7 @@ class AppLocalizationsArApc extends AppLocalizationsAr {
   String get selectProvider => 'اختار المزود';
 
   @override
-  String get searchHint => 'دور على أفلام، مسلسلات...';
+  String get searchHint => 'دور على أفلام ومسلسلات...';
 
   @override
   String get searchFavoriteContent => 'دور على شغلاتك المفضلة';

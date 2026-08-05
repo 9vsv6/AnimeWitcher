@@ -179,12 +179,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     final selected = selectedForSearch;
-    if (!mounted) return;
+    if (!mounted || selected == null || selected.isEmpty) return;
 
     await showSearch<void>(
       context: context,
       delegate: HomeSearchDelegate(
         filters: selected,
+        searchFieldHint: homeSearchFieldLabel(context, selected),
         openWithoutKeyboard: true,
         onFiltersChanged: (updated) {
           if (!mounted) return;
@@ -331,7 +332,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 unawaited(
                   showSearch<void>(
                     context: context,
-                    delegate: HomeSearchDelegate(filters: activeSearchFilters),
+                    delegate: HomeSearchDelegate(
+                      filters: activeSearchFilters,
+                      searchFieldHint: homeSearchFieldLabel(
+                        context,
+                        activeSearchFilters,
+                      ),
+                    ),
                     useRootNavigator: false,
                     maintainState: true,
                   ),

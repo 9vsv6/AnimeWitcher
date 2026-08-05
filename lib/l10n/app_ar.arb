@@ -92,7 +92,7 @@
   },
   "goToDownloads": "الانتقال إلى التنزيلات",
   "selectProvider": "اختر المزود",
-  "searchHint": "ابحث عن أفلام وسلاسل...",
+  "searchHint": "ابحث عن أفلام ومسلسلات...",
   "searchFavoriteContent": "ابحث عن محتواك المفضل",
   "pressSearchOrEnter": "اضغط على مفتاح البحث أو Enter للبدء",
   "noResultsFound": "لم يتم العثور على نتائج.",
@@ -598,8 +598,7 @@
   "showResize": "Resize button",
   "showRotate": "Rotate button",
   "showPlaybackSpeed": "Playback speed button",
-  "showEpisodes": "Episodes button"
-,
+  "showEpisodes": "Episodes button",
   "playerControlsSubtitle": "Show or hide player control buttons",
-  "relatedAnime": "أنمي ذات صلة"
+  "relatedAnime": "ذات صلة"
 }

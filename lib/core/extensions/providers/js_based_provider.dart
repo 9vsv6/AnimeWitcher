@@ -901,6 +901,40 @@ class JsBasedProvider extends SkyStreamProvider {
   }
 
   @override
+  Future<List<Episode>> getEpisodeMetadata(String url) async {
+    await _ensureReady();
+    if (_error != null) return const <Episode>[];
+
+    try {
+      final result = await _jsEngine.invokeAsync(_fn('loadEpisodeMetadata'), [
+        url,
+      ]);
+      dynamic rawEpisodes = result;
+      if (result is Map<Object?, Object?> && result['episodes'] is List) {
+        rawEpisodes = result['episodes'];
+      }
+      if (rawEpisodes is! List) return const <Episode>[];
+
+      final bounded = rawEpisodes.length > _kMaxResultListLength
+          ? rawEpisodes.sublist(0, _kMaxResultListLength)
+          : rawEpisodes;
+      return bounded
+          .whereType<Map<Object?, Object?>>()
+          .map((raw) => Episode.fromJson(Map<String, dynamic>.from(raw)))
+          .toList(growable: false);
+    } catch (error) {
+      if (_isMissingExportError(error, 'loadEpisodeMetadata')) {
+        return const <Episode>[];
+      }
+      if (kDebugMode) {
+        debugPrint('[$_packageName] episode metadata enrichment failed: $error');
+      }
+      talker.error('Episode metadata enrichment failed: $error');
+      return const <Episode>[];
+    }
+  }
+
+  @override
   Future<List<StreamResult>> loadStreams(String url) async {
     await _ensureReady();
     if (_error != null) throw JsPluginException("INIT_ERROR", _error!);

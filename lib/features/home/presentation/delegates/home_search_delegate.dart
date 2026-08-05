@@ -14,6 +14,22 @@ import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../search/presentation/search_provider.dart';
 import '../widgets/provider_search_filter_dialog.dart';
 
+String homeSearchFieldLabel(
+  BuildContext context,
+  ProviderSearchFilters filters,
+) {
+  final isArabic =
+      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+  if (filters.isNotEmpty) {
+    return isArabic
+        ? 'ابحث ضمن النتائج المفلترة...'
+        : 'Search within filtered results...';
+  }
+  return isArabic
+      ? 'ابحث عن أفلام ومسلسلات...'
+      : 'Search movies, series...';
+}
+
 class HomeSearchDelegate extends SearchDelegate<void> {
   final String? initialQuery;
   final bool openWithoutKeyboard;
@@ -27,13 +43,16 @@ class HomeSearchDelegate extends SearchDelegate<void> {
   HomeSearchDelegate({
     this.initialQuery,
     ProviderSearchFilters filters = const ProviderSearchFilters(),
+    String? searchFieldHint,
     this.openWithoutKeyboard = false,
     this.onFiltersChanged,
   }) : _filters = filters,
        super(
-         searchFieldLabel: filters.isEmpty
-             ? 'Search movies, series...'
-             : 'Search within filtered results...',
+         searchFieldLabel:
+             searchFieldHint ??
+             (filters.isEmpty
+                 ? 'Search movies, series...'
+                 : 'Search within filtered results...'),
          searchFieldStyle: null,
        ) {
     if (initialQuery != null) {
@@ -44,6 +63,7 @@ class HomeSearchDelegate extends SearchDelegate<void> {
   ProviderSearchFilters get filters => _filters;
 
   void _dismissKeyboard(BuildContext context) {
+    FocusManager.instance.primaryFocus?.unfocus();
     FocusScope.of(context).unfocus();
     SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
   }
@@ -52,12 +72,18 @@ class HomeSearchDelegate extends SearchDelegate<void> {
     if (!openWithoutKeyboard || _keyboardSuppressed) return;
     _keyboardSuppressed = true;
 
+    void hideAfter(Duration delay) {
+      Future<void>.delayed(delay, () {
+        if (context.mounted) _dismissKeyboard(context);
+      });
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
       _dismissKeyboard(context);
-      Future<void>.delayed(const Duration(milliseconds: 120), () {
-        if (context.mounted) _dismissKeyboard(context);
-      });
+      hideAfter(const Duration(milliseconds: 60));
+      hideAfter(const Duration(milliseconds: 160));
+      hideAfter(const Duration(milliseconds: 320));
     });
   }
 
@@ -107,6 +133,9 @@ class HomeSearchDelegate extends SearchDelegate<void> {
     _filters = selected;
     onFiltersChanged?.call(selected);
 
+    // A plain field change does not rebuild SearchDelegate on its own.
+    // Notify it so the results refresh immediately for the new filters.
+    notifyListeners();
     _dismissKeyboard(context);
     showResults(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -143,79 +172,98 @@ class HomeSearchDelegate extends SearchDelegate<void> {
     );
   }
 
-  @override
-  List<Widget>? buildActions(BuildContext context) {
+  Widget _buildFilterButton(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
-    return [
-      IconButton(
-        tooltip: Localizations.localeOf(context).languageCode == 'ar'
-            ? 'فلاتر البحث'
-            : 'Search filters',
-        onPressed: _loadingFilterOptions ? null : () => _openFilters(context),
-        icon: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            _loadingFilterOptions
-                ? SizedBox.square(
-                    dimension: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.primary,
-                    ),
-                  )
-                : Icon(
-                    Icons.tune_rounded,
-                    color: _filters.isNotEmpty
-                        ? colors.primary
-                        : colors.onSurface,
-                  ),
-            if (_filters.isNotEmpty && !_loadingFilterOptions)
-              Positioned(
-                right: -8,
-                top: -8,
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 17,
-                    minHeight: 17,
-                  ),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
+    return IconButton(
+      tooltip: Localizations.localeOf(context).languageCode == 'ar'
+          ? 'فلاتر البحث'
+          : 'Search filters',
+      onPressed: _loadingFilterOptions ? null : () => _openFilters(context),
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          _loadingFilterOptions
+              ? SizedBox.square(
+                  dimension: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
                     color: colors.primary,
-                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    '${_filters.count}',
-                    style: TextStyle(
-                      color: colors.onPrimary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
+                )
+              : Icon(
+                  Icons.tune_rounded,
+                  color: _filters.isNotEmpty
+                      ? colors.primary
+                      : colors.onSurface,
+                ),
+          if (_filters.isNotEmpty && !_loadingFilterOptions)
+            Positioned(
+              right: -8,
+              top: -8,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: colors.primary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_filters.count}',
+                  style: TextStyle(
+                    color: colors.onPrimary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
-      if (query.isNotEmpty)
-        IconButton(
-          icon: const Icon(Icons.clear),
-          onPressed: () {
-            query = '';
-            showSuggestions(context);
-          },
-        ),
+    );
+  }
+
+  Widget _buildBackButton(BuildContext context) {
+    return IconButton(
+      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+      icon: const Icon(
+        Icons.arrow_back_rounded,
+        textDirection: TextDirection.ltr,
+      ),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  Widget _buildClearButton(BuildContext context) {
+    return IconButton(
+      tooltip: Localizations.localeOf(context).languageCode == 'ar'
+          ? 'مسح البحث'
+          : 'Clear search',
+      icon: const Icon(Icons.clear),
+      onPressed: () {
+        query = '';
+        showSuggestions(context);
+      },
+    );
+  }
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    return [
+      if (isRtl && query.isNotEmpty) _buildClearButton(context),
+      if (isRtl) _buildBackButton(context) else _buildFilterButton(context),
+      if (!isRtl && query.isNotEmpty) _buildClearButton(context),
       const SizedBox(width: 8),
     ];
   }
 
   @override
   Widget? buildLeading(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.arrow_back_rounded),
-      onPressed: () => close(context, null),
-    );
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    // Keep the same physical arrangement in every language: back on the
+    // left and filters on the right. SearchDelegate mirrors these slots in RTL.
+    return isRtl ? _buildFilterButton(context) : _buildBackButton(context);
   }
 
   @override

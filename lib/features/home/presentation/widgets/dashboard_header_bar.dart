@@ -42,6 +42,7 @@ class DashboardHeaderBar extends ConsumerWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final activeProvider = ref.watch(activeProviderProvider);
+    final contentDirection = Directionality.of(context);
 
     final hasCarousel = onPrevious != null && onNext != null;
 
@@ -50,8 +51,10 @@ class DashboardHeaderBar extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(
         horizontal: LayoutConstants.dashboardContentPadding,
       ),
-      child: Row(
-        children: [
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Row(
+          children: [
           // Carousel prev / next arrows
           CardsWrapper(
             scaleFactor: 1.01,
@@ -138,7 +141,13 @@ class DashboardHeaderBar extends ConsumerWidget {
                 unawaited(
                   showSearch<void>(
                     context: context,
-                    delegate: HomeSearchDelegate(filters: searchFilters),
+                    delegate: HomeSearchDelegate(
+                      filters: searchFilters,
+                      searchFieldHint: homeSearchFieldLabel(
+                        context,
+                        searchFilters,
+                      ),
+                    ),
                     useRootNavigator: false,
                     maintainState: true,
                   ),
@@ -167,7 +176,11 @@ class DashboardHeaderBar extends ConsumerWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '${l10n.search}...',
+                        homeSearchFieldLabel(context, searchFilters),
+                        textDirection: contentDirection,
+                        textAlign: contentDirection == TextDirection.rtl
+                            ? TextAlign.right
+                            : TextAlign.left,
                         style: TextStyle(
                           fontSize: 13,
                           color: theme.colorScheme.onSurfaceVariant,
@@ -233,7 +246,8 @@ class DashboardHeaderBar extends ConsumerWidget {
               ],
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
