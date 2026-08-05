@@ -1,4 +1,4 @@
-name: Apply AnimeWitcher search filters v3
+name: Apply AnimeWitcher search filters v4
 
 on:
   workflow_dispatch:
@@ -878,15 +878,14 @@ jobs:
           ''',
               'dashboard header constructor',
           )
-          header = replace_once(
-              header,
-              '''          const SizedBox(width: 16),
-
-          // Capsule search bar
-          ''',
-              '''          const SizedBox(width: 12),
-
-          CardsWrapper(
+          if 'onTap: onShowSearchFilters' not in header:
+              marker = '          // Capsule search bar\n'
+              if header.count(marker) != 1:
+                  raise SystemExit(
+                      'dashboard filter marker: expected one match, found '
+                      f'{header.count(marker)}'
+                  )
+              filter_button = r'''          CardsWrapper(
             scaleFactor: 1.01,
             onTap: onShowSearchFilters,
             borderRadius: BorderRadius.circular(50),
@@ -924,10 +923,9 @@ jobs:
 
           const SizedBox(width: 12),
 
-          // Capsule search bar
-          ''',
-              'dashboard filter button',
-          )
+          '''
+              header = header.replace(marker, filter_button + marker, 1)
+
           header = replace_once(
               header,
               'delegate: HomeSearchDelegate(),',
@@ -966,26 +964,16 @@ jobs:
               'home filter state',
           )
 
-          build_anchor = '  @override\n  Widget build(BuildContext context) {\n'
+          build_anchor = (
+              '  @override\n'
+              '  Widget build(BuildContext context) {\n'
+              '    super.build(context);\n'
+          )
           helpers = r'''  ProviderSearchFilters _filtersFor(SkyStreamProvider? provider) {
               if (provider == null || _providerSearchFilterOwner != provider.packageName) {
                 return const ProviderSearchFilters();
               }
               return _providerSearchFilters;
-            }
-
-            void _openProviderSearch(
-              BuildContext context,
-              SkyStreamProvider? provider,
-            ) {
-              unawaited(
-                showSearch<void>(
-                  context: context,
-                  delegate: HomeSearchDelegate(filters: _filtersFor(provider)),
-                  useRootNavigator: false,
-                  maintainState: true,
-                ),
-              );
             }
 
             Future<void> _showProviderSearchFilters(
@@ -1059,92 +1047,72 @@ jobs:
           ''',
               'home active filters',
           )
-          home = replace_once(
-              home,
-              '''                onShowProviderSelector: () =>
-                    _showProviderSelector(context, ref),
-                onPrevious: _carouselController != null
-          ''',
-              '''                onShowProviderSelector: () =>
-                    _showProviderSelector(context, ref),
-                onShowSearchFilters: () =>
-                    _showProviderSearchFilters(context, ref),
-                searchFilters: activeSearchFilters,
-                isFilterLoading: _isLoadingProviderSearchFilters,
-                onPrevious: _carouselController != null
-          ''',
-              'widescreen filter parameters',
-          )
+          if 'onShowSearchFilters:' not in home:
+              marker = '                onPrevious: _carouselController != null\n'
+              if home.count(marker) != 1:
+                  raise SystemExit(
+                      'widescreen filter parameter marker: expected one match, found '
+                      f'{home.count(marker)}'
+                  )
+              parameters = (
+                  '                onShowSearchFilters: () =>\n'
+                  '                    _showProviderSearchFilters(context, ref),\n'
+                  '                searchFilters: activeSearchFilters,\n'
+                  '                isFilterLoading: _isLoadingProviderSearchFilters,\n'
+              )
+              home = home.replace(marker, parameters + marker, 1)
 
-          mobile_search_anchor = '''        actions: [
-          // 1. Search Action Button
-          '''
-          mobile_filter_button = '''        actions: [
-          // Search filters use the active provider's own supported values.
-          Padding(
-            padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
-            child: CardsWrapper(
-              onTap: () => _showProviderSearchFilters(context, ref),
-              borderRadius: BorderRadius.circular(50),
-              child: CircleAvatar(
-                backgroundColor: activeSearchFilters.isNotEmpty
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.1),
-                radius: 18,
-                child: _isLoadingProviderSearchFilters
-                    ? SizedBox.square(
-                        dimension: 17,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: activeSearchFilters.isNotEmpty
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context).colorScheme.primary,
+
+          if 'Search filters use the active provider' not in home:
+              marker = '          // 1. Search Action Button\n'
+              if home.count(marker) != 1:
+                  raise SystemExit(
+                      'mobile filter marker: expected one match, found '
+                      f'{home.count(marker)}'
+                  )
+              mobile_filter_button = r'''          // Search filters use the active provider's own supported values.
+                    Padding(
+                      padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
+                      child: CardsWrapper(
+                        onTap: () => _showProviderSearchFilters(context, ref),
+                        borderRadius: BorderRadius.circular(50),
+                        child: CircleAvatar(
+                          backgroundColor: activeSearchFilters.isNotEmpty
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.1),
+                          radius: 18,
+                          child: _isLoadingProviderSearchFilters
+                              ? SizedBox.square(
+                                  dimension: 17,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: activeSearchFilters.isNotEmpty
+                                        ? Theme.of(context).colorScheme.onPrimary
+                                        : Theme.of(context).colorScheme.primary,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.tune_rounded,
+                                  color: activeSearchFilters.isNotEmpty
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(context).colorScheme.onSurface,
+                                  size: 18,
+                                ),
                         ),
-                      )
-                    : Icon(
-                        Icons.tune_rounded,
-                        color: activeSearchFilters.isNotEmpty
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurface,
-                        size: 18,
                       ),
-              ),
-            ),
-          ),
+                    ),
 
-          // 1. Search Action Button
           '''
+              home = home.replace(marker, mobile_filter_button + marker, 1)
+
           home = replace_once(
               home,
-              mobile_search_anchor,
-              mobile_filter_button,
-              'mobile filter button',
-          )
-
-          old_search_tap = '''              onTap: () {
-                unawaited(
-                  showSearch<void>(
-                    context: context,
-                    delegate: HomeSearchDelegate(),
-                    useRootNavigator: false,
-                    maintainState: true,
-                  ),
-                );
-              },
-          '''
-          new_search_tap = '''              onTap: () => _openProviderSearch(
-                context,
-                activeProvider,
-              ),
-          '''
-          home = replace_once(
-              home,
-              old_search_tap,
-              new_search_tap,
-              'mobile filtered search tap',
+              'delegate: HomeSearchDelegate(),',
+              'delegate: HomeSearchDelegate(filters: activeSearchFilters),',
+              'mobile filtered search delegate',
           )
           HOME.write_text(home, encoding='utf-8')
           PY
