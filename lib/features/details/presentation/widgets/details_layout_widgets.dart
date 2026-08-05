@@ -497,13 +497,33 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
   final MultimediaItem parentItem;
   final String itemUrl;
   final bool isMovie;
+  final Animation<double>? transition;
+  final Offset transitionOffset;
 
   const SliverDetailsEpisodeList({
     super.key,
     required this.parentItem,
     required this.itemUrl,
     required this.isMovie,
+    this.transition,
+    this.transitionOffset = Offset.zero,
   });
+
+  Widget _withTransition(Widget child) {
+    final animation = transition;
+    if (animation == null) return child;
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: transitionOffset,
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -558,7 +578,9 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final ep = displayedEpisodes[index];
-            return EpisodeCard(episode: ep, parentItem: parentItem) as Widget;
+            return _withTransition(
+              EpisodeCard(episode: ep, parentItem: parentItem) as Widget,
+            );
           },
         ),
       ],

@@ -36,14 +36,43 @@ class DetailsScreen extends ConsumerStatefulWidget {
   ConsumerState<DetailsScreen> createState() => _DetailsScreenState();
 }
 
-class _DetailsScreenState extends ConsumerState<DetailsScreen> {
+class _DetailsScreenState extends ConsumerState<DetailsScreen>
+    with SingleTickerProviderStateMixin {
   static const double _tabSwipeDistanceThreshold = 72;
   static const double _tabSwipeVelocityThreshold = 650;
+  static const Duration _tabTransitionDuration = Duration(milliseconds: 260);
 
   bool _didTriggerAutoPlay = false;
   int _selectedDetailsTab = 0;
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
+  Offset _tabSlideFrom = Offset.zero;
+  late final AnimationController _tabTransitionController;
+  late final Animation<double> _tabTransitionAnimation;
+
+  void _switchDetailsTab(int targetTab) {
+    if (targetTab == _selectedDetailsTab) return;
+
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final entersFromLeft = isRtl ? targetTab == 1 : targetTab == 0;
+    _tabSlideFrom = Offset(entersFromLeft ? -0.16 : 0.16, 0);
+
+    setState(() => _selectedDetailsTab = targetTab);
+    _tabTransitionController.forward(from: 0);
+  }
+
+  Widget _buildTabTransition({required Widget child}) {
+    return FadeTransition(
+      opacity: _tabTransitionAnimation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: _tabSlideFrom,
+          end: Offset.zero,
+        ).animate(_tabTransitionAnimation),
+        child: child,
+      ),
+    );
+  }
 
   Widget _buildDetailsTabSwipeRegion({
     required Widget child,
@@ -82,13 +111,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             velocity >= _tabSwipeVelocityThreshold;
 
         final isRtl = Directionality.of(context) == TextDirection.rtl;
-        final swipeTowardEpisodes = isRtl ? swipeLeft : swipeRight;
-        final swipeTowardDetails = isRtl ? swipeRight : swipeLeft;
+        // Arabic: details -> episodes by swiping right, and episodes ->
+        // details by swiping left. English uses the opposite directions.
+        final swipeTowardEpisodes = isRtl ? swipeRight : swipeLeft;
+        final swipeTowardDetails = isRtl ? swipeLeft : swipeRight;
 
         if (swipeTowardEpisodes && _selectedDetailsTab != 1) {
-          setState(() => _selectedDetailsTab = 1);
+          _switchDetailsTab(1);
         } else if (swipeTowardDetails && _selectedDetailsTab != 0) {
-          setState(() => _selectedDetailsTab = 0);
+          _switchDetailsTab(0);
         }
       },
       child: child,
@@ -117,11 +148,26 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   @override
   void initState() {
     super.initState();
+    _tabTransitionController = AnimationController(
+      vsync: this,
+      duration: _tabTransitionDuration,
+      value: 1,
+    );
+    _tabTransitionAnimation = CurvedAnimation(
+      parent: _tabTransitionController,
+      curve: Curves.easeOutCubic,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(detailsControllerProvider(widget.item.url).notifier)
           .loadDetails(widget.item, autoPlay: widget.autoPlay);
     });
+  }
+
+  @override
+  void dispose() {
+    _tabTransitionController.dispose();
+    super.dispose();
   }
 
   @override
@@ -748,25 +794,28 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           ),
         ),
       ),
-      body: DetailsDesktopHero(
-        displayItem: item,
-        baseItem: widget.item,
-        details: item,
-        detailsState: detailsState,
-        isMovie: isMovie,
-        itemUrl: widget.item.url,
-        child: _buildDesktopContentBelow(
-          context,
-          item,
-          details,
-          detailsState,
-          episodesState,
-          castState,
-          trailersState,
-          relatedState,
-          recommendationsState,
-          isMovie,
-          l10n,
+      body: _buildDetailsTabSwipeRegion(
+        enabled: !isMovie,
+        child: DetailsDesktopHero(
+          displayItem: item,
+          baseItem: widget.item,
+          details: item,
+          detailsState: detailsState,
+          isMovie: isMovie,
+          itemUrl: widget.item.url,
+          child: _buildDesktopContentBelow(
+            context,
+            item,
+            details,
+            detailsState,
+            episodesState,
+            castState,
+            trailersState,
+            relatedState,
+            recommendationsState,
+            isMovie,
+            l10n,
+          ),
         ),
       ),
     );
@@ -828,7 +877,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             label: isArabic ? 'التفاصيل' : 'Details',
             onTap: () {
               if (_selectedDetailsTab == 0) return;
-              setState(() => _selectedDetailsTab = 0);
+              _switchDetailsTab(0);
             },
           ),
         ),
@@ -845,7 +894,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             label: episodeLabel,
             onTap: () {
               if (_selectedDetailsTab == 1) return;
-              setState(() => _selectedDetailsTab = 1);
+              _switchDetailsTab(1);
             },
           ),
         ),
@@ -1036,6 +1085,45 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     bool isMovie,
     AppLocalizations l10n,
   ) {
+    final tabContent = _selectedDetailsTab == 0 || isMovie
+        ? <Widget>[
+            _buildSynopsisAndGenres(context, item, detailsState, l10n),
+            const SizedBox(height: 28),
+            AnimeInformationSection(item: item),
+            if (isMovie) ...[
+              const SizedBox(height: 24),
+              _episodeLoadStatus(context, episodesState),
+              if (episodesState.hasValue &&
+                  (episodesState.value?.isNotEmpty ?? false))
+                DetailsDesktopEpisodeColumn(
+                  parentItem: item,
+                  itemUrl: widget.item.url,
+                  isMovie: true,
+                ),
+            ],
+            ..._buildIndependentDetailSections(
+              context,
+              item,
+              l10n,
+              castState,
+              trailersState,
+              relatedState,
+              recommendationsState,
+            ),
+          ]
+        : <Widget>[
+            _episodeLoadStatus(context, episodesState),
+            if (episodesState.hasValue &&
+                (episodesState.value?.isNotEmpty ?? false)) ...[
+              DetailsSeasonListWrapper(itemUrl: widget.item.url),
+              const SizedBox(height: 16),
+              DetailsDesktopEpisodeColumn(
+                parentItem: item,
+                itemUrl: widget.item.url,
+                isMovie: false,
+              ),
+            ],
+          ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1044,47 +1132,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           _buildDetailsPageTabs(context, episodesState),
           const SizedBox(height: 24),
         ],
-
-        if (_selectedDetailsTab == 0 || isMovie) ...[
-          _buildSynopsisAndGenres(context, item, detailsState, l10n),
-          const SizedBox(height: 28),
-          AnimeInformationSection(item: item),
-
-          if (isMovie) ...[
-            const SizedBox(height: 24),
-            _episodeLoadStatus(context, episodesState),
-            if (episodesState.hasValue &&
-                (episodesState.value?.isNotEmpty ?? false))
-              DetailsDesktopEpisodeColumn(
-                parentItem: item,
-                itemUrl: widget.item.url,
-                isMovie: true,
-              ),
-          ],
-
-          ..._buildIndependentDetailSections(
-            context,
-            item,
-            l10n,
-            castState,
-            trailersState,
-            relatedState,
-            recommendationsState,
+        _buildTabTransition(
+          child: Column(
+            key: ValueKey<int>(isMovie ? 0 : _selectedDetailsTab),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: tabContent,
           ),
-        ] else ...[
-          _episodeLoadStatus(context, episodesState),
-          if (episodesState.hasValue &&
-              (episodesState.value?.isNotEmpty ?? false)) ...[
-            if (!isMovie) DetailsSeasonListWrapper(itemUrl: widget.item.url),
-            const SizedBox(height: 16),
-            DetailsDesktopEpisodeColumn(
-              parentItem: item,
-              itemUrl: widget.item.url,
-              isMovie: isMovie,
-            ),
-          ],
-        ],
-
+        ),
         const SizedBox(height: 100),
       ],
     );
@@ -1208,31 +1262,32 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     if (showDetailsPage) {
       slivers.add(
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSynopsisAndGenres(context, item, detailsState, l10n),
-                const SizedBox(height: 28),
-                AnimeInformationSection(item: item),
-
-                if (isMovie) ...[
-                  const SizedBox(height: 20),
-                  _episodeLoadStatus(context, episodesState),
+          child: _buildTabTransition(
+            child: Padding(
+              key: const ValueKey<int>(0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSynopsisAndGenres(context, item, detailsState, l10n),
+                  const SizedBox(height: 28),
+                  AnimeInformationSection(item: item),
+                  if (isMovie) ...[
+                    const SizedBox(height: 20),
+                    _episodeLoadStatus(context, episodesState),
+                  ],
+                  ..._buildIndependentDetailSections(
+                    context,
+                    item,
+                    l10n,
+                    castState,
+                    trailersState,
+                    relatedState,
+                    recommendationsState,
+                  ),
+                  const SizedBox(height: 40),
                 ],
-
-                ..._buildIndependentDetailSections(
-                  context,
-                  item,
-                  l10n,
-                  castState,
-                  trailersState,
-                  relatedState,
-                  recommendationsState,
-                ),
-                const SizedBox(height: 40),
-              ],
+              ),
             ),
           ),
         ),
@@ -1253,16 +1308,19 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     } else {
       slivers.add(
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _episodeLoadStatus(context, episodesState),
-                if (episodeReady)
-                  DetailsSeasonListWrapper(itemUrl: widget.item.url),
-                if (episodeReady) const SizedBox(height: 12),
-              ],
+          child: _buildTabTransition(
+            child: Padding(
+              key: const ValueKey<int>(1),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _episodeLoadStatus(context, episodesState),
+                  if (episodeReady)
+                    DetailsSeasonListWrapper(itemUrl: widget.item.url),
+                  if (episodeReady) const SizedBox(height: 12),
+                ],
+              ),
             ),
           ),
         ),
@@ -1276,6 +1334,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
               parentItem: item,
               itemUrl: widget.item.url,
               isMovie: false,
+              transition: _tabTransitionAnimation,
+              transitionOffset: _tabSlideFrom,
             ),
           ),
         );

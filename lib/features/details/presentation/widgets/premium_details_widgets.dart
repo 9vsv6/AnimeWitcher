@@ -365,8 +365,8 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
 
     final isArabic = _isArabicDetailsLocale(context);
     final heading = isArabic
-        ? 'حلقة ${widget.nextAiring.episode} من موسم $season في'
-        : 'Episode ${widget.nextAiring.episode} of Season $season in';
+        ? 'حلقة ${widget.nextAiring.episode} بعد'
+        : 'Episode ${widget.nextAiring.episode} in';
 
     final days = _remaining.inDays.toString();
     final hours = _remaining.inHours.remainder(24).toString().padLeft(2, '0');
