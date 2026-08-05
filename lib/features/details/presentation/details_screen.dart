@@ -37,8 +37,59 @@ class DetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _DetailsScreenState extends ConsumerState<DetailsScreen> {
+  static const double _tabSwipeDistanceThreshold = 72;
+  static const double _tabSwipeVelocityThreshold = 650;
+
   bool _didTriggerAutoPlay = false;
   int _selectedDetailsTab = 0;
+  double _tabSwipeDistance = 0;
+  bool _tabSwipeStartedAtBackEdge = false;
+
+  Widget _buildDetailsTabSwipeRegion({
+    required Widget child,
+    required bool enabled,
+  }) {
+    if (!enabled) return child;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (details) {
+        _tabSwipeDistance = 0;
+        // Preserve the native iOS back gesture from the physical left edge.
+        _tabSwipeStartedAtBackEdge = details.globalPosition.dx <= 24;
+      },
+      onHorizontalDragUpdate: (details) {
+        if (_tabSwipeStartedAtBackEdge) return;
+        _tabSwipeDistance += details.primaryDelta ?? 0;
+      },
+      onHorizontalDragCancel: () {
+        _tabSwipeDistance = 0;
+        _tabSwipeStartedAtBackEdge = false;
+      },
+      onHorizontalDragEnd: (details) {
+        final distance = _tabSwipeDistance;
+        final velocity = details.primaryVelocity ?? 0;
+        final ignored = _tabSwipeStartedAtBackEdge;
+        _tabSwipeDistance = 0;
+        _tabSwipeStartedAtBackEdge = false;
+        if (ignored) return;
+
+        final swipeLeft =
+            distance <= -_tabSwipeDistanceThreshold ||
+            velocity <= -_tabSwipeVelocityThreshold;
+        final swipeRight =
+            distance >= _tabSwipeDistanceThreshold ||
+            velocity >= _tabSwipeVelocityThreshold;
+
+        if (swipeLeft && _selectedDetailsTab != 1) {
+          setState(() => _selectedDetailsTab = 1);
+        } else if (swipeRight && _selectedDetailsTab != 0) {
+          setState(() => _selectedDetailsTab = 0);
+        }
+      },
+      child: child,
+    );
+  }
 
   Future<void> _copyAnimeTitle(BuildContext context, String title) async {
     await Clipboard.setData(ClipboardData(text: title));
@@ -167,8 +218,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
-      body: CustomScrollView(
-        slivers: [
+      body: _buildDetailsTabSwipeRegion(
+        enabled: !isMovie,
+        child: CustomScrollView(
+          slivers: [
           Directionality(
             textDirection: TextDirection.ltr,
             child: SliverAppBar(
@@ -309,7 +362,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             isMovie,
             l10n,
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

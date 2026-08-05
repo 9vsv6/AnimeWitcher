@@ -37,8 +37,12 @@ class HomeSearchDelegate extends SearchDelegate<void> {
 
   ProviderSearchFilters _filters;
   ProviderSearchFilterOptions? _filterOptions;
+  static const double _swipeBackDistanceThreshold = 80;
+  static const double _swipeBackVelocityThreshold = 700;
+
   bool _loadingFilterOptions = false;
   bool _keyboardSuppressed = false;
+  double _swipeBackDistance = 0;
 
   HomeSearchDelegate({
     this.initialQuery,
@@ -61,6 +65,33 @@ class HomeSearchDelegate extends SearchDelegate<void> {
   }
 
   ProviderSearchFilters get filters => _filters;
+
+  Widget _buildSwipeBackRegion(BuildContext context, Widget child) {
+    return SizedBox.expand(
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (_) => _swipeBackDistance = 0,
+        onHorizontalDragUpdate: (details) {
+          _swipeBackDistance += details.primaryDelta ?? 0;
+        },
+        onHorizontalDragCancel: () => _swipeBackDistance = 0,
+        onHorizontalDragEnd: (details) {
+          final distance = _swipeBackDistance;
+          final velocity = details.primaryVelocity ?? 0;
+          _swipeBackDistance = 0;
+
+          final shouldClose =
+              distance >= _swipeBackDistanceThreshold ||
+              velocity >= _swipeBackVelocityThreshold;
+          if (!shouldClose) return;
+
+          _dismissKeyboard(context);
+          close(context, null);
+        },
+        child: child,
+      ),
+    );
+  }
 
   void _dismissKeyboard(BuildContext context) {
     FocusManager.instance.primaryFocus?.unfocus();
@@ -271,26 +302,32 @@ class HomeSearchDelegate extends SearchDelegate<void> {
   @override
   Widget buildResults(BuildContext context) {
     _suppressInitialKeyboard(context);
-    if (query.isEmpty && _filters.isEmpty) return const SizedBox.shrink();
-    return _HomeSearchResults(query: query, filters: _filters);
+    final child = query.isEmpty && _filters.isEmpty
+        ? const SizedBox.shrink()
+        : _HomeSearchResults(query: query, filters: _filters);
+    return _buildSwipeBackRegion(context, child);
   }
 
   @override
   Widget buildSuggestions(BuildContext context) {
     _suppressInitialKeyboard(context);
 
+    final Widget child;
     if (query.isEmpty) {
-      if (_filters.isEmpty) return const SizedBox.shrink();
-      return _HomeSearchResults(query: query, filters: _filters);
+      child = _filters.isEmpty
+          ? const SizedBox.shrink()
+          : _HomeSearchResults(query: query, filters: _filters);
+    } else {
+      child = _HomeSearchSuggestions(
+        query: query,
+        onSelect: (value) {
+          query = value;
+          showResults(context);
+        },
+      );
     }
 
-    return _HomeSearchSuggestions(
-      query: query,
-      onSelect: (value) {
-        query = value;
-        showResults(context);
-      },
-    );
+    return _buildSwipeBackRegion(context, child);
   }
 }
 
