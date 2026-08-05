@@ -1,4 +1,4 @@
-name: Apply AnimeWitcher search filters v7
+name: Apply AnimeWitcher search filters v8
 
 on:
   workflow_dispatch:
@@ -347,6 +347,16 @@ jobs:
                   'as Map<Object?, Object?>',
                   'Map casts',
               ),
+              (
+                  r'\bwhereType\s*<\s*Map\s*>',
+                  'whereType<Map<Object?, Object?>>',
+                  'whereType<Map> invocations',
+              ),
+              (
+                  r'\bcast\s*<\s*Map\s*>',
+                  'cast<Map<Object?, Object?>>',
+                  'cast<Map> invocations',
+              ),
           )
 
           typed_raw_maps = 0
@@ -367,11 +377,11 @@ jobs:
 
           if remaining_raw_maps:
               raise SystemExit(
-                  'Raw Map tests/casts remain in js_based_provider.dart: '
+                  'Raw Map usages remain in js_based_provider.dart: '
                   + ' | '.join(remaining_raw_maps)
               )
 
-          print(f'Typed {typed_raw_maps} raw Map test/cast occurrence(s) total')
+          print(f'Typed {typed_raw_maps} raw Map occurrence(s) total')
 
           JS_PROVIDER.write_text(js, encoding='utf-8')
 
