@@ -1,4 +1,4 @@
-name: Apply filter button and lazy provider pagination v3
+name: Apply filter button and lazy provider pagination v4
 
 on:
   workflow_dispatch:
@@ -565,7 +565,19 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add             lib/core/extensions/base_provider.dart             lib/core/extensions/providers/js_based_provider.dart             lib/features/home/presentation/home_screen.dart             lib/features/home/presentation/delegates/home_search_delegate.dart             lib/features/explore/presentation/view_all_screen.dart             lib/features/explore/presentation/widgets/media_horizontal_list.dart             lib/core/router/app_router.dart             lib/core/router/app_router.g.dart
+          # app_router.g.dart is generated for analysis but intentionally ignored by Git.
+          # Stage only the source files; trying to add the ignored generated file makes
+          # git add exit with code 1 and stops the workflow.
+          git add \
+            lib/core/extensions/base_provider.dart \
+            lib/core/extensions/providers/js_based_provider.dart \
+            lib/features/home/presentation/home_screen.dart \
+            lib/features/home/presentation/delegates/home_search_delegate.dart \
+            lib/features/explore/presentation/view_all_screen.dart \
+            lib/features/explore/presentation/widgets/media_horizontal_list.dart \
+            lib/core/router/app_router.dart
+
+          git diff --cached --check
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
@@ -573,4 +585,8 @@ jobs:
           fi
 
           git commit -m "feat: add filtered search and lazy provider pagination"
+
+          # Integrate any commit that reached main while this job was running, then push.
+          git fetch origin main
+          git rebase origin/main
           git push origin HEAD:main
