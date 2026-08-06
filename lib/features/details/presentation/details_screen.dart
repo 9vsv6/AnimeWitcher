@@ -47,8 +47,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
   Offset _tabSlideFrom = Offset.zero;
-  late final ScrollController _detailsScrollController;
-  late final ScrollController _episodesScrollController;
+  late final ScrollController _mobileOuterScrollController;
+  final PageStorageBucket _detailsTabStorage = PageStorageBucket();
+  final PageStorageBucket _episodesTabStorage = PageStorageBucket();
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
 
@@ -155,8 +156,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void initState() {
     super.initState();
-    _detailsScrollController = ScrollController();
-    _episodesScrollController = ScrollController();
+    _mobileOuterScrollController = ScrollController();
     _tabTransitionController = AnimationController(
       vsync: this,
       duration: _tabTransitionDuration,
@@ -175,8 +175,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   @override
   void dispose() {
-    _detailsScrollController.dispose();
-    _episodesScrollController.dispose();
+    _mobileOuterScrollController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -291,10 +290,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       );
     }
 
-    // ── Mobile: details and episodes keep fully independent scroll state. ──
-    final mobileScrollController = activeTab == 1
-        ? _episodesScrollController
-        : _detailsScrollController;
+    // ── Mobile: one shared header, with independent tab scroll state. ──
+    final tabStorage = activeTab == 1
+        ? _episodesTabStorage
+        : _detailsTabStorage;
     return Scaffold(
       bottomNavigationBar:
           selectedEpisodeCount == 0 || (!isMovie && activeTab != 1)
@@ -302,36 +301,71 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       body: _buildDetailsTabSwipeRegion(
         enabled: showEpisodesTab,
-        child: CustomScrollView(
-          key: PageStorageKey<String>(
-            'mobile_details_${widget.item.url}_$activeTab',
+        child: NestedScrollView(
+          controller: _mobileOuterScrollController,
+          headerSliverBuilder: (outerContext, _) {
+            return [
+              SliverOverlapAbsorber(
+                handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                  outerContext,
+                ),
+                sliver: _buildMobileAppBar(
+                  outerContext,
+                  item,
+                  isBookmarked,
+                  libraryNotifier,
+                  _mobileOuterScrollController,
+                ),
+              ),
+              ..._buildMobileSharedHeaderSlivers(
+                outerContext,
+                item,
+                detailsAsync,
+                episodesAsync,
+                isMovie,
+                activeTab: activeTab,
+                showEpisodesTab: showEpisodesTab,
+              ),
+            ];
+          },
+          body: Builder(
+            builder: (innerContext) {
+              return _buildTabTransition(
+                child: PageStorage(
+                  key: ValueKey<int>(activeTab),
+                  bucket: tabStorage,
+                  child: CustomScrollView(
+                    key: PageStorageKey<String>(
+                      'mobile_tab_${widget.item.url}_$activeTab',
+                    ),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    slivers: [
+                      SliverOverlapInjector(
+                        handle:
+                            NestedScrollView.sliverOverlapAbsorberHandleFor(
+                          innerContext,
+                        ),
+                      ),
+                      ..._buildMobileTabSlivers(
+                        innerContext,
+                        item,
+                        detailsAsync,
+                        episodesAsync,
+                        castAsync,
+                        trailersAsync,
+                        relatedAsync,
+                        recommendationsAsync,
+                        isMovie,
+                        l10n,
+                        activeTab: activeTab,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
-          controller: mobileScrollController,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          slivers: [
-            _buildMobileAppBar(
-              context,
-              item,
-              isBookmarked,
-              libraryNotifier,
-              mobileScrollController,
-            ),
-            ..._buildMobileSlivers(
-              context,
-              item,
-              details,
-              detailsAsync,
-              episodesAsync,
-              castAsync,
-              trailersAsync,
-              relatedAsync,
-              recommendationsAsync,
-              isMovie,
-              l10n,
-              activeTab: activeTab,
-              showEpisodesTab: showEpisodesTab,
-            ),
-          ],
         ),
       ),
     );
@@ -1276,26 +1310,16 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
-  List<Widget> _buildMobileSlivers(
+  List<Widget> _buildMobileSharedHeaderSlivers(
     BuildContext context,
     MultimediaItem item,
-    MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
     AsyncValue<List<Episode>> episodesState,
-    AsyncValue<List<Actor>> castState,
-    AsyncValue<List<Trailer>> trailersState,
-    AsyncValue<List<MultimediaItem>> relatedState,
-    AsyncValue<List<MultimediaItem>> recommendationsState,
-    bool isMovie,
-    AppLocalizations l10n, {
+    bool isMovie, {
     required int activeTab,
     required bool showEpisodesTab,
   }) {
-    final showDetailsPage = activeTab == 0 || isMovie;
-    final episodeReady =
-        episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
-
-    final slivers = <Widget>[
+    return [
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -1405,36 +1429,55 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
       ),
     ];
+  }
+
+  List<Widget> _buildMobileTabSlivers(
+    BuildContext context,
+    MultimediaItem item,
+    AsyncValue<MultimediaItem?> detailsState,
+    AsyncValue<List<Episode>> episodesState,
+    AsyncValue<List<Actor>> castState,
+    AsyncValue<List<Trailer>> trailersState,
+    AsyncValue<List<MultimediaItem>> relatedState,
+    AsyncValue<List<MultimediaItem>> recommendationsState,
+    bool isMovie,
+    AppLocalizations l10n, {
+    required int activeTab,
+  }) {
+    final showDetailsPage = activeTab == 0 || isMovie;
+    final episodeReady =
+        episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
+    final slivers = <Widget>[];
 
     if (showDetailsPage) {
       slivers.add(
         SliverToBoxAdapter(
           child: Padding(
-              key: const ValueKey<int>(0),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSynopsisAndGenres(context, item, detailsState, l10n),
-                  const SizedBox(height: 28),
-                  AnimeInformationSection(item: item),
-                  if (isMovie) ...[
-                    const SizedBox(height: 20),
-                    _episodeLoadStatus(context, episodesState),
-                  ],
-                  ..._buildIndependentDetailSections(
-                    context,
-                    item,
-                    l10n,
-                    castState,
-                    trailersState,
-                    relatedState,
-                    recommendationsState,
-                  ),
-                  const SizedBox(height: 40),
+            key: const ValueKey<int>(0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSynopsisAndGenres(context, item, detailsState, l10n),
+                const SizedBox(height: 28),
+                AnimeInformationSection(item: item),
+                if (isMovie) ...[
+                  const SizedBox(height: 20),
+                  _episodeLoadStatus(context, episodesState),
                 ],
-              ),
+                ..._buildIndependentDetailSections(
+                  context,
+                  item,
+                  l10n,
+                  castState,
+                  trailersState,
+                  relatedState,
+                  recommendationsState,
+                ),
+                const SizedBox(height: 40),
+              ],
             ),
+          ),
         ),
       );
 
@@ -1454,18 +1497,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       slivers.add(
         SliverToBoxAdapter(
           child: Padding(
-              key: const ValueKey<int>(1),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _episodeLoadStatus(context, episodesState),
-                  if (episodeReady)
-                    DetailsSeasonListWrapper(itemUrl: widget.item.url),
-                  if (episodeReady) const SizedBox(height: 12),
-                ],
-              ),
+            key: const ValueKey<int>(1),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _episodeLoadStatus(context, episodesState),
+                if (episodeReady)
+                  DetailsSeasonListWrapper(itemUrl: widget.item.url),
+                if (episodeReady) const SizedBox(height: 12),
+              ],
             ),
+          ),
         ),
       );
 
