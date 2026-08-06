@@ -97,7 +97,12 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
 
     return deviceProfileAsync.when(
       data: (profile) {
-        if (profile.isTv || context.isTabletOrLarger) {
+        final mediaSize = MediaQuery.sizeOf(context);
+        final useSidebar =
+            profile.isTv ||
+            (context.isTabletOrLarger && mediaSize.width > mediaSize.height);
+
+        if (useSidebar) {
           return PopScope(
             canPop: isAtDefaultHome,
             onPopInvokedWithResult: (didPop, result) {
