@@ -421,6 +421,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Widget _buildEpisodeSelectionBar(BuildContext context, int selectedCount) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final selectedLabel = isArabic
+        ? 'تم تحديد $selectedCount'
+        : '$selectedCount selected';
     final controller = ref.read(
       detailsControllerProvider(widget.item.url).notifier,
     );
@@ -492,7 +497,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '$selectedCount selected',
+                              selectedLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.titleSmall?.copyWith(
@@ -501,7 +506,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                             ),
                           ),
                           IconButton(
-                            tooltip: 'Cancel selection',
+                            tooltip: isArabic ? 'إلغاء التحديد' : 'Cancel selection',
                             visualDensity: VisualDensity.compact,
                             onPressed: controller.clearEpisodeSelection,
                             icon: const Icon(Icons.close_rounded),
@@ -513,7 +518,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                         children: [
                           Expanded(
                             child: actionButton(
-                              label: 'Watched',
+                              label: isArabic ? 'تمت مشاهدته' : 'Watched',
                               icon: Icons.visibility_rounded,
                               outlined: false,
                               onPressed: () async {
@@ -527,7 +532,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           const SizedBox(width: 8),
                           Expanded(
                             child: actionButton(
-                              label: 'Unwatched',
+                              label: isArabic ? 'غير مشاهدة' : 'Unwatched',
                               icon: Icons.visibility_off_rounded,
                               outlined: true,
                               onPressed: () async {
@@ -540,7 +545,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           ),
                           const SizedBox(width: 8),
                           IconButton.filledTonal(
-                            tooltip: 'Select all episodes',
+                            tooltip: isArabic ? 'تحديد جميع الحلقات' : 'Select all episodes',
                             onPressed: controller.selectAllEpisodes,
                             icon: const Icon(Icons.select_all_rounded),
                             style: IconButton.styleFrom(
@@ -1195,7 +1200,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     const SizedBox(width: 16),
                     Expanded(
                       child: Directionality(
-                        textDirection: Directionality.of(context),
+                        textDirection: TextDirection.ltr,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

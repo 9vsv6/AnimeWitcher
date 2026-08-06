@@ -16,6 +16,12 @@ class DownloadsScreen extends ConsumerWidget {
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;
     final title = AppLocalizations.of(context)!.downloads;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final titleDirection =
+        isArabic ? TextDirection.rtl : TextDirection.ltr;
+    final titleAlignment =
+        isArabic ? Alignment.centerRight : Alignment.centerLeft;
 
     final Widget page;
     if (isWidescreen) {
@@ -30,11 +36,14 @@ class DownloadsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+                alignment: titleAlignment,
+                child: Directionality(
+                  textDirection: titleDirection,
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -45,7 +54,17 @@ class DownloadsScreen extends ConsumerWidget {
       );
     } else {
       page = Scaffold(
-        appBar: AppBar(title: Text(title)),
+        appBar: AppBar(
+          centerTitle: false,
+          titleSpacing: 16,
+          title: Align(
+            alignment: titleAlignment,
+            child: Directionality(
+              textDirection: titleDirection,
+              child: Text(title),
+            ),
+          ),
+        ),
         body: const DownloadsTab(),
       );
     }

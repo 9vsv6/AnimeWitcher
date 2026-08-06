@@ -228,18 +228,36 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final crossAxisCount = (screenWidth / maxExtent).ceil().clamp(1, 20);
     final childAspectRatio = _isPortrait ? 0.55 : 1.35;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            centerTitle: false,
+            titleSpacing: 16,
+            title: Align(
+              alignment:
+                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
+              child: Directionality(
+                textDirection:
+                    isArabic ? TextDirection.rtl : TextDirection.ltr,
+                child: Text(
+                  widget.title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => context.pop(),
+            ),
+            elevation: 0,
+          ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
-        ),
-        elevation: 0,
       ),
       body: Container(
         decoration: BoxDecoration(

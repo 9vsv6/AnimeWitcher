@@ -149,9 +149,11 @@ class DetailsDesktopHero extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Hero content (constrained to left 55%) ──
-                SizedBox(
-                  width: MediaQuery.sizeOf(context).width * 0.55,
-                  child: Column(
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: SizedBox(
+                    width: MediaQuery.sizeOf(context).width * 0.55,
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Logo or Title
@@ -198,7 +200,8 @@ class DetailsDesktopHero extends ConsumerWidget {
                           itemUrl: itemUrl,
                         ),
                       ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
 

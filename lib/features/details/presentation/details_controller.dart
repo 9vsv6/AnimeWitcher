@@ -265,6 +265,12 @@ class DetailsController extends _$DetailsController {
         .read(episodeWatchRepositoryProvider)
         .setManyWatched(mainUrl, selectedEpisodes, watched);
 
+    // A manual watched/unwatched decision supersedes partial playback.
+    // Remove the main history entry so Continue Watching updates immediately.
+    await ref
+        .read(watchHistoryProvider.notifier)
+        .removeFromHistory(mainUrl);
+
     if (!ref.mounted) {
       return;
     }
