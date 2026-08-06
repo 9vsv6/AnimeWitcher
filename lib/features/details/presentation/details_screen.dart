@@ -47,11 +47,29 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
   Offset _tabSlideFrom = Offset.zero;
+  late final PageController _mobileTabPageController;
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
 
   void _switchDetailsTab(int targetTab) {
     if (targetTab == _selectedDetailsTab) return;
+
+    if (!context.isTabletOrLarger) {
+      if (_mobileTabPageController.hasClients) {
+        _mobileTabPageController.animateToPage(
+          targetTab,
+          duration: _tabTransitionDuration,
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        setState(() => _selectedDetailsTab = targetTab);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_mobileTabPageController.hasClients) return;
+          _mobileTabPageController.jumpToPage(targetTab);
+        });
+      }
+      return;
+    }
 
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final entersFromLeft = isRtl ? targetTab == 1 : targetTab == 0;
@@ -59,6 +77,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     setState(() => _selectedDetailsTab = targetTab);
     _tabTransitionController.forward(from: 0);
+  }
+
+  void _handleMobileTabPageChanged(int page) {
+    if (page == _selectedDetailsTab) return;
+    setState(() => _selectedDetailsTab = page);
   }
 
   Widget _buildTabTransition({required Widget child}) {
@@ -148,6 +171,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void initState() {
     super.initState();
+    _mobileTabPageController = PageController(initialPage: _selectedDetailsTab);
     _tabTransitionController = AnimationController(
       vsync: this,
       duration: _tabTransitionDuration,
@@ -166,6 +190,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   @override
   void dispose() {
+    _mobileTabPageController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -262,158 +287,273 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       );
     }
 
-    // ── Mobile: SliverAppBar-based layout (unchanged) ──
+    // ── Mobile: shared header with a real two-page horizontal viewport. ──
     return Scaffold(
       bottomNavigationBar:
           selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
-      body: _buildDetailsTabSwipeRegion(
-        enabled: !isMovie,
-        child: CustomScrollView(
-          slivers: [
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: SliverAppBar(
-              pinned: true,
-              expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
-              stretch: true,
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-              flexibleSpace: FlexibleSpaceBar(
-              stretchModes: const [
-                StretchMode.zoomBackground,
-                StretchMode.blurBackground,
+      body: isMovie
+          ? CustomScrollView(
+              slivers: [
+                _buildMobileAppBar(
+                  context,
+                  item,
+                  isBookmarked,
+                  libraryNotifier,
+                ),
+                ..._buildMobileSlivers(
+                  context,
+                  item,
+                  details,
+                  detailsAsync,
+                  episodesAsync,
+                  castAsync,
+                  trailersAsync,
+                  relatedAsync,
+                  recommendationsAsync,
+                  true,
+                  l10n,
+                ),
               ],
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Hero(
-                    tag: 'banner_${item.url}',
-                    child: CachedNetworkImage(
-                      imageUrl:
-                          AppImageFallbacks.optional(item.bannerUrl) ??
-                          AppImageFallbacks.poster(
-                            item.posterUrl,
-                            label: item.title,
-                          ) ??
-                          '',
-                      fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
-                      // Bound decoded bitmap; plugin backdrops are often at
-                      // source resolution. Without this, 4K-source posters
-                      // burn ~33 MB per detail page.
-                      memCacheWidth:
-                          (MediaQuery.sizeOf(context).width *
-                                  MediaQuery.devicePixelRatioOf(context))
-                              .round(),
-                      placeholder: (context, url) =>
-                          Container(color: Theme.of(context).dividerColor),
-                      errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
-                        label: item.title,
-                        isBackdrop: true,
-                      ),
+            )
+          : NestedScrollView(
+              headerSliverBuilder: (nestedContext, innerBoxIsScrolled) {
+                return [
+                  SliverOverlapAbsorber(
+                    handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                      nestedContext,
+                    ),
+                    sliver: _buildMobileAppBar(
+                      nestedContext,
+                      item,
+                      isBookmarked,
+                      libraryNotifier,
                     ),
                   ),
-                  // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.65),
-                        ],
-                        stops: const [0.5, 1.0],
-                      ),
-                    ),
+                  ..._buildMobileSlivers(
+                    nestedContext,
+                    item,
+                    details,
+                    detailsAsync,
+                    episodesAsync,
+                    castAsync,
+                    trailersAsync,
+                    relatedAsync,
+                    recommendationsAsync,
+                    false,
+                    l10n,
+                    includeTabContent: false,
                   ),
-                  // 2. Blend-into-page transition: Theme-aware eased fade to surface
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.0),
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.15),
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.45),
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.8),
-                          Theme.of(context).scaffoldBackgroundColor,
-                        ],
-                        stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Mobile: back/bookmark excluded from D-pad traversal.
-            // Users navigate back via hardware Back key on TV remotes.
-            leading: Focus(
-              descendantsAreTraversable: false,
-              child: CustomButton(
-                shape: const CircleBorder(),
-                backgroundColor: Colors.black45,
-                onPressed: () => context.pop(),
-                child: const Icon(
-                  Icons.arrow_back_rounded,
-                  color: Colors.white,
+                ];
+              },
+              body: Builder(
+                builder: (innerContext) => _buildMobileTabPager(
+                  innerContext,
+                  item,
+                  details,
+                  detailsAsync,
+                  episodesAsync,
+                  castAsync,
+                  trailersAsync,
+                  relatedAsync,
+                  recommendationsAsync,
+                  l10n,
                 ),
               ),
             ),
-            actions: [
-              Focus(
-                descendantsAreTraversable: false,
-                child: IconButton(
-                  icon: Icon(
-                    isBookmarked
-                        ? Icons.bookmark_rounded
-                        : Icons.bookmark_border_rounded,
-                    color: isBookmarked
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white,
-                  ),
-                  onPressed: () {
-                    if (isBookmarked) {
-                      libraryNotifier.removeItem(item.url);
-                    } else {
-                      libraryNotifier.addItem(item);
-                    }
-                  },
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black45,
-                    foregroundColor: Colors.white,
-                  ),
+    );
+  }
+
+  Widget _buildMobileAppBar(
+    BuildContext context,
+    MultimediaItem item,
+    bool isBookmarked,
+    dynamic libraryNotifier,
+  ) {
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: SliverAppBar(
+        pinned: true,
+        expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
+        stretch: true,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        flexibleSpace: FlexibleSpaceBar(
+        stretchModes: const [
+          StretchMode.zoomBackground,
+          StretchMode.blurBackground,
+        ],
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            Hero(
+              tag: 'banner_${item.url}',
+              child: CachedNetworkImage(
+                imageUrl:
+                    AppImageFallbacks.optional(item.bannerUrl) ??
+                    AppImageFallbacks.poster(
+                      item.posterUrl,
+                      label: item.title,
+                    ) ??
+                    '',
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                // Bound decoded bitmap; plugin backdrops are often at
+                // source resolution. Without this, 4K-source posters
+                // burn ~33 MB per detail page.
+                memCacheWidth:
+                    (MediaQuery.sizeOf(context).width *
+                            MediaQuery.devicePixelRatioOf(context))
+                        .round(),
+                placeholder: (context, url) =>
+                    Container(color: Theme.of(context).dividerColor),
+                errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                  label: item.title,
+                  isBackdrop: true,
                 ),
               ),
-              const SizedBox(width: 8),
-            ],
+            ),
+            // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.65),
+                  ],
+                  stops: const [0.5, 1.0],
+                ),
               ),
+            ),
+            // 2. Blend-into-page transition: Theme-aware eased fade to surface
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Theme.of(
+                      context,
+                    ).scaffoldBackgroundColor.withValues(alpha: 0.0),
+                    Theme.of(
+                      context,
+                    ).scaffoldBackgroundColor.withValues(alpha: 0.15),
+                    Theme.of(
+                      context,
+                    ).scaffoldBackgroundColor.withValues(alpha: 0.45),
+                    Theme.of(
+                      context,
+                    ).scaffoldBackgroundColor.withValues(alpha: 0.8),
+                    Theme.of(context).scaffoldBackgroundColor,
+                  ],
+                  stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      // Mobile: back/bookmark excluded from D-pad traversal.
+      // Users navigate back via hardware Back key on TV remotes.
+      leading: Focus(
+        descendantsAreTraversable: false,
+        child: CustomButton(
+          shape: const CircleBorder(),
+          backgroundColor: Colors.black45,
+          onPressed: () => context.pop(),
+          child: const Icon(
+            Icons.arrow_back_rounded,
+            color: Colors.white,
           ),
-          ..._buildMobileSlivers(
+        ),
+      ),
+      actions: [
+        Focus(
+          descendantsAreTraversable: false,
+          child: IconButton(
+            icon: Icon(
+              isBookmarked
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_border_rounded,
+              color: isBookmarked
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.white,
+            ),
+            onPressed: () {
+              if (isBookmarked) {
+                libraryNotifier.removeItem(item.url);
+              } else {
+                libraryNotifier.addItem(item);
+              }
+            },
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black45,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
+        ),
+    );
+  }
+
+  Widget _buildMobileTabPager(
+    BuildContext context,
+    MultimediaItem item,
+    MultimediaItem? details,
+    AsyncValue<MultimediaItem?> detailsState,
+    AsyncValue<List<Episode>> episodesState,
+    AsyncValue<List<Actor>> castState,
+    AsyncValue<List<Trailer>> trailersState,
+    AsyncValue<List<MultimediaItem>> relatedState,
+    AsyncValue<List<MultimediaItem>> recommendationsState,
+    AppLocalizations l10n,
+  ) {
+    final localeDirection = Directionality.of(context);
+    final isRtl = localeDirection == TextDirection.rtl;
+
+    Widget page({required int tab, required String keyName}) {
+      return Directionality(
+        textDirection: localeDirection,
+        child: CustomScrollView(
+          key: PageStorageKey<String>(
+            'details_${widget.item.url}_$keyName',
+          ),
+          slivers: _buildMobileSlivers(
             context,
             item,
             details,
-            detailsAsync,
-            episodesAsync,
-            castAsync,
-            trailersAsync,
-            relatedAsync,
-            recommendationsAsync,
-            isMovie,
+            detailsState,
+            episodesState,
+            castState,
+            trailersState,
+            relatedState,
+            recommendationsState,
+            false,
             l10n,
+            forcedTab: tab,
+            includeHeader: false,
+            injectOverlap: true,
           ),
-          ],
         ),
+      );
+    }
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: PageView(
+        controller: _mobileTabPageController,
+        reverse: isRtl,
+        allowImplicitScrolling: true,
+        onPageChanged: _handleMobileTabPageChanged,
+        physics: const PageScrollPhysics(),
+        children: [
+          page(tab: 0, keyName: 'details'),
+          page(tab: 1, keyName: 'episodes'),
+        ],
       ),
     );
   }
@@ -1155,14 +1295,24 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
-    AppLocalizations l10n,
-  ) {
-    final showDetailsPage = _selectedDetailsTab == 0 || isMovie;
+    AppLocalizations l10n, {
+    int? forcedTab,
+    bool includeHeader = true,
+    bool includeTabContent = true,
+    bool injectOverlap = false,
+  }) {
+    final activeTab = forcedTab ?? _selectedDetailsTab;
+    final showDetailsPage = activeTab == 0 || isMovie;
     final episodeReady =
         episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
 
     final slivers = <Widget>[
-      SliverToBoxAdapter(
+      if (injectOverlap)
+        SliverOverlapInjector(
+          handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+        ),
+      if (includeHeader)
+        SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -1259,11 +1409,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       ),
     ];
 
+    if (!includeTabContent) return slivers;
+
     if (showDetailsPage) {
       slivers.add(
         SliverToBoxAdapter(
-          child: _buildTabTransition(
-            child: Padding(
+          child: Padding(
               key: const ValueKey<int>(0),
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
@@ -1289,7 +1440,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 ],
               ),
             ),
-          ),
         ),
       );
 
@@ -1308,8 +1458,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     } else {
       slivers.add(
         SliverToBoxAdapter(
-          child: _buildTabTransition(
-            child: Padding(
+          child: Padding(
               key: const ValueKey<int>(1),
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
@@ -1322,7 +1471,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 ],
               ),
             ),
-          ),
         ),
       );
 
@@ -1334,8 +1482,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               parentItem: item,
               itemUrl: widget.item.url,
               isMovie: false,
-              transition: _tabTransitionAnimation,
-              transitionOffset: _tabSlideFrom,
             ),
           ),
         );
