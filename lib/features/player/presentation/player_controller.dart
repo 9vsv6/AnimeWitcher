@@ -1163,7 +1163,7 @@ class PlayerController extends Notifier<PlayerState> {
               kind: PlaybackUiPhaseKind.bufferingRuntime,
               detail: state.isLive
                   ? _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...')
-                  : "Buffering playback...",
+                  : _playerText(english: 'Buffering playback...', arabic: 'جارٍ التخزين المؤقت للتشغيل...'),
             );
           } else {
             _enterStartupPhase(
@@ -1215,7 +1215,7 @@ class PlayerController extends Notifier<PlayerState> {
           if (_manualSelectionPending) {
             _manualSelectionPending = false;
             revertToPreviousStream(
-              "Selected source is not playable. Reverting back to previous source.",
+              _playerText(english: 'Selected source is not playable. Reverting back to previous source.', arabic: 'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.'),
             );
           } else {
             unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
@@ -1462,7 +1462,7 @@ class PlayerController extends Notifier<PlayerState> {
               kind: PlaybackUiPhaseKind.bufferingRuntime,
               detail: state.isLive
                   ? _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...')
-                  : "Buffering playback...",
+                  : _playerText(english: 'Buffering playback...', arabic: 'جارٍ التخزين المؤقت للتشغيل...'),
             );
           } else {
             _enterStartupPhase(
@@ -1677,7 +1677,7 @@ class PlayerController extends Notifier<PlayerState> {
         );
         if (_manualSelectionPending) {
           _manualSelectionPending = false;
-          revertToPreviousStream("Selected source failed. Reverting...");
+          revertToPreviousStream(_playerText(english: 'Selected source failed. Reverting...', arabic: 'فشل المصدر المحدد. جارٍ الرجوع...'));
         } else {
           retryNextStream(sourceSessionId: state.sourceSessionId);
         }
@@ -2828,7 +2828,7 @@ class PlayerController extends Notifier<PlayerState> {
     if (manualSelection && _hasConfirmedPlaybackFrame) {
       _enterRuntimePhase(
         kind: PlaybackUiPhaseKind.switchingSource,
-        detail: "Switching to ${stream.source}...",
+        detail: _playerText(english: 'Switching to ${stream.source}...', arabic: 'جارٍ التبديل إلى ${stream.source}...'),
       );
     } else {
       _enterStartupPhase(
@@ -3015,7 +3015,7 @@ class PlayerController extends Notifier<PlayerState> {
         // Issue 2: Don't show "all sources failed" for a manual pick — revert
         // silently to the previously playing source instead.
         revertToPreviousStream(
-          "Selected source is not playable. Reverting back to previous source.",
+          _playerText(english: 'Selected source is not playable. Reverting back to previous source.', arabic: 'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.'),
         );
         return;
       }
@@ -3105,7 +3105,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     _enterRuntimePhase(
       kind: PlaybackUiPhaseKind.switchingSource,
-      detail: "Switching to ${stream.source}...",
+      detail: _playerText(english: 'Switching to ${stream.source}...', arabic: 'جارٍ التبديل إلى ${stream.source}...'),
     );
 
     try {
@@ -3164,7 +3164,7 @@ class PlayerController extends Notifier<PlayerState> {
         state = state.copyWith(errorMessage: _playerText(english: 'Revert failed: $e', arabic: 'فشل الرجوع: $e'));
       } else {
         revertToPreviousStream(
-          "Could not switch to selected source. Reverting back to previous source.",
+          _playerText(english: 'Could not switch to selected source. Reverting back to previous source.', arabic: 'تعذر التبديل إلى المصدر المحدد. جارٍ الرجوع إلى المصدر السابق.'),
         );
       }
     }
@@ -3244,7 +3244,7 @@ class PlayerController extends Notifier<PlayerState> {
           currentAttemptIndex: nextIndex,
           // Fix Q1: clear old source name so the subtitle doesn't show
           // the failed source during the parallel check.
-          streamSubtitle: "Checking sources...",
+          streamSubtitle: _playerText(english: 'Checking sources...', arabic: 'جارٍ فحص المصادر...'),
         );
         _enterStartupPhase(
           kind: PlaybackUiPhaseKind.checkingSources,
@@ -3313,7 +3313,7 @@ class PlayerController extends Notifier<PlayerState> {
           .read(torrentServiceProvider)
           .getStreamUrlForFileIndex(index);
       if (url != null && state.currentStream != null) {
-        String fileLabel = "Torrent File $index";
+        String fileLabel = _playerText(english: 'Torrent File $index', arabic: 'ملف تورنت $index');
         try {
           final files =
               state.torrentStatus?.data['file_stats'] as List<dynamic>?;
