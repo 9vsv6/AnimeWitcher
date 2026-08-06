@@ -529,17 +529,26 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (isMovie) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
-    final detailsState = ref.watch(detailsControllerProvider(itemUrl));
-    var episodes = detailsState.seasonMap[detailsState.selectedSeason] ?? [];
+    final viewState = ref.watch(
+      detailsControllerProvider(itemUrl).select((state) {
+        final selectedSeason = state.selectedSeason;
+        return (
+          selectedDubStatus: state.selectedDubStatus,
+          isAscending: state.isAscending,
+          episodes: state.seasonMap[selectedSeason] ?? const <Episode>[],
+        );
+      }),
+    );
+    var episodes = viewState.episodes;
 
     if (episodes.isEmpty) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
 
     // Apply Language Filter
-    if (detailsState.selectedDubStatus != DubStatus.none) {
+    if (viewState.selectedDubStatus != DubStatus.none) {
       episodes = episodes
-          .where((e) => e.dubStatus == detailsState.selectedDubStatus)
+          .where((e) => e.dubStatus == viewState.selectedDubStatus)
           .toList();
     }
 
@@ -547,7 +556,7 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
     List<Episode> displayedEpisodes = List<Episode>.from(episodes);
 
     // Apply sorting to the complete filtered list.
-    if (!detailsState.isAscending) {
+    if (!viewState.isAscending) {
       displayedEpisodes = displayedEpisodes.reversed.toList();
     }
 
@@ -595,12 +604,19 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final detailsState = ref.watch(detailsControllerProvider(itemUrl));
-    final bool isAscending = detailsState.isAscending;
-    final DubStatus selectedDub = detailsState.selectedDubStatus;
-
-    final allEpisodes =
-        detailsState.seasonMap[detailsState.selectedSeason] ?? [];
+    final filterState = ref.watch(
+      detailsControllerProvider(itemUrl).select((state) {
+        final selectedSeason = state.selectedSeason;
+        return (
+          isAscending: state.isAscending,
+          selectedDub: state.selectedDubStatus,
+          episodes: state.seasonMap[selectedSeason] ?? const <Episode>[],
+        );
+      }),
+    );
+    final bool isAscending = filterState.isAscending;
+    final DubStatus selectedDub = filterState.selectedDub;
+    final allEpisodes = filterState.episodes;
 
     final hasDub = allEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
     final hasSub = allEpisodes.any((e) => e.dubStatus == DubStatus.subbed);

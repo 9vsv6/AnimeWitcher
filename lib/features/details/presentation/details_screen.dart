@@ -47,29 +47,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
   Offset _tabSlideFrom = Offset.zero;
-  late final PageController _mobileTabPageController;
+  late final ScrollController _mobileScrollController;
+  final GlobalKey _mobileTabsKey = GlobalKey();
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
 
   void _switchDetailsTab(int targetTab) {
     if (targetTab == _selectedDetailsTab) return;
-
-    if (!context.isTabletOrLarger) {
-      if (_mobileTabPageController.hasClients) {
-        _mobileTabPageController.animateToPage(
-          targetTab,
-          duration: _tabTransitionDuration,
-          curve: Curves.easeOutCubic,
-        );
-      } else {
-        setState(() => _selectedDetailsTab = targetTab);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || !_mobileTabPageController.hasClients) return;
-          _mobileTabPageController.jumpToPage(targetTab);
-        });
-      }
-      return;
-    }
 
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final entersFromLeft = isRtl ? targetTab == 1 : targetTab == 0;
@@ -77,11 +61,38 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     setState(() => _selectedDetailsTab = targetTab);
     _tabTransitionController.forward(from: 0);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreMobileTabsIfHidden();
+    });
   }
 
-  void _handleMobileTabPageChanged(int page) {
-    if (page == _selectedDetailsTab) return;
-    setState(() => _selectedDetailsTab = page);
+  void _restoreMobileTabsIfHidden() {
+    if (!mounted ||
+        context.isTabletOrLarger ||
+        !_mobileScrollController.hasClients) {
+      return;
+    }
+
+    final tabsContext = _mobileTabsKey.currentContext;
+    final renderObject = tabsContext?.findRenderObject();
+    if (tabsContext == null ||
+        renderObject is! RenderBox ||
+        !renderObject.attached) {
+      return;
+    }
+
+    final top = renderObject.localToGlobal(Offset.zero).dy;
+    final safeTop = MediaQuery.paddingOf(context).top + kToolbarHeight + 4;
+    if (top >= safeTop) return;
+
+    Scrollable.ensureVisible(
+      tabsContext,
+      duration: _tabTransitionDuration,
+      curve: Curves.easeOutCubic,
+      alignment: 0,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+    );
   }
 
   Widget _buildTabTransition({required Widget child}) {
@@ -171,7 +182,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void initState() {
     super.initState();
-    _mobileTabPageController = PageController(initialPage: _selectedDetailsTab);
+    _mobileScrollController = ScrollController();
     _tabTransitionController = AnimationController(
       vsync: this,
       duration: _tabTransitionDuration,
@@ -190,7 +201,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   @override
   void dispose() {
-    _mobileTabPageController.dispose();
+    _mobileScrollController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -238,25 +249,34 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final episodesAsync = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.episodes),
     );
-    final castAsync = ref.watch(
-      detailsControllerProvider(widget.item.url).select((s) => s.cast),
-    );
-    final trailersAsync = ref.watch(
-      detailsControllerProvider(widget.item.url).select((s) => s.trailers),
-    );
-    final relatedAsync = ref.watch(
-      detailsControllerProvider(widget.item.url).select((s) => s.related),
-    );
-    final recommendationsAsync = ref.watch(
-      detailsControllerProvider(
-        widget.item.url,
-      ).select((s) => s.recommendations),
-    );
-    final currentItem = ref.watch(
-      detailsControllerProvider(widget.item.url).select((s) => s.item),
-    );
     final isMovie = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
+    );
+    final watchOptionalSections = isMovie || _selectedDetailsTab == 0;
+    final castAsync = watchOptionalSections
+        ? ref.watch(
+            detailsControllerProvider(widget.item.url).select((s) => s.cast),
+          )
+        : const AsyncData<List<Actor>>(<Actor>[]);
+    final trailersAsync = watchOptionalSections
+        ? ref.watch(
+            detailsControllerProvider(widget.item.url).select((s) => s.trailers),
+          )
+        : const AsyncData<List<Trailer>>(<Trailer>[]);
+    final relatedAsync = watchOptionalSections
+        ? ref.watch(
+            detailsControllerProvider(widget.item.url).select((s) => s.related),
+          )
+        : const AsyncData<List<MultimediaItem>>(<MultimediaItem>[]);
+    final recommendationsAsync = watchOptionalSections
+        ? ref.watch(
+            detailsControllerProvider(
+              widget.item.url,
+            ).select((s) => s.recommendations),
+          )
+        : const AsyncData<List<MultimediaItem>>(<MultimediaItem>[]);
+    final currentItem = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.item),
     );
     final item = currentItem ?? details ?? widget.item;
     final selectedEpisodeCount = ref.watch(
@@ -287,81 +307,104 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       );
     }
 
-    // ── Mobile: shared header with a real two-page horizontal viewport. ──
+    // ── Mobile: one virtualized sliver viewport for the active tab only. ──
     return Scaffold(
       bottomNavigationBar:
           selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
-      body: isMovie
-          ? CustomScrollView(
-              slivers: [
-                _buildMobileAppBar(
-                  context,
-                  item,
-                  isBookmarked,
-                  libraryNotifier,
-                ),
-                ..._buildMobileSlivers(
-                  context,
-                  item,
-                  details,
-                  detailsAsync,
-                  episodesAsync,
-                  castAsync,
-                  trailersAsync,
-                  relatedAsync,
-                  recommendationsAsync,
-                  true,
-                  l10n,
+      body: _buildDetailsTabSwipeRegion(
+        enabled: !isMovie,
+        child: CustomScrollView(
+          controller: _mobileScrollController,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          slivers: [
+            _buildMobileAppBar(
+              context,
+              item,
+              isBookmarked,
+              libraryNotifier,
+            ),
+            ..._buildMobileSlivers(
+              context,
+              item,
+              details,
+              detailsAsync,
+              episodesAsync,
+              castAsync,
+              trailersAsync,
+              relatedAsync,
+              recommendationsAsync,
+              isMovie,
+              l10n,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollapsedHeaderTitle(
+    BuildContext context,
+    MultimediaItem item,
+  ) {
+    final posterUrl = AppImageFallbacks.poster(
+      item.posterUrl,
+      label: item.title,
+    );
+
+    return AnimatedBuilder(
+      animation: _mobileScrollController,
+      builder: (context, child) {
+        final offset = _mobileScrollController.hasClients
+            ? _mobileScrollController.offset
+            : 0.0;
+        final collapseOffset =
+            LayoutConstants.detailsExpandedHeightMobile -
+            kToolbarHeight -
+            MediaQuery.paddingOf(context).top -
+            32;
+        final visible = offset >= collapseOffset;
+
+        return IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration: const Duration(milliseconds: 140),
+            child: Row(
+              children: [
+                if (posterUrl != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: CachedNetworkImage(
+                      imageUrl: posterUrl,
+                      width: 28,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      memCacheWidth: (28 * MediaQuery.devicePixelRatioOf(context))
+                          .round(),
+                      memCacheHeight:
+                          (40 * MediaQuery.devicePixelRatioOf(context)).round(),
+                      errorWidget: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
-            )
-          : NestedScrollView(
-              headerSliverBuilder: (nestedContext, innerBoxIsScrolled) {
-                return [
-                  SliverOverlapAbsorber(
-                    handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                      nestedContext,
-                    ),
-                    sliver: _buildMobileAppBar(
-                      nestedContext,
-                      item,
-                      isBookmarked,
-                      libraryNotifier,
-                    ),
-                  ),
-                  ..._buildMobileSlivers(
-                    nestedContext,
-                    item,
-                    details,
-                    detailsAsync,
-                    episodesAsync,
-                    castAsync,
-                    trailersAsync,
-                    relatedAsync,
-                    recommendationsAsync,
-                    false,
-                    l10n,
-                    includeTabContent: false,
-                  ),
-                ];
-              },
-              body: Builder(
-                builder: (innerContext) => _buildMobileTabPager(
-                  innerContext,
-                  item,
-                  details,
-                  detailsAsync,
-                  episodesAsync,
-                  castAsync,
-                  trailersAsync,
-                  relatedAsync,
-                  recommendationsAsync,
-                  l10n,
-                ),
-              ),
             ),
+          ),
+        );
+      },
     );
   }
 
@@ -376,13 +419,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       child: SliverAppBar(
         pinned: true,
         expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
-        stretch: true,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        titleSpacing: 0,
+        title: _buildCollapsedHeaderTitle(context, item),
         flexibleSpace: FlexibleSpaceBar(
-        stretchModes: const [
-          StretchMode.zoomBackground,
-          StretchMode.blurBackground,
-        ],
         background: Stack(
           fit: StackFit.expand,
           children: [
@@ -497,64 +537,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         const SizedBox(width: 8),
       ],
         ),
-    );
-  }
-
-  Widget _buildMobileTabPager(
-    BuildContext context,
-    MultimediaItem item,
-    MultimediaItem? details,
-    AsyncValue<MultimediaItem?> detailsState,
-    AsyncValue<List<Episode>> episodesState,
-    AsyncValue<List<Actor>> castState,
-    AsyncValue<List<Trailer>> trailersState,
-    AsyncValue<List<MultimediaItem>> relatedState,
-    AsyncValue<List<MultimediaItem>> recommendationsState,
-    AppLocalizations l10n,
-  ) {
-    final localeDirection = Directionality.of(context);
-    final isRtl = localeDirection == TextDirection.rtl;
-
-    Widget page({required int tab, required String keyName}) {
-      return Directionality(
-        textDirection: localeDirection,
-        child: CustomScrollView(
-          key: PageStorageKey<String>(
-            'details_${widget.item.url}_$keyName',
-          ),
-          slivers: _buildMobileSlivers(
-            context,
-            item,
-            details,
-            detailsState,
-            episodesState,
-            castState,
-            trailersState,
-            relatedState,
-            recommendationsState,
-            false,
-            l10n,
-            forcedTab: tab,
-            includeHeader: false,
-            injectOverlap: true,
-          ),
-        ),
-      );
-    }
-
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: PageView(
-        controller: _mobileTabPageController,
-        reverse: isRtl,
-        allowImplicitScrolling: true,
-        onPageChanged: _handleMobileTabPageChanged,
-        physics: const PageScrollPhysics(),
-        children: [
-          page(tab: 0, keyName: 'details'),
-          page(tab: 1, keyName: 'episodes'),
-        ],
-      ),
     );
   }
 
@@ -1295,24 +1277,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
-    AppLocalizations l10n, {
-    int? forcedTab,
-    bool includeHeader = true,
-    bool includeTabContent = true,
-    bool injectOverlap = false,
-  }) {
-    final activeTab = forcedTab ?? _selectedDetailsTab;
+    AppLocalizations l10n,
+  ) {
+    final activeTab = _selectedDetailsTab;
     final showDetailsPage = activeTab == 0 || isMovie;
     final episodeReady =
         episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
 
     final slivers = <Widget>[
-      if (injectOverlap)
-        SliverOverlapInjector(
-          handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-        ),
-      if (includeHeader)
-        SliverToBoxAdapter(
+      SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -1337,6 +1310,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           width: 100,
                           height: 150,
                           fit: BoxFit.cover,
+                          memCacheWidth:
+                              (100 * MediaQuery.devicePixelRatioOf(context))
+                                  .round(),
+                          memCacheHeight:
+                              (150 * MediaQuery.devicePixelRatioOf(context))
+                                  .round(),
                           errorWidget: (_, _, _) =>
                               ThumbnailErrorPlaceholder(label: item.title),
                         ),
@@ -1353,31 +1332,32 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                               behavior: HitTestBehavior.opaque,
                               onLongPress: () =>
                                   _copyAnimeTitle(context, item.title),
-                              child: item.logoUrl != null
-                                  ? CachedNetworkImage(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (item.logoUrl != null &&
+                                      item.logoUrl!.trim().isNotEmpty) ...[
+                                    CachedNetworkImage(
                                       imageUrl: item.logoUrl!,
-                                      height: 50,
+                                      height: 42,
                                       fit: BoxFit.contain,
                                       alignment: Alignment.centerLeft,
-                                      errorWidget: (_, _, _) => Text(
-                                        item.title,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                    )
-                                  : Text(
-                                      item.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                      errorWidget: (_, _, _) =>
+                                          const SizedBox.shrink(),
                                     ),
+                                    const SizedBox(height: 4),
+                                  ],
+                                  Text(
+                                    item.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 8),
                             MetadataBar(
@@ -1401,15 +1381,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 const SizedBox(height: 16),
                 NextAiringWidget(nextAiring: item.nextAiring!),
               ],
-              const SizedBox(height: 24),
-              if (!isMovie) _buildDetailsPageTabs(context, episodesState),
+              const SizedBox(height: 12),
+              if (!isMovie)
+                KeyedSubtree(
+                  key: _mobileTabsKey,
+                  child: _buildDetailsPageTabs(context, episodesState),
+                ),
             ],
           ),
         ),
       ),
     ];
-
-    if (!includeTabContent) return slivers;
 
     if (showDetailsPage) {
       slivers.add(
