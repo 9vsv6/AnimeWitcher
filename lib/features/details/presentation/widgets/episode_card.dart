@@ -36,7 +36,7 @@ class EpisodeCard extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final historyRepo = ref.read(historyRepositoryProvider);
+    final historyRepo = ref.watch(historyRepositoryProvider);
     final historyItem = ref.watch(
       watchHistoryProvider.select(
         (list) => list.whereType<HistoryItem>().firstWhereOrNull(
@@ -59,7 +59,7 @@ class EpisodeCard extends HookConsumerWidget {
     );
 
     ref.watch(episodeWatchRevisionProvider);
-    final episodeWatchRepo = ref.read(episodeWatchRepositoryProvider);
+    final episodeWatchRepo = ref.watch(episodeWatchRepositoryProvider);
 
     final double progress = epDur > 0 ? (epPos / epDur).clamp(0.0, 1.0) : 0.0;
     final explicitWatchState = episodeWatchRepo.getExplicitState(
@@ -89,48 +89,23 @@ class EpisodeCard extends HookConsumerWidget {
       }
     }
 
-    final isDownloading = ref.watch(
-      activeDownloadsProvider.select(
-        (activeDownloads) => activeDownloads.contains(episode.url),
-      ),
-    );
+    final activeDownloads = ref.watch(activeDownloadsProvider);
+    final isDownloading = activeDownloads.contains(episode.url);
+    final detailsState = ref.watch(detailsControllerProvider(parentItem.url));
+    final details = detailsState.item;
     final selectionKey = episodeSelectionKey(episode);
-    final selectionState = ref.watch(
-      detailsControllerProvider(parentItem.url).select(
-        (state) => (
-          details: state.item,
-          isSelectionMode: state.selectedEpisodeKeys.isNotEmpty,
-          isSelected: state.selectedEpisodeKeys.contains(selectionKey),
-        ),
-      ),
-    );
-    final details = selectionState.details;
-    final isSelectionMode = selectionState.isSelectionMode;
-    final isSelected = selectionState.isSelected;
+    final isSelectionMode = detailsState.selectedEpisodeKeys.isNotEmpty;
+    final isSelected = detailsState.selectedEpisodeKeys.contains(selectionKey);
 
-    final downloadProgressData = ref.watch(
-      downloadProgressProvider.select((progress) => progress[episode.url]),
-    );
+    final progressMap = ref.watch(downloadProgressProvider);
+    final downloadProgressData = progressMap[episode.url];
     final downloadProgress = downloadProgressData?.progress ?? 0.0;
 
-    final downloadedState = ref.watch(
-      downloadedFilesProvider.select(
-        (files) => (
-          wasChecked: files.containsKey(episode.url),
-          file: files[episode.url],
-        ),
-      ),
-    );
-    final downloadedFile = downloadedState.file;
-    final wasDownloading = usePrevious(isDownloading);
+    final downloadedFile = ref.watch(downloadedFilesProvider)[episode.url];
 
-    // Avoid a disk lookup every time a recycled episode card re-enters view.
-    // Re-check once when an active download finishes.
+    // Check for downloaded file on load
     useEffect(() {
-      final shouldCheck =
-          !isDownloading &&
-          (!downloadedState.wasChecked || wasDownloading == true);
-      if (shouldCheck) {
+      if (!isDownloading) {
         Future.microtask(() {
           if (ref.context.mounted) {
             ref
@@ -140,7 +115,7 @@ class EpisodeCard extends HookConsumerWidget {
         });
       }
       return null;
-    }, [episode.url, isDownloading, downloadedState.wasChecked]);
+    }, [episode.url, isDownloading]);
 
     final isFocused = useState(false);
     final downloadFocusNode = useFocusNode(debugLabel: 'ep_download');
@@ -523,10 +498,6 @@ class EpisodeCard extends HookConsumerWidget {
               child: CachedNetworkImage(
                 imageUrl: episode.posterUrl ?? '',
                 fit: BoxFit.cover,
-                memCacheWidth:
-                    (140 * MediaQuery.devicePixelRatioOf(context)).round(),
-                memCacheHeight:
-                    (79 * MediaQuery.devicePixelRatioOf(context)).round(),
                 errorWidget: (context, url, error) =>
                     const ThumbnailErrorPlaceholder(),
                 placeholder: (context, url) => Container(

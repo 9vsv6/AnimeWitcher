@@ -47,9 +47,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
   Offset _tabSlideFrom = Offset.zero;
-  late final ScrollController _mobileOuterScrollController;
-  final PageStorageBucket _detailsTabStorage = PageStorageBucket();
-  final PageStorageBucket _episodesTabStorage = PageStorageBucket();
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
 
@@ -62,11 +59,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     setState(() => _selectedDetailsTab = targetTab);
     _tabTransitionController.forward(from: 0);
-  }
-
-  bool _shouldShowEpisodesTab(AsyncValue<List<Episode>> episodesState) {
-    if (!episodesState.hasValue) return true;
-    return episodesState.value?.isNotEmpty ?? false;
   }
 
   Widget _buildTabTransition({required Widget child}) {
@@ -156,7 +148,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void initState() {
     super.initState();
-    _mobileOuterScrollController = ScrollController();
     _tabTransitionController = AnimationController(
       vsync: this,
       duration: _tabTransitionDuration,
@@ -175,7 +166,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   @override
   void dispose() {
-    _mobileOuterScrollController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -223,43 +213,25 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final episodesAsync = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.episodes),
     );
-    final isMovie = ref.watch(
-      detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
+    final castAsync = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.cast),
     );
-    final showEpisodesTab =
-        !isMovie && _shouldShowEpisodesTab(episodesAsync);
-    final activeTab = showEpisodesTab ? _selectedDetailsTab : 0;
-    if (!showEpisodesTab && _selectedDetailsTab != 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _selectedDetailsTab == 0) return;
-        setState(() => _selectedDetailsTab = 0);
-      });
-    }
-    final watchOptionalSections = activeTab == 0;
-    final castAsync = watchOptionalSections
-        ? ref.watch(
-            detailsControllerProvider(widget.item.url).select((s) => s.cast),
-          )
-        : const AsyncData<List<Actor>>(<Actor>[]);
-    final trailersAsync = watchOptionalSections
-        ? ref.watch(
-            detailsControllerProvider(widget.item.url).select((s) => s.trailers),
-          )
-        : const AsyncData<List<Trailer>>(<Trailer>[]);
-    final relatedAsync = watchOptionalSections
-        ? ref.watch(
-            detailsControllerProvider(widget.item.url).select((s) => s.related),
-          )
-        : const AsyncData<List<MultimediaItem>>(<MultimediaItem>[]);
-    final recommendationsAsync = watchOptionalSections
-        ? ref.watch(
-            detailsControllerProvider(
-              widget.item.url,
-            ).select((s) => s.recommendations),
-          )
-        : const AsyncData<List<MultimediaItem>>(<MultimediaItem>[]);
+    final trailersAsync = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.trailers),
+    );
+    final relatedAsync = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.related),
+    );
+    final recommendationsAsync = ref.watch(
+      detailsControllerProvider(
+        widget.item.url,
+      ).select((s) => s.recommendations),
+    );
     final currentItem = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.item),
+    );
+    final isMovie = ref.watch(
+      detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
     );
     final item = currentItem ?? details ?? widget.item;
     final selectedEpisodeCount = ref.watch(
@@ -290,282 +262,159 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       );
     }
 
-    // ── Mobile: one shared header, with independent tab scroll state. ──
-    final tabStorage = activeTab == 1
-        ? _episodesTabStorage
-        : _detailsTabStorage;
+    // ── Mobile: SliverAppBar-based layout (unchanged) ──
     return Scaffold(
       bottomNavigationBar:
-          selectedEpisodeCount == 0 || (!isMovie && activeTab != 1)
+          selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       body: _buildDetailsTabSwipeRegion(
-        enabled: showEpisodesTab,
-        child: NestedScrollView(
-          controller: _mobileOuterScrollController,
-          headerSliverBuilder: (outerContext, _) {
-            return [
-              SliverOverlapAbsorber(
-                handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                  outerContext,
-                ),
-                sliver: _buildMobileAppBar(
-                  outerContext,
-                  item,
-                  isBookmarked,
-                  libraryNotifier,
-                  _mobileOuterScrollController,
-                ),
-              ),
-              ..._buildMobileSharedHeaderSlivers(
-                outerContext,
-                item,
-                detailsAsync,
-                episodesAsync,
-                isMovie,
-                activeTab: activeTab,
-                showEpisodesTab: showEpisodesTab,
-              ),
-            ];
-          },
-          body: Builder(
-            builder: (innerContext) {
-              return _buildTabTransition(
-                child: PageStorage(
-                  key: ValueKey<int>(activeTab),
-                  bucket: tabStorage,
-                  child: CustomScrollView(
-                    key: PageStorageKey<String>(
-                      'mobile_tab_${widget.item.url}_$activeTab',
-                    ),
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    slivers: [
-                      SliverOverlapInjector(
-                        handle:
-                            NestedScrollView.sliverOverlapAbsorberHandleFor(
-                          innerContext,
-                        ),
-                      ),
-                      ..._buildMobileTabSlivers(
-                        innerContext,
-                        item,
-                        detailsAsync,
-                        episodesAsync,
-                        castAsync,
-                        trailersAsync,
-                        relatedAsync,
-                        recommendationsAsync,
-                        isMovie,
-                        l10n,
-                        activeTab: activeTab,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCollapsedHeaderTitle(
-    BuildContext context,
-    MultimediaItem item,
-    ScrollController scrollController,
-  ) {
-    final posterUrl = AppImageFallbacks.poster(
-      item.posterUrl,
-      label: item.title,
-    );
-
-    return AnimatedBuilder(
-      animation: scrollController,
-      builder: (context, child) {
-        final offset = scrollController.hasClients
-            ? scrollController.offset
-            : 0.0;
-        final collapseOffset =
-            LayoutConstants.detailsExpandedHeightMobile -
-            kToolbarHeight -
-            MediaQuery.paddingOf(context).top -
-            32;
-        final visible = offset >= collapseOffset;
-
-        return IgnorePointer(
-          child: AnimatedOpacity(
-            opacity: visible ? 1 : 0,
-            duration: const Duration(milliseconds: 140),
-            child: Row(
-              children: [
-                if (posterUrl != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
-                    child: CachedNetworkImage(
-                      imageUrl: posterUrl,
-                      width: 28,
-                      height: 40,
-                      fit: BoxFit.cover,
-                      memCacheWidth: (28 * MediaQuery.devicePixelRatioOf(context))
-                          .round(),
-                      memCacheHeight:
-                          (40 * MediaQuery.devicePixelRatioOf(context)).round(),
-                      errorWidget: (_, _, _) => const SizedBox.shrink(),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+        enabled: !isMovie,
+        child: CustomScrollView(
+          slivers: [
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: SliverAppBar(
+              pinned: true,
+              expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
+              stretch: true,
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              flexibleSpace: FlexibleSpaceBar(
+              stretchModes: const [
+                StretchMode.zoomBackground,
+                StretchMode.blurBackground,
               ],
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Hero(
+                    tag: 'banner_${item.url}',
+                    child: CachedNetworkImage(
+                      imageUrl:
+                          AppImageFallbacks.optional(item.bannerUrl) ??
+                          AppImageFallbacks.poster(
+                            item.posterUrl,
+                            label: item.title,
+                          ) ??
+                          '',
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      // Bound decoded bitmap; plugin backdrops are often at
+                      // source resolution. Without this, 4K-source posters
+                      // burn ~33 MB per detail page.
+                      memCacheWidth:
+                          (MediaQuery.sizeOf(context).width *
+                                  MediaQuery.devicePixelRatioOf(context))
+                              .round(),
+                      placeholder: (context, url) =>
+                          Container(color: Theme.of(context).dividerColor),
+                      errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                        label: item.title,
+                        isBackdrop: true,
+                      ),
+                    ),
+                  ),
+                  // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.65),
+                        ],
+                        stops: const [0.5, 1.0],
+                      ),
+                    ),
+                  ),
+                  // 2. Blend-into-page transition: Theme-aware eased fade to surface
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Theme.of(
+                            context,
+                          ).scaffoldBackgroundColor.withValues(alpha: 0.0),
+                          Theme.of(
+                            context,
+                          ).scaffoldBackgroundColor.withValues(alpha: 0.15),
+                          Theme.of(
+                            context,
+                          ).scaffoldBackgroundColor.withValues(alpha: 0.45),
+                          Theme.of(
+                            context,
+                          ).scaffoldBackgroundColor.withValues(alpha: 0.8),
+                          Theme.of(context).scaffoldBackgroundColor,
+                        ],
+                        stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+            // Mobile: back/bookmark excluded from D-pad traversal.
+            // Users navigate back via hardware Back key on TV remotes.
+            leading: Focus(
+              descendantsAreTraversable: false,
+              child: CustomButton(
+                shape: const CircleBorder(),
+                backgroundColor: Colors.black45,
+                onPressed: () => context.pop(),
+                child: const Icon(
+                  Icons.arrow_back_rounded,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            actions: [
+              Focus(
+                descendantsAreTraversable: false,
+                child: IconButton(
+                  icon: Icon(
+                    isBookmarked
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    color: isBookmarked
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.white,
+                  ),
+                  onPressed: () {
+                    if (isBookmarked) {
+                      libraryNotifier.removeItem(item.url);
+                    } else {
+                      libraryNotifier.addItem(item);
+                    }
+                  },
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black45,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+              ),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMobileAppBar(
-    BuildContext context,
-    MultimediaItem item,
-    bool isBookmarked,
-    dynamic libraryNotifier,
-    ScrollController scrollController,
-  ) {
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: SliverAppBar(
-        pinned: true,
-        expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        titleSpacing: 0,
-        title: _buildCollapsedHeaderTitle(context, item, scrollController),
-        flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            Hero(
-              tag: 'banner_${item.url}',
-              child: CachedNetworkImage(
-                imageUrl:
-                    AppImageFallbacks.optional(item.bannerUrl) ??
-                    AppImageFallbacks.poster(
-                      item.posterUrl,
-                      label: item.title,
-                    ) ??
-                    '',
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
-                // Bound decoded bitmap; plugin backdrops are often at
-                // source resolution. Without this, 4K-source posters
-                // burn ~33 MB per detail page.
-                memCacheWidth:
-                    (MediaQuery.sizeOf(context).width *
-                            MediaQuery.devicePixelRatioOf(context))
-                        .round(),
-                placeholder: (context, url) =>
-                    Container(color: Theme.of(context).dividerColor),
-                errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
-                  label: item.title,
-                  isBackdrop: true,
-                ),
-              ),
-            ),
-            // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.65),
-                  ],
-                  stops: const [0.5, 1.0],
-                ),
-              ),
-            ),
-            // 2. Blend-into-page transition: Theme-aware eased fade to surface
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Theme.of(
-                      context,
-                    ).scaffoldBackgroundColor.withValues(alpha: 0.0),
-                    Theme.of(
-                      context,
-                    ).scaffoldBackgroundColor.withValues(alpha: 0.15),
-                    Theme.of(
-                      context,
-                    ).scaffoldBackgroundColor.withValues(alpha: 0.45),
-                    Theme.of(
-                      context,
-                    ).scaffoldBackgroundColor.withValues(alpha: 0.8),
-                    Theme.of(context).scaffoldBackgroundColor,
-                  ],
-                  stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
-                ),
-              ),
-            ),
+          ..._buildMobileSlivers(
+            context,
+            item,
+            details,
+            detailsAsync,
+            episodesAsync,
+            castAsync,
+            trailersAsync,
+            relatedAsync,
+            recommendationsAsync,
+            isMovie,
+            l10n,
+          ),
           ],
         ),
       ),
-      // Mobile: back/bookmark excluded from D-pad traversal.
-      // Users navigate back via hardware Back key on TV remotes.
-      leading: Focus(
-        descendantsAreTraversable: false,
-        child: CustomButton(
-          shape: const CircleBorder(),
-          backgroundColor: Colors.black45,
-          onPressed: () => context.pop(),
-          child: const Icon(
-            Icons.arrow_back_rounded,
-            color: Colors.white,
-          ),
-        ),
-      ),
-      actions: [
-        Focus(
-          descendantsAreTraversable: false,
-          child: IconButton(
-            icon: Icon(
-              isBookmarked
-                  ? Icons.bookmark_rounded
-                  : Icons.bookmark_border_rounded,
-              color: isBookmarked
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.white,
-            ),
-            onPressed: () {
-              if (isBookmarked) {
-                libraryNotifier.removeItem(item.url);
-              } else {
-                libraryNotifier.addItem(item);
-              }
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.black45,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-      ],
-        ),
     );
   }
 
@@ -894,13 +743,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = Theme.of(context).colorScheme.onSurface;
-    final showEpisodesTab =
-        !isMovie && _shouldShowEpisodesTab(episodesState);
-    final activeTab = showEpisodesTab ? _selectedDetailsTab : 0;
 
     return Scaffold(
       bottomNavigationBar:
-          selectedEpisodeCount == 0 || (!isMovie && activeTab != 1)
+          selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       extendBodyBehindAppBar: true,
@@ -949,7 +795,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
       ),
       body: _buildDetailsTabSwipeRegion(
-        enabled: showEpisodesTab,
+        enabled: !isMovie,
         child: DetailsDesktopHero(
           displayItem: item,
           baseItem: widget.item,
@@ -969,8 +815,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             recommendationsState,
             isMovie,
             l10n,
-            activeTab: activeTab,
-            showEpisodesTab: showEpisodesTab,
           ),
         ),
       ),
@@ -979,10 +823,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   Widget _buildDetailsPageTabs(
     BuildContext context,
-    AsyncValue<List<Episode>> episodesState, {
-    required int activeTab,
-    required bool showEpisodesTab,
-  }) {
+    AsyncValue<List<Episode>> episodesState,
+  ) {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final episodeCount = episodesState.asData?.value.length ?? 0;
@@ -992,6 +834,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ? 'الحلقات'
         : 'Episodes';
 
+    // Episode UI v2: equal-width tabs without selected checkmarks.
     Widget tab({
       required bool selected,
       required Widget leading,
@@ -1029,34 +872,32 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       children: [
         Expanded(
           child: tab(
-            selected: activeTab == 0,
+            selected: _selectedDetailsTab == 0,
             leading: const Icon(Icons.info_outline_rounded, size: 21),
             label: isArabic ? 'التفاصيل' : 'Details',
             onTap: () {
-              if (activeTab == 0) return;
+              if (_selectedDetailsTab == 0) return;
               _switchDetailsTab(0);
             },
           ),
         ),
-        if (showEpisodesTab) ...[
-          const SizedBox(width: 10),
-          Expanded(
-            child: tab(
-              selected: activeTab == 1,
-              leading: episodesState.isLoading
-                  ? const SizedBox.square(
-                      dimension: 19,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.video_library_outlined, size: 21),
-              label: episodeLabel,
-              onTap: () {
-                if (activeTab == 1) return;
-                _switchDetailsTab(1);
-              },
-            ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: tab(
+            selected: _selectedDetailsTab == 1,
+            leading: episodesState.isLoading
+                ? const SizedBox.square(
+                    dimension: 19,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.video_library_outlined, size: 21),
+            label: episodeLabel,
+            onTap: () {
+              if (_selectedDetailsTab == 1) return;
+              _switchDetailsTab(1);
+            },
           ),
-        ],
+        ),
       ],
     );
   }
@@ -1242,11 +1083,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
-    AppLocalizations l10n, {
-    required int activeTab,
-    required bool showEpisodesTab,
-  }) {
-    final tabContent = activeTab == 0 || isMovie
+    AppLocalizations l10n,
+  ) {
+    final tabContent = _selectedDetailsTab == 0 || isMovie
         ? <Widget>[
             _buildSynopsisAndGenres(context, item, detailsState, l10n),
             const SizedBox(height: 28),
@@ -1290,17 +1129,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!isMovie) ...[
-          _buildDetailsPageTabs(
-            context,
-            episodesState,
-            activeTab: activeTab,
-            showEpisodesTab: showEpisodesTab,
-          ),
+          _buildDetailsPageTabs(context, episodesState),
           const SizedBox(height: 24),
         ],
         _buildTabTransition(
           child: Column(
-            key: ValueKey<int>(isMovie ? 0 : activeTab),
+            key: ValueKey<int>(isMovie ? 0 : _selectedDetailsTab),
             crossAxisAlignment: CrossAxisAlignment.start,
             children: tabContent,
           ),
@@ -1310,16 +1144,24 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
-  List<Widget> _buildMobileSharedHeaderSlivers(
+  List<Widget> _buildMobileSlivers(
     BuildContext context,
     MultimediaItem item,
+    MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
     AsyncValue<List<Episode>> episodesState,
-    bool isMovie, {
-    required int activeTab,
-    required bool showEpisodesTab,
-  }) {
-    return [
+    AsyncValue<List<Actor>> castState,
+    AsyncValue<List<Trailer>> trailersState,
+    AsyncValue<List<MultimediaItem>> relatedState,
+    AsyncValue<List<MultimediaItem>> recommendationsState,
+    bool isMovie,
+    AppLocalizations l10n,
+  ) {
+    final showDetailsPage = _selectedDetailsTab == 0 || isMovie;
+    final episodeReady =
+        episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
+
+    final slivers = <Widget>[
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -1345,12 +1187,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           width: 100,
                           height: 150,
                           fit: BoxFit.cover,
-                          memCacheWidth:
-                              (100 * MediaQuery.devicePixelRatioOf(context))
-                                  .round(),
-                          memCacheHeight:
-                              (150 * MediaQuery.devicePixelRatioOf(context))
-                                  .round(),
                           errorWidget: (_, _, _) =>
                               ThumbnailErrorPlaceholder(label: item.title),
                         ),
@@ -1367,32 +1203,31 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                               behavior: HitTestBehavior.opaque,
                               onLongPress: () =>
                                   _copyAnimeTitle(context, item.title),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (item.logoUrl != null &&
-                                      item.logoUrl!.trim().isNotEmpty) ...[
-                                    CachedNetworkImage(
+                              child: item.logoUrl != null
+                                  ? CachedNetworkImage(
                                       imageUrl: item.logoUrl!,
-                                      height: 42,
+                                      height: 50,
                                       fit: BoxFit.contain,
                                       alignment: Alignment.centerLeft,
-                                      errorWidget: (_, _, _) =>
-                                          const SizedBox.shrink(),
+                                      errorWidget: (_, _, _) => Text(
+                                        item.title,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                    )
+                                  : Text(
+                                      item.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
-                                    const SizedBox(height: 4),
-                                  ],
-                                  Text(
-                                    item.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
                             ),
                             const SizedBox(height: 8),
                             MetadataBar(
@@ -1416,66 +1251,43 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 const SizedBox(height: 16),
                 NextAiringWidget(nextAiring: item.nextAiring!),
               ],
-              const SizedBox(height: 12),
-              if (!isMovie)
-                _buildDetailsPageTabs(
-                  context,
-                  episodesState,
-                  activeTab: activeTab,
-                  showEpisodesTab: showEpisodesTab,
-                ),
+              const SizedBox(height: 24),
+              if (!isMovie) _buildDetailsPageTabs(context, episodesState),
             ],
           ),
         ),
       ),
     ];
-  }
-
-  List<Widget> _buildMobileTabSlivers(
-    BuildContext context,
-    MultimediaItem item,
-    AsyncValue<MultimediaItem?> detailsState,
-    AsyncValue<List<Episode>> episodesState,
-    AsyncValue<List<Actor>> castState,
-    AsyncValue<List<Trailer>> trailersState,
-    AsyncValue<List<MultimediaItem>> relatedState,
-    AsyncValue<List<MultimediaItem>> recommendationsState,
-    bool isMovie,
-    AppLocalizations l10n, {
-    required int activeTab,
-  }) {
-    final showDetailsPage = activeTab == 0 || isMovie;
-    final episodeReady =
-        episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
-    final slivers = <Widget>[];
 
     if (showDetailsPage) {
       slivers.add(
         SliverToBoxAdapter(
-          child: Padding(
-            key: const ValueKey<int>(0),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSynopsisAndGenres(context, item, detailsState, l10n),
-                const SizedBox(height: 28),
-                AnimeInformationSection(item: item),
-                if (isMovie) ...[
-                  const SizedBox(height: 20),
-                  _episodeLoadStatus(context, episodesState),
+          child: _buildTabTransition(
+            child: Padding(
+              key: const ValueKey<int>(0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSynopsisAndGenres(context, item, detailsState, l10n),
+                  const SizedBox(height: 28),
+                  AnimeInformationSection(item: item),
+                  if (isMovie) ...[
+                    const SizedBox(height: 20),
+                    _episodeLoadStatus(context, episodesState),
+                  ],
+                  ..._buildIndependentDetailSections(
+                    context,
+                    item,
+                    l10n,
+                    castState,
+                    trailersState,
+                    relatedState,
+                    recommendationsState,
+                  ),
+                  const SizedBox(height: 40),
                 ],
-                ..._buildIndependentDetailSections(
-                  context,
-                  item,
-                  l10n,
-                  castState,
-                  trailersState,
-                  relatedState,
-                  recommendationsState,
-                ),
-                const SizedBox(height: 40),
-              ],
+              ),
             ),
           ),
         ),
@@ -1496,17 +1308,19 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     } else {
       slivers.add(
         SliverToBoxAdapter(
-          child: Padding(
-            key: const ValueKey<int>(1),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _episodeLoadStatus(context, episodesState),
-                if (episodeReady)
-                  DetailsSeasonListWrapper(itemUrl: widget.item.url),
-                if (episodeReady) const SizedBox(height: 12),
-              ],
+          child: _buildTabTransition(
+            child: Padding(
+              key: const ValueKey<int>(1),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _episodeLoadStatus(context, episodesState),
+                  if (episodeReady)
+                    DetailsSeasonListWrapper(itemUrl: widget.item.url),
+                  if (episodeReady) const SizedBox(height: 12),
+                ],
+              ),
             ),
           ),
         ),
@@ -1520,6 +1334,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               parentItem: item,
               itemUrl: widget.item.url,
               isMovie: false,
+              transition: _tabTransitionAnimation,
+              transitionOffset: _tabSlideFrom,
             ),
           ),
         );
