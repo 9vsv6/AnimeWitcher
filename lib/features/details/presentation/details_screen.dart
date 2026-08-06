@@ -47,8 +47,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
   Offset _tabSlideFrom = Offset.zero;
-  late final ScrollController _mobileScrollController;
-  final GlobalKey _mobileTabsKey = GlobalKey();
+  late final ScrollController _detailsScrollController;
+  late final ScrollController _episodesScrollController;
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
 
@@ -61,38 +61,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     setState(() => _selectedDetailsTab = targetTab);
     _tabTransitionController.forward(from: 0);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _restoreMobileTabsIfHidden();
-    });
   }
 
-  void _restoreMobileTabsIfHidden() {
-    if (!mounted ||
-        context.isTabletOrLarger ||
-        !_mobileScrollController.hasClients) {
-      return;
-    }
-
-    final tabsContext = _mobileTabsKey.currentContext;
-    final renderObject = tabsContext?.findRenderObject();
-    if (tabsContext == null ||
-        renderObject is! RenderBox ||
-        !renderObject.attached) {
-      return;
-    }
-
-    final top = renderObject.localToGlobal(Offset.zero).dy;
-    final safeTop = MediaQuery.paddingOf(context).top + kToolbarHeight + 4;
-    if (top >= safeTop) return;
-
-    Scrollable.ensureVisible(
-      tabsContext,
-      duration: _tabTransitionDuration,
-      curve: Curves.easeOutCubic,
-      alignment: 0,
-      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-    );
+  bool _shouldShowEpisodesTab(AsyncValue<List<Episode>> episodesState) {
+    if (!episodesState.hasValue) return true;
+    return episodesState.value?.isNotEmpty ?? false;
   }
 
   Widget _buildTabTransition({required Widget child}) {
@@ -182,7 +155,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void initState() {
     super.initState();
-    _mobileScrollController = ScrollController();
+    _detailsScrollController = ScrollController();
+    _episodesScrollController = ScrollController();
     _tabTransitionController = AnimationController(
       vsync: this,
       duration: _tabTransitionDuration,
@@ -201,7 +175,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   @override
   void dispose() {
-    _mobileScrollController.dispose();
+    _detailsScrollController.dispose();
+    _episodesScrollController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -252,7 +227,16 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final isMovie = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
     );
-    final watchOptionalSections = isMovie || _selectedDetailsTab == 0;
+    final showEpisodesTab =
+        !isMovie && _shouldShowEpisodesTab(episodesAsync);
+    final activeTab = showEpisodesTab ? _selectedDetailsTab : 0;
+    if (!showEpisodesTab && _selectedDetailsTab != 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _selectedDetailsTab == 0) return;
+        setState(() => _selectedDetailsTab = 0);
+      });
+    }
+    final watchOptionalSections = activeTab == 0;
     final castAsync = watchOptionalSections
         ? ref.watch(
             detailsControllerProvider(widget.item.url).select((s) => s.cast),
@@ -307,16 +291,22 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       );
     }
 
-    // ── Mobile: one virtualized sliver viewport for the active tab only. ──
+    // ── Mobile: details and episodes keep fully independent scroll state. ──
+    final mobileScrollController = activeTab == 1
+        ? _episodesScrollController
+        : _detailsScrollController;
     return Scaffold(
       bottomNavigationBar:
-          selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
+          selectedEpisodeCount == 0 || (!isMovie && activeTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       body: _buildDetailsTabSwipeRegion(
-        enabled: !isMovie,
+        enabled: showEpisodesTab,
         child: CustomScrollView(
-          controller: _mobileScrollController,
+          key: PageStorageKey<String>(
+            'mobile_details_${widget.item.url}_$activeTab',
+          ),
+          controller: mobileScrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             _buildMobileAppBar(
@@ -324,6 +314,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               item,
               isBookmarked,
               libraryNotifier,
+              mobileScrollController,
             ),
             ..._buildMobileSlivers(
               context,
@@ -337,6 +328,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               recommendationsAsync,
               isMovie,
               l10n,
+              activeTab: activeTab,
+              showEpisodesTab: showEpisodesTab,
             ),
           ],
         ),
@@ -347,6 +340,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Widget _buildCollapsedHeaderTitle(
     BuildContext context,
     MultimediaItem item,
+    ScrollController scrollController,
   ) {
     final posterUrl = AppImageFallbacks.poster(
       item.posterUrl,
@@ -354,10 +348,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
 
     return AnimatedBuilder(
-      animation: _mobileScrollController,
+      animation: scrollController,
       builder: (context, child) {
-        final offset = _mobileScrollController.hasClients
-            ? _mobileScrollController.offset
+        final offset = scrollController.hasClients
+            ? scrollController.offset
             : 0.0;
         final collapseOffset =
             LayoutConstants.detailsExpandedHeightMobile -
@@ -413,6 +407,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     MultimediaItem item,
     bool isBookmarked,
     dynamic libraryNotifier,
+    ScrollController scrollController,
   ) {
     return Directionality(
       textDirection: TextDirection.ltr,
@@ -421,7 +416,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         titleSpacing: 0,
-        title: _buildCollapsedHeaderTitle(context, item),
+        title: _buildCollapsedHeaderTitle(context, item, scrollController),
         flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -865,10 +860,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = Theme.of(context).colorScheme.onSurface;
+    final showEpisodesTab =
+        !isMovie && _shouldShowEpisodesTab(episodesState);
+    final activeTab = showEpisodesTab ? _selectedDetailsTab : 0;
 
     return Scaffold(
       bottomNavigationBar:
-          selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
+          selectedEpisodeCount == 0 || (!isMovie && activeTab != 1)
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       extendBodyBehindAppBar: true,
@@ -917,7 +915,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
       ),
       body: _buildDetailsTabSwipeRegion(
-        enabled: !isMovie,
+        enabled: showEpisodesTab,
         child: DetailsDesktopHero(
           displayItem: item,
           baseItem: widget.item,
@@ -937,6 +935,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             recommendationsState,
             isMovie,
             l10n,
+            activeTab: activeTab,
+            showEpisodesTab: showEpisodesTab,
           ),
         ),
       ),
@@ -945,8 +945,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   Widget _buildDetailsPageTabs(
     BuildContext context,
-    AsyncValue<List<Episode>> episodesState,
-  ) {
+    AsyncValue<List<Episode>> episodesState, {
+    required int activeTab,
+    required bool showEpisodesTab,
+  }) {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final episodeCount = episodesState.asData?.value.length ?? 0;
@@ -956,7 +958,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ? 'الحلقات'
         : 'Episodes';
 
-    // Episode UI v2: equal-width tabs without selected checkmarks.
     Widget tab({
       required bool selected,
       required Widget leading,
@@ -994,32 +995,34 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       children: [
         Expanded(
           child: tab(
-            selected: _selectedDetailsTab == 0,
+            selected: activeTab == 0,
             leading: const Icon(Icons.info_outline_rounded, size: 21),
             label: isArabic ? 'التفاصيل' : 'Details',
             onTap: () {
-              if (_selectedDetailsTab == 0) return;
+              if (activeTab == 0) return;
               _switchDetailsTab(0);
             },
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: tab(
-            selected: _selectedDetailsTab == 1,
-            leading: episodesState.isLoading
-                ? const SizedBox.square(
-                    dimension: 19,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.video_library_outlined, size: 21),
-            label: episodeLabel,
-            onTap: () {
-              if (_selectedDetailsTab == 1) return;
-              _switchDetailsTab(1);
-            },
+        if (showEpisodesTab) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: tab(
+              selected: activeTab == 1,
+              leading: episodesState.isLoading
+                  ? const SizedBox.square(
+                      dimension: 19,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.video_library_outlined, size: 21),
+              label: episodeLabel,
+              onTap: () {
+                if (activeTab == 1) return;
+                _switchDetailsTab(1);
+              },
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1205,9 +1208,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
-    AppLocalizations l10n,
-  ) {
-    final tabContent = _selectedDetailsTab == 0 || isMovie
+    AppLocalizations l10n, {
+    required int activeTab,
+    required bool showEpisodesTab,
+  }) {
+    final tabContent = activeTab == 0 || isMovie
         ? <Widget>[
             _buildSynopsisAndGenres(context, item, detailsState, l10n),
             const SizedBox(height: 28),
@@ -1251,12 +1256,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!isMovie) ...[
-          _buildDetailsPageTabs(context, episodesState),
+          _buildDetailsPageTabs(
+            context,
+            episodesState,
+            activeTab: activeTab,
+            showEpisodesTab: showEpisodesTab,
+          ),
           const SizedBox(height: 24),
         ],
         _buildTabTransition(
           child: Column(
-            key: ValueKey<int>(isMovie ? 0 : _selectedDetailsTab),
+            key: ValueKey<int>(isMovie ? 0 : activeTab),
             crossAxisAlignment: CrossAxisAlignment.start,
             children: tabContent,
           ),
@@ -1277,9 +1287,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
-    AppLocalizations l10n,
-  ) {
-    final activeTab = _selectedDetailsTab;
+    AppLocalizations l10n, {
+    required int activeTab,
+    required bool showEpisodesTab,
+  }) {
     final showDetailsPage = activeTab == 0 || isMovie;
     final episodeReady =
         episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
@@ -1383,9 +1394,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               ],
               const SizedBox(height: 12),
               if (!isMovie)
-                KeyedSubtree(
-                  key: _mobileTabsKey,
-                  child: _buildDetailsPageTabs(context, episodesState),
+                _buildDetailsPageTabs(
+                  context,
+                  episodesState,
+                  activeTab: activeTab,
+                  showEpisodesTab: showEpisodesTab,
                 ),
             ],
           ),
