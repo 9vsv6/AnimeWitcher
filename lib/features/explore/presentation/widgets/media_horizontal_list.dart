@@ -168,9 +168,11 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                 : LayoutConstants.spacingMd,
             LayoutConstants.spacingSm,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+          child: Directionality(
+            textDirection: localeDirection,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
               // Title with Blue Underline Accent
               Expanded(
                 child: Column(
@@ -180,7 +182,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                     Text(
                       widget.title,
                       textDirection: localeDirection,
-                      textAlign: TextAlign.left,
+                      textAlign: TextAlign.start,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -202,7 +204,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                 ),
               ),
 
-              // Desktop arrow buttons — before the View All chip
+              // Desktop arrow buttons â before the View All chip
               if (isDesktop) ...[
                 const SizedBox(width: 8),
                 _HeaderArrowButton(
@@ -259,7 +261,9 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                         ),
                         const SizedBox(width: 4),
                         Icon(
-                          Icons.arrow_forward_ios,
+                          localeDirection == TextDirection.rtl
+                              ? Icons.arrow_back_ios_new
+                              : Icons.arrow_forward_ios,
                           size: 10,
                           color: Theme.of(
                             context,
@@ -269,11 +273,12 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                     ),
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
         ),
 
-        // List — no DesktopScrollWrapper overlay; arrows are in the header
+        // List â no DesktopScrollWrapper overlay; arrows are in the header
         SizedBox(
           height: listHeight, // Adjusted for 2:3 ratio within list
           child: Builder(

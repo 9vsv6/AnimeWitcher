@@ -16,6 +16,8 @@ class DownloadsScreen extends ConsumerWidget {
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;
     final title = AppLocalizations.of(context)!.downloads;
+    final localeDirection = Directionality.of(context);
+    final isRtl = localeDirection == TextDirection.rtl;
 
     final Widget page;
     if (isWidescreen) {
@@ -30,11 +32,15 @@ class DownloadsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+                alignment: isRtl ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection: localeDirection,
+                  child: Text(
+                    title,
+                    textAlign: isRtl ? TextAlign.right : TextAlign.left,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -45,7 +51,18 @@ class DownloadsScreen extends ConsumerWidget {
       );
     } else {
       page = Scaffold(
-        appBar: AppBar(title: Text(title)),
+        appBar: AppBar(
+          title: Align(
+            alignment: isRtl ? Alignment.centerRight : Alignment.centerLeft,
+            child: Directionality(
+              textDirection: localeDirection,
+              child: Text(
+                title,
+                textAlign: isRtl ? TextAlign.right : TextAlign.left,
+              ),
+            ),
+          ),
+        ),
         body: const DownloadsTab(),
       );
     }
