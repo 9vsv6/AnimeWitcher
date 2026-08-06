@@ -8,7 +8,7 @@ import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../../core/storage/library_repository.dart';
-import '../../../../core/storage/history_repository.dart';
+
 import 'package:skystream/core/storage/episode_watch_repository.dart';
 import 'package:skystream/core/storage/storage_service.dart';
 import '../../library/presentation/library_provider.dart';
@@ -967,49 +967,30 @@ class DetailsController extends _$DetailsController {
     int selectedSeason = sortedSeasons.isNotEmpty ? sortedSeasons.first : 1;
     Episode? targetEpisode;
 
-    final historyRepo = ref.read(historyRepositoryProvider);
     final episodeWatchRepo = ref.read(episodeWatchRepositoryProvider);
 
-    final allEpisodes = episodes;
-    final lastEpisodeUrl = historyRepo.getLastEpisodeUrl(contextItem.url);
+    // Choose the play target from a canonical ascending copy, independently
+    // from the user's visible sort order or the last history position.
+    final orderedEpisodes = List<Episode>.from(episodes)
+      ..sort((left, right) {
+        final seasonCompare = left.season.compareTo(right.season);
+        if (seasonCompare != 0) return seasonCompare;
 
-    if (lastEpisodeUrl != null) {
-      int lastIndex = allEpisodes.indexWhere((e) => e.url == lastEpisodeUrl);
+        final episodeCompare = left.episode.compareTo(right.episode);
+        if (episodeCompare != 0) return episodeCompare;
 
-      if (lastIndex == -1) {
-        final mainHistoryItem = ref
-            .read(watchHistoryProvider)
-            .firstWhereOrNull((h) => h.item.url == contextItem.url);
-        if (mainHistoryItem != null &&
-            mainHistoryItem.season != null &&
-            mainHistoryItem.episode != null) {
-          lastIndex = allEpisodes.indexWhere(
-            (e) =>
-                e.season == mainHistoryItem.season &&
-                e.episode == mainHistoryItem.episode,
-          );
-        }
-      }
+        return episodeSelectionKey(left).compareTo(episodeSelectionKey(right));
+      });
 
-      if (lastIndex != -1) {
-        final matchedEp = allEpisodes[lastIndex];
-        if (episodeWatchRepo.isWatched(contextItem.url, matchedEp)) {
-          if (lastIndex + 1 < allEpisodes.length) {
-            targetEpisode = allEpisodes[lastIndex + 1];
-          } else {
-            targetEpisode = allEpisodes[lastIndex];
-          }
-        } else {
-          targetEpisode = allEpisodes[lastIndex];
-        }
-      }
-    }
-
-    targetEpisode ??= allEpisodes.firstWhereOrNull(
+    // Prefer the smallest unwatched episode. If everything is watched, keep
+    // the play button on the highest watched episode instead of jumping back.
+    targetEpisode = orderedEpisodes.firstWhereOrNull(
       (episode) => !episodeWatchRepo.isWatched(contextItem.url, episode),
     );
-
-    targetEpisode ??= allEpisodes.last;
+    targetEpisode ??= orderedEpisodes.lastWhereOrNull(
+      (episode) => episodeWatchRepo.isWatched(contextItem.url, episode),
+    );
+    targetEpisode ??= orderedEpisodes.first;
 
     if (isInitial && targetEpisode.season > 0) {
       selectedSeason = targetEpisode.season;
