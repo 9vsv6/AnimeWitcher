@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/utils/layout_constants.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class SettingsGroup extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -149,7 +150,7 @@ class _SettingsTileState extends State<SettingsTile> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          "BETA",
+                          appText(context, english: 'BETA', arabic: 'تجريبي'),
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.primary,
                             fontSize: 10,

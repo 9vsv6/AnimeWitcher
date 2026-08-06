@@ -12,6 +12,7 @@ import '../player_controller.dart';
 import 'hotstar_player_style.dart';
 import 'player_ltr.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 // Unified settings card container that highlights border when any of its children are focused
 class DpadSettingCard extends StatelessWidget {
   final Widget child;
@@ -581,8 +582,12 @@ class _SubtitleAppearanceDialogState
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          "Subtitle Appearance",
+        title: Text(
+          appText(
+            context,
+            english: 'Subtitle Appearance',
+            arabic: 'مظهر الترجمة',
+          ),
           style: TextStyle(
             color: HotstarPlayerStyle.primaryText,
             fontWeight: FontWeight.bold,
@@ -614,26 +619,42 @@ class _SubtitleAppearanceDialogState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionHeader("Font Settings"),
+                      _buildSectionHeader(
+                        appText(context, english: 'Font Settings', arabic: 'إعدادات الخط'),
+                      ),
                       _buildFontSizeRow(),
                       _buildTypefaceRow(),
                       _buildBoldRow(),
                       _buildItalicRow(),
                       _buildTextColorRow(),
 
-                      _buildSectionHeader("Edge Settings"),
+                      _buildSectionHeader(
+                        appText(context, english: 'Edge Settings', arabic: 'إعدادات الحواف'),
+                      ),
                       _buildEdgeTypeRow(),
                       _buildEdgeSizeRow(),
                       _buildEdgeColorRow(),
 
-                      _buildSectionHeader("Background & Layout"),
+                      _buildSectionHeader(
+                        appText(
+                          context,
+                          english: 'Background & Layout',
+                          arabic: 'الخلفية والتخطيط',
+                        ),
+                      ),
                       _buildBackgroundColorRow(),
                       _buildBackgroundOpacityRow(),
                       _buildBackgroundRadiusRow(),
                       _buildElevationRow(),
                       _buildAlignmentRow(),
 
-                      _buildSectionHeader("Content Cleaning & Filtering"),
+                      _buildSectionHeader(
+                        appText(
+                          context,
+                          english: 'Content Cleaning & Filtering',
+                          arabic: 'تنظيف المحتوى وتصفيته',
+                        ),
+                      ),
                       _buildRemoveBloatRow(),
                       _buildRemoveCaptionsRow(),
                       _buildUppercaseRow(),
@@ -642,19 +663,19 @@ class _SubtitleAppearanceDialogState
                       Row(
                         children: [
                           DpadButton(
-                            label: "Reset to Default",
+                            label: appText(context, english: 'Reset to Default', arabic: 'إعادة الضبط'),
                             isPrimary: false,
                             onPressed: _resetAll,
                           ),
                           const Spacer(),
                           DpadButton(
-                            label: "Cancel",
+                            label: appText(context, english: 'Cancel', arabic: 'إلغاء'),
                             isPrimary: false,
                             onPressed: () => Navigator.of(context).pop(),
                           ),
                           const SizedBox(width: 12),
                           DpadButton(
-                            label: "Apply Settings",
+                            label: appText(context, english: 'Apply Settings', arabic: 'تطبيق الإعدادات'),
                             isPrimary: true,
                             onPressed: _applyAndSave,
                           ),
@@ -714,8 +735,16 @@ class _SubtitleAppearanceDialogState
     final edgeColor = Color(_localSettings.subEdgeColor);
 
     final sampleText = _localSettings.subUpperCase
-        ? "SAMPLE SUBTITLE LINE\nSECOND LINE OF PREVIEW"
-        : "Sample Subtitle Line\nSecond Line of Preview";
+        ? appText(
+            context,
+            english: 'SAMPLE SUBTITLE LINE\nSECOND LINE OF PREVIEW',
+            arabic: 'سطر ترجمة تجريبي\nالسطر الثاني للمعاينة',
+          )
+        : appText(
+            context,
+            english: 'Sample Subtitle Line\nSecond Line of Preview',
+            arabic: 'سطر ترجمة تجريبي\nالسطر الثاني للمعاينة',
+          );
 
     final splitLines = sampleText.split('\n');
 
@@ -947,6 +976,17 @@ class _SubtitleAppearanceDialogState
     );
   }
 
+  String _fontDisplayName(BuildContext context, int index) {
+    if (index == 0) {
+      return appText(
+        context,
+        english: 'Normal (system sans-serif)',
+        arabic: 'عادي (خط النظام)',
+      );
+    }
+    return _builtInFonts[index];
+  }
+
   void _showFontSizePicker() {
     final sizeList = List<int>.generate(55, (i) => i + 6);
     showPlayerDialog<void>(
@@ -954,8 +994,12 @@ class _SubtitleAppearanceDialogState
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF161720),
-          title: const Text(
-            "Select Font Size",
+          title: Text(
+            appText(
+              context,
+              english: 'Select Font Size',
+              arabic: 'اختر حجم الخط',
+            ),
             style: TextStyle(
               color: HotstarPlayerStyle.primaryText,
               fontWeight: FontWeight.bold,
@@ -967,8 +1011,12 @@ class _SubtitleAppearanceDialogState
             child: ListView(
               children: [
                 ListTile(
-                  title: const Text(
-                    "File Default",
+                  title: Text(
+                    appText(
+                      context,
+                      english: 'File Default',
+                      arabic: 'الإعداد الافتراضي للملف',
+                    ),
                     style: TextStyle(color: HotstarPlayerStyle.primaryText),
                   ),
                   selected: _localSettings.subFixedTextSize == null,
@@ -1013,11 +1061,19 @@ class _SubtitleAppearanceDialogState
 
   Widget _buildFontSizeRow() {
     final valText = _localSettings.subFixedTextSize == null
-        ? "File Default"
+        ? appText(
+            context,
+            english: 'File Default',
+            arabic: 'الإعداد الافتراضي للملف',
+          )
         : "${_localSettings.subFixedTextSize!.round()}sp";
     return _buildChevronPickerRow(
-      label: "Font Size",
-      subtitle: "Overriding text size from subtitle files (6sp-60sp)",
+      label: appText(context, english: 'Font Size', arabic: 'حجم الخط'),
+      subtitle: appText(
+        context,
+        english: 'Overriding text size from subtitle files (6sp-60sp)',
+        arabic: 'تجاوز حجم النص المحدد في ملفات الترجمة (6sp–60sp)',
+      ),
       currentValueText: valText,
       onTap: _showFontSizePicker,
     );
@@ -1029,8 +1085,12 @@ class _SubtitleAppearanceDialogState
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF161720),
-          title: const Text(
-            "Select Font Typeface",
+          title: Text(
+            appText(
+              context,
+              english: 'Select Font Typeface',
+              arabic: 'اختر نوع الخط',
+            ),
             style: TextStyle(
               color: HotstarPlayerStyle.primaryText,
               fontWeight: FontWeight.bold,
@@ -1047,7 +1107,7 @@ class _SubtitleAppearanceDialogState
                       _localSettings.subTypeface == idx;
                   return ListTile(
                     title: Text(
-                      _builtInFonts[idx],
+                      _fontDisplayName(context, idx),
                       style: const TextStyle(
                         color: HotstarPlayerStyle.primaryText,
                       ),
@@ -1067,8 +1127,12 @@ class _SubtitleAppearanceDialogState
                   );
                 }),
                 ListTile(
-                  title: const Text(
-                    "Custom Font File...",
+                  title: Text(
+                    appText(
+                      context,
+                      english: 'Custom Font File...',
+                      arabic: 'ملف خط مخصص...',
+                    ),
                     style: TextStyle(color: HotstarPlayerStyle.primaryText),
                   ),
                   selected: _localSettings.subTypefaceFilePath != null,
@@ -1088,11 +1152,15 @@ class _SubtitleAppearanceDialogState
 
   Widget _buildTypefaceRow() {
     final valText = _localSettings.subTypefaceFilePath != null
-        ? "Custom: ${p.basename(_localSettings.subTypefaceFilePath!)}"
-        : _builtInFonts[_localSettings.subTypeface ?? 0];
+        ? "${appText(context, english: 'Custom', arabic: 'مخصص')}: ${p.basename(_localSettings.subTypefaceFilePath!)}"
+        : _fontDisplayName(context, _localSettings.subTypeface ?? 0);
     return _buildChevronPickerRow(
-      label: "Font Typeface",
-      subtitle: "Choose from 15 built-in fonts or load custom OTF/TTF",
+      label: appText(context, english: 'Font Typeface', arabic: 'نوع الخط'),
+      subtitle: appText(
+        context,
+        english: 'Choose from 15 built-in fonts or load custom OTF/TTF',
+        arabic: 'اختر من 15 خطًا مدمجًا أو حمّل ملف OTF/TTF مخصصًا',
+      ),
       currentValueText: valText,
       onTap: _showTypefacePicker,
       isLoading: _customFontLoading,
@@ -1105,12 +1173,12 @@ class _SubtitleAppearanceDialogState
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Bold Text Style",
+                    appText(context, english: 'Bold Text Style', arabic: 'خط عريض'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.primaryText,
                       fontWeight: FontWeight.bold,
@@ -1119,7 +1187,7 @@ class _SubtitleAppearanceDialogState
                   ),
                   SizedBox(height: 2),
                   Text(
-                    "Make subtitle text bold",
+                    appText(context, english: 'Make subtitle text bold', arabic: 'اجعل نص الترجمة عريضًا'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.mutedText,
                       fontSize: 12,
@@ -1152,12 +1220,12 @@ class _SubtitleAppearanceDialogState
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Italic Text Style",
+                    appText(context, english: 'Italic Text Style', arabic: 'خط مائل'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.primaryText,
                       fontWeight: FontWeight.bold,
@@ -1166,7 +1234,7 @@ class _SubtitleAppearanceDialogState
                   ),
                   SizedBox(height: 2),
                   Text(
-                    "Make subtitle text slanted",
+                    appText(context, english: 'Make subtitle text slanted', arabic: 'اجعل نص الترجمة مائلًا'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.mutedText,
                       fontSize: 12,
@@ -1195,7 +1263,7 @@ class _SubtitleAppearanceDialogState
 
   Widget _buildTextColorRow() {
     return _buildColorRow(
-      "Text Color",
+      appText(context, english: 'Text Color', arabic: 'لون النص'),
       "colors",
       _localSettings.subForegroundColor,
       (color) {
@@ -1206,6 +1274,17 @@ class _SubtitleAppearanceDialogState
     );
   }
 
+  String _edgeTypeLabel(BuildContext context, String value) {
+    return switch (value) {
+      'None' => appText(context, english: 'None', arabic: 'بلا'),
+      'Outline' => appText(context, english: 'Outline', arabic: 'مخطط'),
+      'Depressed' => appText(context, english: 'Depressed', arabic: 'غائر'),
+      'Drop Shadow' => appText(context, english: 'Drop Shadow', arabic: 'ظل ساقط'),
+      'Raised' => appText(context, english: 'Raised', arabic: 'بارز'),
+      _ => value,
+    };
+  }
+
   void _showEdgeTypePicker() {
     final edgeTypes = ["None", "Outline", "Depressed", "Drop Shadow", "Raised"];
 
@@ -1214,8 +1293,8 @@ class _SubtitleAppearanceDialogState
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF161720),
-          title: const Text(
-            "Select Edge Type",
+          title: Text(
+            appText(context, english: 'Select Edge Type', arabic: 'اختر نوع الحواف'),
             style: TextStyle(
               color: HotstarPlayerStyle.primaryText,
               fontWeight: FontWeight.bold,
@@ -1228,7 +1307,7 @@ class _SubtitleAppearanceDialogState
               children: List.generate(edgeTypes.length, (int i) {
                 return ListTile(
                   title: Text(
-                    edgeTypes[i],
+                    _edgeTypeLabel(context, edgeTypes[i]),
                     style: const TextStyle(
                       color: HotstarPlayerStyle.primaryText,
                     ),
@@ -1259,9 +1338,16 @@ class _SubtitleAppearanceDialogState
       "Raised",
     ];
     return _buildChevronPickerRow(
-      label: "Edge Type",
-      subtitle: "Text borders/shadows (outline default)",
-      currentValueText: edgeTypesText[_localSettings.subEdgeType],
+      label: appText(context, english: 'Edge Type', arabic: 'نوع الحواف'),
+      subtitle: appText(
+        context,
+        english: 'Text borders/shadows (outline default)',
+        arabic: 'حدود وظلال النص (المخطط افتراضي)',
+      ),
+      currentValueText: _edgeTypeLabel(
+        context,
+        edgeTypesText[_localSettings.subEdgeType],
+      ),
       onTap: _showEdgeTypePicker,
     );
   }
@@ -1275,12 +1361,12 @@ class _SubtitleAppearanceDialogState
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Edge Stroke Size",
+                        appText(context, english: 'Edge Stroke Size', arabic: 'سُمك حواف النص'),
                         style: TextStyle(
                           color: HotstarPlayerStyle.primaryText,
                           fontWeight: FontWeight.bold,
@@ -1289,7 +1375,7 @@ class _SubtitleAppearanceDialogState
                       ),
                       SizedBox(height: 2),
                       Text(
-                        "Thicker outline borders (1px-60px)",
+                        appText(context, english: 'Thicker outline borders (1px-60px)', arabic: 'حدود مخطط أكثر سماكة (1px–60px)'),
                         style: TextStyle(
                           color: HotstarPlayerStyle.mutedText,
                           fontSize: 12,
@@ -1339,7 +1425,7 @@ class _SubtitleAppearanceDialogState
 
   Widget _buildEdgeColorRow() {
     return _buildColorRow(
-      "Outline Color",
+      appText(context, english: 'Outline Color', arabic: 'لون المخطط'),
       "edgeColor",
       _localSettings.subEdgeColor,
       (color) {
@@ -1352,7 +1438,7 @@ class _SubtitleAppearanceDialogState
 
   Widget _buildBackgroundColorRow() {
     return _buildColorRow(
-      "Background Pill Color",
+      appText(context, english: 'Background Pill Color', arabic: 'لون خلفية الترجمة'),
       "colors",
       _localSettings.subBackgroundColor,
       (color) {
@@ -1360,6 +1446,7 @@ class _SubtitleAppearanceDialogState
           _localSettings = _localSettings.copyWith(subBackgroundColor: color);
         });
       },
+      useBackgroundPalette: true,
     );
   }
 
@@ -1370,8 +1457,8 @@ class _SubtitleAppearanceDialogState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Background Opacity",
+            Text(
+              appText(context, english: 'Background Opacity', arabic: 'عتامة الخلفية'),
               style: TextStyle(
                 color: HotstarPlayerStyle.primaryText,
                 fontWeight: FontWeight.bold,
@@ -1379,8 +1466,8 @@ class _SubtitleAppearanceDialogState
               ),
             ),
             const SizedBox(height: 2),
-            const Text(
-              "Pill opacity level (0% to 100%)",
+            Text(
+              appText(context, english: 'Pill opacity level (0% to 100%)', arabic: 'مستوى عتامة الخلفية (0% إلى 100%)'),
               style: TextStyle(
                 color: HotstarPlayerStyle.mutedText,
                 fontSize: 12,
@@ -1415,8 +1502,8 @@ class _SubtitleAppearanceDialogState
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF161720),
-          title: const Text(
-            "Select Corner Radius",
+          title: Text(
+            appText(context, english: 'Select Corner Radius', arabic: 'اختر استدارة الزوايا'),
             style: TextStyle(
               color: HotstarPlayerStyle.primaryText,
               fontWeight: FontWeight.bold,
@@ -1428,8 +1515,8 @@ class _SubtitleAppearanceDialogState
             child: ListView(
               children: [
                 ListTile(
-                  title: const Text(
-                    "None (Sharp)",
+                  title: Text(
+                    appText(context, english: 'None (Sharp)', arabic: 'بلا (حادة)'),
                     style: TextStyle(color: HotstarPlayerStyle.primaryText),
                   ),
                   selected: _localSettings.subBackgroundRadius == null,
@@ -1474,11 +1561,19 @@ class _SubtitleAppearanceDialogState
 
   Widget _buildBackgroundRadiusRow() {
     final valText = _localSettings.subBackgroundRadius == null
-        ? "None (Sharp)"
+        ? appText(context, english: 'None (Sharp)', arabic: 'بلا (حادة)')
         : "${_localSettings.subBackgroundRadius!.round()}px";
     return _buildChevronPickerRow(
-      label: "Background Corner Radius",
-      subtitle: "Round background corners (5px-50px)",
+      label: appText(
+        context,
+        english: 'Background Corner Radius',
+        arabic: 'استدارة زوايا الخلفية',
+      ),
+      subtitle: appText(
+        context,
+        english: 'Round background corners (5px-50px)',
+        arabic: 'تدوير زوايا الخلفية (5px–50px)',
+      ),
       currentValueText: valText,
       onTap: _showBackgroundRadiusPicker,
     );
@@ -1491,8 +1586,8 @@ class _SubtitleAppearanceDialogState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Elevation (Bottom padding)",
+            Text(
+              appText(context, english: 'Elevation (Bottom padding)', arabic: 'الارتفاع (الهامش السفلي)'),
               style: TextStyle(
                 color: HotstarPlayerStyle.primaryText,
                 fontWeight: FontWeight.bold,
@@ -1500,8 +1595,8 @@ class _SubtitleAppearanceDialogState
               ),
             ),
             const SizedBox(height: 2),
-            const Text(
-              "Push subtitles higher (0dp-400dp)",
+            Text(
+              appText(context, english: 'Push subtitles higher (0dp-400dp)', arabic: 'ارفع الترجمة لأعلى (0dp–400dp)'),
               style: TextStyle(
                 color: HotstarPlayerStyle.mutedText,
                 fontSize: 12,
@@ -1530,15 +1625,15 @@ class _SubtitleAppearanceDialogState
 
   void _showAlignmentPicker() {
     final list = [
-      (1, "SSA 1 - Bottom Left"),
-      (2, "SSA 2 - Bottom Center"),
-      (3, "SSA 3 - Bottom Right"),
-      (4, "SSA 4 - Middle Left"),
-      (5, "SSA 5 - Center"),
-      (6, "SSA 6 - Middle Right"),
-      (7, "SSA 7 - Top Left"),
-      (8, "SSA 8 - Top Center"),
-      (9, "SSA 9 - Top Right"),
+      (1, appText(context, english: 'SSA 1 - Bottom Left', arabic: 'SSA 1 - أسفل اليسار')),
+      (2, appText(context, english: 'SSA 2 - Bottom Center', arabic: 'SSA 2 - أسفل الوسط')),
+      (3, appText(context, english: 'SSA 3 - Bottom Right', arabic: 'SSA 3 - أسفل اليمين')),
+      (4, appText(context, english: 'SSA 4 - Middle Left', arabic: 'SSA 4 - وسط اليسار')),
+      (5, appText(context, english: 'SSA 5 - Center', arabic: 'SSA 5 - الوسط')),
+      (6, appText(context, english: 'SSA 6 - Middle Right', arabic: 'SSA 6 - وسط اليمين')),
+      (7, appText(context, english: 'SSA 7 - Top Left', arabic: 'SSA 7 - أعلى اليسار')),
+      (8, appText(context, english: 'SSA 8 - Top Center', arabic: 'SSA 8 - أعلى الوسط')),
+      (9, appText(context, english: 'SSA 9 - Top Right', arabic: 'SSA 9 - أعلى اليمين')),
     ];
 
     showPlayerDialog<void>(
@@ -1546,8 +1641,8 @@ class _SubtitleAppearanceDialogState
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF161720),
-          title: const Text(
-            "Select Alignment",
+          title: Text(
+            appText(context, english: 'Select Alignment', arabic: 'اختر المحاذاة'),
             style: TextStyle(
               color: HotstarPlayerStyle.primaryText,
               fontWeight: FontWeight.bold,
@@ -1559,8 +1654,12 @@ class _SubtitleAppearanceDialogState
             child: ListView(
               children: [
                 ListTile(
-                  title: const Text(
-                    "Auto (Exo/Ass default)",
+                  title: Text(
+                    appText(
+                      context,
+                      english: 'Auto (Exo/ASS default)',
+                      arabic: 'تلقائي (افتراضي Exo/ASS)',
+                    ),
                     style: TextStyle(color: HotstarPlayerStyle.primaryText),
                   ),
                   selected: _localSettings.subAlignment == null,
@@ -1604,11 +1703,15 @@ class _SubtitleAppearanceDialogState
 
   Widget _buildAlignmentRow() {
     final valText = _localSettings.subAlignment == null
-        ? "Auto"
+        ? appText(context, english: 'Auto', arabic: 'تلقائي')
         : "SSA ${_localSettings.subAlignment}";
     return _buildChevronPickerRow(
-      label: "Alignment",
-      subtitle: "Screen alignment (SSA 1-9 coordinates)",
+      label: appText(context, english: 'Alignment', arabic: 'المحاذاة'),
+      subtitle: appText(
+        context,
+        english: 'Screen alignment (SSA 1-9 coordinates)',
+        arabic: 'محاذاة الشاشة (إحداثيات SSA من 1 إلى 9)',
+      ),
       currentValueText: valText,
       onTap: _showAlignmentPicker,
     );
@@ -1620,12 +1723,12 @@ class _SubtitleAppearanceDialogState
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Remove Bloat",
+                    appText(context, english: 'Remove Bloat', arabic: 'إزالة الزوائد'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.primaryText,
                       fontWeight: FontWeight.bold,
@@ -1634,7 +1737,7 @@ class _SubtitleAppearanceDialogState
                   ),
                   SizedBox(height: 2),
                   Text(
-                    "Strip OpenSubtitles ads/promos (re-parses stream)",
+                    appText(context, english: 'Strip OpenSubtitles ads/promos (re-parses stream)', arabic: 'إزالة إعلانات وترويج OpenSubtitles (إعادة تحليل البث)'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.mutedText,
                       fontSize: 12,
@@ -1667,12 +1770,12 @@ class _SubtitleAppearanceDialogState
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Remove Captions",
+                    appText(context, english: 'Remove Captions', arabic: 'إزالة النصوص الوصفية'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.primaryText,
                       fontWeight: FontWeight.bold,
@@ -1681,7 +1784,7 @@ class _SubtitleAppearanceDialogState
                   ),
                   SizedBox(height: 2),
                   Text(
-                    "Strips bracketed text like [Music] or (cough)",
+                    appText(context, english: 'Strips bracketed text like [Music] or (cough)', arabic: 'إزالة النصوص بين الأقواس مثل [موسيقى] أو (سعال)'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.mutedText,
                       fontSize: 12,
@@ -1716,12 +1819,12 @@ class _SubtitleAppearanceDialogState
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Force Uppercase",
+                    appText(context, english: 'Force Uppercase', arabic: 'فرض الأحرف الكبيرة'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.primaryText,
                       fontWeight: FontWeight.bold,
@@ -1730,7 +1833,7 @@ class _SubtitleAppearanceDialogState
                   ),
                   SizedBox(height: 2),
                   Text(
-                    "Display all subtitle cues in capital letters",
+                    appText(context, english: 'Display all subtitle cues in capital letters', arabic: 'عرض جميع أسطر الترجمة بأحرف كبيرة'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.mutedText,
                       fontSize: 12,
@@ -1761,15 +1864,13 @@ class _SubtitleAppearanceDialogState
     String label,
     String fieldKey,
     int selectedColor,
-    void Function(int) onSelected,
-  ) {
+    void Function(int) onSelected, {
+    bool useBackgroundPalette = false,
+  }) {
     final palette = fieldKey == 'edgeColor'
         ? [0xFF000000, 0xFFFFFFFF, 0xFFFF0000, 0xFFFFFF00]
         : _textColors;
-    final finalPalette =
-        fieldKey == 'colors' && label == 'Background Pill Color'
-        ? _bgColors
-        : palette;
+    final finalPalette = useBackgroundPalette ? _bgColors : palette;
 
     return DpadSettingCard(
       child: Padding(
@@ -1789,8 +1890,8 @@ class _SubtitleAppearanceDialogState
                     ),
                   ),
                   const SizedBox(height: 2),
-                  const Text(
-                    "Navigate and select color",
+                  Text(
+                    appText(context, english: 'Navigate and select color', arabic: 'تنقّل واختر لونًا'),
                     style: TextStyle(
                       color: HotstarPlayerStyle.mutedText,
                       fontSize: 12,

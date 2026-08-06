@@ -4,6 +4,7 @@ import '../../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/models/tmdb_details.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class MovieProductionCompanies extends StatefulWidget {
   final List<TmdbProductionCompany> productionCompanies;
   final Color? textColor;
@@ -49,7 +50,7 @@ class _MovieProductionCompaniesState extends State<MovieProductionCompanies> {
       children: [
         if (isDesktop) ...[
           Text(
-            "Production",
+            appText(context, english: 'Production', arabic: 'الإنتاج'),
             style: TextStyle(
               color: widget.textColor,
               fontSize: 24,
@@ -76,7 +77,7 @@ class _MovieProductionCompaniesState extends State<MovieProductionCompanies> {
           const SizedBox(height: 50),
         ] else ...[
           Text(
-            "PRODUCTION",
+            appText(context, english: 'PRODUCTION', arabic: 'الإنتاج'),
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontSize: 16,

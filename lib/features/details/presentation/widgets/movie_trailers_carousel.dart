@@ -7,6 +7,7 @@ import '../../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/models/tmdb_details.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class MovieTrailersCarousel extends StatefulWidget {
   final List<TmdbVideo> trailers;
   final Color? textColor;
@@ -46,7 +47,7 @@ class _MovieTrailersCarouselState extends State<MovieTrailersCarousel> {
       children: [
         if (isDesktop) ...[
           Text(
-            "Trailers & Clips",
+            appText(context, english: 'Trailers & Clips', arabic: 'العروض الدعائية والمقاطع'),
             style: TextStyle(
               color: widget.textColor,
               fontSize: 24,
@@ -84,7 +85,7 @@ class _MovieTrailersCarouselState extends State<MovieTrailersCarousel> {
           Row(
             children: [
               Text(
-                "Trailers",
+                appText(context, english: 'Trailers', arabic: 'العروض الدعائية'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 20,
@@ -108,7 +109,7 @@ class _MovieTrailersCarouselState extends State<MovieTrailersCarousel> {
                 child: Row(
                   children: [
                     Text(
-                      "Official Trailers",
+                      appText(context, english: 'Official Trailers', arabic: 'العروض الدعائية الرسمية'),
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface,
                         fontSize: 12,

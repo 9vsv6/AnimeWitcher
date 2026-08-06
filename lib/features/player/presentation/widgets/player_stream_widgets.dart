@@ -11,6 +11,7 @@ import '../../../settings/presentation/player_settings_provider.dart';
 import 'hotstar_player_style.dart';
 import '../../../skip/data/skip_service.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 /// A self-contained progress bar widget that uses StreamBuilder to avoid
 /// rebuilding the parent widget on every position update.
 class PlayerProgressBar extends ConsumerStatefulWidget {
@@ -154,13 +155,13 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                 width: 1,
               ),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.circle, color: Colors.red, size: 7),
                 SizedBox(width: 5),
                 Text(
-                  'LIVE',
+                  appText(context, english: 'LIVE', arabic: 'مباشر'),
                   style: TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.w800,

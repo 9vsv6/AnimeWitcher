@@ -5,6 +5,7 @@ import '../search_provider.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class WaveformEqualizer extends StatefulWidget {
   final bool isActive;
   final Color? activeColor;
@@ -228,7 +229,7 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Movies & Shows',
+                            appText(context, english: 'Movies & Shows', arabic: 'الأفلام والمسلسلات'),
                             style: TextStyle(
                               fontFamily: nativeFont,
                               fontSize: 13.0,
@@ -267,7 +268,7 @@ class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Live TV',
+                            appText(context, english: 'Live TV', arabic: 'البث التلفزيوني المباشر'),
                             style: TextStyle(
                               fontFamily: nativeFont,
                               fontSize: 13.0,

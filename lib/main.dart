@@ -274,7 +274,12 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
       if (updated.isNotEmpty && mounted) {
         ref
             .read(notificationServiceProvider)
-            .showSuccess(_buildUpdateMessage(updated));
+            .showSuccess(
+              _buildUpdateMessage(
+                updated,
+                isArabic: ref.read(localeProvider).languageCode == 'ar',
+              ),
+            );
       }
     } catch (e) {
       if (kDebugMode) debugPrint("Auto-update failed: $e");
@@ -287,14 +292,27 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
   ///   "Updated: SuperStream"
   ///   "Updated 3 extensions: SuperStream, AniStream, StreamFlix"
   ///   "Updated 7 extensions: A, B, C, D, E -- 2 more"
-  static String _buildUpdateMessage(List<String> names) {
+  static String _buildUpdateMessage(
+    List<String> names, {
+    required bool isArabic,
+  }) {
     final count = names.length;
-    if (count == 1) return 'Updated: ${names.first}';
+    if (count == 1) {
+      return isArabic
+          ? 'تم تحديث: ${names.first}'
+          : 'Updated: ${names.first}';
+    }
     const maxShown = 5;
     final shown = names.take(maxShown).join(', ');
     final rest = count - maxShown;
-    final namesPart = rest > 0 ? '$shown -- $rest more' : shown;
-    return 'Updated $count extensions: $namesPart';
+    final namesPart = rest > 0
+        ? isArabic
+              ? '$shown — و$rest إضافات أخرى'
+              : '$shown -- $rest more'
+        : shown;
+    return isArabic
+        ? 'تم تحديث $count إضافات: $namesPart'
+        : 'Updated $count extensions: $namesPart';
   }
 
   Future<void> _toggleFullscreen() async {
@@ -312,6 +330,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
     final themeMode = ref.watch(appThemeModeProvider);
     final appRouter = ref.watch(appRouterProvider);
     final locale = ref.watch(localeProvider);
+    final isArabic = locale.languageCode.toLowerCase() == 'ar';
     final profileAsync = ref.watch(deviceProfileProvider);
 
     // Mirror the resolved device profile into TmdbConfig's static cache so
@@ -446,10 +465,10 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                 ],
               ),
               PlatformMenu(
-                label: 'Edit',
+                label: isArabic ? 'تحرير' : 'Edit',
                 menus: <PlatformMenuItem>[
                   PlatformMenuItem(
-                    label: 'Undo',
+                    label: isArabic ? 'تراجع' : 'Undo',
                     shortcut: const SingleActivator(
                       LogicalKeyboardKey.keyZ,
                       meta: true,
@@ -457,7 +476,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                     onSelected: () {},
                   ),
                   PlatformMenuItem(
-                    label: 'Redo',
+                    label: isArabic ? 'إعادة' : 'Redo',
                     shortcut: const SingleActivator(
                       LogicalKeyboardKey.keyZ,
                       meta: true,
@@ -465,10 +484,10 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                     ),
                     onSelected: () {},
                   ),
-                  const PlatformMenuItemGroup(
+                  PlatformMenuItemGroup(
                     members: <PlatformMenuItem>[
                       PlatformMenuItem(
-                        label: 'Cut',
+                        label: isArabic ? 'قص' : 'Cut',
                         shortcut: SingleActivator(
                           LogicalKeyboardKey.keyX,
                           meta: true,
@@ -476,7 +495,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                         onSelected: null,
                       ),
                       PlatformMenuItem(
-                        label: 'Copy',
+                        label: isArabic ? 'نسخ' : 'Copy',
                         shortcut: SingleActivator(
                           LogicalKeyboardKey.keyC,
                           meta: true,
@@ -484,7 +503,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                         onSelected: null,
                       ),
                       PlatformMenuItem(
-                        label: 'Paste',
+                        label: isArabic ? 'لصق' : 'Paste',
                         shortcut: SingleActivator(
                           LogicalKeyboardKey.keyV,
                           meta: true,
@@ -492,7 +511,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                         onSelected: null,
                       ),
                       PlatformMenuItem(
-                        label: 'Select All',
+                        label: isArabic ? 'تحديد الكل' : 'Select All',
                         shortcut: SingleActivator(
                           LogicalKeyboardKey.keyA,
                           meta: true,
@@ -504,7 +523,7 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                 ],
               ),
               PlatformMenu(
-                label: 'Window',
+                label: isArabic ? 'نافذة' : 'Window',
                 menus: <PlatformMenuItem>[
                   const PlatformProvidedMenuItem(
                     type: PlatformProvidedMenuItemType.minimizeWindow,
@@ -513,7 +532,9 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
                     type: PlatformProvidedMenuItemType.zoomWindow,
                   ),
                   PlatformMenuItem(
-                    label: alwaysOnTop ? 'Disable Stay on Top' : 'Stay on Top',
+                    label: alwaysOnTop
+                        ? (isArabic ? 'إلغاء البقاء في المقدمة' : 'Disable Stay on Top')
+                        : (isArabic ? 'البقاء في المقدمة' : 'Stay on Top'),
                     shortcut: const SingleActivator(
                       LogicalKeyboardKey.keyT,
                       meta: true,

@@ -13,6 +13,7 @@ import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../settings/presentation/widgets/settings_widgets.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class PluginSettingsScreen extends ConsumerStatefulWidget {
   final ExtensionPlugin plugin;
 
@@ -535,11 +536,13 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(dialogContext)!.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(editor.text),
-            child: const Text('Apply'),
+            child: Text(
+              appText(dialogContext, english: 'Apply', arabic: 'تطبيق'),
+            ),
           ),
         ],
       ),
@@ -561,7 +564,9 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         surfaceTintColor: Colors.transparent,
-        title: const Text('Website address'),
+        title: Text(
+          appText(dialogContext, english: 'Website address', arabic: 'عنوان الموقع'),
+        ),
         content: RadioGroup<String>(
           groupValue: _selectedDomain,
           onChanged: (value) {
@@ -669,7 +674,11 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
             const SizedBox(height: LayoutConstants.spacingXs),
             if (_definitions.isNotEmpty)
               SettingsGroup(
-                title: 'Extension settings',
+                title: appText(
+                  context,
+                  english: 'Extension settings',
+                  arabic: 'إعدادات الإضافة',
+                ),
                 children: List.generate(
                   _definitions.length,
                   (index) => _buildSettingTile(
@@ -684,11 +693,19 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
               const SizedBox(height: LayoutConstants.spacingLg),
             if (domains.isNotEmpty && !hasScriptBaseUrl)
               SettingsGroup(
-                title: 'Website address',
+                title: appText(
+                  context,
+                  english: 'Website address',
+                  arabic: 'عنوان الموقع',
+                ),
                 children: [
                   SettingsTile(
                     icon: Icons.language_rounded,
-                    title: 'Selected website',
+                    title: appText(
+                    context,
+                    english: 'Selected website',
+                    arabic: 'الموقع المحدد',
+                  ),
                     subtitle: _selectedDomainLabel(domains),
                     onTap: _saving ? null : () => _showDomainDialog(domains),
                     isLast: true,
@@ -701,7 +718,11 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
               const SizedBox(height: LayoutConstants.spacingLg),
             if (_providers.isNotEmpty)
               SettingsGroup(
-                title: 'Providers',
+                title: appText(
+                  context,
+                  english: 'Providers',
+                  arabic: 'المزوّدون',
+                ),
                 children: List.generate(_providers.length, (index) {
                   final provider = _providers[index];
                   final enabled = _providerEnabled[provider.id] ?? true;
@@ -814,17 +835,22 @@ class _PluginSettingsScreenState extends ConsumerState<PluginSettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    FilledButton(onPressed: _load, child: const Text('Retry')),
+                    FilledButton(onPressed: _load, child: Text(AppLocalizations.of(context)!.retry)),
                   ],
                 ),
               ),
             )
           : !hasContent
-          ? const Center(
+          ? Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Text(
-                  'This extension does not define configurable settings.',
+                  appText(
+                    context,
+                    english:
+                        'This extension does not define configurable settings.',
+                    arabic: 'هذه الإضافة لا توفر إعدادات قابلة للتخصيص.',
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),

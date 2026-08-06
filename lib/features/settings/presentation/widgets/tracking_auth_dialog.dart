@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class TrackingAuthDialog extends StatefulWidget {
   final String providerName;
   final String verificationUrl;
@@ -38,7 +39,15 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not launch ${widget.verificationUrl}')),
+          SnackBar(
+            content: Text(
+              appText(
+                context,
+                english: 'Could not launch ${widget.verificationUrl}',
+                arabic: 'تعذر فتح ${widget.verificationUrl}',
+              ),
+            ),
+          ),
         );
       }
     }
@@ -92,7 +101,14 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
     final codeWidget = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('2. Enter the following code:', textAlign: TextAlign.center),
+        Text(
+          appText(
+            context,
+            english: '2. Enter the following code:',
+            arabic: '٢. أدخل الرمز التالي:',
+          ),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 8),
         InkWell(
           onTap: () => _copyToClipboard(isManual: true),
@@ -122,7 +138,11 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          '(Code copied to clipboard automatically)',
+          appText(
+            context,
+            english: '(Code copied to clipboard automatically)',
+            arabic: '(تم نسخ الرمز تلقائيًا إلى الحافظة)',
+          ),
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -131,7 +151,11 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
         const AppLoadingIndicator(),
         const SizedBox(height: 16),
         Text(
-          'Waiting for authorization...',
+          appText(
+            context,
+            english: 'Waiting for authorization...',
+            arabic: 'بانتظار التفويض...',
+          ),
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontStyle: FontStyle.italic,
@@ -142,14 +166,26 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
 
     return AlertDialog(
       surfaceTintColor: Colors.transparent,
-      title: Text('Login to ${widget.providerName}'),
+      title: Text(
+        appText(
+          context,
+          english: 'Login to ${widget.providerName}',
+          arabic: 'تسجيل الدخول إلى ${widget.providerName}',
+        ),
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text(
-              '1. Scan the QR code or click the link below to open the verification page.',
+            Text(
+              appText(
+                context,
+                english:
+                    '1. Scan the QR code or click the link below to open the verification page.',
+                arabic:
+                    '١. امسح رمز QR أو اضغط الرابط أدناه لفتح صفحة التحقق.',
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -175,7 +211,7 @@ class _TrackingAuthDialogState extends State<TrackingAuthDialog> {
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(
-            'Cancel',
+            appText(context, english: 'Cancel', arabic: 'إلغاء'),
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
           ),
         ),

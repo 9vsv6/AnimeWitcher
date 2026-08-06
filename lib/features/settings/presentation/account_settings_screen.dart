@@ -19,6 +19,7 @@ import '../../tracking/data/mal_service.dart';
 import '../../tracking/data/anilist_service.dart';
 import '../../../core/storage/settings_repository.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class AccountSettingsScreen extends ConsumerStatefulWidget {
   const AccountSettingsScreen({super.key});
 
@@ -49,20 +50,31 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Disconnect $providerName'),
+        title: Text(
+          appText(
+            context,
+            english: 'Disconnect $providerName',
+            arabic: 'قطع الاتصال بـ $providerName',
+          ),
+        ),
         content: Text(
-          'Are you sure you want to disconnect your $providerName account?',
+          appText(
+            context,
+            english:
+                'Are you sure you want to disconnect your $providerName account?',
+            arabic: 'هل تريد بالتأكيد قطع اتصال حساب $providerName؟',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Disconnect',
-              style: TextStyle(color: Colors.red),
+            child: Text(
+              appText(context, english: 'Disconnect', arabic: 'قطع الاتصال'),
+              style: const TextStyle(color: Colors.red),
             ),
           ),
         ],
@@ -133,7 +145,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                             title: 'Simkl',
                             subtitle: trackingAuthAsync.when(
                               data: (state) => state['simkl'] == true
-                                  ? 'Connected'
+                                  ? appText(context, english: 'Connected', arabic: 'متصل')
                                   : l10n.notLoggedIn,
                               loading: () => l10n.loading,
                               error: (_, _) => l10n.unknown,
@@ -190,9 +202,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                                     );
                                 if (success && context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text(
-                                        'Successfully connected to Simkl!',
+                                        appText(context, english: 'Successfully connected to Simkl!', arabic: 'تم الاتصال بـ Simkl بنجاح!'),
                                       ),
                                       backgroundColor: Colors.green,
                                     ),
@@ -213,7 +225,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                             title: 'Trakt',
                             subtitle: trackingAuthAsync.when(
                               data: (state) => state['trakt'] == true
-                                  ? 'Connected'
+                                  ? appText(context, english: 'Connected', arabic: 'متصل')
                                   : l10n.notLoggedIn,
                               loading: () => l10n.loading,
                               error: (_, _) => l10n.unknown,
@@ -268,9 +280,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                                     );
                                 if (success && context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text(
-                                        'Successfully connected to Trakt!',
+                                        appText(context, english: 'Successfully connected to Trakt!', arabic: 'تم الاتصال بـ Trakt بنجاح!'),
                                       ),
                                       backgroundColor: Colors.green,
                                     ),
@@ -291,7 +303,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                             title: 'MyAnimeList',
                             subtitle: trackingAuthAsync.when(
                               data: (state) => state['mal'] == true
-                                  ? 'Connected'
+                                  ? appText(context, english: 'Connected', arabic: 'متصل')
                                   : l10n.notLoggedIn,
                               loading: () => l10n.loading,
                               error: (_, _) => l10n.unknown,
@@ -344,9 +356,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
-                                        const SnackBar(
+                                        SnackBar(
                                           content: Text(
-                                            'Successfully connected to MyAnimeList!',
+                                            appText(context, english: 'Successfully connected to MyAnimeList!', arabic: 'تم الاتصال بـ MyAnimeList بنجاح!'),
                                           ),
                                           backgroundColor: Colors.green,
                                         ),
@@ -355,9 +367,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
-                                        const SnackBar(
+                                        SnackBar(
                                           content: Text(
-                                            'Failed to connect to MyAnimeList',
+                                            appText(context, english: 'Failed to connect to MyAnimeList', arabic: 'فشل الاتصال بـ MyAnimeList'),
                                           ),
                                           backgroundColor: Colors.red,
                                         ),
@@ -378,7 +390,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                             title: 'AniList',
                             subtitle: trackingAuthAsync.when(
                               data: (state) => state['anilist'] == true
-                                  ? 'Connected'
+                                  ? appText(context, english: 'Connected', arabic: 'متصل')
                                   : l10n.notLoggedIn,
                               loading: () => l10n.loading,
                               error: (_, _) => l10n.unknown,
@@ -428,9 +440,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
-                                        const SnackBar(
+                                        SnackBar(
                                           content: Text(
-                                            'Successfully connected to AniList!',
+                                            appText(context, english: 'Successfully connected to AniList!', arabic: 'تم الاتصال بـ AniList بنجاح!'),
                                           ),
                                           backgroundColor: Colors.green,
                                         ),
@@ -439,9 +451,9 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
-                                        const SnackBar(
+                                        SnackBar(
                                           content: Text(
-                                            'Failed to connect to AniList',
+                                            appText(context, english: 'Failed to connect to AniList', arabic: 'فشل الاتصال بـ AniList'),
                                           ),
                                           backgroundColor: Colors.red,
                                         ),
@@ -464,14 +476,19 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
               ),
               const SizedBox(height: LayoutConstants.spacingLg),
               SettingsGroup(
-                title: 'Integrations',
+                title: appText(context, english: 'Integrations', arabic: 'التكاملات'),
                 children: [
                   SettingsTile(
                     icon: Icons.fast_forward_rounded,
                     title: 'AnimeSkip',
                     isBeta: true,
-                    subtitle:
-                        'Automatically fetch skip segments for Anime (requires AniList authentication)',
+                    subtitle: appText(
+                      context,
+                      english:
+                          'Automatically fetch skip segments for Anime (requires AniList authentication)',
+                      arabic:
+                          'جلب مقاطع التخطي للأنمي تلقائيًا (يتطلب تسجيل الدخول إلى AniList)',
+                    ),
                     trailing: Switch(
                       value: settingsRepo.isAnimeSkipIntegrationEnabled(),
                       onChanged: (val) {
@@ -491,7 +508,11 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     icon: Icons.fast_forward_rounded,
                     title: 'IntroDB',
                     isBeta: true,
-                    subtitle: 'Automatically fetch skip segments for TV Shows',
+                    subtitle: appText(
+                      context,
+                      english: 'Automatically fetch skip segments for TV Shows',
+                      arabic: 'جلب مقاطع التخطي للمسلسلات تلقائيًا',
+                    ),
                     isLast: true,
                     trailing: Switch(
                       value: settingsRepo.isIntroDbIntegrationEnabled(),

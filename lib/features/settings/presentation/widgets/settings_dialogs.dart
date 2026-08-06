@@ -17,6 +17,7 @@ import '../../../../core/providers/locale_provider.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 /// Returns a localized label for a player gesture.
 String getGestureLabel(PlayerGesture gesture, AppLocalizations l10n) {
   switch (gesture) {
@@ -981,7 +982,11 @@ void showDeveloperDialog(BuildContext context) {
             ),
             const SizedBox(height: 4),
             Text(
-              'Fullstack & Flutter Developer',
+              appText(
+                context,
+                english: 'Fullstack & Flutter Developer',
+                arabic: 'مطور Full‑Stack وFlutter',
+              ),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
@@ -1164,26 +1169,50 @@ void showQualityFilterModeDialog(
   required QualityFilterMode current,
   required Future<void> Function(QualityFilterMode) onChanged,
 }) {
-  const options = [
+  final options = [
     (
       mode: QualityFilterMode.any,
-      label: 'Show all (sort only)',
-      subtitle:
-          'Sources are sorted by your quality preference but none are hidden.',
+      label: appText(
+        context,
+        english: 'Show all (sort only)',
+        arabic: 'عرض الكل (ترتيب فقط)',
+      ),
+      subtitle: appText(
+        context,
+        english:
+            'Sources are sorted by your quality preference but none are hidden.',
+        arabic: 'تُرتّب المصادر حسب الجودة المفضلة دون إخفاء أي مصدر.',
+      ),
     ),
     (
       mode: QualityFilterMode.atOrAbove,
-      label: 'Hide sources below preference',
-      subtitle:
-          'Only sources at or above your preferred quality are shown. '
-          'Falls back to all sources if nothing qualifies.',
+      label: appText(
+        context,
+        english: 'Hide sources below preference',
+        arabic: 'إخفاء المصادر الأقل من الجودة المفضلة',
+      ),
+      subtitle: appText(
+        context,
+        english:
+            'Only sources at or above your preferred quality are shown. Falls back to all sources if nothing qualifies.',
+        arabic:
+            'تظهر المصادر التي تساوي الجودة المفضلة أو تتجاوزها، ويُعرض الكل إذا لم يتوفر مصدر مناسب.',
+      ),
     ),
     (
       mode: QualityFilterMode.atOrBelow,
-      label: 'Hide sources above preference',
-      subtitle:
-          'Only sources at or below your preferred quality are shown '
-          '(data-saver mode).',
+      label: appText(
+        context,
+        english: 'Hide sources above preference',
+        arabic: 'إخفاء المصادر الأعلى من الجودة المفضلة',
+      ),
+      subtitle: appText(
+        context,
+        english:
+            'Only sources at or below your preferred quality are shown (data-saver mode).',
+        arabic:
+            'تظهر المصادر التي تساوي الجودة المفضلة أو تقل عنها (وضع توفير البيانات).',
+      ),
     ),
   ];
 
@@ -1191,7 +1220,9 @@ void showQualityFilterModeDialog(
     context: context,
     builder: (ctx) => AlertDialog(
       surfaceTintColor: Colors.transparent,
-      title: const Text('Quality Filter Mode'),
+      title: Text(
+        appText(ctx, english: 'Quality Filter Mode', arabic: 'وضع تصفية الجودة'),
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1233,8 +1264,13 @@ void showQualityFilterModeDialog(
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'The quality preference (Wi-Fi / Mobile) controls '
-                      'which tier is used as the threshold for this filter.',
+                      appText(
+                        ctx,
+                        english:
+                            'The quality preference (Wi-Fi / Mobile) controls which tier is used as the threshold for this filter.',
+                        arabic:
+                            'يحدد تفضيل الجودة (Wi‑Fi / الهاتف) المستوى المستخدم حدًا لهذه التصفية.',
+                      ),
                       style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                       ),
@@ -1584,7 +1620,7 @@ void showSubDlAuthDialog(
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
-                          'OR FETCH VIA ACCOUNT',
+                          l10n.orFetchViaAccount,
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,

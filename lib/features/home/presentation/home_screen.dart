@@ -33,6 +33,7 @@ import 'dart:async';
 import 'widgets/dashboard_header_bar.dart';
 import 'widgets/provider_search_filter_dialog.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -543,7 +544,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               if (syncedProgressAsync.asData?.value.isNotEmpty == true)
                 SliverToBoxAdapter(
                   child: SyncedProgressSection(
-                    title: 'Synced from Trakt',
+                    title: appText(context, english: 'Synced from Trakt', arabic: 'متزامن من Trakt'),
                     items: syncedProgressAsync.asData!.value,
                     onItemTap: (item) {
                       // Pre-fill search query and navigate to Search tab
@@ -662,7 +663,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             FilledButton.icon(
               onPressed: () => _showProviderSelector(context, ref),
               icon: const Icon(Icons.extension_rounded),
-              label: const Text('Select Provider'),
+              label: Text(
+                appText(context, english: 'Select Provider', arabic: 'اختر المزوّد'),
+              ),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,

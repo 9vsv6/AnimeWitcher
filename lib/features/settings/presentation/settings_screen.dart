@@ -22,6 +22,7 @@ import '../../../core/network/doh_service.dart';
 import '../../../core/router/app_router.dart';
 import 'cache_provider.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -344,8 +345,13 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 SettingsTile(
                   icon: Icons.filter_list_rounded,
-                  title: 'Quality Filter Mode',
+                  title: appText(
+                    context,
+                    english: 'Quality Filter Mode',
+                    arabic: 'وضع تصفية الجودة',
+                  ),
                   subtitle: _qualityFilterModeLabel(
+                    context,
                     playerSettings.qualityFilterMode,
                   ),
                   onTap: () => showQualityFilterModeDialog(
@@ -372,8 +378,16 @@ class SettingsScreen extends ConsumerWidget {
               children: [
                 SettingsTile(
                   icon: Icons.account_circle_rounded,
-                  title: 'Manage Accounts',
-                  subtitle: 'Configure Subtitles and Tracking Services',
+                  title: appText(
+                    context,
+                    english: 'Manage Accounts',
+                    arabic: 'إدارة الحسابات',
+                  ),
+                  subtitle: appText(
+                    context,
+                    english: 'Configure Subtitles and Tracking Services',
+                    arabic: 'إعداد خدمات الترجمة وتتبع المشاهدة',
+                  ),
                   isLast: true,
                   onTap: () {
                     Navigator.of(context).push(
@@ -558,14 +572,29 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-String _qualityFilterModeLabel(QualityFilterMode mode) {
+String _qualityFilterModeLabel(
+  BuildContext context,
+  QualityFilterMode mode,
+) {
   switch (mode) {
     case QualityFilterMode.any:
-      return 'Show all (sort only)';
+      return appText(
+        context,
+        english: 'Show all (sort only)',
+        arabic: 'عرض الكل (ترتيب فقط)',
+      );
     case QualityFilterMode.atOrAbove:
-      return 'Hide sources below preference';
+      return appText(
+        context,
+        english: 'Hide sources below preference',
+        arabic: 'إخفاء المصادر الأقل من الجودة المفضلة',
+      );
     case QualityFilterMode.atOrBelow:
-      return 'Hide sources above preference';
+      return appText(
+        context,
+        english: 'Hide sources above preference',
+        arabic: 'إخفاء المصادر الأعلى من الجودة المفضلة',
+      );
   }
 }
 

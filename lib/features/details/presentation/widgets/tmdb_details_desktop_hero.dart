@@ -7,6 +7,7 @@ import '../../../../core/models/tmdb_details.dart';
 import '../../../../core/storage/history_repository.dart';
 import 'provider_search_section.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 /// Desktop hero: backdrop, gradients, and first column (logo, metadata, overview, sources).
 /// [child] is the rest of the scroll content (seasons, cast, trailers, stats, etc.).
 class TmdbDetailsDesktopHero extends ConsumerWidget {
@@ -192,7 +193,7 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  "${(progress * 100).toInt()}% watched",
+                                  "${(progress * 100).toInt()}% ${appText(context, english: 'watched', arabic: 'تمت مشاهدته')}",
                                   style: TextStyle(
                                     color: theme.colorScheme.primary,
                                     fontSize: 12,
@@ -287,7 +288,7 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            "Available Sources",
+                            appText(context, english: 'Available Sources', arabic: 'المصادر المتاحة'),
                             style: TextStyle(
                               color: textColor,
                               fontSize: 18,
@@ -307,7 +308,7 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              "BETA",
+                              appText(context, english: 'BETA', arabic: 'تجريبي'),
                               style: TextStyle(
                                 color: theme.colorScheme.primary,
                                 fontSize: 10,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/explore_language_provider.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class LanguageSelectorDialog extends ConsumerWidget {
   const LanguageSelectorDialog({super.key});
 
@@ -49,7 +50,7 @@ class LanguageSelectorDialog extends ConsumerWidget {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      "Select Content Language",
+                      appText(context, english: 'Select Content Language', arabic: 'اختر لغة المحتوى'),
                       style: TextStyle(
                         color: theme.colorScheme.onSurface,
                         fontSize: 18,

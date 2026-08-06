@@ -12,6 +12,7 @@ import 'package:skystream/shared/widgets/multimedia_card.dart';
 import 'stamp_in_label.dart';
 import 'bouncy_entry_animation.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class SearchResultSection extends ConsumerStatefulWidget {
   final String providerName;
   final String providerId;
@@ -172,8 +173,8 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           color: Colors.red,
           borderRadius: BorderRadius.circular(4),
         ),
-        child: const Text(
-          'DEBUG',
+        child: Text(
+          appText(context, english: 'DEBUG', arabic: 'تصحيح'),
           style: TextStyle(
             fontSize: 10,
             color: Colors.white,

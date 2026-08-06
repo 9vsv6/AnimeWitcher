@@ -12,6 +12,7 @@ import '../../../../shared/widgets/loading_indicator.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class ExploreSearchDelegate extends SearchDelegate<void> {
   ExploreSearchDelegate()
     : super(
@@ -137,7 +138,7 @@ class _SearchSuggestionsListState
     if (suggestions.isEmpty) {
       return Center(
         child: Text(
-          'No results found',
+          appText(context, english: 'No results found', arabic: 'لم يتم العثور على نتائج'),
           style: TextStyle(
             color: Theme.of(
               context,
@@ -292,7 +293,7 @@ class _SearchResultsGridState extends ConsumerState<_SearchResultsGrid> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'No Results Found',
+              appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
               style: TextStyle(
                 fontFamily: nativeFont,
                 fontSize: 16.0,

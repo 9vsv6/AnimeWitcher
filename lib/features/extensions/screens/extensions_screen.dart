@@ -10,6 +10,7 @@ import 'plugin_settings_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class ExtensionsScreen extends ConsumerStatefulWidget {
   const ExtensionsScreen({super.key});
 
@@ -345,7 +346,7 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                 ),
                 const SizedBox(width: LayoutConstants.spacingSm),
                 Text(
-                  'Installed Extensions',
+                  appText(context, english: 'Installed Extensions', arabic: 'الإضافات المثبتة'),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -593,7 +594,11 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
                     ),
                     label: Text(
                       allInstalled
-                          ? 'All installed'
+                          ? appText(
+                              context,
+                              english: 'All installed',
+                              arabic: 'جميعها مثبتة',
+                            )
                           : l10n.downloadAllProviders,
                     ),
                     onPressed: allInstalled || plugins.isEmpty
@@ -1055,7 +1060,15 @@ class _PluginTileState extends ConsumerState<_PluginTile> {
     // Authors: up to 2, prefixed with "By".
     final authors = widget.plugin.authors.take(2).join(', ');
 
-    final metaParts = [version, if (authors.isNotEmpty) 'By $authors'];
+    final metaParts = [
+      version,
+      if (authors.isNotEmpty)
+        appText(
+          context,
+          english: 'By $authors',
+          arabic: 'بواسطة $authors',
+        ),
+    ];
     final metaLine = metaParts.join(' • ');
 
     final desc = widget.plugin.description;

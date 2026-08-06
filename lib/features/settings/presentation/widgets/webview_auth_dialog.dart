@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class WebViewAuthDialog extends StatefulWidget {
   final String providerName;
   final String initialUrl;
@@ -105,14 +106,26 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
     final theme = Theme.of(context);
     return AlertDialog(
       surfaceTintColor: Colors.transparent,
-      title: Text('Login to ${widget.providerName}'),
+      title: Text(
+        appText(
+          context,
+          english: 'Login to ${widget.providerName}',
+          arabic: 'تسجيل الدخول إلى ${widget.providerName}',
+        ),
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              '1. Click the button below to open the login page in your browser.',
+            Text(
+              appText(
+                context,
+                english:
+                    '1. Click the button below to open the login page in your browser.',
+                arabic:
+                    '١. اضغط الزر أدناه لفتح صفحة تسجيل الدخول في المتصفح.',
+              ),
             ),
             const SizedBox(height: 16),
             CustomButton(
@@ -123,21 +136,39 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 }
               },
-              child: const Text('Open Browser'),
+              child: Text(
+                appText(context, english: 'Open Browser', arabic: 'فتح المتصفح'),
+              ),
             ),
             const SizedBox(height: 24),
             Text(
-              '2. After logging in, the browser will redirect you to a blank page starting with ${widget.redirectUrlPrefix}.',
+              appText(
+                context,
+                english:
+                    '2. After logging in, the browser will redirect you to a blank page starting with ${widget.redirectUrlPrefix}.',
+                arabic:
+                    '٢. بعد تسجيل الدخول، سيعيد المتصفح توجيهك إلى صفحة فارغة تبدأ بـ ${widget.redirectUrlPrefix}.',
+              ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              '3. Copy the ENTIRE URL from your browser\'s address bar and paste it below:',
+            Text(
+              appText(
+                context,
+                english:
+                    "3. Copy the ENTIRE URL from your browser's address bar and paste it below:",
+                arabic:
+                    '٣. انسخ الرابط كاملًا من شريط عنوان المتصفح والصقه أدناه:',
+              ),
             ),
             const SizedBox(height: 16),
             CustomTextField(
               controller: _urlController,
-              decoration: const InputDecoration(
-                labelText: 'Pasted Redirect URL',
+              decoration: InputDecoration(
+                labelText: appText(
+                  context,
+                  english: 'Pasted Redirect URL',
+                  arabic: 'رابط إعادة التوجيه الملصق',
+                ),
                 hintText: 'http://localhost/?code=...',
               ),
             ),
@@ -148,7 +179,7 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(
-            'Cancel',
+            appText(context, english: 'Cancel', arabic: 'إلغاء'),
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
           ),
         ),
@@ -160,7 +191,7 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
               Navigator.pop(context, url);
             }
           },
-          child: const Text('Submit'),
+          child: Text(appText(context, english: 'Submit', arabic: 'إرسال')),
         ),
       ],
     );
@@ -177,7 +208,13 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
           child: Column(
             children: [
               AppBar(
-                title: Text('Login to ${widget.providerName}'),
+                title: Text(
+        appText(
+          context,
+          english: 'Login to ${widget.providerName}',
+          arabic: 'تسجيل الدخول إلى ${widget.providerName}',
+        ),
+      ),
                 leading: IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => Navigator.pop(context),

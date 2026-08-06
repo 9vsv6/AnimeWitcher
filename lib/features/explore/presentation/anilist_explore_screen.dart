@@ -9,6 +9,7 @@ import '../../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import 'view_all_screen.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class AnilistExploreScreen extends ConsumerStatefulWidget {
   final ScrollController scrollController;
   final FocusNode firstActionFocusNode;
@@ -77,8 +78,12 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
                         color: Theme.of(context).colorScheme.error,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        "Could not load trending anime",
+                      Text(
+                        appText(
+                          context,
+                          english: 'Could not load trending anime',
+                          arabic: 'تعذر تحميل الأنمي الرائج',
+                        ),
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -89,7 +94,9 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
                         onPressed: () =>
                             ref.invalidate(anilistHeroAnimeProvider),
                         icon: const Icon(Icons.refresh),
-                        label: const Text("Retry"),
+                        label: Text(
+                          appText(context, english: 'Retry', arabic: 'إعادة المحاولة'),
+                        ),
                       ),
                     ],
                   ),
@@ -104,7 +111,7 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
         child: _buildSection(
           context,
           ref.watch(trendingAnimeProvider),
-          'Trending right now',
+          appText(context, english: 'Trending right now', arabic: 'الرائج الآن'),
           ViewAllCategory.providerContent,
         ),
       ),
@@ -113,7 +120,7 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
         child: _buildSection(
           context,
           ref.watch(airedRecentlyAnimeProvider),
-          'Aired recently',
+          appText(context, english: 'Aired recently', arabic: 'عُرض مؤخرًا'),
           ViewAllCategory.providerContent,
         ),
       ),
@@ -122,7 +129,7 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
         child: _buildSection(
           context,
           ref.watch(topSeasonAnimeProvider),
-          'Top of the season',
+          appText(context, english: 'Top of the season', arabic: 'الأفضل في الموسم'),
           ViewAllCategory.providerContent,
         ),
       ),
@@ -131,7 +138,7 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
         child: _buildSection(
           context,
           ref.watch(bestLastSeasonAnimeProvider),
-          'Best of last season',
+          appText(context, english: 'Best of last season', arabic: 'أفضل الموسم السابق'),
           ViewAllCategory.providerContent,
         ),
       ),
@@ -140,7 +147,7 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
         child: _buildSection(
           context,
           ref.watch(moviesAnimeProvider),
-          'Movies',
+          appText(context, english: 'Movies', arabic: 'الأفلام'),
           ViewAllCategory.providerContent,
         ),
       ),
@@ -149,7 +156,7 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
         child: _buildSection(
           context,
           ref.watch(comingSoonAnimeProvider),
-          'Coming soon',
+          appText(context, english: 'Coming soon', arabic: 'قريبًا'),
           ViewAllCategory.providerContent,
         ),
       ),

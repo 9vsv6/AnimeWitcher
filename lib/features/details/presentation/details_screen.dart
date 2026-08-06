@@ -26,6 +26,7 @@ import "../../../shared/widgets/expandable_text.dart";
 import "../../../shared/widgets/loading_indicator.dart";
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class DetailsScreen extends ConsumerStatefulWidget {
   final MultimediaItem item;
   final bool autoPlay;
@@ -137,8 +138,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Title copied'),
+      SnackBar(
+        content: Text(
+          appText(context, english: 'Title copied', arabic: 'تم نسخ العنوان'),
+        ),
         duration: Duration(milliseconds: 1200),
         behavior: SnackBarBehavior.floating,
       ),

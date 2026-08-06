@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/explore_filter_provider.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class YearSelectorDialog extends ConsumerWidget {
   const YearSelectorDialog({super.key});
 
@@ -47,7 +48,7 @@ class YearSelectorDialog extends ConsumerWidget {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      "Select Year",
+                      appText(context, english: 'Select Year', arabic: 'اختر السنة'),
                       style: TextStyle(
                         color: theme.colorScheme.onSurface,
                         fontSize: 22,
@@ -64,7 +65,7 @@ class YearSelectorDialog extends ConsumerWidget {
                           Navigator.of(context).pop();
                         },
                         child: Text(
-                          "Clear",
+                          appText(context, english: 'Clear', arabic: 'مسح'),
                           style: TextStyle(color: theme.colorScheme.error),
                         ),
                       ),

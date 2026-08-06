@@ -15,6 +15,7 @@ import '../../../../shared/widgets/loading_dialog.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/core/services/notification_service.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class ContinueWatchingCard extends ConsumerStatefulWidget {
   final HistoryItem historyItem;
   final double width;
@@ -374,8 +375,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                                 LayoutConstants.radiusSm,
                               ),
                             ),
-                            child: const Text(
-                              'LIVE',
+                            child: Text(
+                              appText(context, english: 'LIVE', arabic: 'مباشر'),
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 10,

@@ -16,6 +16,7 @@ import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 part 'provider_search_section.g.dart';
 
 // Delegates to the shared searchAllProviders() function — no duplicated
@@ -349,7 +350,7 @@ class _ProviderSearchSectionState extends ConsumerState<ProviderSearchSection> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    "BETA",
+                    appText(context, english: 'BETA', arabic: 'تجريبي'),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.primary,
                       fontSize: 10,

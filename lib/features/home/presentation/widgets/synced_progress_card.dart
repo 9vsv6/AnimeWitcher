@@ -11,6 +11,7 @@ import 'package:skystream/features/tracking/data/sync_manager.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/core/services/notification_service.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class SyncedProgressCard extends ConsumerWidget {
   final SyncProgressItem item;
   final double width;
@@ -158,7 +159,7 @@ class SyncedProgressCard extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    "SYNCED",
+                                    appText(context, english: 'SYNCED', arabic: 'متزامن'),
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: Theme.of(
@@ -232,7 +233,7 @@ class SyncedProgressCard extends ConsumerWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '${item.progressPercentage.toStringAsFixed(0)}% watched',
+                          '${item.progressPercentage.toStringAsFixed(0)}% ${appText(context, english: 'watched', arabic: 'تمت مشاهدته')}',
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.outline,
                             fontSize: 11,

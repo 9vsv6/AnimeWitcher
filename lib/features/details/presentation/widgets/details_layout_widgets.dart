@@ -21,6 +21,7 @@ import 'package:skystream/core/providers/device_info_provider.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class DetailsSeasonListWrapper extends ConsumerWidget {
   const DetailsSeasonListWrapper({super.key, required this.itemUrl});
   final String itemUrl;
@@ -835,8 +836,8 @@ class DetailsProviderChip extends ConsumerWidget {
                 color: Colors.redAccent.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text(
-                'DEBUG',
+              child: Text(
+                appText(context, english: 'DEBUG', arabic: 'تصحيح'),
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 8,

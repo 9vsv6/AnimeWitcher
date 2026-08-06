@@ -6,6 +6,7 @@ import '../../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/models/tmdb_details.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class MovieCastList extends StatefulWidget {
   final List<TmdbCast> cast;
   final Color? textColor;
@@ -48,7 +49,7 @@ class _MovieCastListState extends State<MovieCastList> {
       children: [
         if (isDesktop) ...[
           Text(
-            "Cast",
+            appText(context, english: 'Cast', arabic: 'طاقم التمثيل'),
             style: TextStyle(
               color: widget.textColor,
               fontSize: 24,
@@ -84,7 +85,7 @@ class _MovieCastListState extends State<MovieCastList> {
           const SizedBox(height: 50),
         ] else ...[
           Text(
-            "Cast",
+            appText(context, english: 'Cast', arabic: 'طاقم التمثيل'),
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontSize: 20,

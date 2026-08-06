@@ -5,6 +5,7 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'hotstar_player_style.dart';
 import 'player_prompt_placement.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class ResumePromptOverlay extends StatelessWidget {
   final int? positionMs;
   final double? percentage;
@@ -41,7 +42,11 @@ class ResumePromptOverlay extends StatelessWidget {
     if (positionMs != null && positionMs! > 0) {
       subtitle = l10n.pausedAt(_formatDuration(positionMs!));
     } else if (percentage != null && percentage! > 0) {
-      subtitle = 'Synced progress: ${percentage!.toStringAsFixed(0)}%';
+      subtitle = appText(
+        context,
+        english: 'Synced progress: ${percentage!.toStringAsFixed(0)}%',
+        arabic: 'التقدم المتزامن: ${percentage!.toStringAsFixed(0)}%',
+      );
     }
     return PlayerPromptPlacement(
       isTv: isTv,

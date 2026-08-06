@@ -18,6 +18,7 @@ import '../../../../core/utils/stream_quality_sorter.dart';
 import 'subtitle_sync_dialog.dart';
 import 'subtitle_appearance_dialog.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 const List<Shadow> _kGlassTextShadow = [
   Shadow(color: Colors.black54, offset: Offset(0, 1.5), blurRadius: 3.0),
 ];
@@ -615,7 +616,13 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'No sources matched your quality filter — showing all sources.',
+                    appText(
+                      context,
+                      english:
+                          'No sources matched your quality filter — showing all sources.',
+                      arabic:
+                          'لم تطابق أي مصادر مرشح الجودة؛ سيتم عرض جميع المصادر.',
+                    ),
                     style: TextStyle(
                       color: Colors.amber.shade200,
                       fontSize: 11,
@@ -848,7 +855,11 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
       if (supportsStyling) ...[
         _PanelSubheader(title: l10n.styleSettings),
         _PanelOptionRow(
-          label: "Subtitle Appearance",
+          label: appText(
+            context,
+            english: 'Subtitle Appearance',
+            arabic: 'مظهر الترجمة',
+          ),
           leadingIcon: Icons.palette_outlined,
           selected: false,
           isTv: widget.isTv,

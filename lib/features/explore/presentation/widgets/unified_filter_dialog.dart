@@ -8,6 +8,7 @@ import '../../data/explore_tmdb_provider.dart';
 import '../../data/explore_mode_provider.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class UnifiedFilterDialog extends ConsumerStatefulWidget {
   const UnifiedFilterDialog({super.key});
 
@@ -88,7 +89,7 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
                             ),
                             const SizedBox(width: LayoutConstants.spacingSm),
                             Text(
-                              "Filters",
+                              appText(context, english: 'Filters', arabic: 'الفلاتر'),
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.onSurface,
                                 fontSize: 22,
@@ -268,8 +269,8 @@ class _UnifiedFilterDialogState extends ConsumerState<UnifiedFilterDialog>
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text(
-                        "Done",
+                      child: Text(
+                        appText(context, english: 'Done', arabic: 'تم'),
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -514,7 +515,11 @@ class _GenreTab extends ConsumerWidget {
                     : Colors.white24,
               ),
               title: Text(
-                "All Genres",
+                appText(
+                  context,
+                  english: 'All Genres',
+                  arabic: 'جميع التصنيفات',
+                ),
                 style: TextStyle(
                   color: isSelected
                       ? Theme.of(context).colorScheme.primary
@@ -564,10 +569,14 @@ class _GenreTab extends ConsumerWidget {
         },
       ),
       loading: () => const Center(child: AppLoadingIndicator()),
-      error: (_, _) => const Center(
+      error: (_, _) => Center(
         child: Text(
-          "Failed to load genres",
-          style: TextStyle(color: Colors.white),
+          appText(
+            context,
+            english: 'Failed to load genres',
+            arabic: 'فشل تحميل التصنيفات',
+          ),
+          style: const TextStyle(color: Colors.white),
         ),
       ),
     );
@@ -622,7 +631,7 @@ class _YearTab extends ConsumerWidget {
                 ),
               ),
               child: Text(
-                "All",
+                appText(context, english: 'All', arabic: 'الكل'),
                 style: TextStyle(
                   color: isSelected
                       ? Theme.of(context).colorScheme.primary

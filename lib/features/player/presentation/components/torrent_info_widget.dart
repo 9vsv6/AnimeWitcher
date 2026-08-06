@@ -3,10 +3,36 @@ import '../../../../core/models/torrent_status.dart';
 import '../../../../core/widgets/marquee_widget.dart';
 import '../widgets/hotstar_player_style.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 /// Compact, responsive torrent download-stats card. Self-contained: it sizes
 /// its own typography/spacing down on small screens and never assumes a fixed
 /// width (the caller constrains the width and places it). Purely informational
 /// — wrap in an IgnorePointer at the call site so it never blocks the player.
+String _localizedTorrentStatus(BuildContext context, String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'downloading':
+      return appText(context, english: 'Downloading', arabic: 'جارٍ التنزيل');
+    case 'seeding':
+      return appText(context, english: 'Seeding', arabic: 'جارٍ الرفع');
+    case 'paused':
+      return appText(context, english: 'Paused', arabic: 'متوقف مؤقتًا');
+    case 'checking':
+      return appText(context, english: 'Checking', arabic: 'جارٍ الفحص');
+    case 'complete':
+    case 'completed':
+    case 'finished':
+      return appText(context, english: 'Completed', arabic: 'مكتمل');
+    case 'error':
+    case 'failed':
+      return appText(context, english: 'Failed', arabic: 'فشل');
+    case 'starting':
+    case 'initializing':
+      return appText(context, english: 'Starting', arabic: 'جارٍ البدء');
+    default:
+      return status;
+  }
+}
+
 class TorrentInfoWidget extends StatelessWidget {
   final TorrentStatus? status;
 
@@ -73,7 +99,7 @@ class TorrentInfoWidget extends StatelessWidget {
                   child: _Stat(
                     icon: Icons.download_rounded,
                     value: s.speedString,
-                    label: 'Speed',
+                    label: appText(context, english: 'Speed', arabic: 'السرعة'),
                     compact: compact,
                   ),
                 ),
@@ -82,7 +108,7 @@ class TorrentInfoWidget extends StatelessWidget {
                   child: _Stat(
                     icon: Icons.people_alt_rounded,
                     value: '${s.seeds} / ${s.peers}',
-                    label: 'Seeds / Peers',
+                    label: appText(context, english: 'Seeds / Peers', arabic: 'المزوّدون / النظراء'),
                     compact: compact,
                   ),
                 ),
@@ -117,7 +143,7 @@ class TorrentInfoWidget extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '$pct% · ${s.status}',
+                  '$pct% · ${_localizedTorrentStatus(context, s.status)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

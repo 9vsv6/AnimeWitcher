@@ -24,10 +24,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get explore => 'استكشاف';
 
   @override
-  String get exploreAnime => 'Explore Anime';
+  String get exploreAnime => 'استكشاف الأنمي';
 
   @override
-  String get exploreMovies => 'Explore Movies';
+  String get exploreMovies => 'استكشاف الأفلام';
 
   @override
   String get library => 'المكتبة';
@@ -63,13 +63,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get defaultHomeScreen => 'الشاشة الرئيسية الافتراضية';
 
   @override
-  String get titlePosition => 'Title Position';
+  String get titlePosition => 'موضع العنوان';
 
   @override
-  String get titlePositionBelowPoster => 'Below Poster';
+  String get titlePositionBelowPoster => 'أسفل الملصق';
 
   @override
-  String get titlePositionInsidePoster => 'Inside Poster';
+  String get titlePositionInsidePoster => 'داخل الملصق';
 
   @override
   String get player => 'المشغل';
@@ -111,11 +111,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dohProvider => 'مزود DoH';
 
   @override
-  String get githubProxy => 'GitHub Proxy';
+  String get githubProxy => 'وكيل GitHub';
 
   @override
-  String get githubProxySubtitle =>
-      'Route extension downloads through jsDelivr to bypass ISP blocks.';
+  String get githubProxySubtitle => 'تمرير تنزيلات الإضافات عبر jsDelivr لتجاوز حجب مزود خدمة الإنترنت.';
 
   @override
   String get manageExtensions => 'إدارة الإضافات';
@@ -276,7 +275,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get searchFavoriteContent => 'ابحث عن محتواك المفضل';
 
   @override
-  String get pressSearchOrEnter => 'اضغط على مفتاح البحث أو Enter للبدء';
+  String get pressSearchOrEnter => 'اضغط على مفتاح البحث أو الإدخال للبدء';
 
   @override
   String get noResultsFound => 'لم يتم العثور على نتائج.';
@@ -494,7 +493,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get playNow => 'تشغيل الآن';
 
   @override
-  String get upNext => 'Up Next';
+  String get upNext => 'التالي';
 
   @override
   String get deleteDownloadPrompt => 'حذف التنزيل؟';
@@ -671,21 +670,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get installed => 'مثبت';
 
   @override
-  String get repositories => 'Repositories';
+  String get repositories => 'المستودعات';
 
   @override
-  String get noExtensionsInstalled => 'No Extensions Installed';
+  String get noExtensionsInstalled => 'لا توجد إضافات مثبتة';
 
   @override
-  String get browseRepositoriesToInstall =>
-      'Browse the Repositories tab to discover and install extensions.';
+  String get browseRepositoriesToInstall => 'تصفح تبويب المستودعات لاكتشاف الإضافات وتثبيتها.';
 
   @override
-  String get browseRepositories => 'Browse Repositories';
+  String get browseRepositories => 'تصفح المستودعات';
 
   @override
-  String get addRepoDescription =>
-      'Add a repository URL or shortcode to discover and install extension plugins.';
+  String get addRepoDescription => 'أضف رابط مستودع أو رمزًا مختصرًا لاكتشاف إضافات الامتدادات وتثبيتها.';
 
   @override
   String updateTo(String version) {
@@ -821,7 +818,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String playEpisodeOnly(String label, int episode) {
-    return '$label E$episode';
+    return '$label ح$episode';
   }
 
   @override
@@ -846,7 +843,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get loadPluginFromAssets => 'تحميل الإضافة من الأصول';
 
   @override
-  String get enterVideoUrlHint => 'أدخل رابط الفيديو (http, magnet, etc.)';
+  String get enterVideoUrlHint => 'أدخل رابط الفيديو (http أو magnet أو غيرهما)';
 
   @override
   String get networkStream => 'بث الشبكة';
@@ -1121,13 +1118,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get skip => 'تخطي';
 
   @override
-  String get skipIntro => 'Skip Intro';
+  String get skipIntro => 'تخطي المقدمة';
 
   @override
-  String get skipOutro => 'Skip Outro';
+  String get skipOutro => 'تخطي النهاية';
 
   @override
-  String get skipRecap => 'Skip Recap';
+  String get skipRecap => 'تخطي الملخص السابق';
 
   @override
   String get goLive => 'البث المباشر';
@@ -1180,7 +1177,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subtitleAccounts => 'حسابات الترجمة';
 
   @override
-  String get accounts => 'Accounts';
+  String get accounts => 'الحسابات';
 
   @override
   String get notLoggedIn => 'غير مسجّل الدخول';
@@ -1274,48 +1271,46 @@ class AppLocalizationsAr extends AppLocalizations {
   String get viewLogsSubtitle => 'عرض نشاط التطبيق والأخطاء';
 
   @override
-  String get clearCache => 'Clear image and video cache';
+  String get clearCache => 'مسح ذاكرة الصور والفيديو المؤقتة';
 
   @override
-  String get clearCacheSubtitle =>
-      'Frees up storage used by cached images and videos';
+  String get clearCacheSubtitle => 'تحرير مساحة التخزين المستخدمة للصور وملفات الفيديو المؤقتة';
 
   @override
-  String get clearCacheDialogTitle => 'Clear cache?';
+  String get clearCacheDialogTitle => 'مسح الذاكرة المؤقتة؟';
 
   @override
-  String get clearCacheDialogContent =>
-      'This will delete cached images and video files. Your settings, history, and extensions will not be affected.';
+  String get clearCacheDialogContent => 'سيؤدي هذا إلى حذف الصور وملفات الفيديو المؤقتة. لن تتأثر إعداداتك أو سجل المشاهدة أو الإضافات.';
 
   @override
-  String get clearCacheNow => 'Clear Cache';
+  String get clearCacheNow => 'مسح الذاكرة المؤقتة';
 
   @override
-  String get cacheCleared => 'Cache cleared';
+  String get cacheCleared => 'تم مسح الذاكرة المؤقتة';
 
   @override
   String get calculating => 'جارٍ الحساب…';
 
   @override
-  String get playerControls => 'Player Controls';
+  String get playerControls => 'عناصر تحكم المشغل';
 
   @override
-  String get playerControlsSubtitle => 'Show or hide player control buttons';
+  String get playerControlsSubtitle => 'إظهار أزرار التحكم في المشغل أو إخفاؤها';
 
   @override
-  String get showPip => 'Picture-in-Picture button';
+  String get showPip => 'زر صورة داخل صورة';
 
   @override
-  String get showResize => 'Resize button';
+  String get showResize => 'زر تغيير الحجم';
 
   @override
-  String get showRotate => 'Rotate button';
+  String get showRotate => 'زر التدوير';
 
   @override
-  String get showPlaybackSpeed => 'Playback speed button';
+  String get showPlaybackSpeed => 'زر سرعة التشغيل';
 
   @override
-  String get showEpisodes => 'Episodes button';
+  String get showEpisodes => 'زر الحلقات';
 
   @override
   String get relatedAnime => 'ذات صلة';
@@ -1568,7 +1563,7 @@ class AppLocalizationsArApc extends AppLocalizationsAr {
   String get searchFavoriteContent => 'دور على شغلاتك المفضلة';
 
   @override
-  String get pressSearchOrEnter => 'اضغط بحث أو Enter لتبلش';
+  String get pressSearchOrEnter => 'اضغط على مفتاح البحث أو الإدخال للبدء';
 
   @override
   String get noResultsFound => 'ما لقينا شي.';
@@ -2079,7 +2074,7 @@ class AppLocalizationsArApc extends AppLocalizationsAr {
 
   @override
   String playEpisodeOnly(String label, int episode) {
-    return '$label E$episode';
+    return '$label ح$episode';
   }
 
   @override
@@ -2104,7 +2099,7 @@ class AppLocalizationsArApc extends AppLocalizationsAr {
   String get loadPluginFromAssets => 'حمل من الأصول';
 
   @override
-  String get enterVideoUrlHint => 'رابط الفيديو';
+  String get enterVideoUrlHint => 'أدخل رابط الفيديو (http أو magnet أو غيرهما)';
 
   @override
   String get networkStream => 'بث شبكي';
@@ -2527,46 +2522,44 @@ class AppLocalizationsArApc extends AppLocalizationsAr {
   String get viewLogsSubtitle => 'عرض نشاط التطبيق والأخطاء';
 
   @override
-  String get clearCache => 'Clear image and video cache';
+  String get clearCache => 'مسح ذاكرة الصور والفيديو المؤقتة';
 
   @override
-  String get clearCacheSubtitle =>
-      'Frees up storage used by cached images and videos';
+  String get clearCacheSubtitle => 'تحرير مساحة التخزين المستخدمة للصور وملفات الفيديو المؤقتة';
 
   @override
-  String get clearCacheDialogTitle => 'Clear cache?';
+  String get clearCacheDialogTitle => 'مسح الذاكرة المؤقتة؟';
 
   @override
-  String get clearCacheDialogContent =>
-      'This will delete cached images and video files. Your settings, history, and extensions will not be affected.';
+  String get clearCacheDialogContent => 'سيؤدي هذا إلى حذف الصور وملفات الفيديو المؤقتة. لن تتأثر إعداداتك أو سجل المشاهدة أو الإضافات.';
 
   @override
-  String get clearCacheNow => 'Clear Cache';
+  String get clearCacheNow => 'مسح الذاكرة المؤقتة';
 
   @override
-  String get cacheCleared => 'Cache cleared';
+  String get cacheCleared => 'تم مسح الذاكرة المؤقتة';
 
   @override
   String get calculating => 'جارٍ الحساب…';
 
   @override
-  String get playerControls => 'Player Controls';
+  String get playerControls => 'عناصر تحكم المشغل';
 
   @override
-  String get playerControlsSubtitle => 'Show or hide player control buttons';
+  String get playerControlsSubtitle => 'إظهار أزرار التحكم في المشغل أو إخفاؤها';
 
   @override
-  String get showPip => 'Picture-in-Picture button';
+  String get showPip => 'زر صورة داخل صورة';
 
   @override
-  String get showResize => 'Resize button';
+  String get showResize => 'زر تغيير الحجم';
 
   @override
-  String get showRotate => 'Rotate button';
+  String get showRotate => 'زر التدوير';
 
   @override
-  String get showPlaybackSpeed => 'Playback speed button';
+  String get showPlaybackSpeed => 'زر سرعة التشغيل';
 
   @override
-  String get showEpisodes => 'Episodes button';
+  String get showEpisodes => 'زر الحلقات';
 }

@@ -14,6 +14,7 @@ import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../search/presentation/search_provider.dart';
 import '../widgets/provider_search_filter_dialog.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 String homeSearchFieldLabel(
   BuildContext context,
   ProviderSearchFilters filters,
@@ -384,7 +385,7 @@ class _HomeSearchSuggestionsState
     if (suggestions.isEmpty) {
       return Center(
         child: Text(
-          'No results found',
+          appText(context, english: 'No results found', arabic: 'لم يتم العثور على نتائج'),
           style: TextStyle(
             color: Theme.of(
               context,
@@ -404,7 +405,7 @@ class _HomeSearchSuggestionsState
             leading: const Icon(Icons.search_rounded),
             title: Text(suggestion),
             trailing: IconButton(
-              tooltip: 'Fill query',
+              tooltip: appText(context, english: 'Fill query', arabic: 'إدخال عبارة البحث'),
               icon: const Icon(Icons.north_west_rounded),
               onPressed: () => widget.onSelect(suggestion),
             ),
@@ -582,7 +583,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'No Results Found',
+              appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
               style: TextStyle(
                 fontFamily: nativeFont,
                 fontSize: 16,

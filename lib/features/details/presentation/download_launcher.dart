@@ -15,6 +15,7 @@ import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 part 'download_launcher.g.dart';
 
 @Riverpod(keepAlive: true)
@@ -294,9 +295,15 @@ class DownloadLauncher {
 
                   if (!started && finalContext.mounted) {
                     ScaffoldMessenger.of(finalContext).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          'Failed to start download. Check storage permissions.',
+                          appText(
+                            finalContext,
+                            english:
+                                'Failed to start download. Check storage permissions.',
+                            arabic:
+                                'فشل بدء التنزيل. تحقق من أذونات التخزين.',
+                          ),
                         ),
                       ),
                     );

@@ -19,6 +19,7 @@ import 'subtitle_sync_dialog.dart';
 import 'subtitle_appearance_dialog.dart';
 import 'player_ltr.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class _TrackDialogResult {
   final String? audioId;
   final String? subtitleId;
@@ -309,7 +310,7 @@ class PlayerBottomSheets {
                                     ),
                                   )
                                 : null,
-                            child: const Text('Apply'),
+                            child: Text(appText(context, english: 'Apply', arabic: 'تطبيق')),
                           ),
                         ),
                       ],
@@ -1127,8 +1128,12 @@ class PlayerBottomSheets {
                                       ),
                                     ),
                                     const SizedBox(height: 16),
-                                    const Text(
-                                      'Subtitle Accounts Not Configured',
+                                    Text(
+                                      appText(
+                                        context,
+                                        english: 'Subtitle Accounts Not Configured',
+                                        arabic: 'حسابات الترجمة غير مهيأة',
+                                      ),
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w800,
@@ -1136,8 +1141,14 @@ class PlayerBottomSheets {
                                       ),
                                     ),
                                     const SizedBox(height: 8),
-                                    const Text(
-                                      'Explorey requires your personal API keys for OpenSubtitles, SubDL, or SubSource.',
+                                    Text(
+                                      appText(
+                                        context,
+                                        english:
+                                            'Explorey requires your personal API keys for OpenSubtitles, SubDL, or SubSource.',
+                                        arabic:
+                                            'يتطلب Explorey مفاتيح API الشخصية لخدمات OpenSubtitles أو SubDL أو SubSource.',
+                                      ),
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 13,
@@ -1155,11 +1166,17 @@ class PlayerBottomSheets {
                                           ScaffoldMessenger.of(
                                             parentContext,
                                           ).showSnackBar(
-                                            const SnackBar(
+                                            SnackBar(
                                               content: Text(
-                                                'Go to App Settings > Player > Subtitle Accounts to configure.',
+                                                appText(
+                                                  context,
+                                                  english:
+                                                      'Go to App Settings > Player > Subtitle Accounts to configure.',
+                                                  arabic:
+                                                      'انتقل إلى إعدادات التطبيق > المشغل > حسابات الترجمة للتهيئة.',
+                                                ),
                                               ),
-                                              duration: Duration(seconds: 4),
+                                              duration: const Duration(seconds: 4),
                                             ),
                                           );
                                         }
@@ -1168,8 +1185,12 @@ class PlayerBottomSheets {
                                         Icons.settings_outlined,
                                         size: 18,
                                       ),
-                                      label: const Text(
-                                        'View Settings Instructions',
+                                      label: Text(
+                                        appText(
+                                          context,
+                                          english: 'View Settings Instructions',
+                                          arabic: 'عرض تعليمات الإعداد',
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1512,8 +1533,13 @@ class _HotstarSourcesTabState extends State<_HotstarSourcesTab> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'No sources matched your quality filter — showing all sources. '
-                    'Try a different filter in Settings.',
+                    appText(
+                      context,
+                      english:
+                          'No sources matched your quality filter — showing all sources. Try a different filter in Settings.',
+                      arabic:
+                          'لم تطابق أي مصادر مرشح الجودة؛ سيتم عرض جميع المصادر. جرّب مرشحًا مختلفًا من الإعدادات.',
+                    ),
                     style: TextStyle(
                       color: Colors.amber.shade200,
                       fontSize: isCompact ? 12 : 13,
@@ -1595,7 +1621,13 @@ class _HotstarSourcesTabState extends State<_HotstarSourcesTab> {
 
               return _HotstarOptionRow(
                 label: stream.source,
-                metadata: selected ? 'Current source' : null,
+                metadata: selected
+                    ? appText(
+                        context,
+                        english: 'Current source',
+                        arabic: 'المصدر الحالي',
+                      )
+                    : null,
                 selected: selected,
                 badge: badge != 'Auto' ? badge : null,
                 onTap: () => widget.onSelected(stream),
@@ -1629,7 +1661,11 @@ class _PendingSourceTracksMessage extends StatelessWidget {
             ),
             SizedBox(height: isCompact ? 12 : 18),
             Text(
-              'Apply the source first',
+              appText(
+                context,
+                english: 'Apply the source first',
+                arabic: 'طبّق المصدر أولًا',
+              ),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: HotstarPlayerStyle.primaryText,
@@ -1639,7 +1675,12 @@ class _PendingSourceTracksMessage extends StatelessWidget {
             ),
             SizedBox(height: isCompact ? 8 : 10),
             Text(
-              'Audio and subtitles are loaded separately for each source.',
+              appText(
+                context,
+                english:
+                    'Audio and subtitles are loaded separately for each source.',
+                arabic: 'يتم تحميل الصوت والترجمة بشكل منفصل لكل مصدر.',
+              ),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: HotstarPlayerStyle.mutedText,

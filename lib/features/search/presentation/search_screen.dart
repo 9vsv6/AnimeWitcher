@@ -11,6 +11,7 @@ import 'widgets/search_header_bar.dart';
 import 'widgets/bouncy_entry_animation.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -401,7 +402,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: PopupMenuButton<SearchFilter>(
-              tooltip: 'Search scope',
+              tooltip: appText(context, english: 'Search scope', arabic: 'نطاق البحث'),
               onSelected: (value) {
                 ref.read(searchFilterProvider.notifier).set(value);
                 // Sync current text to search query instantly on scope switch
@@ -416,7 +417,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     children: [
                       const Text('🍿', style: TextStyle(fontSize: 18)),
                       const SizedBox(width: 12),
-                      const Expanded(child: Text('Non Livestreams')),
+                      Expanded(
+                        child: Text(
+                          appText(
+                            context,
+                            english: 'Non Livestreams',
+                            arabic: 'محتوى غير مباشر',
+                          ),
+                        ),
+                      ),
                       if (!isLive)
                         Icon(
                           Icons.check,
@@ -436,7 +445,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         child: Center(child: WaveformEqualizer(isActive: true)),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(child: Text('Livestreams')),
+                      Expanded(
+                        child: Text(
+                          appText(
+                            context,
+                            english: 'Livestreams',
+                            arabic: 'البث المباشر',
+                          ),
+                        ),
+                      ),
                       if (isLive)
                         Icon(
                           Icons.check,
@@ -643,7 +660,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (suggestionState.suggestions.isEmpty) {
       return Center(
         child: Text(
-          'No results found',
+          appText(context, english: 'No results found', arabic: 'لم يتم العثور على نتائج'),
           style: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -726,7 +743,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'No Results Found',
+            appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
             style: TextStyle(
               fontFamily: nativeFont,
               fontSize: 16.0,

@@ -10,6 +10,7 @@ import '../player_controller.dart';
 import 'hotstar_player_style.dart';
 import 'player_ltr.dart';
 
+import 'package:skystream/core/utils/localized_text.dart';
 class SubtitleCue {
   final int startTimeMs;
   final int durationMs;
@@ -398,7 +399,11 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
     if (subtitleUrl == null) {
       setState(() {
         _cues = [];
-        _errorMessage = "No subtitles loaded yet";
+        _errorMessage = appText(
+          context,
+          english: 'No subtitles loaded yet',
+          arabic: 'لم تُحمّل أي ترجمة بعد',
+        );
       });
       return;
     }
@@ -587,7 +592,12 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  _errorMessage ?? "No subtitles loaded yet",
+                  _errorMessage ??
+                      appText(
+                        context,
+                        english: 'No subtitles loaded yet',
+                        arabic: 'لم تُحمّل أي ترجمة بعد',
+                      ),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
@@ -623,9 +633,13 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // Title (centered text)
-                          const Center(
+                          Center(
                             child: Text(
-                              "Subtitle delay",
+                              appText(
+                                context,
+                                english: 'Subtitle delay',
+                                arabic: 'تأخير الترجمة',
+                              ),
                               style: TextStyle(
                                 color: HotstarPlayerStyle.primaryText,
                                 fontSize: 24,
@@ -782,9 +796,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text(
-                    "Apply",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  child: Text(
+                    appText(context, english: 'Apply', arabic: 'تطبيق'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -801,9 +815,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text(
-                    "Reset",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  child: Text(
+                    appText(context, english: 'Reset', arabic: 'إعادة ضبط'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -820,9 +834,9 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text(
-                    "Cancel",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  child: Text(
+                    appText(context, english: 'Cancel', arabic: 'إلغاء'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
