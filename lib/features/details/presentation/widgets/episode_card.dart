@@ -36,6 +36,19 @@ class EpisodeCard extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final episodeNumberLabel =
+        isArabic ? 'حلقة ${episode.episode}' : 'Episode ${episode.episode}';
+    final episodeTitle = episode.name.trim();
+    final genericEpisodeTitle = RegExp(
+      r'^(?:(?:الحلقة|حلقه|حلقة)|(?:episode|ep\.?))\s*[0-9٠-٩۰-۹]+$',
+      caseSensitive: false,
+    );
+    final showEpisodeTitle =
+        episodeTitle.isNotEmpty &&
+        !genericEpisodeTitle.hasMatch(episodeTitle) &&
+        !RegExp(r'^[0-9٠-٩۰-۹]+$').hasMatch(episodeTitle);
     final historyRepo = ref.watch(historyRepositoryProvider);
     final historyItem = ref.watch(
       watchHistoryProvider.select(
@@ -290,18 +303,39 @@ class EpisodeCard extends HookConsumerWidget {
                     ),
                     const SizedBox(width: LayoutConstants.spacingMd),
                     Expanded(
-                      child: Text(
-                        "${episode.episode}. ${episode.name.toUpperCase()}",
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: isWatched
-                              ? theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.65,
-                                )
-                              : theme.colorScheme.onSurface,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            episodeNumberLabel,
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: isWatched
+                                  ? theme.colorScheme.onSurface.withValues(
+                                      alpha: 0.65,
+                                    )
+                                  : theme.colorScheme.onSurface,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (showEpisodeTitle) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              episodeTitle,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w500,
+                                color: theme.colorScheme.onSurfaceVariant.withValues(
+                                  alpha: isWatched ? 0.55 : 0.72,
+                                ),
+                                height: 1.25,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const SizedBox(width: LayoutConstants.spacingXs),
