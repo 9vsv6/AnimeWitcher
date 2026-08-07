@@ -4,7 +4,6 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 enum TaskbarDestination {
   home,
   search,
-  explore,
   library,
   downloads,
   settings;
@@ -14,16 +13,14 @@ enum TaskbarDestination {
   int get branchIndex => switch (this) {
     TaskbarDestination.home => 0,
     TaskbarDestination.search => 1,
-    TaskbarDestination.explore => 2,
-    TaskbarDestination.library => 3,
-    TaskbarDestination.downloads => 4,
-    TaskbarDestination.settings => 5,
+    TaskbarDestination.library => 2,
+    TaskbarDestination.downloads => 3,
+    TaskbarDestination.settings => 4,
   };
 
   String get route => switch (this) {
     TaskbarDestination.home => '/home',
     TaskbarDestination.search => '/search',
-    TaskbarDestination.explore => '/explore',
     TaskbarDestination.library => '/library',
     TaskbarDestination.downloads => '/downloads',
     TaskbarDestination.settings => '/settings',
@@ -32,7 +29,6 @@ enum TaskbarDestination {
   IconData get icon => switch (this) {
     TaskbarDestination.home => Icons.home_outlined,
     TaskbarDestination.search => Icons.search_outlined,
-    TaskbarDestination.explore => Icons.explore_outlined,
     TaskbarDestination.library => Icons.video_library_outlined,
     TaskbarDestination.downloads => Icons.download_for_offline_outlined,
     TaskbarDestination.settings => Icons.settings_outlined,
@@ -41,7 +37,6 @@ enum TaskbarDestination {
   IconData get selectedIcon => switch (this) {
     TaskbarDestination.home => Icons.home,
     TaskbarDestination.search => Icons.search,
-    TaskbarDestination.explore => Icons.explore,
     TaskbarDestination.library => Icons.video_library,
     TaskbarDestination.downloads => Icons.download_for_offline_rounded,
     TaskbarDestination.settings => Icons.settings,
@@ -50,7 +45,6 @@ enum TaskbarDestination {
   String label(AppLocalizations l10n) => switch (this) {
     TaskbarDestination.home => l10n.home,
     TaskbarDestination.search => l10n.search,
-    TaskbarDestination.explore => l10n.explore,
     TaskbarDestination.library => l10n.library,
     TaskbarDestination.downloads => l10n.downloads,
     TaskbarDestination.settings => l10n.settings,
@@ -60,7 +54,6 @@ enum TaskbarDestination {
 const List<String> defaultTaskbarOrderIds = <String>[
   'home',
   'search',
-  'explore',
   'library',
   'downloads',
   'settings',

@@ -25,7 +25,7 @@ class HeroCarouselController {
       onPreviousPage?.call();
 }
 
-class ExploreCarousel extends ConsumerStatefulWidget {
+class HomeHeroCarousel extends ConsumerStatefulWidget {
   final List<MultimediaItem> movies;
   final ScrollController? scrollController;
   final void Function(MultimediaItem)? onTap;
@@ -35,7 +35,7 @@ class ExploreCarousel extends ConsumerStatefulWidget {
   /// so the parent can drive prev/next from an external UI (e.g. header arrows).
   final void Function(HeroCarouselController controller)? onControllerReady;
 
-  const ExploreCarousel({
+  const HomeHeroCarousel({
     super.key,
     required this.movies,
     this.scrollController,
@@ -45,7 +45,7 @@ class ExploreCarousel extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<ExploreCarousel> createState() => _ExploreCarouselState();
+  ConsumerState<HomeHeroCarousel> createState() => _HomeHeroCarouselState();
 }
 
 // Intents used by the carousel's keyboard shortcuts. Defined at file scope so
@@ -62,7 +62,7 @@ class _CarouselNextIntent extends Intent {
   const _CarouselNextIntent();
 }
 
-class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
+class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     with TickerProviderStateMixin {
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final HeroCarouselController _heroCarouselController =
@@ -660,24 +660,6 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
     final title = movie.title;
     final year = movie.year?.toString() ?? '';
     final genres = movie.tags?.join(' • ') ?? '';
-    final provider = movie.provider;
-
-    String? type;
-    final mType = movie.mediaType.toLowerCase();
-    if (mType == 'movie') {
-      type = "Movie";
-    } else if (mType == 'series' || mType == 'tv') {
-      type = "TV Show";
-    } else if (mType == 'anime') {
-      type = "Anime";
-    } else if (mType == 'livestream') {
-      type = "Live Stream";
-    } else {
-      type = mType.isNotEmpty
-          ? mType[0].toUpperCase() + mType.substring(1)
-          : null;
-    }
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: isDesktop
@@ -697,14 +679,6 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
           spacing: 8.0,
           runSpacing: 4.0,
           children: [
-            if (provider != null && provider.isNotEmpty) ...[
-              _buildMiniBadge(
-                context,
-                provider.toUpperCase(),
-                isProvider: true,
-              ),
-            ],
-            if (type != null) ...[_buildMiniBadge(context, type.toUpperCase())],
             if (genres.isNotEmpty) ...[
               Text(
                 genres,

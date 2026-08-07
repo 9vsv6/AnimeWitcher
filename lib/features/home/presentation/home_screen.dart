@@ -10,7 +10,7 @@ import 'package:skystream/features/tracking/domain/sync_progress_item.dart';
 import 'package:skystream/features/home/presentation/widgets/synced_progress_section.dart';
 import 'package:skystream/features/library/presentation/history_provider.dart';
 import '../../settings/presentation/general_settings_provider.dart';
-import '../../explore/presentation/widgets/explore_carousel.dart';
+import 'widgets/home_hero_carousel.dart';
 import '../../explore/presentation/widgets/media_horizontal_list.dart';
 import '../../explore/presentation/view_all_screen.dart';
 import '../../../shared/widgets/desktop_scroll_wrapper.dart';
@@ -64,7 +64,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   bool _isLoadingProviderSearchFilters = false;
   final Map<String, ProviderSearchFilterOptions> _searchFilterOptionsCache = {};
 
-  /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
+  /// Carousel controller exposed by HomeHeroCarousel via [onControllerReady].
   /// Used by DashboardHeaderBar arrows.
   HeroCarouselController? _carouselController;
 
@@ -425,7 +425,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             slivers: [
               if (data.containsKey('Trending'))
                 SliverToBoxAdapter(
-                  child: ExploreCarousel(
+                  child: HomeHeroCarousel(
                     movies: data['Trending']!.take(7).toList(),
                     scrollController: _scrollController,
                     onNavigateUp: () => _firstActionFocusNode.requestFocus(),
@@ -440,7 +440,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 )
               else if (data.isNotEmpty)
                 SliverToBoxAdapter(
-                  child: ExploreCarousel(
+                  child: HomeHeroCarousel(
                     movies: data.values.first.take(7).toList(),
                     scrollController: _scrollController,
                     onNavigateUp: () => _firstActionFocusNode.requestFocus(),

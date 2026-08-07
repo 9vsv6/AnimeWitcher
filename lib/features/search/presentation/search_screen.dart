@@ -28,6 +28,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final FocusNode _clearButtonFocusNode = FocusNode();
   final FocusNode _firstSuggestionFocusNode = FocusNode();
   final FocusNode _firstResultFocusNode = FocusNode();
+  final ScrollController _resultsScrollController = ScrollController();
   bool _isLoadingProviderFilters = false;
 
   @override
@@ -36,6 +37,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     // Restore any previously committed query into the text field.
     _controller.text = ref.read(searchQueryProvider);
     _controller.addListener(_onTextChanged);
+    _resultsScrollController.addListener(_onResultsScroll);
     ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
 
     _focusNode.onKeyEvent = (node, event) {
@@ -101,9 +103,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (mounted) setState(() {});
   }
 
+
+  void _onResultsScroll() {
+    if (!_resultsScrollController.hasClients) return;
+    if (_resultsScrollController.position.extentAfter < 600) {
+      ref.read(searchPagedResultsProvider.notifier).loadMore();
+    }
+  }
+
   @override
   void dispose() {
     _controller.removeListener(_onTextChanged);
+    _resultsScrollController.removeListener(_onResultsScroll);
+    _resultsScrollController.dispose();
     _controller.dispose();
     _focusNode.dispose();
     _clearButtonFocusNode.dispose();
@@ -367,7 +379,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildMobileLayout(BuildContext context) {
-    final searchResultsAsync = ref.watch(searchResultsProvider);
+    final searchResultsState = ref.watch(searchPagedResultsProvider);
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
@@ -438,11 +450,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             child: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _controller,
               builder: (context, value, child) {
-                final isSearching = searchResultsAsync.maybeWhen(
-                  data: (state) => state.isLoading,
-                  loading: () => true,
-                  orElse: () => false,
-                );
+                final isSearching = searchResultsState.isLoading;
 
                 Widget? suffix;
                 if (isSearching) {
@@ -542,56 +550,48 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildBody(BuildContext context) {
-    final searchResultsAsync = ref.watch(searchResultsProvider);
+    final state = ref.watch(searchPagedResultsProvider);
     final suggestionState = ref.watch(searchSuggestionControllerProvider);
-    final l10n = AppLocalizations.of(context)!;
     final typedLongEnough = suggestionState.query.trim().length >= 2;
     final hasSuggestionContent =
         suggestionState.isLoading || suggestionState.suggestions.isNotEmpty;
     final showSuggestions = typedLongEnough && hasSuggestionContent;
 
-    return showSuggestions
-        ? _buildSuggestionsView(context, suggestionState)
-        : searchResultsAsync.when(
-            data: (state) {
-              final allResults = state.results
-                  .expand((e) => e.results)
-                  .toList();
+    if (showSuggestions) {
+      return _buildSuggestionsView(context, suggestionState);
+    }
 
-              if (allResults.isEmpty && !state.isLoading) {
-                return _buildEmptyState(context);
-              } else if (allResults.isEmpty && state.isLoading) {
-                return const Center(child: AppLoadingIndicator());
-              }
+    final allResults = state.results.expand((entry) => entry.results).toList();
+    if (allResults.isEmpty && state.isLoading) {
+      return const Center(child: AppLoadingIndicator());
+    }
+    if (allResults.isEmpty) {
+      return _buildEmptyState(context);
+    }
 
-              // RepaintBoundary isolates list repaints from the rest of the
-              // screen (app bar, background) so each incremental result update
-              // only repaints the list — not the entire scaffold.
-              return RepaintBoundary(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(
-                    bottom: 100,
-                  ),
-                  itemCount: state.results.length,
-                  itemBuilder: (context, index) {
-                    final pResult = state.results[index];
-                    return SearchResultSection(
-                      key: ValueKey(pResult.providerId),
-                      providerName: pResult.providerName,
-                      providerId: pResult.providerId,
-                      results: pResult.results,
-                      firstCardFocusNode: index == 0
-                          ? _firstResultFocusNode
-                          : null,
-                    );
-                  },
-                ),
-              );
-            },
-            loading: () => const Center(child: AppLoadingIndicator()),
-            error: (err, stack) =>
-                Center(child: Text(l10n.errorPrefix(err.toString()))),
+    return RepaintBoundary(
+      child: ListView.builder(
+        controller: _resultsScrollController,
+        padding: const EdgeInsets.only(bottom: 100),
+        itemCount: state.results.length + (state.isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= state.results.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: AppLoadingIndicator()),
+            );
+          }
+          final pResult = state.results[index];
+          return SearchResultSection(
+            key: ValueKey(pResult.providerId),
+            providerName: pResult.providerName,
+            providerId: pResult.providerId,
+            results: pResult.results,
+            firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
           );
+        },
+      ),
+    );
   }
 
   Widget _buildSuggestionsView(

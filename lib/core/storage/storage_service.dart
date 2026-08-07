@@ -93,14 +93,42 @@ class StorageService {
     return md5.convert(utf8.encode(url)).toString();
   }
 
+
+  String _canonicalMediaUrl(String rawUrl) {
+    final value = rawUrl.trim();
+    final uri = Uri.tryParse(value);
+    if (uri == null) return value;
+    final host = uri.host.toLowerCase();
+    if ((host == 'animewitcher.com' || host == 'www.animewitcher.com') &&
+        uri.pathSegments.isNotEmpty &&
+        uri.pathSegments.first == 'watch') {
+      return uri.replace(query: '', fragment: '').toString();
+    }
+    return value;
+  }
+
   // --- Library (Favorites) ---
 
   // We store items as JSON strings or Maps. Key is url.
   Future<void> addToLibrary(MultimediaItem item) async {
-    // We assume item.url is unique enough for now
-    await _libraryBox.put(_getKey(item.url), {
+    final canonicalUrl = _canonicalMediaUrl(item.url);
+    final staleKeys = <dynamic>[];
+    for (var i = 0; i < _libraryBox.length; i++) {
+      final key = _libraryBox.keyAt(i);
+      final raw = _libraryBox.get(key);
+      if (raw is! Map) continue;
+      final storedUrl = (raw['url'] as String?) ?? '';
+      if (_canonicalMediaUrl(storedUrl) == canonicalUrl &&
+          key != _getKey(canonicalUrl)) {
+        staleKeys.add(key);
+      }
+    }
+    for (final key in staleKeys) {
+      await _libraryBox.delete(key);
+    }
+    await _libraryBox.put(_getKey(canonicalUrl), {
       'title': item.title,
-      'url': item.url,
+      'url': canonicalUrl,
       'posterUrl': item.posterUrl,
       'bannerUrl': item.bannerUrl,
       'description': item.description,
@@ -110,22 +138,48 @@ class StorageService {
   }
 
   Future<void> removeFromLibrary(String url) async {
-    await _libraryBox.delete(_getKey(url));
+    final canonicalUrl = _canonicalMediaUrl(url);
+    final keys = <dynamic>[];
+    for (var i = 0; i < _libraryBox.length; i++) {
+      final key = _libraryBox.keyAt(i);
+      final raw = _libraryBox.get(key);
+      if (raw is Map &&
+          _canonicalMediaUrl((raw['url'] as String?) ?? '') == canonicalUrl) {
+        keys.add(key);
+      }
+    }
+    for (final key in keys) {
+      await _libraryBox.delete(key);
+    }
   }
 
   bool isInLibrary(String url) {
-    return _libraryBox.containsKey(_getKey(url));
+    final canonicalUrl = _canonicalMediaUrl(url);
+    if (_libraryBox.containsKey(_getKey(canonicalUrl))) return true;
+    for (var i = 0; i < _libraryBox.length; i++) {
+      final raw = _libraryBox.getAt(i);
+      if (raw is Map &&
+          _canonicalMediaUrl((raw['url'] as String?) ?? '') == canonicalUrl) {
+        return true;
+      }
+    }
+    return false;
   }
 
   List<MultimediaItem> getLibraryItems() {
     final items = <MultimediaItem>[];
+    final seen = <String>{};
     for (var i = 0; i < _libraryBox.length; i++) {
       final key = _libraryBox.keyAt(i);
-      final map = Map<String, dynamic>.from(_libraryBox.get(key) as Map);
+      final raw = _libraryBox.get(key);
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      final canonicalUrl = _canonicalMediaUrl((map['url'] as String?) ?? '');
+      if (canonicalUrl.isEmpty || !seen.add(canonicalUrl)) continue;
       items.add(
         MultimediaItem(
           title: (map['title'] as String?) ?? '',
-          url: (map['url'] as String?) ?? '',
+          url: canonicalUrl,
           posterUrl: (map['posterUrl'] as String?) ?? '',
           bannerUrl: map['bannerUrl'] as String?,
           description: map['description'] as String?,

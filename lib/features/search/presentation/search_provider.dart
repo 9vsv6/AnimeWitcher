@@ -29,8 +29,33 @@ class ProviderSearchResult {
 class SearchAggregateState {
   final List<ProviderSearchResult> results;
   final bool isLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final int nextOffset;
 
-  const SearchAggregateState({this.results = const [], this.isLoading = false});
+  const SearchAggregateState({
+    this.results = const [],
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.hasMore = false,
+    this.nextOffset = 0,
+  });
+
+  SearchAggregateState copyWith({
+    List<ProviderSearchResult>? results,
+    bool? isLoading,
+    bool? isLoadingMore,
+    bool? hasMore,
+    int? nextOffset,
+  }) {
+    return SearchAggregateState(
+      results: results ?? this.results,
+      isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      hasMore: hasMore ?? this.hasMore,
+      nextOffset: nextOffset ?? this.nextOffset,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +381,149 @@ class SearchProviderFiltersNotifier extends Notifier<ProviderSearchFilters> {
 final searchProviderFiltersProvider =
     NotifierProvider<SearchProviderFiltersNotifier, ProviderSearchFilters>(
       SearchProviderFiltersNotifier.new,
+    );
+
+
+class PagedSearchNotifier extends Notifier<SearchAggregateState> {
+  int _generation = 0;
+  String _query = '';
+  ProviderSearchFilters _filters = const ProviderSearchFilters();
+
+  @override
+  SearchAggregateState build() {
+    ref.listen(searchQueryProvider, (_, next) {
+      _query = next;
+      _reload();
+    });
+    ref.listen(searchProviderFiltersProvider, (_, next) {
+      _filters = next;
+      _reload();
+    });
+    _query = ref.read(searchQueryProvider);
+    _filters = ref.read(searchProviderFiltersProvider);
+    Future.microtask(_reload);
+    return const SearchAggregateState(isLoading: true);
+  }
+
+  SkyStreamProvider? _provider() {
+    final providers = ref
+        .read(extensionManagerProvider.notifier)
+        .getAllProviders()
+        .where((provider) {
+          final liveOnly = provider.supportedTypes.isNotEmpty &&
+              provider.supportedTypes.every(
+                (type) => type == ProviderType.livestream,
+              );
+          return !liveOnly;
+        })
+        .toList(growable: false);
+    return providers.isEmpty ? null : providers.first;
+  }
+
+  Future<ProviderMediaPage> _loadPage(
+    SkyStreamProvider provider,
+    int offset,
+  ) {
+    final pageSize = provider.searchPageSize;
+    if (_query.trim().isEmpty && _filters.isEmpty) {
+      return provider.getHomeSectionPage(
+        'قائمة الأنمي',
+        offset: offset,
+        limit: pageSize,
+      );
+    }
+    return provider.searchPage(
+      _query,
+      _filters,
+      offset: offset,
+      limit: pageSize,
+    );
+  }
+
+  Future<void> _reload() async {
+    final generation = ++_generation;
+    state = const SearchAggregateState(isLoading: true);
+    final provider = _provider();
+    if (provider == null) {
+      if (generation == _generation) {
+        state = const SearchAggregateState();
+      }
+      return;
+    }
+
+    try {
+      final page = await _loadPage(provider, 0);
+      if (generation != _generation) return;
+      state = SearchAggregateState(
+        results: page.items.isEmpty
+            ? const <ProviderSearchResult>[]
+            : <ProviderSearchResult>[
+                ProviderSearchResult(
+                  providerId: provider.packageName,
+                  providerName: provider.name,
+                  results: page.items,
+                ),
+              ],
+        isLoading: false,
+        hasMore: page.hasMore,
+        nextOffset: page.nextOffset,
+      );
+    } catch (e) {
+      debugPrint('[SEARCH PAGE] initial load failed: $e');
+      if (generation == _generation) {
+        state = const SearchAggregateState();
+      }
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
+    final provider = _provider();
+    if (provider == null) return;
+    final generation = _generation;
+    state = state.copyWith(isLoadingMore: true);
+
+    try {
+      final page = await _loadPage(provider, state.nextOffset);
+      if (generation != _generation) return;
+      final current = state.results.isEmpty
+          ? const <MultimediaItem>[]
+          : state.results.first.results;
+      final seen = <String>{};
+      final merged = <MultimediaItem>[];
+      for (final item in <MultimediaItem>[...current, ...page.items]) {
+        final key = item.url.trim().isNotEmpty
+            ? item.url.trim()
+            : '${item.provider ?? ''}|${item.title.trim().toLowerCase()}|${item.year ?? ''}';
+        if (seen.add(key)) merged.add(item);
+      }
+      state = SearchAggregateState(
+        results: merged.isEmpty
+            ? const <ProviderSearchResult>[]
+            : <ProviderSearchResult>[
+                ProviderSearchResult(
+                  providerId: provider.packageName,
+                  providerName: provider.name,
+                  results: merged,
+                ),
+              ],
+        isLoading: false,
+        isLoadingMore: false,
+        hasMore: page.hasMore,
+        nextOffset: page.nextOffset,
+      );
+    } catch (e) {
+      debugPrint('[SEARCH PAGE] load more failed: $e');
+      if (generation == _generation) {
+        state = state.copyWith(isLoadingMore: false);
+      }
+    }
+  }
+}
+
+final searchPagedResultsProvider =
+    NotifierProvider<PagedSearchNotifier, SearchAggregateState>(
+      PagedSearchNotifier.new,
     );
 
 @Riverpod(keepAlive: true)

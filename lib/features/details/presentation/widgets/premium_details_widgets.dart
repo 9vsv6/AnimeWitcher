@@ -29,10 +29,6 @@ class MetadataBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // theme and context used in helper methods
-    final contentType = item.contentType;
-    final showTypeBadge =
-        !isLoading || (contentType != MultimediaContentType.movie);
-
     // Details metadata v2: age rating and episode count use plugin fallbacks.
     String? clean(dynamic raw) {
       if (raw == null) return null;
@@ -60,20 +56,6 @@ class MetadataBar extends ConsumerWidget {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        if (showTypeBadge)
-          _buildBorderedInfo(
-            context,
-            contentType.name.toUpperCase(),
-            color: Theme.of(context).colorScheme.primary,
-            isFilled: true,
-          )
-        else
-          ShimmerPlaceholder.rectangular(
-            width: 60,
-            height: 20,
-            borderRadius: 4,
-          ),
-
         if (item.year != null)
           _buildIconInfo(
             context,

@@ -3,7 +3,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:skystream/features/home/presentation/home_screen.dart';
 import 'package:skystream/features/search/presentation/search_screen.dart';
-import '../../features/explore/presentation/explore_screen.dart';
 import 'package:skystream/features/library/presentation/library_screen.dart';
 import 'package:skystream/features/library/presentation/downloads_screen.dart';
 import 'package:skystream/features/settings/presentation/settings_screen.dart';
@@ -31,9 +30,6 @@ part 'app_router.g.dart';
     ),
     TypedStatefulShellBranch<SearchBranchData>(
       routes: [TypedGoRoute<SearchRoute>(path: '/search')],
-    ),
-    TypedStatefulShellBranch<ExploreBranchData>(
-      routes: [TypedGoRoute<ExploreRoute>(path: '/explore')],
     ),
     TypedStatefulShellBranch<LibraryBranchData>(
       routes: [TypedGoRoute<LibraryRoute>(path: '/library')],
@@ -87,16 +83,6 @@ class SearchRoute extends GoRouteData with $SearchRoute {
       const SearchScreen();
 }
 
-class ExploreBranchData extends StatefulShellBranchData {
-  const ExploreBranchData();
-}
-
-class ExploreRoute extends GoRouteData with $ExploreRoute {
-  const ExploreRoute();
-  @override
-  Widget build(BuildContext context, GoRouterState state) =>
-      const ExploreScreen();
-}
 
 class LibraryBranchData extends StatefulShellBranchData {
   const LibraryBranchData();
