@@ -428,8 +428,6 @@ class _HomeSearchResults extends ConsumerStatefulWidget {
 }
 
 class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
-  static const int _pageSize = 30;
-
   final ScrollController _scrollController = ScrollController();
   final List<MultimediaItem> _items = <MultimediaItem>[];
   final Set<String> _seen = <String>{};
@@ -522,7 +520,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
         widget.query,
         widget.filters,
         offset: requestedOffset,
-        limit: _pageSize,
+        limit: provider.searchPageSize,
       );
 
       if (!mounted || generation != _generation) return;
@@ -533,13 +531,15 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
         }
       }
 
+      final fallbackAdvance = page.items.isNotEmpty ? page.items.length : 1;
       final nextOffset = page.nextOffset > requestedOffset
           ? page.nextOffset
-          : requestedOffset + _pageSize;
+          : requestedOffset + fallbackAdvance;
 
       setState(() {
         _offset = nextOffset;
-        _hasMore = page.hasMore;
+        _hasMore = page.hasMore &&
+            (page.nextOffset > requestedOffset || page.items.isNotEmpty);
         _isInitialLoading = false;
         _isLoadingMore = false;
       });

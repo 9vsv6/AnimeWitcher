@@ -96,6 +96,21 @@ class JsBasedProvider extends SkyStreamProvider {
 
   final String? _namespace;
   String? get namespace => _namespace; // Expose namespace
+
+  int _manifestPageSize(String key, int fallback) {
+    final pagination = _manifest['pagination'];
+    if (pagination is! Map) return fallback;
+    final raw = pagination[key];
+    final parsed = raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
+    if (parsed == null || parsed < 1) return fallback;
+    return parsed.clamp(1, 100).toInt();
+  }
+
+  @override
+  int get viewAllPageSize => _manifestPageSize('viewAllPageSize', 30);
+
+  @override
+  int get searchPageSize => _manifestPageSize('searchPageSize', 30);
   final String? _forcedName;
   final String? _providerId;
   // Scopes JS getPreference/setPreference — sub-providers share parent's namespace

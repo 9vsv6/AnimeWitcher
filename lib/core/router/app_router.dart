@@ -197,7 +197,7 @@ class ViewAllRouteExtra {
   final List<MultimediaItem> initialMediaList;
   final ViewAllCategory category;
   final void Function(MultimediaItem item)? onTap;
-  final Future<ProviderMediaPage> Function(int offset, int limit)? loadPage;
+  final Future<ProviderMediaPage> Function(int offset)? loadPage;
 }
 
 // --- Full Screen Routes ---

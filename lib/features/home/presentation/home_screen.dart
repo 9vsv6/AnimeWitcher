@@ -568,11 +568,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       category: ViewAllCategory.providerContent,
                       showViewAll: true,
                       fixedPhysicalDirection: true,
-                      loadViewAllPage: (offset, limit) =>
+                      loadViewAllPage: (offset) =>
                           activeProvider.getHomeSectionPage(
                             entry.key,
                             offset: offset,
-                            limit: limit,
+                            limit: activeProvider.viewAllPageSize,
                           ),
                       onTap: (item) {
                         DetailsRoute(

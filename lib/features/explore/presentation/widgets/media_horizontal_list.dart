@@ -21,8 +21,7 @@ class MediaHorizontalList extends StatefulWidget {
   final bool showViewAll;
   final bool fixedPhysicalDirection;
   final String? heroTagPrefix;
-  final Future<ProviderMediaPage> Function(int offset, int limit)?
-  loadViewAllPage;
+  final Future<ProviderMediaPage> Function(int offset)? loadViewAllPage;
 
   const MediaHorizontalList({
     super.key,

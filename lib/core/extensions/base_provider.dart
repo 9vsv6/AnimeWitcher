@@ -107,6 +107,12 @@ abstract class SkyStreamProvider {
   bool get hasSearch => true;
   bool get isDebug => packageName.endsWith('.debug');
 
+  /// Preferred provider-controlled batch sizes for paginated content.
+  /// Native providers can override these. JavaScript providers read them from
+  /// plugin.json. Older providers keep the legacy-safe value of 30.
+  int get viewAllPageSize => 30;
+  int get searchPageSize => 30;
+
   /// Cancel any pending JS eval for this provider so the queue isn't blocked
   /// by a stale IIFE load after the triggering search was abandoned.
   /// The provider resets itself so the next search retries cleanly.

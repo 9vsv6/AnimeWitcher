@@ -33,7 +33,7 @@ class ViewAllScreen extends ConsumerStatefulWidget {
 
   /// Loads exactly one provider page. The page is requested only when the
   /// user approaches the bottom, so View All never downloads the full catalog.
-  final Future<ProviderMediaPage> Function(int offset, int limit)? loadPage;
+  final Future<ProviderMediaPage> Function(int offset)? loadPage;
 
   const ViewAllScreen({
     super.key,
@@ -49,8 +49,6 @@ class ViewAllScreen extends ConsumerStatefulWidget {
 }
 
 class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
-  static const int _providerPageSize = 30;
-
   final ScrollController _scrollController = ScrollController();
   final List<MultimediaItem> _providerItems = <MultimediaItem>[];
   final Set<String> _providerSeen = <String>{};
@@ -110,7 +108,7 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
     setState(() => _providerLoading = true);
 
     try {
-      final page = await loader(requestedOffset, _providerPageSize);
+      final page = await loader(requestedOffset);
       if (!mounted) return;
 
       for (final item in page.items) {
@@ -120,10 +118,12 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
       }
 
       setState(() {
+        final fallbackAdvance = page.items.isNotEmpty ? page.items.length : 1;
         _providerOffset = page.nextOffset > requestedOffset
             ? page.nextOffset
-            : requestedOffset + _providerPageSize;
-        _providerHasMore = page.hasMore;
+            : requestedOffset + fallbackAdvance;
+        _providerHasMore = page.hasMore &&
+            (page.nextOffset > requestedOffset || page.items.isNotEmpty);
         _providerLoading = false;
       });
 
