@@ -8,7 +8,7 @@ import 'package:skystream/features/library/presentation/downloads_screen.dart';
 import 'package:skystream/features/settings/presentation/settings_screen.dart';
 import '../../features/settings/presentation/developer_options_screen.dart';
 import '../../features/details/presentation/details_screen.dart';
-import '../../features/explore/presentation/view_all_screen.dart';
+import '../../features/home/presentation/view_all_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
 import '../domain/entity/multimedia_item.dart';
 import '../navigation/taskbar_destination.dart';

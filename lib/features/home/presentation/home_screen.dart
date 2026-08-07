@@ -11,8 +11,8 @@ import 'package:skystream/features/home/presentation/widgets/synced_progress_sec
 import 'package:skystream/features/library/presentation/history_provider.dart';
 import '../../settings/presentation/general_settings_provider.dart';
 import 'widgets/home_hero_carousel.dart';
-import '../../explore/presentation/widgets/media_horizontal_list.dart';
-import '../../explore/presentation/view_all_screen.dart';
+import 'widgets/media_horizontal_list.dart';
+import 'view_all_screen.dart';
 import '../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 
