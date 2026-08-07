@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/extensions/extension_manager.dart';
@@ -67,6 +68,7 @@ Stream<SearchAggregateState> searchAllProviders(
   String query,
   ExtensionManager manager, {
   required SearchFilter filter,
+  required ProviderSearchFilters providerFilters,
   required bool Function() isCancelled,
 }) async* {
   final allProviders = manager.getAllProviders();
@@ -80,7 +82,7 @@ Stream<SearchAggregateState> searchAllProviders(
     '[SEARCH DBG] searchAllProviders called: query="$query", providers=${providers.length}, cancelled=${isCancelled()}',
   );
 
-  if (query.isEmpty || providers.isEmpty) {
+  if (providers.isEmpty) {
     yield const SearchAggregateState(results: [], isLoading: false);
     return;
   }
@@ -217,7 +219,11 @@ Stream<SearchAggregateState> searchAllProviders(
 
         try {
           debugPrint('[SEARCH DBG] START ${provider.packageName}');
-          final rawResults = await provider.search(query, cancelToken: token);
+          final rawResults = await provider.searchWithFilters(
+            query,
+            providerFilters,
+            cancelToken: token,
+          );
           debugPrint(
             '[SEARCH DBG] DONE ${provider.packageName} — rawResults=${rawResults.length}',
           );
@@ -341,10 +347,23 @@ class SearchFilterNotifier extends _$SearchFilterNotifier {
   void set(SearchFilter filter) => state = filter;
 }
 
+class SearchProviderFiltersNotifier extends Notifier<ProviderSearchFilters> {
+  @override
+  ProviderSearchFilters build() => const ProviderSearchFilters();
+
+  void set(ProviderSearchFilters value) => state = value;
+}
+
+final searchProviderFiltersProvider =
+    NotifierProvider<SearchProviderFiltersNotifier, ProviderSearchFilters>(
+      SearchProviderFiltersNotifier.new,
+    );
+
 @Riverpod(keepAlive: true)
 Stream<SearchAggregateState> searchResults(Ref ref) {
   final query = ref.watch(searchQueryProvider);
   final filter = ref.watch(searchFilterProvider);
+  final providerFilters = ref.watch(searchProviderFiltersProvider);
   final manager = ref.read(extensionManagerProvider.notifier);
 
   debugPrint('[SEARCH DBG] searchResults PROVIDER BUILT — query="$query"');
@@ -360,6 +379,7 @@ Stream<SearchAggregateState> searchResults(Ref ref) {
     query,
     manager,
     filter: filter,
+    providerFilters: providerFilters,
     isCancelled: () => cancelled,
   );
 }

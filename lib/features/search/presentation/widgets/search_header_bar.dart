@@ -6,301 +6,16 @@ import '../../../../shared/widgets/loading_indicator.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
-class WaveformEqualizer extends StatefulWidget {
-  final bool isActive;
-  final Color? activeColor;
-  final Color? inactiveColor;
-  const WaveformEqualizer({
-    super.key,
-    required this.isActive,
-    this.activeColor,
-    this.inactiveColor,
-  });
-
-  @override
-  State<WaveformEqualizer> createState() => _WaveformEqualizerState();
-}
-
-class _WaveformEqualizerState extends State<WaveformEqualizer>
-    with TickerProviderStateMixin {
-  late final AnimationController _anim1;
-  late final AnimationController _anim2;
-  late final AnimationController _anim3;
-
-  @override
-  void initState() {
-    super.initState();
-    _anim1 = AnimationController(
-      duration: const Duration(milliseconds: 400),
-      vsync: this,
-    )..repeat(reverse: true);
-    _anim2 = AnimationController(
-      duration: const Duration(milliseconds: 550),
-      vsync: this,
-    )..repeat(reverse: true);
-    _anim3 = AnimationController(
-      duration: const Duration(milliseconds: 480),
-      vsync: this,
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _anim1.dispose();
-    _anim2.dispose();
-    _anim3.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final active = widget.activeColor ?? Colors.redAccent;
-    final inactive =
-        widget.inactiveColor ??
-        theme.colorScheme.onSurface.withValues(alpha: 0.6);
-
-    if (!widget.isActive) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(
-          3,
-          (index) => Container(
-            width: 2,
-            height: 4,
-            margin: const EdgeInsets.symmetric(horizontal: 1),
-            decoration: BoxDecoration(
-              color: inactive,
-              borderRadius: BorderRadius.circular(0.5),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        _buildBar(_anim1, 4, 12, active),
-        _buildBar(_anim2, 6, 14, active),
-        _buildBar(_anim3, 3, 10, active),
-      ],
-    );
-  }
-
-  Widget _buildBar(
-    Animation<double> anim,
-    double minH,
-    double maxH,
-    Color color,
-  ) {
-    return AnimatedBuilder(
-      animation: anim,
-      builder: (context, child) {
-        final h = minH + (maxH - minH) * anim.value;
-        return Container(
-          width: 2,
-          height: h,
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(0.5),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// A custom Scope Pill Switcher with animated sliding fill between states.
-class SearchScopeSwitcher extends StatefulWidget {
-  final SearchFilter value;
-  final FocusNode moviesShowsFocusNode;
-  final FocusNode liveTvFocusNode;
-  final ValueChanged<SearchFilter> onChanged;
-
-  const SearchScopeSwitcher({
-    super.key,
-    required this.value,
-    required this.moviesShowsFocusNode,
-    required this.liveTvFocusNode,
-    required this.onChanged,
-  });
-
-  @override
-  State<SearchScopeSwitcher> createState() => _SearchScopeSwitcherState();
-}
-
-class _SearchScopeSwitcherState extends State<SearchScopeSwitcher>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final isLive = widget.value == SearchFilter.live;
-    final nativeFont = theme.textTheme.bodyLarge?.fontFamily;
-
-    final unselectedTextColor = isDark
-        ? Colors.white60
-        : theme.colorScheme.onSurfaceVariant;
-
-    return Container(
-      width: 310,
-      height: 38,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.25,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Stack(
-        children: [
-          // Sliding indicator pill
-          AnimatedAlign(
-            duration: const Duration(milliseconds: 350),
-            curve: Curves.easeOutBack, // Bouncy overshoot slide
-            alignment: isLive ? Alignment.centerRight : Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: 0.5,
-              child: Container(
-                margin: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: theme
-                      .colorScheme
-                      .primary, // Theme primary (Coral in light, Blue in dark)
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.25),
-                      blurRadius: 5,
-                      offset: const Offset(0, 1.5),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Buttons
-          Row(
-            children: [
-              Expanded(
-                child: CardsWrapper(
-                  focusNode: widget.moviesShowsFocusNode,
-                  onTap: () => widget.onChanged(SearchFilter.content),
-                  borderRadius: BorderRadius.circular(18),
-                  scaleFactor: 1.0,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (_) => widget.onChanged(SearchFilter.content),
-                    child: Container(
-                      height: 34,
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Transform.translate(
-                            offset: const Offset(0, -1.5),
-                            child: const Text(
-                              '🍿',
-                              style: TextStyle(fontSize: 14),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            appText(context, english: 'Movies & Shows', arabic: 'الأفلام والمسلسلات'),
-                            style: TextStyle(
-                              fontFamily: nativeFont,
-                              fontSize: 13.0,
-                              fontWeight: FontWeight.w400,
-                              color: !isLive
-                                  ? theme.colorScheme.onPrimary
-                                  : unselectedTextColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: CardsWrapper(
-                  focusNode: widget.liveTvFocusNode,
-                  onTap: () => widget.onChanged(SearchFilter.live),
-                  borderRadius: BorderRadius.circular(18),
-                  scaleFactor: 1.0,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (_) => widget.onChanged(SearchFilter.live),
-                    child: Container(
-                      height: 34,
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          WaveformEqualizer(
-                            isActive: isLive,
-                            inactiveColor: unselectedTextColor.withValues(
-                              alpha: 0.6,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            appText(context, english: 'Live TV', arabic: 'البث التلفزيوني المباشر'),
-                            style: TextStyle(
-                              fontFamily: nativeFont,
-                              fontSize: 13.0,
-                              fontWeight: FontWeight.w400,
-                              color: isLive
-                                  ? theme.colorScheme.onPrimary
-                                  : unselectedTextColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Redesigned static widescreen/desktop search control bar.
 class SearchHeaderBar extends ConsumerStatefulWidget {
   final TextEditingController textController;
   final FocusNode searchFocusNode;
   final FocusNode clearButtonFocusNode;
-  final FocusNode moviesShowsFocusNode;
-  final FocusNode liveTvFocusNode;
   final ValueChanged<String> onSubmitted;
   final ValueChanged<String> onChanged;
+  final VoidCallback onShowFilters;
+  final int activeFilterCount;
+  final bool isFilterLoading;
   final bool isCompact;
 
   const SearchHeaderBar({
@@ -308,10 +23,11 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
     required this.textController,
     required this.searchFocusNode,
     required this.clearButtonFocusNode,
-    required this.moviesShowsFocusNode,
-    required this.liveTvFocusNode,
     required this.onSubmitted,
     required this.onChanged,
+    required this.onShowFilters,
+    required this.activeFilterCount,
+    required this.isFilterLoading,
     this.isCompact = false,
   });
 
@@ -324,7 +40,6 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final filter = ref.watch(searchFilterProvider);
     final searchResultsAsync = ref.watch(searchResultsProvider);
     final isCompact = widget.isCompact;
     final isDark = theme.brightness == Brightness.dark;
@@ -483,16 +198,63 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                 height: isCompact ? 0 : 38,
                 child: isCompact
                     ? const SizedBox.shrink()
-                    : SearchScopeSwitcher(
-                        value: filter,
-                        moviesShowsFocusNode: widget.moviesShowsFocusNode,
-                        liveTvFocusNode: widget.liveTvFocusNode,
-                        onChanged: (val) {
-                          ref.read(searchFilterProvider.notifier).set(val);
-                          // Sync current text to search query instantly on scope switch
-                          final text = widget.textController.text.trim();
-                          ref.read(searchQueryProvider.notifier).set(text);
-                        },
+                    : CardsWrapper(
+                        scaleFactor: 1.0,
+                        onTap: widget.isFilterLoading ? null : widget.onShowFilters,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          height: 38,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: widget.activeFilterCount > 0
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (widget.isFilterLoading)
+                                const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else
+                                Icon(
+                                  Icons.tune_rounded,
+                                  size: 18,
+                                  color: widget.activeFilterCount > 0
+                                      ? theme.colorScheme.onPrimary
+                                      : theme.colorScheme.onSurfaceVariant,
+                                ),
+                              const SizedBox(width: 8),
+                              Text(
+                                appText(context, english: 'Filters', arabic: 'الفلاتر'),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: widget.activeFilterCount > 0
+                                      ? theme.colorScheme.onPrimary
+                                      : theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              if (widget.activeFilterCount > 0) ...[
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${widget.activeFilterCount}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: theme.colorScheme.onPrimary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
               ),
             ),

@@ -1,18 +1,14 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 
-import 'package:skystream/core/extensions/extension_manager.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
 import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/shared/widgets/desktop_scroll_wrapper.dart';
 import 'package:skystream/shared/widgets/multimedia_card.dart';
-import 'stamp_in_label.dart';
 import 'bouncy_entry_animation.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
 class SearchResultSection extends ConsumerStatefulWidget {
   final String providerName;
   final String providerId;
@@ -46,142 +42,83 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
     if (widget.results.isEmpty) return const SizedBox.shrink();
 
     final isLarge = context.isTabletOrLarger;
-    // Matching MediaHorizontalList/ContinueWatchingSection dimensions
-    final double listHeight = isLarge ? 350.0 : 230.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header with Blue Accent Style
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    StampInLabel(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              widget.providerName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: isLarge ? 24 : 20,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                          _buildDebugTag(context, ref),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: isLarge ? 30 : 20,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ],
-                ),
+    if (!isLarge) {
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 14,
+          childAspectRatio: 0.56,
+        ),
+        itemCount: widget.results.length,
+        itemBuilder: (context, rIndex) {
+          final item = widget.results[rIndex];
+          final uniqueTag =
+              'search_${widget.providerId}_${item.url}_$rIndex';
+          return BouncyEntryAnimation(
+            delay: Duration(milliseconds: rIndex * 35),
+            child: MultimediaCard(
+              key: ValueKey(item.url),
+              imageUrl: AppImageFallbacks.poster(
+                item.posterUrl,
+                label: item.title,
               ),
-            ],
-          ),
-        ),
-
-        SizedBox(
-          height: listHeight,
-          child: DesktopScrollWrapper(
-            controller: _scrollController,
-            child: Builder(
-              builder: (context) {
-                final double cardWidth = isLarge ? 200.0 : 130.0;
-                final double spacing = isLarge ? 24.0 : 12.0;
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: widget.results.length,
-                  itemExtent: cardWidth + spacing,
-                  clipBehavior: Clip.none,
-                  itemBuilder: (context, rIndex) {
-                    final item = widget.results[rIndex];
-                    final uniqueTag =
-                        'search_${widget.providerId}_${item.url}_$rIndex';
-
-                    return Padding(
-                      padding: EdgeInsets.only(right: spacing),
-                      child: BouncyEntryAnimation(
-                        delay: Duration(milliseconds: rIndex * 50),
-                        child: MultimediaCard(
-                          key: ValueKey(item.url),
-                          imageUrl: AppImageFallbacks.poster(
-                            item.posterUrl,
-                            label: item.title,
-                          ),
-                          title: item.title,
-                          heroTag: uniqueTag,
-                          focusNode: rIndex == 0
-                              ? widget.firstCardFocusNode
-                              : null,
-                          onTap: () => DetailsRoute(
-                            $extra: DetailsRouteExtra(item: item),
-                          ).push<void>(context),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
+              title: item.title,
+              heroTag: uniqueTag,
+              focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
+              onTap: () => DetailsRoute(
+                $extra: DetailsRouteExtra(item: item),
+              ).push<void>(context),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDebugTag(BuildContext context, WidgetRef ref) {
-    bool isDebug = false;
-    try {
-      final manager = ref.read(extensionManagerProvider.notifier);
-      final p = manager.getAllProviders().firstWhere(
-        (p) => p.packageName == widget.providerId,
+          );
+        },
       );
-      if (p.isDebug) {
-        isDebug = true;
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('SearchResultSection._buildDebugTag: $e');
     }
 
-    if (!isDebug) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 8.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          appText(context, english: 'DEBUG', arabic: 'تصحيح'),
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+    const listHeight = 350.0;
+    const cardWidth = 200.0;
+    const spacing = 24.0;
+    return SizedBox(
+      height: listHeight,
+      child: DesktopScrollWrapper(
+        controller: _scrollController,
+        child: ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          scrollDirection: Axis.horizontal,
+          itemCount: widget.results.length,
+          itemExtent: cardWidth + spacing,
+          clipBehavior: Clip.none,
+          itemBuilder: (context, rIndex) {
+            final item = widget.results[rIndex];
+            final uniqueTag =
+                'search_${widget.providerId}_${item.url}_$rIndex';
+            return Padding(
+              padding: const EdgeInsets.only(right: spacing),
+              child: BouncyEntryAnimation(
+                delay: Duration(milliseconds: rIndex * 50),
+                child: MultimediaCard(
+                  key: ValueKey(item.url),
+                  imageUrl: AppImageFallbacks.poster(
+                    item.posterUrl,
+                    label: item.title,
+                  ),
+                  title: item.title,
+                  heroTag: uniqueTag,
+                  focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
+                  onTap: () => DetailsRoute(
+                    $extra: DetailsRouteExtra(item: item),
+                  ).push<void>(context),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
   }
+
 }

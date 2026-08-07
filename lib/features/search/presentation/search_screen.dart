@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../core/providers/device_info_provider.dart';
+import '../../../core/extensions/base_provider.dart';
+import '../../../core/extensions/extension_manager.dart';
+import '../../home/presentation/widgets/provider_search_filter_dialog.dart';
 import 'search_provider.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'widgets/search_result_section.dart';
@@ -23,10 +26,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final FocusNode _clearButtonFocusNode = FocusNode();
-  final FocusNode _moviesShowsFocusNode = FocusNode();
-  final FocusNode _liveTvFocusNode = FocusNode();
   final FocusNode _firstSuggestionFocusNode = FocusNode();
   final FocusNode _firstResultFocusNode = FocusNode();
+  bool _isLoadingProviderFilters = false;
 
   @override
   void initState() {
@@ -34,6 +36,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     // Restore any previously committed query into the text field.
     _controller.text = ref.read(searchQueryProvider);
     _controller.addListener(_onTextChanged);
+    ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
 
     _focusNode.onKeyEvent = (node, event) {
       if (event is KeyDownEvent) {
@@ -45,11 +48,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           }
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-          final filter = ref.read(searchFilterProvider);
-          if (filter == SearchFilter.live) {
-            _liveTvFocusNode.requestFocus();
+          final suggestionState = ref.read(searchSuggestionControllerProvider);
+          final hasSuggestions = suggestionState.query.trim().length >= 2 &&
+              (suggestionState.isLoading || suggestionState.suggestions.isNotEmpty);
+          if (hasSuggestions) {
+            _firstSuggestionFocusNode.requestFocus();
           } else {
-            _moviesShowsFocusNode.requestFocus();
+            _firstResultFocusNode.requestFocus();
           }
           return KeyEventResult.handled;
         }
@@ -64,97 +69,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           return KeyEventResult.handled;
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-          final filter = ref.read(searchFilterProvider);
-          if (filter == SearchFilter.live) {
-            _liveTvFocusNode.requestFocus();
-          } else {
-            _moviesShowsFocusNode.requestFocus();
-          }
-          return KeyEventResult.handled;
-        }
-      }
-      return KeyEventResult.ignored;
-    };
-
-    _moviesShowsFocusNode.onKeyEvent = (node, event) {
-      if (event is KeyDownEvent) {
-        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-          _focusNode.requestFocus();
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-          _liveTvFocusNode.requestFocus();
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
           final suggestionState = ref.read(searchSuggestionControllerProvider);
-          final typedLongEnough = suggestionState.query.trim().length >= 2;
-          final hasSuggestionContent =
-              suggestionState.isLoading ||
-              suggestionState.suggestions.isNotEmpty;
-
-          if (typedLongEnough && hasSuggestionContent) {
+          final hasSuggestions = suggestionState.query.trim().length >= 2 &&
+              (suggestionState.isLoading || suggestionState.suggestions.isNotEmpty);
+          if (hasSuggestions) {
             _firstSuggestionFocusNode.requestFocus();
-            return KeyEventResult.handled;
           } else {
-            final resultsState = ref.read(searchResultsProvider).asData?.value;
-            final hasResults =
-                resultsState != null &&
-                resultsState.results.any((r) => r.results.isNotEmpty);
-            if (hasResults) {
-              _firstResultFocusNode.requestFocus();
-              return KeyEventResult.handled;
-            }
+            _firstResultFocusNode.requestFocus();
           }
+          return KeyEventResult.handled;
         }
       }
       return KeyEventResult.ignored;
     };
 
-    _liveTvFocusNode.onKeyEvent = (node, event) {
-      if (event is KeyDownEvent) {
-        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-          _focusNode.requestFocus();
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-          _moviesShowsFocusNode.requestFocus();
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-          final suggestionState = ref.read(searchSuggestionControllerProvider);
-          final typedLongEnough = suggestionState.query.trim().length >= 2;
-          final hasSuggestionContent =
-              suggestionState.isLoading ||
-              suggestionState.suggestions.isNotEmpty;
 
-          if (typedLongEnough && hasSuggestionContent) {
-            _firstSuggestionFocusNode.requestFocus();
-            return KeyEventResult.handled;
-          } else {
-            final resultsState = ref.read(searchResultsProvider).asData?.value;
-            final hasResults =
-                resultsState != null &&
-                resultsState.results.any((r) => r.results.isNotEmpty);
-            if (hasResults) {
-              _firstResultFocusNode.requestFocus();
-              return KeyEventResult.handled;
-            }
-          }
-        }
-      }
-      return KeyEventResult.ignored;
-    };
+
+
 
     _firstResultFocusNode.onKeyEvent = (node, event) {
       if (event is KeyDownEvent &&
           event.logicalKey == LogicalKeyboardKey.arrowUp) {
-        final filter = ref.read(searchFilterProvider);
-        if (filter == SearchFilter.live) {
-          _liveTvFocusNode.requestFocus();
-        } else {
-          _moviesShowsFocusNode.requestFocus();
-        }
+        _focusNode.requestFocus();
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
@@ -171,11 +107,52 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _controller.dispose();
     _focusNode.dispose();
     _clearButtonFocusNode.dispose();
-    _moviesShowsFocusNode.dispose();
-    _liveTvFocusNode.dispose();
     _firstSuggestionFocusNode.dispose();
     _firstResultFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _showSearchFilters() async {
+    if (_isLoadingProviderFilters) return;
+    final providers = ref
+        .read(extensionManagerProvider.notifier)
+        .getAllProviders();
+    if (providers.isEmpty) return;
+
+    setState(() => _isLoadingProviderFilters = true);
+    try {
+      final options = await providers.first.getSearchFilterOptions();
+      if (!mounted) return;
+      if (options.isEmpty) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                Localizations.localeOf(context).languageCode == 'ar'
+                    ? 'لا توجد فلاتر متاحة'
+                    : 'No filters available',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
+
+      final selected = await showDialog<ProviderSearchFilters>(
+        context: context,
+        builder: (_) => ProviderSearchFilterDialog(
+          options: options,
+          initialValue: ref.read(searchProviderFiltersProvider),
+        ),
+      );
+      if (selected != null && mounted) {
+        ref.read(searchProviderFiltersProvider.notifier).set(selected);
+        ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingProviderFilters = false);
+    }
   }
 
   void _submitSearch(String val) {
@@ -359,9 +336,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     textController: _controller,
                     searchFocusNode: _focusNode,
                     clearButtonFocusNode: _clearButtonFocusNode,
-                    moviesShowsFocusNode: _moviesShowsFocusNode,
-                    liveTvFocusNode: _liveTvFocusNode,
                     isCompact: false,
+                    onShowFilters: _showSearchFilters,
+                    activeFilterCount: ref.watch(searchProviderFiltersProvider).count,
+                    isFilterLoading: _isLoadingProviderFilters,
                     onSubmitted: _submitSearch,
                     onChanged: (val) {
                       ref
@@ -390,10 +368,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Widget _buildMobileLayout(BuildContext context) {
     final searchResultsAsync = ref.watch(searchResultsProvider);
-    final filter = ref.watch(searchFilterProvider);
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final isLive = filter == SearchFilter.live;
 
     return Scaffold(
       appBar: AppBar(
@@ -401,87 +377,56 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: PopupMenuButton<SearchFilter>(
-              tooltip: appText(context, english: 'Search scope', arabic: 'نطاق البحث'),
-              onSelected: (value) {
-                ref.read(searchFilterProvider.notifier).set(value);
-                // Sync current text to search query instantly on scope switch
-                final text = _controller.text.trim();
-                ref.read(searchQueryProvider.notifier).set(text);
+            child: Builder(
+              builder: (context) {
+                final activeFilters = ref.watch(searchProviderFiltersProvider);
+                final isActive = activeFilters.isNotEmpty;
+                return IconButton(
+                  tooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
+                  onPressed: _isLoadingProviderFilters ? null : _showSearchFilters,
+                  style: IconButton.styleFrom(
+                    backgroundColor: isActive
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                    foregroundColor: isActive
+                        ? theme.colorScheme.onPrimary
+                        : theme.colorScheme.onSurface,
+                  ),
+                  icon: _isLoadingProviderFilters
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            const Icon(Icons.tune_rounded, size: 20),
+                            if (isActive)
+                              Positioned(
+                                right: -7,
+                                top: -7,
+                                child: Container(
+                                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.onPrimary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${activeFilters.count}',
+                                    style: TextStyle(
+                                      color: theme.colorScheme.primary,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                );
               },
-              offset: const Offset(0, 48),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: SearchFilter.content,
-                  child: Row(
-                    children: [
-                      const Text('🍿', style: TextStyle(fontSize: 18)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          appText(
-                            context,
-                            english: 'Non Livestreams',
-                            arabic: 'محتوى غير مباشر',
-                          ),
-                        ),
-                      ),
-                      if (!isLive)
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: theme.colorScheme.primary,
-                        ),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: SearchFilter.live,
-                  child: Row(
-                    children: [
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: Center(child: WaveformEqualizer(isActive: true)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          appText(
-                            context,
-                            english: 'Livestreams',
-                            arabic: 'البث المباشر',
-                          ),
-                        ),
-                      ),
-                      if (isLive)
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: theme.colorScheme.primary,
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.3,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: isLive
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: Center(child: WaveformEqualizer(isActive: true)),
-                      )
-                    : const Text('🍿', style: TextStyle(fontSize: 18)),
-              ),
             ),
           ),
         ],
@@ -680,14 +625,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               suggestion: suggestion,
               focusNode: index == 0 ? _firstSuggestionFocusNode : null,
               isFirst: index == 0,
-              onFocusSearch: () {
-                final filter = ref.read(searchFilterProvider);
-                if (filter == SearchFilter.live) {
-                  _liveTvFocusNode.requestFocus();
-                } else {
-                  _moviesShowsFocusNode.requestFocus();
-                }
-              },
+              onFocusSearch: () => _focusNode.requestFocus(),
               onTap: () => _submitSearch(suggestion),
               onFill: () => _fillSuggestion(suggestion),
             ),

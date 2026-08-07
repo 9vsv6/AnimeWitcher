@@ -50,7 +50,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   String get packageName => 'com.fares669.animewitcher.native';
 
   @override
-  String get name => 'AnimeWitcher Native (Beta)';
+  String get name => 'AnimeWitcher';
 
   @override
   String get mainUrl => _baseUrl;
@@ -714,12 +714,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final expression = _buildFilters(filters);
     final safeLimit = limit.clamp(10, 50).toInt();
     final safeOffset = offset < 0 ? 0 : offset;
-    if (text.isEmpty && expression.isEmpty) {
-      return ProviderMediaPage(items: const [], nextOffset: safeOffset, hasMore: false);
-    }
     final pageNumber = safeOffset ~/ safeLimit;
     final payload = await _algoliaQuery(
-      'series',
+      text.isEmpty ? 'series_date_created' : 'series',
       query: text,
       page: pageNumber,
       hitsPerPage: safeLimit,
