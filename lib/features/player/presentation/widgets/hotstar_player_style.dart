@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/core/theme/app_theme.dart';
 
 /// Visual + layout tokens for the player chrome.
 ///
@@ -11,21 +12,21 @@ class HotstarPlayerStyle {
   static const Color background = Color(0xFF000000);
   static const Color panel = Color(0xFF05070B);
   static const Color panelElevated = Color(0xFF090D14);
-  static const Color accent = Color(0xFF0A84FF);
-  static const Color hotstar = Color(0xFF1F80E0);
-  static const Color accentAlt = Color(0xFFDD3EFF);
+  static const Color accent = AppTheme.animeWitcherAccent;
+  static const Color hotstar = AppTheme.animeWitcherAccent;
+  static const Color accentAlt = AppTheme.animeWitcherAccent;
   static const Color primaryText = Color(0xF2FFFFFF);
   static const Color secondaryText = Color(0xA6FFFFFF);
   static const Color mutedText = Color(0x73FFFFFF);
   static const Color divider = Color(0x1FFFFFFF);
   static const Color track = Color(0x55FFFFFF);
   static const Color trackInactive = Color(0x35FFFFFF);
-  static const Color focus = Color(0x660A84FF);
+  static const Color focus = Color(0x66EEC60A);
   static const Color liveRed = Color(0xFFE53935);
 
   /// Marker on the scrubber for skip segments (intro / recap / outro). A warm
   /// amber so it reads clearly against the blue progress and grey track.
-  static const Color skipSegment = Color(0xFFFFC107);
+  static const Color skipSegment = AppTheme.animeWitcherAccent;
 
   // --- Motion ---
   static const Duration controlFadeDuration = Duration(milliseconds: 220);

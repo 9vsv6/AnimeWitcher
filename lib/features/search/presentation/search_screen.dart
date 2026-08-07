@@ -328,9 +328,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 listenable: _focusNode,
                 builder: (context, child) {
                   if (!_focusNode.hasFocus) return const SizedBox.shrink();
-                  final spotlightColor = isDark
-                      ? const Color(0xFF1E40AF)
-                      : theme.colorScheme.primary;
+                  final spotlightColor = theme.colorScheme.primary;
                   return IgnorePointer(
                     child: Center(
                       child: Container(
@@ -842,9 +840,7 @@ class _SuggestionCardState extends State<_SuggestionCard> {
     final baseBorderColor = isDark
         ? Colors.white.withValues(alpha: 0.1)
         : theme.colorScheme.outlineVariant;
-    final highlightColor = isDark
-        ? const Color(0xFF1F80E0)
-        : theme.colorScheme.primary;
+    final highlightColor = theme.colorScheme.primary;
 
     final borderColor = isAnyHighlighted
         ? highlightColor.withValues(alpha: 0.85)
@@ -854,13 +850,13 @@ class _SuggestionCardState extends State<_SuggestionCard> {
         ? Colors.black.withValues(alpha: 0.65)
         : theme.colorScheme.surfaceContainer;
 
-    final bodyHighlightBg = isDark
-        ? const Color(0xFF1F80E0).withValues(alpha: 0.25)
-        : theme.colorScheme.primary.withValues(alpha: 0.12);
+    final bodyHighlightBg = theme.colorScheme.primary.withValues(
+      alpha: isDark ? 0.25 : 0.12,
+    );
 
-    final buttonHighlightBg = isDark
-        ? const Color(0xFF1F80E0).withValues(alpha: 0.35)
-        : theme.colorScheme.primary.withValues(alpha: 0.18);
+    final buttonHighlightBg = theme.colorScheme.primary.withValues(
+      alpha: isDark ? 0.35 : 0.18,
+    );
 
     final iconColor = isDark
         ? Colors.white70

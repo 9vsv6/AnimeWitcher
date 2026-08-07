@@ -101,7 +101,7 @@ class MetadataBar extends ConsumerWidget {
             context,
             Icons.star_rounded,
             item.score!.toStringAsFixed(1),
-            iconColor: const Color(0xFF01B4E4),
+            iconColor: Theme.of(context).colorScheme.primary,
           )
         else if (isLoading)
           ShimmerPlaceholder.rectangular(

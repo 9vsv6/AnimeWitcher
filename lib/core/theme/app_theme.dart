@@ -44,13 +44,18 @@ class AppTheme {
               const _FixedLtrCupertinoPageTransitionsBuilder(),
         },
       );
+  // AnimeWitcher palette. The official Android app uses #EEC60A as
+  // colorAccent across interactive controls, tabs, selection states and progress.
+  static const Color animeWitcherAccent = Color(0xFFEEC60A);
+  static const Color animeWitcherAccentTransparent = Color(0xAEEEC60A);
+
   // Premium Colors
   static const Color background = Color(0xFF0F0F13); // Deep dark blue-grey
   static const Color surface = Color(0xFF18181F);
   static const Color surfaceHighlight = Color(0xFF22222E);
-  static const Color primary = Color(0xFF448AFF); // Blue Accent
-  static const Color primaryVariant = Color(0xFF2962FF); // Blue Accent Darker
-  static const Color secondary = Color(0xFF10B981); // Emerald
+  static const Color primary = animeWitcherAccent;
+  static const Color primaryVariant = animeWitcherAccent;
+  static const Color secondary = animeWitcherAccent;
   static const Color error = Color(0xFFEF4444);
   static const Color onSurface = Color(0xFFE5E7EB);
   static const Color textSecondary = Color(0xFF9CA3AF);
@@ -63,7 +68,8 @@ class AppTheme {
   ); // surfaceContainerHigh
   static const Color lightTextPrimary = Color(0xFF2C2521); // onSurface
   static const Color lightTextSecondary = Color(0xFF5C5C5C); // onSurfaceVariant
-  static const Color lightCoral = Color(0xFFC63523); // Coral Accent
+  // Kept as a compatibility alias for existing callers/tests.
+  static const Color lightCoral = animeWitcherAccent;
 
   static SnackBarThemeData snackBarThemeFor(ColorScheme colorScheme) {
     final isDark = colorScheme.brightness == Brightness.dark;
@@ -76,17 +82,26 @@ class AppTheme {
     );
   }
 
-  static ThemeData createDarkTheme(ColorScheme? dynamicScheme) {
-    var colorScheme =
-        dynamicScheme ??
-        ColorScheme.fromSeed(
-          seedColor: const Color(0xFF448AFF), // Blue Accent seed
-          brightness: Brightness.dark,
-          surface: const Color(0xFF000000), // Default surface
-        );
+  static ThemeData createDarkTheme(ColorScheme? _) {
+    // Keep the official AnimeWitcher accent fixed instead of allowing Android
+    // dynamic colors to replace it with a device-specific blue/purple palette.
+    var colorScheme = ColorScheme.fromSeed(
+      seedColor: animeWitcherAccent,
+      brightness: Brightness.dark,
+      surface: const Color(0xFF000000),
+    );
 
-    // Ensure surface is always Pitch Black for list items/cards
-    colorScheme = colorScheme.copyWith(surface: const Color(0xFF000000));
+    // AnimeWitcher uses one gold accent for its interactive theme. Force the
+    // key Material roles to that same accent while preserving semantic errors.
+    colorScheme = colorScheme.copyWith(
+      primary: animeWitcherAccent,
+      onPrimary: Colors.black,
+      secondary: animeWitcherAccent,
+      onSecondary: Colors.black,
+      tertiary: animeWitcherAccent,
+      onTertiary: Colors.black,
+      surface: const Color(0xFF000000),
+    );
 
     return ThemeData(
       useMaterial3: true,
@@ -236,32 +251,30 @@ class AppTheme {
     );
   }
 
-  static ThemeData createLightTheme(ColorScheme? dynamicScheme) {
-    const colorScheme = ColorScheme.light(
-      primary: lightCoral,
-      onPrimary: Colors.white,
-      primaryContainer: Color(0xFFFFDAD4),
-      onPrimaryContainer: Color(0xFF410001),
-      secondary: Color(0xFF775651),
-      onSecondary: Colors.white,
-      secondaryContainer: lightSurfaceHighlight,
-      onSecondaryContainer: Color(0xFF2C1512),
-      tertiary: lightCoral,
-      onTertiary: Colors.white,
-      tertiaryContainer: Color(0xFFFFDAD4),
-      onTertiaryContainer: Color(0xFF410001),
+  static ThemeData createLightTheme(ColorScheme? _) {
+    final generatedScheme = ColorScheme.fromSeed(
+      seedColor: animeWitcherAccent,
+      brightness: Brightness.light,
+    );
+    final colorScheme = generatedScheme.copyWith(
+      primary: animeWitcherAccent,
+      onPrimary: Colors.black,
+      secondary: animeWitcherAccent,
+      onSecondary: Colors.black,
+      tertiary: animeWitcherAccent,
+      onTertiary: Colors.black,
       surface: lightBackground,
       onSurface: lightTextPrimary,
       onSurfaceVariant: lightTextSecondary,
-      outline: Color(0xFFC9BBA6), // Warm sand outline
-      outlineVariant: Color(0xFFD9C9AE), // Soft warm tan outlineVariant
-      error: Color(0xFFBA1A1A),
+      outline: const Color(0xFFC9BBA6), // Warm sand outline
+      outlineVariant: const Color(0xFFD9C9AE), // Soft warm tan outlineVariant
+      error: const Color(0xFFBA1A1A),
       onError: Colors.white,
       surfaceContainerLowest: lightSurface,
-      surfaceContainerLow: Color(0xFFF7F3EE),
-      surfaceContainer: Color(0xFFEFEAE2),
+      surfaceContainerLow: const Color(0xFFF7F3EE),
+      surfaceContainer: const Color(0xFFEFEAE2),
       surfaceContainerHigh: lightSurfaceHighlight,
-      surfaceContainerHighest: Color(0xFFE4D9C8),
+      surfaceContainerHighest: const Color(0xFFE4D9C8),
     );
 
     return ThemeData(

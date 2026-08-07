@@ -147,9 +147,7 @@ class _AppRootState extends State<AppRoot> {
         textDirection: TextDirection.ltr,
         child: DynamicColorBuilder(
           builder: (lightDynamic, darkDynamic) {
-            final color =
-                lightDynamic?.primary ??
-                const Color(0xFF6200EE); // Default Purple/Blue
+            const color = AppTheme.animeWitcherAccent;
             return ColoredBox(
               color: Colors.black,
               child: Center(child: AppLoadingIndicator(color: color)),

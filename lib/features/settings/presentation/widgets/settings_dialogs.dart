@@ -1382,7 +1382,10 @@ void showOpenSubtitlesAuthDialog(
             surfaceTintColor: Colors.transparent,
             title: Row(
               children: [
-                const Icon(Icons.subtitles_rounded, color: Colors.blue),
+                Icon(
+                  Icons.subtitles_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 12),
                 Text(l10n.openSubtitles),
               ],
@@ -1869,11 +1872,14 @@ void showSubSourceAuthDialog(
           policy: WidgetOrderTraversalPolicy(),
           child: AlertDialog(
             surfaceTintColor: Colors.transparent,
-            title: const Row(
+            title: Row(
               children: [
-                Icon(Icons.vpn_key_rounded, color: Colors.blue),
-                SizedBox(width: 12),
-                Text('SubSource API Key'),
+                Icon(
+                  Icons.vpn_key_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                const Text('SubSource API Key'),
               ],
             ),
             content: SingleChildScrollView(
