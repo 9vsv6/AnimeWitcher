@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/anilist_explore_provider.dart';
 import 'widgets/explore_carousel.dart';
 import 'widgets/media_horizontal_list.dart';
-import '../../../../core/utils/layout_constants.dart';
-import '../../../../core/utils/responsive_breakpoints.dart';
-import '../../../../shared/widgets/shimmer_placeholder.dart';
-import '../../../../core/domain/entity/multimedia_item.dart';
+import 'package:skystream/core/utils/layout_constants.dart';
+import 'package:skystream/core/utils/responsive_breakpoints.dart';
+import 'package:skystream/shared/widgets/shimmer_placeholder.dart';
+import 'package:skystream/core/domain/entity/multimedia_item.dart';
+import 'package:skystream/core/extensions/extension_manager.dart';
+import 'package:skystream/core/router/app_router.dart';
 import 'view_all_screen.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
@@ -28,6 +30,35 @@ class AnilistExploreScreen extends ConsumerStatefulWidget {
 }
 
 class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
+
+  Future<void> _openAnime(MultimediaItem item) async {
+    final providers = ref
+        .read(extensionManagerProvider.notifier)
+        .getAllProviders();
+    if (providers.isEmpty) return;
+
+    final results = await providers.first.search(item.title);
+    if (!mounted || results.isEmpty) return;
+
+    String normalize(String value) => value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\u0600-\u06ff]+'), ' ')
+        .trim();
+    final target = normalize(item.title);
+    var resolved = results.first;
+    for (final candidate in results) {
+      if (normalize(candidate.title) == target) {
+        resolved = candidate;
+        break;
+      }
+    }
+
+    if (!mounted) return;
+    await DetailsRoute(
+      $extra: DetailsRouteExtra(item: resolved),
+    ).push<void>(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
@@ -52,6 +83,7 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
                     : ExploreCarousel(
                         movies: value,
                         scrollController: widget.scrollController,
+                        onTap: (item) => _openAnime(item),
                         onNavigateUp: () =>
                             widget.firstActionFocusNode.requestFocus(),
                         onControllerReady: widget.onControllerReady,
@@ -177,6 +209,7 @@ class _AnilistExploreScreenState extends ConsumerState<AnilistExploreScreen> {
                 title: title,
                 mediaList: value,
                 category: category,
+                onTap: (item) => _openAnime(item),
                 heroTagPrefix: 'explore_anilist',
               ),
       AsyncLoading() => _buildListShimmer(context),

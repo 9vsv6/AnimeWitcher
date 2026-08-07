@@ -13,8 +13,6 @@ import '../../../../l10n/generated/app_localizations.dart';
 import '../player_controller.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
-import '../../../../core/models/torrent_status.dart';
-import '../components/torrent_info_widget.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
@@ -42,9 +40,7 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   final StreamResult? currentStream;
 
   final List<SubtitleFile>? externalSubtitles;
-  final TorrentStatus? torrentStatus;
   final void Function(StreamResult)? onStreamSelected;
-  final void Function(int)? onTorrentFileSelected;
   final void Function(BoxFit)? onResize;
   final void Function(bool)? onVisibilityChanged;
 
@@ -66,9 +62,7 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
     this.streams,
     this.currentStream,
     this.externalSubtitles,
-    this.torrentStatus,
     this.onStreamSelected,
-    this.onTorrentFileSelected,
     this.onResize,
     this.onVisibilityChanged,
     this.onRequestRootFocus,
@@ -94,7 +88,6 @@ class SkyStreamPlayerControlsState
 
   void togglePlayPause() => _togglePlay();
 
-  bool _showTorrentInfo = false; // Changed from true
   Timer? _hideTimer;
 
   // Metadata scrim (Netflix-style info panel on pause, TV/desktop only)
@@ -541,10 +534,6 @@ class SkyStreamPlayerControlsState
     }
   }
 
-  /// Torrent status is passed via widget props from the parent rebuild.
-  /// This method is retained for API compatibility but no longer forces a rebuild.
-  void updateTorrentStatus(TorrentStatus status) {}
-
   void showControls() {
     if (mounted) {
       setState(() => _isVisible = true);
@@ -568,7 +557,7 @@ class SkyStreamPlayerControlsState
   /// from under the user (req: no auto-hide while a side bar is active).
   bool get _panelOpen {
     final s = ref.read(playerControllerProvider);
-    return s.showSourcesPanel || s.showEpisodeList || s.showContentPanel;
+    return s.showSourcesPanel || s.showEpisodeList;
   }
 
   /// Hide the chrome and suspend auto-hide so a side panel can take over. The
@@ -594,11 +583,6 @@ class SkyStreamPlayerControlsState
     ref.read(playerControllerProvider.notifier).openEpisodeList();
   }
 
-  /// Open the torrent content (file picker) side panel.
-  void openContentPanel() {
-    _enterPanelMode();
-    ref.read(playerControllerProvider.notifier).openContentPanel();
-  }
 
   /// Close the sources panel and bring the chrome back with a fresh auto-hide.
   void closeSourcesPanel() {
@@ -615,17 +599,11 @@ class SkyStreamPlayerControlsState
   }
 
   /// Close the content panel and bring the chrome back with a fresh auto-hide.
-  void closeContentPanel() {
-    if (!ref.read(playerControllerProvider).showContentPanel) return;
-    ref.read(playerControllerProvider.notifier).closeContentPanel();
-    showControls();
-  }
 
   /// Close whichever side panel is open — the shared Back/dismiss entry point.
   void closeActivePanel() {
     closeSourcesPanel();
     closeEpisodesPanel();
-    closeContentPanel();
   }
 
   void _onFocusChange() {
@@ -917,9 +895,6 @@ class SkyStreamPlayerControlsState
     final externalSubtitles = ref.watch(
       playerControllerProvider.select((s) => s.externalSubtitles),
     );
-    final torrentStatus = ref.watch(
-      playerControllerProvider.select((s) => s.torrentStatus),
-    );
     final showNextEpOverlay = ref.watch(
       playerControllerProvider.select((s) => s.showNextEpisodeOverlay),
     );
@@ -1051,7 +1026,6 @@ class SkyStreamPlayerControlsState
                   _buildUnlockedUI(
                     title: title,
                     subtitle: subtitle,
-                    torrentStatus: torrentStatus,
                     streams: streams,
                     currentStream: currentStream,
                     externalSubtitles: externalSubtitles,
@@ -1119,46 +1093,6 @@ class SkyStreamPlayerControlsState
                   getDuration: () => _duration,
                   formatDuration: _formatDuration,
                 ),
-
-                // Torrent stats card — top-right, toggled by the Stats action.
-                // Responsive width, cleared below the top bar, and pointer-
-                // transparent so it never blocks the player. Non-focusable.
-                if (torrentStatus != null && _showTorrentInfo)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: SafeArea(
-                        left: false,
-                        right: false,
-                        child: Align(
-                          alignment: Alignment.topRight,
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              // Clear the top bar (back + title).
-                              top: _isTv ? 88 : 68,
-                              right: _isTv
-                                  ? HotstarPlayerStyle.tvEdgeInset
-                                  : (MediaQuery.viewPaddingOf(context).right >
-                                            HotstarPlayerStyle.edgeInset
-                                        ? MediaQuery.viewPaddingOf(
-                                            context,
-                                          ).right
-                                        : HotstarPlayerStyle.edgeInset),
-                              left: 12,
-                            ),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: (size.width * 0.36).clamp(
-                                  240.0,
-                                  360.0,
-                                ),
-                              ),
-                              child: TorrentInfoWidget(status: torrentStatus),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
 
                 // Resume Prompt Button
                 if (!widget.isLoading &&
@@ -1256,27 +1190,6 @@ class SkyStreamPlayerControlsState
                     ),
                   ),
 
-                // Torrent content (file picker) drawer — same shell.
-                if (torrentStatus != null)
-                  Positioned.fill(
-                    child: PlayerSidePanel(
-                      isVisible: ref.watch(
-                        playerControllerProvider.select(
-                          (s) => s.showContentPanel,
-                        ),
-                      ),
-                      isTv: _isTv,
-                      onDismiss: closeContentPanel,
-                      child: PlayerContentPanel(
-                        isTv: _isTv,
-                        onFileSelected: (idx) => ref
-                            .read(playerControllerProvider.notifier)
-                            .onTorrentFileSelected(idx),
-                        onClose: closeContentPanel,
-                      ),
-                    ),
-                  ),
-
                 // Netflix-style metadata scrim (TV / desktop only).
                 // Sits over the paused video as a left-anchored gradient panel
                 // with logo/title, meta line, and description. Appears after
@@ -1367,7 +1280,6 @@ class SkyStreamPlayerControlsState
   Widget _buildUnlockedUI({
     required String title,
     String? subtitle,
-    TorrentStatus? torrentStatus,
     List<StreamResult>? streams,
     StreamResult? currentStream,
     List<SubtitleFile>? externalSubtitles,
@@ -1458,21 +1370,6 @@ class SkyStreamPlayerControlsState
                 .setPlaybackSpeed(s, persist: true),
           ),
           isTv: _isTv,
-        ),
-      if (torrentStatus != null)
-        PlayerIconButton(
-          icon: Icons.folder,
-          tooltip: l10n.content,
-          onPressed: openContentPanel,
-          isTv: _isTv,
-        ),
-      if (torrentStatus != null)
-        PlayerIconButton(
-          icon: Icons.info_outline,
-          tooltip: l10n.stats,
-          onPressed: () => setState(() => _showTorrentInfo = !_showTorrentInfo),
-          isTv: _isTv,
-          highlight: _showTorrentInfo,
         ),
       if (isTouch &&
           (Platform.isAndroid || (Platform.isIOS && !_isIpad)) &&

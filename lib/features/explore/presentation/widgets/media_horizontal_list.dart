@@ -314,12 +314,8 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                           if (widget.onTap != null) {
                             widget.onTap!(item);
                           } else {
-                            TmdbDetailsRoute(
-                              movieId: item.id,
-                              mediaType: item.tmdbMediaType,
-                              heroTag: uniqueTag,
-                              placeholderPoster: imageUrl,
-                              source: item.source,
+                            DetailsRoute(
+                              $extra: DetailsRouteExtra(item: item),
                             ).push<void>(context);
                           }
                         },

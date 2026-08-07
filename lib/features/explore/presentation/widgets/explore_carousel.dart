@@ -444,16 +444,8 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel>
     return _buildCarouselItem(context, movie, height, isDesktop: isDesktop);
   }
 
-  void _navigateToDetails(BuildContext context, MultimediaItem movie) {
-    // Standardize media type mapping (prevents TMDB ID collisions)
-    final String mediaType = movie.tmdbMediaType;
-
-    TmdbDetailsRoute(
-      movieId: movie.id,
-      mediaType: mediaType,
-      heroTag: 'hero_${movie.id}',
-      source: movie.source,
-    ).push<void>(context);
+  void _navigateToDetails(BuildContext context, MultimediaItem item) {
+    DetailsRoute($extra: DetailsRouteExtra(item: item)).push<void>(context);
   }
 
   Widget _buildCarouselItem(

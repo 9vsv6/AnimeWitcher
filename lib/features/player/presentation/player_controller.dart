@@ -19,8 +19,6 @@ import '../../../../core/services/download_service.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
 import '../../../../core/extensions/extension_manager.dart';
-import '../../../../core/extensions/providers.dart';
-import '../../../../core/models/torrent_status.dart';
 import '../../../../core/storage/history_repository.dart';
 import '../../../../core/storage/episode_watch_repository.dart';
 import '../../library/presentation/history_provider.dart';
@@ -169,7 +167,6 @@ class PlayerState {
   final int currentStreamIndex;
   final StreamResult? currentStream;
   final StreamResult? previousStream;
-  final TorrentStatus? torrentStatus;
   final List<SubtitleFile> externalSubtitles;
   final bool showNextEpisodeOverlay;
   final String? nextEpisodeTitle;
@@ -189,8 +186,6 @@ class PlayerState {
   /// Which tab the side panel should show: 0 = Sources, 1 = Audio, 2 = Subtitles.
   final int sourcesPanelTab;
 
-  /// Whether the torrent content (file picker) side panel is open.
-  final bool showContentPanel;
   final double playbackSpeed;
   final bool isLive;
   final double subtitleDelay;
@@ -223,7 +218,6 @@ class PlayerState {
     this.currentStreamIndex = 0,
     this.currentStream,
     this.previousStream,
-    this.torrentStatus,
     this.externalSubtitles = const [],
     this.showNextEpisodeOverlay = false,
     this.nextEpisodeTitle,
@@ -237,7 +231,6 @@ class PlayerState {
     this.showEpisodeList = false,
     this.showSourcesPanel = false,
     this.sourcesPanelTab = 0,
-    this.showContentPanel = false,
     this.playbackSpeed = 1.0,
     this.isLive = false,
     this.isSeekable = false,
@@ -287,7 +280,6 @@ class PlayerState {
     int? currentStreamIndex,
     StreamResult? currentStream,
     StreamResult? previousStream,
-    Object? torrentStatus = _keep,
     List<SubtitleFile>? externalSubtitles,
     bool? showNextEpisodeOverlay,
     String? nextEpisodeTitle,
@@ -301,7 +293,6 @@ class PlayerState {
     bool? showEpisodeList,
     bool? showSourcesPanel,
     int? sourcesPanelTab,
-    bool? showContentPanel,
     double? playbackSpeed,
     bool? isLive,
     bool? isSeekable,
@@ -327,9 +318,6 @@ class PlayerState {
       currentStreamIndex: currentStreamIndex ?? this.currentStreamIndex,
       currentStream: currentStream ?? this.currentStream,
       previousStream: previousStream ?? this.previousStream,
-      torrentStatus: torrentStatus == _keep
-          ? this.torrentStatus
-          : torrentStatus as TorrentStatus?,
       externalSubtitles: externalSubtitles ?? this.externalSubtitles,
       showNextEpisodeOverlay:
           showNextEpisodeOverlay ?? this.showNextEpisodeOverlay,
@@ -346,7 +334,6 @@ class PlayerState {
       showEpisodeList: showEpisodeList ?? this.showEpisodeList,
       showSourcesPanel: showSourcesPanel ?? this.showSourcesPanel,
       sourcesPanelTab: sourcesPanelTab ?? this.sourcesPanelTab,
-      showContentPanel: showContentPanel ?? this.showContentPanel,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       isLive: isLive ?? this.isLive,
       isSeekable: isSeekable ?? this.isSeekable,
@@ -406,8 +393,6 @@ class PlayerController extends Notifier<PlayerState> {
   late MultimediaItem _item;
   late String _videoUrl;
   Episode? _episode;
-  Timer? _torrentPollTimer;
-  bool _isPolling = false;
   bool _isInitialized = false;
   bool _isDisposed = false;
 
@@ -804,7 +789,6 @@ class PlayerController extends Notifier<PlayerState> {
     // Safety net: if the provider is somehow disposed without
     // disposeController() being called, clean up subscriptions.
     ref.onDispose(() {
-      _torrentPollTimer?.cancel();
       _stallTimer?.cancel();
       _videoParamsSub?.cancel();
       _errorSub?.cancel();
@@ -1420,7 +1404,7 @@ class PlayerController extends Notifier<PlayerState> {
     _durationSub = _player.stream.duration.listen((duration) {
       if (duration > Duration.zero) {
         // Retry whenever either pending field is set. The percentage-only
-        // path (Trakt/Simkl synced progress) needs the duration to compute
+        // path for synced progress needs the duration to compute
         // the absolute ms; if the user taps Resume before duration arrives,
         // _flushPendingResumeSeek early-returns with the pending pct still
         // set. Without this check, the resume silently dropped — the user
@@ -1747,9 +1731,7 @@ class PlayerController extends Notifier<PlayerState> {
     _playingSub = _player.stream.playing.listen((isPlaying) {
       if (!isPlaying) {
         saveProgress();
-        _torrentPollTimer?.cancel();
-        _torrentPollTimer = null;
-        // Bug 2: clear any in-flight buffering overlay when the user
+          // Bug 2: clear any in-flight buffering overlay when the user
         // pauses. Without this, "seek → buffering starts → user pauses
         // before buffer fills" leaves the spinner stuck on top of a
         // paused video forever. The spinner is meaningful for an active
@@ -1765,9 +1747,6 @@ class PlayerController extends Notifier<PlayerState> {
         // playing=true as soon as open() is called, before any frames arrive.
         // Confirmation happens in _positionSub (position > 0) and
         // _setupVideoParamsListener (video dimensions received).
-        if (state.torrentStatus != null && _torrentPollTimer == null) {
-          startTorrentPolling();
-        }
       }
     });
 
@@ -1955,10 +1934,6 @@ class PlayerController extends Notifier<PlayerState> {
       default:
         if (_item.provider == 'Local' || AppUtils.isLocalFile(_videoUrl)) {
           detail = _playerText(english: 'Opening local file...', arabic: 'جارٍ فتح الملف المحلي...');
-        } else if (_item.provider == 'Torrent' ||
-            _videoUrl.startsWith("magnet:") ||
-            _videoUrl.endsWith(".torrent")) {
-          detail = _playerText(english: 'Preparing torrent stream...', arabic: 'جارٍ تجهيز بث التورنت...');
         }
         _enterStartupPhase(kind: requestedPhaseKind, detail: detail);
     }
@@ -1982,8 +1957,6 @@ class PlayerController extends Notifier<PlayerState> {
           english: 'Fetching sources...',
           arabic: 'جارٍ جلب المصادر...',
         ));
-        if (await _handleFallbackTorrent()) return;
-
         final rawStreams = await activeProvider.loadStreams(_videoUrl);
         if (!_isCurrentSourceSession(sourceSessionId)) return;
         if (rawStreams.isNotEmpty) {
@@ -2076,41 +2049,20 @@ class PlayerController extends Notifier<PlayerState> {
   Future<bool> _handleSpecialProviders() async {
     if (_item.provider == 'Remote' ||
         _item.provider == 'Local' ||
-        _item.provider == 'Torrent' ||
         AppUtils.isLocalFile(_videoUrl)) {
-      final isTorrent =
-          _item.provider == 'Torrent' ||
-          _videoUrl.startsWith("magnet:") ||
-          _videoUrl.endsWith(".torrent");
-
       final stream = StreamResult(
         url: _videoUrl,
-        source: isTorrent ? "Torrent" : "Video",
-        headers: {},
+        source: 'Video',
+        headers: const <String, String>{},
       );
-
-      state = state.copyWith(streams: [stream], currentStreamIndex: 0);
-      _setSourceAttemptsFromStreams([stream], activeIndex: 0);
+      state = state.copyWith(streams: <StreamResult>[stream], currentStreamIndex: 0);
+      _setSourceAttemptsFromStreams(<StreamResult>[stream], activeIndex: 0);
       await loadStreamAtIndex(0, sourceSessionId: state.sourceSessionId);
       return true;
     }
     return false;
   }
 
-  Future<bool> _handleFallbackTorrent() async {
-    if (_videoUrl.startsWith("magnet:") || _videoUrl.endsWith(".torrent")) {
-      final stream = StreamResult(
-        url: _videoUrl,
-        source: "Torrent",
-        headers: {},
-      );
-      state = state.copyWith(streams: [stream], currentStreamIndex: 0);
-      _setSourceAttemptsFromStreams([stream], activeIndex: 0);
-      await loadStreamAtIndex(0, sourceSessionId: state.sourceSessionId);
-      return true;
-    }
-    return false;
-  }
 
   SkyStreamProvider? _resolveProvider() {
     final activeState = ref.read(activeProviderProvider);
@@ -2743,9 +2695,7 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<bool> _isStreamCandidateHealthy(StreamResult stream) async {
-    if (stream.url.startsWith("magnet:") ||
-        stream.url.endsWith(".torrent") ||
-        stream.url.startsWith("/")) {
+    if (stream.url.startsWith('/')) {
       return true;
     }
 
@@ -2805,12 +2755,6 @@ class PlayerController extends Notifier<PlayerState> {
     );
     _manualSelectionPending = manualSelection;
 
-    // Issue 3: Detect torrent streams early so the overlay shows the correct detail
-    // before _resolveStreamUrl is called (which internally resolves the torrent URL).
-    final isTorrentStream =
-        stream.url.startsWith("magnet:") ||
-        stream.url.endsWith(".torrent") ||
-        (stream.url.startsWith("/") && stream.source.contains("Torrent"));
 
     state = state.copyWith(
       currentStreamIndex: index,
@@ -2833,9 +2777,7 @@ class PlayerController extends Notifier<PlayerState> {
     } else {
       _enterStartupPhase(
         kind: PlaybackUiPhaseKind.openingSource,
-        detail: isTorrentStream
-            ? "Initializing torrent engine..."
-            : "Opening ${stream.source}...",
+        detail: "Opening ${stream.source}...",
         attemptIndex: index + 1,
         attemptTotal: attemptTotal,
       );
@@ -2847,12 +2789,6 @@ class PlayerController extends Notifier<PlayerState> {
       if (sourceSessionId != null &&
           !_isCurrentSourceSession(sourceSessionId)) {
         return;
-      }
-
-      if (playUrl.contains("index=")) {
-        startTorrentPolling(playUrl);
-      } else {
-        stopTorrentPolling();
       }
 
       final resolvedIsLive = _detectResolvedLiveState(playUrl);
@@ -3133,12 +3069,6 @@ class PlayerController extends Notifier<PlayerState> {
         streamSubtitle: "$pName - ${stream.source}",
       );
 
-      if (playUrl.contains("index=")) {
-        startTorrentPolling(playUrl);
-      } else {
-        stopTorrentPolling();
-      }
-
       final headers = _buildPlaybackHeaders(stream);
       await _applyPlaybackProperties(
         headers,
@@ -3303,45 +3233,6 @@ class PlayerController extends Notifier<PlayerState> {
     return msg;
   }
 
-  Future<void> onTorrentFileSelected(int index) async {
-    _enterRuntimePhase(
-      kind: PlaybackUiPhaseKind.switchingSource,
-      detail: _playerText(english: 'Switching torrent file...', arabic: 'جارٍ تبديل ملف التورنت...'),
-    );
-    try {
-      final url = await ref
-          .read(torrentServiceProvider)
-          .getStreamUrlForFileIndex(index);
-      if (url != null && state.currentStream != null) {
-        String fileLabel = _playerText(english: 'Torrent File $index', arabic: 'ملف تورنت $index');
-        try {
-          final files =
-              state.torrentStatus?.data['file_stats'] as List<dynamic>?;
-          final file = files?.firstWhere(
-            (f) => f['id'] == index,
-            orElse: () => null,
-          );
-          if (file != null) {
-            fileLabel = (file['path'] as String).split('/').last;
-            state = state.copyWith(playerTitle: fileLabel);
-          }
-        } catch (e) {
-          if (kDebugMode) {
-            debugPrint('PlayerController.onTorrentFileSelected: $e');
-          }
-        }
-
-        final newStream = StreamResult(
-          url: url,
-          source: "Torrent ($fileLabel)",
-          headers: {},
-        );
-        unawaited(changeStream(newStream, resetPosition: true));
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint("Failed to switch file: $e");
-    }
-  }
 
   /// Reset every per-episode state that would otherwise carry across an
   /// in-place episode swap (no `disposeController()` is called between
@@ -3473,14 +3364,7 @@ class PlayerController extends Notifier<PlayerState> {
     state = state.copyWith(showSourcesPanel: true, sourcesPanelTab: tab);
   }
 
-  void openContentPanel() {
-    state = state.copyWith(showContentPanel: true);
-  }
 
-  void closeContentPanel() {
-    if (!state.showContentPanel) return;
-    state = state.copyWith(showContentPanel: false);
-  }
 
   void closeSourcesPanel() {
     if (!state.showSourcesPanel) return;
@@ -3695,68 +3579,10 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  void startTorrentPolling([String? activeStreamUrl]) {
-    _torrentPollTimer?.cancel();
 
-    Future<void> poll() async {
-      if (_isPolling) return;
-      _isPolling = true;
-      try {
-        final status = await ref
-            .read(torrentServiceProvider)
-            .getCurrentStatus();
-        if (status != null) {
-          final urlToCheck = activeStreamUrl ?? state.currentStream?.url;
-          if (urlToCheck?.contains("index=") ?? false) {
-            try {
-              final uri = Uri.parse(urlToCheck!);
-              final indexStr = uri.queryParameters['index'];
-              if (indexStr != null) {
-                final index = int.tryParse(indexStr);
-                final files = status.data['file_stats'] as List<dynamic>?;
-                final file = files?.firstWhere(
-                  (f) => f['id'] == index,
-                  orElse: () => null,
-                );
-                if (file != null) {
-                  final name = (file['path'] as String).split('/').last;
-                  if (state.playerTitle != name) {
-                    state = state.copyWith(playerTitle: name);
-                  }
-                }
-              }
-            } catch (e) {
-              if (kDebugMode) {
-                debugPrint('PlayerController.startTorrentPolling: $e');
-              }
-            }
-          }
-          state = state.copyWith(torrentStatus: status);
-        }
-      } finally {
-        _isPolling = false;
-      }
-    }
-
-    poll();
-    _torrentPollTimer = Timer.periodic(
-      const Duration(seconds: 3),
-      (_) => poll(),
-    );
-  }
-
-  void stopTorrentPolling() {
-    _torrentPollTimer?.cancel();
-    _torrentPollTimer = null;
-    if (state.torrentStatus != null) {
-      state = state.copyWith(torrentStatus: null);
-    }
-  }
 
   void disposeController() {
     _isDisposed = true;
-    _torrentPollTimer?.cancel();
-    _torrentPollTimer = null;
     _stallTimer?.cancel();
     _stallTimer = null;
     _bufferingHideTimer?.cancel();
@@ -3805,7 +3631,6 @@ class PlayerController extends Notifier<PlayerState> {
     } catch (_) {}
 
     saveProgress();
-    ref.read(torrentServiceProvider).stop();
     Future.microtask(() {
       state = const PlayerState();
     });
@@ -3967,20 +3792,9 @@ class PlayerController extends Notifier<PlayerState> {
     return providerName;
   }
 
-  Future<String?> _resolveStreamUrl(StreamResult stream) async {
-    if (stream.url.startsWith("magnet:") ||
-        stream.url.endsWith(".torrent") ||
-        (stream.url.startsWith("/") && stream.source.contains("Torrent"))) {
-      state = state.copyWith(streamSubtitle: _playerText(english: 'Initializing Torrent Engine...', arabic: 'جارٍ تشغيل محرك التورنت...'));
-      final torrentUrl = await ref
-          .read(torrentServiceProvider)
-          .getStreamUrl(stream.url);
-      if (torrentUrl != null) return torrentUrl;
-      return null;
-    }
 
-    return AppUtils.normalizeUrl(stream.url);
-  }
+  Future<String?> _resolveStreamUrl(StreamResult stream) async =>
+      AppUtils.normalizeUrl(stream.url);
 
   /// Applies per-playback MPV properties (headers, cookies, DRM).
   Future<void> _applyPlaybackProperties(
@@ -4503,10 +4317,8 @@ class PlayerController extends Notifier<PlayerState> {
 
     final lower = url.toLowerCase();
 
-    // Torrents and local files are definitely VOD
-    if (lower.startsWith('magnet:') ||
-        lower.endsWith('.torrent') ||
-        lower.startsWith('/')) {
+    // Local files are definitely VOD.
+    if (lower.startsWith('/')) {
       return false;
     }
 

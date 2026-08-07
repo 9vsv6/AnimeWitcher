@@ -95,7 +95,7 @@ class ProviderMediaPage {
 }
 
 abstract class SkyStreamProvider {
-  /// Unique Package Name (from plugin.json)
+  /// Unique provider package name.
   String get packageName;
 
   /// Display Name
@@ -108,8 +108,7 @@ abstract class SkyStreamProvider {
   bool get isDebug => packageName.endsWith('.debug');
 
   /// Preferred provider-controlled batch sizes for paginated content.
-  /// Native providers can override these. JavaScript providers read them from
-  /// plugin.json. Older providers keep the legacy-safe value of 30.
+  /// Providers can override these pagination sizes. The default remains 30.
   int get viewAllPageSize => 30;
   int get searchPageSize => 30;
 

@@ -14,10 +14,6 @@ class SyncConfig {
     'ANIMESKIP_CLIENT_ID',
   );
 
-  static const String traktClientId = String.fromEnvironment('TRAKT_CLIENT_ID');
-  static const String traktClientSecret = String.fromEnvironment(
-    'TRAKT_CLIENT_SECRET',
-  );
 
   static const String anilistClientId = String.fromEnvironment(
     'ANILIST_CLIENT_ID',
@@ -32,8 +28,4 @@ class SyncConfig {
   // string prefix — keep it as a parseable URI, not a fragment.
   static const String malRedirectUri = 'http://localhost';
 
-  static const String simklClientId = String.fromEnvironment('SIMKL_CLIENT_ID');
-  static const String simklClientSecret = String.fromEnvironment(
-    'SIMKL_CLIENT_SECRET',
-  );
 }

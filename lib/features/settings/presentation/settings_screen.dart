@@ -467,19 +467,6 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: LayoutConstants.spacingLg),
             SettingsGroup(
-              title: l10n.extensions,
-              children: [
-                SettingsTile(
-                  icon: Icons.extension_rounded,
-                  title: l10n.manageExtensions,
-                  subtitle: l10n.installRemoveProviders,
-                  isLast: true,
-                  onTap: () => const ExtensionsRoute().go(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: LayoutConstants.spacingLg),
-            SettingsGroup(
               title: l10n.appData,
               children: [
                 if (!kIsWeb)

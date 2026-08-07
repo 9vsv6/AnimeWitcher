@@ -7,14 +7,11 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 
 import 'widgets/settings_widgets.dart';
 import 'widgets/settings_dialogs.dart';
-import 'widgets/tracking_auth_dialog.dart';
 import 'widgets/webview_auth_dialog.dart';
 import 'player_settings_provider.dart';
 
 import '../../../core/config/sync_config.dart';
 import '../../tracking/presentation/tracking_auth_provider.dart';
-import '../../tracking/data/simkl_service.dart';
-import '../../tracking/data/trakt_service.dart';
 import '../../tracking/data/mal_service.dart';
 import '../../tracking/data/anilist_service.dart';
 import '../../../core/storage/settings_repository.dart';
@@ -29,15 +26,11 @@ class AccountSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
-  final FocusNode _simklFocusNode = FocusNode();
-  final FocusNode _traktFocusNode = FocusNode();
   final FocusNode _malFocusNode = FocusNode();
   final FocusNode _anilistFocusNode = FocusNode();
 
   @override
   void dispose() {
-    _simklFocusNode.dispose();
-    _traktFocusNode.dispose();
     _malFocusNode.dispose();
     _anilistFocusNode.dispose();
     super.dispose();
@@ -139,164 +132,6 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                       return Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SettingsTile(
-                            focusNode: _simklFocusNode,
-                            icon: Icons.sync_rounded,
-                            title: 'Simkl',
-                            subtitle: trackingAuthAsync.when(
-                              data: (state) => state['simkl'] == true
-                                  ? appText(context, english: 'Connected', arabic: 'متصل')
-                                  : l10n.notLoggedIn,
-                              loading: () => l10n.loading,
-                              error: (_, _) => l10n.unknown,
-                            ),
-                            onTap: () async {
-                              final state = trackingAuthAsync.value ?? {};
-                              if (state['simkl'] == true) {
-                                final confirm = await _confirmDisconnect(
-                                  context,
-                                  'Simkl',
-                                );
-                                if (confirm) {
-                                  await ref.read(simklServiceProvider).logout();
-                                  ref.invalidate(trackingAuthProvider);
-                                  if (context.mounted) {
-                                    FocusScope.of(context).requestFocus();
-                                  }
-                                }
-                              } else {
-                                bool isCancelled = false;
-                                bool isDialogShowing = false;
-                                BuildContext? dialogContext;
-                                final success = await ref
-                                    .read(simklServiceProvider)
-                                    .login(
-                                      isCancelled: () => isCancelled,
-                                      onDeviceCodeGenerated: (url, code) async {
-                                        if (context.mounted) {
-                                          isDialogShowing = true;
-                                          unawaited(
-                                            showDialog<void>(
-                                              context: context,
-                                              barrierDismissible: true,
-                                              builder: (ctx) {
-                                                dialogContext = ctx;
-                                                return TrackingAuthDialog(
-                                                  providerName: 'Simkl',
-                                                  verificationUrl: url,
-                                                  userCode: code,
-                                                );
-                                              },
-                                            ).then((_) {
-                                              isCancelled = true;
-                                              isDialogShowing = false;
-                                              if (context.mounted) {
-                                                FocusScope.of(
-                                                  context,
-                                                ).requestFocus();
-                                              }
-                                            }),
-                                          );
-                                        }
-                                      },
-                                    );
-                                if (success && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        appText(context, english: 'Successfully connected to Simkl!', arabic: 'تم الاتصال بـ Simkl بنجاح!'),
-                                      ),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                }
-                                if (isDialogShowing &&
-                                    dialogContext != null &&
-                                    dialogContext!.mounted) {
-                                  Navigator.of(dialogContext!).pop();
-                                }
-                              }
-                              ref.invalidate(trackingAuthProvider);
-                            },
-                          ),
-                          SettingsTile(
-                            focusNode: _traktFocusNode,
-                            icon: Icons.sync_rounded,
-                            title: 'Trakt',
-                            subtitle: trackingAuthAsync.when(
-                              data: (state) => state['trakt'] == true
-                                  ? appText(context, english: 'Connected', arabic: 'متصل')
-                                  : l10n.notLoggedIn,
-                              loading: () => l10n.loading,
-                              error: (_, _) => l10n.unknown,
-                            ),
-                            onTap: () async {
-                              final state = trackingAuthAsync.value ?? {};
-                              if (state['trakt'] == true) {
-                                final confirm = await _confirmDisconnect(
-                                  context,
-                                  'Trakt',
-                                );
-                                if (confirm) {
-                                  await ref.read(traktServiceProvider).logout();
-                                  ref.invalidate(trackingAuthProvider);
-                                  if (context.mounted) {
-                                    _traktFocusNode.requestFocus();
-                                  }
-                                }
-                              } else {
-                                bool isCancelled = false;
-                                bool isDialogShowing = false;
-                                BuildContext? dialogContext;
-                                final success = await ref
-                                    .read(traktServiceProvider)
-                                    .login(
-                                      isCancelled: () => isCancelled,
-                                      onDeviceCodeGenerated: (url, code) async {
-                                        if (context.mounted) {
-                                          isDialogShowing = true;
-                                          unawaited(
-                                            showDialog<void>(
-                                              context: context,
-                                              barrierDismissible: true,
-                                              builder: (ctx) {
-                                                dialogContext = ctx;
-                                                return TrackingAuthDialog(
-                                                  providerName: 'Trakt',
-                                                  verificationUrl: url,
-                                                  userCode: code,
-                                                );
-                                              },
-                                            ).then((_) {
-                                              isCancelled = true;
-                                              isDialogShowing = false;
-                                              if (context.mounted) {
-                                                _traktFocusNode.requestFocus();
-                                              }
-                                            }),
-                                          );
-                                        }
-                                      },
-                                    );
-                                if (success && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        appText(context, english: 'Successfully connected to Trakt!', arabic: 'تم الاتصال بـ Trakt بنجاح!'),
-                                      ),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                }
-                                if (isDialogShowing &&
-                                    dialogContext != null &&
-                                    dialogContext!.mounted) {
-                                  Navigator.of(dialogContext!).pop();
-                                }
-                              }
-                              ref.invalidate(trackingAuthProvider);
-                            },
-                          ),
                           SettingsTile(
                             focusNode: _malFocusNode,
                             icon: Icons.sync_rounded,

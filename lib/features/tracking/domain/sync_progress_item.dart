@@ -1,7 +1,7 @@
 import '../../../../core/domain/entity/multimedia_item.dart';
 
 class SyncProgressItem {
-  final int? id; // Playback ID for Trakt removal
+  final int? id; // Optional remote playback-progress ID
   final String? tmdbId;
   final String? imdbId;
   final String title;

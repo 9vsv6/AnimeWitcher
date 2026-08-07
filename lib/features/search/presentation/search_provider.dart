@@ -6,7 +6,6 @@ import 'package:dio/dio.dart';
 import '../../../../core/extensions/extension_manager.dart';
 import '../../../../core/extensions/base_provider.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
-import '../../explore/data/explore_tmdb_provider.dart';
 
 part 'search_provider.g.dart';
 
@@ -420,11 +419,17 @@ class SearchSuggestionController extends _$SearchSuggestionController {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () async {
       try {
-        final tmdb = ref.read(tmdbServiceProvider);
-        final suggestions = await tmdb.getSuggestions(
-          query: query,
-          language: 'en-US',
-        );
+        final manager = ref.read(extensionManagerProvider.notifier);
+        final providers = manager.getAllProviders();
+        final results = providers.isEmpty
+            ? const <MultimediaItem>[]
+            : await providers.first.search(query);
+        final suggestions = results
+            .map((item) => item.title.trim())
+            .where((title) => title.isNotEmpty)
+            .toSet()
+            .take(10)
+            .toList(growable: false);
         if (state.query == query) {
           state = state.copyWith(suggestions: suggestions, isLoading: false);
         }

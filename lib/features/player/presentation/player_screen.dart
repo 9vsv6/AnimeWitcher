@@ -108,7 +108,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
     WakelockPlus.enable();
 
-    // Initialize player with larger buffer for torrent streaming
+    // Initialize player with larger buffer for stream streaming
     _player = Player(
       configuration: const PlayerConfiguration(
         bufferSize: 128 * 1024 * 1024, // 128MB
@@ -493,7 +493,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       return true;
     }
     final s = ref.read(playerControllerProvider);
-    if (s.showSourcesPanel || s.showEpisodeList || s.showContentPanel) {
+    if (s.showSourcesPanel || s.showEpisodeList) {
       _lastBackAt = now;
       _controlsKeyFinal.currentState?.closeActivePanel();
       return true;

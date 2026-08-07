@@ -100,7 +100,7 @@ class SyncedProgressCard extends ConsumerWidget {
                     ),
                     child: CachedNetworkImage(
                       imageUrl:
-                          AppImageFallbacks.tmdbPoster(
+                          AppImageFallbacks.poster(
                             item.posterUrl,
                             label: item.title,
                           ) ??

@@ -3,10 +3,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../core/storage/history_repository.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
-import '../../explore/data/explore_tmdb_provider.dart';
 import '../domain/sync_progress_item.dart';
-import 'simkl_service.dart';
-import 'trakt_service.dart';
 import 'anilist_service.dart';
 import 'mal_service.dart';
 import 'tracking_service.dart';
@@ -41,15 +38,6 @@ class SyncManager {
     }
 
     final ids = Map<String, String>.from(item.syncData ?? {});
-
-    // We primarily use Simkl for resolving cross-platform IDs because its API is the most comprehensive
-    try {
-      final simkl = _services.whereType<SimklService>().first;
-      final resolved = await simkl.syncIds(item);
-      ids.addAll(resolved);
-    } catch (e) {
-      // Ignore
-    }
 
     _cachedIds = ids;
     _cachedItemUrl = item.url;
@@ -190,7 +178,7 @@ class SyncManager {
     }
   }
 
-  /// Remove playback progress item from services that support it (e.g. Trakt)
+  /// Remove playback progress item from services that support it
   Future<bool> removePlaybackProgress(SyncProgressItem item) async {
     if (item.id == null) return false;
     final active = await getActiveServices();
@@ -212,8 +200,6 @@ class SyncManager {
 @riverpod
 SyncManager syncManager(Ref ref) {
   return SyncManager([
-    ref.watch(simklServiceProvider),
-    ref.watch(traktServiceProvider),
     ref.watch(aniListServiceProvider),
     ref.watch(malServiceProvider),
   ]);
@@ -306,26 +292,6 @@ Future<List<SyncProgressItem>> syncedProgress(Ref ref) async {
   final result = uniqueItems.values.toList();
   result.sort((a, b) => b.pausedAt.compareTo(a.pausedAt));
 
-  // Fetch TMDB posters concurrently
-  final tmdbService = ref.read(tmdbServiceProvider);
-  final enrichedResult = await Future.wait(
-    result.map((item) async {
-      if (item.tmdbId == null) return item;
-      try {
-        final mediaType = item.type == MultimediaContentType.series
-            ? 'tv'
-            : 'movie';
-        final details = await tmdbService.getDetailsForCarousel(
-          int.parse(item.tmdbId!),
-          mediaType,
-        );
-        if (details != null && details['poster_path'] != null) {
-          return item.copyWith(posterUrl: details['poster_path'] as String);
-        }
-      } catch (_) {}
-      return item;
-    }),
-  );
+  return result;
 
-  return enrichedResult;
 }

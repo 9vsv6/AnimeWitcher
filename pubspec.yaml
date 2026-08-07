@@ -54,8 +54,6 @@ dependencies:
   path_provider: ^2.1.5
   wakelock_plus: ^1.4.0
   hive_flutter: ^1.1.0
-  flutter_js:
-    path: packages/flutter_js_ng
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
@@ -66,8 +64,6 @@ dependencies:
   device_info_plus: any
   app_restarter: ^0.2.0
   crypto: ^3.0.7
-  flutter_torrent_server:
-    path: packages/flutter_torrent_server
   file_picker: ^12.0.0-beta.7
   archive: ^4.0.7
   filesystem_picker: ^4.1.0
@@ -97,7 +93,7 @@ dependencies:
   talker_riverpod_logger: ^5.1.16
   visibility_detector: ^0.4.0+2
   qr_flutter: ^4.1.0
-  # Platform keychain/keystore for OAuth tokens (Trakt/Simkl/MAL/AniList).
+  # Platform keychain/keystore for OAuth tokens (MAL/AniList).
   # Falls back to encrypted Hive on Linux/Windows where libsecret is missing.
   flutter_secure_storage: ^10.3.1
 
@@ -131,7 +127,6 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/plugins/
     - assets/images/
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

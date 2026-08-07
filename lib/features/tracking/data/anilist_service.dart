@@ -135,7 +135,7 @@ class AniListService implements TrackingService {
 
   @override
   Future<Map<String, String>> syncIds(MultimediaItem item) async {
-    // AniList IDs usually resolved via Simkl or MAL-Sync
+    // The native provider supplies AniList IDs in syncData
     return {};
   }
 

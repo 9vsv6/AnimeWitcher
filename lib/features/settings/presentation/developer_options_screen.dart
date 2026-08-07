@@ -5,14 +5,11 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:async';
 
 import '../../../shared/widgets/custom_widgets.dart';
-import '../../extensions/providers/extensions_controller.dart';
-import '../../../core/storage/settings_repository.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/providers/device_info_provider.dart';
 import '../../../core/router/app_router.dart';
 import 'widgets/settings_widgets.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
-import '../../../core/services/notification_service.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -26,13 +23,7 @@ class DeveloperOptionsScreen extends ConsumerStatefulWidget {
 
 class _DeveloperOptionsScreenState
     extends ConsumerState<DeveloperOptionsScreen> {
-  bool _devLoadAssets = false;
-
   @override
-  void initState() {
-    super.initState();
-    _devLoadAssets = ref.read(settingsRepositoryProvider).getDevLoadAssets();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,24 +53,6 @@ class _DeveloperOptionsScreenState
                   deviceAsync.asData?.value.isTv ?? false,
                 ),
               ),
-              SettingsTile(
-                icon: Icons.stream,
-                title: l10n.streamTorrent,
-                subtitle: l10n.streamTorrentSubtitle,
-                onTap: () => _pickTorrentFile(context),
-              ),
-              if (kDebugMode)
-                SettingsTile(
-                  icon: Icons.folder_copy_rounded,
-                  title: l10n.loadPluginFromAssets,
-                  subtitle: _devLoadAssets ? l10n.enabled : l10n.disabled,
-                  isLast: true,
-                  trailing: Switch(
-                    value: _devLoadAssets,
-                    onChanged: (val) => _toggleAssetLoading(context, val),
-                  ),
-                  onTap: () => _toggleAssetLoading(context, !_devLoadAssets),
-                ),
             ],
           ),
           SettingsGroup(
@@ -103,30 +76,6 @@ class _DeveloperOptionsScreenState
     return scaffold;
   }
 
-  Future<void> _toggleAssetLoading(BuildContext context, bool newValue) async {
-    if (!kDebugMode) {
-      ref
-          .read(notificationServiceProvider)
-          .showError(AppLocalizations.of(context)!.debugOnlyFeature);
-      return;
-    }
-
-    Future<void> handleDevLoadAssetsChanged(bool? newValue) async {
-      if (newValue == null) return;
-      await ref.read(settingsRepositoryProvider).setDevLoadAssets(newValue);
-      if (context.mounted) {
-        setState(() {
-          _devLoadAssets = newValue;
-        });
-      }
-    }
-
-    await handleDevLoadAssetsChanged(newValue);
-
-    await ref
-        .read(extensionsControllerProvider.notifier)
-        .loadInstalledPlugins();
-  }
 
   Future<void> _pickLocalVideo(BuildContext context) async {
     final result = await FilePicker.pickFiles(type: FileType.video);
@@ -218,27 +167,4 @@ class _DeveloperOptionsScreenState
     );
   }
 
-  Future<void> _pickTorrentFile(BuildContext context) async {
-    final result = await FilePicker.pickFiles(type: FileType.any);
-
-    if (result != null && result.files.single.path != null && context.mounted) {
-      final path = result.files.single.path!;
-      final name = result.files.single.name;
-
-      unawaited(
-        PlayerRoute(
-          $extra: PlayerRouteExtra(
-            item: MultimediaItem(
-              title: name,
-              url: path,
-              posterUrl: '',
-              provider: AppLocalizations.of(context)!.torrent,
-              episodes: [Episode(name: name, url: path, posterUrl: '')],
-            ),
-            videoUrl: path,
-          ),
-        ).push<void>(context),
-      );
-    }
-  }
 }

@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
-import 'package:skystream/core/extensions/extension_manager.dart';
-import 'package:skystream/core/extensions/base_provider.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/features/home/presentation/delegates/home_search_delegate.dart';
 import 'package:skystream/features/home/presentation/home_provider.dart';
-import 'package:skystream/features/explore/presentation/widgets/hover_border_gradient.dart';
 import 'dart:async';
 
 /// A custom header bar for the widescreen dashboard layout.
@@ -15,7 +12,6 @@ import 'dart:async';
 /// Contains: carousel prev/next arrows, capsule search, provider chip.
 class DashboardHeaderBar extends ConsumerWidget {
   final FocusNode searchFocusNode;
-  final VoidCallback onShowProviderSelector;
   final VoidCallback onShowSearchFilters;
   final ProviderSearchFilters searchFilters;
   final bool isFilterLoading;
@@ -29,7 +25,6 @@ class DashboardHeaderBar extends ConsumerWidget {
   const DashboardHeaderBar({
     super.key,
     required this.searchFocusNode,
-    required this.onShowProviderSelector,
     required this.onShowSearchFilters,
     required this.searchFilters,
     required this.isFilterLoading,
@@ -41,7 +36,6 @@ class DashboardHeaderBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final activeProvider = ref.watch(activeProviderProvider);
     final contentDirection = Directionality.of(context);
 
     final hasCarousel = onPrevious != null && onNext != null;
@@ -220,32 +214,6 @@ class DashboardHeaderBar extends ConsumerWidget {
 
           const SizedBox(width: 12),
 
-          HoverBorderGradient(
-            onTap: onShowProviderSelector,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.extension,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  activeProvider?.name ?? l10n.none,
-                  style: TextStyle(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white
-                        : Colors.black,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
           ],
         ),
       ),

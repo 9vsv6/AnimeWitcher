@@ -9,7 +9,6 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/external_player_service.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/base_provider.dart';
-import '../../../core/extensions/providers.dart';
 import '../../settings/presentation/player_settings_provider.dart';
 import 'package:collection/collection.dart';
 import 'details_controller.dart';
@@ -196,17 +195,7 @@ class PlaybackLauncher {
     String episodeDataUrl,
     String playerId,
   ) async {
-    String playUrl = stream.url;
-    if (stream.url.startsWith("magnet:") ||
-        stream.url.endsWith(".torrent") ||
-        (stream.url.startsWith("/") && stream.source.contains("Torrent"))) {
-      final torrentUrl = await _ref
-          .read(torrentServiceProvider)
-          .getStreamUrl(stream.url);
-      if (torrentUrl != null) {
-        playUrl = torrentUrl;
-      }
-    }
+    final playUrl = stream.url;
 
     final success = await ExternalPlayerService.instance.launch(
       playUrl,

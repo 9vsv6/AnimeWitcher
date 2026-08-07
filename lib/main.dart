@@ -14,8 +14,6 @@ import 'core/storage/storage_service.dart';
 import 'core/network/doh_service.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'core/utils/app_utils.dart';
-import 'features/extensions/providers/extensions_controller.dart';
-import 'features/extensions/widgets/extensions_sync_bridge.dart';
 import 'core/providers/update_provider.dart';
 import 'core/widgets/update_dialog.dart';
 import 'core/services/download_service.dart';
@@ -25,7 +23,6 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/network/cloudflare_bypass.dart';
 import 'package:dpad/dpad.dart';
-import 'core/config/tmdb_config.dart';
 import 'core/providers/device_info_provider.dart';
 import 'shared/widgets/loading_indicator.dart';
 import 'features/settings/presentation/general_settings_provider.dart';
@@ -35,7 +32,7 @@ void main() async {
   MediaKit.ensureInitialized();
 
   // Cap Flutter's image cache. Default is 1000 entries / 100 MB which is too
-  // generous for low-RAM TVs and even most phones — decoded TMDB posters fill
+  // generous for low-RAM TVs and even most phones — decoded media posters fill
   // it quickly. Tighter limits force earlier eviction and keep raster smooth.
   PaintingBinding.instance.imageCache
     ..maximumSize = 200
@@ -163,7 +160,7 @@ class _AppRootState extends State<AppRoot> {
 
     return ProviderScope(
       overrides: [storageServiceProvider.overrideWithValue(_storageService)],
-      child: const ExtensionsSyncBridge(child: MyApp()),
+      child: const MyApp(),
     );
   }
 }
@@ -185,7 +182,6 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(downloadServiceProvider).init();
-      _checkExtensionsUpdates();
       _checkAppUpdates();
     });
   }
@@ -264,56 +260,6 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
     }
   }
 
-  Future<void> _checkExtensionsUpdates() async {
-    try {
-      final controller = ref.read(extensionsControllerProvider.notifier);
-      await controller.ensureInitialized();
-      if (!mounted) return;
-
-      final updated = await controller.checkForUpdates();
-      if (updated.isNotEmpty && mounted) {
-        ref
-            .read(notificationServiceProvider)
-            .showSuccess(
-              _buildUpdateMessage(
-                updated,
-                isArabic: ref.read(localeProvider).languageCode == 'ar',
-              ),
-            );
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint("Auto-update failed: $e");
-    }
-  }
-
-  /// Builds a human-readable update toast message that lists plugin names.
-  /// Shows up to 5 names; any remainder is shown as "-- N more".
-  /// Examples:
-  ///   "Updated: SuperStream"
-  ///   "Updated 3 extensions: SuperStream, AniStream, StreamFlix"
-  ///   "Updated 7 extensions: A, B, C, D, E -- 2 more"
-  static String _buildUpdateMessage(
-    List<String> names, {
-    required bool isArabic,
-  }) {
-    final count = names.length;
-    if (count == 1) {
-      return isArabic
-          ? 'تم تحديث: ${names.first}'
-          : 'Updated: ${names.first}';
-    }
-    const maxShown = 5;
-    final shown = names.take(maxShown).join(', ');
-    final rest = count - maxShown;
-    final namesPart = rest > 0
-        ? isArabic
-              ? '$shown — و$rest إضافات أخرى'
-              : '$shown -- $rest more'
-        : shown;
-    return isArabic
-        ? 'تم تحديث $count إضافات: $namesPart'
-        : 'Updated $count extensions: $namesPart';
-  }
 
   Future<void> _toggleFullscreen() async {
     if (!(Platform.isMacOS || Platform.isWindows || Platform.isLinux)) return;
@@ -332,16 +278,6 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
     final locale = ref.watch(localeProvider);
     final isArabic = locale.languageCode.toLowerCase() == 'ar';
     final profileAsync = ref.watch(deviceProfileProvider);
-
-    // Mirror the resolved device profile into TmdbConfig's static cache so
-    // pure-utility URL builders (AppImageFallbacks, TmdbDetails ctor) pick
-    // TV / desktop-class image sizes once the async profile resolves.
-    // Until then they fall back to the mobile defaults — a few cold-start
-    // frames may use w1280 backdrops on TV before snapping to original.
-    ref.listen<AsyncValue<DeviceProfile>>(deviceProfileProvider, (prev, next) {
-      final value = next.value;
-      if (value != null) TmdbConfig.setProfile(value);
-    });
 
     // Reactive Listener: Keeps UpdateController alive and handles the UI side-effect
     ref.listen<UpdateState>(updateControllerProvider, (previous, next) {
@@ -641,8 +577,7 @@ class LaunchErrorApp extends StatelessWidget {
                       ),
                       icon: const Icon(Icons.restore),
                       label: Text(
-                        l10n?.resetDataKeepExtensions ??
-                            'Reset Data (Keep Extensions)',
+                        appText(context, english: 'Reset Preferences', arabic: 'إعادة ضبط التفضيلات'),
                       ),
                       onPressed: () async {
                         await storageService.clearPreferences();

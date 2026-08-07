@@ -1,7 +1,6 @@
 import 'package:html_unescape/html_unescape.dart';
 import 'package:collection/collection.dart';
 
-import '../../config/tmdb_config.dart';
 
 enum MultimediaContentType { movie, series, anime, livestream, other }
 
@@ -198,11 +197,6 @@ class MultimediaItem {
   }
 
   factory MultimediaItem.fromJson(Map<String, dynamic> json) {
-    if (json.containsKey('media_type') &&
-        json.containsKey('vote_average') &&
-        !json.containsKey('posterUrl')) {
-      return MultimediaItem.fromTmdbJson(json);
-    }
     final title = json['title'] != null
         ? _unescape.convert(json['title'] as String)
         : '';
@@ -300,42 +294,6 @@ class MultimediaItem {
     );
   }
 
-  factory MultimediaItem.fromTmdbJson(Map<String, dynamic> json) {
-    final String mTypeStr =
-        (json['media_type'] as String?) ??
-        (json['title'] != null ? 'movie' : 'tv');
-    final title = _unescape.convert(
-      (json['title'] as String?) ?? (json['name'] as String?) ?? 'Unknown',
-    );
-    final date =
-        (json['release_date'] as String?) ??
-        (json['first_air_date'] as String?) ??
-        '';
-    final year = int.tryParse(date.split('-').first);
-    final posterPath = json['poster_path'] as String?;
-    final backdropPath = json['backdrop_path'] as String?;
-
-    // Using simple logic for now, we'll eventually use AppImageFallbacks once we unify more
-    final posterUrl = posterPath != null
-        ? '${TmdbConfig.posterSizeUrl}$posterPath'
-        : '';
-    final bannerUrl = backdropPath != null
-        ? '${TmdbConfig.backdropSizeUrl}$backdropPath'
-        : posterUrl;
-
-    return MultimediaItem(
-      title: title,
-      url: '', // Needs detail resolving
-      posterUrl: posterUrl,
-      bannerUrl: bannerUrl,
-      description: json['overview'] as String?,
-      contentType: MultimediaItem.parseContentType(mTypeStr),
-      year: year,
-      score: (json['vote_average'] as num?)?.toDouble(),
-      tmdbId: json['id'] as int?,
-      imdbId: json['imdbId'] as String?,
-    );
-  }
 
   static ShowStatus _parseShowStatus(dynamic raw) {
     if (raw == null) return ShowStatus.ongoing;

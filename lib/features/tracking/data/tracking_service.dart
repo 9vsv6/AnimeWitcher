@@ -3,7 +3,7 @@ import '../domain/sync_progress_item.dart';
 
 abstract class TrackingService {
   String get name;
-  String get idPrefix; // e.g. "simkl", "mal", "anilist"
+  String get idPrefix; // e.g. "mal", "anilist"
   String get mainUrl;
 
   // Auth
@@ -18,7 +18,7 @@ abstract class TrackingService {
   // Search & ID resolution
   Future<List<MultimediaItem>> search(String query);
 
-  /// Fetches IDs associated with this item (e.g. { "simkl": "12345", "mal": "889" })
+  /// Fetches tracker IDs associated with this item when available.
   Future<Map<String, String>> syncIds(MultimediaItem item);
 
   // Tracking actions

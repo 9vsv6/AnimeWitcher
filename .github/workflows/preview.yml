@@ -51,17 +51,6 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-      
-      - name: Install Dependencies
-        run: |
-          flutter pub get
-          flutter gen-l10n
-          dart run build_runner build --delete-conflicting-outputs
-
-      # Remove desktop TorrServer binaries to reduce APK size
-      - name: Strip Desktop Binaries
-        run: rm -f packages/flutter_torrent_server/assets/torrserver/TorrServer-*
-        
       - name: Decode Keystore
         if: env.ANDROID_KEYSTORE_BASE64 != ''
         run: |
@@ -76,11 +65,6 @@ jobs:
         run: |
           cat > dart-defines.json << 'JSON_EOF'
           {
-            "TMDB_API_KEY": "${{ secrets.TMDB_API_KEY }}",
-            "SIMKL_CLIENT_ID": "${{ secrets.SIMKL_CLIENT_ID }}",
-            "SIMKL_CLIENT_SECRET": "${{ secrets.SIMKL_CLIENT_SECRET }}",
-            "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
-            "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
@@ -125,11 +109,6 @@ jobs:
         run: |
           cat > dart-defines.json << 'JSON_EOF'
           {
-            "TMDB_API_KEY": "${{ secrets.TMDB_API_KEY }}",
-            "SIMKL_CLIENT_ID": "${{ secrets.SIMKL_CLIENT_ID }}",
-            "SIMKL_CLIENT_SECRET": "${{ secrets.SIMKL_CLIENT_SECRET }}",
-            "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
-            "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
@@ -160,10 +139,8 @@ jobs:
         arch: [arm64, x64]
         include:
           - arch: arm64
-            torrserver_binary: TorrServer-darwin-arm64
             xcode_arch: arm64
           - arch: x64
-            torrserver_binary: TorrServer-darwin-amd64
             xcode_arch: x86_64
     steps:
       - uses: actions/checkout@v5
@@ -183,22 +160,11 @@ jobs:
           flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
-
-      - name: Strip Unused Binaries
-        run: |
-          cd packages/flutter_torrent_server/assets/torrserver
-          find . -type f ! -name "${{ matrix.torrserver_binary }}" -delete
-
       - name: Generate dart-defines file
         shell: bash
         run: |
           cat > dart-defines.json << 'JSON_EOF'
           {
-            "TMDB_API_KEY": "${{ secrets.TMDB_API_KEY }}",
-            "SIMKL_CLIENT_ID": "${{ secrets.SIMKL_CLIENT_ID }}",
-            "SIMKL_CLIENT_SECRET": "${{ secrets.SIMKL_CLIENT_SECRET }}",
-            "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
-            "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
@@ -272,7 +238,6 @@ jobs:
         include:
           - os: windows-2022
             arch: x64
-            torrserver_binary: TorrServer-windows-amd64.exe
     steps:
       - uses: actions/checkout@v5
         with:
@@ -288,13 +253,6 @@ jobs:
           flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
-
-      - name: Strip Unused Binaries
-        shell: pwsh
-        run: |
-          cd packages/flutter_torrent_server/assets/torrserver
-          Get-ChildItem -File | Where-Object { $_.Name -ne "${{ matrix.torrserver_binary }}" } | Remove-Item
-
       - name: Download libmpv-2.dll
         shell: pwsh
         run: |
@@ -326,11 +284,6 @@ jobs:
         run: |
           cat > dart-defines.json << 'JSON_EOF'
           {
-            "TMDB_API_KEY": "${{ secrets.TMDB_API_KEY }}",
-            "SIMKL_CLIENT_ID": "${{ secrets.SIMKL_CLIENT_ID }}",
-            "SIMKL_CLIENT_SECRET": "${{ secrets.SIMKL_CLIENT_SECRET }}",
-            "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
-            "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
@@ -374,10 +327,8 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: x64
-            torrserver_binary: TorrServer-linux-amd64
           - os: ubuntu-22.04-arm
             arch: arm64
-            torrserver_binary: TorrServer-linux-arm64
     steps:
       - uses: actions/checkout@v5
         with:
@@ -411,21 +362,11 @@ jobs:
           flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
-      - name: Strip Unused Binaries
-        run: |
-          cd packages/flutter_torrent_server/assets/torrserver
-          find . -type f ! -name "${{ matrix.torrserver_binary }}" -delete
-
       - name: Generate dart-defines file
         shell: bash
         run: |
           cat > dart-defines.json << 'JSON_EOF'
           {
-            "TMDB_API_KEY": "${{ secrets.TMDB_API_KEY }}",
-            "SIMKL_CLIENT_ID": "${{ secrets.SIMKL_CLIENT_ID }}",
-            "SIMKL_CLIENT_SECRET": "${{ secrets.SIMKL_CLIENT_SECRET }}",
-            "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
-            "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
             "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",

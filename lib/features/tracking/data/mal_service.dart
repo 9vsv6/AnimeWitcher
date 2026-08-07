@@ -239,8 +239,7 @@ class MalService implements TrackingService {
 
   @override
   Future<Map<String, String>> syncIds(MultimediaItem item) async {
-    // MAL API doesn't have a direct reverse lookup from IMDB/TMDB
-    // We rely on Simkl or MAL-Sync database to resolve MAL IDs
+    // MAL IDs are supplied by the native AnimeWitcher metadata when available
     return {};
   }
 

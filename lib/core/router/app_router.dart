@@ -7,10 +7,8 @@ import '../../features/explore/presentation/explore_screen.dart';
 import 'package:skystream/features/library/presentation/library_screen.dart';
 import 'package:skystream/features/library/presentation/downloads_screen.dart';
 import 'package:skystream/features/settings/presentation/settings_screen.dart';
-import '../../features/extensions/screens/extensions_screen.dart';
 import '../../features/settings/presentation/developer_options_screen.dart';
 import '../../features/details/presentation/details_screen.dart';
-import '../../features/details/presentation/tmdb_movie_details_screen.dart';
 import '../../features/explore/presentation/view_all_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
 import '../domain/entity/multimedia_item.dart';
@@ -48,7 +46,6 @@ part 'app_router.g.dart';
         TypedGoRoute<SettingsRoute>(
           path: '/settings',
           routes: [
-            TypedGoRoute<ExtensionsRoute>(path: 'extensions'),
             TypedGoRoute<DeveloperOptionsRoute>(path: 'developer'),
           ],
         ),
@@ -136,12 +133,6 @@ class SettingsRoute extends GoRouteData with $SettingsRoute {
 
 // --- Sub-routes of Settings ---
 
-class ExtensionsRoute extends GoRouteData with $ExtensionsRoute {
-  const ExtensionsRoute();
-  @override
-  Widget build(BuildContext context, GoRouterState state) =>
-      const ExtensionsScreen();
-}
 
 class DeveloperOptionsRoute extends GoRouteData with $DeveloperOptionsRoute {
   const DeveloperOptionsRoute();
@@ -213,32 +204,6 @@ class DetailsRoute extends GoRouteData with $DetailsRoute {
   }
 }
 
-@TypedGoRoute<TmdbDetailsRoute>(path: '/tmdb-details')
-class TmdbDetailsRoute extends GoRouteData with $TmdbDetailsRoute {
-  const TmdbDetailsRoute({
-    required this.movieId,
-    this.mediaType = 'movie',
-    this.heroTag,
-    this.placeholderPoster,
-    this.source,
-  });
-  final int movieId;
-  final String mediaType;
-  final String? heroTag;
-  final String? placeholderPoster;
-  final String? source;
-
-  @override
-  Widget build(BuildContext context, GoRouterState state) {
-    return TmdbMovieDetailsScreen(
-      movieId: movieId,
-      mediaType: mediaType,
-      heroTag: heroTag,
-      placeholderPoster: placeholderPoster,
-      source: source,
-    );
-  }
-}
 
 @TypedGoRoute<ViewAllRoute>(path: '/view-all')
 class ViewAllRoute extends GoRouteData with $ViewAllRoute {
