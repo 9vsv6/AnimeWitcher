@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/domain/entity/multimedia_item.dart';
-import '../../../../core/extensions/base_provider.dart';
-import '../../../../core/router/app_router.dart';
-import '../../../../core/utils/image_utils.dart';
-import '../../../../core/utils/responsive_breakpoints.dart';
-import '../../../../shared/widgets/multimedia_card.dart';
-import '../../../../shared/widgets/shimmer_placeholder.dart';
+import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/extensions/base_provider.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/utils/image_utils.dart';
+import '../../../core/utils/responsive_breakpoints.dart';
+import '../../../shared/widgets/multimedia_card.dart';
+import '../../../shared/widgets/shimmer_placeholder.dart';
 import 'controllers/view_all_controller.dart';
 
 enum ViewAllCategory {
