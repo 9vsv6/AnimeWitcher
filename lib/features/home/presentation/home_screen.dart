@@ -20,14 +20,12 @@ import '../../../l10n/generated/app_localizations.dart';
 import 'package:skystream/core/extensions/extension_manager.dart';
 import 'package:skystream/core/extensions/base_provider.dart';
 import 'package:skystream/core/router/app_router.dart';
-import 'delegates/home_search_delegate.dart';
 import '../../../shared/widgets/cards_wrapper.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
-import 'dart:async';
 import 'widgets/dashboard_header_bar.dart';
 import 'widgets/provider_search_filter_dialog.dart';
 
@@ -59,8 +57,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
   final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
   final FocusNode _firstActionFocusNode = FocusNode();
-  ProviderSearchFilters _providerSearchFilters = const ProviderSearchFilters();
-  String? _providerSearchFilterOwner;
   bool _isLoadingProviderSearchFilters = false;
   final Map<String, ProviderSearchFilterOptions> _searchFilterOptionsCache = {};
 
@@ -115,25 +111,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.dispose();
   }
 
-  ProviderSearchFilters _filtersFor(SkyStreamProvider? provider) {
-    if (provider == null ||
-        _providerSearchFilterOwner != provider.packageName) {
-      return const ProviderSearchFilters();
+  void _openSearchPage({
+    bool focusKeyboard = false,
+    bool clearQuery = false,
+  }) {
+    if (clearQuery) {
+      ref.read(searchQueryProvider.notifier).set('');
+      ref.read(searchSuggestionControllerProvider.notifier).clear();
     }
-    return _providerSearchFilters;
+    const SearchRoute().go(context);
+    if (!focusKeyboard && !clearQuery) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (clearQuery) {
+        ref.read(searchClearRequestProvider.notifier).request();
+      }
+      if (focusKeyboard) {
+        ref.read(searchFocusRequestProvider.notifier).request();
+      }
+    });
   }
 
   Future<void> _showProviderSearchFilters(WidgetRef ref) async {
     final provider = ref.read(activeProviderProvider);
     if (provider == null || _isLoadingProviderSearchFilters) return;
 
-    if (_providerSearchFilterOwner != provider.packageName) {
-      _providerSearchFilterOwner = provider.packageName;
-      _providerSearchFilters = const ProviderSearchFilters();
-    }
-
-    ProviderSearchFilters? selectedForSearch;
     setState(() => _isLoadingProviderSearchFilters = true);
+    ProviderSearchFilters? selected;
     try {
       final options =
           _searchFilterOptionsCache[provider.packageName] ??
@@ -157,46 +161,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         return;
       }
 
-      final selected = await showDialog<ProviderSearchFilters>(
+      selected = await showDialog<ProviderSearchFilters>(
         context: context,
         builder: (dialogContext) => ProviderSearchFilterDialog(
           options: options,
-          initialValue: _providerSearchFilters,
+          initialValue: ref.read(searchProviderFiltersProvider),
         ),
       );
-
-      if (!mounted || selected == null) return;
-      selectedForSearch = selected;
-      setState(() {
-        _providerSearchFilterOwner = provider.packageName;
-        _providerSearchFilters = selected;
-      });
     } finally {
       if (mounted) {
         setState(() => _isLoadingProviderSearchFilters = false);
       }
     }
 
-    final selected = selectedForSearch;
-    if (!mounted || selected == null || selected.isEmpty) return;
-
-    await showSearch<void>(
-      context: context,
-      delegate: HomeSearchDelegate(
-        filters: selected,
-        searchFieldHint: homeSearchFieldLabel(context, selected),
-        openWithoutKeyboard: true,
-        onFiltersChanged: (updated) {
-          if (!mounted) return;
-          setState(() {
-            _providerSearchFilterOwner = provider.packageName;
-            _providerSearchFilters = updated;
-          });
-        },
-      ),
-      useRootNavigator: false,
-      maintainState: true,
-    );
+    if (!mounted || selected == null) return;
+    ref.read(searchProviderFiltersProvider.notifier).set(selected);
+    ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
+    _openSearchPage(clearQuery: true);
   }
 
   @override
@@ -208,7 +189,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final generalSettings = ref.watch(generalSettingsProvider);
     final l10n = AppLocalizations.of(context)!;
     final activeProvider = ref.watch(activeProviderProvider);
-    final activeSearchFilters = _filtersFor(activeProvider);
+    final activeSearchFilters = ref.watch(searchProviderFiltersProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final overlayStyle = isDark
@@ -237,6 +218,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               padding: const EdgeInsets.only(top: 8),
               child: DashboardHeaderBar(
                 searchFocusNode: _firstActionFocusNode,
+                onShowSearch: () => _openSearchPage(focusKeyboard: true),
                 onShowSearchFilters: () => _showProviderSearchFilters(ref),
                 searchFilters: activeSearchFilters,
                 isFilterLoading: _isLoadingProviderSearchFilters,
@@ -329,22 +311,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
             child: CardsWrapper(
               focusNode: _firstActionFocusNode,
-              onTap: () {
-                unawaited(
-                  showSearch<void>(
-                    context: context,
-                    delegate: HomeSearchDelegate(
-                      filters: activeSearchFilters,
-                      searchFieldHint: homeSearchFieldLabel(
-                        context,
-                        activeSearchFilters,
-                      ),
-                    ),
-                    useRootNavigator: false,
-                    maintainState: true,
-                  ),
-                );
-              },
+              onTap: () => _openSearchPage(focusKeyboard: true),
               borderRadius: BorderRadius.circular(50),
               child: CircleAvatar(
                 backgroundColor: Theme.of(

@@ -383,6 +383,30 @@ final searchProviderFiltersProvider =
       SearchProviderFiltersNotifier.new,
     );
 
+class SearchFocusRequestNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void request() => state++;
+}
+
+final searchFocusRequestProvider =
+    NotifierProvider<SearchFocusRequestNotifier, int>(
+      SearchFocusRequestNotifier.new,
+    );
+
+class SearchClearRequestNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void request() => state++;
+}
+
+final searchClearRequestProvider =
+    NotifierProvider<SearchClearRequestNotifier, int>(
+      SearchClearRequestNotifier.new,
+    );
+
 
 class PagedSearchNotifier extends Notifier<SearchAggregateState> {
   int _generation = 0;

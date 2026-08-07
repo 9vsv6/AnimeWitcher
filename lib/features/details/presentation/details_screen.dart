@@ -16,6 +16,7 @@ import 'package:skystream/shared/widgets/custom_widgets.dart';
 
 import '../../library/presentation/library_provider.dart';
 import '../../library/presentation/library_state.dart';
+import '../../../core/storage/library_category.dart';
 
 import 'details_controller.dart';
 import "widgets/details_layout_widgets.dart";
@@ -50,6 +51,107 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Offset _tabSlideFrom = Offset.zero;
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
+
+  static const String _removeLibraryAction = '__remove_from_library__';
+
+  String _libraryCategoryLabel(BuildContext context, LibraryCategory category) {
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    return switch (category) {
+      LibraryCategory.favorite => isArabic ? 'مفضلة' : 'Favorites',
+      LibraryCategory.watching => isArabic ? 'أشاهده حاليًا' : 'Watching',
+      LibraryCategory.planToWatch =>
+        isArabic ? 'أرغب بمشاهدته' : 'Plan to watch',
+      LibraryCategory.completed => isArabic ? 'تمت مشاهدته' : 'Completed',
+      LibraryCategory.onHold => isArabic ? 'مؤجل' : 'On hold',
+      LibraryCategory.notInterested =>
+        isArabic ? 'لا أرغب بمشاهدته' : 'Not interested',
+    };
+  }
+
+  IconData _libraryCategoryIcon(LibraryCategory category) {
+    return switch (category) {
+      LibraryCategory.favorite => Icons.favorite_rounded,
+      LibraryCategory.watching => Icons.play_circle_fill_rounded,
+      LibraryCategory.planToWatch => Icons.schedule_rounded,
+      LibraryCategory.completed => Icons.check_circle_rounded,
+      LibraryCategory.onHold => Icons.pause_circle_filled_rounded,
+      LibraryCategory.notInterested => Icons.block_rounded,
+    };
+  }
+
+  Future<void> _showLibraryCategoryPicker(
+    BuildContext context,
+    MultimediaItem item,
+  ) async {
+    final notifier = ref.read(libraryProvider.notifier);
+    final currentCategory = notifier.itemCategory(item.url);
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+
+    final result = await showModalBottomSheet<Object>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                  child: Text(
+                    isArabic ? 'حفظ في قائمة' : 'Save to list',
+                    style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                for (final category in LibraryCategory.values)
+                  ListTile(
+                    leading: Icon(_libraryCategoryIcon(category)),
+                    title: Text(_libraryCategoryLabel(sheetContext, category)),
+                    trailing: currentCategory == category
+                        ? Icon(
+                            Icons.check_rounded,
+                            color: Theme.of(sheetContext).colorScheme.primary,
+                          )
+                        : null,
+                    onTap: () => Navigator.of(sheetContext).pop(category),
+                  ),
+                if (currentCategory != null) ...[
+                  const Divider(),
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline_rounded,
+                      color: Theme.of(sheetContext).colorScheme.error,
+                    ),
+                    title: Text(
+                      isArabic ? 'إزالة من المكتبة' : 'Remove from library',
+                      style: TextStyle(
+                        color: Theme.of(sheetContext).colorScheme.error,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(sheetContext).pop(
+                      _removeLibraryAction,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || result == null) return;
+    if (result is LibraryCategory) {
+      await notifier.addItem(item, category: result);
+    } else if (result == _removeLibraryAction) {
+      await notifier.removeItem(item.url);
+    }
+  }
 
   void _switchDetailsTab(int targetTab) {
     if (targetTab == _selectedDetailsTab) return;
@@ -382,13 +484,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                         ? Theme.of(context).colorScheme.primary
                         : Colors.white,
                   ),
-                  onPressed: () {
-                    if (isBookmarked) {
-                      libraryNotifier.removeItem(item.url);
-                    } else {
-                      libraryNotifier.addItem(item);
-                    }
-                  },
+                  onPressed: () => _showLibraryCategoryPicker(context, item),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.black45,
                     foregroundColor: Colors.white,
@@ -782,13 +878,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       ? Theme.of(context).colorScheme.primary
                       : textColor,
                 ),
-                onPressed: () {
-                  if (isBookmarked) {
-                    libraryNotifier.removeItem(item.url);
-                  } else {
-                    libraryNotifier.addItem(item);
-                  }
-                },
+                onPressed: () => _showLibraryCategoryPicker(context, item),
                 style: IconButton.styleFrom(
                   backgroundColor: isDark ? Colors.black45 : Colors.white54,
                   foregroundColor: textColor,

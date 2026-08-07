@@ -13,6 +13,7 @@ import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
 import 'widgets/bouncy_entry_animation.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/widgets/shimmer_placeholder.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
 class SearchScreen extends ConsumerStatefulWidget {
@@ -30,12 +31,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final FocusNode _firstResultFocusNode = FocusNode();
   final ScrollController _resultsScrollController = ScrollController();
   bool _isLoadingProviderFilters = false;
+  int _lastFocusRequest = 0;
+  int _lastClearRequest = 0;
 
   @override
   void initState() {
     super.initState();
     // Restore any previously committed query into the text field.
     _controller.text = ref.read(searchQueryProvider);
+    _lastFocusRequest = ref.read(searchFocusRequestProvider);
+    _lastClearRequest = ref.read(searchClearRequestProvider);
     _controller.addListener(_onTextChanged);
     _resultsScrollController.addListener(_onResultsScroll);
     ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
@@ -192,6 +197,26 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final clearRequest = ref.watch(searchClearRequestProvider);
+    if (clearRequest != _lastClearRequest) {
+      _lastClearRequest = clearRequest;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _controller.clear();
+      });
+    }
+
+    final focusRequest = ref.watch(searchFocusRequestProvider);
+    if (focusRequest != _lastFocusRequest) {
+      _lastFocusRequest = focusRequest;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _focusNode.requestFocus();
+        final textLength = _controller.text.length;
+        _controller.selection = TextSelection.collapsed(offset: textLength);
+      });
+    }
+
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;
@@ -563,7 +588,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     final allResults = state.results.expand((entry) => entry.results).toList();
     if (allResults.isEmpty && state.isLoading) {
-      return const Center(child: AppLoadingIndicator());
+      return _buildLoadingSkeleton(context);
     }
     if (allResults.isEmpty) {
       return _buildEmptyState(context);
@@ -576,10 +601,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         itemCount: state.results.length + (state.isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index >= state.results.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: AppLoadingIndicator()),
-            );
+            return _buildLoadingMoreSkeleton(context);
           }
           final pResult = state.results[index];
           return SearchResultSection(
@@ -594,12 +616,59 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
+  Widget _buildLoadingSkeleton(BuildContext context) {
+    final isLarge = context.isTabletOrLarger;
+    return GridView.builder(
+      controller: _resultsScrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 100),
+      gridDelegate: isLarge
+          ? const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 200,
+              childAspectRatio: 0.56,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+            )
+          : const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              childAspectRatio: 0.56,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 14,
+            ),
+      itemCount: isLarge ? 12 : 9,
+      itemBuilder: (context, index) =>
+          const ShimmerPlaceholder(borderRadius: 12),
+    );
+  }
+
+  Widget _buildLoadingMoreSkeleton(BuildContext context) {
+    final spacing = context.isTabletOrLarger ? 16.0 : 10.0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+      child: Row(
+        children: List.generate(3, (index) {
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsetsDirectional.only(
+                end: index == 2 ? 0 : spacing,
+              ),
+              child: const AspectRatio(
+                aspectRatio: 0.56,
+                child: ShimmerPlaceholder(borderRadius: 12),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _buildSuggestionsView(
     BuildContext context,
     SearchSuggestionState suggestionState,
   ) {
     if (suggestionState.isLoading) {
-      return const Center(child: AppLoadingIndicator());
+      return _buildLoadingSkeleton(context);
     }
 
     if (suggestionState.suggestions.isEmpty) {

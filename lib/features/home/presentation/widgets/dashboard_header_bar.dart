@@ -3,16 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/shared/widgets/cards_wrapper.dart';
-import 'package:skystream/features/home/presentation/delegates/home_search_delegate.dart';
 import 'package:skystream/features/home/presentation/home_provider.dart';
 import 'package:skystream/core/extensions/base_provider.dart';
-import 'dart:async';
 
 /// A custom header bar for the widescreen dashboard layout.
 ///
 /// Contains: carousel prev/next arrows, capsule search, provider chip.
 class DashboardHeaderBar extends ConsumerWidget {
   final FocusNode searchFocusNode;
+  final VoidCallback onShowSearch;
   final VoidCallback onShowSearchFilters;
   final ProviderSearchFilters searchFilters;
   final bool isFilterLoading;
@@ -26,6 +25,7 @@ class DashboardHeaderBar extends ConsumerWidget {
   const DashboardHeaderBar({
     super.key,
     required this.searchFocusNode,
+    required this.onShowSearch,
     required this.onShowSearchFilters,
     required this.searchFilters,
     required this.isFilterLoading,
@@ -132,22 +132,7 @@ class DashboardHeaderBar extends ConsumerWidget {
             child: CardsWrapper(
               scaleFactor: 1.01,
               focusNode: searchFocusNode,
-              onTap: () {
-                unawaited(
-                  showSearch<void>(
-                    context: context,
-                    delegate: HomeSearchDelegate(
-                      filters: searchFilters,
-                      searchFieldHint: homeSearchFieldLabel(
-                        context,
-                        searchFilters,
-                      ),
-                    ),
-                    useRootNavigator: false,
-                    maintainState: true,
-                  ),
-                );
-              },
+              onTap: onShowSearch,
               borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
               child: Container(
                 height: 38,
@@ -171,7 +156,7 @@ class DashboardHeaderBar extends ConsumerWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        homeSearchFieldLabel(context, searchFilters),
+                        l10n.searchHint,
                         textDirection: contentDirection,
                         textAlign: contentDirection == TextDirection.rtl
                             ? TextAlign.right

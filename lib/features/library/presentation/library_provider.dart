@@ -66,6 +66,11 @@ class Library extends _$Library {
     return repository.isInLibrary(url);
   }
 
+  LibraryCategory? itemCategory(String url) {
+    final repository = ref.read(libraryRepositoryProvider);
+    return repository.getItemCategory(url);
+  }
+
   Future<void> clearAll() async {
     // repository.clearAll() if it exists
   }
