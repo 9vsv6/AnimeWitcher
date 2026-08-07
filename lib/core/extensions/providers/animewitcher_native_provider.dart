@@ -584,7 +584,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       );
       final number = RegExp(r'[0-9٠-٩۰-۹]+(?:\.[0-9]+)?').firstMatch(rawEpisode);
       if (number != null) {
-        episodeBadge = 'حلقة ${_normalizeDigits(number.group(0)!)}';
+        final normalizedNumber = _normalizeDigits(number.group(0)!)
+            .replaceFirst(RegExp(r'^0+(?=\d)'), '');
+        episodeBadge = 'حلقة $normalizedNumber';
       }
       final episodeName = _text(source['episode_name'] ?? source['episodeName']);
       if (episodeName.isNotEmpty) {
@@ -741,19 +743,15 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       case 'أحدث الحلقات':
         return const _HomePlan(index: 'recent', recent: true);
       case 'أنميات الموسم الحالي':
-        return _HomePlan(
-          index: 'series',
-          query: _officialCurrentSeason.isNotEmpty
-              ? _officialCurrentSeason
-              : _seasonLabel(_currentSeason()),
-        );
+        final currentLabel = _officialCurrentSeason.isNotEmpty
+            ? _officialCurrentSeason
+            : _seasonLabel(_currentSeason());
+        return _HomePlan(index: 'series', filters: _seasonFilter(currentLabel));
       case 'أنميات الموسم القادم':
-        return _HomePlan(
-          index: 'series',
-          query: _officialNextSeason.isNotEmpty
-              ? _officialNextSeason
-              : _seasonLabel(_nextSeason(_currentSeason())),
-        );
+        final nextLabel = _officialNextSeason.isNotEmpty
+            ? _officialNextSeason
+            : _seasonLabel(_nextSeason(_currentSeason()));
+        return _HomePlan(index: 'series', filters: _seasonFilter(nextLabel));
       case 'قائمة الأنمي':
         return const _HomePlan(index: 'series_date_created');
       case 'قائمة الأفلام':
@@ -793,6 +791,12 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return name.isEmpty ? '' : '$name عام ${value.year}';
   }
 
+
+  String _seasonFilter(String label) {
+    final escaped = label.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    return escaped.isEmpty ? '' : 'details.season:"$escaped"';
+  }
+
   Future<ProviderMediaPage> _loadHomePage(
     String sectionName, {
     int offset = 0,
@@ -811,6 +815,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
           query: plan.query,
           page: pageNumber,
           hitsPerPage: safeLimit,
+          filters: plan.filters,
           attributes: plan.recent ? _recentAttributes : _searchAttributes,
         );
 
@@ -921,9 +926,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   bool _hasUsefulMetadata(Map<String, dynamic> source) {
-    return _text(source['name'] ?? source['english_title']).isNotEmpty &&
-        _posterFromHit(source).isNotEmpty &&
-        _malId(source) > 0;
+    final highlighted = _map(_map(source['_highlightResult'])['story']);
+    return _text(source['story']).isNotEmpty ||
+        _text(highlighted['value']).isNotEmpty ||
+        _map(source['details']).isNotEmpty ||
+        _list(source['tags']).isNotEmpty;
   }
 
   Future<Map<String, dynamic>> _fullAnimeRecord(
@@ -969,7 +976,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   double? _scoreFromHit(Map<String, dynamic> source) {
     final details = _map(source['details']);
     final rating = _map(source['rating']);
-    for (final raw in <dynamic>[details['mal_score'], rating['rate'], source['score']]) {
+    for (final raw in <dynamic>[details['mal_mean'], details['mal_score'], rating['rate'], source['score']]) {
       final value = raw is num ? raw.toDouble() : double.tryParse(_text(raw));
       if (value != null && value > 0) return value;
     }
@@ -999,14 +1006,61 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final malId = _malId(source);
     final poster = _posterFromHit(source);
     final syncData = <String, String>{};
+    void putSync(String key, dynamic raw) {
+      final value = _text(raw);
+      if (value.isNotEmpty) syncData[key] = value;
+    }
     if (malId > 0) {
       syncData['malId'] = '$malId';
       syncData['mal_id'] = '$malId';
     }
-    final englishTitle = _text(details['english_title'] ?? source['english_title']);
-    if (englishTitle.isNotEmpty) syncData['awEnglishTitle'] = englishTitle;
-    final age = _text(details['age']);
-    if (age.isNotEmpty) syncData['awAge'] = age;
+    final rating = _map(source['rating']);
+    final statistics = _map(source['statictes']).isNotEmpty
+        ? _map(source['statictes'])
+        : _map(source['statistics']);
+    final studios = _list(details['studio']).isNotEmpty
+        ? _list(details['studio'])
+        : _list(details['studios']).isNotEmpty
+            ? _list(details['studios'])
+            : _text(details['studio']).isNotEmpty
+                ? <dynamic>[details['studio']]
+                : const <dynamic>[];
+    putSync('awEnglishTitle', details['english_title'] ?? source['english_title']);
+    putSync(
+      'awStudio',
+      studios.map((value) => _text(value)).where((value) => value.isNotEmpty).join(', '),
+    );
+    putSync('awSource', details['source'] ?? source['source']);
+    putSync('awSeason', details['season']);
+    putSync('awSeasonName', details['season_name'] ?? details['seasonName']);
+    putSync('awYear', details['year'] ?? _yearFromHit(source));
+    putSync('awStartDate', details['start_date'] ?? details['startDate']);
+    putSync('awEndDate', details['end_date'] ?? details['endDate']);
+    putSync(
+      'awState',
+      details['state'] ?? details['status'] ?? source['state'] ?? source['status'],
+    );
+    putSync('awEpisodes', details['eps_num'] ?? details['episodes']);
+    putSync('awDuration', source['duration'] ?? details['duration']);
+    final age = _text(
+      details['age'] ?? details['age_rating'] ?? details['content_rating'],
+    );
+    putSync('awAge', age);
+    putSync('awMalScore', details['mal_mean'] ?? details['mal_score']);
+    putSync('awMalRank', details['mal_rank']);
+    putSync(
+      'awMalScoringUsers',
+      details['mal_num_scoring_users'] ?? details['mal_scoring_users'],
+    );
+    putSync('awScore', rating['rate']);
+    putSync(
+      'awRatingsCount',
+      rating['totalRatingsCount'] ?? rating['total_ratings_count'],
+    );
+    putSync('awViews', source['views']);
+    putSync('awFavorites', statistics['fav_count'] ?? statistics['favorite_count']);
+    putSync('awType', source['type']);
+    putSync('awSeasonNumber', details['season_number'] ?? details['seasonNumber']);
     return MultimediaItem(
       title: title.isEmpty ? route.animeId : title,
       url: url,
@@ -2235,9 +2289,15 @@ class _ServerRecord {
 }
 
 class _HomePlan {
-  const _HomePlan({required this.index, this.query = '', this.recent = false});
+  const _HomePlan({
+    required this.index,
+    this.query = '',
+    this.filters = '',
+    this.recent = false,
+  });
   final String index;
   final String query;
+  final String filters;
   final bool recent;
 }
 

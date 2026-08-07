@@ -60,8 +60,6 @@ class MetadataBar extends ConsumerWidget {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        if (item.provider != null && item.provider!.isNotEmpty)
-          DetailsProviderChip(providerName: item.provider!),
         if (showTypeBadge)
           _buildBorderedInfo(
             context,
