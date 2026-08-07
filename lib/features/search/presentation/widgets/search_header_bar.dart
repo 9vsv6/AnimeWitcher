@@ -200,7 +200,11 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                     ? const SizedBox.shrink()
                     : CardsWrapper(
                         scaleFactor: 1.0,
-                        onTap: widget.isFilterLoading ? null : widget.onShowFilters,
+                        onTap: () {
+                          if (!widget.isFilterLoading) {
+                            widget.onShowFilters();
+                          }
+                        },
                         borderRadius: BorderRadius.circular(20),
                         child: Container(
                           height: 38,

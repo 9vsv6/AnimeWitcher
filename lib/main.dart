@@ -14,6 +14,7 @@ import 'core/storage/storage_service.dart';
 import 'core/network/doh_service.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'core/utils/app_utils.dart';
+import 'core/utils/localized_text.dart';
 import 'core/providers/update_provider.dart';
 import 'core/widgets/update_dialog.dart';
 import 'core/services/download_service.dart';

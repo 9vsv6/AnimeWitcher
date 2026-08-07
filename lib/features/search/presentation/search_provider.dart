@@ -310,7 +310,6 @@ Stream<SearchAggregateState> searchAllProviders(
             debugPrint(
               '[SEARCH DBG] ALL DONE — total result sets=${results.length}',
             );
-            manager.runGC();
             if (!controller.isClosed) {
               unawaited(
                 Future.microtask(() {
