@@ -426,7 +426,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               if (data.containsKey('Trending'))
                 SliverToBoxAdapter(
                   child: HomeHeroCarousel(
-                    movies: data['Trending']!.take(7).toList(),
+                    movies: data['Trending']!,
                     scrollController: _scrollController,
                     onNavigateUp: () => _firstActionFocusNode.requestFocus(),
                     onControllerReady: (c) =>
@@ -441,7 +441,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               else if (data.isNotEmpty)
                 SliverToBoxAdapter(
                   child: HomeHeroCarousel(
-                    movies: data.values.first.take(7).toList(),
+                    movies: data.values.first,
                     scrollController: _scrollController,
                     onNavigateUp: () => _firstActionFocusNode.requestFocus(),
                     onControllerReady: (c) =>

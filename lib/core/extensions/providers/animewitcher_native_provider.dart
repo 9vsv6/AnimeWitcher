@@ -31,6 +31,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   final Map<int, String> _aniListPosterCache = <int, String>{};
   final Map<int, Map<String, dynamic>> _aniListMediaCache =
       <int, Map<String, dynamic>>{};
+  final Map<String, Map<String, dynamic>> _animeDocumentCache =
+      <String, Map<String, dynamic>>{};
+  List<_OfficialHomeSection>? _officialHomeSectionsCache;
+  DateTime _officialHomeSectionsExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Future<List<_OfficialHomeSection>>? _officialHomeSectionsRequest;
   DateTime _remoteConstantsExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
   Future<void>? _remoteConstantsRequest;
   static const String _userAgent =
@@ -44,6 +49,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   static const Duration _mediaFireTimeout = Duration(seconds: 30);
   static const Duration _aniZipTimeout = Duration(seconds: 12);
   static const Duration _remoteConstantsTtl = Duration(hours: 6);
+  static const Duration _homeSectionsTtl = Duration(minutes: 30);
   static const int _previewSize = 10;
   static const int _maxCastItems = 25;
   static const int _maxRelatedItems = 16;
@@ -682,11 +688,44 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     };
   }
 
+  Future<List<Map<String, dynamic>>> _hydrateRecentHitsForPosters(
+    List<Map<String, dynamic>> hits,
+  ) async {
+    final missingIds = <String>{};
+    for (final hit in hits) {
+      if (_malId(hit) > 0) continue;
+      final animeId = _animeIdFromHit(hit);
+      if (animeId.isNotEmpty) missingIds.add(animeId);
+    }
+    if (missingIds.isEmpty) return hits;
+
+    final documents = await Future.wait(
+      missingIds.map((animeId) async => MapEntry(
+            animeId,
+            await _fetchAnimeDocument(animeId),
+          )),
+    );
+    final byId = <String, Map<String, dynamic>>{
+      for (final entry in documents) entry.key: entry.value,
+    };
+
+    return hits.map((hit) {
+      if (_malId(hit) > 0) return hit;
+      final animeId = _animeIdFromHit(hit);
+      final document = byId[animeId];
+      if (document == null || document.isEmpty) return hit;
+      // Anime document supplies MAL/poster/details metadata while the recent
+      // record remains authoritative for episode badge/date fields.
+      return _mergeMaps(document, hit);
+    }).toList(growable: false);
+  }
+
   Future<List<MultimediaItem>> _dedupeHitsWithAniListPosters(
     Iterable<dynamic> hits, {
     bool recent = false,
   }) async {
-    final maps = hits.map(_map).where((hit) => hit.isNotEmpty).toList();
+    var maps = hits.map(_map).where((hit) => hit.isNotEmpty).toList();
+    if (recent) maps = await _hydrateRecentHitsForPosters(maps);
     final posters = await _aniListPostersForHits(maps);
     final seen = <String>{};
     final output = <MultimediaItem>[];
@@ -811,7 +850,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     );
   }
 
-  _HomePlan? _homePlan(String sectionName) {
+  _HomePlan? _fallbackHomePlan(String sectionName) {
     switch (sectionName.trim()) {
       case 'أحدث الحلقات':
         return const _HomePlan(index: 'recent', recent: true);
@@ -832,6 +871,101 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       default:
         return null;
     }
+  }
+
+  _OfficialHomeSection _officialHomeSection(dynamic raw) {
+    final source = _map(raw);
+    final rawHits = source['hits_per_page'] ?? source['hitsPerPage'] ?? source['limit'];
+    final hits = rawHits is num ? rawHits.toInt() : int.tryParse(_text(rawHits)) ?? _previewSize;
+    final rawOrder = source['order'];
+    final order = rawOrder is num ? rawOrder.toInt() : int.tryParse(_text(rawOrder)) ?? 1 << 30;
+    return _OfficialHomeSection(
+      title: _text(source['title']),
+      type: _text(source['type']).toLowerCase(),
+      indexName: _text(source['index_name'] ?? source['indexName']),
+      searchText: _text(source['search_text'] ?? source['searchText']),
+      hitsPerPage: hits > 0 ? hits : _previewSize,
+      order: order,
+      enabled: source['enabled'] == null ? true : source['enabled'] == true,
+      autoScroll: source['auto_scroll'] == true || source['autoScroll'] == true,
+    );
+  }
+
+  Future<List<_OfficialHomeSection>> _fetchOfficialHomeSections() async {
+    final now = DateTime.now();
+    final cached = _officialHomeSectionsCache;
+    if (cached != null && _officialHomeSectionsExpiresAt.isAfter(now)) {
+      return cached;
+    }
+    final inFlight = _officialHomeSectionsRequest;
+    if (inFlight != null) return inFlight;
+
+    final request = () async {
+      final payload = await _getJson(_firestoreUrl('Settings/home_sections'));
+      final fields = payload == null
+          ? <String, dynamic>{}
+          : _firestoreFields(payload['fields']);
+      final sections = _list(fields['sections'])
+          .map<_OfficialHomeSection>(_officialHomeSection)
+          .where((section) =>
+              section.enabled &&
+              section.title.isNotEmpty &&
+              section.indexName.isNotEmpty)
+          .toList();
+      sections.sort((a, b) => a.order.compareTo(b.order));
+      _officialHomeSectionsCache = sections;
+      _officialHomeSectionsExpiresAt = now.add(_homeSectionsTtl);
+      return sections;
+    }();
+    _officialHomeSectionsRequest = request;
+    try {
+      return await request;
+    } finally {
+      if (identical(_officialHomeSectionsRequest, request)) {
+        _officialHomeSectionsRequest = null;
+      }
+    }
+  }
+
+  bool _isLatestHomeSection(_OfficialHomeSection section) {
+    final text = '${section.title} ${section.type} ${section.indexName}'.toLowerCase();
+    return section.type == 'recent' ||
+        section.indexName.toLowerCase() == 'recent' ||
+        RegExp(r'أحدث الحلقات|الحلقات الجديدة|آخر الحلقات|recent').hasMatch(text);
+  }
+
+  bool _isCurrentSeasonSection(_OfficialHomeSection section) {
+    final text = '${section.title} ${section.type} ${section.searchText}'.toLowerCase();
+    return RegExp(r'الموسم الحالي|current season|season_current|current_season').hasMatch(text);
+  }
+
+  bool _isNextSeasonSection(_OfficialHomeSection section) {
+    final text = '${section.title} ${section.type} ${section.searchText}'.toLowerCase();
+    return RegExp(r'الموسم القادم|الموسم التالي|next season|upcoming season|season_next|next_season').hasMatch(text);
+  }
+
+  _HomePlan _homePlanFromOfficial(_OfficialHomeSection section) {
+    if (_isCurrentSeasonSection(section)) {
+      final currentLabel = _officialCurrentSeason.isNotEmpty
+          ? _officialCurrentSeason
+          : section.searchText.isNotEmpty
+              ? section.searchText
+              : _seasonLabel(_currentSeason());
+      return _HomePlan(index: 'series', filters: _seasonFilter(currentLabel));
+    }
+    if (_isNextSeasonSection(section)) {
+      final nextLabel = _officialNextSeason.isNotEmpty
+          ? _officialNextSeason
+          : section.searchText.isNotEmpty
+              ? section.searchText
+              : _seasonLabel(_nextSeason(_currentSeason()));
+      return _HomePlan(index: 'series', filters: _seasonFilter(nextLabel));
+    }
+    return _HomePlan(
+      index: section.indexName,
+      query: _isLatestHomeSection(section) ? '' : section.searchText,
+      recent: _isLatestHomeSection(section),
+    );
   }
 
   _SeasonInfo _currentSeason() {
@@ -864,9 +998,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return name.isEmpty ? '' : '$name عام ${value.year}';
   }
 
-
   String _seasonFilter(String label) {
-    final escaped = label.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    final escaped = label.replaceAll('\\', '\\\\').replaceAll('"', '\"');
     return escaped.isEmpty ? '' : 'details.season:"$escaped"';
   }
 
@@ -876,7 +1009,17 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     int limit = 30,
   }) async {
     await _refreshRemoteConstants();
-    final plan = _homePlan(sectionName);
+    final sections = await _fetchOfficialHomeSections();
+    _OfficialHomeSection? official;
+    for (final section in sections) {
+      if (section.title == sectionName.trim()) {
+        official = section;
+        break;
+      }
+    }
+    final plan = official == null
+        ? _fallbackHomePlan(sectionName)
+        : _homePlanFromOfficial(official);
     final safeOffset = offset < 0 ? 0 : offset;
     final safeLimit = limit.clamp(1, 50).toInt();
     if (plan == null) {
@@ -915,6 +1058,32 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
   @override
   Future<Map<String, List<MultimediaItem>>> getHome() async {
+    final configured = await _fetchOfficialHomeSections();
+    final officialSections = configured
+        .where((section) =>
+            section.type != 'news' &&
+            section.type != 'continue_watching')
+        .toList(growable: false);
+    if (officialSections.isNotEmpty) {
+      final pages = await Future.wait(
+        officialSections.map(
+          (section) => _loadHomePage(
+            section.title,
+            limit: section.hitsPerPage.clamp(1, _previewSize).toInt(),
+          ),
+        ),
+      );
+      final output = <String, List<MultimediaItem>>{};
+      for (var i = 0; i < officialSections.length; i++) {
+        final section = officialSections[i];
+        // SkyStream already treats "Trending" as the full-width hero carousel.
+        // AnimeWitcher's backend marks the equivalent row as type=carousel.
+        final key = section.type == 'carousel' ? 'Trending' : section.title;
+        output[key] = pages[i].items;
+      }
+      return output;
+    }
+
     const names = <String>[
       'أحدث الحلقات',
       'أنميات الموسم الحالي',
@@ -944,7 +1113,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return _loadHomePage(
       sectionName,
       offset: offset,
-      limit: viewAllPageSize,
+      limit: limit,
     );
   }
 
@@ -969,10 +1138,18 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<Map<String, dynamic>> _fetchAnimeDocument(String animeId) async {
+    final key = animeId.trim();
+    if (key.isEmpty) return <String, dynamic>{};
+    final cached = _animeDocumentCache[key];
+    if (cached != null) return cached;
     final payload = await _getJson(
-      _firestoreUrl('anime_list/${Uri.encodeComponent(animeId)}'),
+      _firestoreUrl('anime_list/${Uri.encodeComponent(key)}'),
     );
-    return payload == null ? <String, dynamic>{} : _firestoreFields(payload['fields']);
+    final value = payload == null
+        ? <String, dynamic>{}
+        : _firestoreFields(payload['fields']);
+    if (value.isNotEmpty) _animeDocumentCache[key] = value;
+    return value;
   }
 
   Future<dynamic> _postAny(
@@ -2617,6 +2794,28 @@ class _ServerWords {
   final String word2;
   final String word3;
   final String word4;
+}
+
+class _OfficialHomeSection {
+  const _OfficialHomeSection({
+    required this.title,
+    required this.type,
+    required this.indexName,
+    required this.searchText,
+    required this.hitsPerPage,
+    required this.order,
+    required this.enabled,
+    required this.autoScroll,
+  });
+
+  final String title;
+  final String type;
+  final String indexName;
+  final String searchText;
+  final int hitsPerPage;
+  final int order;
+  final bool enabled;
+  final bool autoScroll;
 }
 
 class _HomePlan {
