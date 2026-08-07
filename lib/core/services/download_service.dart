@@ -525,6 +525,7 @@ class DownloadService {
     Episode? episode,
     String? trackingUrl,
     Map<String, String>? headers,
+    int totalBytes = -1,
   }) async {
     if (kDebugMode) {
       debugPrint('[DownloadService] startDownload called');
@@ -645,6 +646,16 @@ class DownloadService {
       await dir.create(recursive: true);
     }
 
+    // iOS 26 requires BGContinuedProcessingTask submission to originate from
+    // the user's explicit foreground action. Start the system task before the
+    // URLSession transfer is enqueued so the Lock Screen / Dynamic Island task
+    // is reliably created even if enqueueing or metadata persistence takes time.
+    await _continuedProcessing.start(
+      taskId: task.taskId,
+      displayName: filename,
+      totalBytes: totalBytes,
+    );
+
     final success = await FileDownloader().enqueue(task);
     if (kDebugMode) debugPrint('[DownloadService] Enqueue result: $success');
 
@@ -654,10 +665,8 @@ class DownloadService {
       await _ref
           .read(storageServiceProvider)
           .saveDownloadMetadata(task.taskId, item, episode: episode);
-      await _continuedProcessing.start(
-        taskId: task.taskId,
-        displayName: filename,
-      );
+    } else {
+      await _continuedProcessing.stop(taskId: task.taskId);
     }
     return success;
   }

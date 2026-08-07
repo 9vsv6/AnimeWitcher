@@ -291,6 +291,7 @@ class DownloadLauncher {
                     episode: episodeData,
                     trackingUrl: resolveUrl,
                     headers: stream.headers,
+                    totalBytes: metadata.size ?? -1,
                   );
 
                   if (!started && finalContext.mounted) {
