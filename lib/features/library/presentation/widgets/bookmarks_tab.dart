@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../l10n/generated/app_localizations.dart';
+import '../../../../core/utils/localized_text.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/layout_constants.dart';
@@ -78,7 +78,11 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
           ),
           const SizedBox(height: 16),
           Text(
-            AppLocalizations.of(context)!.libraryEmpty,
+            appText(
+              context,
+              english: 'No titles in this list yet',
+              arabic: 'لا توجد أعمال في هذه القائمة بعد',
+            ),
             style: Theme.of(context).textTheme.bodyLarge,
           ),
         ],

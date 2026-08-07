@@ -107,11 +107,48 @@ class StorageService {
     return value;
   }
 
-  // --- Library (Favorites) ---
+  // --- Library (AnimeWitcher lists) ---
 
-  // We store items as JSON strings or Maps. Key is url.
-  Future<void> addToLibrary(MultimediaItem item) async {
+  static const String _defaultLibraryCategory = 'favorite';
+
+  String _normalizeLibraryCategory(dynamic raw) {
+    final value = (raw ?? '').toString().trim();
+    switch (value) {
+      case 'watching':
+        return 'watching';
+      case 'completed':
+        return 'completed';
+      case 'on_Hold':
+      case 'onHold':
+        return 'onHold';
+      case 'no_watching':
+      case 'noWatching':
+        return 'noWatching';
+      case 'pinned':
+        return 'pinned';
+      case 'favorite':
+      case 'favorites':
+      case 'fav':
+        return 'favorite';
+      default:
+        return _defaultLibraryCategory;
+    }
+  }
+
+  String _storedLibraryCategory(Map<dynamic, dynamic> raw) {
+    return _normalizeLibraryCategory(
+      raw['libraryCategory'] ?? raw['library_category'] ?? raw['category'],
+    );
+  }
+
+  // Existing SkyStream bookmarks did not have a category. They intentionally
+  // migrate to Favorites so no saved item disappears after the upgrade.
+  Future<void> addToLibrary(
+    MultimediaItem item, {
+    String category = _defaultLibraryCategory,
+  }) async {
     final canonicalUrl = _canonicalMediaUrl(item.url);
+    final normalizedCategory = _normalizeLibraryCategory(category);
     final staleKeys = <dynamic>[];
     for (var i = 0; i < _libraryBox.length; i++) {
       final key = _libraryBox.keyAt(i);
@@ -134,7 +171,25 @@ class StorageService {
       'description': item.description,
       'type': item.contentType.name,
       'provider': item.provider,
+      'libraryCategory': normalizedCategory,
     });
+  }
+
+  Future<void> setLibraryItemCategory(String url, String category) async {
+    final canonicalUrl = _canonicalMediaUrl(url);
+    final normalizedCategory = _normalizeLibraryCategory(category);
+    for (var i = 0; i < _libraryBox.length; i++) {
+      final key = _libraryBox.keyAt(i);
+      final raw = _libraryBox.get(key);
+      if (raw is! Map) continue;
+      final map = Map<dynamic, dynamic>.from(raw);
+      if (_canonicalMediaUrl((map['url'] as String?) ?? '') != canonicalUrl) {
+        continue;
+      }
+      map['libraryCategory'] = normalizedCategory;
+      await _libraryBox.put(key, map);
+      return;
+    }
   }
 
   Future<void> removeFromLibrary(String url) async {
@@ -166,14 +221,32 @@ class StorageService {
     return false;
   }
 
-  List<MultimediaItem> getLibraryItems() {
+  String? getLibraryItemCategory(String url) {
+    final canonicalUrl = _canonicalMediaUrl(url);
+    for (var i = 0; i < _libraryBox.length; i++) {
+      final raw = _libraryBox.getAt(i);
+      if (raw is! Map) continue;
+      if (_canonicalMediaUrl((raw['url'] as String?) ?? '') == canonicalUrl) {
+        return _storedLibraryCategory(raw);
+      }
+    }
+    return null;
+  }
+
+  List<MultimediaItem> getLibraryItems({String? category}) {
     final items = <MultimediaItem>[];
     final seen = <String>{};
+    final normalizedFilter = category == null
+        ? null
+        : _normalizeLibraryCategory(category);
     for (var i = 0; i < _libraryBox.length; i++) {
-      final key = _libraryBox.keyAt(i);
-      final raw = _libraryBox.get(key);
+      final raw = _libraryBox.getAt(i);
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
+      if (normalizedFilter != null &&
+          _storedLibraryCategory(raw) != normalizedFilter) {
+        continue;
+      }
       final canonicalUrl = _canonicalMediaUrl((map['url'] as String?) ?? '');
       if (canonicalUrl.isEmpty || !seen.add(canonicalUrl)) continue;
       items.add(
@@ -191,6 +264,22 @@ class StorageService {
       );
     }
     return items;
+  }
+
+  Future<void> setSelectedLibraryCategory(String category) async {
+    await _settingsBox.put(
+      'library_selected_category',
+      _normalizeLibraryCategory(category),
+    );
+  }
+
+  String getSelectedLibraryCategory() {
+    return _normalizeLibraryCategory(
+      _settingsBox.get(
+        'library_selected_category',
+        defaultValue: _defaultLibraryCategory,
+      ),
+    );
   }
 
   // --- Settings ---

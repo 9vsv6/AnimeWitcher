@@ -199,14 +199,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             .handlePlayPress(context, item);
       });
     });
-    final isBookmarked = ref.watch(
-      libraryProvider.select(
-        (state) =>
-            state is LibrarySuccess &&
-            state.items.any((i) => i.url == widget.item.url),
-      ),
-    );
+    // Watch library state so the icon refreshes after add/remove, but check
+    // membership globally instead of only inside the currently selected list.
+    ref.watch(libraryProvider);
     final libraryNotifier = ref.read(libraryProvider.notifier);
+    final isBookmarked = libraryNotifier.isBookmarked(widget.item.url);
     final isLarge = context.isTabletOrLarger;
 
     final detailsAsync = ref.watch(
