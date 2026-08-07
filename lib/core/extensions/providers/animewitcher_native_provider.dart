@@ -1850,9 +1850,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       final output = <Episode>[];
       for (final record in records) {
         final aniZip = _aniZipEpisodeFor(payload, record.number);
-        final local = _positiveInt(
-          aniZip['episodeNumber'] ?? aniZip['episode_number'] ?? aniZip['episode'],
-        );
+        // AniZip only enriches AnimeWitcher episodes. Its local episode number
+        // can reset between seasons, so it must never replace AnimeWitcher's
+        // canonical episode number/order.
         final image = _text(
           aniZip['image'] ??
               aniZip['imageUrl'] ??
@@ -1863,7 +1863,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
           name: record.title,
           url: '${Uri.encodeComponent(route.animeId)}|${Uri.encodeComponent(record.id)}',
           season: seasonNumber,
-          episode: local > 0 ? local : record.number,
+          episode: record.number,
           posterUrl: image.isEmpty ? null : image,
         ));
       }

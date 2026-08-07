@@ -707,7 +707,9 @@ class DetailsController extends _$DetailsController {
       name: source.name,
       url: source.url,
       season: metadata.season > 0 ? metadata.season : source.season,
-      episode: metadata.episode > 0 ? metadata.episode : source.episode,
+      // AnimeWitcher owns episode numbering. Background metadata may enrich
+      // season/images, but must never renumber or reorder the source episode.
+      episode: source.episode,
       description: source.description,
       posterUrl: metadataPoster != null && metadataPoster.isNotEmpty
           ? metadataPoster
@@ -743,16 +745,17 @@ class DetailsController extends _$DetailsController {
           const <Episode>[];
       if (currentEpisodes.isEmpty) return;
 
+      // Match enrichment by AnimeWitcher's canonical episode URL only.
+      // Number-based matching is unsafe for long/multi-season shows because
+      // AniZip local episode numbers can repeat (for example, episode 1).
       final byUrl = <String, Episode>{};
-      final byNumber = <int, Episode>{};
       for (final item in metadata) {
         if (item.url.isNotEmpty) byUrl[item.url] = item;
-        if (item.episode > 0) byNumber[item.episode] = item;
       }
 
       var changed = false;
       final enriched = currentEpisodes.map((episode) {
-        final match = byUrl[episode.url] ?? byNumber[episode.episode];
+        final match = byUrl[episode.url];
         if (match == null) return episode;
         final merged = _mergeEpisodeMetadata(episode, match);
         if (merged.season != episode.season ||
