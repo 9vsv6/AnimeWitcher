@@ -52,6 +52,7 @@ class ProviderSearchFilters {
   final Set<String> ageRatings;
   final Set<String> years;
   final Set<String> genres;
+  final String sort;
 
   const ProviderSearchFilters({
     this.statuses = const <String>{},
@@ -59,6 +60,7 @@ class ProviderSearchFilters {
     this.ageRatings = const <String>{},
     this.years = const <String>{},
     this.genres = const <String>{},
+    this.sort = '',
   });
 
   bool get isEmpty => count == 0;
@@ -78,7 +80,26 @@ class ProviderSearchFilters {
       'ageRatings': ageRatings.toList(growable: false),
       'years': years.toList(growable: false),
       'genres': genres.toList(growable: false),
+      'sort': sort,
     };
+  }
+
+  ProviderSearchFilters copyWith({
+    Set<String>? statuses,
+    Set<String>? types,
+    Set<String>? ageRatings,
+    Set<String>? years,
+    Set<String>? genres,
+    String? sort,
+  }) {
+    return ProviderSearchFilters(
+      statuses: statuses ?? this.statuses,
+      types: types ?? this.types,
+      ageRatings: ageRatings ?? this.ageRatings,
+      years: years ?? this.years,
+      genres: genres ?? this.genres,
+      sort: sort ?? this.sort,
+    );
   }
 }
 

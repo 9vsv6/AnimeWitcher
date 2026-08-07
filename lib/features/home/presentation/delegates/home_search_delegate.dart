@@ -162,8 +162,8 @@ class HomeSearchDelegate extends SearchDelegate<void> {
 
     if (!context.mounted || selected == null) return;
 
-    _filters = selected;
-    onFiltersChanged?.call(selected);
+    _filters = selected.copyWith(sort: _filters.sort);
+    onFiltersChanged?.call(_filters);
 
     // Force SearchDelegate to rebuild even when it is already displaying
     // results. Toggling its body mode avoids requiring the user to focus or
@@ -257,6 +257,62 @@ class HomeSearchDelegate extends SearchDelegate<void> {
     );
   }
 
+  void _applySort(BuildContext context, String sort) {
+    if (_filters.sort == sort) return;
+    _filters = _filters.copyWith(sort: sort);
+    onFiltersChanged?.call(_filters);
+    _dismissKeyboard(context);
+
+    // Restart the paginated result body immediately with the selected
+    // AnimeWitcher Algolia replica, without requiring a new search submit.
+    showSuggestions(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      showResults(context);
+      _dismissKeyboard(context);
+    });
+  }
+
+  Widget _buildSortButton(BuildContext context) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final colors = Theme.of(context).colorScheme;
+    final current = _filters.sort;
+
+    return PopupMenuButton<String>(
+      tooltip: isArabic ? 'ترتيب الأنمي' : 'Sort anime',
+      initialValue: current.isEmpty ? 'default' : current,
+      onSelected: (value) =>
+          _applySort(context, value == 'default' ? '' : value),
+      icon: Icon(
+        Icons.sort_rounded,
+        color: current.isNotEmpty ? colors.primary : colors.onSurface,
+      ),
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        CheckedPopupMenuItem<String>(
+          value: 'default',
+          checked: current.isEmpty,
+          child: Text(isArabic ? 'الافتراضي' : 'Default'),
+        ),
+        CheckedPopupMenuItem<String>(
+          value: 'favorites',
+          checked: current == 'favorites',
+          child: Text(isArabic ? 'الأكثر تفضيلاً' : 'Most favorited'),
+        ),
+        CheckedPopupMenuItem<String>(
+          value: 'rating',
+          checked: current == 'rating',
+          child: Text(isArabic ? 'الأعلى تقييماً' : 'Top rated'),
+        ),
+        CheckedPopupMenuItem<String>(
+          value: 'date_added',
+          checked: current == 'date_added',
+          child: Text(isArabic ? 'تاريخ الإضافة' : 'Date added'),
+        ),
+      ],
+    );
+  }
+
   Widget _buildBackButton(BuildContext context) {
     return IconButton(
       tooltip: MaterialLocalizations.of(context).backButtonTooltip,
@@ -287,6 +343,7 @@ class HomeSearchDelegate extends SearchDelegate<void> {
     return [
       if (isRtl && query.isNotEmpty) _buildClearButton(context),
       if (isRtl) _buildBackButton(context) else _buildFilterButton(context),
+      _buildSortButton(context),
       if (!isRtl && query.isNotEmpty) _buildClearButton(context),
       const SizedBox(width: 8),
     ];
@@ -303,10 +360,10 @@ class HomeSearchDelegate extends SearchDelegate<void> {
   @override
   Widget buildResults(BuildContext context) {
     _suppressInitialKeyboard(context);
-    final child = query.isEmpty && _filters.isEmpty
-        ? const SizedBox.shrink()
-        : _HomeSearchResults(query: query, filters: _filters);
-    return _buildSwipeBackRegion(context, child);
+    return _buildSwipeBackRegion(
+      context,
+      _HomeSearchResults(query: query, filters: _filters),
+    );
   }
 
   @override
@@ -315,9 +372,9 @@ class HomeSearchDelegate extends SearchDelegate<void> {
 
     final Widget child;
     if (query.isEmpty) {
-      child = _filters.isEmpty
-          ? const SizedBox.shrink()
-          : _HomeSearchResults(query: query, filters: _filters);
+      // Opening Search should immediately show AnimeWitcher's real anime
+      // catalog instead of the home "latest added" replica or an empty page.
+      child = _HomeSearchResults(query: query, filters: _filters);
     } else {
       child = _HomeSearchSuggestions(
         query: query,

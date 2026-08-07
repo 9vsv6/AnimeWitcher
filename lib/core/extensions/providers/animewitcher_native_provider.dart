@@ -817,6 +817,21 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return page.items;
   }
 
+  String _searchIndexForSort(String sort) {
+    switch (sort.trim().toLowerCase()) {
+      case 'favorites':
+        return 'series_fav_count_desc';
+      case 'rating':
+        return 'series_ranking_mal';
+      case 'date_added':
+        return 'series_date_created';
+      default:
+        // AnimeWitcher's real main anime catalog. Sorted replicas are only
+        // selected explicitly through the search sort control.
+        return 'series';
+    }
+  }
+
   @override
   Future<ProviderMediaPage> searchPage(
     String query,
@@ -831,7 +846,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final safeOffset = offset < 0 ? 0 : offset;
     final pageNumber = safeOffset ~/ safeLimit;
     final payload = await _algoliaQuery(
-      text.isEmpty ? 'series_date_created' : 'series',
+      _searchIndexForSort(filters.sort),
       query: text,
       page: pageNumber,
       hitsPerPage: safeLimit,
