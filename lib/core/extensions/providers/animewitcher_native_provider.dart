@@ -1904,6 +1904,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       link: _text(source['link']),
       quality: _text(source['quality']),
       originalLink: _text(source['original_link'] ?? source['originalLink']),
+      openBrowser: source['open_browser'] == true || source['openBrowser'] == true,
       directLink: source['direct_link'] == true || source['directLink'] == true,
       visible: source['visible'] == null ? true : source['visible'] == true,
     );
@@ -1944,6 +1945,24 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return 'Auto';
   }
 
+  String _sourceQuality(String value) {
+    final raw = value.trim();
+    final text = raw.toLowerCase();
+    if (text.contains('1080') || text.contains('fhd')) return '1080';
+    if (text.contains('720') || RegExp(r'(^|[^a-z])hd([^a-z]|$)').hasMatch(text)) {
+      return '720';
+    }
+    if (text.contains('480') || RegExp(r'(^|[^a-z])sd([^a-z]|$)').hasMatch(text)) {
+      return '480';
+    }
+    if (raw.contains('متعدد') || text.contains('multi') || text.contains('auto')) {
+      return 'متعدد';
+    }
+    final number = RegExp(r'\d{3,4}').firstMatch(raw)?.group(0);
+    if (number != null && number.isNotEmpty) return number;
+    return raw.isEmpty ? 'متعدد' : raw.replaceFirst(RegExp(r'[pP]$'), '');
+  }
+
   Future<List<_ServerRecord>> _serverSummary(String animeId, String episodeId) async {
     final path = 'anime_list/${Uri.encodeComponent(animeId)}/episodes/'
         '${Uri.encodeComponent(episodeId)}/servers2/all_servers';
@@ -1953,10 +1972,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return _list(fields['servers'])
         .map<_ServerRecord>(_serverRecord)
         .where((server) =>
-            server.visible &&
-            server.name.isNotEmpty &&
-            server.link.isNotEmpty &&
-            _serverFamily(server).isNotEmpty)
+            server.visible && server.name.isNotEmpty && server.link.isNotEmpty)
         .toList(growable: false);
   }
 
@@ -1969,10 +1985,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     for (final raw in _list(payload['documents'])) {
       final document = _map(raw);
       final server = _serverRecord(_firestoreFields(document['fields']));
-      if (server.visible &&
-          server.name.isNotEmpty &&
-          server.link.isNotEmpty &&
-          _serverFamily(server).isNotEmpty) {
+      if (server.visible && server.name.isNotEmpty && server.link.isNotEmpty) {
         output.add(server);
       }
     }
@@ -1983,19 +1996,10 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     var servers = await _serverSummary(animeId, episodeId);
     if (servers.isEmpty) servers = await _serverCollection(animeId, episodeId);
     final seen = <String>{};
-    final output = servers.where((server) {
-      final family = _serverFamily(server);
-      return family.isNotEmpty && seen.add('$family|${server.quality}|${server.link}');
-    }).toList();
-    output.sort((a, b) {
-      final quality = _qualityNumber(b.quality).compareTo(_qualityNumber(a.quality));
-      if (quality != 0) return quality;
-      const priorities = <String, int>{'MF': 0, 'ST': 1, 'PD': 2};
-      return (priorities[_serverFamily(a)] ?? 99).compareTo(
-        priorities[_serverFamily(b)] ?? 99,
-      );
-    });
-    return output;
+    return servers.where((server) {
+      final key = '${server.name.toUpperCase()}|${server.quality}|${server.link}';
+      return seen.add(key);
+    }).toList(growable: false);
   }
 
   String _pixelDrainId(String url) {
@@ -2171,7 +2175,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return <StreamResult>[
       StreamResult(
         url: playable,
-        source: 'MediaFire - ${_normalizeQuality(server.quality)}',
+        source: server.name,
+        quality: _sourceQuality(server.quality),
         headers: <String, String>{
           'User-Agent': _userAgent,
           'Referer': finalUrl.isEmpty ? pageUrl : finalUrl,
@@ -2261,7 +2266,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return <StreamResult>[
       StreamResult(
         url: playbackUrl,
-        source: 'StreamTape - ${_normalizeQuality(server.quality)}',
+        source: server.name,
+        quality: _sourceQuality(server.quality),
         headers: <String, String>{
           'User-Agent': _userAgent,
           'Referer': response.realUri.toString(),
@@ -2272,44 +2278,259 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     ];
   }
 
-  Future<List<StreamResult>> _resolveServer(_ServerRecord server) async {
-    final family = _serverFamily(server);
-    if (family.isEmpty) return const <StreamResult>[];
-    if (server.directLink || _isDirectMediaUrl(server.link)) {
-      final label = family == 'PD' ? 'PixelDrain' : family == 'ST' ? 'StreamTape' : 'MediaFire';
+  static const String _sourceTokenPrefix = 'animewitcher-source://';
+
+  String _encodeServerSource(_ServerRecord server) {
+    final payload = jsonEncode(<String, dynamic>{
+      'name': server.name,
+      'link': server.link,
+      'quality': server.quality,
+      'original_link': server.originalLink,
+      'open_browser': server.openBrowser,
+      'direct_link': server.directLink,
+      'visible': server.visible,
+    });
+    final encoded = base64Url.encode(utf8.encode(payload)).replaceAll('=', '');
+    return '$_sourceTokenPrefix$encoded';
+  }
+
+  _ServerRecord? _decodeServerSource(String value) {
+    if (!value.startsWith(_sourceTokenPrefix)) return null;
+    var encoded = value.substring(_sourceTokenPrefix.length);
+    while (encoded.length % 4 != 0) encoded += '=';
+    try {
+      final decoded = utf8.decode(base64Url.decode(encoded));
+      final payload = jsonDecode(decoded);
+      if (payload is! Map) return null;
+      return _serverRecord(Map<String, dynamic>.from(payload));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<_ServerWords?> _serverWords(String serverName) async {
+    final cleanName = serverName.trim();
+    if (cleanName.isEmpty) return null;
+    final payload = await _getJson(
+      _firestoreUrl(
+        'Settings/servers/servers/${Uri.encodeComponent(cleanName)}',
+      ),
+      timeout: _serverTimeout,
+    );
+    if (payload == null) return null;
+    final fields = _firestoreFields(payload['fields']);
+    final word1 = _text(fields['word1']);
+    final word2 = _text(fields['word2']);
+    if (word1.isEmpty || word2.isEmpty) return null;
+    return _ServerWords(
+      name: _text(fields['name']).isEmpty ? cleanName : _text(fields['name']),
+      word1: word1,
+      word2: word2,
+      word3: _text(fields['word3']),
+      word4: _text(fields['word4']),
+    );
+  }
+
+  String _betweenWords(String input, String start, String end) {
+    if (input.isEmpty || start.isEmpty || end.isEmpty) return '';
+    final startIndex = input.indexOf(start);
+    if (startIndex < 0) return '';
+    final valueStart = startIndex + start.length;
+    final endIndex = input.indexOf(end, valueStart);
+    if (endIndex < 0 || endIndex < valueStart) return '';
+    return input.substring(valueStart, endIndex).trim();
+  }
+
+  String _cleanServerExtract(String value) {
+    return _normalizePageEscapes(value)
+        .replaceAll('amp;', '')
+        .replaceAll('&amp;', '&')
+        .trim();
+  }
+
+  StreamResult _serverStream(
+    _ServerRecord server,
+    String url, {
+    Map<String, String>? headers,
+  }) {
+    return StreamResult(
+      url: url,
+      source: server.name,
+      quality: _sourceQuality(server.quality),
+      headers: headers,
+    );
+  }
+
+  Future<List<StreamResult>> _extractUsingAnimeWitcherWords(
+    _ServerRecord server,
+  ) async {
+    final words = await _serverWords(server.name);
+    if (words == null) return const <StreamResult>[];
+    final response = await _getText(server.link, timeout: _streamTimeout);
+    if (response == null) return const <StreamResult>[];
+    final body = response.data ?? '';
+    final rawName = server.name.trim().toUpperCase();
+
+    try {
+      if (rawName == 'MF') {
+        final first = _betweenWords(body, words.word1, words.word2).trim();
+        if (first.isEmpty) return const <StreamResult>[];
+        var next = first;
+        if (next.endsWith('/') || next.endsWith('"') || next.endsWith("'")) {
+          next = next.substring(0, next.length - 1);
+        }
+        if (!next.startsWith('http://') && !next.startsWith('https://')) {
+          next = 'https://$next';
+        }
+        final secondResponse = await _getText(next, timeout: _mediaFireTimeout);
+        if (secondResponse == null || words.word3.isEmpty || words.word4.isEmpty) {
+          return const <StreamResult>[];
+        }
+        final finalUrl = _cleanServerExtract(
+          _betweenWords(secondResponse.data ?? '', words.word3, words.word4),
+        );
+        if (finalUrl.isEmpty) return const <StreamResult>[];
+        return <StreamResult>[
+          _serverStream(
+            server,
+            finalUrl,
+            headers: <String, String>{
+              'User-Agent': _userAgent,
+              'Referer': secondResponse.realUri.toString(),
+            },
+          ),
+        ];
+      }
+
+      var finalUrl = _cleanServerExtract(
+        _betweenWords(body, words.word1, words.word2),
+      );
+      if (finalUrl.isEmpty) return const <StreamResult>[];
+
+      if (rawName == 'ST') {
+        final equals = finalUrl.indexOf('=');
+        if (equals >= 0 && equals + 1 < finalUrl.length) {
+          finalUrl = finalUrl.substring(equals + 1).trim();
+        }
+        if (finalUrl.contains('+')) return const <StreamResult>[];
+        if (words.name.trim().toUpperCase() == 'ST' &&
+            !finalUrl.startsWith('http://') &&
+            !finalUrl.startsWith('https://')) {
+          finalUrl =
+              'https://streamtape.com/get_video?id=${Uri.encodeQueryComponent(finalUrl)}&dl=1';
+        }
+      } else if (rawName == 'KF' &&
+          !finalUrl.startsWith('http://') &&
+          !finalUrl.startsWith('https://')) {
+        finalUrl = 'https://$finalUrl';
+      }
+
+      if (finalUrl.isEmpty) return const <StreamResult>[];
       return <StreamResult>[
-        StreamResult(
-          url: server.link,
-          source: '$label - ${_normalizeQuality(server.quality)}',
+        _serverStream(
+          server,
+          finalUrl,
           headers: <String, String>{
             'User-Agent': _userAgent,
-            'Referer': server.originalLink.isNotEmpty ? server.originalLink : server.link,
+            'Referer': response.realUri.toString(),
+          },
+        ),
+      ];
+    } catch (_) {
+      return const <StreamResult>[];
+    }
+  }
+
+  Future<List<StreamResult>> _resolveServer(_ServerRecord server) async {
+    final family = _serverFamily(server);
+    if (server.directLink || _isDirectMediaUrl(server.link)) {
+      return <StreamResult>[
+        _serverStream(
+          server,
+          server.link,
+          headers: <String, String>{
+            'User-Agent': _userAgent,
+            'Referer': server.originalLink.isNotEmpty
+                ? server.originalLink
+                : server.link,
           },
         ),
       ];
     }
+
     if (family == 'PD') {
       final id = _pixelDrainId(server.link);
-      if (id.isEmpty) return const <StreamResult>[];
-      return <StreamResult>[
-        StreamResult(
-          url: 'https://pixeldrain.com/api/file/${Uri.encodeComponent(id)}',
-          source: 'PixelDrain - ${_normalizeQuality(server.quality)}',
-          headers: const <String, String>{
-            'User-Agent': _userAgent,
-            'Referer': 'https://pixeldrain.com/',
-            'Origin': 'https://pixeldrain.com',
-          },
-        ),
-      ];
+      if (id.isNotEmpty) {
+        return <StreamResult>[
+          _serverStream(
+            server,
+            'https://pixeldrain.com/api/file/${Uri.encodeComponent(id)}',
+            headers: const <String, String>{
+              'User-Agent': _userAgent,
+              'Referer': 'https://pixeldrain.com/',
+              'Origin': 'https://pixeldrain.com',
+            },
+          ),
+        ];
+      }
     }
-    if (family == 'ST') return _extractStreamTape(server);
-    if (family == 'MF') return _extractMediaFire(server);
-    return const <StreamResult>[];
+
+    if (family == 'ST') {
+      final extracted = await _extractStreamTape(server);
+      if (extracted.isNotEmpty) return extracted;
+    }
+    if (family == 'MF') {
+      final extracted = await _extractMediaFire(server);
+      if (extracted.isNotEmpty) return extracted;
+    }
+
+    // AnimeWitcher's Android app resolves non-direct servers using the
+    // server-specific word1..word4 document from Settings/servers/servers.
+    return _extractUsingAnimeWitcherWords(server);
   }
 
   @override
+  Future<List<StreamResult>> loadStreamSources(String url) async {
+    final selected = _decodeServerSource(url);
+    if (selected != null) {
+      return <StreamResult>[
+        StreamResult(
+          url: url,
+          source: selected.name,
+          quality: _sourceQuality(selected.quality),
+          requiresResolution: true,
+        ),
+      ];
+    }
+
+    final route = _parseEpisodeUrl(url);
+    if (route.animeId.isEmpty || route.episodeId.isEmpty) {
+      throw StateError('Invalid AnimeWitcher episode data');
+    }
+    final servers = await _fetchServers(route.animeId, route.episodeId);
+    return servers
+        .map(
+          (server) => StreamResult(
+            url: _encodeServerSource(server),
+            source: server.name,
+            quality: _sourceQuality(server.quality),
+            requiresResolution: true,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  bool isExplicitStreamSelection(String url) =>
+      url.startsWith(_sourceTokenPrefix);
+
+  @override
   Future<List<StreamResult>> loadStreams(String url) async {
+    final selected = _decodeServerSource(url);
+    if (selected != null) {
+      return _resolveServer(selected);
+    }
+
     final route = _parseEpisodeUrl(url);
     if (route.animeId.isEmpty || route.episodeId.isEmpty) {
       throw StateError('Invalid AnimeWitcher episode data');
@@ -2317,23 +2538,17 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final servers = await _fetchServers(route.animeId, route.episodeId);
     if (servers.isEmpty) return const <StreamResult>[];
 
-    // Native migration currently mirrors the plugin's default FAST preference:
-    // PixelDrain first, StreamTape second, MediaFire only when both fail.
-    for (final family in const <String>['PD', 'ST', 'MF']) {
-      final familyServers = servers.where((server) => _serverFamily(server) == family).toList();
-      if (familyServers.isEmpty) continue;
-      final groups = await Future.wait(familyServers.map(_resolveServer));
-      final seen = <String>{};
-      final output = <StreamResult>[];
-      for (final group in groups) {
-        for (final stream in group) {
-          if (stream.url.isEmpty || !seen.add(stream.url)) continue;
-          output.add(stream);
-        }
+    // No preferred server: legacy callers receive every server that resolves.
+    final groups = await Future.wait(servers.map(_resolveServer));
+    final seen = <String>{};
+    final output = <StreamResult>[];
+    for (final group in groups) {
+      for (final stream in group) {
+        if (stream.url.isEmpty || !seen.add(stream.url)) continue;
+        output.add(stream);
       }
-      if (output.isNotEmpty) return output;
     }
-    return const <StreamResult>[];
+    return output;
   }
 
 }
@@ -2376,6 +2591,7 @@ class _ServerRecord {
     required this.link,
     required this.quality,
     required this.originalLink,
+    required this.openBrowser,
     required this.directLink,
     required this.visible,
   });
@@ -2383,8 +2599,24 @@ class _ServerRecord {
   final String link;
   final String quality;
   final String originalLink;
+  final bool openBrowser;
   final bool directLink;
   final bool visible;
+}
+
+class _ServerWords {
+  const _ServerWords({
+    required this.name,
+    required this.word1,
+    required this.word2,
+    required this.word3,
+    required this.word4,
+  });
+  final String name;
+  final String word1;
+  final String word2;
+  final String word3;
+  final String word4;
 }
 
 class _HomePlan {

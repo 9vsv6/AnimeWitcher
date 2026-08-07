@@ -16,6 +16,7 @@ import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'source_picker.dart';
 part 'download_launcher.g.dart';
 
 @Riverpod(keepAlive: true)
@@ -37,109 +38,99 @@ class DownloadLauncher {
     final resolveUrl = episodeUrl ?? item.url;
     if (resolveUrl.isEmpty) return;
 
+    final manager = _ref.read(extensionManagerProvider.notifier);
+    SkyStreamProvider? provider;
+    if (item.provider != null) {
+      try {
+        final val = item.provider!;
+        provider = manager.getAllProviders().firstWhere(
+          (p) => p.packageName == val || p.name == val,
+        );
+      } catch (e) {
+        if (kDebugMode) debugPrint('DownloadLauncher.launch: $e');
+      }
+    }
+    provider ??= _ref.read(activeProviderProvider);
+    if (provider == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.errorPrefix('No active provider'))),
+      );
+      return;
+    }
+
     bool isCanceled = false;
+    bool dialogDismissed = false;
     unawaited(
       LoadingDialog.show(
         context,
         message: l10n.resolving,
-        onCancel: () => isCanceled = true,
+        onCancel: () {
+          isCanceled = true;
+          dialogDismissed = true;
+        },
       ),
     );
 
     try {
-      // 2. Resolve streams
-      final manager = _ref.read(extensionManagerProvider.notifier);
-      SkyStreamProvider? provider;
-      if (item.provider != null) {
-        try {
-          final val = item.provider!;
-          provider = manager.getAllProviders().firstWhere(
-            (p) => p.packageName == val || p.name == val,
-          );
-        } catch (e) {
-          if (kDebugMode) debugPrint('DownloadLauncher.launch: $e');
-        }
-      }
-      provider ??= _ref.read(activeProviderProvider);
-      if (provider == null) throw Exception('No active provider');
-
-      final streams = await provider.loadStreams(resolveUrl);
+      // Fetch only AnimeWitcher's source records here. Extraction happens
+      // after the user chooses PD/MF2/ST/etc.
+      final sources = await provider.loadStreamSources(resolveUrl);
       if (isCanceled || !context.mounted) return;
-
-      Navigator.of(context).pop(); // Dismiss loading dialog
-
-      if (streams.isEmpty) {
+      if (!dialogDismissed) {
+        Navigator.of(context).pop();
+        dialogDismissed = true;
+      }
+      if (sources.isEmpty) {
         throw Exception('No download sources found for this item.');
       }
 
-      // 3. Show Source Picker
-      _showSourcePicker(context, streams, item, resolveUrl);
+      final selected = await showStreamSourcePicker(
+        context,
+        sources,
+        forDownload: true,
+      );
+      if (selected == null || !context.mounted) return;
+
+      StreamResult stream = selected;
+      if (selected.requiresResolution) {
+        isCanceled = false;
+        dialogDismissed = false;
+        unawaited(
+          LoadingDialog.show(
+            context,
+            message: l10n.resolving,
+            onCancel: () {
+              isCanceled = true;
+              dialogDismissed = true;
+            },
+          ),
+        );
+        final resolved = await provider.loadStreams(selected.url);
+        if (isCanceled || !context.mounted) return;
+        if (!dialogDismissed) {
+          Navigator.of(context).pop();
+          dialogDismissed = true;
+        }
+        if (resolved.isEmpty) {
+          throw Exception(
+            Localizations.localeOf(context).languageCode == 'ar'
+                ? 'تعذر استخراج رابط صالح من هذا المصدر.'
+                : 'Could not extract a downloadable URL from this source.',
+          );
+        }
+        stream = resolved.first;
+      }
+
+      await _verifyAndDownload(context, stream, item, resolveUrl);
     } catch (e) {
       if (!context.mounted) return;
-      if (!isCanceled) Navigator.of(context).pop(); // Dismiss if still there
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.errorPrefix(e.toString()))));
+      if (!isCanceled && !dialogDismissed) {
+        Navigator.of(context).pop();
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.errorPrefix(e.toString()))),
+      );
     }
-  }
-
-  void _showSourcePicker(
-    BuildContext context,
-    List<StreamResult> streams,
-    MultimediaItem item,
-    String resolveUrl,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.5,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  l10n.selectSource,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-              const Divider(height: 1),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: streams.length,
-                  itemBuilder: (context, index) {
-                    final stream = streams[index];
-                    final label = stream.source != 'Auto'
-                        ? stream.source
-                        : 'Source ${index + 1}';
-                    final host = Uri.tryParse(stream.url)?.host ?? '';
-
-                    return ListTile(
-                      leading: const Icon(Icons.file_download_outlined),
-                      title: Text(label),
-                      subtitle: host.isNotEmpty ? Text(host) : null,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _verifyAndDownload(context, stream, item, resolveUrl);
-                      },
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _verifyAndDownload(

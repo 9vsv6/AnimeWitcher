@@ -12,6 +12,7 @@ import '../../../core/extensions/base_provider.dart';
 import '../../settings/presentation/player_settings_provider.dart';
 import 'package:collection/collection.dart';
 import 'details_controller.dart';
+import 'source_picker.dart';
 import '../../../core/services/download_service.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../core/utils/app_utils.dart';
@@ -30,71 +31,27 @@ class PlaybackLauncher {
 
   PlaybackLauncher(this._ref);
 
-  Future<void> play(
-    BuildContext context,
-    String url, {
-    required MultimediaItem baseItem,
-    MultimediaItem? detailedItem,
-    Episode? episode,
-  }) async {
-    final settings = await _ref.read(playerSettingsProvider.future);
-    if (!context.mounted) return;
-
-    // Smart Intercept: Check if this item/episode is downloaded
-    final itemToCheck = detailedItem ?? baseItem;
-    final resolvedEpisode =
-        episode ?? itemToCheck.episodes?.firstWhereOrNull((e) => e.url == url);
-    final downloadService = _ref.read(downloadServiceProvider);
-    final localFile = await downloadService.getDownloadedFile(
-      itemToCheck,
-      episode: resolvedEpisode,
-    );
-    if (!context.mounted) return;
-
-    final String finalUrl = AppUtils.normalizeUrl(localFile?.path ?? url);
-
-    if (settings.preferredPlayer != null) {
-      if (baseItem.url.isNotEmpty) {
-        _ref
-            .read(detailsControllerProvider(baseItem.url).notifier)
-            .setLaunching(true);
+  SkyStreamProvider? _resolveProvider(MultimediaItem item) {
+    final manager = _ref.read(extensionManagerProvider.notifier);
+    SkyStreamProvider? provider;
+    if (item.provider != null) {
+      try {
+        final val = item.provider!;
+        provider = manager.getAllProviders().firstWhere(
+          (p) => p.packageName == val || p.name == val,
+        );
+      } catch (e) {
+        if (kDebugMode) debugPrint('PlaybackLauncher._resolveProvider: $e');
       }
-      await _launchExternal(
-        context,
-        finalUrl,
-        detailedItem ?? baseItem,
-        settings.preferredPlayer!,
-      ).whenComplete(() {
-        if (baseItem.url.isNotEmpty) {
-          _ref
-              .read(detailsControllerProvider(baseItem.url).notifier)
-              .setLaunching(false);
-        }
-      });
-    } else {
-      await PlayerRoute(
-        $extra: PlayerRouteExtra(
-          item: detailedItem ?? baseItem,
-          videoUrl: finalUrl,
-          episode: resolvedEpisode,
-        ),
-      ).push<void>(context);
     }
+    return provider ?? _ref.read(activeProviderProvider);
   }
 
-  Future<void> _launchExternal(
+  Future<StreamResult?> _chooseSource(
     BuildContext context,
+    SkyStreamProvider provider,
     String episodeDataUrl,
-    MultimediaItem item,
-    String playerId,
   ) async {
-    // If it's a local file, we can skip stream resolution
-    if (AppUtils.isLocalFile(episodeDataUrl)) {
-      final stream = StreamResult(url: episodeDataUrl, source: 'Local');
-      await _launchStream(context, stream, item, episodeDataUrl, playerId);
-      return;
-    }
-
     bool isCanceled = false;
     bool dialogDismissed = false;
     unawaited(
@@ -109,96 +66,201 @@ class PlaybackLauncher {
     );
 
     try {
-      final manager = _ref.read(extensionManagerProvider.notifier);
-      SkyStreamProvider? provider;
-      if (item.provider != null) {
-        try {
-          final val = item.provider!;
-          provider = manager.getAllProviders().firstWhere(
-            (p) => p.packageName == val || p.name == val,
-          );
-        } catch (e) {
-          if (kDebugMode) debugPrint('PlaybackLauncher.launch: $e');
-        }
-      }
-      provider ??= _ref.read(activeProviderProvider);
-      if (provider == null) throw Exception('No active provider');
-
-      final streams = await provider.loadStreams(episodeDataUrl);
-      if (isCanceled || !context.mounted) return;
-
+      final sources = await provider.loadStreamSources(episodeDataUrl);
+      if (isCanceled || !context.mounted) return null;
       if (!dialogDismissed) {
-        Navigator.of(context).pop(); // Dismiss loading dialog
+        Navigator.of(context).pop();
         dialogDismissed = true;
       }
-
-      if (streams.isEmpty) {
-        final playerName =
-            ExternalPlayerService.instance
-                .getPlayerById(playerId)
-                ?.displayName ??
-            playerId;
+      if (sources.isEmpty) {
         _ref
             .read(notificationServiceProvider)
             .showError(
-              AppLocalizations.of(context)!.playerNotDetected(playerName),
+              Localizations.localeOf(context).languageCode == 'ar'
+                  ? 'لم يتم العثور على مصادر تشغيل.'
+                  : 'No playback sources found.',
             );
-        unawaited(
-          PlayerRoute(
-            $extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl),
-          ).push<void>(context),
-        );
-        return;
+        return null;
       }
-
-      if (streams.length == 1) {
-        await _launchStream(
-          context,
-          streams.first,
-          item,
-          episodeDataUrl,
-          playerId,
-        );
-      } else {
-        if (item.url.isNotEmpty) {
-          _ref
-              .read(detailsControllerProvider(item.url).notifier)
-              .setLaunching(false);
-        }
-        _showSourcePicker(context, streams, item, episodeDataUrl, playerId);
-      }
+      return showStreamSourcePicker(context, sources, forDownload: false);
     } catch (e) {
-      if (!context.mounted) return;
-      if (!isCanceled && !dialogDismissed) {
-        Navigator.of(context).pop(); // Dismiss if still there
+      if (context.mounted && !isCanceled && !dialogDismissed) {
+        Navigator.of(context).pop();
+      }
+      if (context.mounted) {
+        _ref
+            .read(notificationServiceProvider)
+            .showError(
+              AppLocalizations.of(context)!.usingInternalPlayerError(e.toString()),
+            );
+      }
+      return null;
+    }
+  }
+
+  Future<StreamResult?> _resolveSelectedSource(
+    BuildContext context,
+    SkyStreamProvider provider,
+    StreamResult source,
+  ) async {
+    if (!source.requiresResolution) return source;
+
+    bool isCanceled = false;
+    bool dialogDismissed = false;
+    unawaited(
+      LoadingDialog.show(
+        context,
+        message: AppLocalizations.of(context)!.resolving,
+        onCancel: () {
+          isCanceled = true;
+          dialogDismissed = true;
+        },
+      ),
+    );
+    try {
+      final streams = await provider.loadStreams(source.url);
+      if (isCanceled || !context.mounted) return null;
+      if (!dialogDismissed) {
+        Navigator.of(context).pop();
         dialogDismissed = true;
       }
+      if (streams.isEmpty) {
+        _ref
+            .read(notificationServiceProvider)
+            .showError(
+              Localizations.localeOf(context).languageCode == 'ar'
+                  ? 'تعذر استخراج رابط صالح من هذا المصدر.'
+                  : 'Could not extract a playable URL from this source.',
+            );
+        return null;
+      }
+      return streams.first;
+    } catch (e) {
+      if (context.mounted && !isCanceled && !dialogDismissed) {
+        Navigator.of(context).pop();
+      }
+      if (context.mounted) {
+        _ref
+            .read(notificationServiceProvider)
+            .showError(
+              AppLocalizations.of(context)!.usingInternalPlayerError(e.toString()),
+            );
+      }
+      return null;
+    }
+  }
+
+  Future<void> play(
+    BuildContext context,
+    String url, {
+    required MultimediaItem baseItem,
+    MultimediaItem? detailedItem,
+    Episode? episode,
+  }) async {
+    final settings = await _ref.read(playerSettingsProvider.future);
+    if (!context.mounted) return;
+
+    final item = detailedItem ?? baseItem;
+    final resolvedEpisode =
+        episode ?? item.episodes?.firstWhereOrNull((e) => e.url == url);
+    final downloadService = _ref.read(downloadServiceProvider);
+    final localFile = await downloadService.getDownloadedFile(
+      item,
+      episode: resolvedEpisode,
+    );
+    if (!context.mounted) return;
+
+    final localOrEpisodeUrl = AppUtils.normalizeUrl(localFile?.path ?? url);
+
+    // Downloaded files are already playable and do not need a source list.
+    if (AppUtils.isLocalFile(localOrEpisodeUrl)) {
+      if (settings.preferredPlayer != null) {
+        final stream = StreamResult(url: localOrEpisodeUrl, source: 'Local');
+        await _launchStream(
+          context,
+          stream,
+          item,
+          localOrEpisodeUrl,
+          settings.preferredPlayer!,
+        );
+      } else {
+        await PlayerRoute(
+          $extra: PlayerRouteExtra(
+            item: item,
+            videoUrl: localOrEpisodeUrl,
+            episode: resolvedEpisode,
+          ),
+        ).push<void>(context);
+      }
+      return;
+    }
+
+    final provider = _resolveProvider(item);
+    if (provider == null) {
       _ref
           .read(notificationServiceProvider)
           .showError(
-            AppLocalizations.of(
-              context,
-            )!.usingInternalPlayerError(e.toString()),
+            Localizations.localeOf(context).languageCode == 'ar'
+                ? 'لم يتم العثور على مزود التشغيل.'
+                : 'No playback provider found.',
           );
-      unawaited(
-        PlayerRoute(
-          $extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl),
-        ).push<void>(context),
-      );
+      return;
     }
+
+    // AnimeWitcher source discovery is intentionally separate from extraction:
+    // show PD/MF2/ST/etc. first, then resolve only the server the user chose.
+    final selected = await _chooseSource(context, provider, localOrEpisodeUrl);
+    if (selected == null || !context.mounted) return;
+
+    if (settings.preferredPlayer != null) {
+      if (baseItem.url.isNotEmpty) {
+        _ref
+            .read(detailsControllerProvider(baseItem.url).notifier)
+            .setLaunching(true);
+      }
+      try {
+        final resolved = await _resolveSelectedSource(context, provider, selected);
+        if (resolved == null || !context.mounted) return;
+        await _launchStream(
+          context,
+          resolved,
+          item,
+          selected.url,
+          settings.preferredPlayer!,
+        );
+      } finally {
+        if (baseItem.url.isNotEmpty) {
+          _ref
+              .read(detailsControllerProvider(baseItem.url).notifier)
+              .setLaunching(false);
+        }
+      }
+      return;
+    }
+
+    // For deferred sources, the opaque selected URL tells the provider to
+    // extract exactly that one server inside the player loading screen.
+    final selectedUrl = selected.requiresResolution
+        ? selected.url
+        : localOrEpisodeUrl;
+    await PlayerRoute(
+      $extra: PlayerRouteExtra(
+        item: item,
+        videoUrl: selectedUrl,
+        episode: resolvedEpisode,
+      ),
+    ).push<void>(context);
   }
 
   Future<void> _launchStream(
     BuildContext context,
     StreamResult stream,
     MultimediaItem item,
-    String episodeDataUrl,
+    String fallbackVideoUrl,
     String playerId,
   ) async {
-    final playUrl = stream.url;
-
     final success = await ExternalPlayerService.instance.launch(
-      playUrl,
+      stream.url,
       headers: stream.headers,
       playerId: playerId,
       title: item.title,
@@ -215,80 +277,9 @@ class PlaybackLauncher {
           );
       unawaited(
         PlayerRoute(
-          $extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl),
+          $extra: PlayerRouteExtra(item: item, videoUrl: fallbackVideoUrl),
         ).push<void>(context),
       );
     }
-  }
-
-  void _showSourcePicker(
-    BuildContext context,
-    List<StreamResult> streams,
-    MultimediaItem item,
-    String episodeDataUrl,
-    String playerId,
-  ) {
-    final playerName =
-        ExternalPlayerService.instance.getPlayerById(playerId)?.displayName ??
-        playerId;
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.5,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  AppLocalizations.of(
-                    context,
-                  )!.selectSourceForPlayer(playerName),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const Divider(height: 1),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: streams.length,
-                  itemBuilder: (context, index) {
-                    final stream = streams[index];
-                    final label = stream.source != 'Auto'
-                        ? stream.source
-                        : 'Source ${index + 1}';
-                    final host = Uri.tryParse(stream.url)?.host ?? '';
-
-                    return ListTile(
-                      leading: const Icon(Icons.play_circle_outline),
-                      title: Text(label),
-                      subtitle: host.isNotEmpty ? Text(host) : null,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _launchStream(
-                          context,
-                          stream,
-                          item,
-                          episodeDataUrl,
-                          playerId,
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

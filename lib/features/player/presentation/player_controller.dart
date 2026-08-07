@@ -1960,13 +1960,13 @@ class PlayerController extends Notifier<PlayerState> {
         final rawStreams = await activeProvider.loadStreams(_videoUrl);
         if (!_isCurrentSourceSession(sourceSessionId)) return;
         if (rawStreams.isNotEmpty) {
-          // Filter then sort streams by quality preference based on network type.
-          // Wi-Fi → wifiQuality, mobile/other → mobileQuality.
-          // If the filter leaves nothing, falls back to all streams + sets
-          // qualityFilteredFallback so the Sources tab can show a banner.
+          // A source explicitly chosen in AnimeWitcher's picker must not be
+          // replaced by saved-source or network quality preferences.
+          final explicitSelection =
+              activeProvider.isExplicitStreamSelection(_videoUrl);
           final settings = ref.read(playerSettingsProvider).asData?.value;
           bool didFallback = false;
-          final streams = settings == null
+          final streams = explicitSelection || settings == null
               ? rawStreams
               : await _processStreams(
                   rawStreams,
@@ -1975,13 +1975,16 @@ class PlayerController extends Notifier<PlayerState> {
                 );
           if (!_isCurrentSourceSession(sourceSessionId)) return;
 
-          final initialIndex = _findSavedStreamIndex(streams);
+          final initialIndex =
+              explicitSelection ? 0 : _findSavedStreamIndex(streams);
           state = state.copyWith(
             streams: streams,
             currentStreamIndex: initialIndex,
             qualityFilteredFallback: didFallback,
           );
-          final checkCount = streams.length > 3 ? 3 : streams.length;
+          final checkCount = explicitSelection
+              ? 1
+              : (streams.length > 3 ? 3 : streams.length);
 
           // Issue 1: Mark ALL batch candidates as `trying` before parallel check,
           // so the UI shows the correct status for each source being checked.

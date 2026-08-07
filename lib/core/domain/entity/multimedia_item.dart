@@ -592,6 +592,8 @@ class Episode {
 class StreamResult {
   final String url;
   final String source;
+  final String? quality;
+  final bool requiresResolution;
   final Map<String, String>? headers;
   final List<SubtitleFile>? subtitles;
   final String? drmKid;
@@ -601,6 +603,8 @@ class StreamResult {
   const StreamResult({
     required this.url,
     required this.source,
+    this.quality,
+    this.requiresResolution = false,
     this.headers,
     this.subtitles,
     this.drmKid,
@@ -611,6 +615,8 @@ class StreamResult {
   Map<String, dynamic> toJson() => {
     'url': url,
     'source': source,
+    'quality': quality,
+    'requiresResolution': requiresResolution,
     'headers': headers,
     'subtitles': subtitles?.map((x) => x.toJson()).toList(),
     'drmKid': drmKid,
@@ -622,6 +628,8 @@ class StreamResult {
     return StreamResult(
       url: (json['url'] as String?) ?? '',
       source: (json['source'] as String?) ?? 'Unknown',
+      quality: json['quality'] as String?,
+      requiresResolution: json['requiresResolution'] == true,
       headers: json['headers'] != null
           ? Map<String, String>.from(json['headers'] as Map)
           : null,

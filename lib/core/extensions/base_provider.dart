@@ -255,6 +255,17 @@ abstract class SkyStreamProvider {
     return const <Episode>[];
   }
 
-  // Returns list of video streams (urls)
+  /// Lists sources that can be presented to the user before expensive
+  /// extraction. Providers with no deferred extraction can keep the default.
+  Future<List<StreamResult>> loadStreamSources(String url) {
+    return loadStreams(url);
+  }
+
+  /// True when [url] represents a user-selected source token that must bypass
+  /// automatic quality/source preference logic.
+  bool isExplicitStreamSelection(String url) => false;
+
+  // Resolves a playable stream URL. Deferred providers may accept one of the
+  // opaque URLs returned by [loadStreamSources].
   Future<List<StreamResult>> loadStreams(String url);
 }
