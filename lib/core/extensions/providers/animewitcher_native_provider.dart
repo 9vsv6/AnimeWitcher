@@ -1488,8 +1488,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     Map<String, dynamic> hit, {
     String? relationType,
     String? relationLabel,
+    String? preferredPoster,
   }) {
-    final item = _mapHit(hit);
+    final item = _mapHit(hit, preferredPoster: preferredPoster);
     return MultimediaItem(
       title: item.title,
       url: item.url,
@@ -1513,6 +1514,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final relations = _officialRelations(source);
     if (relations.isEmpty) return const <MultimediaItem>[];
     final resolved = await _resolveMalIds(relations.map((item) => item.malId));
+    final posters = await _aniListPostersForHits(resolved.values);
     final output = <MultimediaItem>[];
     for (final relation in relations) {
       final hit = resolved[relation.malId];
@@ -1521,6 +1523,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         hit,
         relationType: relation.type,
         relationLabel: relation.label,
+        preferredPoster: posters[relation.malId],
       ));
     }
     return output;
@@ -1552,12 +1555,18 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       if (ids.length >= _maxRecommendations) break;
     }
     final resolved = await _resolveMalIds(ids);
-    return ids
-        .map((id) => resolved[id])
-        .whereType<Map<String, dynamic>>()
-        .map((hit) => _relatedItem(hit))
-        .take(_maxRecommendations)
-        .toList(growable: false);
+    final posters = await _aniListPostersForHits(resolved.values);
+    final output = <MultimediaItem>[];
+    for (final id in ids) {
+      final hit = resolved[id];
+      if (hit == null) continue;
+      output.add(_relatedItem(
+        hit,
+        preferredPoster: posters[id],
+      ));
+      if (output.length >= _maxRecommendations) break;
+    }
+    return output;
   }
 
   int _normalizeUnixSeconds(dynamic raw) {
