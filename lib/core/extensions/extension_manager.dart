@@ -8,11 +8,13 @@ import 'dart:io';
 import 'engine/js_engine.dart';
 import 'models/extension_plugin.dart';
 import 'providers/js_based_provider.dart';
+import 'providers/animewitcher_native_provider.dart';
 import 'services/plugin_storage_service.dart';
 import 'providers.dart';
 import '../storage/settings_repository.dart';
 import '../storage/extension_repository.dart';
 import '../logger/app_logger.dart';
+import '../network/dio_client_provider.dart';
 
 part 'extension_manager.g.dart';
 
@@ -142,7 +144,11 @@ class ExtensionManager extends _$ExtensionManager {
   List<SkyStreamProvider> build() {
     _engine = ref.watch(jsEngineProvider);
     _storageService = ref.watch(pluginStorageServiceProvider);
-    return [];
+    // Native AnimeWitcher is additive during the migration period. The existing
+    // JavaScript extension continues to load normally so both can be compared.
+    return <SkyStreamProvider>[
+      AnimeWitcherNativeProvider(ref.watch(dioClientProvider)),
+    ];
   }
 
   /// Called by the extensions feature when installed plugins change.
@@ -255,6 +261,9 @@ class ExtensionManager extends _$ExtensionManager {
       final providersToRemove = <SkyStreamProvider>[];
 
       for (final provider in state) {
+        // Built-in native providers are not backed by an installed extension
+        // package and therefore must not be removed during extension sync.
+        if (provider is AnimeWitcherNativeProvider) continue;
         if (!_belongsToInstalled(provider.packageName, installedPackageNames)) {
           providersToRemove.add(provider);
         }
