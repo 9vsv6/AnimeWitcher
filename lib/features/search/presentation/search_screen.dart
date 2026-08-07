@@ -164,6 +164,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       );
       if (selected != null && mounted) {
+        _resetResultsScrollPosition();
         ref.read(searchProviderFiltersProvider.notifier).set(selected);
         ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
       }
@@ -172,8 +173,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
   }
 
+  void _resetResultsScrollPosition() {
+    if (_resultsScrollController.hasClients) {
+      _resultsScrollController.jumpTo(0);
+    }
+  }
+
   void _submitSearch(String val) {
     final trimmed = val.trim();
+    _resetResultsScrollPosition();
     _controller.value = TextEditingValue(
       text: trimmed,
       selection: TextSelection.collapsed(offset: trimmed.length),
@@ -616,6 +624,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Widget _buildLoadingSkeleton(BuildContext context) {
     final isLarge = context.isTabletOrLarger;
+    // Keep enough placeholder cards to cover the whole Search viewport.
+    // A short fixed list left a large black gap when the retained scroll
+    // position was near the end of a previous result set.
+    final placeholderCount = isLarge ? 24 : 18;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_resultsScrollController.hasClients) return;
+      if (_resultsScrollController.offset != 0) {
+        _resultsScrollController.jumpTo(0);
+      }
+    });
     return GridView.builder(
       controller: _resultsScrollController,
       physics: const AlwaysScrollableScrollPhysics(),
@@ -633,30 +651,35 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               crossAxisSpacing: 10,
               mainAxisSpacing: 14,
             ),
-      itemCount: isLarge ? 12 : 9,
-      itemBuilder: (context, index) =>
-          ShimmerPlaceholder(borderRadius: 12),
+      itemCount: placeholderCount,
+      itemBuilder: (context, index) => ShimmerPlaceholder(borderRadius: 12),
     );
   }
 
   Widget _buildLoadingMoreSkeleton(BuildContext context) {
-    final spacing = context.isTabletOrLarger ? 16.0 : 10.0;
+    final isLarge = context.isTabletOrLarger;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-      child: Row(
-        children: List.generate(3, (index) {
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsetsDirectional.only(
-                end: index == 2 ? 0 : spacing,
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: isLarge
+            ? const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 200,
+                childAspectRatio: 0.56,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              )
+            : const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                childAspectRatio: 0.56,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 14,
               ),
-              child: AspectRatio(
-                aspectRatio: 0.56,
-                child: ShimmerPlaceholder(borderRadius: 12),
-              ),
-            ),
-          );
-        }),
+        // Pagination now fills the remaining screen with placeholders instead
+        // of showing only one three-card row at the bottom.
+        itemCount: isLarge ? 12 : 9,
+        itemBuilder: (context, index) => ShimmerPlaceholder(borderRadius: 12),
       ),
     );
   }

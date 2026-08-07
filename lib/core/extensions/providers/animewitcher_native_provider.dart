@@ -845,8 +845,15 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final safeLimit = limit.clamp(10, 50).toInt();
     final safeOffset = offset < 0 ? 0 : offset;
     final pageNumber = safeOffset ~/ safeLimit;
+    // AnimeWitcher's MainAnimeListFragment initializes its catalog with
+    // series_name_asc. Keep typed searches on the normal `series` index and
+    // use the main-list index for an empty landing page unless the user
+    // explicitly selects another sort mode.
+    final searchIndex = text.isEmpty && filters.sort.trim().isEmpty
+        ? 'series_name_asc'
+        : _searchIndexForSort(filters.sort);
     final payload = await _algoliaQuery(
-      _searchIndexForSort(filters.sort),
+      searchIndex,
       query: text,
       page: pageNumber,
       hitsPerPage: safeLimit,

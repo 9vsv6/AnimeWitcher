@@ -449,13 +449,10 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
     int offset,
   ) {
     final pageSize = provider.searchPageSize;
-    if (_query.trim().isEmpty && _filters.isEmpty) {
-      return provider.getHomeSectionPage(
-        'قائمة الأنمي',
-        offset: offset,
-        limit: pageSize,
-      );
-    }
+    // The unified Search page owns its own catalog. Do not route an empty
+    // query through the Home "قائمة الأنمي" section, because that section
+    // is the official latest-added row (series_date_created), not the
+    // AnimeWitcher main anime list.
     return provider.searchPage(
       _query,
       _filters,
