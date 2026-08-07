@@ -637,7 +637,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
       itemCount: isLarge ? 12 : 9,
       itemBuilder: (context, index) =>
-          const ShimmerPlaceholder(borderRadius: 12),
+          ShimmerPlaceholder(borderRadius: 12),
     );
   }
 
@@ -652,7 +652,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               padding: EdgeInsetsDirectional.only(
                 end: index == 2 ? 0 : spacing,
               ),
-              child: const AspectRatio(
+              child: AspectRatio(
                 aspectRatio: 0.56,
                 child: ShimmerPlaceholder(borderRadius: 12),
               ),
