@@ -1,7 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/storage/settings_repository.dart';
-import '../../player/data/subtitle_providers.dart';
-import '../../../core/network/dio_client_provider.dart';
 
 part 'player_settings_provider.g.dart';
 
@@ -63,15 +61,6 @@ class PlayerSettings {
   final bool showPlaybackSpeed;
   final bool showEpisodes;
 
-  // Subtitle Accounts
-  final String osUsername;
-  final String osPassword;
-  final String osApiKey;
-  final String subdlEmail;
-  final String subdlPassword;
-  final String subdlApiKey;
-  final String subsourceApiKey;
-
   const PlayerSettings({
     this.leftGesture = PlayerGesture.brightness,
     this.rightGesture = PlayerGesture.volume,
@@ -111,13 +100,6 @@ class PlayerSettings {
     this.showRotate = true,
     this.showPlaybackSpeed = true,
     this.showEpisodes = true,
-    this.osUsername = '',
-    this.osPassword = '',
-    this.osApiKey = '',
-    this.subdlEmail = '',
-    this.subdlPassword = '',
-    this.subdlApiKey = '',
-    this.subsourceApiKey = '',
   });
 
   PlayerSettings copyWith({
@@ -160,13 +142,6 @@ class PlayerSettings {
     bool? showRotate,
     bool? showPlaybackSpeed,
     bool? showEpisodes,
-    String? osUsername,
-    String? osPassword,
-    String? osApiKey,
-    String? subdlEmail,
-    String? subdlPassword,
-    String? subdlApiKey,
-    String? subsourceApiKey,
   }) {
     return PlayerSettings(
       leftGesture: leftGesture ?? this.leftGesture,
@@ -217,13 +192,6 @@ class PlayerSettings {
       showRotate: showRotate ?? this.showRotate,
       showPlaybackSpeed: showPlaybackSpeed ?? this.showPlaybackSpeed,
       showEpisodes: showEpisodes ?? this.showEpisodes,
-      osUsername: osUsername ?? this.osUsername,
-      osPassword: osPassword ?? this.osPassword,
-      osApiKey: osApiKey ?? this.osApiKey,
-      subdlEmail: subdlEmail ?? this.subdlEmail,
-      subdlPassword: subdlPassword ?? this.subdlPassword,
-      subdlApiKey: subdlApiKey ?? this.subdlApiKey,
-      subsourceApiKey: subsourceApiKey ?? this.subsourceApiKey,
     );
   }
 }
@@ -307,15 +275,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
         (storage.getPlayerSetting('player_default_speed') as num?)
             ?.toDouble() ??
         1.0;
-    final osUser = storage.getPlayerSetting<String>('player_os_user') ?? '';
-    final osPass = storage.getPlayerSetting<String>('player_os_pass') ?? '';
-    final osKey = storage.getPlayerSetting<String>('player_os_key') ?? '';
-    final dlEmail =
-        storage.getPlayerSetting<String>('player_subdl_email') ?? '';
-    final dlPass = storage.getPlayerSetting<String>('player_subdl_pass') ?? '';
-    final dlKey = storage.getPlayerSetting<String>('player_subdl_key') ?? '';
-    final ssKey = storage.getPlayerSetting<String>('player_ss_key') ?? '';
-
     final subFixedTextSize =
         (storage.getPlayerSetting('player_sub_fixed_text_size') as num?)
             ?.toDouble();
@@ -462,13 +421,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       showRotate: showRotate,
       showPlaybackSpeed: showPlaybackSpeed,
       showEpisodes: showEpisodes,
-      osUsername: osUser,
-      osPassword: osPass,
-      osApiKey: osKey,
-      subdlEmail: dlEmail,
-      subdlPassword: dlPass,
-      subdlApiKey: dlKey,
-      subsourceApiKey: ssKey,
     );
   }
 
@@ -764,93 +716,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setDefaultPlaybackSpeed(double speed) async {
     await _repository.setPlayerSetting('player_default_speed', speed);
     state = AsyncData(state.requireValue.copyWith(defaultPlaybackSpeed: speed));
-  }
-
-  Future<void> setOpenSubtitlesCredentials(
-    String user,
-    String pass, [
-    String? key,
-  ]) async {
-    await _repository.setPlayerSetting('player_os_user', user);
-    await _repository.setPlayerSetting('player_os_pass', pass);
-    if (key != null) {
-      await _repository.setPlayerSetting('player_os_key', key);
-    }
-    state = AsyncData(
-      state.requireValue.copyWith(
-        osUsername: user,
-        osPassword: pass,
-        osApiKey: key,
-      ),
-    );
-  }
-
-  Future<void> setSubDlAuth({
-    required String apiKey,
-    String? email,
-    String? pass,
-  }) async {
-    await _repository.setPlayerSetting('player_subdl_key', apiKey);
-    if (email != null) {
-      await _repository.setPlayerSetting('player_subdl_email', email);
-    }
-    if (pass != null) {
-      await _repository.setPlayerSetting('player_subdl_pass', pass);
-    }
-
-    state = AsyncData(
-      state.requireValue.copyWith(
-        subdlApiKey: apiKey,
-        subdlEmail: email ?? state.requireValue.subdlEmail,
-        subdlPassword: pass ?? state.requireValue.subdlPassword,
-      ),
-    );
-  }
-
-  Future<void> setSubDlApiKey(String key) async {
-    await _repository.setPlayerSetting('player_subdl_key', key);
-    state = AsyncData(state.requireValue.copyWith(subdlApiKey: key));
-  }
-
-  Future<void> setSubSourceApiKey(String key) async {
-    await _repository.setPlayerSetting('player_ss_key', key);
-    state = AsyncData(state.requireValue.copyWith(subsourceApiKey: key));
-  }
-
-  Future<bool> verifyOpenSubtitles(
-    String user,
-    String pass, [
-    String? key,
-  ]) async {
-    final dio = ref.read(dioClientProvider);
-    final provider = OpenSubtitlesProvider(
-      dio,
-      username: user,
-      password: pass,
-      apiKey: key,
-    );
-    return await provider.verifyCredentials();
-  }
-
-  Future<({String? key, String? error})> verifySubDl(
-    String email,
-    String pass,
-  ) async {
-    final dio = ref.read(dioClientProvider);
-    final provider = SubDLProvider(dio, email: email, password: pass);
-    return await provider.login(email, pass);
-  }
-
-  Future<bool> verifySubDlKey(String key) async {
-    final dio = ref.read(dioClientProvider);
-    final provider = SubDLProvider(dio, apiKey: key);
-    return await provider.verifyKey();
-  }
-
-  Future<bool> verifySubSource(String key) async {
-    final dio = ref.read(dioClientProvider);
-    final provider = SubSourceProvider(dio, apiKey: key);
-    return await provider.verifyKey();
   }
 
   PlayerGesture _parse(String s) {

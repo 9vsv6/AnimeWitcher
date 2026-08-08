@@ -11,7 +11,6 @@ import 'core/theme/theme_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/storage/storage_service.dart';
-import 'core/network/doh_service.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'core/utils/app_utils.dart';
 import 'core/utils/localized_text.dart';
@@ -96,7 +95,6 @@ class _AppRootState extends State<AppRoot> {
     try {
       await Future.wait([
         _storageService.init(),
-        DohService.instance.init(),
         if (Platform.isAndroid)
           FlutterDisplayMode.setHighRefreshRate().catchError((Object e) {
             if (kDebugMode) debugPrint("Error setting high refresh rate: $e");

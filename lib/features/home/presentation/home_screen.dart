@@ -5,9 +5,6 @@ import 'home_provider.dart';
 import 'home_state.dart';
 import 'package:skystream/features/home/presentation/widgets/continue_watching_section.dart';
 import 'package:skystream/features/search/presentation/search_provider.dart';
-import 'package:skystream/features/tracking/data/sync_manager.dart';
-import 'package:skystream/features/tracking/domain/sync_progress_item.dart';
-import 'package:skystream/features/home/presentation/widgets/synced_progress_section.dart';
 import 'package:skystream/features/library/presentation/history_provider.dart';
 import '../../settings/presentation/general_settings_provider.dart';
 import 'widgets/home_hero_carousel.dart';
@@ -185,7 +182,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.build(context);
     final homeDataAsync = ref.watch(homeDataProvider);
     final history = ref.watch(watchHistoryProvider);
-    final syncedProgressAsync = ref.watch(syncedProgressProvider);
     final generalSettings = ref.watch(generalSettingsProvider);
     final l10n = AppLocalizations.of(context)!;
     final activeProvider = ref.watch(activeProviderProvider);
@@ -236,7 +232,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 homeDataAsync,
                 history,
                 generalSettings.watchHistoryEnabled,
-                syncedProgressAsync,
                 isWidescreen: true,
               ),
             ),
@@ -336,7 +331,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         homeDataAsync,
         history,
         generalSettings.watchHistoryEnabled,
-        syncedProgressAsync,
       ),
     );
   }
@@ -346,7 +340,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     HomeState state,
     List<dynamic> history,
     bool watchHistoryEnabled,
-    AsyncValue<List<SyncProgressItem>> syncedProgressAsync, {
+    {
     bool isWidescreen = false,
   }) {
     final l10n = AppLocalizations.of(context)!;
@@ -435,19 +429,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     title: l10n.continueWatching,
                     items: history.cast<HistoryItem>(),
                     topPadding: isWidescreen ? 0 : null,
-                  ),
-                ),
-
-              if (syncedProgressAsync.asData?.value.isNotEmpty == true)
-                SliverToBoxAdapter(
-                  child: SyncedProgressSection(
-                    title: appText(context, english: 'Synced progress', arabic: 'التقدم المتزامن'),
-                    items: syncedProgressAsync.asData!.value,
-                    onItemTap: (item) {
-                      // Pre-fill search query and navigate to Search tab
-                      ref.read(searchQueryProvider.notifier).set(item.title);
-                      const SearchRoute().go(context);
-                    },
                   ),
                 ),
 

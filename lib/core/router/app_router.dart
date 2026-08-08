@@ -6,7 +6,6 @@ import 'package:skystream/features/search/presentation/search_screen.dart';
 import 'package:skystream/features/library/presentation/library_screen.dart';
 import 'package:skystream/features/library/presentation/downloads_screen.dart';
 import 'package:skystream/features/settings/presentation/settings_screen.dart';
-import '../../features/settings/presentation/developer_options_screen.dart';
 import '../../features/details/presentation/details_screen.dart';
 import '../../features/home/presentation/view_all_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
@@ -15,9 +14,7 @@ import '../navigation/taskbar_destination.dart';
 import '../extensions/base_provider.dart';
 import 'package:skystream/shared/widgets/app_scaffold.dart';
 import '../../core/storage/settings_repository.dart';
-import 'package:talker_flutter/talker_flutter.dart';
 import 'package:flutter/foundation.dart';
-import '../logger/app_logger.dart';
 
 part 'app_router.g.dart';
 
@@ -39,12 +36,7 @@ part 'app_router.g.dart';
     ),
     TypedStatefulShellBranch<SettingsBranchData>(
       routes: [
-        TypedGoRoute<SettingsRoute>(
-          path: '/settings',
-          routes: [
-            TypedGoRoute<DeveloperOptionsRoute>(path: 'developer'),
-          ],
-        ),
+        TypedGoRoute<SettingsRoute>(path: '/settings'),
       ],
     ),
   ],
@@ -117,31 +109,6 @@ class SettingsRoute extends GoRouteData with $SettingsRoute {
       const SettingsScreen();
 }
 
-// --- Sub-routes of Settings ---
-
-
-class DeveloperOptionsRoute extends GoRouteData with $DeveloperOptionsRoute {
-  const DeveloperOptionsRoute();
-  @override
-  Widget build(BuildContext context, GoRouterState state) =>
-      const DeveloperOptionsScreen();
-}
-
-@TypedGoRoute<AppLogsRoute>(path: '/logs')
-class AppLogsRoute extends GoRouteData with $AppLogsRoute {
-  const AppLogsRoute();
-  @override
-  Widget build(BuildContext context, GoRouterState state) {
-    return TalkerScreen(
-      talker: talker,
-      theme: TalkerScreenTheme(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        textColor: Theme.of(context).colorScheme.onSurface,
-        cardColor: Theme.of(context).colorScheme.surface,
-      ),
-    );
-  }
-}
 
 // --- Typed Extras ---
 

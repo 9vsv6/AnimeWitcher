@@ -8,7 +8,6 @@ part 'general_settings_provider.g.dart';
 class GeneralSettings {
   final bool watchHistoryEnabled;
   final String defaultHomeScreen;
-  final bool githubProxyEnabled;
   final bool alwaysOnTop;
   final String titlePosition;
   final List<String> taskbarOrder;
@@ -17,7 +16,6 @@ class GeneralSettings {
   const GeneralSettings({
     this.watchHistoryEnabled = true,
     this.defaultHomeScreen = '/home',
-    this.githubProxyEnabled = false,
     this.alwaysOnTop = false,
     this.titlePosition = 'below',
     this.taskbarOrder = defaultTaskbarOrderIds,
@@ -27,7 +25,6 @@ class GeneralSettings {
   GeneralSettings copyWith({
     bool? watchHistoryEnabled,
     String? defaultHomeScreen,
-    bool? githubProxyEnabled,
     bool? alwaysOnTop,
     String? titlePosition,
     List<String>? taskbarOrder,
@@ -36,7 +33,6 @@ class GeneralSettings {
     return GeneralSettings(
       watchHistoryEnabled: watchHistoryEnabled ?? this.watchHistoryEnabled,
       defaultHomeScreen: defaultHomeScreen ?? this.defaultHomeScreen,
-      githubProxyEnabled: githubProxyEnabled ?? this.githubProxyEnabled,
       alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
       titlePosition: titlePosition ?? this.titlePosition,
       taskbarOrder: taskbarOrder ?? this.taskbarOrder,
@@ -64,7 +60,6 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
         order,
         hidden,
       ),
-      githubProxyEnabled: repository.isGithubProxyEnabled(),
       alwaysOnTop: repository.isAlwaysOnTop(),
       titlePosition: repository.getTitlePosition(),
       taskbarOrder: order,
@@ -116,12 +111,6 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
       hiddenTaskbarItems: normalizedHidden,
       defaultHomeScreen: resolvedDefault,
     );
-  }
-
-  Future<void> setGithubProxyEnabled(bool enabled) async {
-    final repository = ref.read(settingsRepositoryProvider);
-    await repository.setGithubProxyEnabled(enabled);
-    state = state.copyWith(githubProxyEnabled: enabled);
   }
 
   Future<void> setAlwaysOnTop(bool enabled) async {

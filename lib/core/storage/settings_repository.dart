@@ -109,14 +109,6 @@ class SettingsRepository {
     return _storageService.isAlwaysOnTop();
   }
 
-  Future<void> setGithubProxyEnabled(bool enabled) async {
-    await _storageService.setGithubProxyEnabled(enabled);
-  }
-
-  bool isGithubProxyEnabled() {
-    return _storageService.isGithubProxyEnabled();
-  }
-
   Future<void> setIntroDbIntegrationEnabled(bool enabled) async {
     await _storageService.setIntroDbIntegrationEnabled(enabled);
   }

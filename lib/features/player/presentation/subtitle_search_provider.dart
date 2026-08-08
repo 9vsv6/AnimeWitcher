@@ -10,7 +10,6 @@ import 'package:path/path.dart' as p;
 import '../../../core/network/dio_client_provider.dart';
 import '../data/subtitle_providers.dart';
 import '../domain/entity/subtitle_model.dart';
-import '../../settings/presentation/player_settings_provider.dart';
 
 part 'subtitle_search_provider.g.dart';
 
@@ -100,32 +99,15 @@ class SubtitleSearch extends _$SubtitleSearch {
       _cancelToken?.cancel();
     });
 
-    // Watch settings to update providers if they change
-    ref.listen(playerSettingsProvider, (previous, next) {
-      if (next.hasValue) {
-        _initializeProviders();
-      }
-    });
-
     _initializeProviders();
     return null;
   }
 
   void _initializeProviders() {
     final dio = ref.read(dioClientProvider);
-    final settings =
-        ref.read(playerSettingsProvider).asData?.value ??
-        const PlayerSettings();
-
     _providers = [
-      OpenSubtitlesProvider(
-        dio,
-        username: settings.osUsername,
-        password: settings.osPassword,
-        apiKey: settings.osApiKey,
-      ),
-      SubDLProvider(dio, apiKey: settings.subdlApiKey),
-      SubSourceProvider(dio, apiKey: settings.subsourceApiKey),
+      OpenSubtitlesProvider(dio),
+      SubSourceProvider(dio),
     ];
   }
 

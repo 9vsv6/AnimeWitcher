@@ -13,12 +13,9 @@ import 'widgets/taskbar_customization_dialog.dart';
 import 'player_settings_provider.dart';
 import 'general_settings_provider.dart';
 import 'app_version_provider.dart';
-import 'account_settings_screen.dart';
 
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../../../core/providers/locale_provider.dart';
-import '../../../core/network/doh_service.dart';
-import '../../../core/router/app_router.dart';
 import 'cache_provider.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
@@ -319,99 +316,6 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: LayoutConstants.spacingLg),
             SettingsGroup(
-              title: l10n.accounts,
-              children: [
-                SettingsTile(
-                  icon: Icons.account_circle_rounded,
-                  title: appText(
-                    context,
-                    english: 'Manage Accounts',
-                    arabic: 'إدارة الحسابات',
-                  ),
-                  subtitle: appText(
-                    context,
-                    english: 'Configure Subtitles and Tracking Services',
-                    arabic: 'إعداد خدمات الترجمة وتتبع المشاهدة',
-                  ),
-                  isLast: true,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const AccountSettingsScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: LayoutConstants.spacingLg),
-            Builder(
-              builder: (context) {
-                final dohState =
-                    ref.watch(dohSettingsProvider).asData?.value ??
-                    const DohSettings();
-                return SettingsGroup(
-                  title: l10n.network,
-                  children: [
-                    SettingsTile(
-                      icon: Icons.dns_rounded,
-                      title: l10n.dnsOverHttps,
-                      subtitle: dohState.enabled
-                          ? '${l10n.on} (${getDohProviderLabel(dohState.provider, dohState.customUrl, l10n)})'
-                          : l10n.off,
-                      trailing: Switch(
-                        value: dohState.enabled,
-                        onChanged: (val) {
-                          ref
-                              .read(dohSettingsProvider.notifier)
-                              .setEnabled(val);
-                        },
-                      ),
-                      onTap: () {
-                        ref
-                            .read(dohSettingsProvider.notifier)
-                            .setEnabled(!dohState.enabled);
-                      },
-                    ),
-                    if (dohState.enabled)
-                      SettingsTile(
-                        icon: Icons.cloud_rounded,
-                        title: l10n.dohProvider,
-                        subtitle: getDohProviderLabel(
-                          dohState.provider,
-                          dohState.customUrl,
-                          l10n,
-                        ),
-                        onTap: () => showDohProviderDialog(context, ref),
-                      ),
-
-                    SettingsTile(
-                      icon: Icons.alt_route_rounded,
-                      title: l10n.githubProxy,
-                      subtitle: l10n.githubProxySubtitle,
-                      trailing: Switch(
-                        value: generalSettings.githubProxyEnabled,
-                        onChanged: (val) {
-                          ref
-                              .read(generalSettingsProvider.notifier)
-                              .setGithubProxyEnabled(val);
-                        },
-                      ),
-                      onTap: () {
-                        ref
-                            .read(generalSettingsProvider.notifier)
-                            .setGithubProxyEnabled(
-                              !generalSettings.githubProxyEnabled,
-                            );
-                      },
-                      isLast: true,
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: LayoutConstants.spacingLg),
-            SettingsGroup(
               title: l10n.appData,
               children: [
                 if (!kIsWeb)
@@ -445,42 +349,44 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: LayoutConstants.spacingLg),
             SettingsGroup(
-              title: l10n.developer,
-              children: [
-                SettingsTile(
-                  icon: Icons.developer_mode_rounded,
-                  title: l10n.developerOptions,
-                  subtitle: l10n.developerOptionsSubtitle,
-                  isLast: true,
-                  onTap: () => const DeveloperOptionsRoute().go(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: LayoutConstants.spacingLg),
-            SettingsGroup(
               title: l10n.about,
               children: [
                 SettingsTile(
-                  icon: Icons.person_outline_rounded,
-                  title: l10n.developer,
-                  subtitle: l10n.developedBy('Akash'),
-                  onTap: () => showDeveloperDialog(context),
+                  icon: Icons.language_rounded,
+                  title: appText(
+                    context,
+                    english: 'AnimeWitcher Website',
+                    arabic: 'موقع AnimeWitcher',
+                  ),
+                  subtitle: 'animewitcher.com',
+                  onTap: () => launchUrl(
+                    Uri.parse('https://www.animewitcher.com'),
+                    mode: LaunchMode.externalApplication,
+                  ),
                 ),
                 SettingsTile(
-                  icon: Icons.forum_outlined,
-                  title: l10n.discord,
-                  subtitle: l10n.discordSubtitle,
+                  icon: Icons.support_agent_rounded,
+                  title: appText(
+                    context,
+                    english: 'Technical Support',
+                    arabic: 'الدعم الفني',
+                  ),
+                  subtitle: 't.me/animewitcher_support',
                   onTap: () => launchUrl(
-                    Uri.parse('https://discord.gg/73XGA8Mxn9'),
+                    Uri.parse('https://t.me/animewitcher_support'),
                     mode: LaunchMode.externalApplication,
                   ),
                 ),
                 SettingsTile(
                   icon: Icons.send_rounded,
-                  title: l10n.telegram,
-                  subtitle: l10n.telegramSubtitle,
+                  title: appText(
+                    context,
+                    english: 'Telegram Channel',
+                    arabic: 'قناة التلجرام',
+                  ),
+                  subtitle: 't.me/AnimeWitcherUpdates',
                   onTap: () => launchUrl(
-                    Uri.parse('https://t.me/+Ez5Vsv2pUUFjZmNl'),
+                    Uri.parse('https://t.me/AnimeWitcherUpdates'),
                     mode: LaunchMode.externalApplication,
                   ),
                 ),

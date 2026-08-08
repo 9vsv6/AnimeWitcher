@@ -417,16 +417,19 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     return ValueListenableBuilder<int>(
       valueListenable: _currentIndexNotifier,
       builder: (context, currentIndex, _) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (final entry in widget.movies.asMap().entries)
-              _ProgressDot(
-                key: ValueKey('hcd_${entry.key}'),
-                isActive: currentIndex == entry.key,
-                fillController: _fillController,
-              ),
-          ],
+        return Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final entry in widget.movies.asMap().entries)
+                _ProgressDot(
+                  key: ValueKey('hcd_${entry.key}'),
+                  isActive: currentIndex == entry.key,
+                  fillController: _fillController,
+                ),
+            ],
+          ),
         );
       },
     );

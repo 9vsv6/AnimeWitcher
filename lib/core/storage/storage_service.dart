@@ -441,17 +441,6 @@ class StorageService {
         false;
   }
 
-  // --- Network Settings ---
-  Future<void> setGithubProxyEnabled(bool enabled) async {
-    await _settingsBox.put('github_proxy_enabled', enabled);
-  }
-
-  bool isGithubProxyEnabled() {
-    return (_settingsBox.get('github_proxy_enabled', defaultValue: false)
-            as bool?) ??
-        false;
-  }
-
   // --- Integrations ---
   Future<void> setIntroDbIntegrationEnabled(bool enabled) async {
     await _settingsBox.put('introdb_integration_enabled', enabled);
