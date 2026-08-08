@@ -2544,7 +2544,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
 
   List<Episode> _animeWitcherEpisodeMetadata(
-    _EpisodeRoute route,
+    _AnimeRoute route,
     List<_EpisodeRecord> records,
     int season,
   ) {
