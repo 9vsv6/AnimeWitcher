@@ -62,7 +62,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       LibraryCategory.planToWatch =>
         isArabic ? 'أرغب بمشاهدته' : 'Plan to watch',
       LibraryCategory.completed => isArabic ? 'تمت مشاهدته' : 'Completed',
-      LibraryCategory.onHold => isArabic ? 'مؤجل' : 'On hold',
       LibraryCategory.notInterested =>
         isArabic ? 'لا أرغب بمشاهدته' : 'Not interested',
     };
@@ -74,7 +73,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       LibraryCategory.watching => Icons.play_circle_fill_rounded,
       LibraryCategory.planToWatch => Icons.schedule_rounded,
       LibraryCategory.completed => Icons.check_circle_rounded,
-      LibraryCategory.onHold => Icons.pause_circle_filled_rounded,
       LibraryCategory.notInterested => Icons.block_rounded,
     };
   }
@@ -89,56 +87,144 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     final result = await showModalBottomSheet<Object>(
       context: context,
-      showDragHandle: true,
       useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.56),
       builder: (sheetContext) {
-        return SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                  child: Text(
-                    isArabic ? 'حفظ في قائمة' : 'Save to list',
-                    style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                for (final category in LibraryCategory.values)
-                  ListTile(
-                    leading: Icon(_libraryCategoryIcon(category)),
-                    title: Text(_libraryCategoryLabel(sheetContext, category)),
-                    trailing: currentCategory == category
-                        ? Icon(
-                            Icons.check_rounded,
-                            color: Theme.of(sheetContext).colorScheme.primary,
-                          )
-                        : null,
-                    onTap: () => Navigator.of(sheetContext).pop(category),
-                  ),
-                if (currentCategory != null) ...[
-                  const Divider(),
-                  ListTile(
-                    leading: Icon(
-                      Icons.delete_outline_rounded,
-                      color: Theme.of(sheetContext).colorScheme.error,
-                    ),
-                    title: Text(
-                      isArabic ? 'إزالة من المكتبة' : 'Remove from library',
-                      style: TextStyle(
-                        color: Theme.of(sheetContext).colorScheme.error,
+        final theme = Theme.of(sheetContext);
+        final colors = theme.colorScheme;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+          ),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.36),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: colors.onSurfaceVariant.withValues(alpha: 0.34),
+                        borderRadius: BorderRadius.circular(99),
                       ),
                     ),
-                    onTap: () => Navigator.of(sheetContext).pop(
-                      _removeLibraryAction,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 16, 8, 10),
+                    child: Text(
+                      isArabic ? 'حفظ في قائمة' : 'Save to list',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
+                  for (final category in LibraryCategory.values)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Material(
+                        color: currentCategory == category
+                            ? colors.primaryContainer.withValues(alpha: 0.70)
+                            : colors.surfaceContainerHighest.withValues(alpha: 0.46),
+                        borderRadius: BorderRadius.circular(15),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(15),
+                          onTap: () => Navigator.of(sheetContext).pop(category),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 11,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: currentCategory == category
+                                        ? colors.primary.withValues(alpha: 0.14)
+                                        : colors.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                  child: Icon(
+                                    _libraryCategoryIcon(category),
+                                    size: 21,
+                                    color: currentCategory == category
+                                        ? colors.primary
+                                        : colors.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _libraryCategoryLabel(sheetContext, category),
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                if (currentCategory == category)
+                                  Icon(
+                                    Icons.check_rounded,
+                                    color: colors.primary,
+                                    size: 22,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (currentCategory != null) ...[
+                    const SizedBox(height: 8),
+                    Divider(color: colors.outlineVariant.withValues(alpha: 0.5)),
+                    const SizedBox(height: 4),
+                    Material(
+                      color: colors.errorContainer.withValues(alpha: 0.36),
+                      borderRadius: BorderRadius.circular(15),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(15),
+                        onTap: () => Navigator.of(sheetContext).pop(
+                          _removeLibraryAction,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline_rounded, color: colors.error),
+                              const SizedBox(width: 12),
+                              Text(
+                                isArabic ? 'إزالة من المكتبة' : 'Remove from library',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: colors.error,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         );
@@ -152,6 +238,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       await notifier.removeItem(item.url);
     }
   }
+
 
   void _switchDetailsTab(int targetTab) {
     if (targetTab == _selectedDetailsTab) return;

@@ -120,7 +120,9 @@ class StorageService {
         return 'completed';
       case 'on_Hold':
       case 'onHold':
-        return 'onHold';
+        // On Hold was removed from the product UI. Treat legacy entries as
+        // Plan to Watch so they remain visible and editable.
+        return 'pinned';
       case 'no_watching':
       case 'noWatching':
         return 'noWatching';

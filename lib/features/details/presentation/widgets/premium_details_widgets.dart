@@ -26,210 +26,183 @@ class MetadataBar extends ConsumerWidget {
   final bool isLoading;
   const MetadataBar({super.key, required this.item, this.isLoading = false});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // theme and context used in helper methods
-    // Details metadata v2: age rating and episode count use plugin fallbacks.
-    String? clean(dynamic raw) {
-      if (raw == null) return null;
-      final value = raw.toString().trim();
-      if (value.isEmpty || value.toLowerCase() == 'null') return null;
-      return value;
+  String? _clean(dynamic raw) {
+    if (raw == null) return null;
+    final value = raw.toString().trim();
+    if (value.isEmpty || value.toLowerCase() == 'null') return null;
+    return value;
+  }
+
+  String _normalizeDigits(String value) {
+    const arabic = '٠١٢٣٤٥٦٧٨٩';
+    const eastern = '۰۱۲۳۴۵۶۷۸۹';
+    return value
+        .replaceAllMapped(
+          RegExp(r'[٠-٩]'),
+          (match) => '${arabic.indexOf(match.group(0)!)}',
+        )
+        .replaceAllMapped(
+          RegExp(r'[۰-۹]'),
+          (match) => '${eastern.indexOf(match.group(0)!)}',
+        );
+  }
+
+  String _statusLabel(BuildContext context, Map<String, String> data) {
+    final isArabic = _isArabicDetailsLocale(context);
+    final raw = (_clean(data['awState']) ?? '').toLowerCase();
+    final isCompleted = item.status == ShowStatus.completed ||
+        raw.contains('completed') ||
+        raw.contains('finished') ||
+        raw.contains('مكتمل') ||
+        raw.contains('منتهي');
+
+    var label = isCompleted
+        ? (isArabic ? 'مكتمل' : 'Completed')
+        : (isArabic ? 'مستمر' : 'Ongoing');
+
+    if (!isCompleted && item.nextAiring != null && item.nextAiring!.unixTime > 0) {
+      final date = DateTime.fromMillisecondsSinceEpoch(
+        item.nextAiring!.unixTime * 1000,
+        isUtc: true,
+      ).toLocal();
+      const arDays = <String>[
+        'الاثنين',
+        'الثلاثاء',
+        'الأربعاء',
+        'الخميس',
+        'الجمعة',
+        'السبت',
+        'الأحد',
+      ];
+      const enDays = <String>[
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ];
+      final day = isArabic ? arDays[date.weekday - 1] : enDays[date.weekday - 1];
+      label = '$label ($day)';
+    }
+    return label;
+  }
+
+  String? _seasonLabel(BuildContext context, Map<String, String> data) {
+    final isArabic = _isArabicDetailsLocale(context);
+    var season = _clean(data['awSeasonName']) ?? _clean(data['awSeason']);
+    if (season == null) return null;
+
+    final lower = season.toLowerCase();
+    if (isArabic) {
+      if (lower.contains('winter')) season = 'شتاء';
+      if (lower.contains('spring')) season = 'ربيع';
+      if (lower.contains('summer')) season = 'صيف';
+      if (lower.contains('fall') || lower.contains('autumn')) season = 'خريف';
     }
 
-    final syncData = item.syncData ?? const <String, String>{};
-    final ageRating = clean(syncData['awAge']) ?? clean(item.contentRating);
-    final providerEpisodeCount = clean(syncData['awEpisodes']);
-    final loadedEpisodeCount = item.episodes?.length ?? 0;
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final episodeCount =
-        providerEpisodeCount ??
-        (loadedEpisodeCount > 0
-            ? isArabic
-                  ? '$loadedEpisodeCount حلقة'
-                  : '$loadedEpisodeCount episodes'
-            : null);
-
-    return Wrap(
-      spacing: 12,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (item.year != null)
-          _buildIconInfo(
-            context,
-            Icons.calendar_today_rounded,
-            item.year.toString(),
-          )
-        else if (isLoading)
-          ShimmerPlaceholder.rectangular(
-            width: 60,
-            height: 20,
-            borderRadius: 4,
-          ),
-
-        if (ageRating != null)
-          _buildBorderedInfo(context, ageRating)
-        else if (isLoading)
-          ShimmerPlaceholder.rectangular(
-            width: 60,
-            height: 20,
-            borderRadius: 4,
-          ),
-
-        if (item.duration != null)
-          _buildIconInfo(context, Icons.timer_outlined, "${item.duration}m")
-        else if (isLoading)
-          ShimmerPlaceholder.rectangular(
-            width: 60,
-            height: 20,
-            borderRadius: 4,
-          ),
-
-        if (episodeCount != null)
-          _buildIconInfo(context, Icons.video_library_outlined, episodeCount)
-        else if (isLoading)
-          ShimmerPlaceholder.rectangular(
-            width: 70,
-            height: 20,
-            borderRadius: 4,
-          ),
-
-        if (item.score != null)
-          _buildIconInfo(
-            context,
-            Icons.star_rounded,
-            item.score!.toStringAsFixed(1),
-            iconColor: Theme.of(context).colorScheme.primary,
-          )
-        else if (isLoading)
-          ShimmerPlaceholder.rectangular(
-            width: 60,
-            height: 20,
-            borderRadius: 4,
-          ),
-
-        if (item.playbackPolicy != null && item.playbackPolicy != "none")
-          _buildPlaybackBadge(context, item.playbackPolicy!),
-        if (item.isAdult)
-          _buildBorderedInfo(context, "18+", color: Colors.redAccent),
-      ],
-    );
+    final year = _clean(data['awYear']) ?? item.year?.toString();
+    if (year != null && !season.contains(year)) return '$season $year';
+    return season;
   }
 
-  Widget _buildInfoText(BuildContext context, String text) {
-    return Text(
-      text,
-      style: TextStyle(
-        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
-      ),
-    );
+  String _typeLabel(BuildContext context, Map<String, String> data) {
+    final isArabic = _isArabicDetailsLocale(context);
+    final raw = (_clean(data['awType']) ?? '').toLowerCase();
+    if (raw.contains('ova') || raw.contains('أوفا') || raw.contains('اوفا')) {
+      return isArabic ? 'أوفا' : 'OVA';
+    }
+    if (item.contentType == MultimediaContentType.movie ||
+        raw.contains('movie') ||
+        raw.contains('film') ||
+        raw.contains('فيلم') ||
+        raw.contains('فلم')) {
+      return isArabic ? 'فلم' : 'Movie';
+    }
+    return isArabic ? 'مسلسل' : 'Series';
   }
 
-  Widget _buildBorderedInfo(
-    BuildContext context,
-    String text, {
-    Color? color,
-    bool isFilled = false,
-  }) {
-    final theme = Theme.of(context);
-    final themeColor = color ?? theme.colorScheme.onSurface;
+  String? _episodeCountLabel(BuildContext context, Map<String, String> data) {
+    final raw = _clean(data['awEpisodes']);
+    if (raw == null) return null;
+    final normalized = _normalizeDigits(raw);
+    final match = RegExp(r'\d+').firstMatch(normalized);
+    final count = match == null ? null : int.tryParse(match.group(0)!);
+    if (count == null || count <= 0) return null;
+    if (RegExp(r'حلقة|episode', caseSensitive: false).hasMatch(raw)) return raw;
+    return _isArabicDetailsLocale(context) ? '$count حلقة' : '$count episodes';
+  }
 
-    if (isFilled) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: themeColor.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: themeColor.withValues(alpha: 0.3),
-            width: 0.5,
-          ),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: themeColor,
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.5,
+  String? _malLabel(Map<String, String> data) {
+    final raw = _clean(data['awMalScore']);
+    if (raw == null) return null;
+    final normalized = _normalizeDigits(raw);
+    final match = RegExp(r'\d+(?:\.\d+)?').firstMatch(normalized);
+    final score = match == null ? null : double.tryParse(match.group(0)!);
+    if (score == null || score <= 0) return null;
+    final pretty = score.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+    return 'MAL $pretty';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final data = item.syncData ?? const <String, String>{};
+    final ageRating = _clean(data['awAge']) ?? _clean(item.contentRating);
+    final season = _seasonLabel(context, data);
+    final episodeCount = _episodeCountLabel(context, data);
+    final malScore = _malLabel(data);
+    final entries = <String>[
+      _statusLabel(context, data),
+      if (season != null) season,
+      if (ageRating != null) ageRating,
+      _typeLabel(context, data),
+      if (episodeCount != null) episodeCount,
+      if (malScore != null) malScore,
+    ];
+
+    if (entries.isEmpty && isLoading) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: List.generate(
+          4,
+          (_) => ShimmerPlaceholder.rectangular(
+            width: 72,
+            height: 20,
+            borderRadius: 4,
           ),
         ),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        border: Border.all(
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
-        ),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: themeColor.withValues(alpha: 0.7),
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.76),
+      fontWeight: FontWeight.w700,
+      height: 1.2,
     );
-  }
+    final separatorStyle = style?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
+      fontWeight: FontWeight.w600,
+    );
 
-  Widget _buildIconInfo(
-    BuildContext context,
-    IconData icon,
-    String text, {
-    Color? iconColor,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 7,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Icon(
-          icon,
-          size: 14,
-          color:
-              iconColor ??
-              Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-        ),
-        const SizedBox(width: 4),
-        _buildInfoText(context, text),
-      ],
-    );
-  }
-
-  Widget _buildPlaybackBadge(BuildContext context, String policy) {
-    final color = Theme.of(context).colorScheme.secondary;
-    final label = policy;
-    const icon = Icons.play_circle_outline_rounded;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
+        for (var index = 0; index < entries.length; index++)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (index > 0) ...[
+                Text('•', style: separatorStyle),
+                const SizedBox(width: 8),
+              ],
+              Text(entries[index], style: style),
+            ],
           ),
-        ],
-      ),
+      ],
     );
   }
 }
