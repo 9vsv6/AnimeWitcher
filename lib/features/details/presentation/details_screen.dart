@@ -395,6 +395,179 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
+  Widget _buildAnimeWitcherMobileHeader(
+    BuildContext context,
+    MultimediaItem item,
+    AsyncValue<MultimediaItem?> detailsState,
+  ) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final scale = screenWidth / LayoutConstants.detailsSdpReferenceWidth;
+    double sdp(double value) => value * scale;
+
+    final bannerHeight = sdp(LayoutConstants.detailsBannerHeightMobile);
+    final posterUrl =
+        AppImageFallbacks.poster(item.posterUrl, label: item.title) ?? '';
+
+    return ColoredBox(
+      color: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: bannerHeight,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Hero(
+                  tag: 'banner_${item.url}',
+                  child: CachedNetworkImage(
+                    imageUrl:
+                        AppImageFallbacks.optional(item.bannerUrl) ??
+                        posterUrl,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    memCacheWidth:
+                        (screenWidth * MediaQuery.devicePixelRatioOf(context))
+                            .round(),
+                    placeholder: (_, _) => const ColoredBox(
+                      color: Colors.black,
+                    ),
+                    errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                      label: item.title,
+                      isBackdrop: true,
+                    ),
+                  ),
+                ),
+                // AnimeWitcher's image_gradient2.xml: transparent through
+                // the midpoint, fading to #E2000000 at the bottom.
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.transparent,
+                        Color(0xE2000000),
+                      ],
+                      stops: [0, 0.5, 1],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: sdp(LayoutConstants.detailsPosterTopMobile),
+            left: sdp(LayoutConstants.detailsPosterStartMobile),
+            width: sdp(LayoutConstants.detailsPosterWidthMobile),
+            height: sdp(LayoutConstants.detailsPosterHeightMobile),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _showPosterViewer(context, item),
+              child: Hero(
+                tag: 'poster_${item.url}',
+                child: Material(
+                  color: Colors.black,
+                  elevation: sdp(6),
+                  borderRadius: BorderRadius.circular(sdp(5)),
+                  clipBehavior: Clip.antiAlias,
+                  child: CachedNetworkImage(
+                    imageUrl: posterUrl,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) =>
+                        ThumbnailErrorPlaceholder(label: item.title),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: sdp(LayoutConstants.detailsTitleStartMobile),
+            right: sdp(LayoutConstants.detailsHeaderEndMobile),
+            bottom: sdp(
+              LayoutConstants.detailsExpandedHeightMobile -
+                  LayoutConstants.detailsBannerHeightMobile +
+                  LayoutConstants.detailsHeaderBottomMobile,
+            ),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onLongPress: () => _copyAnimeTitle(context, item.title),
+                child: item.logoUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: item.logoUrl!,
+                        height: sdp(32).clamp(32, 50).toDouble(),
+                        fit: BoxFit.contain,
+                        alignment: Alignment.centerLeft,
+                        errorWidget: (_, _, _) => Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      )
+                    : Text(
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: bannerHeight + sdp(6),
+            left: sdp(LayoutConstants.detailsTitleStartMobile),
+            right: sdp(LayoutConstants.detailsHeaderEndMobile),
+            bottom: sdp(LayoutConstants.detailsHeaderBottomMobile),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  colorScheme: Theme.of(context).colorScheme.copyWith(
+                    onSurface: Colors.white,
+                    onSurfaceVariant: Colors.white70,
+                  ),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) => FittedBox(
+                    alignment: Alignment.topLeft,
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      width: constraints.maxWidth,
+                      child: MetadataBar(
+                        item: item,
+                        isLoading: detailsState is AsyncLoading,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -509,7 +682,19 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       );
     }
 
-    // ── Mobile: SliverAppBar-based layout (unchanged) ──
+    final mobileHeaderScale =
+        MediaQuery.sizeOf(context).width /
+        LayoutConstants.detailsSdpReferenceWidth;
+    final mobileHeaderHeight =
+        LayoutConstants.detailsExpandedHeightMobile * mobileHeaderScale;
+    // SliverAppBar adds the status-bar inset to expandedHeight. Subtract it
+    // so the complete visible header remains AnimeWitcher's 230sdp tall.
+    final mobileExpandedHeight =
+        (mobileHeaderHeight - MediaQuery.paddingOf(context).top)
+            .clamp(kToolbarHeight, mobileHeaderHeight)
+            .toDouble();
+
+    // ── Mobile: AnimeWitcher-sized overlapping details header ──
     return Scaffold(
       bottomNavigationBar:
           selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
@@ -523,84 +708,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             textDirection: TextDirection.ltr,
             child: SliverAppBar(
               pinned: true,
-              expandedHeight: LayoutConstants.detailsExpandedHeightMobile,
+              expandedHeight: mobileExpandedHeight,
               stretch: true,
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              backgroundColor: Colors.black,
               flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [
                 StretchMode.zoomBackground,
                 StretchMode.blurBackground,
               ],
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Hero(
-                    tag: 'banner_${item.url}',
-                    child: CachedNetworkImage(
-                      imageUrl:
-                          AppImageFallbacks.optional(item.bannerUrl) ??
-                          AppImageFallbacks.poster(
-                            item.posterUrl,
-                            label: item.title,
-                          ) ??
-                          '',
-                      fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
-                      // Bound decoded bitmap; plugin backdrops are often at
-                      // source resolution. Without this, 4K-source posters
-                      // burn ~33 MB per detail page.
-                      memCacheWidth:
-                          (MediaQuery.sizeOf(context).width *
-                                  MediaQuery.devicePixelRatioOf(context))
-                              .round(),
-                      placeholder: (context, url) =>
-                          Container(color: Theme.of(context).dividerColor),
-                      errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
-                        label: item.title,
-                        isBackdrop: true,
-                      ),
-                    ),
-                  ),
-                  // 1. Legibility Scrim: Fixed dark-tinted overlay at the bottom of the backdrop
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.65),
-                        ],
-                        stops: const [0.5, 1.0],
-                      ),
-                    ),
-                  ),
-                  // 2. Blend-into-page transition: Theme-aware eased fade to surface
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.0),
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.15),
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.45),
-                          Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor.withValues(alpha: 0.8),
-                          Theme.of(context).scaffoldBackgroundColor,
-                        ],
-                        stops: const [0.0, 0.5, 0.75, 0.9, 1.0],
-                      ),
-                    ),
-                  ),
-                ],
+              background: _buildAnimeWitcherMobileHeader(
+                context,
+                item,
+                detailsAsync,
               ),
             ),
             // Mobile: back/bookmark excluded from D-pad traversal.
@@ -1408,86 +1527,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Directionality(
-                textDirection: TextDirection.ltr,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _showPosterViewer(context, item),
-                      child: Hero(
-                        tag: 'poster_${item.url}',
-                        child: SizedBox(
-                          width: 100,
-                          height: 150,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: CachedNetworkImage(
-                              imageUrl:
-                                  AppImageFallbacks.poster(
-                                    item.posterUrl,
-                                    label: item.title,
-                                  ) ??
-                                  '',
-                              fit: BoxFit.cover,
-                              errorWidget: (_, _, _) =>
-                                  ThumbnailErrorPlaceholder(label: item.title),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Directionality(
-                        textDirection: TextDirection.ltr,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onLongPress: () =>
-                                  _copyAnimeTitle(context, item.title),
-                              child: item.logoUrl != null
-                                  ? CachedNetworkImage(
-                                      imageUrl: item.logoUrl!,
-                                      height: 50,
-                                      fit: BoxFit.contain,
-                                      alignment: Alignment.centerLeft,
-                                      errorWidget: (_, _, _) => Text(
-                                        item.title,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                    )
-                                  : Text(
-                                      item.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                            ),
-                            const SizedBox(height: 8),
-                            MetadataBar(
-                              item: item,
-                              isLoading: detailsState is AsyncLoading,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
               DetailsActionButtons(
                 item: widget.item,
                 details: item,

@@ -9,8 +9,19 @@ class LayoutConstants {
   static const double spacingMd = 16;
   static const double spacingLg = 24;
 
-  // Details screen SliverAppBar
-  static const double detailsExpandedHeightMobile = 400;
+  // Details screen mobile header. AnimeWitcher defines these with the
+  // scalable-dp library against a 300dp reference width. Keep the source
+  // values here and scale them from the actual device width at runtime.
+  static const double detailsSdpReferenceWidth = 300;
+  static const double detailsExpandedHeightMobile = 230;
+  static const double detailsBannerHeightMobile = 170;
+  static const double detailsPosterTopMobile = 120;
+  static const double detailsPosterWidthMobile = 65;
+  static const double detailsPosterHeightMobile = 100;
+  static const double detailsPosterStartMobile = 12;
+  static const double detailsTitleStartMobile = 87;
+  static const double detailsHeaderEndMobile = 16;
+  static const double detailsHeaderBottomMobile = 5;
   static const double detailsExpandedHeightDesktop = 300;
 
   // Explore carousel: use same breakpoint as [ResponsiveBreakpoints.desktopBreakpoint]
