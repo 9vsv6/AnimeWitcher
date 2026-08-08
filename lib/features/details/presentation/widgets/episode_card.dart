@@ -302,7 +302,6 @@ class EpisodeCard extends HookConsumerWidget {
                       context,
                       displayedProgress,
                       statusBadge,
-                      isArabic: isArabic,
                       isWatched: isWatched,
                       isSelectionMode: isSelectionMode,
                       isSelected: isSelected,
@@ -313,26 +312,32 @@ class EpisodeCard extends HookConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (isArabic)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              textDirection: TextDirection.rtl,
-                              children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            textDirection: isArabic
+                                ? TextDirection.rtl
+                                : TextDirection.ltr,
+                            children: [
+                              if (isArabic) ...[
                                 Text('حلقة', style: episodeNumberStyle),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${episode.episode}',
                                   style: episodeNumberStyle,
                                 ),
+                              ] else
+                                Text(
+                                  episodeNumberLabel,
+                                  style: episodeNumberStyle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              if (episode.isFiller) ...[
+                                const SizedBox(width: 8),
+                                _buildFillerBadge(isArabic),
                               ],
-                            )
-                          else
-                            Text(
-                              episodeNumberLabel,
-                              style: episodeNumberStyle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            ],
+                          ),
                           if (showEpisodeTitle) ...[
                             const SizedBox(height: 2),
                             Text(
@@ -526,11 +531,28 @@ class EpisodeCard extends HookConsumerWidget {
     }
   }
 
+  Widget _buildFillerBadge(bool isArabic) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD32F2F),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        isArabic ? 'فلر' : 'FILLER',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
   Widget _buildThumbnail(
     BuildContext context,
     double progress,
     String? statusBadge, {
-    required bool isArabic,
     required bool isWatched,
     required bool isSelectionMode,
     required bool isSelected,
@@ -569,26 +591,6 @@ class EpisodeCard extends HookConsumerWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: Colors.black.withValues(alpha: 0.28),
-                ),
-              ),
-            ),
-          ),
-        if (episode.isFiller)
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFD32F2F),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                isArabic ? 'فلر' : 'FILLER',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
