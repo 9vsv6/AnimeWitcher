@@ -4,14 +4,12 @@ import '../storage/settings_repository.dart';
 
 class AnimeDataSourceSettings {
   final bool episodeImagesFromAniZip;
-  final bool seasonNumberFromAniZip;
   final bool postersFromAniList;
   final bool castFromAniList;
   final bool recommendationsFromAniList;
 
   const AnimeDataSourceSettings({
     this.episodeImagesFromAniZip = true,
-    this.seasonNumberFromAniZip = true,
     this.postersFromAniList = true,
     this.castFromAniList = true,
     this.recommendationsFromAniList = true,
@@ -19,7 +17,6 @@ class AnimeDataSourceSettings {
 
   AnimeDataSourceSettings copyWith({
     bool? episodeImagesFromAniZip,
-    bool? seasonNumberFromAniZip,
     bool? postersFromAniList,
     bool? castFromAniList,
     bool? recommendationsFromAniList,
@@ -27,8 +24,6 @@ class AnimeDataSourceSettings {
     return AnimeDataSourceSettings(
       episodeImagesFromAniZip:
           episodeImagesFromAniZip ?? this.episodeImagesFromAniZip,
-      seasonNumberFromAniZip:
-          seasonNumberFromAniZip ?? this.seasonNumberFromAniZip,
       postersFromAniList:
           postersFromAniList ?? this.postersFromAniList,
       castFromAniList: castFromAniList ?? this.castFromAniList,
@@ -53,8 +48,6 @@ class AnimeDataSourceSettingsNotifier
     return AnimeDataSourceSettings(
       episodeImagesFromAniZip:
           repository.isEpisodeImagesFromAniZipEnabled(),
-      seasonNumberFromAniZip:
-          repository.isSeasonNumberFromAniZipEnabled(),
       postersFromAniList: repository.isPostersFromAniListEnabled(),
       castFromAniList: repository.isCastFromAniListEnabled(),
       recommendationsFromAniList:
@@ -65,11 +58,6 @@ class AnimeDataSourceSettingsNotifier
   Future<void> setEpisodeImagesFromAniZip(bool enabled) async {
     state = state.copyWith(episodeImagesFromAniZip: enabled);
     await _repository.setEpisodeImagesFromAniZipEnabled(enabled);
-  }
-
-  Future<void> setSeasonNumberFromAniZip(bool enabled) async {
-    state = state.copyWith(seasonNumberFromAniZip: enabled);
-    await _repository.setSeasonNumberFromAniZipEnabled(enabled);
   }
 
   Future<void> setPostersFromAniList(bool enabled) async {

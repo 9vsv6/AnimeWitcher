@@ -85,9 +85,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   bool get _useAniZipEpisodeImages =>
       _settings.isEpisodeImagesFromAniZipEnabled();
 
-  bool get _useAniZipSeasonNumber =>
-      _settings.isSeasonNumberFromAniZipEnabled();
-
   bool get _useAniListPosters =>
       _settings.isPostersFromAniListEnabled();
 
@@ -1444,22 +1441,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
 
-  int _animeWitcherSeasonNumber(Map<String, dynamic> source) {
-    final details = _map(source['details']);
-    for (final raw in <dynamic>[
-      details['season_number'],
-      details['seasonNumber'],
-      source['season_number'],
-      source['seasonNumber'],
-      details['season'],
-      source['season'],
-    ]) {
-      final value = _positiveInt(raw);
-      if (value > 0) return value;
-    }
-    return 1;
-  }
-
   @override
   Future<MultimediaItem> getDetails(String url) async {
     final route = _parseAnimeUrl(url);
@@ -1539,7 +1520,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     putSync('awViews', source['views']);
     putSync('awFavorites', statistics['fav_count'] ?? statistics['favorite_count']);
     putSync('awType', source['type']);
-    putSync('awSeasonNumber', details['season_number'] ?? details['seasonNumber']);
     return MultimediaItem(
       title: title.isEmpty ? route.animeId : title,
       url: url,
@@ -2476,47 +2456,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return <String, dynamic>{};
   }
 
-  int _aniZipSeasonNumber(Map<String, dynamic> payload, int targetEpisode) {
-    for (final raw in <dynamic>[
-      payload['seasonNumber'],
-      payload['season_number'],
-      payload['season'],
-    ]) {
-      final value = _positiveInt(raw);
-      if (value > 0) return value;
-    }
-    for (final number in <int>[targetEpisode, targetEpisode - 1]) {
-      final item = _aniZipEpisodeFor(payload, number);
-      final value = _positiveInt(
-        item['seasonNumber'] ?? item['season_number'] ?? item['season'],
-      );
-      if (value > 0) return value;
-    }
-    final counts = <int, int>{};
-    for (final raw in _map(payload['episodes']).values) {
-      final item = _map(raw);
-      final season = _positiveInt(
-        item['seasonNumber'] ?? item['season_number'] ?? item['season'],
-      );
-      if (season > 0) counts[season] = (counts[season] ?? 0) + 1;
-    }
-    var bestSeason = 0;
-    var bestCount = 0;
-    for (final entry in counts.entries) {
-      if (entry.value > bestCount ||
-          (entry.value == bestCount && entry.key > bestSeason)) {
-        bestSeason = entry.key;
-        bestCount = entry.value;
-      }
-    }
-    return bestSeason;
-  }
-
-
   List<Episode> _animeWitcherEpisodeMetadata(
     _AnimeRoute route,
     List<_EpisodeRecord> records,
-    int season,
   ) {
     return records
         .map(
@@ -2526,7 +2468,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
                 Uri.encodeComponent(route.animeId) +
                 '|' +
                 Uri.encodeComponent(record.id),
-            season: season > 0 ? season : 1,
+            season: 1,
             episode: record.number,
             posterUrl: record.image.isEmpty ? null : record.image,
             isFiller: record.isFiller,
@@ -2544,22 +2486,13 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       final resolvedRecords = await _episodeRecords(route.animeId);
       if (resolvedRecords.isEmpty) return const <Episode>[];
 
-      final serverSeason = _animeWitcherSeasonNumber(source);
-      if (!_useAniZipEpisodeImages && !_useAniZipSeasonNumber) {
-        return _animeWitcherEpisodeMetadata(
-          route,
-          resolvedRecords,
-          serverSeason,
-        );
+      if (!_useAniZipEpisodeImages) {
+        return _animeWitcherEpisodeMetadata(route, resolvedRecords);
       }
 
       final malId = _malId(source);
       if (malId <= 0) {
-        return _animeWitcherEpisodeMetadata(
-          route,
-          resolvedRecords,
-          serverSeason,
-        );
+        return _animeWitcherEpisodeMetadata(route, resolvedRecords);
       }
 
       final payload = await _getJson(
@@ -2567,21 +2500,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         timeout: _aniZipTimeout,
       );
       if (payload == null || _map(payload['episodes']).isEmpty) {
-        return _animeWitcherEpisodeMetadata(
-          route,
-          resolvedRecords,
-          serverSeason,
-        );
+        return _animeWitcherEpisodeMetadata(route, resolvedRecords);
       }
-
-      var targetEpisode = 0;
-      for (final record in resolvedRecords) {
-        if (record.number > targetEpisode) targetEpisode = record.number;
-      }
-      final aniZipSeason = _aniZipSeasonNumber(payload, targetEpisode);
-      final season = _useAniZipSeasonNumber && aniZipSeason > 0
-          ? aniZipSeason
-          : serverSeason;
       final output = <Episode>[];
       for (final record in resolvedRecords) {
         final aniZip = _aniZipEpisodeFor(payload, record.number);
@@ -2597,7 +2517,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
               Uri.encodeComponent(route.animeId) +
               '|' +
               Uri.encodeComponent(record.id),
-          season: season,
+          season: 1,
           episode: record.number,
           posterUrl: _useAniZipEpisodeImages && image.isNotEmpty
               ? image

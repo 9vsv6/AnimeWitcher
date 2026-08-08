@@ -380,8 +380,6 @@ class StorageService {
 
   static const String _kEpisodeImagesFromAniZip =
       'anime_source_episode_images_anizip';
-  static const String _kSeasonNumberFromAniZip =
-      'anime_source_season_number_anizip';
   static const String _kPostersFromAniList =
       'anime_source_posters_anilist';
   static const String _kCastFromAniList = 'anime_source_cast_anilist';
@@ -395,18 +393,6 @@ class StorageService {
   bool isEpisodeImagesFromAniZipEnabled() {
     return (_settingsBox.get(
               _kEpisodeImagesFromAniZip,
-              defaultValue: true,
-            ) as bool?) ??
-        true;
-  }
-
-  Future<void> setSeasonNumberFromAniZipEnabled(bool enabled) async {
-    await _settingsBox.put(_kSeasonNumberFromAniZip, enabled);
-  }
-
-  bool isSeasonNumberFromAniZipEnabled() {
-    return (_settingsBox.get(
-              _kSeasonNumberFromAniZip,
               defaultValue: true,
             ) as bool?) ??
         true;

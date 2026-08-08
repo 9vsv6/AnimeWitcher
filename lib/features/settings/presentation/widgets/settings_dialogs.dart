@@ -864,14 +864,6 @@ void showAnimeDataSourcesDialog(BuildContext context, WidgetRef ref) {
       ),
     ),
     (
-      icon: Icons.layers_rounded,
-      label: appText(
-        context,
-        english: 'Season number from AniZip',
-        arabic: 'رقم الموسم من AniZip',
-      ),
-    ),
-    (
       icon: Icons.photo_library_rounded,
       label: appText(
         context,
@@ -898,14 +890,12 @@ void showAnimeDataSourcesDialog(BuildContext context, WidgetRef ref) {
   ];
   final setters = [
     notifier.setEpisodeImagesFromAniZip,
-    notifier.setSeasonNumberFromAniZip,
     notifier.setPostersFromAniList,
     notifier.setCastFromAniList,
     notifier.setRecommendationsFromAniList,
   ];
   final values = [
     settings.episodeImagesFromAniZip,
-    settings.seasonNumberFromAniZip,
     settings.postersFromAniList,
     settings.castFromAniList,
     settings.recommendationsFromAniList,

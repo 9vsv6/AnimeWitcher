@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
+import 'package:skystream/core/utils/episode_label.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/services/download_service.dart';
 import '../../../../core/utils/layout_constants.dart';
@@ -310,6 +311,15 @@ class _DownloadItemTile extends ConsumerWidget {
     final isWorking =
         status == TaskStatus.running || status == TaskStatus.enqueued;
     final isPaused = status == TaskStatus.paused;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final episodeLabel = item.episode == null
+        ? null
+        : formatEpisodeLabel(
+            episode: item.episode!.episode,
+            title: item.episode!.name,
+            isArabic: isArabic,
+          );
 
     final content = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -342,8 +352,8 @@ class _DownloadItemTile extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                (isInsideGroup && item.episode != null)
-                    ? 'S${item.episode!.season} E${item.episode!.episode}: ${item.episode!.name}'
+                (isInsideGroup && episodeLabel != null)
+                    ? episodeLabel
                     : item.item.title,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
@@ -353,13 +363,13 @@ class _DownloadItemTile extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               if (!isInsideGroup &&
-                  item.episode != null &&
+                  episodeLabel != null &&
                   (item.item.contentType == MultimediaContentType.series ||
                       item.item.contentType ==
                           MultimediaContentType.anime)) ...[
                 const SizedBox(height: 2),
                 Text(
-                  'S${item.episode!.season} E${item.episode!.episode}: ${item.episode!.name}',
+                  episodeLabel,
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),

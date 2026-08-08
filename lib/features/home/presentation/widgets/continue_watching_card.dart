@@ -8,6 +8,7 @@ import '../../../../core/domain/entity/multimedia_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
+import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import '../../../../core/extensions/extension_manager.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
@@ -123,18 +124,22 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     final isSeries = item.contentType == MultimediaContentType.series;
     final isAnime = item.contentType == MultimediaContentType.anime;
     final hasEpisodes = isSeries || isAnime;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     final imageUrl = hasEpisodes
         ? (widget.historyItem.episodePosterUrl ?? item.backdropImageUrl)
         : item.backdropImageUrl;
     final bannerUrl = AppImageFallbacks.poster(imageUrl, label: item.title);
 
+    final episodeNumber = widget.historyItem.episode;
     final episodeLabel =
-        hasEpisodes &&
-            widget.historyItem.season != null &&
-            widget.historyItem.episode != null &&
-            (widget.historyItem.season! > 0 || widget.historyItem.episode! > 0)
-        ? "S${widget.historyItem.season} E${widget.historyItem.episode}${widget.historyItem.episodeTitle != null && widget.historyItem.episodeTitle!.isNotEmpty && !widget.historyItem.episodeTitle!.startsWith("Episode") ? " - ${widget.historyItem.episodeTitle}" : ""}"
+        hasEpisodes && episodeNumber != null && episodeNumber > 0
+        ? formatEpisodeLabel(
+            episode: episodeNumber,
+            title: widget.historyItem.episodeTitle,
+            isArabic: isArabic,
+          )
         : null;
 
     return CardsWrapper(
