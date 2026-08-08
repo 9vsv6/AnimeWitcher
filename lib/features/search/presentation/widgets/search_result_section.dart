@@ -7,11 +7,13 @@ import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/shared/widgets/desktop_scroll_wrapper.dart';
 import 'package:skystream/shared/widgets/multimedia_card.dart';
+import 'package:skystream/shared/widgets/shimmer_placeholder.dart';
 
 class SearchResultSection extends ConsumerStatefulWidget {
   final String providerName;
   final String providerId;
   final List<MultimediaItem> results;
+  final bool isLoadingMore;
   final FocusNode? firstCardFocusNode;
 
   const SearchResultSection({
@@ -19,6 +21,7 @@ class SearchResultSection extends ConsumerStatefulWidget {
     required this.providerName,
     required this.providerId,
     required this.results,
+    required this.isLoadingMore,
     this.firstCardFocusNode,
   });
 
@@ -52,8 +55,12 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           mainAxisSpacing: 14,
           childAspectRatio: 0.56,
         ),
-        itemCount: widget.results.length,
+        itemCount: widget.results.length + (widget.isLoadingMore ? 3 : 0),
         itemBuilder: (context, rIndex) {
+          if (rIndex >= widget.results.length) {
+            return ShimmerPlaceholder(borderRadius: 12);
+          }
+
           final item = widget.results[rIndex];
           final uniqueTag =
               'search_${widget.providerId}_${item.url}_$rIndex';
@@ -85,10 +92,17 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           controller: _scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           scrollDirection: Axis.horizontal,
-          itemCount: widget.results.length,
+          itemCount: widget.results.length + (widget.isLoadingMore ? 3 : 0),
           itemExtent: cardWidth + spacing,
           clipBehavior: Clip.none,
           itemBuilder: (context, rIndex) {
+            if (rIndex >= widget.results.length) {
+              return Padding(
+                padding: const EdgeInsets.only(right: spacing),
+                child: ShimmerPlaceholder(borderRadius: 12),
+              );
+            }
+
             final item = widget.results[rIndex];
             final uniqueTag =
                 'search_${widget.providerId}_${item.url}_$rIndex';

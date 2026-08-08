@@ -667,17 +667,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: ListView.builder(
         controller: _resultsScrollController,
         padding: const EdgeInsets.only(bottom: 100),
-        itemCount: state.results.length + (state.isLoadingMore ? 1 : 0),
+        itemCount: state.results.length,
         itemBuilder: (context, index) {
-          if (index >= state.results.length) {
-            return _buildLoadingMoreIndicator(context);
-          }
           final pResult = state.results[index];
           return SearchResultSection(
             key: ValueKey(pResult.providerId),
             providerName: pResult.providerName,
             providerId: pResult.providerId,
             results: pResult.results,
+            isLoadingMore:
+                state.isLoadingMore && index == state.results.length - 1,
             firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
           );
         },
@@ -690,18 +689,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: AppLoadingIndicator(
         color: Theme.of(context).colorScheme.primary,
         constraints: BoxConstraints.tight(const Size(32, 32)),
-      ),
-    );
-  }
-
-  Widget _buildLoadingMoreIndicator(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 18, 12, 100),
-      child: Center(
-        child: AppLoadingIndicator(
-          color: Theme.of(context).colorScheme.primary,
-          constraints: BoxConstraints.tight(const Size(24, 24)),
-        ),
       ),
     );
   }
