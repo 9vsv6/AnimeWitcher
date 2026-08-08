@@ -11,6 +11,7 @@ import 'search_provider.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
+import 'widgets/search_sort_dialog.dart';
 import 'widgets/bouncy_entry_animation.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 
@@ -170,6 +171,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     } finally {
       if (mounted) setState(() => _isLoadingProviderFilters = false);
     }
+  }
+
+  Future<void> _showSearchSort() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (_) => SearchSortDialog(
+        initialValue: ref.read(searchProviderFiltersProvider).sort,
+      ),
+    );
+    if (selected == null || !mounted) return;
+
+    final current = ref.read(searchProviderFiltersProvider);
+    if (selected == current.sort) return;
+
+    _resetResultsScrollPosition();
+    ref
+        .read(searchProviderFiltersProvider.notifier)
+        .set(current.copyWith(sort: selected));
+    ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
   }
 
   void _resetResultsScrollPosition() {
@@ -380,6 +400,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     clearButtonFocusNode: _clearButtonFocusNode,
                     isCompact: false,
                     onShowFilters: _showSearchFilters,
+                    onShowSort: _showSearchSort,
+                    sortTooltip:
+                        '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: '
+                        '${SearchSortOption.fromValue(ref.watch(searchProviderFiltersProvider).sort).label(context)}',
                     activeFilterCount: ref.watch(searchProviderFiltersProvider).count,
                     isFilterLoading: _isLoadingProviderFilters,
                     onSubmitted: _submitSearch,
@@ -418,55 +442,95 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         titleSpacing: 16,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsetsDirectional.only(end: 12),
             child: Builder(
               builder: (context) {
                 final activeFilters = ref.watch(searchProviderFiltersProvider);
-                final isActive = activeFilters.isNotEmpty;
-                return IconButton(
-                  tooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
-                  onPressed: _isLoadingProviderFilters ? null : _showSearchFilters,
-                  style: IconButton.styleFrom(
-                    backgroundColor: isActive
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                    foregroundColor: isActive
-                        ? theme.colorScheme.onPrimary
-                        : theme.colorScheme.onSurface,
-                  ),
-                  icon: _isLoadingProviderFilters
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            const Icon(Icons.tune_rounded, size: 20),
-                            if (isActive)
-                              Positioned(
-                                right: -7,
-                                top: -7,
-                                child: Container(
-                                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.onPrimary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '${activeFilters.count}',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.primary,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
+                final isFilterActive = activeFilters.isNotEmpty;
+                final sortOption = SearchSortOption.fromValue(
+                  activeFilters.sort,
+                );
+
+                return Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip:
+                            '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: '
+                            '${sortOption.label(context)}',
+                        onPressed: _showSearchSort,
+                        style: IconButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary.withValues(
+                            alpha: 0.14,
+                          ),
+                          foregroundColor: theme.colorScheme.primary,
                         ),
+                        icon: const Icon(Icons.sort_rounded, size: 20),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: appText(
+                          context,
+                          english: 'Filters',
+                          arabic: 'الفلاتر',
+                        ),
+                        onPressed: _isLoadingProviderFilters
+                            ? null
+                            : _showSearchFilters,
+                        style: IconButton.styleFrom(
+                          backgroundColor: isFilterActive
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
+                          foregroundColor: isFilterActive
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurface,
+                        ),
+                        icon: _isLoadingProviderFilters
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  const Icon(Icons.tune_rounded, size: 20),
+                                  if (isFilterActive)
+                                    Positioned(
+                                      right: -7,
+                                      top: -7,
+                                      child: Container(
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                        ),
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: theme.colorScheme.onPrimary,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Text(
+                                          '${activeFilters.count}',
+                                          style: TextStyle(
+                                            color: theme.colorScheme.primary,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),

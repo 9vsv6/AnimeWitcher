@@ -820,14 +820,22 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   String _searchIndexForSort(String sort) {
     switch (sort.trim().toLowerCase()) {
       case 'favorites':
-        return 'series_fav_count_desc';
+        // AnimeWitcher's source app labels the primary series index as
+        // "Most favorited".
+        return 'series';
+      case 'year_asc':
+        return 'series_year_asc';
+      case 'year_desc':
+        return 'series_year_desc';
+      case 'name_asc':
+        return 'series_name_asc';
+      case 'name_desc':
+        return 'series_name_desc';
       case 'rating':
         return 'series_ranking_mal';
       case 'date_added':
         return 'series_date_created';
       default:
-        // AnimeWitcher's real main anime catalog. Sorted replicas are only
-        // selected explicitly through the search sort control.
         return 'series';
     }
   }

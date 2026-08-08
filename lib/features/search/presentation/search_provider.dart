@@ -373,7 +373,8 @@ class SearchFilterNotifier extends _$SearchFilterNotifier {
 
 class SearchProviderFiltersNotifier extends Notifier<ProviderSearchFilters> {
   @override
-  ProviderSearchFilters build() => const ProviderSearchFilters();
+  ProviderSearchFilters build() =>
+      const ProviderSearchFilters(sort: 'favorites');
 
   void set(ProviderSearchFilters value) => state = value;
 }

@@ -14,6 +14,8 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
   final ValueChanged<String> onSubmitted;
   final ValueChanged<String> onChanged;
   final VoidCallback onShowFilters;
+  final VoidCallback onShowSort;
+  final String sortTooltip;
   final int activeFilterCount;
   final bool isFilterLoading;
   final bool isCompact;
@@ -26,6 +28,8 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
     required this.onSubmitted,
     required this.onChanged,
     required this.onShowFilters,
+    required this.onShowSort,
+    required this.sortTooltip,
     required this.activeFilterCount,
     required this.isFilterLoading,
     this.isCompact = false,
@@ -198,71 +202,126 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                 height: isCompact ? 0 : 38,
                 child: isCompact
                     ? const SizedBox.shrink()
-                    : CardsWrapper(
-                        scaleFactor: 1.0,
-                        onTap: () {
-                          if (!widget.isFilterLoading) {
-                            widget.onShowFilters();
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          height: 38,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: widget.activeFilterCount > 0
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        textDirection: TextDirection.ltr,
+                        children: [
+                          _SearchControlButton(
+                            tooltip: widget.sortTooltip,
+                            onTap: widget.onShowSort,
+                            icon: Icons.sort_rounded,
+                            label: appText(
+                              context,
+                              english: 'Sort',
+                              arabic: 'الترتيب',
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (widget.isFilterLoading)
-                                const SizedBox.square(
-                                  dimension: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              else
-                                Icon(
-                                  Icons.tune_rounded,
-                                  size: 18,
-                                  color: widget.activeFilterCount > 0
-                                      ? theme.colorScheme.onPrimary
-                                      : theme.colorScheme.onSurfaceVariant,
-                                ),
-                              const SizedBox(width: 8),
-                              Text(
-                                appText(context, english: 'Filters', arabic: 'الفلاتر'),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: widget.activeFilterCount > 0
-                                      ? theme.colorScheme.onPrimary
-                                      : theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              if (widget.activeFilterCount > 0) ...[
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${widget.activeFilterCount}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                    color: theme.colorScheme.onPrimary,
-                                  ),
-                                ),
-                              ],
-                            ],
+                          const SizedBox(width: 10),
+                          _SearchControlButton(
+                            tooltip: appText(
+                              context,
+                              english: 'Filters',
+                              arabic: 'الفلاتر',
+                            ),
+                            onTap: widget.onShowFilters,
+                            icon: Icons.tune_rounded,
+                            label: appText(
+                              context,
+                              english: 'Filters',
+                              arabic: 'الفلاتر',
+                            ),
+                            isActive: widget.activeFilterCount > 0,
+                            isLoading: widget.isFilterLoading,
+                            count: widget.activeFilterCount,
                           ),
-                        ),
+                        ],
                       ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _SearchControlButton extends StatelessWidget {
+  const _SearchControlButton({
+    required this.tooltip,
+    required this.onTap,
+    required this.icon,
+    required this.label,
+    this.isActive = false,
+    this.isLoading = false,
+    this.count = 0,
+  });
+
+  final String tooltip;
+  final VoidCallback onTap;
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final bool isLoading;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final foreground = isActive ? colors.onPrimary : colors.onSurfaceVariant;
+
+    return Tooltip(
+      message: tooltip,
+      child: CardsWrapper(
+        scaleFactor: 1.0,
+        onTap: () {
+          if (!isLoading) onTap();
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: isActive
+                ? colors.primary
+                : colors.surfaceContainerHighest.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: colors.onSurface.withValues(alpha: 0.08),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLoading)
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: foreground,
+                ),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: foreground,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

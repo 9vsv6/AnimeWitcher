@@ -71,6 +71,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
     ageRatings: {..._ageRatings},
     years: {..._years},
     genres: {..._genres},
+    sort: widget.initialValue.sort,
   );
 
   @override
