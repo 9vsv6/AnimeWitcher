@@ -13,6 +13,7 @@ import 'hotstar_player_style.dart';
 import 'player_utils.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/utils/episode_label.dart';
 const List<Shadow> _kGlassTextShadow = [
   Shadow(color: Colors.black54, offset: Offset(0, 1.5), blurRadius: 3.0),
 ];
@@ -543,7 +544,12 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                         Row(
                           children: [
                             Text(
-                              'S${ep.season} : E${ep.episode}',
+                              formatEpisodeLabel(
+                                episode: ep.episode,
+                                isArabic: Localizations.localeOf(context)
+                                        .languageCode ==
+                                    'ar',
+                              ),
                               style: TextStyle(
                                 color: widget.isCurrent
                                     ? accent
