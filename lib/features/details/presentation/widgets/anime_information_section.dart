@@ -22,15 +22,26 @@ class AnimeInformationSection extends StatelessWidget {
     return null;
   }
 
-  String _status(bool isArabic) {
-    switch (item.status) {
-      case ShowStatus.completed:
-        return isArabic ? 'مكتمل' : 'Completed';
-      case ShowStatus.upcoming:
-        return isArabic ? 'قادم' : 'Upcoming';
-      case ShowStatus.ongoing:
-        return isArabic ? 'مستمر' : 'Ongoing';
+  String? _durationLabel(
+    BuildContext context,
+    Map<String, String> data,
+  ) {
+    final raw = _clean(data['awDuration']);
+    int? minutes;
+
+    if (raw != null) {
+      final match = RegExp(r'[0-9]+').firstMatch(raw);
+      minutes = match == null ? null : int.tryParse(match.group(0)!);
     }
+
+    if (minutes == null || minutes <= 0) {
+      minutes = item.duration;
+    }
+    if (minutes == null || minutes <= 0) return null;
+
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    return isArabic ? '\${minutes} دقيقة' : '\${minutes} minutes';
   }
 
   @override
@@ -52,16 +63,16 @@ class AnimeInformationSection extends StatelessWidget {
     final rows = <List<_AnimeInfoEntry?>>[
       [
         entry(
-          'الحالة',
-          'Status',
-          _read(data, const ['awState']) ?? _status(isArabic),
-          Icons.wifi_tethering_rounded,
+          'المصدر',
+          'Source',
+          _read(data, const ['awSource']) ?? item.source,
+          Icons.menu_book_rounded,
         ),
         entry(
-          'موسم العرض',
-          'Airing season',
-          _read(data, const ['awSeason']),
-          Icons.calendar_month_rounded,
+          'مدة الحلقة',
+          'Episode duration',
+          _durationLabel(context, data),
+          Icons.timer_outlined,
         ),
       ],
       [
@@ -79,12 +90,6 @@ class AnimeInformationSection extends StatelessWidget {
         ),
       ],
       [
-        entry(
-          'المصدر',
-          'Source',
-          _read(data, const ['awSource']) ?? item.source,
-          Icons.menu_book_rounded,
-        ),
         entry(
           'الاستديو',
           'Studio',
