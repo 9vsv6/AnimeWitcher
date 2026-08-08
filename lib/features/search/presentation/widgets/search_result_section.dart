@@ -7,7 +7,6 @@ import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/shared/widgets/desktop_scroll_wrapper.dart';
 import 'package:skystream/shared/widgets/multimedia_card.dart';
-import 'bouncy_entry_animation.dart';
 
 class SearchResultSection extends ConsumerStatefulWidget {
   final String providerName;
@@ -58,9 +57,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           final item = widget.results[rIndex];
           final uniqueTag =
               'search_${widget.providerId}_${item.url}_$rIndex';
-          return BouncyEntryAnimation(
-            delay: Duration(milliseconds: rIndex * 35),
-            child: MultimediaCard(
+          return MultimediaCard(
               key: ValueKey(item.url),
               imageUrl: AppImageFallbacks.poster(
                 item.posterUrl,
@@ -72,8 +69,9 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
               onTap: () => DetailsRoute(
                 $extra: DetailsRouteExtra(item: item),
               ).push<void>(context),
-            ),
-          );
+            
+              showImageLoadingShimmer: false,
+            );
         },
       );
     }
@@ -98,9 +96,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
                 'search_${widget.providerId}_${item.url}_$rIndex';
             return Padding(
               padding: const EdgeInsets.only(right: spacing),
-              child: BouncyEntryAnimation(
-                delay: Duration(milliseconds: rIndex * 50),
-                child: MultimediaCard(
+              child: MultimediaCard(
                   key: ValueKey(item.url),
                   imageUrl: AppImageFallbacks.poster(
                     item.posterUrl,
@@ -112,8 +108,9 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
                   onTap: () => DetailsRoute(
                     $extra: DetailsRouteExtra(item: item),
                   ).push<void>(context),
+                
+                  showImageLoadingShimmer: false,
                 ),
-              ),
             );
           },
         ),

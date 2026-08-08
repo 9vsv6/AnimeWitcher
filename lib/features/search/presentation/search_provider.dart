@@ -463,7 +463,15 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
 
   Future<void> _reload() async {
     final generation = ++_generation;
-    state = const SearchAggregateState(isLoading: true);
+    // Keep the current cards visible while the next query is loading.
+    // This prevents a fast scroll or slow connection from exposing a blank
+    // skeleton-to-black transition.
+    state = state.copyWith(
+      isLoading: true,
+      isLoadingMore: false,
+      hasMore: false,
+      nextOffset: 0,
+    );
     final provider = _provider();
     if (provider == null) {
       if (generation == _generation) {
@@ -492,7 +500,12 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
     } catch (e) {
       debugPrint('[SEARCH PAGE] initial load failed: $e');
       if (generation == _generation) {
-        state = const SearchAggregateState();
+        // Keep the last rendered cards on transient network failures.
+        state = state.copyWith(
+          isLoading: false,
+          isLoadingMore: false,
+          hasMore: false,
+        );
       }
     }
   }

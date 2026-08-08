@@ -13,7 +13,6 @@ import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
 import 'widgets/bouncy_entry_animation.dart';
 import '../../../shared/widgets/loading_indicator.dart';
-import '../../../shared/widgets/shimmer_placeholder.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
 class SearchScreen extends ConsumerStatefulWidget {
@@ -594,7 +593,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     final allResults = state.results.expand((entry) => entry.results).toList();
     if (allResults.isEmpty && state.isLoading) {
-      return _buildLoadingSkeleton(context);
+      return _buildLoadingIndicator(context);
     }
     if (allResults.isEmpty) {
       return _buildEmptyState(context);
@@ -607,7 +606,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         itemCount: state.results.length + (state.isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index >= state.results.length) {
-            return _buildLoadingMoreSkeleton(context);
+            return _buildLoadingMoreIndicator(context);
           }
           final pResult = state.results[index];
           return SearchResultSection(
@@ -622,64 +621,23 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildLoadingSkeleton(BuildContext context) {
-    final isLarge = context.isTabletOrLarger;
-    // Keep enough placeholder cards to cover the whole Search viewport.
-    // A short fixed list left a large black gap when the retained scroll
-    // position was near the end of a previous result set.
-    final placeholderCount = isLarge ? 24 : 18;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_resultsScrollController.hasClients) return;
-      if (_resultsScrollController.offset != 0) {
-        _resultsScrollController.jumpTo(0);
-      }
-    });
-    return GridView.builder(
-      controller: _resultsScrollController,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 100),
-      gridDelegate: isLarge
-          ? const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 200,
-              childAspectRatio: 0.56,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-            )
-          : const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 0.56,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 14,
-            ),
-      itemCount: placeholderCount,
-      itemBuilder: (context, index) => ShimmerPlaceholder(borderRadius: 12),
+  Widget _buildLoadingIndicator(BuildContext context) {
+    return Center(
+      child: AppLoadingIndicator(
+        color: Theme.of(context).colorScheme.primary,
+        constraints: BoxConstraints.tight(const Size(32, 32)),
+      ),
     );
   }
 
-  Widget _buildLoadingMoreSkeleton(BuildContext context) {
-    final isLarge = context.isTabletOrLarger;
+  Widget _buildLoadingMoreIndicator(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: isLarge
-            ? const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 200,
-                childAspectRatio: 0.56,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              )
-            : const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 0.56,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 14,
-              ),
-        // Pagination now fills the remaining screen with placeholders instead
-        // of showing only one three-card row at the bottom.
-        itemCount: isLarge ? 12 : 9,
-        itemBuilder: (context, index) => ShimmerPlaceholder(borderRadius: 12),
+      padding: const EdgeInsets.fromLTRB(12, 18, 12, 100),
+      child: Center(
+        child: AppLoadingIndicator(
+          color: Theme.of(context).colorScheme.primary,
+          constraints: BoxConstraints.tight(const Size(24, 24)),
+        ),
       ),
     );
   }
@@ -689,7 +647,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     SearchSuggestionState suggestionState,
   ) {
     if (suggestionState.isLoading) {
-      return _buildLoadingSkeleton(context);
+      return _buildLoadingIndicator(context);
     }
 
     if (suggestionState.suggestions.isEmpty) {

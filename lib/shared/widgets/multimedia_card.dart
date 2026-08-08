@@ -15,6 +15,10 @@ class MultimediaCard extends ConsumerWidget {
   final bool isPortrait;
   final FocusNode? focusNode;
 
+  /// Shows a stable card surface while the poster is still loading.
+  /// Search results disable the shimmer so the card is visible immediately.
+  final bool showImageLoadingShimmer;
+
   /// Fully formatted text supplied by the provider.
   ///
   /// This widget displays the string unchanged.
@@ -29,6 +33,7 @@ class MultimediaCard extends ConsumerWidget {
     this.isPortrait = true,
     this.focusNode,
     this.episodeBadge,
+    this.showImageLoadingShimmer = true,
   });
 
   @override
@@ -48,17 +53,28 @@ class MultimediaCard extends ConsumerWidget {
         ? null
         : normalizedEpisodeBadge;
 
+    final normalizedImageUrl = imageUrl?.trim();
+    final hasImageUrl =
+        normalizedImageUrl != null && normalizedImageUrl.isNotEmpty;
     final imageWidget = Hero(
       tag: heroTag,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: CachedNetworkImage(
-          imageUrl: imageUrl ?? '',
-          fit: BoxFit.cover,
-          width: double.infinity,
-          placeholder: (context, url) => ShimmerPlaceholder(borderRadius: 12),
-          errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(label: title),
-        ),
+        child: hasImageUrl
+            ? CachedNetworkImage(
+                imageUrl: normalizedImageUrl!,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                placeholder: (context, url) => showImageLoadingShimmer
+                    ? ShimmerPlaceholder(borderRadius: 12)
+                    : _buildImageLoadingCard(context),
+                errorWidget: (_, _, _) =>
+                    ThumbnailErrorPlaceholder(label: title),
+                fadeOutDuration: Duration.zero,
+                fadeInDuration: const Duration(milliseconds: 120),
+                useOldImageOnUrlChange: true,
+              )
+            : ThumbnailErrorPlaceholder(label: title),
       ),
     );
 
@@ -99,6 +115,29 @@ class MultimediaCard extends ConsumerWidget {
                   titleTextStyle,
                   badgeText,
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageLoadingCard(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.surfaceContainerHighest,
+            colors.surface,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.movie_outlined,
+          size: 32,
+          color: colors.onSurfaceVariant.withValues(alpha: 0.45),
         ),
       ),
     );
