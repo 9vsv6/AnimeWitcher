@@ -127,10 +127,31 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
-    final imageUrl = hasEpisodes
-        ? (widget.historyItem.episodePosterUrl ?? item.backdropImageUrl)
-        : item.backdropImageUrl;
-    final bannerUrl = AppImageFallbacks.poster(imageUrl, label: item.title);
+    final episodePosterUrl = AppImageFallbacks.optional(
+      widget.historyItem.episodePosterUrl,
+    );
+    final animeBannerUrl = AppImageFallbacks.optional(item.bannerUrl);
+    final animePosterUrl = AppImageFallbacks.poster(
+      item.posterUrl,
+      label: item.title,
+    );
+    final imageCandidates = <String>{
+      if (hasEpisodes && episodePosterUrl != null) episodePosterUrl,
+      if (animeBannerUrl != null) animeBannerUrl,
+      if (animePosterUrl != null) animePosterUrl,
+    }.toList(growable: false);
+
+    Widget buildImageCandidate(int index) {
+      if (index >= imageCandidates.length) {
+        return const SizedBox.shrink();
+      }
+      return CachedNetworkImage(
+        imageUrl: imageCandidates[index],
+        fit: BoxFit.cover,
+        placeholder: (_, _) => const SizedBox.shrink(),
+        errorWidget: (_, _, _) => buildImageCandidate(index + 1),
+      );
+    }
 
     final episodeNumber = widget.historyItem.episode;
     final episodeLabel =
@@ -257,13 +278,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                 Positioned.fill(
                   child: Container(
                     color: Theme.of(context).colorScheme.surfaceContainer,
-                    child: bannerUrl != null
-                        ? CachedNetworkImage(
-                            imageUrl: bannerUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (_, _) => const SizedBox.shrink(),
-                            errorWidget: (_, _, _) => const SizedBox.shrink(),
-                          )
+                    child: imageCandidates.isNotEmpty
+                        ? buildImageCandidate(0)
                         : null,
                   ),
                 ),

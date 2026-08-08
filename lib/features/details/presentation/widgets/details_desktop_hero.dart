@@ -51,10 +51,17 @@ class DetailsDesktopHero extends ConsumerWidget {
     final scaffoldColor = theme.scaffoldBackgroundColor;
     final textColor = theme.colorScheme.onSurface;
 
+    final providedBannerUrl = AppImageFallbacks.optional(
+      displayItem.bannerUrl,
+    );
+    final posterUrl = AppImageFallbacks.poster(
+      displayItem.posterUrl,
+      label: displayItem.title,
+    );
     final backdropUrl =
-        AppImageFallbacks.optional(displayItem.bannerUrl) ??
-        AppImageFallbacks.poster(
-          displayItem.posterUrl,
+        AppImageFallbacks.banner(
+          bannerUrl: displayItem.bannerUrl,
+          posterUrl: displayItem.posterUrl,
           label: displayItem.title,
         ) ??
         '';
@@ -92,10 +99,29 @@ class DetailsDesktopHero extends ConsumerWidget {
                   (MediaQuery.sizeOf(context).width *
                           MediaQuery.devicePixelRatioOf(context))
                       .round(),
-              errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
-                label: displayItem.title,
-                isBackdrop: true,
-              ),
+              errorWidget: (_, _, _) {
+                if (providedBannerUrl != null &&
+                    posterUrl != null &&
+                    providedBannerUrl != posterUrl) {
+                  return CachedNetworkImage(
+                    imageUrl: posterUrl,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.centerRight,
+                    memCacheWidth:
+                        (MediaQuery.sizeOf(context).width *
+                                MediaQuery.devicePixelRatioOf(context))
+                            .round(),
+                    errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                      label: displayItem.title,
+                      isBackdrop: true,
+                    ),
+                  );
+                }
+                return ThumbnailErrorPlaceholder(
+                  label: displayItem.title,
+                  isBackdrop: true,
+                );
+              },
             ),
           ),
         ),

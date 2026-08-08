@@ -334,7 +334,12 @@ class MultimediaItem {
   String get tmdbMediaType =>
       contentType == MultimediaContentType.series ? 'tv' : 'movie';
 
-  String get backdropImageUrl => bannerUrl ?? posterUrl;
+  String get backdropImageUrl {
+    final normalizedBanner = bannerUrl?.trim();
+    return normalizedBanner == null || normalizedBanner.isEmpty
+        ? posterUrl
+        : normalizedBanner;
+  }
   String get posterImageUrl => posterUrl;
   String get thumbnailImageUrl => posterUrl;
   String get releaseDate => year?.toString() ?? '';

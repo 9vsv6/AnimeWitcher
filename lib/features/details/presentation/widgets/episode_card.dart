@@ -10,6 +10,7 @@ import 'package:skystream/core/domain/entity/multimedia_item.dart';
 import 'package:skystream/core/storage/history_repository.dart';
 import 'package:skystream/core/storage/episode_watch_repository.dart';
 import 'package:skystream/core/services/download_service.dart';
+import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
@@ -557,6 +558,39 @@ class EpisodeCard extends HookConsumerWidget {
     required bool isSelectionMode,
     required bool isSelected,
   }) {
+    final episodePosterUrl = AppImageFallbacks.optional(episode.posterUrl);
+    final animeBannerUrl = AppImageFallbacks.optional(parentItem.bannerUrl);
+    final animePosterUrl = AppImageFallbacks.poster(
+      parentItem.posterUrl,
+      label: parentItem.title,
+    );
+    final imageCandidates = <String>{
+      if (episodePosterUrl != null) episodePosterUrl,
+      if (animeBannerUrl != null) animeBannerUrl,
+      if (animePosterUrl != null) animePosterUrl,
+    }.toList(growable: false);
+
+    Widget buildImageCandidate(int index) {
+      if (index >= imageCandidates.length) {
+        return const ThumbnailErrorPlaceholder();
+      }
+      return CachedNetworkImage(
+        imageUrl: imageCandidates[index],
+        fit: BoxFit.cover,
+        errorWidget: (_, _, _) => buildImageCandidate(index + 1),
+        placeholder: (context, url) => Container(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Stack(
       children: [
         ClipRRect(
@@ -565,22 +599,7 @@ class EpisodeCard extends HookConsumerWidget {
             width: 140,
             child: AspectRatio(
               aspectRatio: 16 / 9,
-              child: CachedNetworkImage(
-                imageUrl: episode.posterUrl ?? '',
-                fit: BoxFit.cover,
-                errorWidget: (context, url, error) =>
-                    const ThumbnailErrorPlaceholder(),
-                placeholder: (context, url) => Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                ),
-              ),
+              child: buildImageCandidate(0),
             ),
           ),
         ),

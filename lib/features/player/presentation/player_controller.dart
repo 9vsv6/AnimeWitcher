@@ -24,6 +24,7 @@ import '../../../../core/storage/episode_watch_repository.dart';
 import '../../library/presentation/history_provider.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../core/utils/app_utils.dart';
+import '../../../../core/utils/image_fallbacks.dart';
 import '../../settings/presentation/player_settings_provider.dart';
 import '../../settings/presentation/general_settings_provider.dart';
 import '../../../../core/providers/locale_provider.dart';
@@ -348,6 +349,15 @@ class PlayerController extends Notifier<PlayerState> {
   PlayerState get currentState => state;
   List<SubtitleFile> get userAddedExternalSubtitles =>
       _userAddedExternalSubtitles;
+
+  String? _episodeArtwork(Episode? episode) {
+    return AppImageFallbacks.episode(
+      episodeUrl: episode?.posterUrl,
+      bannerUrl: _item.bannerUrl,
+      posterUrl: _item.posterUrl,
+      label: _item.title,
+    );
+  }
 
   Set<String>? pendingVideoViewSubtitleIdsBeforeReload;
   bool selectNewestVideoViewSubtitleAfterReload = false;
@@ -1284,7 +1294,7 @@ class PlayerController extends Notifier<PlayerState> {
               state = state.copyWith(
                 showNextEpisodeOverlay: true,
                 nextEpisodeTitle: next.name,
-                nextEpisodePosterUrl: next.posterUrl,
+                nextEpisodePosterUrl: _episodeArtwork(next),
                 nextEpisodeRating: next.rating,
                 nextEpisodeNumber: next.episode,
                 nextEpisodeSeason: next.season,
@@ -1340,7 +1350,7 @@ class PlayerController extends Notifier<PlayerState> {
       state = state.copyWith(
         showNextEpisodeOverlay: true,
         nextEpisodeTitle: next.name,
-        nextEpisodePosterUrl: next.posterUrl,
+        nextEpisodePosterUrl: _episodeArtwork(next),
         nextEpisodeRating: next.rating,
         nextEpisodeNumber: next.episode,
         nextEpisodeSeason: next.season,
@@ -1815,7 +1825,7 @@ class PlayerController extends Notifier<PlayerState> {
               state = state.copyWith(
                 showNextEpisodeOverlay: true,
                 nextEpisodeTitle: next.name,
-                nextEpisodePosterUrl: next.posterUrl,
+                nextEpisodePosterUrl: _episodeArtwork(next),
                 nextEpisodeRating: next.rating,
                 nextEpisodeNumber: next.episode,
                 nextEpisodeSeason: next.season,
@@ -3087,7 +3097,7 @@ class PlayerController extends Notifier<PlayerState> {
                 season: nextEpisode.season,
                 episode: nextEpisode.episode,
                 episodeTitle: nextEpisode.name,
-                episodePosterUrl: nextEpisode.posterUrl,
+                episodePosterUrl: _episodeArtwork(nextEpisode),
               );
               return;
             } else {
@@ -3121,7 +3131,7 @@ class PlayerController extends Notifier<PlayerState> {
                 season: currentEpisode?.season,
                 episode: currentEpisode?.episode,
                 episodeTitle: currentEpisode?.name,
-                episodePosterUrl: currentEpisode?.posterUrl,
+                episodePosterUrl: _episodeArtwork(currentEpisode),
               );
         }
       }

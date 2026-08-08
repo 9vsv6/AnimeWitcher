@@ -28,6 +28,26 @@ import "../../../shared/widgets/loading_indicator.dart";
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+
+/// Keeps the native pull-to-stretch reaction while making it deliberately
+/// subtle. The whole flexible header remains one moving unit.
+class _GentleTopOverscrollPhysics extends BouncingScrollPhysics {
+  const _GentleTopOverscrollPhysics({super.parent});
+
+  @override
+  _GentleTopOverscrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _GentleTopOverscrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
+    final appliedOffset = super.applyPhysicsToUserOffset(position, offset);
+    final isPullingPastTop =
+        position.pixels <= position.minScrollExtent && offset > 0;
+    return isPullingPastTop ? appliedOffset * 0.16 : appliedOffset;
+  }
+}
+
 class DetailsScreen extends ConsumerStatefulWidget {
   final MultimediaItem item;
   final bool autoPlay;
@@ -407,6 +427,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final bannerHeight = sdp(LayoutConstants.detailsBannerHeightMobile);
     final posterUrl =
         AppImageFallbacks.poster(item.posterUrl, label: item.title) ?? '';
+    final providedBannerUrl = AppImageFallbacks.optional(item.bannerUrl);
+    final bannerUrl =
+        AppImageFallbacks.banner(
+          bannerUrl: item.bannerUrl,
+          posterUrl: item.posterUrl,
+          label: item.title,
+        ) ??
+        '';
 
     return ColoredBox(
       color: Colors.black,
@@ -425,9 +453,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 Hero(
                   tag: 'banner_${item.url}',
                   child: CachedNetworkImage(
-                    imageUrl:
-                        AppImageFallbacks.optional(item.bannerUrl) ??
-                        posterUrl,
+                    imageUrl: bannerUrl,
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
                     memCacheWidth:
@@ -436,10 +462,32 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     placeholder: (_, _) => const ColoredBox(
                       color: Colors.black,
                     ),
-                    errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
-                      label: item.title,
-                      isBackdrop: true,
-                    ),
+                    errorWidget: (_, _, _) {
+                      if (providedBannerUrl != null &&
+                          posterUrl.isNotEmpty &&
+                          providedBannerUrl != posterUrl) {
+                        return CachedNetworkImage(
+                          imageUrl: posterUrl,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          memCacheWidth:
+                              (screenWidth *
+                                      MediaQuery.devicePixelRatioOf(context))
+                                  .round(),
+                          placeholder: (_, _) => const ColoredBox(
+                            color: Colors.black,
+                          ),
+                          errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                            label: item.title,
+                            isBackdrop: true,
+                          ),
+                        );
+                      }
+                      return ThumbnailErrorPlaceholder(
+                        label: item.title,
+                        isBackdrop: true,
+                      );
+                    },
                   ),
                 ),
                 // AnimeWitcher's image_gradient2.xml: transparent through
@@ -703,6 +751,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       body: _buildDetailsTabSwipeRegion(
         enabled: !isMovie,
         child: CustomScrollView(
+          physics: const _GentleTopOverscrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
           slivers: [
           Directionality(
             textDirection: TextDirection.ltr,
@@ -714,7 +765,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [
                 StretchMode.zoomBackground,
-                StretchMode.blurBackground,
               ],
               background: _buildAnimeWitcherMobileHeader(
                 context,
