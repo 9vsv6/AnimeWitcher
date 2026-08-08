@@ -38,8 +38,7 @@ class EpisodeCard extends HookConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final episodeNumberLabel =
-        isArabic ? '${episode.episode} حلقة' : 'Episode ${episode.episode}';
+    final episodeNumberLabel = 'Episode ${episode.episode}';
     final episodeTitle = episode.name.trim();
     final genericEpisodeTitle = RegExp(
       r'^(?:(?:الحلقة|حلقه|حلقة)|(?:episode|ep\.?))\s*[0-9٠-٩۰-۹]+$',
@@ -141,6 +140,12 @@ class EpisodeCard extends HookConsumerWidget {
         alpha: theme.brightness == Brightness.dark ? 0.30 : 0.14,
       ),
       normalCardColor,
+    );
+    final episodeNumberStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.bold,
+      color: isWatched
+          ? theme.colorScheme.onSurface.withValues(alpha: 0.65)
+          : theme.colorScheme.onSurface,
     );
 
     void triggerDownload() {
@@ -307,19 +312,26 @@ class EpisodeCard extends HookConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            episodeNumberLabel,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: isWatched
-                                  ? theme.colorScheme.onSurface.withValues(
-                                      alpha: 0.65,
-                                    )
-                                  : theme.colorScheme.onSurface,
+                          if (isArabic)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              textDirection: TextDirection.ltr,
+                              children: [
+                                Text('حلقة', style: episodeNumberStyle),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${episode.episode}',
+                                  style: episodeNumberStyle,
+                                ),
+                              ],
+                            )
+                          else
+                            Text(
+                              episodeNumberLabel,
+                              style: episodeNumberStyle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
                           if (showEpisodeTitle) ...[
                             const SizedBox(height: 2),
                             Text(

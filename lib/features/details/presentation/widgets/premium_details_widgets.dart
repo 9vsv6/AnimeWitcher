@@ -123,14 +123,14 @@ class MetadataBar extends ConsumerWidget {
     return isArabic ? 'مسلسل' : 'Series';
   }
 
-  String? _episodeCountLabel(BuildContext context, Map<String, String> data) {
+  int? _episodeCount(Map<String, String> data) {
     final raw = _clean(data['awEpisodes']);
     if (raw == null) return null;
     final normalized = _normalizeDigits(raw);
     final match = RegExp(r'[0-9]+').firstMatch(normalized);
     final count = match == null ? null : int.tryParse(match.group(0)!);
     if (count == null || count <= 0) return null;
-    return _isArabicDetailsLocale(context) ? '$count حلقة' : '$count episodes';
+    return count;
   }
 
   String? _ratingValue(Map<String, String> data) {
@@ -175,7 +175,7 @@ class MetadataBar extends ConsumerWidget {
     final data = item.syncData ?? const <String, String>{};
     final ageRating = _clean(data['awAge']) ?? _clean(item.contentRating);
     final season = _seasonLabel(context, data);
-    final episodeCount = _episodeCountLabel(context, data);
+    final episodeCount = _episodeCount(data);
     final ratingValue = _ratingValue(data);
 
     final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -194,7 +194,19 @@ class MetadataBar extends ConsumerWidget {
     ];
     final secondRow = <Widget>[
       Text(_typeLabel(context, data), style: style),
-      if (episodeCount != null) Text(episodeCount, style: style),
+      if (episodeCount != null)
+        if (_isArabicDetailsLocale(context))
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            textDirection: TextDirection.ltr,
+            children: [
+              Text('$episodeCount', style: style),
+              const SizedBox(width: 4),
+              Text('حلقة', style: style),
+            ],
+          )
+        else
+          Text('$episodeCount episodes', style: style),
       if (ageRating != null) Text(ageRating, style: style),
       if (ratingValue != null)
         Row(

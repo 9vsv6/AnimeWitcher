@@ -41,7 +41,7 @@ class AnimeInformationSection extends StatelessWidget {
 
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    return isArabic ? '\${minutes} دقيقة' : '\${minutes} minutes';
+    return isArabic ? '$minutes دقيقة' : '$minutes minutes';
   }
 
   @override
@@ -50,13 +50,20 @@ class AnimeInformationSection extends StatelessWidget {
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final data = item.syncData ?? const <String, String>{};
 
-    _AnimeInfoEntry? entry(String ar, String en, dynamic value, IconData icon) {
+    _AnimeInfoEntry? entry(
+      String ar,
+      String en,
+      dynamic value,
+      IconData icon, {
+      bool numberBeforeUnit = false,
+    }) {
       final cleaned = _clean(value);
       if (cleaned == null) return null;
       return _AnimeInfoEntry(
         label: isArabic ? ar : en,
         value: cleaned,
         icon: icon,
+        numberBeforeUnit: numberBeforeUnit,
       );
     }
 
@@ -73,6 +80,7 @@ class AnimeInformationSection extends StatelessWidget {
           'Episode duration',
           _durationLabel(context, data),
           Icons.timer_outlined,
+          numberBeforeUnit: isArabic,
         ),
       ],
       [
@@ -129,7 +137,10 @@ class AnimeInformationSection extends StatelessWidget {
                 for (var index = 0; index < row.length; index++) ...[
                   if (row[index] != null)
                     Expanded(child: _AnimeInfoCard(entry: row[index]!)),
-                  if (index == 0 && row[0] != null && row[1] != null)
+                  if (index == 0 &&
+                      row.length > 1 &&
+                      row[0] != null &&
+                      row[1] != null)
                     const SizedBox(width: 8),
                 ],
               ],
@@ -150,11 +161,13 @@ class _AnimeInfoEntry {
   final String label;
   final String value;
   final IconData icon;
+  final bool numberBeforeUnit;
 
   const _AnimeInfoEntry({
     required this.label,
     required this.value,
     required this.icon,
+    this.numberBeforeUnit = false,
   });
 }
 
@@ -196,16 +209,60 @@ class _AnimeInfoCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  SelectableText(
-                    entry.value,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
+                  if (entry.numberBeforeUnit)
+                    _NumberBeforeUnitText(
+                      value: entry.value,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  else
+                    SelectableText(
+                      entry.value,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NumberBeforeUnitText extends StatelessWidget {
+  final String value;
+  final TextStyle? style;
+
+  const _NumberBeforeUnitText({required this.value, this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    final separatorIndex = value.indexOf(' ');
+    if (separatorIndex <= 0 || separatorIndex >= value.length - 1) {
+      return SelectableText(value, style: style);
+    }
+
+    final number = value.substring(0, separatorIndex);
+    final unit = value.substring(separatorIndex + 1);
+
+    return Semantics(
+      label: value,
+      child: ExcludeSemantics(
+        child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            textDirection: TextDirection.ltr,
+            children: [
+              Text(number, style: style),
+              const SizedBox(width: 4),
+              Text(unit, style: style),
+            ],
+          ),
         ),
       ),
     );
