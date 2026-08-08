@@ -256,7 +256,7 @@ class _NumberBeforeUnitText extends StatelessWidget {
           alignment: AlignmentDirectional.centerStart,
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            textDirection: TextDirection.ltr,
+            textDirection: TextDirection.rtl,
             children: [
               Text(number, style: style),
               const SizedBox(width: 4),

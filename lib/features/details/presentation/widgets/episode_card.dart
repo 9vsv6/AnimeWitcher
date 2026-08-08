@@ -315,7 +315,7 @@ class EpisodeCard extends HookConsumerWidget {
                           if (isArabic)
                             Row(
                               mainAxisSize: MainAxisSize.min,
-                              textDirection: TextDirection.ltr,
+                              textDirection: TextDirection.rtl,
                               children: [
                                 Text('حلقة', style: episodeNumberStyle),
                                 const SizedBox(width: 4),

@@ -198,7 +198,7 @@ class MetadataBar extends ConsumerWidget {
         if (_isArabicDetailsLocale(context))
           Row(
             mainAxisSize: MainAxisSize.min,
-            textDirection: TextDirection.ltr,
+            textDirection: TextDirection.rtl,
             children: [
               Text('$episodeCount', style: style),
               const SizedBox(width: 4),
