@@ -69,8 +69,6 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
               onTap: () => DetailsRoute(
                 $extra: DetailsRouteExtra(item: item),
               ).push<void>(context),
-            
-              showImageLoadingShimmer: false,
             );
         },
       );
@@ -108,8 +106,6 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
                   onTap: () => DetailsRoute(
                     $extra: DetailsRouteExtra(item: item),
                   ).push<void>(context),
-                
-                  showImageLoadingShimmer: false,
                 ),
             );
           },
