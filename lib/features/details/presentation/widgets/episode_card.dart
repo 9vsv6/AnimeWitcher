@@ -39,7 +39,7 @@ class EpisodeCard extends HookConsumerWidget {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final episodeNumberLabel =
-        isArabic ? 'حلقة ${episode.episode}' : 'Episode ${episode.episode}';
+        isArabic ? '${episode.episode} حلقة' : 'Episode ${episode.episode}';
     final episodeTitle = episode.name.trim();
     final genericEpisodeTitle = RegExp(
       r'^(?:(?:الحلقة|حلقه|حلقة)|(?:episode|ep\.?))\s*[0-9٠-٩۰-۹]+$',

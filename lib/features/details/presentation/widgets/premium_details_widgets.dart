@@ -130,19 +130,44 @@ class MetadataBar extends ConsumerWidget {
     final match = RegExp(r'[0-9]+').firstMatch(normalized);
     final count = match == null ? null : int.tryParse(match.group(0)!);
     if (count == null || count <= 0) return null;
-    if (RegExp(r'حلقة|episode', caseSensitive: false).hasMatch(raw)) return raw;
     return _isArabicDetailsLocale(context) ? '$count حلقة' : '$count episodes';
   }
 
-  String? _malLabel(Map<String, String> data) {
+  String? _ratingValue(Map<String, String> data) {
     final raw = _clean(data['awMalScore']);
     if (raw == null) return null;
     final normalized = _normalizeDigits(raw);
     final match = RegExp(r'[0-9]+(?:[.][0-9]+)?').firstMatch(normalized);
     final score = match == null ? null : double.tryParse(match.group(0)!);
     if (score == null || score <= 0) return null;
-    final pretty = score.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'[.]$'), '');
-    return 'MAL $pretty';
+    return score
+        .toStringAsFixed(2)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'[.]$'), '');
+  }
+
+  Widget _buildMetadataRow(
+    List<Widget> entries,
+    TextStyle? separatorStyle,
+  ) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 7,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (var index = 0; index < entries.length; index++)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (index > 0) ...[
+                Text('•', style: separatorStyle),
+                const SizedBox(width: 8),
+              ],
+              entries[index],
+            ],
+          ),
+      ],
+    );
   }
 
   @override
@@ -151,17 +176,42 @@ class MetadataBar extends ConsumerWidget {
     final ageRating = _clean(data['awAge']) ?? _clean(item.contentRating);
     final season = _seasonLabel(context, data);
     final episodeCount = _episodeCountLabel(context, data);
-    final malScore = _malLabel(data);
-    final entries = <String>[
-      _statusLabel(context, data),
-      if (season != null) season,
-      if (ageRating != null) ageRating,
-      _typeLabel(context, data),
-      if (episodeCount != null) episodeCount,
-      if (malScore != null) malScore,
+    final ratingValue = _ratingValue(data);
+
+    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.76),
+      fontWeight: FontWeight.w700,
+      height: 1.2,
+    );
+    final separatorStyle = style?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
+      fontWeight: FontWeight.w600,
+    );
+
+    final firstRow = <Widget>[
+      Text(_statusLabel(context, data), style: style),
+      if (season != null) Text(season, style: style),
+    ];
+    final secondRow = <Widget>[
+      Text(_typeLabel(context, data), style: style),
+      if (episodeCount != null) Text(episodeCount, style: style),
+      if (ageRating != null) Text(ageRating, style: style),
+      if (ratingValue != null)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.star_rounded,
+              size: 17,
+              color: Colors.amber.shade600,
+            ),
+            const SizedBox(width: 3),
+            Text(ratingValue, style: style),
+          ],
+        ),
     ];
 
-    if (entries.isEmpty && isLoading) {
+    if (firstRow.isEmpty && secondRow.isEmpty && isLoading) {
       return Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -176,32 +226,14 @@ class MetadataBar extends ConsumerWidget {
       );
     }
 
-    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.76),
-      fontWeight: FontWeight.w700,
-      height: 1.2,
-    );
-    final separatorStyle = style?.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
-      fontWeight: FontWeight.w600,
-    );
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 7,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var index = 0; index < entries.length; index++)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (index > 0) ...[
-                Text('•', style: separatorStyle),
-                const SizedBox(width: 8),
-              ],
-              Text(entries[index], style: style),
-            ],
-          ),
+        _buildMetadataRow(firstRow, separatorStyle),
+        if (secondRow.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          _buildMetadataRow(secondRow, separatorStyle),
+        ],
       ],
     );
   }
