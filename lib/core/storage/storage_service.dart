@@ -375,6 +375,62 @@ class StorageService {
     return _settingsBox.get('home_category_filter') as String?;
   }
 
+
+  // --- Anime metadata source toggles ---
+
+  static const String _kEpisodeImagesFromAniZip =
+      'anime_source_episode_images_anizip';
+  static const String _kSeasonNumberFromAniZip =
+      'anime_source_season_number_anizip';
+  static const String _kCastFromAniList = 'anime_source_cast_anilist';
+  static const String _kRecommendationsFromAniList =
+      'anime_source_recommendations_anilist';
+
+  Future<void> setEpisodeImagesFromAniZipEnabled(bool enabled) async {
+    await _settingsBox.put(_kEpisodeImagesFromAniZip, enabled);
+  }
+
+  bool isEpisodeImagesFromAniZipEnabled() {
+    return (_settingsBox.get(
+              _kEpisodeImagesFromAniZip,
+              defaultValue: true,
+            ) as bool?) ??
+        true;
+  }
+
+  Future<void> setSeasonNumberFromAniZipEnabled(bool enabled) async {
+    await _settingsBox.put(_kSeasonNumberFromAniZip, enabled);
+  }
+
+  bool isSeasonNumberFromAniZipEnabled() {
+    return (_settingsBox.get(
+              _kSeasonNumberFromAniZip,
+              defaultValue: true,
+            ) as bool?) ??
+        true;
+  }
+
+  Future<void> setCastFromAniListEnabled(bool enabled) async {
+    await _settingsBox.put(_kCastFromAniList, enabled);
+  }
+
+  bool isCastFromAniListEnabled() {
+    return (_settingsBox.get(_kCastFromAniList, defaultValue: true) as bool?) ??
+        true;
+  }
+
+  Future<void> setRecommendationsFromAniListEnabled(bool enabled) async {
+    await _settingsBox.put(_kRecommendationsFromAniList, enabled);
+  }
+
+  bool isRecommendationsFromAniListEnabled() {
+    return (_settingsBox.get(
+              _kRecommendationsFromAniList,
+              defaultValue: true,
+            ) as bool?) ??
+        true;
+  }
+
   // --- Extension Persistence ---
 
   Future<void> setExtensionData(String key, String? value) async {

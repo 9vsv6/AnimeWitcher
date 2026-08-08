@@ -316,6 +316,31 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: LayoutConstants.spacingLg),
             SettingsGroup(
+              title: appText(
+                context,
+                english: 'Anime data sources',
+                arabic: 'مصادر بيانات الأنمي',
+              ),
+              children: [
+                SettingsTile(
+                  icon: Icons.cloud_sync_rounded,
+                  title: appText(
+                    context,
+                    english: 'Anime data sources',
+                    arabic: 'مصادر بيانات الأنمي',
+                  ),
+                  subtitle: appText(
+                    context,
+                    english: 'Control AniZip and AniList sources',
+                    arabic: 'التحكم بمصادر AniZip وAniList',
+                  ),
+                  isLast: true,
+                  onTap: () => showAnimeDataSourcesDialog(context, ref),
+                ),
+              ],
+            ),
+            const SizedBox(height: LayoutConstants.spacingLg),
+            SettingsGroup(
               title: l10n.appData,
               children: [
                 if (!kIsWeb)

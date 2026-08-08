@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../network/dio_client_provider.dart';
+import '../providers/anime_data_source_settings_provider.dart';
 import '../storage/settings_repository.dart';
 import 'base_provider.dart';
 import 'providers/animewitcher_native_provider.dart';
@@ -11,9 +12,15 @@ part 'extension_manager.g.dart';
 @Riverpod(keepAlive: true)
 class ExtensionManager extends _$ExtensionManager {
   @override
-  List<SkyStreamProvider> build() => <SkyStreamProvider>[
-        AnimeWitcherNativeProvider(ref.watch(dioClientProvider)),
-      ];
+  List<SkyStreamProvider> build() {
+    ref.watch(animeDataSourceSettingsProvider);
+    return <SkyStreamProvider>[
+      AnimeWitcherNativeProvider(
+        ref.watch(dioClientProvider),
+        ref.watch(settingsRepositoryProvider),
+      ),
+    ];
+  }
 
   List<SkyStreamProvider> getAllProviders() =>
       List<SkyStreamProvider>.unmodifiable(state);

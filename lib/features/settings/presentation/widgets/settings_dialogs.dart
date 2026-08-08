@@ -12,6 +12,7 @@ import '../../../../shared/widgets/loading_indicator.dart';
 import '../player_settings_provider.dart';
 import '../general_settings_provider.dart';
 import '../../../../core/providers/locale_provider.dart';
+import '../../../../core/providers/anime_data_source_settings_provider.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
 
@@ -834,6 +835,114 @@ void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
               onPressed: () => Navigator.pop<void>(ctx),
               child: Text(
                 l10n.close,
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+
+/// Shows the AnimeWitcher/AniZip/AniList source controls.
+void showAnimeDataSourcesDialog(BuildContext context, WidgetRef ref) {
+  final isArabic =
+      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+  final settings = ref.read(animeDataSourceSettingsProvider);
+  final notifier = ref.read(animeDataSourceSettingsProvider.notifier);
+  final metadata = [
+    (
+      icon: Icons.image_rounded,
+      label: appText(
+        context,
+        english: 'Episode images from AniZip',
+        arabic: 'صور الحلقات من AniZip',
+      ),
+    ),
+    (
+      icon: Icons.layers_rounded,
+      label: appText(
+        context,
+        english: 'Season number from AniZip',
+        arabic: 'رقم الموسم من AniZip',
+      ),
+    ),
+    (
+      icon: Icons.people_alt_rounded,
+      label: appText(
+        context,
+        english: 'Characters from AniList',
+        arabic: 'الشخصيات من AniList',
+      ),
+    ),
+    (
+      icon: Icons.auto_awesome_rounded,
+      label: appText(
+        context,
+        english: 'More like this from AniList',
+        arabic: 'المزيد مثل هذا من AniList',
+      ),
+    ),
+  ];
+  final setters = [
+    notifier.setEpisodeImagesFromAniZip,
+    notifier.setSeasonNumberFromAniZip,
+    notifier.setCastFromAniList,
+    notifier.setRecommendationsFromAniList,
+  ];
+  final values = [
+    settings.episodeImagesFromAniZip,
+    settings.seasonNumberFromAniZip,
+    settings.castFromAniList,
+    settings.recommendationsFromAniList,
+  ];
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) {
+        return AlertDialog(
+          surfaceTintColor: Colors.transparent,
+          title: Text(
+            appText(
+              context,
+              english: 'Anime data sources',
+              arabic: 'مصادر بيانات الأنمي',
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < metadata.length; i++)
+                  SwitchListTile(
+                    secondary: Icon(metadata[i].icon),
+                    title: Text(metadata[i].label),
+                    subtitle: Text(
+                      values[i]
+                          ? (isArabic ? 'مفعّل' : 'Enabled')
+                          : (isArabic
+                              ? 'متوقف — AnimeWitcher'
+                              : 'Disabled — AnimeWitcher'),
+                    ),
+                    value: values[i],
+                    onChanged: (val) {
+                      setters[i](val);
+                      setState(() => values[i] = val);
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop<void>(ctx),
+              child: Text(
+                AppLocalizations.of(ctx)!.close,
                 style: TextStyle(
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                 ),

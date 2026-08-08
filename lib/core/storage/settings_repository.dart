@@ -71,6 +71,31 @@ class SettingsRepository {
     return _storageService.getActiveProviderId();
   }
 
+
+  Future<void> setEpisodeImagesFromAniZipEnabled(bool enabled) =>
+      _storageService.setEpisodeImagesFromAniZipEnabled(enabled);
+
+  bool isEpisodeImagesFromAniZipEnabled() =>
+      _storageService.isEpisodeImagesFromAniZipEnabled();
+
+  Future<void> setSeasonNumberFromAniZipEnabled(bool enabled) =>
+      _storageService.setSeasonNumberFromAniZipEnabled(enabled);
+
+  bool isSeasonNumberFromAniZipEnabled() =>
+      _storageService.isSeasonNumberFromAniZipEnabled();
+
+  Future<void> setCastFromAniListEnabled(bool enabled) =>
+      _storageService.setCastFromAniListEnabled(enabled);
+
+  bool isCastFromAniListEnabled() =>
+      _storageService.isCastFromAniListEnabled();
+
+  Future<void> setRecommendationsFromAniListEnabled(bool enabled) =>
+      _storageService.setRecommendationsFromAniListEnabled(enabled);
+
+  bool isRecommendationsFromAniListEnabled() =>
+      _storageService.isRecommendationsFromAniListEnabled();
+
   Future<void> setCustomBaseUrl(String packageName, String? url) =>
       _storageService.setCustomBaseUrl(packageName, url);
 
