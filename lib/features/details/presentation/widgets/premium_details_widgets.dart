@@ -91,8 +91,44 @@ class MetadataBar extends ConsumerWidget {
 
   String? _seasonLabel(BuildContext context, Map<String, String> data) {
     final isArabic = _isArabicDetailsLocale(context);
-    var season = _clean(data['awSeasonName']) ?? _clean(data['awSeason']);
-    if (season == null) return null;
+
+    String? season;
+    for (final candidate in <String?>[
+      _clean(data['awSeasonName']),
+      _clean(data['awSeason']),
+    ]) {
+      if (candidate == null) continue;
+
+      final normalized = _normalizeDigits(candidate.toLowerCase());
+      if (normalized == 'undefined' ||
+          normalized == 'undefined عام 0' ||
+          normalized == 'undefined year 0' ||
+          normalized == 'عام 0') {
+        continue;
+      }
+      season = candidate;
+      break;
+    }
+
+    var year = _clean(data['awYear']) ?? item.year?.toString();
+    if (year != null) {
+      final normalizedYear = _normalizeDigits(year);
+      final match = RegExp(r'(?:19|20)[0-9]{2}').firstMatch(normalizedYear);
+      if (match != null) {
+        year = match.group(0);
+      } else if (normalizedYear == '0') {
+        year = null;
+      }
+    }
+
+    final startDate = _clean(data['awStartDate']);
+    if (season == null) return year ?? startDate;
+
+    season = season.replaceAll('عام ', '').trim();
+    final embeddedYear = RegExp(
+      r'(?:19|20)[0-9]{2}',
+    ).firstMatch(_normalizeDigits(season))?.group(0);
+    final displayYear = year ?? embeddedYear;
 
     final lower = season.toLowerCase();
     if (isArabic) {
@@ -102,8 +138,9 @@ class MetadataBar extends ConsumerWidget {
       if (lower.contains('fall') || lower.contains('autumn')) season = 'خريف';
     }
 
-    final year = _clean(data['awYear']) ?? item.year?.toString();
-    if (year != null && !season.contains(year)) return '$season $year';
+    if (displayYear != null && !season.contains(displayYear)) {
+      return '$season $displayYear';
+    }
     return season;
   }
 

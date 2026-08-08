@@ -45,7 +45,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   static const Duration _tabTransitionDuration = Duration(milliseconds: 260);
 
   bool _didTriggerAutoPlay = false;
-  bool _isPosterExpanded = false;
   int _selectedDetailsTab = 0;
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
@@ -338,6 +337,64 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
+  Future<void> _showPosterViewer(
+    BuildContext context,
+    MultimediaItem item,
+  ) async {
+    final posterUrl = AppImageFallbacks.poster(
+      item.posterUrl,
+      label: item.title,
+    );
+    if (posterUrl == null || posterUrl.isEmpty) return;
+
+    await showGeneralDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(
+        context,
+      ).modalBarrierDismissLabel,
+      barrierColor: Colors.black,
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, _, _) {
+        final size = MediaQuery.of(dialogContext).size;
+        return Material(
+          color: Colors.black,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(dialogContext).pop(),
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 4,
+              child: SizedBox(
+                width: size.width,
+                height: size.height,
+                child: CachedNetworkImage(
+                  imageUrl: posterUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, _) => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                  errorWidget: (_, _, _) => const Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 52,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (_, animation, _, child) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -355,14 +412,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           .read(detailsControllerProvider(widget.item.url).notifier)
           .loadDetails(widget.item, autoPlay: widget.autoPlay);
     });
-  }
-
-  @override
-  void didUpdateWidget(covariant DetailsScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.url != widget.item.url) {
-      _isPosterExpanded = false;
-    }
   }
 
   @override
@@ -1366,31 +1415,24 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   children: [
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(
-                        () => _isPosterExpanded = !_isPosterExpanded,
-                      ),
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeInOutCubic,
-                        alignment: AlignmentDirectional.topStart,
-                        child: Hero(
-                          tag: 'poster_${item.url}',
-                          child: SizedBox(
-                            width: _isPosterExpanded ? 160 : 100,
-                            height: _isPosterExpanded ? 240 : 150,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: CachedNetworkImage(
-                                imageUrl:
-                                    AppImageFallbacks.poster(
-                                      item.posterUrl,
-                                      label: item.title,
-                                    ) ??
-                                    '',
-                                fit: BoxFit.cover,
-                                errorWidget: (_, _, _) =>
-                                    ThumbnailErrorPlaceholder(label: item.title),
-                              ),
+                      onTap: () => _showPosterViewer(context, item),
+                      child: Hero(
+                        tag: 'poster_${item.url}',
+                        child: SizedBox(
+                          width: 100,
+                          height: 150,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl:
+                                  AppImageFallbacks.poster(
+                                    item.posterUrl,
+                                    label: item.title,
+                                  ) ??
+                                  '',
+                              fit: BoxFit.cover,
+                              errorWidget: (_, _, _) =>
+                                  ThumbnailErrorPlaceholder(label: item.title),
                             ),
                           ),
                         ),
