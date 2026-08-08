@@ -119,8 +119,12 @@ class _NewsListScreenState extends State<NewsListScreen> {
 
             final item = _items[index];
             final onOpen = widget.onOpen == null
-                ? () => openNewsUrl(item)
-                : () => widget.onOpen!(item);
+                ? () {
+                    openNewsUrl(item);
+                  }
+                : () {
+                    widget.onOpen!(item);
+                  };
             return NewsCard(
               item: item,
               compact: false,
