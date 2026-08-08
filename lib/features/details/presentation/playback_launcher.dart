@@ -98,6 +98,43 @@ class PlaybackLauncher {
     }
   }
 
+  /// Reuses the same source discovery + picker shown before initial playback.
+  /// Downloaded episodes bypass the picker because they are already playable.
+  Future<StreamResult?> chooseSourceForItem(
+    BuildContext context,
+    MultimediaItem item,
+    String episodeDataUrl, {
+    Episode? episode,
+  }) async {
+    final downloadService = _ref.read(downloadServiceProvider);
+    final localFile = await downloadService.getDownloadedFile(
+      item,
+      episode: episode,
+    );
+    if (!context.mounted) return null;
+
+    if (localFile != null) {
+      return StreamResult(
+        url: AppUtils.normalizeUrl(localFile.path),
+        source: 'Local',
+      );
+    }
+
+    final provider = _resolveProvider(item);
+    if (provider == null) {
+      _ref
+          .read(notificationServiceProvider)
+          .showError(
+            Localizations.localeOf(context).languageCode == 'ar'
+                ? 'لم يتم العثور على مزود التشغيل.'
+                : 'No playback provider found.',
+          );
+      return null;
+    }
+
+    return _chooseSource(context, provider, episodeDataUrl);
+  }
+
   Future<StreamResult?> _resolveSelectedSource(
     BuildContext context,
     SkyStreamProvider provider,

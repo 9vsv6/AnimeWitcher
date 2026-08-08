@@ -8,6 +8,7 @@ import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/history_repository.dart';
 
 import '../player_controller.dart';
+import '../../../details/presentation/playback_launcher.dart';
 import 'hotstar_player_style.dart';
 import 'player_utils.dart';
 
@@ -365,8 +366,21 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
             progress: dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0,
             isTv: widget.isTv,
             focusNode: isAnchor ? _anchorNode : null,
-            onTap: () =>
-                ref.read(playerControllerProvider.notifier).loadEpisode(ep),
+            onTap: () async {
+              widget.onClose();
+              final selected = await ref
+                  .read(playbackLauncherProvider)
+                  .chooseSourceForItem(
+                    context,
+                    widget.item,
+                    ep.url,
+                    episode: ep,
+                  );
+              if (selected == null || !mounted) return;
+              await ref
+                  .read(playerControllerProvider.notifier)
+                  .loadEpisode(ep, selectedSource: selected);
+            },
           ),
         );
       }

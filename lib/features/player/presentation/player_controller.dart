@@ -754,6 +754,24 @@ class PlayerController extends Notifier<PlayerState> {
   String? get currentEpisodeUrl => _episode?.url ?? _videoUrl;
   Episode? get currentEpisode => _episode ?? _resolveCurrentEpisode();
 
+  Episode? get nextEpisode {
+    if (!isSeries) return null;
+    final currentEp = currentEpisode;
+    var episodes = _item.episodes;
+    if (currentEp != null && currentEp.dubStatus != DubStatus.none) {
+      episodes = episodes
+          ?.where((e) => e.dubStatus == currentEp.dubStatus)
+          .toList();
+    }
+    if (episodes == null || episodes.isEmpty) return null;
+
+    final currentIndex = currentEp != null
+        ? episodes.indexWhere((e) => e.url == currentEp.url)
+        : episodes.indexWhere((e) => e.url == _videoUrl);
+    if (currentIndex < 0 || currentIndex >= episodes.length - 1) return null;
+    return episodes[currentIndex + 1];
+  }
+
   Future<void> init({
     required Player player,
     required MultimediaItem item,
@@ -2836,85 +2854,65 @@ class PlayerController extends Notifier<PlayerState> {
     unawaited(setSubtitleDelay(0.0));
   }
 
-  Future<void> playNextEpisode() async {
-    if (_item.contentType != MultimediaContentType.series &&
-        _item.contentType != MultimediaContentType.anime) {
-      return;
-    }
+  Future<void> playNextEpisode({StreamResult? selectedSource}) async {
+    final nextEpisode = this.nextEpisode;
+    if (nextEpisode == null) return;
 
-    final currentEp = _episode ?? _resolveCurrentEpisode();
-    List<Episode>? episodes = _item.episodes;
-    if (isSeries &&
-        currentEp != null &&
-        currentEp.dubStatus != DubStatus.none) {
-      episodes = episodes
-          ?.where((e) => e.dubStatus == currentEp.dubStatus)
-          .toList();
-    }
+    // Smart Next Episode: downloaded files bypass network source selection.
+    final downloadService = ref.read(downloadServiceProvider);
+    final localFile = await downloadService.getDownloadedFile(
+      _item,
+      episode: nextEpisode,
+    );
 
-    int? currentIndex;
-    if (currentEp != null) {
-      currentIndex = episodes?.indexWhere((e) => e.url == currentEp.url);
-    } else {
-      currentIndex = episodes?.indexWhere((e) => e.url == _videoUrl);
-    }
+    final bool isLocal = localFile != null;
+    final bool useDirectSelectedSource =
+        !isLocal && selectedSource != null && !selectedSource.requiresResolution;
+    final String finalUrl = localFile?.path ??
+        ((selectedSource?.requiresResolution ?? false)
+            ? selectedSource!.url
+            : nextEpisode.url);
 
-    if (currentIndex != null &&
-        currentIndex != -1 &&
-        episodes != null &&
-        currentIndex < episodes.length - 1) {
-      final nextEpisode = episodes[currentIndex + 1];
+    // Save current episode's progress BEFORE updating _episode/_videoUrl.
+    saveProgress();
+    await pause();
 
-      // Smart Next Episode: Check for downloaded version
-      final downloadService = ref.read(downloadServiceProvider);
-      final localFile = await downloadService.getDownloadedFile(
-        _item,
-        episode: nextEpisode,
-      );
+    _suppressNextEpisodeDetection = true;
+    _hasConfirmedPlaybackFrame = false;
+    _videoUrl = finalUrl;
+    _episode = nextEpisode;
+    _userAddedExternalSubtitles.clear();
+    _resetPerEpisodeState();
+    unawaited(_fetchAndLogSkipSegments());
 
-      final String finalUrl = localFile?.path ?? nextEpisode.url;
-      final bool isLocal = localFile != null;
-
-      // Save current episode's progress BEFORE updating _episode/_videoUrl.
-      // pause() (below) triggers saveProgress() via _playingSub — if _episode
-      // already points to nextEpisode at that point, the current position gets
-      // written under the wrong episode's history key (classic off-by-one bug).
-      saveProgress();
-      await pause(); // _episode still = current ep here, so any triggered save is correct
-
-      // NOW switch context to the next episode.
-      _suppressNextEpisodeDetection = true;
-
-      _hasConfirmedPlaybackFrame = false;
-      _videoUrl = finalUrl;
-      _episode = nextEpisode;
-      _userAddedExternalSubtitles.clear();
-      _resetPerEpisodeState();
-
-      // Refetch intro/outro/recap (IntroDB / AnimeSkip) for the new episode.
-      // _resetPerEpisodeState() cleared the previous episode's segments, so
-      // without this the next episode has no skip data — the same call that
-      // loadEpisode() already makes. _episode now points to nextEpisode.
-      unawaited(_fetchAndLogSkipSegments());
-
-      state = state.copyWith(
-        playerTitle: "${_item.title} - ${nextEpisode.name}",
-        showNextEpisodeOverlay: false,
-        streamSubtitle: isLocal
+    state = state.copyWith(
+      playerTitle: "${_item.title} - ${nextEpisode.name}",
+      showNextEpisodeOverlay: false,
+      streamSubtitle: isLocal
           ? _playerText(
               english: 'Local - Downloaded',
               arabic: 'محلي - تم تنزيله',
             )
           : _playerText(
-              english: 'Fetching sources...',
-              arabic: 'جارٍ جلب المصادر...',
+              english: 'Preparing selected source...',
+              arabic: 'جارٍ تجهيز المصدر المحدد...',
             ),
-      );
+    );
 
-      await _initStream(
-        requestedPhaseKind: PlaybackUiPhaseKind.loadingNextEpisode,
+    if (useDirectSelectedSource) {
+      final sourceSessionId = _beginSourceSession(resetAttempts: true);
+      state = state.copyWith(
+        streams: <StreamResult>[selectedSource!],
+        currentStreamIndex: 0,
       );
+      _setSourceAttemptsFromStreams(<StreamResult>[selectedSource!]);
+      await loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
+      return;
     }
+
+    await _initStream(
+      requestedPhaseKind: PlaybackUiPhaseKind.loadingNextEpisode,
+    );
   }
 
   void dismissNextEpisodeOverlay() {
@@ -2935,36 +2933,37 @@ class PlayerController extends Notifier<PlayerState> {
     state = state.copyWith(showEpisodeList: false);
   }
 
-  Future<void> loadEpisode(Episode episode) async {
-    if (state.isLoading) return; // guard: uiPhase-derived getter
+  Future<void> loadEpisode(
+    Episode episode, {
+    StreamResult? selectedSource,
+  }) async {
+    if (state.isLoading) return;
     state = state.copyWith(showEpisodeList: false);
 
-    // Save current episode's progress BEFORE changing _episode/_videoUrl,
-    // so the history key written by pause()-triggered saves is correct.
     saveProgress();
 
-    // Smart load: Check for downloaded version
     final downloadService = ref.read(downloadServiceProvider);
     final localFile = await downloadService.getDownloadedFile(
       _item,
       episode: episode,
     );
 
-    final String finalUrl = localFile?.path ?? episode.url;
     final bool isLocal = localFile != null;
+    final bool useDirectSelectedSource =
+        !isLocal && selectedSource != null && !selectedSource.requiresResolution;
+    final String finalUrl = localFile?.path ??
+        ((selectedSource?.requiresResolution ?? false)
+            ? selectedSource!.url
+            : episode.url);
 
-    // Pause while _episode/_videoUrl still point to the old episode.
     await pause();
 
-    // NOW switch context to the selected episode.
     _episode = episode;
     _videoUrl = finalUrl;
     _hasConfirmedPlaybackFrame = false;
     _suppressNextEpisodeDetection = true;
-
     _userAddedExternalSubtitles.clear();
     _resetPerEpisodeState();
-
     unawaited(_fetchAndLogSkipSegments());
 
     state = state.copyWith(
@@ -2975,10 +2974,21 @@ class PlayerController extends Notifier<PlayerState> {
               arabic: 'محلي - تم تنزيله',
             )
           : _playerText(
-              english: 'Fetching sources...',
-              arabic: 'جارٍ جلب المصادر...',
+              english: 'Preparing selected source...',
+              arabic: 'جارٍ تجهيز المصدر المحدد...',
             ),
     );
+
+    if (useDirectSelectedSource) {
+      final sourceSessionId = _beginSourceSession(resetAttempts: true);
+      state = state.copyWith(
+        streams: <StreamResult>[selectedSource!],
+        currentStreamIndex: 0,
+      );
+      _setSourceAttemptsFromStreams(<StreamResult>[selectedSource!]);
+      await loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
+      return;
+    }
 
     await _initStream(
       requestedPhaseKind: PlaybackUiPhaseKind.loadingNextEpisode,

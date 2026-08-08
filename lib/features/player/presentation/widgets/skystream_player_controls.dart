@@ -11,6 +11,7 @@ import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:video_view/video_view.dart' as vv;
 import '../../../../l10n/generated/app_localizations.dart';
 import '../player_controller.dart';
+import '../../../details/presentation/playback_launcher.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
@@ -418,6 +419,23 @@ class SkyStreamPlayerControlsState
 
   void _toggleOrientation() {
     _platformService.toggleOrientation(context);
+  }
+
+  Future<void> _playNextEpisodeWithSourcePicker() async {
+    final controller = ref.read(playerControllerProvider.notifier);
+    final episode = controller.nextEpisode;
+    final item = controller.multimediaItem;
+    if (episode == null || item == null) return;
+
+    final selected = await ref.read(playbackLauncherProvider).chooseSourceForItem(
+      context,
+      item,
+      episode.url,
+      episode: episode,
+    );
+    if (selected == null || !mounted) return;
+
+    await controller.playNextEpisode(selectedSource: selected);
   }
 
   Future<void> toggleFullscreen() async {
@@ -1102,9 +1120,9 @@ class SkyStreamPlayerControlsState
                     nextEpisodeSeason: nextEpSeason,
                     nextEpisodeRuntime: nextEpRuntime,
                     nextEpisodeDescription: nextEpDescription,
-                    onPlayNext: () => ref
-                        .read(playerControllerProvider.notifier)
-                        .playNextEpisode(),
+                    onPlayNext: () => unawaited(
+                      _playNextEpisodeWithSourcePicker(),
+                    ),
                     onDismiss: () => ref
                         .read(playerControllerProvider.notifier)
                         .dismissNextEpisodeOverlay(),
@@ -1279,8 +1297,9 @@ class SkyStreamPlayerControlsState
         PlayerIconButton(
           icon: Icons.skip_next_rounded,
           tooltip: l10n.next,
-          onPressed: () =>
-              ref.read(playerControllerProvider.notifier).playNextEpisode(),
+          onPressed: () => unawaited(
+            _playNextEpisodeWithSourcePicker(),
+          ),
           isTv: _isTv,
         ),
     ];
