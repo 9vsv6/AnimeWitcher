@@ -31,7 +31,6 @@ import '../../settings/presentation/general_settings_provider.dart';
 import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/services/local_proxy_service.dart';
 import '../../../../core/network/http_defaults.dart';
-import '../../../../core/utils/stream_quality_sorter.dart';
 import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/anime_skip_service.dart';
 import '../../skip/data/skip_service.dart';
@@ -179,13 +178,6 @@ class PlayerState {
   final bool isAdaptiveBufferingActive;
   final bool showEpisodeList;
 
-  /// Whether the sources/audio/subtitles side panel is open. While open, the
-  /// player chrome is hidden and auto-hide is suspended.
-  final bool showSourcesPanel;
-
-  /// Which tab the side panel should show: 0 = Sources, 1 = Audio, 2 = Subtitles.
-  final int sourcesPanelTab;
-
   final double playbackSpeed;
   final bool isLive;
   final double subtitleDelay;
@@ -199,10 +191,6 @@ class PlayerState {
   final List<SourceAttemptEntry> sourceAttempts;
   final int? currentAttemptIndex;
   final int sourceSessionId;
-
-  /// True when the quality filter was active but no streams matched — the
-  /// Sources tab should show a fallback banner in this case.
-  final bool qualityFilteredFallback;
 
   /// Non-null when a saved position was found; shows resume prompt instead of seeking silently.
   final int? resumePromptPosition;
@@ -229,8 +217,6 @@ class PlayerState {
     this.nextEpisodeDescription,
     this.isAdaptiveBufferingActive = false,
     this.showEpisodeList = false,
-    this.showSourcesPanel = false,
-    this.sourcesPanelTab = 0,
     this.playbackSpeed = 1.0,
     this.isLive = false,
     this.isSeekable = false,
@@ -245,7 +231,6 @@ class PlayerState {
     this.sourceAttempts = const [],
     this.currentAttemptIndex,
     this.sourceSessionId = 0,
-    this.qualityFilteredFallback = false,
     this.resumePromptPosition,
     this.resumePromptPercentage,
     this.userSkippedOverlay = false,
@@ -291,8 +276,6 @@ class PlayerState {
     String? nextEpisodeDescription,
     bool? isAdaptiveBufferingActive,
     bool? showEpisodeList,
-    bool? showSourcesPanel,
-    int? sourcesPanelTab,
     double? playbackSpeed,
     bool? isLive,
     bool? isSeekable,
@@ -304,7 +287,6 @@ class PlayerState {
     List<SourceAttemptEntry>? sourceAttempts,
     Object? currentAttemptIndex = _keep,
     int? sourceSessionId,
-    bool? qualityFilteredFallback,
     Object? resumePromptPosition = _keep,
     Object? resumePromptPercentage = _keep,
     bool? userSkippedOverlay,
@@ -332,8 +314,6 @@ class PlayerState {
       isAdaptiveBufferingActive:
           isAdaptiveBufferingActive ?? this.isAdaptiveBufferingActive,
       showEpisodeList: showEpisodeList ?? this.showEpisodeList,
-      showSourcesPanel: showSourcesPanel ?? this.showSourcesPanel,
-      sourcesPanelTab: sourcesPanelTab ?? this.sourcesPanelTab,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       isLive: isLive ?? this.isLive,
       isSeekable: isSeekable ?? this.isSeekable,
@@ -347,8 +327,6 @@ class PlayerState {
           ? this.currentAttemptIndex
           : currentAttemptIndex as int?,
       sourceSessionId: sourceSessionId ?? this.sourceSessionId,
-      qualityFilteredFallback:
-          qualityFilteredFallback ?? this.qualityFilteredFallback,
       resumePromptPosition: resumePromptPosition == _keep
           ? this.resumePromptPosition
           : resumePromptPosition as int?,
@@ -359,32 +337,6 @@ class PlayerState {
       skipSegments: skipSegments ?? this.skipSegments,
     );
   }
-}
-
-class PlayerTrackOption {
-  final String id;
-  final String label;
-  final String? subtitle;
-  final bool selected;
-
-  const PlayerTrackOption({
-    required this.id,
-    required this.label,
-    this.subtitle,
-    this.selected = false,
-  });
-}
-
-class PlayerTrackSelectionSnapshot {
-  final List<PlayerTrackOption> audioTracks;
-  final List<PlayerTrackOption> subtitleTracks;
-  final bool subtitlesOffSelected;
-
-  const PlayerTrackSelectionSnapshot({
-    this.audioTracks = const [],
-    this.subtitleTracks = const [],
-    this.subtitlesOffSelected = true,
-  });
 }
 
 class PlayerController extends Notifier<PlayerState> {
@@ -1964,23 +1916,13 @@ class PlayerController extends Notifier<PlayerState> {
           // replaced by saved-source or network quality preferences.
           final explicitSelection =
               activeProvider.isExplicitStreamSelection(_videoUrl);
-          final settings = ref.read(playerSettingsProvider).asData?.value;
-          bool didFallback = false;
-          final streams = explicitSelection || settings == null
-              ? rawStreams
-              : await _processStreams(
-                  rawStreams,
-                  settings,
-                  onFallback: (v) => didFallback = v,
-                );
-          if (!_isCurrentSourceSession(sourceSessionId)) return;
+          final streams = rawStreams;
 
           final initialIndex =
               explicitSelection ? 0 : _findSavedStreamIndex(streams);
           state = state.copyWith(
             streams: streams,
             currentStreamIndex: initialIndex,
-            qualityFilteredFallback: didFallback,
           );
           final checkCount = explicitSelection
               ? 1
@@ -2155,71 +2097,6 @@ class PlayerController extends Notifier<PlayerState> {
           ),
         )
         .toList();
-  }
-
-  String _languageName(String code) {
-    return code.trim();
-  }
-
-  String _formatTrackLabel({
-    String? language,
-    String? title,
-    String? fallbackId,
-  }) {
-    final List<String> parts = [];
-    if (language != null && language.trim().isNotEmpty) {
-      parts.add(language.trim());
-    }
-    if (title != null && title.trim().isNotEmpty) {
-      parts.add(title.trim());
-    }
-
-    if (parts.isNotEmpty) {
-      return parts.join(' - ');
-    }
-
-    return fallbackId != null && fallbackId.trim().isNotEmpty
-        ? (int.tryParse(fallbackId) != null
-              ? 'Audio Track $fallbackId'
-              : fallbackId)
-        : 'Unknown Track';
-  }
-
-  String? _formatTechnicalSubtitle(dynamic track) {
-    try {
-      final List<String> techParts = [];
-
-      // Extract raw technical tags from the track object (media_kit specific)
-      // We use dynamic access as these fields exist in the runtime object but
-      // may not be present in early/stub versions of the class.
-      final String? codec = track.codec?.toString();
-      final String? channels = track.channels?.toString();
-      final dynamic samplerate = track.samplerate;
-
-      if (codec != null && codec.isNotEmpty && codec != 'null') {
-        techParts.add(codec.toUpperCase());
-      }
-
-      if (channels != null &&
-          channels.isNotEmpty &&
-          channels != 'null' &&
-          channels != 'unknown') {
-        techParts.add(channels);
-      }
-
-      if (samplerate != null && samplerate is num && samplerate > 0) {
-        techParts.add(
-          '${(samplerate / 1000).toStringAsFixed(1).replaceAll('.0', '')}kHz',
-        );
-      }
-
-      if (techParts.isNotEmpty) {
-        return techParts.join(' · ');
-      }
-    } catch (_) {
-      // Fallback if specific fields are inaccessible
-    }
-    return null;
   }
 
   Future<void> _openResolvedStream(
@@ -2459,142 +2336,6 @@ class PlayerController extends Notifier<PlayerState> {
       await pause();
     } else {
       await play();
-    }
-  }
-
-  PlayerTrackSelectionSnapshot getTrackSelectionSnapshot() {
-    if (state.useExoPlayer && _videoViewController != null) {
-      final controller = _videoViewController!;
-      final info = controller.mediaInfo.value;
-      if (info == null) {
-        return const PlayerTrackSelectionSnapshot();
-      }
-
-      final overrideAudio = controller.overrideAudio.value;
-      final overrideSubtitle = controller.overrideSubtitle.value;
-      final showSubtitle = controller.showSubtitle.value;
-
-      final audioTracks = info.audioTracks.entries
-          .map(
-            (entry) => PlayerTrackOption(
-              id: entry.key,
-              label: _formatTrackLabel(
-                language: entry.value.language,
-                title: entry.value.title,
-                fallbackId: entry.key,
-              ),
-              subtitle: entry.value.format,
-              selected:
-                  overrideAudio == entry.key ||
-                  (overrideAudio == null && info.audioTracks.length == 1),
-            ),
-          )
-          .toList();
-
-      final subtitleTracks = info.subtitleTracks.entries
-          .map(
-            (entry) => PlayerTrackOption(
-              id: entry.key,
-              label: _formatTrackLabel(
-                language: entry.value.language,
-                title: entry.value.title,
-                fallbackId: entry.key,
-              ),
-              subtitle: entry.value.format,
-              selected: showSubtitle && overrideSubtitle == entry.key,
-            ),
-          )
-          .toList();
-
-      return PlayerTrackSelectionSnapshot(
-        audioTracks: audioTracks,
-        subtitleTracks: subtitleTracks,
-        subtitlesOffSelected: !showSubtitle,
-      );
-    }
-
-    final audioTracks = _player.state.tracks.audio
-        .map(
-          (track) => PlayerTrackOption(
-            id: track.id,
-            label: _formatTrackLabel(
-              language: track.language,
-              title: track.title,
-              fallbackId: track.id,
-            ),
-            subtitle: _formatTechnicalSubtitle(track),
-            selected: track == _player.state.track.audio,
-          ),
-        )
-        .toList();
-
-    final subtitleTracks = <PlayerTrackOption>[
-      ...state.externalSubtitles.map(
-        (subtitle) => PlayerTrackOption(
-          id: 'external:${subtitle.url}',
-          label: subtitle.label,
-          subtitle: subtitle.lang != null
-              ? _languageName(subtitle.lang!)
-              : null,
-          selected:
-              _player.state.track.subtitle.id == subtitle.url ||
-              _player.state.track.subtitle.id == 'external:${subtitle.url}',
-        ),
-      ),
-      ..._buildEmbeddedSubtitleOptions(),
-    ];
-
-    return PlayerTrackSelectionSnapshot(
-      audioTracks: audioTracks,
-      subtitleTracks: subtitleTracks,
-      subtitlesOffSelected: _player.state.track.subtitle == SubtitleTrack.no(),
-    );
-  }
-
-  List<PlayerTrackOption> _buildEmbeddedSubtitleOptions() {
-    final tracks = _player.state.tracks.subtitle;
-    final options = <PlayerTrackOption>[];
-    final seenIds = <String>{};
-    for (final track in tracks) {
-      final language = (track.language ?? '').toString().trim().toLowerCase();
-      final id = language.isNotEmpty
-          ? 'embedded:$language'
-          : 'embedded:${track.id}';
-      if (!seenIds.add(id)) continue;
-      options.add(
-        PlayerTrackOption(
-          id: id,
-          label: _subtitleTrackLabel(track),
-          selected: track == _player.state.track.subtitle,
-        ),
-      );
-    }
-    return options;
-  }
-
-  String _subtitleTrackLabel(dynamic track) {
-    final title = (track.title ?? '').toString().trim();
-    final language = (track.language ?? '').toString().trim();
-    if (title.isNotEmpty && language.isNotEmpty) {
-      return '$title (${language.toLowerCase()})';
-    }
-    if (title.isNotEmpty) return title;
-    if (language.isNotEmpty) return language.toUpperCase();
-    final id = (track.id ?? '').toString().trim();
-    return id.isNotEmpty ? id : 'Unknown';
-  }
-
-  Future<void> selectAudioTrack(String id) async {
-    if (state.useExoPlayer && _videoViewController != null) {
-      _videoViewController!.setOverrideAudio(id);
-      return;
-    }
-
-    final track = _player.state.tracks.audio.firstWhereOrNull(
-      (t) => t.id == id,
-    );
-    if (track != null) {
-      await _player.setAudioTrack(track);
     }
   }
 
@@ -3363,17 +3104,6 @@ class PlayerController extends Notifier<PlayerState> {
     state = state.copyWith(showEpisodeList: false);
   }
 
-  void openSourcesPanel({int tab = 0}) {
-    state = state.copyWith(showSourcesPanel: true, sourcesPanelTab: tab);
-  }
-
-
-
-  void closeSourcesPanel() {
-    if (!state.showSourcesPanel) return;
-    state = state.copyWith(showSourcesPanel: false);
-  }
-
   Future<void> loadEpisode(Episode episode) async {
     if (state.isLoading) return; // guard: uiPhase-derived getter
     state = state.copyWith(showEpisodeList: false);
@@ -3761,22 +3491,6 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     return start; // Fallback to initial
-  }
-
-  Future<List<StreamResult>> _processStreams(
-    List<StreamResult> streams,
-    PlayerSettings settings, {
-    void Function(bool)? onFallback,
-  }) async {
-    final onWifi = await isOnWifi();
-    final preference = onWifi ? settings.wifiQuality : settings.mobileQuality;
-    final filtered = filterStreamsByQuality(
-      streams,
-      preference,
-      settings.qualityFilterMode,
-      onFallback: onFallback,
-    );
-    return sortStreamsByQuality(filtered, preference);
   }
 
   String _getProviderDisplayName(String providerName) {

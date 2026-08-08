@@ -7,7 +7,6 @@ import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../core/providers/device_info_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 
-import '../../../core/utils/stream_quality_sorter.dart';
 import 'widgets/settings_widgets.dart';
 import 'widgets/settings_dialogs.dart';
 import 'widgets/taskbar_customization_dialog.dart';
@@ -310,60 +309,6 @@ class SettingsScreen extends ConsumerWidget {
                       .setHardwareDecoding(!playerSettings.hardwareDecoding),
                 ),
                 SettingsTile(
-                  icon: Icons.wifi_rounded,
-                  title: l10n.wifiQualityPreference,
-                  subtitle: qualityPreferenceLabel(
-                    playerSettings.wifiQuality,
-                    l10n,
-                  ),
-                  onTap: () => showQualityDialog(
-                    context,
-                    ref,
-                    title: l10n.wifiQualityPreference,
-                    current: playerSettings.wifiQuality,
-                    onChanged: ref
-                        .read(playerSettingsProvider.notifier)
-                        .setWifiQuality,
-                  ),
-                ),
-                SettingsTile(
-                  icon: Icons.signal_cellular_alt_rounded,
-                  title: l10n.mobileQualityPreference,
-                  subtitle: qualityPreferenceLabel(
-                    playerSettings.mobileQuality,
-                    l10n,
-                  ),
-                  onTap: () => showQualityDialog(
-                    context,
-                    ref,
-                    title: l10n.mobileQualityPreference,
-                    current: playerSettings.mobileQuality,
-                    onChanged: ref
-                        .read(playerSettingsProvider.notifier)
-                        .setMobileQuality,
-                  ),
-                ),
-                SettingsTile(
-                  icon: Icons.filter_list_rounded,
-                  title: appText(
-                    context,
-                    english: 'Quality Filter Mode',
-                    arabic: 'وضع تصفية الجودة',
-                  ),
-                  subtitle: _qualityFilterModeLabel(
-                    context,
-                    playerSettings.qualityFilterMode,
-                  ),
-                  onTap: () => showQualityFilterModeDialog(
-                    context,
-                    ref,
-                    current: playerSettings.qualityFilterMode,
-                    onChanged: ref
-                        .read(playerSettingsProvider.notifier)
-                        .setQualityFilterMode,
-                  ),
-                ),
-                SettingsTile(
                   icon: Icons.tune_rounded,
                   title: l10n.playerControls,
                   subtitle: l10n.playerControlsSubtitle,
@@ -556,32 +501,6 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-String _qualityFilterModeLabel(
-  BuildContext context,
-  QualityFilterMode mode,
-) {
-  switch (mode) {
-    case QualityFilterMode.any:
-      return appText(
-        context,
-        english: 'Show all (sort only)',
-        arabic: 'عرض الكل (ترتيب فقط)',
-      );
-    case QualityFilterMode.atOrAbove:
-      return appText(
-        context,
-        english: 'Hide sources below preference',
-        arabic: 'إخفاء المصادر الأقل من الجودة المفضلة',
-      );
-    case QualityFilterMode.atOrBelow:
-      return appText(
-        context,
-        english: 'Hide sources above preference',
-        arabic: 'إخفاء المصادر الأعلى من الجودة المفضلة',
-      );
   }
 }
 

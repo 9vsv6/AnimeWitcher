@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:collection/collection.dart';
 import '../player_controller.dart';
 import 'hotstar_player_style.dart';
 import 'player_ltr.dart';
@@ -344,53 +343,31 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
   String? _getSubtitleUrl() {
     final controller = ref.read(playerControllerProvider.notifier);
     final playerState = ref.read(playerControllerProvider);
-    final snapshot = controller.getTrackSelectionSnapshot();
-    if (snapshot.subtitlesOffSelected) return null;
-    final selectedTrack = snapshot.subtitleTracks.firstWhereOrNull(
-      (t) => t.selected,
-    );
-    if (selectedTrack == null) return null;
-    final id = selectedTrack.id;
-
-    // 1. Direct ID formats (media_kit / online loaded tracks)
-    if (id.startsWith('external:')) {
-      return id.substring('external:'.length);
-    }
-    if (id.startsWith('http://') ||
-        id.startsWith('https://') ||
-        id.startsWith('file://')) {
-      return id;
+    final selectedId = controller.player.state.track.subtitle.id.trim();
+    if (selectedId.isEmpty || selectedId == 'no' || selectedId == 'auto') {
+      return null;
     }
 
-    // 2. Match by URL containing ID or vice-versa
+    if (selectedId.startsWith('external:')) {
+      return selectedId.substring('external:'.length);
+    }
+    if (selectedId.startsWith('http://') ||
+        selectedId.startsWith('https://') ||
+        selectedId.startsWith('file://')) {
+      return selectedId;
+    }
+
     for (final sub in playerState.externalSubtitles) {
-      if (id.contains(sub.url) || sub.url.contains(id)) {
+      if (selectedId.contains(sub.url) || sub.url.contains(selectedId)) {
         return sub.url;
       }
     }
 
-    // 3. Match by label similarity
-    final cleanTrackLabel = selectedTrack.label.toLowerCase();
-    for (final sub in playerState.externalSubtitles) {
-      final cleanSubLabel = sub.label.toLowerCase();
-      if (cleanTrackLabel.contains(cleanSubLabel) ||
-          cleanSubLabel.contains(cleanTrackLabel)) {
-        return sub.url;
-      }
+    // Subtitle synchronization works with an external subtitle file. When only
+    // one external subtitle is loaded, it is the unambiguous sync target.
+    if (playerState.externalSubtitles.length == 1) {
+      return playerState.externalSubtitles.first.url;
     }
-
-    // 4. Fallback: If only one external subtitle is active in state and we selected a subtitle
-    if (playerState.externalSubtitles.isNotEmpty) {
-      if (playerState.externalSubtitles.length == 1) {
-        return playerState.externalSubtitles.first.url;
-      }
-      if (cleanTrackLabel.contains('external') ||
-          cleanTrackLabel.contains('srt') ||
-          cleanTrackLabel.contains('vtt')) {
-        return playerState.externalSubtitles.first.url;
-      }
-    }
-
     return null;
   }
 

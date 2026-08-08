@@ -7,24 +7,6 @@ part 'player_settings_provider.g.dart';
 
 enum PlayerGesture { brightness, volume, none }
 
-/// Preferred playback quality tier. Plugins don't guarantee a specific
-/// quality but sources are sorted so the preferred tier is tried first.
-enum QualityPreference {
-  any, // no preference — keep original order
-  q360, // 360p
-  q480, // 480p / SD
-  q720, // 720p / HD
-  q1080, // 1080p / FHD
-  q4k, // 4K / UHD / 2160p
-}
-
-/// Controls how the quality preference threshold is applied when streams are loaded.
-enum QualityFilterMode {
-  any, // Sort only — show everything (current behaviour)
-  atOrAbove, // Hide sources strictly below the preferred quality tier
-  atOrBelow, // Hide sources strictly above the preferred tier (data-saver mode)
-}
-
 class PlayerSettings {
   final PlayerGesture leftGesture;
   final PlayerGesture rightGesture;
@@ -61,16 +43,6 @@ class PlayerSettings {
   final double subBackgroundOpacity;
   final int? subAlignment;
 
-  /// Quality to prefer when on Wi-Fi. Default: 4K (best available).
-  final QualityPreference wifiQuality;
-
-  /// Quality to prefer when on mobile data. Default: 1080p.
-  final QualityPreference mobileQuality;
-
-  /// Controls whether streams below/above the quality preference are hidden.
-  /// Default: [QualityFilterMode.any] (sort only, no filtering).
-  final QualityFilterMode qualityFilterMode;
-
   /// When true, the progress-bar time header shows the remaining time
   /// (e.g. "-1:23:45 / 2:00:00") instead of the elapsed time. Sticky
   /// across sessions because users who prefer one view almost always
@@ -83,9 +55,8 @@ class PlayerSettings {
   /// at playback time (`maxPlaybackSpeed`).
   final double defaultPlaybackSpeed;
 
-  /// Toggles for individual player control-bar buttons. All default to
-  /// visible. Sources, Audio Tracks and Subtitles are intentionally not
-  /// toggleable because they are essential.
+  /// Toggles for the remaining optional player control-bar buttons.
+  /// All default to visible.
   final bool showPip;
   final bool showResize;
   final bool showRotate;
@@ -133,9 +104,6 @@ class PlayerSettings {
     this.subEdgeColor = 0xFF000000,
     this.subBackgroundOpacity = 0.5,
     this.subAlignment,
-    this.wifiQuality = QualityPreference.q4k,
-    this.mobileQuality = QualityPreference.q1080,
-    this.qualityFilterMode = QualityFilterMode.any,
     this.showRemainingTime = false,
     this.defaultPlaybackSpeed = 1.0,
     this.showPip = true,
@@ -185,9 +153,6 @@ class PlayerSettings {
     int? subEdgeColor,
     double? subBackgroundOpacity,
     int? Function()? subAlignment,
-    QualityPreference? wifiQuality,
-    QualityPreference? mobileQuality,
-    QualityFilterMode? qualityFilterMode,
     bool? showRemainingTime,
     double? defaultPlaybackSpeed,
     bool? showPip,
@@ -245,9 +210,6 @@ class PlayerSettings {
       subEdgeColor: subEdgeColor ?? this.subEdgeColor,
       subBackgroundOpacity: subBackgroundOpacity ?? this.subBackgroundOpacity,
       subAlignment: subAlignment != null ? subAlignment() : this.subAlignment,
-      wifiQuality: wifiQuality ?? this.wifiQuality,
-      mobileQuality: mobileQuality ?? this.mobileQuality,
-      qualityFilterMode: qualityFilterMode ?? this.qualityFilterMode,
       showRemainingTime: showRemainingTime ?? this.showRemainingTime,
       defaultPlaybackSpeed: defaultPlaybackSpeed ?? this.defaultPlaybackSpeed,
       showPip: showPip ?? this.showPip,
@@ -335,14 +297,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     final subPos =
         (storage.getPlayerSetting('player_sub_pos') as num?)?.toDouble() ??
         100.0;
-    final wifiQ = _parseQuality(
-      storage.getPlayerSetting<String>('player_wifi_quality'),
-      QualityPreference.q4k,
-    );
-    final mobileQ = _parseQuality(
-      storage.getPlayerSetting<String>('player_mobile_quality'),
-      QualityPreference.q1080,
-    );
     final showRemaining =
         storage.getPlayerSetting<bool>(
           'player_show_remaining',
@@ -361,9 +315,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     final dlPass = storage.getPlayerSetting<String>('player_subdl_pass') ?? '';
     final dlKey = storage.getPlayerSetting<String>('player_subdl_key') ?? '';
     final ssKey = storage.getPlayerSetting<String>('player_ss_key') ?? '';
-    final filterMode = _parseFilterMode(
-      storage.getPlayerSetting<String>('player_quality_filter_mode'),
-    );
 
     final subFixedTextSize =
         (storage.getPlayerSetting('player_sub_fixed_text_size') as num?)
@@ -504,9 +455,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       subEdgeColor: subEdgeColor,
       subBackgroundOpacity: subBackgroundOpacity,
       subAlignment: subAlignment,
-      wifiQuality: wifiQ,
-      mobileQuality: mobileQ,
-      qualityFilterMode: filterMode,
       showRemainingTime: showRemaining,
       defaultPlaybackSpeed: defaultSpeed,
       showPip: showPip,
@@ -808,21 +756,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     state = AsyncData(newState);
   }
 
-  Future<void> setWifiQuality(QualityPreference q) async {
-    await _repository.setPlayerSetting('player_wifi_quality', q.name);
-    state = AsyncData(state.requireValue.copyWith(wifiQuality: q));
-  }
-
-  Future<void> setMobileQuality(QualityPreference q) async {
-    await _repository.setPlayerSetting('player_mobile_quality', q.name);
-    state = AsyncData(state.requireValue.copyWith(mobileQuality: q));
-  }
-
-  Future<void> setQualityFilterMode(QualityFilterMode mode) async {
-    await _repository.setPlayerSetting('player_quality_filter_mode', mode.name);
-    state = AsyncData(state.requireValue.copyWith(qualityFilterMode: mode));
-  }
-
   Future<void> setShowRemainingTime(bool val) async {
     await _repository.setPlayerSetting('player_show_remaining', val);
     state = AsyncData(state.requireValue.copyWith(showRemainingTime: val));
@@ -927,19 +860,5 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     );
   }
 
-  QualityPreference _parseQuality(String? s, QualityPreference fallback) {
-    if (s == null) return fallback;
-    return QualityPreference.values.firstWhere(
-      (e) => e.name == s,
-      orElse: () => fallback,
-    );
-  }
 
-  QualityFilterMode _parseFilterMode(String? s) {
-    if (s == null) return QualityFilterMode.any;
-    return QualityFilterMode.values.firstWhere(
-      (e) => e.name == s,
-      orElse: () => QualityFilterMode.any,
-    );
-  }
 }

@@ -552,13 +552,9 @@ class SkyStreamPlayerControlsState
     }
   }
 
-  /// True while a side panel (sources/tracks or episodes) owns the screen. Used
-  /// to suspend the chrome and its auto-hide timer so the panel isn't yanked out
-  /// from under the user (req: no auto-hide while a side bar is active).
-  bool get _panelOpen {
-    final s = ref.read(playerControllerProvider);
-    return s.showSourcesPanel || s.showEpisodeList;
-  }
+  /// True while the episodes side panel owns the screen. Used to suspend the
+  /// chrome and its auto-hide timer while the panel is active.
+  bool get _panelOpen => ref.read(playerControllerProvider).showEpisodeList;
 
   /// Hide the chrome and suspend auto-hide so a side panel can take over. The
   /// panel handles its own focus (its current/anchor row).
@@ -570,26 +566,12 @@ class SkyStreamPlayerControlsState
     }
   }
 
-  /// Open the sources/audio/subtitles side panel at [tab] (0=Sources, 1=Audio,
-  /// 2=Subtitles).
-  void openSourcesPanel(int tab) {
-    _enterPanelMode();
-    ref.read(playerControllerProvider.notifier).openSourcesPanel(tab: tab);
-  }
-
   /// Open the episodes side panel.
   void openEpisodesPanel() {
     _enterPanelMode();
     ref.read(playerControllerProvider.notifier).openEpisodeList();
   }
 
-
-  /// Close the sources panel and bring the chrome back with a fresh auto-hide.
-  void closeSourcesPanel() {
-    if (!ref.read(playerControllerProvider).showSourcesPanel) return;
-    ref.read(playerControllerProvider.notifier).closeSourcesPanel();
-    showControls();
-  }
 
   /// Close the episodes panel and bring the chrome back with a fresh auto-hide.
   void closeEpisodesPanel() {
@@ -600,9 +582,8 @@ class SkyStreamPlayerControlsState
 
   /// Close the content panel and bring the chrome back with a fresh auto-hide.
 
-  /// Close whichever side panel is open — the shared Back/dismiss entry point.
+  /// Close the active episodes panel — the shared Back/dismiss entry point.
   void closeActivePanel() {
-    closeSourcesPanel();
     closeEpisodesPanel();
   }
 
@@ -1212,25 +1193,6 @@ class SkyStreamPlayerControlsState
                   onHidePlayerUI: hideControls,
                 ),
 
-                // Sources / Audio / Subtitles drawer — topmost so it sits above
-                // the chrome. Pure Row layout inside (no nested Stack).
-                Positioned.fill(
-                  child: PlayerSidePanel(
-                    isVisible: ref.watch(
-                      playerControllerProvider.select(
-                        (s) => s.showSourcesPanel,
-                      ),
-                    ),
-                    isTv: _isTv,
-                    onDismiss: closeSourcesPanel,
-                    child: PlayerSourcesPanel(
-                      player: widget.player,
-                      videoViewController: widget.videoViewController,
-                      isTv: _isTv,
-                      onClose: closeSourcesPanel,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -1334,28 +1296,8 @@ class SkyStreamPlayerControlsState
         ref.watch(playerSettingsProvider).asData?.value ??
         const PlayerSettings();
 
-    // Right-side icon-only buttons (same style as resize/fullscreen). Sources,
-    // Audio and Subtitles all open the same side panel, each landing on its own
-    // tab; the panel applies every choice instantly.
+    // Right-side optional player controls.
     final actions = <Widget>[
-      PlayerIconButton(
-        icon: Icons.source,
-        tooltip: l10n.sources,
-        onPressed: () => openSourcesPanel(0),
-        isTv: _isTv,
-      ),
-      PlayerIconButton(
-        icon: Icons.audiotrack_rounded,
-        tooltip: l10n.audioTracks,
-        onPressed: () => openSourcesPanel(1),
-        isTv: _isTv,
-      ),
-      PlayerIconButton(
-        icon: Icons.subtitles_rounded,
-        tooltip: l10n.subtitles,
-        onPressed: () => openSourcesPanel(2),
-        isTv: _isTv,
-      ),
       if (supportsPlaybackSpeed && playerSettings.showPlaybackSpeed)
         PlayerIconButton(
           icon: Icons.speed,

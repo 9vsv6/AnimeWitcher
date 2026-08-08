@@ -493,7 +493,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       return true;
     }
     final s = ref.read(playerControllerProvider);
-    if (s.showSourcesPanel || s.showEpisodeList) {
+    if (s.showEpisodeList) {
       _lastBackAt = now;
       _controlsKeyFinal.currentState?.closeActivePanel();
       return true;
