@@ -80,11 +80,6 @@ class EpisodeCard extends HookConsumerWidget {
     );
     final isWatched = episodeWatchRepo.isWatched(parentItem.url, episode);
     final displayedProgress = isWatched ? 1.0 : progress;
-    final isImageExpanded = useState(false);
-    useEffect(() {
-      isImageExpanded.value = false;
-      return null;
-    }, [episode.url]);
 
     String? statusBadge;
     if (isWatched) {
@@ -308,10 +303,6 @@ class EpisodeCard extends HookConsumerWidget {
                       displayedProgress,
                       statusBadge,
                       isArabic: isArabic,
-                      isImageExpanded: isImageExpanded.value,
-                      onToggleImage: () {
-                        isImageExpanded.value = !isImageExpanded.value;
-                      },
                       isWatched: isWatched,
                       isSelectionMode: isSelectionMode,
                       isSelected: isSelected,
@@ -540,137 +531,126 @@ class EpisodeCard extends HookConsumerWidget {
     double progress,
     String? statusBadge, {
     required bool isArabic,
-    required bool isImageExpanded,
-    required VoidCallback onToggleImage,
     required bool isWatched,
     required bool isSelectionMode,
     required bool isSelected,
   }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onToggleImage,
-      child: AnimatedSize(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeInOutCubic,
-        alignment: AlignmentDirectional.topStart,
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: isImageExpanded ? 220 : 140,
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: CachedNetworkImage(
-                    imageUrl: episode.posterUrl ?? '',
-                    fit: BoxFit.cover,
-                    errorWidget: (context, url, error) =>
-                        const ThumbnailErrorPlaceholder(),
-                    placeholder: (context, url) => Container(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: const Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 140,
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: CachedNetworkImage(
+                imageUrl: episode.posterUrl ?? '',
+                fit: BoxFit.cover,
+                errorWidget: (context, url, error) =>
+                    const ThumbnailErrorPlaceholder(),
+                placeholder: (context, url) => Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                 ),
               ),
             ),
-            if (isWatched)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: Colors.black.withValues(alpha: 0.28),
-                    ),
-                  ),
-                ),
-              ),
-            if (episode.isFiller)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD32F2F),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    isArabic ? 'فلر' : 'FILLER',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-            if (progress > 0)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 3,
-                  backgroundColor: Colors.black26,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-            if (statusBadge != null)
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    statusBadge,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-            Positioned.fill(
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isSelectionMode
-                        ? isSelected
-                              ? Icons.check_rounded
-                              : Icons.add_rounded
-                        : Icons.play_arrow_rounded,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        if (isWatched)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.black.withValues(alpha: 0.28),
+                ),
+              ),
+            ),
+          ),
+        if (episode.isFiller)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD32F2F),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                isArabic ? 'فلر' : 'FILLER',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        if (progress > 0)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 3,
+              backgroundColor: Colors.black26,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        if (statusBadge != null)
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                statusBadge,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+        Positioned.fill(
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.6),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isSelectionMode
+                    ? isSelected
+                          ? Icons.check_rounded
+                          : Icons.add_rounded
+                    : Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

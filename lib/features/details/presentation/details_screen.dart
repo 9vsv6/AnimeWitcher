@@ -45,6 +45,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   static const Duration _tabTransitionDuration = Duration(milliseconds: 260);
 
   bool _didTriggerAutoPlay = false;
+  bool _isPosterExpanded = false;
   int _selectedDetailsTab = 0;
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
@@ -354,6 +355,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           .read(detailsControllerProvider(widget.item.url).notifier)
           .loadDetails(widget.item, autoPlay: widget.autoPlay);
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant DetailsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.url != widget.item.url) {
+      _isPosterExpanded = false;
+    }
   }
 
   @override
@@ -1355,22 +1364,35 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Hero(
-                      tag: 'poster_${item.url}',
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: CachedNetworkImage(
-                          imageUrl:
-                              AppImageFallbacks.poster(
-                                item.posterUrl,
-                                label: item.title,
-                              ) ??
-                              '',
-                          width: 100,
-                          height: 150,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, _, _) =>
-                              ThumbnailErrorPlaceholder(label: item.title),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(
+                        () => _isPosterExpanded = !_isPosterExpanded,
+                      ),
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeInOutCubic,
+                        alignment: AlignmentDirectional.topStart,
+                        child: Hero(
+                          tag: 'poster_${item.url}',
+                          child: SizedBox(
+                            width: _isPosterExpanded ? 160 : 100,
+                            height: _isPosterExpanded ? 240 : 150,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: CachedNetworkImage(
+                                imageUrl:
+                                    AppImageFallbacks.poster(
+                                      item.posterUrl,
+                                      label: item.title,
+                                    ) ??
+                                    '',
+                                fit: BoxFit.cover,
+                                errorWidget: (_, _, _) =>
+                                    ThumbnailErrorPlaceholder(label: item.title),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
