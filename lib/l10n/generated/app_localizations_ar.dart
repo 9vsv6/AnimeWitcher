@@ -818,7 +818,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String playEpisodeOnly(String label, int episode) {
-    return '$label ح$episode';
+    return '$label حلقة $episode';
   }
 
   @override

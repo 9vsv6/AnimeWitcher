@@ -531,7 +531,7 @@
       }
     }
   },
-  "playEpisodeOnly": "{label} ح{episode}",
+  "playEpisodeOnly": "{label} حلقة {episode}",
   "@playEpisodeOnly": {
     "placeholders": {
       "label": {
