@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
-import '../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../../core/utils/image_fallbacks.dart';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -456,7 +455,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           label: item.title,
         ) ??
         '';
-    final titleHeight = sdp(32).clamp(32.0, 50.0).toDouble();
+    final titleHeight = sdp(28).clamp(28.0, 44.0).toDouble();
+    final titleStyle = TextStyle(
+      color: Colors.white,
+      fontSize: sdp(21).clamp(18.0, 24.0).toDouble(),
+      fontWeight: FontWeight.bold,
+      height: 1.1,
+    );
     final titleTop =
         bannerHeight -
         sdp(LayoutConstants.detailsHeaderBottomMobile) -
@@ -478,22 +483,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               children: [
                 Hero(
                   tag: 'banner_${item.url}',
-                  child: CachedNetworkImage(
-                    imageUrl: bannerUrl,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    memCacheWidth:
-                        (screenWidth * MediaQuery.devicePixelRatioOf(context))
-                            .round(),
-                    placeholder: (_, _) => const ColoredBox(
-                      color: Colors.black,
-                    ),
-                    errorWidget: (_, _, _) {
-                      if (providedBannerUrl != null &&
-                          posterUrl.isNotEmpty &&
-                          providedBannerUrl != posterUrl) {
-                        return CachedNetworkImage(
-                          imageUrl: posterUrl,
+                  child: bannerUrl.isEmpty
+                      ? const ColoredBox(color: Colors.black)
+                      : CachedNetworkImage(
+                          imageUrl: bannerUrl,
                           fit: BoxFit.cover,
                           alignment: Alignment.center,
                           memCacheWidth:
@@ -503,18 +496,31 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           placeholder: (_, _) => const ColoredBox(
                             color: Colors.black,
                           ),
-                          errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
-                            label: item.title,
-                            isBackdrop: true,
-                          ),
-                        );
-                      }
-                      return ThumbnailErrorPlaceholder(
-                        label: item.title,
-                        isBackdrop: true,
-                      );
-                    },
-                  ),
+                          errorWidget: (_, _, _) {
+                            if (providedBannerUrl != null &&
+                                posterUrl.isNotEmpty &&
+                                providedBannerUrl != posterUrl) {
+                              return CachedNetworkImage(
+                                imageUrl: posterUrl,
+                                fit: BoxFit.cover,
+                                alignment: Alignment.center,
+                                memCacheWidth:
+                                    (screenWidth *
+                                            MediaQuery.devicePixelRatioOf(
+                                              context,
+                                            ))
+                                        .round(),
+                                placeholder: (_, _) => const ColoredBox(
+                                  color: Colors.black,
+                                ),
+                                errorWidget: (_, _, _) => const ColoredBox(
+                                  color: Colors.black,
+                                ),
+                              );
+                            }
+                            return const ColoredBox(color: Colors.black);
+                          },
+                        ),
                 ),
                 // Keep the fade broad and finish on the same solid black as
                 // the content below. Ending at a translucent black leaves a
@@ -553,12 +559,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   elevation: sdp(6),
                   borderRadius: BorderRadius.circular(sdp(5)),
                   clipBehavior: Clip.antiAlias,
-                  child: CachedNetworkImage(
-                    imageUrl: posterUrl,
-                    fit: BoxFit.cover,
-                    errorWidget: (_, _, _) =>
-                        ThumbnailErrorPlaceholder(label: item.title),
-                  ),
+                  child: posterUrl.isEmpty
+                      ? const ColoredBox(color: Colors.black)
+                      : CachedNetworkImage(
+                          imageUrl: posterUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, _, _) => const ColoredBox(
+                            color: Colors.black,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -585,26 +594,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                             item.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: titleStyle,
                           ),
                         )
                       : Text(
                           item.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: titleStyle,
                         ),
                 ),
               ),
