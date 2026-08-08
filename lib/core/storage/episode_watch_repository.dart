@@ -42,12 +42,59 @@ class EpisodeWatchRepository {
 
   Map<String, bool>? _cachedOverrides;
 
-  String _episodeKey(String mainUrl, Episode episode) {
+  String _canonicalMainUrl(String mainUrl) {
+    final value = mainUrl.trim();
+    final uri = Uri.tryParse(value);
+    if (uri == null) return value;
+
+    // Search/home results can carry the original hit query while the details
+    // page is reopened with the canonical AnimeWitcher route. Those URLs
+    // identify the same anime, so query data must not affect watch state.
+    final host = uri.host.toLowerCase();
+    if ((host == 'animewitcher.com' || host == 'www.animewitcher.com') &&
+        uri.pathSegments.isNotEmpty &&
+        uri.pathSegments.first == 'watch') {
+      return uri.replace(query: '', fragment: '').toString();
+    }
+    return value;
+  }
+
+  String _stableEpisodeId(Episode episode) {
+    final episodeUrl = episode.url.trim();
+    if (episodeUrl.isNotEmpty) {
+      // Episode URLs are the provider's actual episode identity. Using the
+      // season/number pair here caused a watched episode to disappear when
+      // AniZip enrichment changed the season value or when AnimeWitcher
+      // returned a duplicate/renumbered document.
+      return ['url', episodeUrl, episode.dubStatus.name].join(':');
+    }
+
+    return [
+      'number',
+      episode.season,
+      episode.episode,
+      episode.name,
+      episode.dubStatus.name,
+    ].join(':');
+  }
+
+  String _episodeKey(Episode episode) {
+    // v2 intentionally keys a non-empty episode by its own stable URL rather
+    // than by the transient parent item URL and mutable metadata fields.
+    final identity = 'episode_watch_v2|${_stableEpisodeId(episode)}';
+    return sha256.convert(utf8.encode(identity)).toString();
+  }
+
+  String _legacyEpisodeKey(String mainUrl, Episode episode) {
     final stableEpisodeId = episode.episode > 0
         ? [episode.season, episode.episode, episode.dubStatus.name].join(':')
         : [episode.url, episode.name, episode.dubStatus.name].join(':');
 
-    return sha256.convert(utf8.encode('$mainUrl|$stableEpisodeId')).toString();
+    return sha256
+        .convert(
+          utf8.encode('${_canonicalMainUrl(mainUrl)}|$stableEpisodeId'),
+        )
+        .toString();
   }
 
   Map<String, bool> _readOverrides() {
@@ -82,7 +129,13 @@ class EpisodeWatchRepository {
   }
 
   bool? getExplicitState(String mainUrl, Episode episode) {
-    return _readOverrides()[_episodeKey(mainUrl, episode)];
+    final overrides = _readOverrides();
+    final current = overrides[_episodeKey(episode)];
+    if (current != null) return current;
+
+    // Read states written by v1 so existing users do not lose their watched
+    // marks after upgrading. New writes use the URL-based v2 identity above.
+    return overrides[_legacyEpisodeKey(mainUrl, episode)];
   }
 
   bool isWatched(String mainUrl, Episode episode) {
@@ -109,7 +162,7 @@ class EpisodeWatchRepository {
 
   Future<void> setWatched(String mainUrl, Episode episode, bool watched) async {
     final overrides = Map<String, bool>.from(_readOverrides());
-    overrides[_episodeKey(mainUrl, episode)] = watched;
+    overrides[_episodeKey(episode)] = watched;
     await _persist(overrides);
   }
 
@@ -121,7 +174,7 @@ class EpisodeWatchRepository {
     final overrides = Map<String, bool>.from(_readOverrides());
 
     for (final episode in episodes) {
-      overrides[_episodeKey(mainUrl, episode)] = watched;
+      overrides[_episodeKey(episode)] = watched;
     }
 
     await _persist(overrides);
