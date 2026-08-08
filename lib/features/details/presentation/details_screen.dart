@@ -69,10 +69,31 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
   Offset _tabSlideFrom = Offset.zero;
+  final ScrollController _detailsScrollController = ScrollController();
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
 
   static const String _removeLibraryAction = '__remove_from_library__';
+
+  double get _detailsHeaderPullTranslation {
+    if (!_detailsScrollController.hasClients) return 0;
+
+    final pullDistance = (-_detailsScrollController.offset)
+        .clamp(0.0, 24.0)
+        .toDouble();
+    return pullDistance * 0.20;
+  }
+
+  Widget _withDetailsHeaderPullReaction(Widget child) {
+    return AnimatedBuilder(
+      animation: _detailsScrollController,
+      child: child,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, _detailsHeaderPullTranslation),
+        child: child,
+      ),
+    );
+  }
 
   String _libraryCategoryLabel(BuildContext context, LibraryCategory category) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
@@ -435,6 +456,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           label: item.title,
         ) ??
         '';
+    final titleHeight = sdp(32).clamp(32.0, 50.0).toDouble();
+    final titleTop =
+        bannerHeight -
+        sdp(LayoutConstants.detailsHeaderBottomMobile) -
+        titleHeight;
 
     return ColoredBox(
       color: Colors.black,
@@ -537,23 +563,35 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           Positioned(
             left: sdp(LayoutConstants.detailsTitleStartMobile),
             right: sdp(LayoutConstants.detailsHeaderEndMobile),
-            bottom: sdp(
-              LayoutConstants.detailsExpandedHeightMobile -
-                  LayoutConstants.detailsBannerHeightMobile +
-                  LayoutConstants.detailsHeaderBottomMobile,
-            ),
+            top: titleTop,
+            height: titleHeight,
             child: Directionality(
               textDirection: TextDirection.ltr,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onLongPress: () => _copyAnimeTitle(context, item.title),
-                child: item.logoUrl != null
-                    ? CachedNetworkImage(
-                        imageUrl: item.logoUrl!,
-                        height: sdp(32).clamp(32, 50).toDouble(),
-                        fit: BoxFit.contain,
-                        alignment: Alignment.centerLeft,
-                        errorWidget: (_, _, _) => Text(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: item.logoUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl: item.logoUrl!,
+                          height: titleHeight,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.centerLeft,
+                          errorWidget: (_, _, _) => Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        )
+                      : Text(
                           item.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -565,19 +603,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                                 fontWeight: FontWeight.bold,
                               ),
                         ),
-                      )
-                    : Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
+                ),
               ),
             ),
           ),
@@ -637,6 +663,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   @override
   void dispose() {
+    _detailsScrollController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -751,77 +778,85 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       body: _buildDetailsTabSwipeRegion(
         enabled: !isMovie,
         child: CustomScrollView(
+          controller: _detailsScrollController,
           physics: const _GentleTopOverscrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: SliverAppBar(
-              pinned: true,
-              expandedHeight: mobileExpandedHeight,
-              stretch: true,
-              backgroundColor: Colors.black,
-              flexibleSpace: FlexibleSpaceBar(
-              stretchModes: const [
-                StretchMode.zoomBackground,
-              ],
-              background: _buildAnimeWitcherMobileHeader(
-                context,
-                item,
-                detailsAsync,
-              ),
-            ),
-            // Mobile: back/bookmark excluded from D-pad traversal.
-            // Users navigate back via hardware Back key on TV remotes.
-            leading: Focus(
-              descendantsAreTraversable: false,
-              child: CustomButton(
-                shape: const CircleBorder(),
-                backgroundColor: Colors.black45,
-                onPressed: () => context.pop(),
-                child: const Icon(
-                  Icons.arrow_back_rounded,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            actions: [
-              Focus(
-                descendantsAreTraversable: false,
-                child: IconButton(
-                  icon: Icon(
-                    isBookmarked
-                        ? Icons.bookmark_rounded
-                        : Icons.bookmark_border_rounded,
-                    color: isBookmarked
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white,
-                  ),
-                  onPressed: () => _showLibraryCategoryPicker(context, item),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black45,
-                    foregroundColor: Colors.white,
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: SliverAppBar(
+                pinned: true,
+                expandedHeight: mobileExpandedHeight,
+                stretch: true,
+                backgroundColor: Colors.black,
+                flexibleSpace: FlexibleSpaceBar(
+                  stretchModes: const [
+                    StretchMode.zoomBackground,
+                  ],
+                  background: _withDetailsHeaderPullReaction(
+                    _buildAnimeWitcherMobileHeader(
+                      context,
+                      item,
+                      detailsAsync,
+                    ),
                   ),
                 ),
+                // Mobile: back/bookmark excluded from D-pad traversal.
+                // Users navigate back via hardware Back key on TV remotes.
+                leading: _withDetailsHeaderPullReaction(
+                  Focus(
+                    descendantsAreTraversable: false,
+                    child: CustomButton(
+                      shape: const CircleBorder(),
+                      backgroundColor: Colors.black45,
+                      onPressed: () => context.pop(),
+                      child: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                actions: [
+                  _withDetailsHeaderPullReaction(
+                    Focus(
+                      descendantsAreTraversable: false,
+                      child: IconButton(
+                        icon: Icon(
+                          isBookmarked
+                              ? Icons.bookmark_rounded
+                              : Icons.bookmark_border_rounded,
+                          color: isBookmarked
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.white,
+                        ),
+                        onPressed: () =>
+                            _showLibraryCategoryPicker(context, item),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black45,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
               ),
-              const SizedBox(width: 8),
-            ],
-              ),
-          ),
-          ..._buildMobileSlivers(
-            context,
-            item,
-            details,
-            detailsAsync,
-            episodesAsync,
-            castAsync,
-            trailersAsync,
-            relatedAsync,
-            recommendationsAsync,
-            isMovie,
-            l10n,
-          ),
+            ),
+            ..._buildMobileSlivers(
+              context,
+              item,
+              details,
+              detailsAsync,
+              episodesAsync,
+              castAsync,
+              trailersAsync,
+              relatedAsync,
+              recommendationsAsync,
+              isMovie,
+              l10n,
+            ),
           ],
         ),
       ),
