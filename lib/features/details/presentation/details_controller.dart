@@ -715,6 +715,7 @@ class DetailsController extends _$DetailsController {
           ? metadataPoster
           : source.posterUrl,
       headers: source.headers,
+      isFiller: source.isFiller || metadata.isFiller,
       rating: source.rating,
       runtime: source.runtime,
       airDate: source.airDate,

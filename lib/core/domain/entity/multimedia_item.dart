@@ -482,6 +482,9 @@ class Episode {
   final String? posterUrl;
   final Map<String, String>? headers;
 
+  /// Whether the provider marked this episode as filler.
+  final bool isFiller;
+
   // Parity fields
   final double? rating;
   final int? runtime;
@@ -498,6 +501,7 @@ class Episode {
     this.description,
     this.posterUrl,
     this.headers,
+    this.isFiller = false,
     this.rating,
     this.runtime,
     this.airDate,
@@ -522,6 +526,9 @@ class Episode {
       headers: json['headers'] != null
           ? Map<String, String>.from(json['headers'] as Map)
           : null,
+      isFiller: _parseBoolean(
+        json['isFiller'] ?? json['is_filler'] ?? json['filler'],
+      ),
       rating: (json['rating'] as num?)?.toDouble(),
       runtime: (json['runtime'] as int?) ?? (json['duration'] as int?),
       airDate: json['airDate'] as String?,
@@ -538,6 +545,18 @@ class Episode {
                 .toList()
           : null,
     );
+  }
+
+  static bool _parseBoolean(dynamic raw) {
+    if (raw is bool) return raw;
+    if (raw is num) return raw != 0;
+
+    final value = raw?.toString().trim().toLowerCase();
+    return value == 'true' ||
+        value == '1' ||
+        value == 'yes' ||
+        value == 'filler' ||
+        value == 'فلر';
   }
 
   static DubStatus _parseDubStatus(dynamic raw, [String? name]) {
@@ -567,6 +586,7 @@ class Episode {
       'description': description,
       'posterUrl': posterUrl,
       'headers': headers,
+      'isFiller': isFiller,
       'rating': rating,
       'runtime': runtime,
       'airDate': airDate,

@@ -404,6 +404,18 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
   String _text(dynamic value) => value == null ? '' : value.toString().trim();
 
+  bool _isTruthy(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+
+    final normalized = _text(value).toLowerCase();
+    return normalized == 'true' ||
+        normalized == '1' ||
+        normalized == 'yes' ||
+        normalized == 'filler' ||
+        normalized == 'فلر';
+  }
+
   String _decodeHtml(dynamic value) {
     final text = _unescape.convert(_text(value));
     return text.replaceAll(RegExp(r'<[^>]+>'), '').trim();
@@ -1892,11 +1904,15 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final image = _text(
       source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
     );
+    final isFiller = _isTruthy(
+      source['filler'] ?? source['is_filler'] ?? source['isFiller'],
+    );
     return _EpisodeRecord(
       id: id,
       number: number,
       title: _episodeTitle(source, number),
       image: image,
+      isFiller: isFiller,
     );
   }
 
@@ -1980,6 +1996,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
             season: 1,
             episode: record.number,
             posterUrl: record.image.isEmpty ? null : record.image,
+            isFiller: record.isFiller,
           ),
         )
         .toList(growable: false);
@@ -2778,11 +2795,13 @@ class _EpisodeRecord {
     required this.number,
     required this.title,
     required this.image,
+    required this.isFiller,
   });
   final String id;
   final int number;
   final String title;
   final String image;
+  final bool isFiller;
 }
 
 class _RelatedCandidate {

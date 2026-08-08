@@ -302,6 +302,7 @@ class EpisodeCard extends HookConsumerWidget {
                       context,
                       displayedProgress,
                       statusBadge,
+                      isArabic: isArabic,
                       isWatched: isWatched,
                       isSelectionMode: isSelectionMode,
                       isSelected: isSelected,
@@ -529,6 +530,7 @@ class EpisodeCard extends HookConsumerWidget {
     BuildContext context,
     double progress,
     String? statusBadge, {
+    required bool isArabic,
     required bool isWatched,
     required bool isSelectionMode,
     required bool isSelected,
@@ -567,6 +569,26 @@ class EpisodeCard extends HookConsumerWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: Colors.black.withValues(alpha: 0.28),
+                ),
+              ),
+            ),
+          ),
+        if (episode.isFiller)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD32F2F),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                isArabic ? 'فلر' : 'FILLER',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
