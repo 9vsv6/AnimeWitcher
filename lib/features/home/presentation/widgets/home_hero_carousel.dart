@@ -750,9 +750,9 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
         maxLines: isDesktop ? 2 : 3,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
-          fontSize: 40,
+          fontSize: isDesktop ? 34 : 30,
           fontFamily: 'RobotoCondensed',
           fontWeight: FontWeight.w900,
           letterSpacing: 1.0,
