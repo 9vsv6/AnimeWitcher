@@ -127,7 +127,7 @@ class MetadataBar extends ConsumerWidget {
     final raw = _clean(data['awEpisodes']);
     if (raw == null) return null;
     final normalized = _normalizeDigits(raw);
-    final match = RegExp(r'\d+').firstMatch(normalized);
+    final match = RegExp(r'[0-9]+').firstMatch(normalized);
     final count = match == null ? null : int.tryParse(match.group(0)!);
     if (count == null || count <= 0) return null;
     if (RegExp(r'حلقة|episode', caseSensitive: false).hasMatch(raw)) return raw;
@@ -138,10 +138,10 @@ class MetadataBar extends ConsumerWidget {
     final raw = _clean(data['awMalScore']);
     if (raw == null) return null;
     final normalized = _normalizeDigits(raw);
-    final match = RegExp(r'\d+(?:\.\d+)?').firstMatch(normalized);
+    final match = RegExp(r'[0-9]+(?:[.][0-9]+)?').firstMatch(normalized);
     final score = match == null ? null : double.tryParse(match.group(0)!);
     if (score == null || score <= 0) return null;
-    final pretty = score.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+    final pretty = score.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'[.]$'), '');
     return 'MAL $pretty';
   }
 
