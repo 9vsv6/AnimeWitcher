@@ -752,7 +752,7 @@ class _OptionList extends StatelessWidget {
         // Build a generous off-screen window so the selected (anchor) row is
         // laid out even when it starts below the fold — required for the
         // open/tab-switch ensureVisible() to be able to scroll to it.
-        scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
+        cacheExtent: 1200,
         children: children,
       ),
     );
