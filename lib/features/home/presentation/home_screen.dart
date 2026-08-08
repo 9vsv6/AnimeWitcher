@@ -395,15 +395,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         .trim();
 
     return normalized.contains('اخر الاعمال المضافه') ||
-        normalized.contains('احدث الاعمال') ||
-        normalized.contains('اخر التحديثات') ||
-        normalized.contains('احدث الحلقات') ||
-        normalized.contains('الحلقات الجديده') ||
-        normalized.contains('اخر الحلقات') ||
+        normalized.contains('الاعمال المضافه حديثا') ||
         normalized.contains('latest additions') ||
-        normalized.contains('latest updates') ||
-        normalized.contains('recently added') ||
-        normalized.contains('recent');
+        normalized.contains('recently added');
   }
 
   List<Widget> _buildProviderSectionsWithNews(
@@ -419,7 +413,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       (entry) => _isLatestAddedSectionTitle(entry.key),
     );
     if (newsAfterIndex < 0 && entries.isNotEmpty) {
-      newsAfterIndex = 0;
+      newsAfterIndex = entries.length - 1;
     }
 
     Widget buildNewsSection() {

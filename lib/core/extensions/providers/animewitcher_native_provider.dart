@@ -394,6 +394,22 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     '_highlightResult',
   ];
 
+  static const List<String> _similarAttributes = <String>[
+    'objectID',
+    'anime_id',
+    'name',
+    'english_title',
+    'poster_uri',
+    'order',
+    'path',
+    'type',
+    'poster',
+    'cover_uri',
+    'tags',
+    'mal_id',
+    'malId',
+  ];
+
   static const List<String> _recentAttributes = <String>[
     'filler',
     'note',
@@ -1853,11 +1869,132 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return output;
   }
 
+  Future<List<_AnimeWitcherCharacterRef>> _animeWitcherCharacterRefs(
+    String animeId,
+  ) async {
+    final cleanId = animeId.trim();
+    if (cleanId.isEmpty) return const <_AnimeWitcherCharacterRef>[];
+
+    final main = <_AnimeWitcherCharacterRef>[];
+    final supporting = <_AnimeWitcherCharacterRef>[];
+    final encodedId = Uri.encodeComponent(cleanId);
+    var nextToken = '';
+    final seenTokens = <String>{};
+
+    for (var page = 0; page < 4; page++) {
+      var requestUrl =
+          '${_firestoreUrl('anime_list/$encodedId/characters')}?pageSize=100';
+      if (nextToken.isNotEmpty) {
+        requestUrl +=
+            '&pageToken=${Uri.encodeQueryComponent(nextToken)}';
+      }
+      final payload = await _getJson(requestUrl);
+      if (payload == null) break;
+
+      for (final raw in _list(payload['documents'])) {
+        final document = _map(raw);
+        final fields = _firestoreFields(document['fields']);
+        final role = _text(fields['role']);
+        final target = role == 'Main'
+            ? main
+            : role == 'Supporting'
+                ? supporting
+                : null;
+        if (target == null || target.length >= 10) continue;
+
+        var characterId = _text(document['name']);
+        if (characterId.isNotEmpty) characterId = characterId.split('/').last;
+        try {
+          characterId = Uri.decodeComponent(characterId);
+        } catch (_) {}
+        if (characterId.isEmpty) continue;
+        target.add(_AnimeWitcherCharacterRef(characterId, role));
+      }
+
+      if (main.length >= 10 && supporting.length >= 10) break;
+      final token = _text(payload['nextPageToken']);
+      if (token.isEmpty || !seenTokens.add(token)) break;
+      nextToken = token;
+    }
+
+    return <_AnimeWitcherCharacterRef>[...main, ...supporting];
+  }
+
+  Future<_AnimeWitcherCharacter?> _animeWitcherCharacter(
+    _AnimeWitcherCharacterRef reference,
+  ) async {
+    final payload = await _getJson(
+      _firestoreUrl(
+        'characters_list/${Uri.encodeComponent(reference.id)}',
+      ),
+    );
+    if (payload == null) return null;
+
+    final fields = _firestoreFields(payload['fields']);
+    final data = _map(fields['data']);
+    final name = _text(data['name'] ?? fields['name']);
+    if (name.isEmpty) return null;
+
+    final images = _map(data['images'] ?? fields['images']);
+    final jpg = _map(images['jpg']);
+    final webp = _map(images['webp']);
+    var image = _text(
+      jpg['image_url'] ??
+          jpg['large_image_url'] ??
+          webp['image_url'] ??
+          webp['large_image_url'] ??
+          fields['image'],
+    );
+    if (image ==
+        'https://cdn.myanimelist.net/img/sp/icon/apple-touch-icon-256.png') {
+      image = '';
+    }
+
+    return _AnimeWitcherCharacter(
+      actor: Actor(
+        name: name,
+        image: image.isEmpty ? null : image,
+        role: _characterRole(reference.role),
+      ),
+      role: reference.role,
+      likes: _positiveInt(fields['likes']),
+    );
+  }
+
+  Future<List<Actor>> _animeWitcherServerCast(
+    String animeId,
+    Map<String, dynamic> source,
+  ) async {
+    final references = await _animeWitcherCharacterRefs(animeId);
+    if (references.isEmpty) return _animeWitcherCast(source);
+
+    final characters = await Future.wait(
+      references.map(_animeWitcherCharacter),
+    );
+    final main = characters
+        .whereType<_AnimeWitcherCharacter>()
+        .where((item) => item.role == 'Main')
+        .toList()
+      ..sort((a, b) => b.likes.compareTo(a.likes));
+    final supporting = characters
+        .whereType<_AnimeWitcherCharacter>()
+        .where((item) => item.role == 'Supporting')
+        .toList()
+      ..sort((a, b) => b.likes.compareTo(a.likes));
+    final output = <Actor>[
+      ...main.map((item) => item.actor),
+      ...supporting.map((item) => item.actor),
+    ];
+    return output.isEmpty ? _animeWitcherCast(source) : output;
+  }
+
   @override
   Future<List<Actor>> getCast(String url) async {
+    final route = _parseAnimeUrl(url);
     final source = await _detailSource(url);
-    final providerCast = _animeWitcherCast(source);
-    if (!_useAniListCast) return providerCast;
+    if (!_useAniListCast) {
+      return _animeWitcherServerCast(route.animeId, source);
+    }
 
     final media = await _aniListMedia(_malId(source));
     final edges = _list(_map(media['characters'])['edges']);
@@ -1891,7 +2028,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       ));
       if (output.length >= _maxCastItems) break;
     }
-    return output.isEmpty ? providerCast : output;
+    if (output.isNotEmpty) return output;
+    return _animeWitcherServerCast(route.animeId, source);
   }
 
   String _youtubeId(dynamic raw) {
@@ -2172,8 +2310,51 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<List<MultimediaItem>> _animeWitcherRecommendations(
+    String animeId,
     Map<String, dynamic> source,
   ) async {
+    final currentAnimeId = animeId.trim().isNotEmpty
+        ? animeId.trim().toLowerCase()
+        : _animeIdFromHit(source).trim().toLowerCase();
+    final tags = _stringList(source['tags']);
+    if (tags.isNotEmpty) {
+      final payload = await _algoliaQuery(
+        'series_similar',
+        query: tags.join(' '),
+        page: 0,
+        hitsPerPage: 11,
+        attributes: _similarAttributes,
+      );
+      final hits = <Map<String, dynamic>>[];
+      final seenIds = <String>{};
+      for (final raw in _list(payload['hits'])) {
+        final hit = _map(raw);
+        if (hit.isEmpty) continue;
+        final animeId = _animeIdFromHit(hit).trim().toLowerCase();
+        if (animeId.isEmpty ||
+            animeId == currentAnimeId ||
+            !seenIds.add(animeId) ||
+            _stringList(hit['tags']).contains('ايتشي')) {
+          continue;
+        }
+        hits.add(hit);
+      }
+
+      final posters = await _aniListPostersForHits(hits);
+      final similar = <MultimediaItem>[];
+      final seenUrls = <String>{};
+      for (final hit in hits) {
+        final item = _relatedItem(
+          hit,
+          preferredPoster: posters[_malId(hit)],
+        );
+        if (!seenUrls.add(item.url)) continue;
+        similar.add(item);
+        if (similar.length >= _maxRecommendations) break;
+      }
+      if (similar.isNotEmpty) return similar;
+    }
+
     final details = _map(source['details']);
     final raw = source['recommendations'] ??
         source['recommended'] ??
@@ -2244,9 +2425,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
   @override
   Future<List<MultimediaItem>> getRecommendations(String url) async {
+    final route = _parseAnimeUrl(url);
     final source = await _detailSource(url);
-    final providerRecommendations = await _animeWitcherRecommendations(source);
-    if (!_useAniListRecommendations) return providerRecommendations;
+    if (!_useAniListRecommendations) {
+      return _animeWitcherRecommendations(route.animeId, source);
+    }
 
     final currentMal = _malId(source);
     final media = await _aniListMedia(currentMal);
@@ -2254,7 +2437,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         .map(_map)
         .toList(growable: false)
       ..sort((a, b) {
-        final left = a['rating'] is num ? (a['rating'] as num).toDouble() : 0.0;
+        final left =
+            a['rating'] is num ? (a['rating'] as num).toDouble() : 0.0;
         final right =
             b['rating'] is num ? (b['rating'] as num).toDouble() : 0.0;
         return right.compareTo(left);
@@ -2284,7 +2468,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       ));
       if (output.length >= _maxRecommendations) break;
     }
-    return output.isEmpty ? providerRecommendations : output;
+    if (output.isNotEmpty) return output;
+    return _animeWitcherRecommendations(route.animeId, source);
   }
 
   int _normalizeUnixSeconds(dynamic raw) {
@@ -3353,6 +3538,23 @@ class _EpisodeRecord {
   final String title;
   final String image;
   final bool isFiller;
+}
+
+class _AnimeWitcherCharacterRef {
+  const _AnimeWitcherCharacterRef(this.id, this.role);
+  final String id;
+  final String role;
+}
+
+class _AnimeWitcherCharacter {
+  const _AnimeWitcherCharacter({
+    required this.actor,
+    required this.role,
+    required this.likes,
+  });
+  final Actor actor;
+  final String role;
+  final int likes;
 }
 
 class _RelatedCandidate {
