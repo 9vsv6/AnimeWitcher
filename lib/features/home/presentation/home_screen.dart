@@ -25,6 +25,10 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import 'widgets/dashboard_header_bar.dart';
 import 'widgets/provider_search_filter_dialog.dart';
+import 'widgets/news_section.dart';
+import 'package:skystream/features/news/presentation/news_list_screen.dart';
+import 'package:skystream/features/news/presentation/news_utils.dart';
+import 'package:skystream/core/domain/entity/multimedia_item.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
 class HomeScreen extends ConsumerStatefulWidget {
@@ -106,6 +110,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _showBottomFade.dispose();
     _firstActionFocusNode.dispose();
     super.dispose();
+  }
+
+  void _openNewsArticle(NewsItem item) {
+    openNewsUrl(item);
+  }
+
+  Future<void> _openLinkedNewsAnime(
+    BuildContext context,
+    SkyStreamProvider provider,
+    NewsItem item,
+  ) async {
+    final animeId = item.animeId?.trim();
+    if (animeId == null || animeId.isEmpty) return;
+
+    try {
+      final baseUrl = provider.mainUrl.replaceFirst(RegExp(r'/$'), '');
+      final details = await provider.getDetails(
+        baseUrl + '/watch/' + Uri.encodeComponent(animeId),
+      );
+      if (!context.mounted) return;
+      DetailsRoute(
+        $extra: DetailsRouteExtra(item: details),
+      ).push<void>(context);
+    } catch (_) {
+      // The article remains usable even if its linked anime is unavailable.
+    }
+  }
+
+  void _openNewsList(
+    BuildContext context,
+    SkyStreamProvider provider,
+    List<NewsItem> items,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => NewsListScreen(
+          initialItems: items,
+          loadPage: (offset, limit) =>
+              provider.getNewsPage(offset: offset, limit: limit),
+          onOpen: (item) => _openNewsArticle(item),
+          onAnimeTap: (item) {
+            _openLinkedNewsAnime(context, provider, item);
+          },
+        ),
+      ),
+    );
   }
 
   void _openSearchPage({
@@ -378,7 +428,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       HomeOffline() => _buildErrorState(context, l10n.noInternetError, ref),
       HomeError(:final message) => _buildErrorState(context, message, ref),
-      HomeSuccess(:final data) => _withGradientEdgeHint(
+      HomeSuccess(:final data, :final news) => _withGradientEdgeHint(
         RefreshIndicator(
           onRefresh: () async => ref.read(homeDataProvider.notifier).fetch(),
           child: CustomScrollView(
@@ -429,6 +479,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     title: l10n.continueWatching,
                     items: history.cast<HistoryItem>(),
                     topPadding: isWidescreen ? 0 : null,
+                  ),
+                ),
+
+              if (news.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: NewsSection(
+                    title: Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'الأخبار'
+                        : 'News',
+                    items: news,
+                    onViewAll: () =>
+                        _openNewsList(context, activeProvider, news),
+                    onOpen: _openNewsArticle,
+                    onAnimeTap: (item) {
+                      _openLinkedNewsAnime(context, activeProvider, item);
+                    },
                   ),
                 ),
 

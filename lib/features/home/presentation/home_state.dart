@@ -23,5 +23,10 @@ class HomeError extends HomeState {
 
 class HomeSuccess extends HomeState {
   final Map<String, List<MultimediaItem>> data;
-  const HomeSuccess(this.data);
+  final List<NewsItem> news;
+
+  const HomeSuccess(
+    this.data, {
+    this.news = const <NewsItem>[],
+  });
 }

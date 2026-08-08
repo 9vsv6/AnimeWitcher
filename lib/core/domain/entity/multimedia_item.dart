@@ -686,3 +686,30 @@ class SubtitleFile {
     );
   }
 }
+
+
+/// A news article shown in the provider home feed or news list.
+///
+/// News is intentionally separate from [MultimediaItem] because AnimeWitcher's
+/// article cards have a different layout and navigation model from anime cards.
+class NewsItem {
+  const NewsItem({
+    required this.id,
+    required this.title,
+    required this.imageUrl,
+    this.newsUrl,
+    this.animeId,
+    this.docRef,
+    this.publishedAt,
+  });
+
+  final String id;
+  final String title;
+  final String imageUrl;
+  final String? newsUrl;
+  final String? animeId;
+  final String? docRef;
+  final DateTime? publishedAt;
+
+  bool get hasAnimeLink => animeId?.trim().isNotEmpty == true;
+}

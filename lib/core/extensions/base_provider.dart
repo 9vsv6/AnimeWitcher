@@ -115,6 +115,18 @@ class ProviderMediaPage {
   });
 }
 
+class ProviderNewsPage {
+  final List<NewsItem> items;
+  final int nextOffset;
+  final bool hasMore;
+
+  const ProviderNewsPage({
+    required this.items,
+    required this.nextOffset,
+    required this.hasMore,
+  });
+}
+
 abstract class SkyStreamProvider {
   /// Unique provider package name.
   String get packageName;
@@ -188,6 +200,30 @@ abstract class SkyStreamProvider {
 
   // Returns categorized content (Section Name -> Items)
   Future<Map<String, List<MultimediaItem>>> getHome();
+
+  /// Loads the compact news feed shown on the provider home page.
+  ///
+  /// Older providers can leave the default empty implementation in place;
+  /// this keeps news optional and prevents it from being mixed into anime
+  /// sections.
+  Future<ProviderNewsPage> getHomeNewsPage({
+    int offset = 0,
+    int limit = 10,
+  }) async {
+    return const ProviderNewsPage(
+      items: <NewsItem>[],
+      nextOffset: 0,
+      hasMore: false,
+    );
+  }
+
+  /// Loads the full provider news list.
+  Future<ProviderNewsPage> getNewsPage({
+    int offset = 0,
+    int limit = 20,
+  }) {
+    return getHomeNewsPage(offset: offset, limit: limit);
+  }
 
   /// Loads the complete content for one provider home section.
   ///

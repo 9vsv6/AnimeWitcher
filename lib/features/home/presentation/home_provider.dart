@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/extensions/extension_manager.dart';
 import '../../../../core/storage/storage_service.dart';
+import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
 
 import './home_state.dart';
@@ -46,12 +47,23 @@ class HomeData extends _$HomeData {
     }
 
     try {
-      final items = await activeProvider.getHome();
-      if (items.isEmpty) {
-        state = const HomeSuccess({});
-      } else {
-        state = HomeSuccess(items);
-      }
+      final results = await Future.wait<dynamic>([
+        activeProvider.getHome(),
+        () async {
+          try {
+            return await activeProvider.getHomeNewsPage(limit: 10);
+          } catch (_) {
+            return const ProviderNewsPage(
+              items: <NewsItem>[],
+              nextOffset: 0,
+              hasMore: false,
+            );
+          }
+        }(),
+      ]);
+      final items = results[0] as Map<String, List<MultimediaItem>>;
+      final newsPage = results[1] as ProviderNewsPage;
+      state = HomeSuccess(items, news: newsPage.items);
     } catch (e) {
       state = HomeError(e.toString());
     }

@@ -416,7 +416,138 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     'thumb_uri',
   ];
 
+  static const List<String> _newsAttributes = <String>[
+    'objectID',
+    'date_created',
+    'date',
+    'news_link',
+    'newsLink',
+    'thumb_link',
+    'thumb_uri',
+    'thumb_url',
+    'image_url',
+    'title',
+    'title_ar',
+    'title_translated',
+    'name',
+    'anime_id',
+    'animeId',
+    'doc_ref',
+    'docRef',
+  ];
+
   String _text(dynamic value) => value == null ? '' : value.toString().trim();
+
+  String _firstText(
+    Map<String, dynamic> source,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = _text(source[key]);
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  DateTime? _newsDate(dynamic raw) {
+    final source = _map(raw);
+    dynamic value = source.isEmpty
+        ? raw
+        : source['_seconds'] ??
+            source['seconds'] ??
+            source['timestamp'] ??
+            source['value'];
+    if (value is Map) {
+      final nested = _map(value);
+      value = nested['_seconds'] ??
+          nested['seconds'] ??
+          nested['timestamp'] ??
+          nested['value'];
+    }
+
+    final number = value is num ? value : num.tryParse(_text(value));
+    if (number != null) {
+      var timestamp = number.toInt();
+      if (timestamp.abs() < 100000000000) {
+        timestamp *= 1000;
+      }
+      return DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true).toLocal();
+    }
+
+    final parsed = DateTime.tryParse(_text(value));
+    return parsed?.toLocal();
+  }
+
+  NewsItem? _newsItem(dynamic raw) {
+    final source = _map(raw);
+    final id = _firstText(source, const <String>[
+      'objectID',
+      'docId',
+      'doc_id',
+      'id',
+    ]);
+    final title = _decodeHtml(
+      _firstText(source, const <String>[
+        'title',
+        'title_ar',
+        'title_translated',
+        'name',
+      ]),
+    );
+    final imageUrl = _firstText(source, const <String>[
+      'thumb_link',
+      'thumb_uri',
+      'thumb_url',
+      'image_url',
+      'image',
+      'poster_uri',
+      'cover_uri',
+    ]);
+    final newsUrl = _firstText(source, const <String>[
+      'news_link',
+      'newsLink',
+      'url',
+      'link',
+      'path',
+    ]);
+    final animeId = _firstText(source, const <String>[
+      'anime_id',
+      'animeId',
+      'series_id',
+      'seriesId',
+    ]);
+    final stableId = id.isNotEmpty
+        ? id
+        : newsUrl.isNotEmpty
+            ? newsUrl
+            : title;
+    if (stableId.isEmpty || title.isEmpty) return null;
+
+    final rawDocRef = _firstText(source, const <String>[
+      'doc_ref',
+      'docRef',
+    ]);
+    return NewsItem(
+      id: stableId,
+      title: title,
+      imageUrl: imageUrl,
+      newsUrl: newsUrl.isEmpty ? null : newsUrl,
+      animeId: animeId.isEmpty ? null : animeId,
+      docRef: rawDocRef.isEmpty ? 'news/$stableId' : rawDocRef,
+      publishedAt: _newsDate(source['date_created'] ?? source['date']),
+    );
+  }
+
+  List<NewsItem> _dedupeNews(List<dynamic> rawHits) {
+    final items = <NewsItem>[];
+    final seen = <String>{};
+    for (final raw in rawHits) {
+      final item = _newsItem(raw);
+      if (item == null || !seen.add(item.id)) continue;
+      items.add(item);
+    }
+    return items;
+  }
 
   bool _isTruthy(dynamic value) {
     if (value is bool) return value;
@@ -983,6 +1114,25 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     }
   }
 
+  bool _isNewsHomeSection(_OfficialHomeSection section) {
+    final text =
+        (section.title + ' ' + section.type + ' ' + section.indexName)
+            .toLowerCase();
+    return section.type == 'news' ||
+        section.indexName.toLowerCase() == 'news' ||
+        section.indexName.toLowerCase().contains('news') ||
+        RegExp(r'الأخبار|اخبار|news').hasMatch(text);
+  }
+
+  _OfficialHomeSection? _officialNewsSection(
+    List<_OfficialHomeSection> sections,
+  ) {
+    for (final section in sections) {
+      if (_isNewsHomeSection(section)) return section;
+    }
+    return null;
+  }
+
   bool _isLatestHomeSection(_OfficialHomeSection section) {
     final text = '${section.title} ${section.type} ${section.indexName}'.toLowerCase();
     return section.type == 'recent' ||
@@ -1112,12 +1262,74 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     );
   }
 
+
+  Future<ProviderNewsPage> _loadNewsPage({
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    await _refreshRemoteConstants();
+    final sections = await _fetchOfficialHomeSections();
+    final official = _officialNewsSection(sections);
+    final index = official?.indexName.trim().isNotEmpty == true
+        ? official!.indexName.trim()
+        : 'news';
+    final safeOffset = offset < 0 ? 0 : offset;
+    final safeLimit = limit.clamp(1, 50).toInt();
+    final pageNumber = safeOffset ~/ safeLimit;
+
+    var payload = await _algoliaQuery(
+      index,
+      query: '',
+      page: pageNumber,
+      hitsPerPage: safeLimit,
+      attributes: _newsAttributes,
+    );
+    var rawHits = _list(payload['hits']);
+    if (rawHits.isEmpty && index != 'news') {
+      payload = await _algoliaQuery(
+        'news',
+        query: '',
+        page: pageNumber,
+        hitsPerPage: safeLimit,
+        attributes: _newsAttributes,
+      );
+      rawHits = _list(payload['hits']);
+    }
+
+    final items = _dedupeNews(rawHits);
+    final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
+    final hasMore = nbPages > 0
+        ? pageNumber + 1 < nbPages
+        : rawHits.length >= safeLimit;
+    return ProviderNewsPage(
+      items: items,
+      nextOffset: (pageNumber + 1) * safeLimit,
+      hasMore: hasMore,
+    );
+  }
+
+  @override
+  Future<ProviderNewsPage> getHomeNewsPage({
+    int offset = 0,
+    int limit = 10,
+  }) {
+    return _loadNewsPage(offset: offset, limit: limit);
+  }
+
+  @override
+  Future<ProviderNewsPage> getNewsPage({
+    int offset = 0,
+    int limit = 20,
+  }) {
+    return _loadNewsPage(offset: offset, limit: limit);
+  }
+
   @override
   Future<Map<String, List<MultimediaItem>>> getHome() async {
     final configured = await _fetchOfficialHomeSections();
     final officialSections = configured
         .where((section) =>
-            section.type != 'news' &&
+            !_isNewsHomeSection(section) &&
             section.type != 'continue_watching')
         .toList(growable: false);
     if (officialSections.isNotEmpty) {
