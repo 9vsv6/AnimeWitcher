@@ -664,9 +664,14 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   String _posterFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
     final aniListPoster = _map(source['aniList_poster']);
+
+    // AnimeWitcher exposes a dedicated large poster for cards and details.
+    // Prefer it everywhere so normal cards do not upscale the smaller
+    // poster_uri/medium asset. AniList remains a separate opt-in override
+    // through preferredPoster when its setting is enabled.
     for (final candidate in <dynamic>[
-      source['poster_uri'],
       poster['large'],
+      source['poster_uri'],
       poster['medium'],
       aniListPoster['large'],
       aniListPoster['medium'],
