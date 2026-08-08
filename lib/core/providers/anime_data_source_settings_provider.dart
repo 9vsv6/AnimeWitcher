@@ -5,12 +5,14 @@ import '../storage/settings_repository.dart';
 class AnimeDataSourceSettings {
   final bool episodeImagesFromAniZip;
   final bool seasonNumberFromAniZip;
+  final bool postersFromAniList;
   final bool castFromAniList;
   final bool recommendationsFromAniList;
 
   const AnimeDataSourceSettings({
     this.episodeImagesFromAniZip = true,
     this.seasonNumberFromAniZip = true,
+    this.postersFromAniList = true,
     this.castFromAniList = true,
     this.recommendationsFromAniList = true,
   });
@@ -18,6 +20,7 @@ class AnimeDataSourceSettings {
   AnimeDataSourceSettings copyWith({
     bool? episodeImagesFromAniZip,
     bool? seasonNumberFromAniZip,
+    bool? postersFromAniList,
     bool? castFromAniList,
     bool? recommendationsFromAniList,
   }) {
@@ -26,6 +29,8 @@ class AnimeDataSourceSettings {
           episodeImagesFromAniZip ?? this.episodeImagesFromAniZip,
       seasonNumberFromAniZip:
           seasonNumberFromAniZip ?? this.seasonNumberFromAniZip,
+      postersFromAniList:
+          postersFromAniList ?? this.postersFromAniList,
       castFromAniList: castFromAniList ?? this.castFromAniList,
       recommendationsFromAniList:
           recommendationsFromAniList ?? this.recommendationsFromAniList,
@@ -50,6 +55,7 @@ class AnimeDataSourceSettingsNotifier
           repository.isEpisodeImagesFromAniZipEnabled(),
       seasonNumberFromAniZip:
           repository.isSeasonNumberFromAniZipEnabled(),
+      postersFromAniList: repository.isPostersFromAniListEnabled(),
       castFromAniList: repository.isCastFromAniListEnabled(),
       recommendationsFromAniList:
           repository.isRecommendationsFromAniListEnabled(),
@@ -64,6 +70,11 @@ class AnimeDataSourceSettingsNotifier
   Future<void> setSeasonNumberFromAniZip(bool enabled) async {
     state = state.copyWith(seasonNumberFromAniZip: enabled);
     await _repository.setSeasonNumberFromAniZipEnabled(enabled);
+  }
+
+  Future<void> setPostersFromAniList(bool enabled) async {
+    state = state.copyWith(postersFromAniList: enabled);
+    await _repository.setPostersFromAniListEnabled(enabled);
   }
 
   Future<void> setCastFromAniList(bool enabled) async {

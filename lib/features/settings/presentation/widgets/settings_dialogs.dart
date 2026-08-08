@@ -872,6 +872,14 @@ void showAnimeDataSourcesDialog(BuildContext context, WidgetRef ref) {
       ),
     ),
     (
+      icon: Icons.photo_library_rounded,
+      label: appText(
+        context,
+        english: 'Anime posters from AniList',
+        arabic: 'بوسترات الأنمي من AniList',
+      ),
+    ),
+    (
       icon: Icons.people_alt_rounded,
       label: appText(
         context,
@@ -891,12 +899,14 @@ void showAnimeDataSourcesDialog(BuildContext context, WidgetRef ref) {
   final setters = [
     notifier.setEpisodeImagesFromAniZip,
     notifier.setSeasonNumberFromAniZip,
+    notifier.setPostersFromAniList,
     notifier.setCastFromAniList,
     notifier.setRecommendationsFromAniList,
   ];
   final values = [
     settings.episodeImagesFromAniZip,
     settings.seasonNumberFromAniZip,
+    settings.postersFromAniList,
     settings.castFromAniList,
     settings.recommendationsFromAniList,
   ];

@@ -84,6 +84,12 @@ class SettingsRepository {
   bool isSeasonNumberFromAniZipEnabled() =>
       _storageService.isSeasonNumberFromAniZipEnabled();
 
+  Future<void> setPostersFromAniListEnabled(bool enabled) =>
+      _storageService.setPostersFromAniListEnabled(enabled);
+
+  bool isPostersFromAniListEnabled() =>
+      _storageService.isPostersFromAniListEnabled();
+
   Future<void> setCastFromAniListEnabled(bool enabled) =>
       _storageService.setCastFromAniListEnabled(enabled);
 

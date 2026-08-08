@@ -64,6 +64,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   bool get _useAniZipSeasonNumber =>
       _settings.isSeasonNumberFromAniZipEnabled();
 
+  bool get _useAniListPosters =>
+      _settings.isPostersFromAniListEnabled();
+
   bool get _useAniListCast => _settings.isCastFromAniListEnabled();
 
   bool get _useAniListRecommendations =>
@@ -802,6 +805,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   Future<Map<int, String>> _aniListPostersForHits(
     Iterable<Map<String, dynamic>> hits,
   ) async {
+    if (!_useAniListPosters) return const <int, String>{};
     final ids = hits.map(_malId).where((id) => id > 0).toSet().toList();
     if (ids.isEmpty) return const <int, String>{};
 
