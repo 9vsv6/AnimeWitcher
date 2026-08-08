@@ -516,8 +516,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     },
                   ),
                 ),
-                // AnimeWitcher's image_gradient2.xml: transparent through
-                // the midpoint, fading to #E2000000 at the bottom.
+                // Keep the fade broad and finish on the same solid black as
+                // the content below. Ending at a translucent black leaves a
+                // visible horizontal seam where the banner meets the page.
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -526,9 +527,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       colors: [
                         Colors.transparent,
                         Colors.transparent,
-                        Color(0xE2000000),
+                        Color(0x26000000),
+                        Color(0x99000000),
+                        Colors.black,
                       ],
-                      stops: [0, 0.5, 1],
+                      stops: [0, 0.30, 0.58, 0.86, 1],
                     ),
                   ),
                 ),
