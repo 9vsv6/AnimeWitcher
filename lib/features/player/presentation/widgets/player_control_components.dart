@@ -8,6 +8,7 @@ import 'hotstar_player_style.dart';
 class PlayerTopBar extends StatelessWidget {
   final String title;
   final String? subtitle;
+  final String? episodeLabel;
   final VoidCallback? onBack;
   final bool isTv;
   final FocusNode? backFocusNode;
@@ -16,6 +17,7 @@ class PlayerTopBar extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.episodeLabel,
     this.onBack,
     this.isTv = false,
     this.backFocusNode,
@@ -78,6 +80,20 @@ class PlayerTopBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (episodeLabel != null && episodeLabel!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        episodeLabel!,
+                        style: TextStyle(
+                          color: HotstarPlayerStyle.secondaryText,
+                          fontSize: isTv ? 16 : 13,
+                          fontWeight: FontWeight.w500,
+                          height: 1.25,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
                 ),
               ),

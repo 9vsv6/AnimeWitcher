@@ -826,6 +826,50 @@ class SkyStreamPlayerControlsState
     return "$minutes:${twoDigits(seconds)}";
   }
 
+  String _normalizeEpisodeDigits(String value) {
+    const arabic = '٠١٢٣٤٥٦٧٨٩';
+    const eastern = '۰۱۲۳۴۵۶۷۸۹';
+    return value
+        .replaceAllMapped(
+          RegExp(r'[٠-٩]'),
+          (match) => '${arabic.indexOf(match.group(0)!)}',
+        )
+        .replaceAllMapped(
+          RegExp(r'[۰-۹]'),
+          (match) => '${eastern.indexOf(match.group(0)!)}',
+        );
+  }
+
+  bool _isGenericEpisodeTitle(String title, int episodeNumber) {
+    final compact = _normalizeEpisodeDigits(title)
+        .replaceAll('\u00A0', ' ')
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s:：._#\-–—]+'), '');
+    final number = episodeNumber.toString();
+
+    return compact.isEmpty ||
+        compact == number ||
+        compact == 'episode$number' ||
+        compact == 'ep$number' ||
+        compact == 'e$number' ||
+        compact == 'الحلقة$number' ||
+        compact == 'حلقة$number';
+  }
+
+  String? _buildEpisodeLine(BuildContext context, Episode? episode) {
+    if (episode == null || episode.episode <= 0) return null;
+
+    final number = episode.episode;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final prefix = isArabic ? 'حلقة $number' : 'Episode $number';
+    final title = episode.name.trim();
+
+    if (_isGenericEpisodeTitle(title, number)) return prefix;
+    return '$prefix: $title';
+  }
+
   Widget _buildKickAnimation() {
     final seconds =
         ref.watch(playerSettingsProvider).asData?.value.seekDuration ?? 10;
@@ -874,12 +918,13 @@ class SkyStreamPlayerControlsState
   @override
   Widget build(BuildContext context) {
     // Watch relevant player state selectively, falling back to props for initial frame
+    final playerNotifier = ref.read(playerControllerProvider.notifier);
     final controllerTitle = ref.watch(
       playerControllerProvider.select((s) => s.playerTitle),
     );
-    final title = controllerTitle.isEmpty
-        ? (widget.title ?? "")
-        : controllerTitle;
+    final title =
+        playerNotifier.multimediaItem?.title ??
+        (controllerTitle.isEmpty ? (widget.title ?? "") : controllerTitle);
 
     final controllerSubtitle = ref.watch(
       playerControllerProvider.select((s) => s.streamSubtitle),
@@ -933,7 +978,10 @@ class SkyStreamPlayerControlsState
     final maxPlaybackSpeed = ref.watch(
       playerControllerProvider.select((s) => s.maxPlaybackSpeed),
     );
-    final isSeries = ref.read(playerControllerProvider.notifier).isSeries;
+    final isSeries = playerNotifier.isSeries;
+    final episodeLabel = isSeries
+        ? _buildEpisodeLine(context, playerNotifier.currentEpisode)
+        : null;
     final skipSegments = ref.watch(
       playerControllerProvider.select((s) => s.skipSegments),
     );
@@ -1022,6 +1070,7 @@ class SkyStreamPlayerControlsState
                   _buildUnlockedUI(
                     title: title,
                     subtitle: subtitle,
+                    episodeLabel: episodeLabel,
                     streams: streams,
                     currentStream: currentStream,
                     externalSubtitles: externalSubtitles,
@@ -1253,6 +1302,7 @@ class SkyStreamPlayerControlsState
   Widget _buildUnlockedUI({
     required String title,
     String? subtitle,
+    String? episodeLabel,
     List<StreamResult>? streams,
     StreamResult? currentStream,
     List<SubtitleFile>? externalSubtitles,
@@ -1388,6 +1438,7 @@ class SkyStreamPlayerControlsState
                   PlayerTopBar(
                     title: title,
                     subtitle: subtitle,
+                    episodeLabel: episodeLabel,
                     onBack: widget.onBackPointer ?? () => context.pop(),
                     isTv: _isTv,
                     backFocusNode: _backFocusNode,
