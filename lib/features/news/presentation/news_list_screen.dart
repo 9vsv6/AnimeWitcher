@@ -95,8 +95,32 @@ class _NewsListScreenState extends State<NewsListScreen> {
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isArabic ? 'الأخبار' : 'News'),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            centerTitle: false,
+            titleSpacing: 16,
+            title: Align(
+              alignment:
+                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
+              child: Directionality(
+                textDirection:
+                    isArabic ? TextDirection.rtl : TextDirection.ltr,
+                child: Text(
+                  isArabic ? 'الأخبار' : 'News',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            elevation: 0,
+          ),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -129,7 +153,6 @@ class _NewsListScreenState extends State<NewsListScreen> {
               item: item,
               compact: false,
               onOpen: onOpen,
-              onCommentsTap: onOpen,
               onAnimeTap: widget.onAnimeTap == null
                   ? null
                   : () => widget.onAnimeTap!(item),

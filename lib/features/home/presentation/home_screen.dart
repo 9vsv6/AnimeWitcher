@@ -385,6 +385,92 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  bool _isLatestAddedSectionTitle(String title) {
+    final normalized = title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[ً-ٰٟ]'), '')
+        .replaceAll(RegExp(r'[أإآ]'), 'ا')
+        .replaceAll('ة', 'ه')
+        .replaceAll(RegExp(r' +'), ' ')
+        .trim();
+
+    return normalized.contains('اخر الاعمال المضافه') ||
+        normalized.contains('احدث الاعمال') ||
+        normalized.contains('اخر التحديثات') ||
+        normalized.contains('احدث الحلقات') ||
+        normalized.contains('الحلقات الجديده') ||
+        normalized.contains('اخر الحلقات') ||
+        normalized.contains('latest additions') ||
+        normalized.contains('latest updates') ||
+        normalized.contains('recently added') ||
+        normalized.contains('recent');
+  }
+
+  List<Widget> _buildProviderSectionsWithNews(
+    BuildContext context,
+    Map<String, List<MultimediaItem>> data,
+    List<NewsItem> news,
+    SkyStreamProvider provider,
+  ) {
+    final entries = data.entries
+        .where((entry) => entry.key != 'Trending')
+        .toList(growable: false);
+    var newsAfterIndex = entries.indexWhere(
+      (entry) => _isLatestAddedSectionTitle(entry.key),
+    );
+    if (newsAfterIndex < 0 && entries.isNotEmpty) {
+      newsAfterIndex = 0;
+    }
+
+    Widget buildNewsSection() {
+      return NewsSection(
+        title: Localizations.localeOf(context).languageCode == 'ar'
+            ? 'الأخبار'
+            : 'News',
+        items: news,
+        onViewAll: () => _openNewsList(context, provider, news),
+        onOpen: _openNewsArticle,
+        onAnimeTap: (item) {
+          _openLinkedNewsAnime(context, provider, item);
+        },
+      );
+    }
+
+    final sections = <Widget>[];
+    if (entries.isEmpty && news.isNotEmpty) {
+      sections.add(buildNewsSection());
+    }
+
+    for (var index = 0; index < entries.length; index++) {
+      final entry = entries[index];
+      sections.add(
+        MediaHorizontalList(
+          title: entry.key,
+          mediaList: entry.value,
+          category: ViewAllCategory.providerContent,
+          showViewAll: true,
+          fixedPhysicalDirection: true,
+          loadViewAllPage: (offset) => provider.getHomeSectionPage(
+            entry.key,
+            offset: offset,
+            limit: provider.viewAllPageSize,
+          ),
+          onTap: (item) {
+            DetailsRoute(
+              $extra: DetailsRouteExtra(item: item),
+            ).push<void>(context);
+          },
+          heroTagPrefix: 'home',
+        ),
+      );
+      if (news.isNotEmpty && index == newsAfterIndex) {
+        sections.add(buildNewsSection());
+      }
+    }
+
+    return sections;
+  }
+
   Widget _buildBody(
     BuildContext context,
     HomeState state,
@@ -482,53 +568,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
 
-              if (news.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: NewsSection(
-                    title: Localizations.localeOf(context).languageCode == 'ar'
-                        ? 'الأخبار'
-                        : 'News',
-                    items: news,
-                    onViewAll: () =>
-                        _openNewsList(context, activeProvider, news),
-                    onOpen: _openNewsArticle,
-                    onAnimeTap: (item) {
-                      _openLinkedNewsAnime(context, activeProvider, item);
-                    },
-                  ),
-                ),
-
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final filteredEntries = data.entries
-                        .where((e) => e.key != 'Trending')
-                        .toList();
-                    if (index >= filteredEntries.length) return null;
-                    final entry = filteredEntries[index];
-                    return MediaHorizontalList(
-                      title: entry.key,
-                      mediaList: entry.value,
-                      category: ViewAllCategory.providerContent,
-                      showViewAll: true,
-                      fixedPhysicalDirection: true,
-                      loadViewAllPage: (offset) =>
-                          activeProvider.getHomeSectionPage(
-                            entry.key,
-                            offset: offset,
-                            limit: activeProvider.viewAllPageSize,
-                          ),
-                      onTap: (item) {
-                        DetailsRoute(
-                          $extra: DetailsRouteExtra(item: item),
-                        ).push<void>(context);
-                      },
-                      heroTagPrefix: 'home',
-                    );
-                  },
-                  childCount: data.entries
-                      .where((e) => e.key != 'Trending')
-                      .length,
+                delegate: SliverChildListDelegate(
+                  _buildProviderSectionsWithNews(
+                    context,
+                    data,
+                    news,
+                    activeProvider,
+                  ),
                 ),
               ),
 

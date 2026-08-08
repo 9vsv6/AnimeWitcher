@@ -9,22 +9,19 @@ class NewsCard extends StatelessWidget {
     required this.item,
     this.compact = true,
     this.onOpen,
-    this.onCommentsTap,
     this.onAnimeTap,
   });
 
   final NewsItem item;
   final bool compact;
   final VoidCallback? onOpen;
-  final VoidCallback? onCommentsTap;
   final VoidCallback? onAnimeTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final width = compact ? 200.0 : double.infinity;
-    final imageHeight = compact ? 100.0 : 150.0;
-    final commentsAction = onCommentsTap ?? onOpen;
+    final imageHeight = compact ? 100.0 : 210.0;
 
     return SizedBox(
       width: width,
@@ -71,19 +68,12 @@ class NewsCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _NewsActionIcon(
-                            icon: Icons.chat_bubble_outline_rounded,
-                            onTap: commentsAction,
-                            size: compact ? 20 : 28,
-                          ),
-                          if (item.hasAnimeLink) ...[
-                            SizedBox(width: compact ? 5 : 8),
+                          if (item.hasAnimeLink)
                             _NewsActionIcon(
                               icon: Icons.link_rounded,
                               onTap: onAnimeTap,
                               size: compact ? 20 : 28,
                             ),
-                          ],
                         ],
                       ),
                     ),
@@ -147,7 +137,7 @@ class NewsCard extends StatelessWidget {
 
     return CachedNetworkImage(
       imageUrl: url,
-      fit: BoxFit.fill,
+      fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
       fadeInDuration: const Duration(milliseconds: 120),
