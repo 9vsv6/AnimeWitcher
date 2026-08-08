@@ -49,42 +49,35 @@ class MetadataBar extends ConsumerWidget {
 
   String _statusLabel(BuildContext context, Map<String, String> data) {
     final isArabic = _isArabicDetailsLocale(context);
-    final raw = (_clean(data['awState']) ?? '').toLowerCase();
-    final isCompleted = item.status == ShowStatus.completed ||
-        raw.contains('completed') ||
-        raw.contains('finished') ||
-        raw.contains('مكتمل') ||
-        raw.contains('منتهي');
+    final raw = _clean(data['awState']);
+    late final String label;
+    if (raw != null) {
+      label = raw;
+    } else {
+      switch (item.status) {
+        case ShowStatus.completed:
+          label = isArabic ? 'مكتمل' : 'Completed';
+          break;
+        case ShowStatus.upcoming:
+          label = isArabic ? 'لم يتم بثه بعد' : 'Not yet aired';
+          break;
+        case ShowStatus.ongoing:
+          label = isArabic ? 'مستمر' : 'Ongoing';
+          break;
+      }
+    }
 
-    var label = isCompleted
-        ? (isArabic ? 'مكتمل' : 'Completed')
-        : (isArabic ? 'مستمر' : 'Ongoing');
-
-    if (!isCompleted && item.nextAiring != null && item.nextAiring!.unixTime > 0) {
-      final date = DateTime.fromMillisecondsSinceEpoch(
-        item.nextAiring!.unixTime * 1000,
-        isUtc: true,
-      ).toLocal();
-      const arDays = <String>[
-        'الاثنين',
-        'الثلاثاء',
-        'الأربعاء',
-        'الخميس',
-        'الجمعة',
-        'السبت',
-        'الأحد',
-      ];
-      const enDays = <String>[
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-        'Sunday',
-      ];
-      final day = isArabic ? arDays[date.weekday - 1] : enDays[date.weekday - 1];
-      label = '$label ($day)';
+    final normalized = (raw ?? '').toLowerCase();
+    final isOngoing =
+        normalized == 'مستمر' ||
+        normalized == 'ongoing' ||
+        normalized == 'airing' ||
+        (raw == null && item.status == ShowStatus.ongoing);
+    final showTime = _clean(data['awShowTime']);
+    if (isOngoing && showTime != null) {
+      // AnimeWitcher constructs this as "(show_time) state". The Arabic
+      // bidirectional renderer displays it as "state (show_time)".
+      return '($showTime) $label';
     }
     return label;
   }
@@ -94,8 +87,8 @@ class MetadataBar extends ConsumerWidget {
 
     String? season;
     for (final candidate in <String?>[
-      _clean(data['awSeasonName']),
       _clean(data['awSeason']),
+      _clean(data['awSeasonName']),
     ]) {
       if (candidate == null) continue;
 
@@ -145,17 +138,12 @@ class MetadataBar extends ConsumerWidget {
   }
 
   String _typeLabel(BuildContext context, Map<String, String> data) {
+    final raw = _clean(data['awType']);
+    if (raw != null) return raw;
+
     final isArabic = _isArabicDetailsLocale(context);
-    final raw = (_clean(data['awType']) ?? '').toLowerCase();
-    if (raw.contains('ova') || raw.contains('أوفا') || raw.contains('اوفا')) {
-      return isArabic ? 'أوفا' : 'OVA';
-    }
-    if (item.contentType == MultimediaContentType.movie ||
-        raw.contains('movie') ||
-        raw.contains('film') ||
-        raw.contains('فيلم') ||
-        raw.contains('فلم')) {
-      return isArabic ? 'فلم' : 'Movie';
+    if (item.contentType == MultimediaContentType.movie) {
+      return isArabic ? 'فيلم' : 'Movie';
     }
     return isArabic ? 'مسلسل' : 'Series';
   }
@@ -225,15 +213,14 @@ class MetadataBar extends ConsumerWidget {
       fontWeight: FontWeight.w600,
     );
 
-    final firstRow = <Widget>[
-      Text(_statusLabel(context, data), style: style),
-      if (season != null) Text(season, style: style),
-    ];
-    final secondRow = <Widget>[
-      Text(_typeLabel(context, data), style: style),
-      if (episodeCount != null)
-        if (_isArabicDetailsLocale(context))
-          Row(
+    final statusEntry = Text(_statusLabel(context, data), style: style);
+    final seasonEntry = season == null ? null : Text(season, style: style);
+    final typeEntry = Text(_typeLabel(context, data), style: style);
+    final ageEntry = ageRating == null ? null : Text(ageRating, style: style);
+    final episodeEntry = episodeCount == null
+        ? null
+        : _isArabicDetailsLocale(context)
+        ? Row(
             mainAxisSize: MainAxisSize.min,
             textDirection: TextDirection.rtl,
             children: [
@@ -242,25 +229,51 @@ class MetadataBar extends ConsumerWidget {
               Text('حلقة', style: style),
             ],
           )
-        else
-          Text('$episodeCount episodes', style: style),
-      if (ageRating != null) Text(ageRating, style: style),
-      if (ratingValue != null)
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.star_rounded,
-              size: 17,
-              color: Colors.amber.shade600,
-            ),
-            const SizedBox(width: 3),
-            Text(ratingValue, style: style),
-          ],
-        ),
+        : Text('$episodeCount episodes', style: style);
+    final ratingEntry = ratingValue == null
+        ? null
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.star_rounded,
+                size: 17,
+                color: Colors.amber.shade600,
+              ),
+              const SizedBox(width: 3),
+              Text(ratingValue, style: style),
+            ],
+          );
+
+    final isArabic = _isArabicDetailsLocale(context);
+    final firstRow = <Widget>[
+      if (isArabic) ...[
+        if (seasonEntry != null) seasonEntry,
+        statusEntry,
+      ] else ...[
+        statusEntry,
+        if (seasonEntry != null) seasonEntry,
+      ],
+    ];
+    final secondRow = <Widget>[
+      if (isArabic) ...[
+        if (ageEntry != null) ageEntry,
+        if (episodeEntry != null) episodeEntry,
+        typeEntry,
+      ] else ...[
+        typeEntry,
+        if (episodeEntry != null) episodeEntry,
+        if (ageEntry != null) ageEntry,
+      ],
+    ];
+    final thirdRow = <Widget>[
+      if (ratingEntry != null) ratingEntry,
     ];
 
-    if (firstRow.isEmpty && secondRow.isEmpty && isLoading) {
+    if (firstRow.isEmpty &&
+        secondRow.isEmpty &&
+        thirdRow.isEmpty &&
+        isLoading) {
       return Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -282,6 +295,10 @@ class MetadataBar extends ConsumerWidget {
         if (secondRow.isNotEmpty) ...[
           const SizedBox(height: 4),
           _buildMetadataRow(secondRow, separatorStyle),
+        ],
+        if (thirdRow.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          _buildMetadataRow(thirdRow, separatorStyle),
         ],
       ],
     );

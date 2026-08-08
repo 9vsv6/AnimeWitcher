@@ -381,6 +381,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     'poster_uri',
     'path',
     'type',
+    'show_time',
+    'showTime',
     'story',
     'description',
     'details',
@@ -1586,6 +1588,13 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     putSync(
       'awState',
       details['state'] ?? details['status'] ?? source['state'] ?? source['status'],
+    );
+    putSync(
+      'awShowTime',
+      source['show_time'] ??
+          source['showTime'] ??
+          details['show_time'] ??
+          details['showTime'],
     );
     putSync('awEpisodes', details['eps_num'] ?? details['episodes']);
     putSync('awDuration', source['duration'] ?? details['duration']);
