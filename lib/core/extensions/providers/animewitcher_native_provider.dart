@@ -2299,6 +2299,47 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return generic.isEmpty ? 'الحلقة $number' : generic;
   }
 
+  int _episodeNumberFromId(String id) {
+    final normalized = _normalizeDigits(id.trim());
+    if (normalized.isEmpty) return 0;
+
+    final explicit = RegExp(
+      r'(?:episode|ep|الحلقة|حلقه)[^0-9]*(\d+)$',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+    if (explicit != null) {
+      return int.tryParse(explicit.group(1)!) ?? 0;
+    }
+
+    final numeric = RegExp(r'^\d+$').firstMatch(normalized);
+    return numeric == null ? 0 : int.tryParse(numeric.group(0)!) ?? 0;
+  }
+
+  int _episodeFieldNumber(Map<String, dynamic> source) {
+    for (final key in const <String>[
+      'episode_number',
+      'episodeNumber',
+      'episode',
+      'ep',
+    ]) {
+      final value = _positiveInt(source[key]);
+      if (value > 0) return value;
+    }
+    return 0;
+  }
+
+  int _episodeSortOrder(Map<String, dynamic> source) {
+    for (final key in const <String>[
+      'sortOrder',
+      'sort_order',
+      'sort',
+    ]) {
+      final value = _positiveInt(source[key]);
+      if (value > 0) return value;
+    }
+    return 0;
+  }
+
   _EpisodeRecord _episodeRecord(
     Map<String, dynamic> source, {
     required String fallbackId,
@@ -2306,12 +2347,22 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }) {
     var id = _text(source['doc_id'] ?? source['id'] ?? source['episode_id']);
     if (id.isEmpty) id = fallbackId;
-    final rawNumber = source['number'];
-    var number = rawNumber is num ? rawNumber.toInt() : int.tryParse(_text(rawNumber)) ?? 0;
-    if (number <= 0) {
-      final match = RegExp(r'\d+').firstMatch(_normalizeDigits(id));
-      number = match == null ? fallbackNumber : int.tryParse(match.group(0)!) ?? fallbackNumber;
-    }
+    final explicitNumber = _episodeFieldNumber(source);
+    final idNumber = _episodeNumberFromId(id);
+    final sourceNumber = _positiveInt(source['number']);
+
+    // AnimeWitcher episode identity is the episode number, not the generic
+    // number field alone. Some long-running series contain records where
+    // number is reset to 1 while the document id still contains 1159.
+    // Prefer an explicit episode field, then the canonical numeric id, and
+    // only use the generic field as a fallback.
+    final number = explicitNumber > 0
+        ? explicitNumber
+        : idNumber > 0
+            ? idNumber
+            : sourceNumber > 0
+                ? sourceNumber
+                : fallbackNumber;
     final image = _text(
       source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
     );
@@ -2321,6 +2372,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return _EpisodeRecord(
       id: id,
       number: number,
+      sortOrder: _episodeSortOrder(source),
       title: _episodeTitle(source, number),
       image: image,
       isFiller: isFiller,
@@ -2354,7 +2406,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     String nextToken = '';
     final seenTokens = <String>{};
     for (var page = 0; page < 20; page++) {
-      var url = '${_firestoreUrl('anime_list/$encoded/episodes')}?pageSize=100';
+      var url = '${_firestoreUrl('anime_list/$encoded/episodes')}?pageSize=1000';
       if (nextToken.isNotEmpty) {
         url += '&pageToken=${Uri.encodeQueryComponent(nextToken)}';
       }
@@ -2401,9 +2453,29 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     if (inFlight != null) return inFlight;
 
     final request = () async {
-      var records = await _fetchEpisodeSummary(key);
-      if (records.isEmpty) records = await _fetchEpisodeCollection(key);
-      final cachedRecords = List<_EpisodeRecord>.unmodifiable(records);
+      // AnimeWitcher uses the canonical episode collection as the source of
+      // truth. The summary document is only a compatibility fallback because
+      // it can contain stale or locally reset number values.
+      var records = await _fetchEpisodeCollection(key);
+      if (records.isEmpty) records = await _fetchEpisodeSummary(key);
+      // Keep one record per AnimeWitcher identity: anime id + episode number.
+      // This prevents a malformed duplicate document from producing two cards
+      // for the same episode while preserving the first source record.
+      final unique = <int, _EpisodeRecord>{};
+      for (final record in records) {
+        if (record.number <= 0) continue;
+        unique.putIfAbsent(record.number, () => record);
+      }
+
+      final normalized = unique.values.toList(growable: false)
+        ..sort((a, b) {
+          final aOrder = a.sortOrder > 0 ? a.sortOrder : a.number;
+          final bOrder = b.sortOrder > 0 ? b.sortOrder : b.number;
+          final orderCompare = aOrder.compareTo(bOrder);
+          if (orderCompare != 0) return orderCompare;
+          return a.number.compareTo(b.number);
+        });
+      final cachedRecords = List<_EpisodeRecord>.unmodifiable(normalized);
       _episodeRecordCache[key] = cachedRecords;
       _episodeRecordExpiresAt[key] = DateTime.now().add(_episodeDataTtl);
       return cachedRecords;
@@ -2422,8 +2494,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   Future<List<Episode>> getEpisodes(String url) async {
     final route = _parseAnimeUrl(url);
     if (route.animeId.isEmpty) throw StateError('AnimeWitcher anime id is missing');
-    final records = List<_EpisodeRecord>.of(await _episodeRecords(route.animeId));
-    records.sort((a, b) => b.number.compareTo(a.number));
+    final records = await _episodeRecords(route.animeId);
     return records
         .map(
           (record) => Episode(
@@ -3237,12 +3308,14 @@ class _EpisodeRecord {
   const _EpisodeRecord({
     required this.id,
     required this.number,
+    required this.sortOrder,
     required this.title,
     required this.image,
     required this.isFiller,
   });
   final String id;
   final int number;
+  final int sortOrder;
   final String title;
   final String image;
   final bool isFiller;
