@@ -131,6 +131,7 @@ class FirestoreRestClient {
           );
 
   final Dio _dio;
+  final Map<String, int> _catalogDurationCache = <String, int>{};
 
   String get _databaseBase =>
       'https://firestore.googleapis.com/v1/projects/'
@@ -152,7 +153,10 @@ class FirestoreRestClient {
         '$_documentsBase/${_encodedPath(path)}',
         options: _options(idToken),
       );
-      return _decodeDocument(response.data);
+      final document = _decodeDocument(response.data);
+      return document == null
+          ? null
+          : await _hydrateContinueWatchingDocument(document, idToken);
     } on DioException catch (error) {
       if (error.response?.statusCode == 404) return null;
       throw _firestoreException(error);
@@ -181,7 +185,11 @@ class FirestoreRestClient {
         if (documents is List) {
           for (final raw in documents) {
             final document = _decodeDocument(raw);
-            if (document != null) output.add(document);
+            if (document != null) {
+              output.add(
+                await _hydrateContinueWatchingDocument(document, idToken),
+              );
+            }
           }
         }
         pageToken = _optionalString(payload['nextPageToken']);
@@ -464,6 +472,106 @@ class FirestoreRestClient {
     );
   }
 
+  Future<FirestoreDocument> _hydrateContinueWatchingDocument(
+    FirestoreDocument document,
+    String idToken,
+  ) async {
+    final segments = document.path.split('/');
+    if (segments.length < 4 ||
+        segments[0] != 'users' ||
+        segments[2] != 'continue_watching') {
+      return document;
+    }
+
+    final fields = Map<String, dynamic>.from(document.fields);
+    var position = _intValue(fields['position']);
+    var duration = _intValue(fields['duration']);
+    final progress = _intValue(fields['progress']).clamp(0, 100);
+    final userId = segments[1];
+    final animeId = _optionalString(fields['anime_id']) ?? document.id;
+    final episodeId = _optionalString(fields['episode_id']);
+
+    var stopTime = 0;
+    if (episodeId != null) {
+      final stopDocument = await getDocument(
+        'users/$userId/episodes_watched/$animeId/stop_times/$episodeId',
+        idToken,
+      );
+      stopTime = _intValue(stopDocument?.fields['stop_time']);
+      if (position <= 0 && stopTime > 0) position = stopTime;
+    }
+
+    if (duration <= 0 && position > 0 && progress > 0) {
+      final watchedForEstimate = stopTime > 0 ? stopTime + 2000 : position;
+      if (progress >= 100) {
+        duration = watchedForEstimate;
+      } else {
+        final minimumDuration = (watchedForEstimate * 100) / (progress + 1);
+        final maximumDuration = (watchedForEstimate * 100) / progress;
+        duration = ((minimumDuration + maximumDuration) / 2).round();
+      }
+    }
+
+    if (duration <= 0) {
+      duration = await _catalogDurationMillis(animeId, episodeId, idToken);
+    }
+
+    if (position <= 0 && duration > 0 && progress > 0) {
+      final estimatedProgress = progress >= 100 ? 100.0 : progress + 0.5;
+      position = ((duration * estimatedProgress) / 100)
+          .round()
+          .clamp(0, duration);
+    }
+
+    if (position == _intValue(fields['position']) &&
+        duration == _intValue(fields['duration'])) {
+      return document;
+    }
+    fields['position'] = position;
+    fields['duration'] = duration;
+    return FirestoreDocument(
+      id: document.id,
+      path: document.path,
+      fields: fields,
+    );
+  }
+
+  Future<int> _catalogDurationMillis(
+    String animeId,
+    String? episodeId,
+    String idToken,
+  ) async {
+    final cacheKey = '$animeId|${episodeId ?? ''}';
+    final cached = _catalogDurationCache[cacheKey];
+    if (cached != null) return cached;
+
+    int minutes = 0;
+    if (episodeId != null) {
+      final episode = await getDocument(
+        'anime_list/$animeId/episodes/$episodeId',
+        idToken,
+      );
+      minutes = _durationMinutes(episode?.fields['duration']);
+    }
+    if (minutes <= 0) {
+      final anime = await getDocument('anime_list/$animeId', idToken);
+      minutes = _durationMinutes(anime?.fields['duration']);
+    }
+
+    final milliseconds = minutes > 0
+        ? Duration(minutes: minutes).inMilliseconds
+        : 0;
+    _catalogDurationCache[cacheKey] = milliseconds;
+    return milliseconds;
+  }
+
+  int _durationMinutes(dynamic raw) {
+    if (raw is num) return raw.round();
+    final match = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(raw?.toString() ?? '');
+    if (match == null) return 0;
+    return double.tryParse(match.group(0)!.replaceAll(',', '.'))?.round() ?? 0;
+  }
+
   FirestoreDocument? _decodeDocument(dynamic raw) {
     final source = _map(raw);
     final name = _optionalString(source['name']);
@@ -508,6 +616,11 @@ Map<String, dynamic> _map(dynamic raw) {
 String? _optionalString(dynamic raw) {
   final value = raw?.toString().trim() ?? '';
   return value.isEmpty ? null : value;
+}
+
+int _intValue(dynamic raw) {
+  if (raw is num) return raw.toInt();
+  return int.tryParse(raw?.toString() ?? '') ?? 0;
 }
 
 AnimeWitcherAccountException _firestoreException(DioException error) {
