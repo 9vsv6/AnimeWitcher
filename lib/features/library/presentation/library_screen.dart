@@ -17,6 +17,8 @@ class LibraryScreen extends ConsumerWidget {
     return switch (category) {
       LibraryCategory.favorite => isArabic ? 'المفضلة' : 'Favorites',
       LibraryCategory.watching => isArabic ? 'أشاهده حاليًا' : 'Watching',
+      LibraryCategory.continueLater =>
+        isArabic ? 'أكملها لاحقًا' : 'Continue Later',
       LibraryCategory.planToWatch =>
         isArabic ? 'أرغب بمشاهدته' : 'Plan to Watch',
       LibraryCategory.completed => isArabic ? 'تمت مشاهدته' : 'Completed',
@@ -29,6 +31,7 @@ class LibraryScreen extends ConsumerWidget {
     return switch (category) {
       LibraryCategory.favorite => Icons.favorite_rounded,
       LibraryCategory.watching => Icons.play_circle_fill_rounded,
+      LibraryCategory.continueLater => Icons.pause_circle_filled_rounded,
       LibraryCategory.planToWatch => Icons.schedule_rounded,
       LibraryCategory.completed => Icons.check_circle_rounded,
       LibraryCategory.notInterested => Icons.block_rounded,

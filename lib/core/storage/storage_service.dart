@@ -120,12 +120,13 @@ class StorageService {
         return 'completed';
       case 'on_Hold':
       case 'onHold':
-        // On Hold was removed from the product UI. Treat legacy entries as
-        // Plan to Watch so they remain visible and editable.
-        return 'pinned';
+      case 'continueLater':
+      case 'continue_later':
+        return 'onHold';
       case 'no_watching':
       case 'noWatching':
         return 'noWatching';
+      case 'pin':
       case 'pinned':
         return 'pinned';
       case 'favorite':
@@ -137,23 +138,69 @@ class StorageService {
     }
   }
 
-  String _storedLibraryCategory(Map<dynamic, dynamic> raw) {
-    return _normalizeLibraryCategory(
-      raw['libraryCategory'] ?? raw['library_category'] ?? raw['category'],
-    );
+  String? _normalizePrimaryLibraryCategory(dynamic raw) {
+    final value = (raw ?? '').toString().trim();
+    switch (value) {
+      case 'watching':
+        return 'watching';
+      case 'completed':
+        return 'completed';
+      case 'on_Hold':
+      case 'onHold':
+      case 'continueLater':
+      case 'continue_later':
+        return 'onHold';
+      case 'no_watching':
+      case 'noWatching':
+        return 'noWatching';
+      case 'pin':
+      case 'pinned':
+        return 'pinned';
+      case 'favorite':
+      case 'favorites':
+      case 'fav':
+      case '':
+        return null;
+      default:
+        return null;
+    }
   }
 
-  // Existing SkyStream bookmarks did not have a category. They intentionally
-  // migrate to Favorites so no saved item disappears after the upgrade.
+  dynamic _rawLibraryCategory(Map<dynamic, dynamic> raw) =>
+      raw['libraryCategory'] ?? raw['library_category'] ?? raw['category'];
+
+  String? _storedLibraryCategory(Map<dynamic, dynamic> raw) {
+    return _normalizePrimaryLibraryCategory(_rawLibraryCategory(raw));
+  }
+
+  bool _storedLibraryFavorite(Map<dynamic, dynamic> raw) {
+    final explicit = raw['isFavorite'] ?? raw['is_favorite'] ?? raw['favorite'];
+    if (explicit is bool) return explicit;
+    if (explicit is num) return explicit != 0;
+    if (explicit != null) {
+      final value = explicit.toString().trim().toLowerCase();
+      if (value == 'true' || value == '1') return true;
+      if (value == 'false' || value == '0') return false;
+    }
+
+    final legacyCategory = _rawLibraryCategory(raw);
+    if (legacyCategory == null) {
+      // Bookmarks created before list categories existed were favorites.
+      return true;
+    }
+    return _normalizeLibraryCategory(legacyCategory) == 'favorite';
+  }
+
   Future<void> addToLibrary(
     MultimediaItem item, {
-    String category = _defaultLibraryCategory,
+    String? category,
+    bool replaceCategory = false,
+    bool? favorite,
     int? updatedAt,
     String? syncedAccountUid,
     int? syncedAt,
   }) async {
     final canonicalUrl = _canonicalMediaUrl(item.url);
-    final normalizedCategory = _normalizeLibraryCategory(category);
     Map<dynamic, dynamic>? previousEntry;
     final staleKeys = <dynamic>[];
     for (var i = 0; i < _libraryBox.length; i++) {
@@ -171,7 +218,37 @@ class StorageService {
     for (final key in staleKeys) {
       await _libraryBox.delete(key);
     }
-    await _libraryBox.put(_getKey(canonicalUrl), {
+
+    final previousCategory = previousEntry == null
+        ? null
+        : _storedLibraryCategory(previousEntry);
+    final previousFavorite = previousEntry == null
+        ? false
+        : _storedLibraryFavorite(previousEntry);
+    final normalizedRequested = category == null
+        ? null
+        : _normalizeLibraryCategory(category);
+    final legacyFavoriteRequest = normalizedRequested == 'favorite';
+    final effectiveCategory = replaceCategory
+        ? _normalizePrimaryLibraryCategory(category)
+        : category == null || legacyFavoriteRequest
+        ? previousCategory
+        : _normalizePrimaryLibraryCategory(category);
+    final effectiveFavorite =
+        favorite ??
+        (legacyFavoriteRequest
+            ? true
+            : previousEntry == null && category == null
+            ? true
+            : previousFavorite);
+
+    final key = _getKey(canonicalUrl);
+    if (effectiveCategory == null && !effectiveFavorite) {
+      await _libraryBox.delete(key);
+      return;
+    }
+
+    await _libraryBox.put(key, {
       'title': item.title,
       'url': canonicalUrl,
       'posterUrl': item.posterUrl,
@@ -179,10 +256,10 @@ class StorageService {
       'description': item.description,
       'type': item.contentType.name,
       'provider': item.provider,
-      'libraryCategory': normalizedCategory,
-      'updatedAt':
-          updatedAt ??
-          DateTime.now().millisecondsSinceEpoch,
+      'status': item.status.name,
+      'libraryCategory': effectiveCategory,
+      'isFavorite': effectiveFavorite,
+      'updatedAt': updatedAt ?? DateTime.now().millisecondsSinceEpoch,
       if (syncedAccountUid != null)
         'animeWitcherSyncedUid': syncedAccountUid
       else if (previousEntry?['animeWitcherSyncedUid'] != null)
@@ -194,9 +271,9 @@ class StorageService {
     });
   }
 
-  Future<void> setLibraryItemCategory(String url, String category) async {
+  Future<void> setLibraryItemCategory(String url, String? category) async {
     final canonicalUrl = _canonicalMediaUrl(url);
-    final normalizedCategory = _normalizeLibraryCategory(category);
+    final normalizedCategory = _normalizePrimaryLibraryCategory(category);
     for (var i = 0; i < _libraryBox.length; i++) {
       final key = _libraryBox.keyAt(i);
       final raw = _libraryBox.get(key);
@@ -204,6 +281,10 @@ class StorageService {
       final map = Map<dynamic, dynamic>.from(raw);
       if (_canonicalMediaUrl((map['url'] as String?) ?? '') != canonicalUrl) {
         continue;
+      }
+      if (normalizedCategory == null && !_storedLibraryFavorite(map)) {
+        await _libraryBox.delete(key);
+        return;
       }
       map['libraryCategory'] = normalizedCategory;
       map['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
@@ -295,6 +376,18 @@ class StorageService {
     return false;
   }
 
+  bool isLibraryItemFavorite(String url) {
+    final canonicalUrl = _canonicalMediaUrl(url);
+    for (var i = 0; i < _libraryBox.length; i++) {
+      final raw = _libraryBox.getAt(i);
+      if (raw is! Map) continue;
+      if (_canonicalMediaUrl((raw['url'] as String?) ?? '') == canonicalUrl) {
+        return _storedLibraryFavorite(raw);
+      }
+    }
+    return false;
+  }
+
   String? getLibraryItemCategory(String url) {
     final canonicalUrl = _canonicalMediaUrl(url);
     for (var i = 0; i < _libraryBox.length; i++) {
@@ -317,12 +410,15 @@ class StorageService {
       final raw = _libraryBox.getAt(i);
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
-      if (normalizedFilter != null &&
+      if (normalizedFilter == 'favorite') {
+        if (!_storedLibraryFavorite(raw)) continue;
+      } else if (normalizedFilter != null &&
           _storedLibraryCategory(raw) != normalizedFilter) {
         continue;
       }
       final canonicalUrl = _canonicalMediaUrl((map['url'] as String?) ?? '');
       if (canonicalUrl.isEmpty || !seen.add(canonicalUrl)) continue;
+      final storedStatus = (map['status'] ?? '').toString();
       items.add(
         MultimediaItem(
           title: (map['title'] as String?) ?? '',
@@ -334,6 +430,11 @@ class StorageService {
             (map['type'] as String?) ?? (map['contentType'] as String?),
           ),
           provider: map['provider'] as String?,
+          status: storedStatus == 'completed'
+              ? ShowStatus.completed
+              : storedStatus == 'upcoming'
+              ? ShowStatus.upcoming
+              : ShowStatus.ongoing,
         ),
       );
     }

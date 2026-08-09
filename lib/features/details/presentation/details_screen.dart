@@ -100,6 +100,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return switch (category) {
       LibraryCategory.favorite => isArabic ? 'مفضلة' : 'Favorites',
       LibraryCategory.watching => isArabic ? 'أشاهده حاليًا' : 'Watching',
+      LibraryCategory.continueLater =>
+        isArabic ? 'أكملها لاحقًا' : 'Continue later',
       LibraryCategory.planToWatch =>
         isArabic ? 'أرغب بمشاهدته' : 'Plan to watch',
       LibraryCategory.completed => isArabic ? 'تمت مشاهدته' : 'Completed',
@@ -112,6 +114,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return switch (category) {
       LibraryCategory.favorite => Icons.favorite_rounded,
       LibraryCategory.watching => Icons.play_circle_fill_rounded,
+      LibraryCategory.continueLater => Icons.pause_circle_filled_rounded,
       LibraryCategory.planToWatch => Icons.schedule_rounded,
       LibraryCategory.completed => Icons.check_circle_rounded,
       LibraryCategory.notInterested => Icons.block_rounded,
@@ -174,57 +177,73 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       ),
                     ),
                   ),
-                  for (final category in LibraryCategory.values)
+                  for (final category in LibraryCategory.primaryValues)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Material(
-                        color: currentCategory == category
-                            ? colors.primaryContainer.withValues(alpha: 0.70)
-                            : colors.surfaceContainerHighest.withValues(alpha: 0.46),
-                        borderRadius: BorderRadius.circular(15),
-                        child: InkWell(
+                      child: Opacity(
+                        opacity: category == LibraryCategory.completed &&
+                                item.status != ShowStatus.completed
+                            ? 0.42
+                            : 1,
+                        child: Material(
+                          color: currentCategory == category
+                              ? colors.primaryContainer.withValues(alpha: 0.70)
+                              : colors.surfaceContainerHighest.withValues(alpha: 0.46),
                           borderRadius: BorderRadius.circular(15),
-                          onTap: () => Navigator.of(sheetContext).pop(category),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 11,
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: currentCategory == category
-                                        ? colors.primary.withValues(alpha: 0.14)
-                                        : colors.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(11),
-                                  ),
-                                  child: Icon(
-                                    _libraryCategoryIcon(category),
-                                    size: 21,
-                                    color: currentCategory == category
-                                        ? colors.primary
-                                        : colors.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _libraryCategoryLabel(sheetContext, category),
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(15),
+                            onTap: category == LibraryCategory.completed &&
+                                    item.status != ShowStatus.completed
+                                ? null
+                                : () => Navigator.of(sheetContext).pop(category),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 11,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: currentCategory == category
+                                          ? colors.primary.withValues(alpha: 0.14)
+                                          : colors.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(11),
+                                    ),
+                                    child: Icon(
+                                      _libraryCategoryIcon(category),
+                                      size: 21,
+                                      color: currentCategory == category
+                                          ? colors.primary
+                                          : colors.onSurfaceVariant,
                                     ),
                                   ),
-                                ),
-                                if (currentCategory == category)
-                                  Icon(
-                                    Icons.check_rounded,
-                                    color: colors.primary,
-                                    size: 22,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _libraryCategoryLabel(sheetContext, category),
+                                      style: theme.textTheme.bodyLarge?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ),
-                              ],
+                                  if (category == LibraryCategory.completed &&
+                                      item.status != ShowStatus.completed)
+                                    Icon(
+                                      Icons.lock_outline_rounded,
+                                      color: colors.onSurfaceVariant,
+                                      size: 20,
+                                    )
+                                  else if (currentCategory == category)
+                                    Icon(
+                                      Icons.check_rounded,
+                                      color: colors.primary,
+                                      size: 22,
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -252,7 +271,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                               Icon(Icons.delete_outline_rounded, color: colors.error),
                               const SizedBox(width: 12),
                               Text(
-                                isArabic ? 'إزالة من المكتبة' : 'Remove from library',
+                                isArabic ? 'إزالة من القائمة' : 'Remove from list',
                                 style: theme.textTheme.bodyLarge?.copyWith(
                                   color: colors.error,
                                   fontWeight: FontWeight.w700,
@@ -276,7 +295,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     if (result is LibraryCategory) {
       await notifier.addItem(item, category: result);
     } else if (result == _removeLibraryAction) {
-      await notifier.removeItem(item.url);
+      await notifier.clearItemCategory(item.url);
     }
   }
 
@@ -717,7 +736,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     // membership globally instead of only inside the currently selected list.
     ref.watch(libraryProvider);
     final libraryNotifier = ref.read(libraryProvider.notifier);
-    final isBookmarked = libraryNotifier.isBookmarked(widget.item.url);
+    final isBookmarked = libraryNotifier.itemCategory(widget.item.url) != null;
+    final isFavorite = libraryNotifier.isFavorite(widget.item.url);
     final isLarge = context.isTabletOrLarger;
 
     final detailsAsync = ref.watch(
@@ -774,6 +794,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         recommendationsAsync,
         isMovie,
         isBookmarked,
+        isFavorite,
         libraryNotifier,
         l10n,
         selectedEpisodeCount,
@@ -846,6 +867,34 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     Focus(
                       descendantsAreTraversable: false,
                       child: IconButton(
+                        tooltip: isFavorite
+                            ? appText(context, english: 'Remove favorite', arabic: 'إزالة من المفضلة')
+                            : appText(context, english: 'Add to favorites', arabic: 'إضافة إلى المفضلة'),
+                        icon: Icon(
+                          isFavorite
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          color: isFavorite
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.white,
+                        ),
+                        onPressed: () => libraryNotifier.setFavorite(
+                          item,
+                          !isFavorite,
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black45,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  _withDetailsHeaderPullReaction(
+                    Focus(
+                      descendantsAreTraversable: false,
+                      child: IconButton(
+                        tooltip: appText(context, english: 'Choose list', arabic: 'اختر قائمة'),
                         icon: Icon(
                           isBookmarked
                               ? Icons.bookmark_rounded
@@ -1210,6 +1259,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
     bool isBookmarked,
+    bool isFavorite,
     dynamic libraryNotifier,
     AppLocalizations l10n,
     int selectedEpisodeCount,
@@ -1240,8 +1290,28 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               ),
             ),
             actions: [
-              // Bookmark — D-pad reachable
               IconButton(
+                tooltip: isFavorite
+                    ? appText(context, english: 'Remove favorite', arabic: 'إزالة من المفضلة')
+                    : appText(context, english: 'Add to favorites', arabic: 'إضافة إلى المفضلة'),
+                icon: Icon(
+                  isFavorite
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: isFavorite
+                      ? Theme.of(context).colorScheme.primary
+                      : textColor,
+                ),
+                onPressed: () => libraryNotifier.setFavorite(item, !isFavorite),
+                style: IconButton.styleFrom(
+                  backgroundColor: isDark ? Colors.black45 : Colors.white54,
+                  foregroundColor: textColor,
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Primary list selector — D-pad reachable
+              IconButton(
+                tooltip: appText(context, english: 'Choose list', arabic: 'اختر قائمة'),
                 icon: Icon(
                   isBookmarked
                       ? Icons.bookmark_rounded

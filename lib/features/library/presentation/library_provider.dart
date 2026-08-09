@@ -57,6 +57,18 @@ class Library extends _$Library {
     refresh();
   }
 
+  Future<void> clearItemCategory(String url) async {
+    final repository = ref.read(libraryRepositoryProvider);
+    await repository.clearCategory(url);
+    refresh();
+  }
+
+  Future<void> setFavorite(MultimediaItem item, bool favorite) async {
+    final repository = ref.read(libraryRepositoryProvider);
+    await repository.setFavorite(item, favorite);
+    refresh();
+  }
+
   Future<void> removeItem(String url) async {
     final repository = ref.read(libraryRepositoryProvider);
     await repository.removeFromLibrary(url);
@@ -66,6 +78,11 @@ class Library extends _$Library {
   bool isBookmarked(String url) {
     final repository = ref.read(libraryRepositoryProvider);
     return repository.isInLibrary(url);
+  }
+
+  bool isFavorite(String url) {
+    final repository = ref.read(libraryRepositoryProvider);
+    return repository.isFavorite(url);
   }
 
   LibraryCategory? itemCategory(String url) {

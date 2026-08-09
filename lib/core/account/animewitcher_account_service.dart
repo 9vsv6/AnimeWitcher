@@ -653,19 +653,22 @@ class AnimeWitcherAccountService {
       if (animeId == null) continue;
       remoteEntries[animeId] = _RemoteLibraryEntry(
         category: _categoryFromCloudType(document.fields['type']),
+        favorite: false,
         document: document,
         updatedAt: _dateValue(document.fields['date']),
       );
     }
     for (final document in favoriteDocs) {
       final animeId = _animeIdFromFavorite(document);
-      if (animeId != null) {
-        remoteEntries[animeId] = _RemoteLibraryEntry(
-          category: LibraryCategory.favorite,
-          document: document,
-          updatedAt: _dateValue(document.fields['date']),
-        );
-      }
+      if (animeId == null) continue;
+      final existing = remoteEntries[animeId];
+      final favoriteUpdatedAt = _dateValue(document.fields['date']);
+      remoteEntries[animeId] = _RemoteLibraryEntry(
+        category: existing?.category,
+        favorite: true,
+        document: existing?.document ?? document,
+        updatedAt: _latestDate(existing?.updatedAt, favoriteUpdatedAt),
+      );
     }
 
     final localItems = _storage.getLibraryItems();
@@ -690,7 +693,9 @@ class AnimeWitcherAccountService {
         if (item != null && _isCurrentProfile(profile)) {
           await _storage.addToLibrary(
             item,
-            category: remote.category.storageKey,
+            category: remote.category?.storageKey,
+            replaceCategory: true,
+            favorite: remote.favorite,
             updatedAt: remoteMillis,
             syncedAccountUid: profile.uid,
             syncedAt: remoteMillis,
@@ -700,8 +705,7 @@ class AnimeWitcherAccountService {
       }
 
       final localUpdatedAt = _storage.getLibraryItemUpdatedAt(url);
-      final remoteUpdatedAt =
-          remote.updatedAt?.millisecondsSinceEpoch ?? 0;
+      final remoteUpdatedAt = remote.updatedAt?.millisecondsSinceEpoch ?? 0;
       final resolution = resolveAnimeWitcherSyncConflict(
         remoteExists: true,
         localUpdatedAt: localUpdatedAt,
@@ -713,9 +717,8 @@ class AnimeWitcherAccountService {
       if (resolution == AnimeWitcherSyncResolution.uploadLocal) {
         await saveLibraryItem(
           local,
-          LibraryCategory.fromStorageKey(
-            _storage.getLibraryItemCategory(local.url),
-          ),
+          _localLibraryCategory(local.url),
+          favorite: _storage.isLibraryItemFavorite(local.url),
           knownFavorites: favoriteDocs,
         );
         continue;
@@ -725,7 +728,9 @@ class AnimeWitcherAccountService {
           _itemFromCompact(remote.document.fields['skystream_item']) ?? local;
       await _storage.addToLibrary(
         remoteItem,
-        category: remote.category.storageKey,
+        category: remote.category?.storageKey,
+        replaceCategory: true,
+        favorite: remote.favorite,
         updatedAt: remoteMillis,
         syncedAccountUid: profile.uid,
         syncedAt: remoteMillis,
@@ -748,32 +753,43 @@ class AnimeWitcherAccountService {
         currentAccountUid: profile.uid,
       );
       if (resolution == AnimeWitcherSyncResolution.deleteLocal) {
-        // The item existed at the previous successful sync but no longer
-        // exists remotely: honor a deletion made by another device.
         await _storage.removeFromLibrary(item.url);
         continue;
       }
-      final category = LibraryCategory.fromStorageKey(
-        _storage.getLibraryItemCategory(item.url),
+      await saveLibraryItem(
+        item,
+        _localLibraryCategory(item.url),
+        favorite: _storage.isLibraryItemFavorite(item.url),
+        knownFavorites: favoriteDocs,
       );
-      await saveLibraryItem(item, category, knownFavorites: favoriteDocs);
     }
+  }
+
+  LibraryCategory? _localLibraryCategory(String url) {
+    final raw = _storage.getLibraryItemCategory(url);
+    if (raw == null) return null;
+    final category = LibraryCategory.fromStorageKey(raw);
+    return category.isPrimary ? category : null;
   }
 
   Future<void> saveLibraryItem(
     MultimediaItem item,
-    LibraryCategory category, {
+    LibraryCategory? category, {
+    bool? favorite,
     List<FirestoreDocument>? knownFavorites,
   }) async {
     if (!isSignedIn) return;
     final animeId = AnimeWitcherSyncIds.animeIdFromUrl(item.url);
     final profile = _profile;
     if (animeId == null || profile == null) return;
+    final primaryCategory = category == LibraryCategory.favorite ? null : category;
+    final isFavorite = favorite ?? category == LibraryCategory.favorite;
     await _enqueueLibraryWrite(
       animeId,
       () => _saveLibraryItemInternal(
         item,
-        category,
+        primaryCategory,
+        favorite: isFavorite,
         profile: profile,
         knownFavorites: knownFavorites,
       ),
@@ -782,7 +798,8 @@ class AnimeWitcherAccountService {
 
   Future<void> _saveLibraryItemInternal(
     MultimediaItem item,
-    LibraryCategory category, {
+    LibraryCategory? category, {
+    required bool favorite,
     required AnimeWitcherProfile profile,
     List<FirestoreDocument>? knownFavorites,
   }) async {
@@ -790,20 +807,35 @@ class AnimeWitcherAccountService {
     if (animeId == null || !_isCurrentProfile(profile)) return;
     final root = 'users/${profile.documentId}';
     final compact = _compactItem(item);
-    if (category == LibraryCategory.favorite) {
+
+    if (category == null) {
       await _authenticated(
         (token) => _firestore.deleteDocument(
           '$root/user_anime/$animeId',
           token,
         ),
       );
+    } else {
+      await _authenticated(
+        (token) => _firestore.setDocumentWithServerTimestamps(
+          '$root/user_anime/$animeId',
+          <String, dynamic>{
+            'doc_ref': 'anime_list/$animeId',
+            'type': _cloudType(category),
+            'views': 0,
+            'skystream_item': compact,
+          },
+          token,
+          serverTimestampFields: const <String>{'date'},
+        ),
+      );
+    }
+
+    if (favorite) {
       await _authenticated(
         (token) => _firestore.setDocumentWithServerTimestamps(
           '$root/fav_anime/$animeId',
           <String, dynamic>{
-            // AnimeWitcher's models declare this as String, not a Firestore
-            // reference. Keeping the exact type is required for its equality
-            // queries and for lists loaded by the official client.
             'anime_doc_id': 'anime_list/$animeId',
             'views': 0,
             'skystream_item': compact,
@@ -812,9 +844,6 @@ class AnimeWitcherAccountService {
           serverTimestampFields: const <String>{'date'},
         ),
       );
-      // Remove legacy random-ID favorite records after writing the canonical
-      // document. The official app has migrated these server-side, but older
-      // accounts can still contain them and would otherwise show duplicates.
       final List<FirestoreDocument> legacyFavorites = knownFavorites ??
           await _authenticated<List<FirestoreDocument>>(
             (token) => _firestore.listDocuments(
@@ -831,32 +860,14 @@ class AnimeWitcherAccountService {
           (token) => _firestore.deleteDocument(document.path, token),
         );
       }
-      await _storage.markLibraryItemSynced(
-        item.url,
-        accountUid: profile.uid,
-        syncedAt: DateTime.now().millisecondsSinceEpoch,
+    } else {
+      await _removeFavoriteEntries(
+        animeId,
+        profile: profile,
+        known: knownFavorites,
       );
-      return;
     }
 
-    await _removeFavoriteEntries(
-      animeId,
-      profile: profile,
-      known: knownFavorites,
-    );
-    await _authenticated(
-      (token) => _firestore.setDocumentWithServerTimestamps(
-        '$root/user_anime/$animeId',
-        <String, dynamic>{
-          'doc_ref': 'anime_list/$animeId',
-          'type': _cloudType(category),
-          'views': 0,
-          'skystream_item': compact,
-        },
-        token,
-        serverTimestampFields: const <String>{'date'},
-      ),
-    );
     await _storage.markLibraryItemSynced(
       item.url,
       accountUid: profile.uid,
@@ -1694,6 +1705,7 @@ class AnimeWitcherAccountService {
     'description': item.description,
     'type': item.contentType.name,
     'provider': item.provider ?? animeWitcherProvider,
+    'status': item.status.name,
     'year': item.year,
     'score': item.score,
     'tmdbId': item.tmdbId,
@@ -1745,6 +1757,7 @@ class AnimeWitcherAccountService {
 
   String _cloudType(LibraryCategory category) => switch (category) {
     LibraryCategory.watching => 'watching',
+    LibraryCategory.continueLater => 'on_Hold',
     LibraryCategory.completed => 'completed',
     LibraryCategory.planToWatch => 'pin',
     LibraryCategory.notInterested => 'no_watching',
@@ -1756,7 +1769,8 @@ class AnimeWitcherAccountService {
       'watching' => LibraryCategory.watching,
       'completed' => LibraryCategory.completed,
       'no_watching' || 'noWatching' => LibraryCategory.notInterested,
-      'pin' || 'on_Hold' || 'onHold' => LibraryCategory.planToWatch,
+      'on_Hold' || 'onHold' => LibraryCategory.continueLater,
+      'pin' || 'pinned' => LibraryCategory.planToWatch,
       _ => LibraryCategory.planToWatch,
     };
   }
@@ -1785,11 +1799,13 @@ class AnimeWitcherAccountService {
 class _RemoteLibraryEntry {
   const _RemoteLibraryEntry({
     required this.category,
+    required this.favorite,
     required this.document,
     required this.updatedAt,
   });
 
-  final LibraryCategory category;
+  final LibraryCategory? category;
+  final bool favorite;
   final FirestoreDocument document;
   final DateTime? updatedAt;
 }
@@ -1849,6 +1865,12 @@ double? _doubleValue(dynamic raw) {
 int? _yearValue(dynamic raw) {
   final match = RegExp(r'\b(?:19|20)\d{2}\b').firstMatch(raw?.toString() ?? '');
   return match == null ? null : int.tryParse(match.group(0)!);
+}
+
+DateTime? _latestDate(DateTime? first, DateTime? second) {
+  if (first == null) return second;
+  if (second == null) return first;
+  return first.isAfter(second) ? first : second;
 }
 
 DateTime? _dateValue(dynamic raw) {

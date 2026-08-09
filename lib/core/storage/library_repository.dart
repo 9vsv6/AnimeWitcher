@@ -29,25 +29,84 @@ class LibraryRepository {
     LibraryCategory? category,
   }) async {
     final target = category ?? getSelectedCategory();
-    await _storageService.addToLibrary(
-      item,
-      category: target.storageKey,
-    );
+    if (target == LibraryCategory.favorite) {
+      await setFavorite(item, true);
+      return;
+    }
+    if (target == LibraryCategory.completed &&
+        item.status != ShowStatus.completed) {
+      return;
+    }
+
+    await _storageService.addToLibrary(item, category: target.storageKey);
     _syncInBackground(
-      _accountService.saveLibraryItem(item, target),
+      _accountService.saveLibraryItem(
+        item,
+        target,
+        favorite: _storageService.isLibraryItemFavorite(item.url),
+      ),
       'save library item',
     );
   }
 
   Future<void> moveToCategory(String url, LibraryCategory category) async {
-    await _storageService.setLibraryItemCategory(url, category.storageKey);
+    if (category == LibraryCategory.favorite) {
+      final item = _findItem(url);
+      if (item != null) await setFavorite(item, true);
+      return;
+    }
+
     final item = _findItem(url);
+    if (category == LibraryCategory.completed &&
+        item != null &&
+        item.status != ShowStatus.completed) {
+      return;
+    }
+    await _storageService.setLibraryItemCategory(url, category.storageKey);
     if (item != null) {
       _syncInBackground(
-        _accountService.saveLibraryItem(item, category),
+        _accountService.saveLibraryItem(
+          item,
+          category,
+          favorite: _storageService.isLibraryItemFavorite(url),
+        ),
         'move library item',
       );
     }
+  }
+
+  Future<void> clearCategory(String url) async {
+    final item = _findItem(url);
+    final favorite = _storageService.isLibraryItemFavorite(url);
+    await _storageService.setLibraryItemCategory(url, null);
+    if (item == null) return;
+    if (favorite) {
+      _syncInBackground(
+        _accountService.saveLibraryItem(item, null, favorite: true),
+        'clear library category',
+      );
+    } else {
+      _syncInBackground(
+        _accountService.removeLibraryItem(url),
+        'remove library item',
+      );
+    }
+  }
+
+  Future<void> setFavorite(MultimediaItem item, bool favorite) async {
+    final category = getItemCategory(item.url);
+    await _storageService.addToLibrary(item, favorite: favorite);
+    if (!favorite && category == null) {
+      _syncInBackground(
+        _accountService.removeLibraryItem(item.url),
+        'remove favorite-only library item',
+      );
+      return;
+    }
+    _syncInBackground(
+      _accountService.saveLibraryItem(item, category, favorite: favorite),
+      favorite ? 'save favorite' : 'remove favorite',
+    );
   }
 
   Future<void> removeFromLibrary(String url) async {
@@ -62,9 +121,15 @@ class LibraryRepository {
     return _storageService.isInLibrary(url);
   }
 
+  bool isFavorite(String url) {
+    return _storageService.isLibraryItemFavorite(url);
+  }
+
   LibraryCategory? getItemCategory(String url) {
     final value = _storageService.getLibraryItemCategory(url);
-    return value == null ? null : LibraryCategory.fromStorageKey(value);
+    if (value == null) return null;
+    final category = LibraryCategory.fromStorageKey(value);
+    return category.isPrimary ? category : null;
   }
 
   List<MultimediaItem> getLibraryItems({LibraryCategory? category}) {
