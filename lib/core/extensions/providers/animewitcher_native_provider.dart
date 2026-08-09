@@ -958,24 +958,30 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final years = selectedYears.isNotEmpty
-        ? selectedYears
-        : <String>[
-            for (var year = 2028; year >= 1961; year--) year.toString(),
-          ];
+    if (selectedYears.isEmpty) {
+      // The UI blocks this state. Keep a defensive no-match filter for any
+      // persisted/programmatic filter that selects a season without a year.
+      return _filterGroup(
+        'details.season',
+        const <String>['__season_requires_year__'],
+        'OR',
+      );
+    }
+
     final values = <String>[
       for (final season in seasons)
-        for (final year in years) '$season عام $year',
+        for (final year in selectedYears) '$season عام $year',
     ];
     return _filterGroup('details.season', values, 'OR');
   }
 
   String _buildFilters(ProviderSearchFilters filters) {
+    final hasSeason = filters.seasons.any((value) => value.trim().isNotEmpty);
     return <String>[
       _filterGroup('details.state', filters.statuses, 'OR'),
       _filterGroup('type', filters.types, 'OR'),
       _filterGroup('details.age', filters.ageRatings, 'OR'),
-      _filterGroup('details.year', filters.years, 'OR'),
+      if (!hasSeason) _filterGroup('details.year', filters.years, 'OR'),
       _seasonFilter(filters),
       _filterGroup('tags', filters.genres, 'AND'),
     ].where((value) => value.isNotEmpty).join(' AND ');

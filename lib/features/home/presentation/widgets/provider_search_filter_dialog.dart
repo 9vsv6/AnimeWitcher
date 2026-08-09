@@ -33,6 +33,8 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
   bool get _isArabic =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
+  bool get _seasonRequiresYear => _seasons.isNotEmpty && _years.isEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -254,33 +256,65 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                 ),
                 Padding(
                   padding: const EdgeInsets.all(LayoutConstants.spacingMd),
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextButton.icon(
-                        onPressed: _value.isEmpty ? null : _clearAll,
-                        icon: const Icon(Icons.restart_alt_rounded),
-                        label: Text(_isArabic ? 'مسح الكل' : 'Clear all'),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(_value),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: colors.primary,
-                            foregroundColor: colors.onPrimary,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            _isArabic ? 'تطبيق' : 'Apply',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                      if (_seasonRequiresYear)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                size: 18,
+                                color: colors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  _isArabic
+                                      ? 'اختر سنة مع الموسم'
+                                      : 'Choose a year with the season',
+                                  style: TextStyle(
+                                    color: colors.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
+                      Row(
+                        children: [
+                          TextButton.icon(
+                            onPressed: _value.isEmpty ? null : _clearAll,
+                            icon: const Icon(Icons.restart_alt_rounded),
+                            label: Text(_isArabic ? 'مسح الكل' : 'Clear all'),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _seasonRequiresYear
+                                  ? null
+                                  : () => Navigator.of(context).pop(_value),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: colors.primary,
+                                foregroundColor: colors.onPrimary,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                _isArabic ? 'تطبيق' : 'Apply',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
