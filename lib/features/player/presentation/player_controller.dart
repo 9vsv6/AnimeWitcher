@@ -344,6 +344,7 @@ class PlayerController extends Notifier<PlayerState> {
   bool _isDisposed = false;
 
   bool _hasMarkedWatched = false;
+  bool _hasRefreshedCloudProgress = false;
 
   Player get player => _player;
   VideoController? get videoViewController => _videoViewController;
@@ -811,6 +812,7 @@ class PlayerController extends Notifier<PlayerState> {
     pendingVideoViewSubtitleIdsBeforeReload = null;
     selectNewestVideoViewSubtitleAfterReload = false;
     _hasMarkedWatched = false;
+    _hasRefreshedCloudProgress = false;
     _item = item;
 
     String initialTitle = item.title;
@@ -2571,6 +2573,19 @@ class PlayerController extends Notifier<PlayerState> {
           (_item.contentType == MultimediaContentType.series ||
           _item.contentType == MultimediaContentType.anime);
 
+      if (!_hasRefreshedCloudProgress) {
+        _hasRefreshedCloudProgress = true;
+        try {
+          await ref
+              .read(animeWitcherAccountServiceProvider)
+              .syncContinueWatchingItem(_item.url);
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint('[Player] Cloud progress sync deferred: $error');
+          }
+        }
+      }
+
       int savedPos = 0;
       if (isSeries) {
         final ep = _resolveCurrentEpisode();
@@ -2588,6 +2603,7 @@ class PlayerController extends Notifier<PlayerState> {
                 .remoteEpisodePosition(
                   mainUrl: _item.url,
                   episodeUrl: historyEpisodeUrl,
+                  refresh: true,
                 );
           } catch (error) {
             if (kDebugMode) {

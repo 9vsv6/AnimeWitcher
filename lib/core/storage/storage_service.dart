@@ -148,18 +148,24 @@ class StorageService {
   Future<void> addToLibrary(
     MultimediaItem item, {
     String category = _defaultLibraryCategory,
+    int? updatedAt,
+    String? syncedAccountUid,
+    int? syncedAt,
   }) async {
     final canonicalUrl = _canonicalMediaUrl(item.url);
     final normalizedCategory = _normalizeLibraryCategory(category);
+    Map<dynamic, dynamic>? previousEntry;
     final staleKeys = <dynamic>[];
     for (var i = 0; i < _libraryBox.length; i++) {
       final key = _libraryBox.keyAt(i);
       final raw = _libraryBox.get(key);
       if (raw is! Map) continue;
       final storedUrl = (raw['url'] as String?) ?? '';
-      if (_canonicalMediaUrl(storedUrl) == canonicalUrl &&
-          key != _getKey(canonicalUrl)) {
-        staleKeys.add(key);
+      if (_canonicalMediaUrl(storedUrl) == canonicalUrl) {
+        previousEntry ??= Map<dynamic, dynamic>.from(raw);
+        if (key != _getKey(canonicalUrl)) {
+          staleKeys.add(key);
+        }
       }
     }
     for (final key in staleKeys) {
@@ -174,6 +180,17 @@ class StorageService {
       'type': item.contentType.name,
       'provider': item.provider,
       'libraryCategory': normalizedCategory,
+      'updatedAt':
+          updatedAt ??
+          DateTime.now().millisecondsSinceEpoch,
+      if (syncedAccountUid != null)
+        'animeWitcherSyncedUid': syncedAccountUid
+      else if (previousEntry?['animeWitcherSyncedUid'] != null)
+        'animeWitcherSyncedUid': previousEntry!['animeWitcherSyncedUid'],
+      if (syncedAt != null)
+        'animeWitcherSyncedAt': syncedAt
+      else if (previousEntry?['animeWitcherSyncedAt'] != null)
+        'animeWitcherSyncedAt': previousEntry!['animeWitcherSyncedAt'],
     });
   }
 
@@ -189,9 +206,64 @@ class StorageService {
         continue;
       }
       map['libraryCategory'] = normalizedCategory;
+      map['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
       await _libraryBox.put(key, map);
       return;
     }
+  }
+
+  int getLibraryItemUpdatedAt(String url) {
+    return _libraryMetadataInt(url, 'updatedAt');
+  }
+
+  int getLibraryItemSyncedAt(String url) {
+    return _libraryMetadataInt(url, 'animeWitcherSyncedAt');
+  }
+
+  String? getLibraryItemSyncedAccountUid(String url) {
+    final value = _libraryMetadata(url, 'animeWitcherSyncedUid')
+        ?.toString()
+        .trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  Future<void> markLibraryItemSynced(
+    String url, {
+    required String accountUid,
+    required int syncedAt,
+  }) async {
+    final canonicalUrl = _canonicalMediaUrl(url);
+    for (var i = 0; i < _libraryBox.length; i++) {
+      final key = _libraryBox.keyAt(i);
+      final raw = _libraryBox.get(key);
+      if (raw is! Map) continue;
+      final map = Map<dynamic, dynamic>.from(raw);
+      if (_canonicalMediaUrl((map['url'] as String?) ?? '') != canonicalUrl) {
+        continue;
+      }
+      map['animeWitcherSyncedUid'] = accountUid;
+      map['animeWitcherSyncedAt'] = syncedAt;
+      await _libraryBox.put(key, map);
+      return;
+    }
+  }
+
+  dynamic _libraryMetadata(String url, String field) {
+    final canonicalUrl = _canonicalMediaUrl(url);
+    for (var i = 0; i < _libraryBox.length; i++) {
+      final raw = _libraryBox.getAt(i);
+      if (raw is! Map) continue;
+      if (_canonicalMediaUrl((raw['url'] as String?) ?? '') == canonicalUrl) {
+        return raw[field];
+      }
+    }
+    return null;
+  }
+
+  int _libraryMetadataInt(String url, String field) {
+    final raw = _libraryMetadata(url, field);
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw?.toString() ?? '') ?? 0;
   }
 
   Future<void> removeFromLibrary(String url) async {
@@ -571,7 +643,13 @@ class StorageService {
     String? episodeTitle,
     String? episodePosterUrl,
     int? timestamp,
+    String? syncedAccountUid,
+    int? syncedAt,
   }) async {
+    final existing = _historyBox.get(_getKey(item.url));
+    final previous = existing is Map
+        ? Map<dynamic, dynamic>.from(existing)
+        : const <dynamic, dynamic>{};
     final entry = {
       'title': item.title,
       'url': item.url,
@@ -591,6 +669,14 @@ class StorageService {
       'episodeTitle': episodeTitle,
       'episodePosterUrl': episodePosterUrl,
       'timestamp': timestamp ?? DateTime.now().millisecondsSinceEpoch,
+      if (syncedAccountUid != null)
+        'animeWitcherSyncedUid': syncedAccountUid
+      else if (previous['animeWitcherSyncedUid'] != null)
+        'animeWitcherSyncedUid': previous['animeWitcherSyncedUid'],
+      if (syncedAt != null)
+        'animeWitcherSyncedAt': syncedAt
+      else if (previous['animeWitcherSyncedAt'] != null)
+        'animeWitcherSyncedAt': previous['animeWitcherSyncedAt'],
     };
 
     // Save main entry (keyed by series/movie URL)
@@ -606,6 +692,33 @@ class StorageService {
       await _historyBox.put(episodeKey, entry);
     }
 
+    _historyCacheDirty = true;
+  }
+
+  Future<void> markHistoryItemSynced(
+    String url, {
+    required String accountUid,
+    required int syncedAt,
+  }) async {
+    final mainKey = _getKey(url);
+    final raw = _historyBox.get(mainKey);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['animeWitcherSyncedUid'] = accountUid;
+    entry['animeWitcherSyncedAt'] = syncedAt;
+    await _historyBox.put(mainKey, entry);
+
+    final lastEpisodeUrl = entry['lastEpisodeUrl'] as String?;
+    if (lastEpisodeUrl != null && lastEpisodeUrl.isNotEmpty) {
+      final episodeKey = 'EP_${_getKey(lastEpisodeUrl)}';
+      final episodeRaw = _historyBox.get(episodeKey);
+      if (episodeRaw is Map) {
+        final episodeEntry = Map<String, dynamic>.from(episodeRaw);
+        episodeEntry['animeWitcherSyncedUid'] = accountUid;
+        episodeEntry['animeWitcherSyncedAt'] = syncedAt;
+        await _historyBox.put(episodeKey, episodeEntry);
+      }
+    }
     _historyCacheDirty = true;
   }
 

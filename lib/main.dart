@@ -170,10 +170,14 @@ class MyApp extends ConsumerStatefulWidget {
   ConsumerState<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends ConsumerState<MyApp> with WindowListener {
+class _MyAppState extends ConsumerState<MyApp>
+    with WindowListener, WidgetsBindingObserver {
+  DateTime? _lastForegroundAccountSyncAt;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     FocusManager.instance.addEarlyKeyEventHandler(_handleEarlyKeyEvent);
     if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
       windowManager.addListener(this);
@@ -186,11 +190,42 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     FocusManager.instance.removeEarlyKeyEventHandler(_handleEarlyKeyEvent);
     if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
       windowManager.removeListener(this);
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final account = ref
+        .read(animeWitcherAccountControllerProvider)
+        .asData
+        ?.value;
+    if (account?.isSignedIn != true) return;
+
+    final now = DateTime.now();
+    final previous = _lastForegroundAccountSyncAt;
+    if (previous != null &&
+        now.difference(previous) < const Duration(minutes: 1)) {
+      return;
+    }
+    _lastForegroundAccountSyncAt = now;
+    unawaited(
+      ref
+          .read(animeWitcherAccountControllerProvider.notifier)
+          .syncNow()
+          .catchError((Object error) {
+            if (kDebugMode) {
+              debugPrint(
+                '[AnimeWitcherAccount] Foreground sync deferred: $error',
+              );
+            }
+          }),
+    );
   }
 
   KeyEventResult _handleEarlyKeyEvent(KeyEvent event) {

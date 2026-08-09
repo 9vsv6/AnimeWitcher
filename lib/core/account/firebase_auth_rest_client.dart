@@ -128,6 +128,12 @@ class FirebaseAuthRestClient {
   Future<AnimeWitcherSession> refresh(
     AnimeWitcherSession previous,
   ) async {
+    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+      throw const AnimeWitcherAccountException(
+        'not-configured',
+        'AnimeWitcher account services are not configured.',
+      );
+    }
     try {
       final response = await _dio.post<dynamic>(
         '$_tokenBase/token',

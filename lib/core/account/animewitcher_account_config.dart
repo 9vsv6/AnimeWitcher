@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 
-/// Public Firebase client configuration used by the official AnimeWitcher
-/// application.
+/// Build-time client configuration for AnimeWitcher account synchronization.
 ///
-/// Firebase API keys identify a client project; they are not server secrets.
-/// Every value can still be replaced at build time so forks can point the
-/// account feature at their own Firebase project.
+/// Firebase client keys are identifiers rather than authorization secrets, but
+/// they must not be committed as an unrestricted shared credential. Release
+/// builds receive these values through `--dart-define-from-file` and GitHub
+/// Actions secrets.
 class AnimeWitcherAccountConfig {
   const AnimeWitcherAccountConfig._();
 
@@ -17,25 +17,19 @@ class AnimeWitcherAccountConfig {
 
   static const String projectId = String.fromEnvironment(
     'ANIMEWITCHER_FIREBASE_PROJECT_ID',
-    defaultValue: 'animewitcher-1c66d',
   );
 
   static const String apiKey = String.fromEnvironment(
     'ANIMEWITCHER_FIREBASE_API_KEY',
-    defaultValue: 'AIzaSyAcbWRwfFNnCpoydDXlEALWnM_TYVcJOMU',
   );
 
   /// OAuth web/server client used to request a Google ID token which Firebase
   /// can exchange for an AnimeWitcher session.
   static const String googleServerClientId = String.fromEnvironment(
     'ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID',
-    defaultValue:
-        '861470152250-pfkag6v2dvos8v2sl1faftic0ckcr114.apps.googleusercontent.com',
   );
 
-  /// iOS requires its own OAuth client and reversed URL scheme. This is left
-  /// build-configurable because it must be registered for SkyStream's bundle
-  /// identifier; copying AnimeWitcher's Android client would not work.
+  /// iOS requires an OAuth client registered for SkyStream's bundle ID.
   static const String googleIosClientId = String.fromEnvironment(
     'ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID',
   );
@@ -55,6 +49,7 @@ class AnimeWitcherAccountConfig {
   }
 
   static bool get googleConfigured {
+    if (!firebaseConfigured) return false;
     if (kIsWeb) return googleServerClientId.trim().isNotEmpty;
     return switch (defaultTargetPlatform) {
       TargetPlatform.iOS || TargetPlatform.macOS =>

@@ -437,11 +437,19 @@ class FirestoreRestClient {
     }
   }
 
-  Options _options(String idToken) => Options(
-    contentType: Headers.jsonContentType,
-    headers: <String, String>{'Authorization': 'Bearer $idToken'},
-    listFormat: ListFormat.multi,
-  );
+  Options _options(String idToken) {
+    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+      throw const AnimeWitcherAccountException(
+        'not-configured',
+        'AnimeWitcher account services are not configured.',
+      );
+    }
+    return Options(
+      contentType: Headers.jsonContentType,
+      headers: <String, String>{'Authorization': 'Bearer $idToken'},
+      listFormat: ListFormat.multi,
+    );
+  }
 
   FirestoreDocument? _decodeDocument(dynamic raw) {
     final source = _map(raw);

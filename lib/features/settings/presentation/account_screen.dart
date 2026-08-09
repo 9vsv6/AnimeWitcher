@@ -45,7 +45,8 @@ class _AnimeWitcherAccountScreenState
     final account = ref.watch(animeWitcherAccountControllerProvider);
     final snapshot = account.asData?.value;
     final profile = snapshot?.profile;
-    final busy = _submitting || account.isLoading;
+    final configured = AnimeWitcherAccountConfig.firebaseConfigured;
+    final busy = _submitting || account.isLoading || !configured;
     final asyncError = account.when<Object?>(
       data: (_) => null,
       error: (error, _) => error,
@@ -85,6 +86,24 @@ class _AnimeWitcherAccountScreenState
     final isCreate = _mode == _AccountFormMode.createAccount;
     return Column(
       children: [
+        if (!AnimeWitcherAccountConfig.firebaseConfigured)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              LayoutConstants.spacingLg,
+              LayoutConstants.spacingMd,
+              LayoutConstants.spacingLg,
+              0,
+            ),
+            child: _ErrorBanner(
+              message: appText(
+                context,
+                english:
+                    'Account sync is not configured in this build. Add the AnimeWitcher Firebase values through build secrets.',
+                arabic:
+                    'مزامنة الحساب غير مهيأة في هذه النسخة. أضف إعدادات Firebase الخاصة بـ AnimeWitcher من أسرار البناء.',
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: LayoutConstants.spacingLg,
@@ -833,6 +852,8 @@ class _AnimeWitcherAccountScreenState
       'user-disabled' => 'تم تعطيل هذا الحساب.',
       'too-many-attempts' => 'محاولات كثيرة. حاول لاحقًا.',
       'google-not-configured' => 'دخول Google غير مهيأ لهذه النسخة.',
+      'not-configured' => 'مزامنة AnimeWitcher غير مهيأة لهذه النسخة.',
+      'account-banned' => 'تم إيقاف حساب AnimeWitcher هذا.',
       'duplicate-user-documents' =>
         'يوجد تكرار قديم في بيانات الحساب. تواصل مع دعم AnimeWitcher.',
       'permission-denied' => 'رفض خادم AnimeWitcher عملية المزامنة.',

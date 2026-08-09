@@ -45,9 +45,12 @@ class EpisodeWatchRepository {
   final AnimeWitcherAccountService _accountService;
   final void Function() _notifyChanged;
 
-  static const String _storageKey = 'episode_watch_overrides_v1';
+  static const String _legacyStorageKey = 'episode_watch_overrides_v1';
+  static const String _storageKey = 'episode_watch_states_v2';
+  static const String _cloudMigrationPrefix =
+      'episode_watch_cloud_migrated_v1';
 
-  Map<String, bool>? _cachedOverrides;
+  Map<String, _EpisodeWatchState>? _cachedStates;
 
   String _canonicalMainUrl(String mainUrl) {
     final value = mainUrl.trim();
@@ -104,45 +107,87 @@ class EpisodeWatchRepository {
         .toString();
   }
 
-  Map<String, bool> _readOverrides() {
-    final cached = _cachedOverrides;
+  Map<String, _EpisodeWatchState> _readStates() {
+    final cached = _cachedStates;
     if (cached != null) {
       return cached;
     }
 
     final raw = _storageService.getString(_storageKey);
-    if (raw == null || raw.isEmpty) {
-      return _cachedOverrides = <String, bool>{};
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          final states = <String, _EpisodeWatchState>{};
+          decoded.forEach((dynamic key, dynamic value) {
+            if (value is Map) {
+              states[key.toString()] = _EpisodeWatchState.fromJson(
+                Map<String, dynamic>.from(value),
+              );
+            }
+          });
+          return _cachedStates = states;
+        }
+      } catch (_) {
+        // Fall through to the v1 migration.
+      }
     }
 
+    final legacyRaw = _storageService.getString(_legacyStorageKey);
+    if (legacyRaw == null || legacyRaw.isEmpty) {
+      return _cachedStates = <String, _EpisodeWatchState>{};
+    }
     try {
-      final decoded = jsonDecode(raw);
+      final decoded = jsonDecode(legacyRaw);
       if (decoded is! Map) {
-        return _cachedOverrides = <String, bool>{};
+        return _cachedStates = <String, _EpisodeWatchState>{};
       }
-
-      return _cachedOverrides = decoded.map<String, bool>(
-        (key, value) => MapEntry(key.toString(), value == true),
+      return _cachedStates = decoded.map<String, _EpisodeWatchState>(
+        (key, value) => MapEntry(
+          key.toString(),
+          _EpisodeWatchState(watched: value == true),
+        ),
       );
     } catch (_) {
-      return _cachedOverrides = <String, bool>{};
+      return _cachedStates = <String, _EpisodeWatchState>{};
     }
   }
 
-  Future<void> _persist(Map<String, bool> overrides) async {
-    _cachedOverrides = overrides;
-    await _storageService.setString(_storageKey, jsonEncode(overrides));
+  Future<void> _persist(Map<String, _EpisodeWatchState> states) async {
+    _cachedStates = states;
+    await _storageService.setString(
+      _storageKey,
+      jsonEncode(
+        states.map<String, dynamic>(
+          (key, value) => MapEntry(key, value.toJson()),
+        ),
+      ),
+    );
+    await _storageService.remove(_legacyStorageKey);
     _notifyChanged();
   }
 
   bool? getExplicitState(String mainUrl, Episode episode) {
-    final overrides = _readOverrides();
-    final current = overrides[_episodeKey(episode)];
-    if (current != null) return current;
+    final states = _readStates();
+    final current = _visibleState(states[_episodeKey(episode)]);
+    if (current != null) return current.watched;
 
     // Read states written by v1 so existing users do not lose their watched
     // marks after upgrading. New writes use the URL-based v2 identity above.
-    return overrides[_legacyEpisodeKey(mainUrl, episode)];
+    return _visibleState(
+      states[_legacyEpisodeKey(mainUrl, episode)],
+    )?.watched;
+  }
+
+  _EpisodeWatchState? _visibleState(_EpisodeWatchState? state) {
+    if (state == null) return null;
+    final currentUid = _accountService.accountUid;
+    if (currentUid == null ||
+        state.ownerUid == null ||
+        state.ownerUid == currentUid) {
+      return state;
+    }
+    return null;
   }
 
   bool isWatched(String mainUrl, Episode episode) {
@@ -172,9 +217,12 @@ class EpisodeWatchRepository {
   }
 
   Future<void> setWatched(String mainUrl, Episode episode, bool watched) async {
-    final overrides = Map<String, bool>.from(_readOverrides());
-    overrides[_episodeKey(episode)] = watched;
-    await _persist(overrides);
+    final states = Map<String, _EpisodeWatchState>.from(_readStates());
+    states[_episodeKey(episode)] = _EpisodeWatchState(
+      watched: watched,
+      ownerUid: _accountService.accountUid,
+    );
+    await _persist(states);
     _syncInBackground(
       _accountService.setEpisodeWatched(
         mainUrl: mainUrl,
@@ -190,13 +238,16 @@ class EpisodeWatchRepository {
     bool watched,
   ) async {
     final episodeList = episodes.toList(growable: false);
-    final overrides = Map<String, bool>.from(_readOverrides());
+    final states = Map<String, _EpisodeWatchState>.from(_readStates());
 
     for (final episode in episodeList) {
-      overrides[_episodeKey(episode)] = watched;
+      states[_episodeKey(episode)] = _EpisodeWatchState(
+        watched: watched,
+        ownerUid: _accountService.accountUid,
+      );
     }
 
-    await _persist(overrides);
+    await _persist(states);
     for (final episode in episodeList) {
       _syncInBackground(
         _accountService.setEpisodeWatched(
@@ -208,44 +259,109 @@ class EpisodeWatchRepository {
     }
   }
 
-  /// Merges AnimeWitcher's watched array with SkyStream's explicit local
-  /// choices after the provider has resolved the real episode document IDs.
-  /// Local explicit true/false wins; otherwise a cloud watched mark is pulled
-  /// into local storage so it remains visible while offline.
+  /// Reconciles the local cache with AnimeWitcher's watched array after the
+  /// provider has resolved the real episode document IDs.
+  ///
+  /// Only an unsent local mutation may override the server. Once a mutation is
+  /// acknowledged, the cloud becomes authoritative so a watched/unwatched
+  /// change made on another device is not overwritten by an old local bool.
+  /// Existing pre-account watched=true values are uploaded once on first sync;
+  /// legacy watched=false values never erase a remote watched mark.
   Future<void> reconcileWithCloud(
     String mainUrl,
     Iterable<Episode> episodes,
   ) async {
     if (!_accountService.isSignedIn) return;
-    final remote = await _accountService.watchedEpisodeIds(mainUrl);
-    final overrides = Map<String, bool>.from(_readOverrides());
+    // A details page can be opened from search/home long after the account's
+    // first sync. Refresh this one document so watched changes made on another
+    // device are visible immediately instead of serving a stale process cache.
+    final remote = await _accountService.watchedEpisodeIds(
+      mainUrl,
+      refresh: true,
+    );
+    final states = Map<String, _EpisodeWatchState>.from(_readStates());
+    final accountUid = _accountService.accountUid;
+    final migrationKey = accountUid == null
+        ? null
+        : '$_cloudMigrationPrefix:'
+              '${sha256.convert(utf8.encode('$accountUid|${_canonicalMainUrl(mainUrl)}'))}';
+    final firstAccountMerge =
+        migrationKey != null && _storageService.getString(migrationKey) != '1';
     var changed = false;
 
     for (final episode in episodes) {
-      final explicit = getExplicitState(mainUrl, episode);
-      if (explicit != null) {
-        _syncInBackground(
-          _accountService.setEpisodeWatched(
+      final currentKey = _episodeKey(episode);
+      final legacyKey = _legacyEpisodeKey(mainUrl, episode);
+      final storedState = states[currentKey] ?? states[legacyKey];
+      final visibleState = _visibleState(storedState);
+      final explicit = visibleState?.watched;
+      final pending = _accountService.hasPendingEpisodeWatched(
+        mainUrl,
+        episode.url,
+      );
+      if (pending) {
+        if (explicit != null) {
+          await _accountService.setEpisodeWatched(
             mainUrl: mainUrl,
             episodeUrl: episode.url,
             watched: explicit,
-          ),
-        );
+          );
+          states[currentKey] = _EpisodeWatchState(
+            watched: explicit,
+            ownerUid: accountUid,
+          );
+          states.remove(legacyKey);
+          changed = true;
+        }
         continue;
       }
 
-      final episodeId = episode.url.split('|').length < 2
-          ? null
-          : _decodeEpisodeId(episode.url);
-      if ((episodeId != null && remote.contains(episodeId)) ||
-          _accountService.isEpisodeWatchedCached(mainUrl, episode.url)) {
-        overrides[_episodeKey(episode)] = true;
+      final episodeId = _decodeEpisodeId(episode.url);
+      final remoteWatched =
+          (episodeId != null && remote.contains(episodeId)) ||
+          _accountService.isEpisodeWatchedCached(mainUrl, episode.url);
+
+      if (firstAccountMerge &&
+          storedState?.ownerUid == null &&
+          explicit == true &&
+          !remoteWatched) {
+        await _accountService.setEpisodeWatched(
+          mainUrl: mainUrl,
+          episodeUrl: episode.url,
+          watched: true,
+        );
+        states[currentKey] = _EpisodeWatchState(
+          watched: true,
+          ownerUid: accountUid,
+        );
+        states.remove(legacyKey);
         changed = true;
+        continue;
+      }
+
+      final target = _EpisodeWatchState(
+        watched: remoteWatched,
+        ownerUid: accountUid,
+      );
+      if (storedState != null || remoteWatched) {
+        if (states[currentKey] != target || states.containsKey(legacyKey)) {
+          states[currentKey] = target;
+          states.remove(legacyKey);
+          changed = true;
+        }
+      } else {
+        final removedCurrent = states.remove(currentKey) != null;
+        final removedLegacy = states.remove(legacyKey) != null;
+        if (removedCurrent || removedLegacy) changed = true;
       }
     }
 
+    if (migrationKey != null && firstAccountMerge) {
+      await _storageService.setString(migrationKey, '1');
+    }
+
     if (changed) {
-      await _persist(overrides);
+      await _persist(states);
     } else {
       _notifyChanged();
     }
@@ -273,4 +389,36 @@ class EpisodeWatchRepository {
       }),
     );
   }
+}
+
+class _EpisodeWatchState {
+  const _EpisodeWatchState({
+    required this.watched,
+    this.ownerUid,
+  });
+
+  final bool watched;
+  final String? ownerUid;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'watched': watched,
+    if (ownerUid != null) 'owner_uid': ownerUid,
+  };
+
+  factory _EpisodeWatchState.fromJson(Map<String, dynamic> json) {
+    final owner = json['owner_uid']?.toString().trim();
+    return _EpisodeWatchState(
+      watched: json['watched'] == true,
+      ownerUid: owner == null || owner.isEmpty ? null : owner,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _EpisodeWatchState &&
+      other.watched == watched &&
+      other.ownerUid == ownerUid;
+
+  @override
+  int get hashCode => Object.hash(watched, ownerUid);
 }

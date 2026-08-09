@@ -89,4 +89,12 @@ skystream-plugins/
 skystream-tools/
 tree-shaking-test*.js
 
+# Local build configuration and Firebase/Google client files. Keep production
+# values in CI secrets or an ignored local dart-defines file.
+dart-defines.json
+dart-defines.*.json
+!dart-defines.example.json
+**/GoogleService-Info.plist
+**/google-services.json
+
 node_modules/
