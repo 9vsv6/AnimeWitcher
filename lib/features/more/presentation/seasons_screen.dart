@@ -419,10 +419,10 @@ class _SeasonGrid extends StatefulWidget {
 }
 
 class _SeasonGridState extends State<_SeasonGrid>
+    with AutomaticKeepAliveClientMixin<_SeasonGrid> {
   @override
   bool get wantKeepAlive => true;
 
-    with AutomaticKeepAliveClientMixin<_SeasonGrid> {
   final ScrollController _controller = ScrollController();
   final List<MultimediaItem> _items = <MultimediaItem>[];
   final Set<String> _seen = <String>{};
