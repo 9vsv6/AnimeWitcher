@@ -8,6 +8,28 @@ import '../../storage/settings_repository.dart';
 import '../base_provider.dart';
 import 'mediafire_utils.dart';
 
+class AnimeWitcherSeasonConfig {
+  final String past;
+  final String current;
+  final String next;
+
+  const AnimeWitcherSeasonConfig({
+    required this.past,
+    required this.current,
+    required this.next,
+  });
+}
+
+const List<String> animeWitcherBroadcastDays = <String>[
+  'السبت',
+  'الأحد',
+  'الإثنين',
+  'الثلاثاء',
+  'الأربعاء',
+  'الخميس',
+  'الجمعة',
+];
+
 /// Native AnimeWitcher implementation used during the JS-to-native migration.
 ///
 /// It mirrors the current plugin's Firestore/Algolia metadata, independent
@@ -62,6 +84,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   Future<List<_OfficialHomeSection>>? _officialHomeSectionsRequest;
   DateTime _remoteConstantsExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
   Future<void>? _remoteConstantsRequest;
+  String _seasonPast = '';
+  String _seasonCurrent = '';
+  String _seasonNext = '';
+  List<String>? _allSeasonsCache;
+  DateTime _allSeasonsExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
   static const String _userAgent =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
       'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -333,6 +360,15 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       if (apiKey.isNotEmpty) _algoliaApiKey = apiKey;
       final serverLoadType = _text(fields['load_servers_type']).toLowerCase();
       if (serverLoadType.isNotEmpty) _serverLoadType = serverLoadType;
+
+      final seasons = _map(fields['seasons']);
+      final past = _text(seasons['past']);
+      final current = _text(seasons['current']);
+      final next = _text(seasons['next']);
+      if (past.isNotEmpty) _seasonPast = past;
+      if (current.isNotEmpty) _seasonCurrent = current;
+      if (next.isNotEmpty) _seasonNext = next;
+
       _remoteConstantsExpiresAt = now.add(_remoteConstantsTtl);
     }();
     _remoteConstantsRequest = request;
@@ -1010,6 +1046,146 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         'مدرسي', 'مكان عمل', 'فضاء', 'قوة خارقة', 'مصاصي دماء', 'جوسي', 'اطفال',
       ],
     );
+  }
+
+  AnimeWitcherSeasonConfig _fallbackSeasonConfig() {
+    const names = <String>['شتاء', 'ربيع', 'صيف', 'خريف'];
+    final now = DateTime.now();
+    final currentIndex = ((now.month - 1) ~/ 3).clamp(0, 3).toInt();
+
+    String valueFor(int index, int year) => '${names[index]} عام $year';
+
+    final previousIndex = (currentIndex + 3) % 4;
+    final nextIndex = (currentIndex + 1) % 4;
+    final previousYear = currentIndex == 0 ? now.year - 1 : now.year;
+    final nextYear = currentIndex == 3 ? now.year + 1 : now.year;
+    return AnimeWitcherSeasonConfig(
+      past: valueFor(previousIndex, previousYear),
+      current: valueFor(currentIndex, now.year),
+      next: valueFor(nextIndex, nextYear),
+    );
+  }
+
+  Future<AnimeWitcherSeasonConfig> getSeasonConfig() async {
+    await _refreshRemoteConstants();
+    final fallback = _fallbackSeasonConfig();
+    return AnimeWitcherSeasonConfig(
+      past: _seasonPast.isEmpty ? fallback.past : _seasonPast,
+      current: _seasonCurrent.isEmpty ? fallback.current : _seasonCurrent,
+      next: _seasonNext.isEmpty ? fallback.next : _seasonNext,
+    );
+  }
+
+  Future<List<String>> getAllSeasons({bool refresh = false}) async {
+    final now = DateTime.now();
+    final cached = _allSeasonsCache;
+    if (!refresh && cached != null && _allSeasonsExpiresAt.isAfter(now)) {
+      return List<String>.unmodifiable(cached);
+    }
+
+    final payload = await _getJson(_firestoreUrl('Settings/all_seasons'));
+    final fields = payload == null
+        ? <String, dynamic>{}
+        : _firestoreFields(payload['fields']);
+    final values = _list(fields['all_seasons'])
+        .map<String>(_text)
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (values.isNotEmpty) {
+      _allSeasonsCache = values;
+      _allSeasonsExpiresAt = now.add(_remoteConstantsTtl);
+    }
+    return List<String>.unmodifiable(values);
+  }
+
+  Future<ProviderMediaPage> getSeasonPage(
+    String season, {
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    final value = season.trim();
+    final safeOffset = offset < 0 ? 0 : offset;
+    final safeLimit = limit.clamp(10, 50).toInt();
+    if (value.isEmpty) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
+
+    final pageNumber = safeOffset ~/ safeLimit;
+    final payload = await _algoliaQuery(
+      'series',
+      query: '',
+      page: pageNumber,
+      hitsPerPage: safeLimit,
+      filters: _filterGroup('details.season', <String>[value], 'OR'),
+      attributes: _searchAttributes,
+    );
+    final rawHits = _list(payload['hits']);
+    final items = await _dedupeHitsWithAniListPosters(rawHits);
+    final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
+    final hasMore = nbPages > 0
+        ? pageNumber + 1 < nbPages
+        : rawHits.length >= safeLimit;
+    return ProviderMediaPage(
+      items: items,
+      nextOffset: (pageNumber + 1) * safeLimit,
+      hasMore: hasMore,
+    );
+  }
+
+  Future<Map<String, List<MultimediaItem>>> getBroadcastSchedule() async {
+    final values = animeWitcherBroadcastDays
+        .map<Map<String, dynamic>>(
+          (day) => <String, dynamic>{'stringValue': day},
+        )
+        .toList(growable: false);
+    final raw = await _postAny(
+      _firestoreRunQueryUrl(),
+      <String, dynamic>{
+        'structuredQuery': <String, dynamic>{
+          'from': const <Map<String, dynamic>>[
+            <String, dynamic>{'collectionId': 'anime_list'},
+          ],
+          'where': <String, dynamic>{
+            'fieldFilter': <String, dynamic>{
+              'field': const <String, dynamic>{'fieldPath': 'show_time'},
+              'op': 'IN',
+              'value': <String, dynamic>{
+                'arrayValue': <String, dynamic>{'values': values},
+              },
+            },
+          },
+          'limit': 500,
+        },
+      },
+    );
+
+    final grouped = <String, List<Map<String, dynamic>>>{
+      for (final day in animeWitcherBroadcastDays)
+        day: <Map<String, dynamic>>[],
+    };
+    for (final rowRaw in _list(raw)) {
+      final document = _map(_map(rowRaw)['document']);
+      if (document.isEmpty) continue;
+      final hit = _firestoreDocumentHit(document);
+      if (hit.isEmpty) continue;
+      final day = _text(hit['show_time']);
+      grouped[day]?.add(hit);
+    }
+
+    final lists = await Future.wait(
+      animeWitcherBroadcastDays.map(
+        (day) => _dedupeHitsWithAniListPosters(grouped[day]!),
+      ),
+    );
+    return <String, List<MultimediaItem>>{
+      for (var i = 0; i < animeWitcherBroadcastDays.length; i++)
+        animeWitcherBroadcastDays[i]: lists[i],
+    };
   }
 
   @override

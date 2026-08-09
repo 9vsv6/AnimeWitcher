@@ -31,7 +31,7 @@ enum TaskbarDestination {
     TaskbarDestination.search => Icons.search_outlined,
     TaskbarDestination.library => Icons.video_library_outlined,
     TaskbarDestination.downloads => Icons.download_for_offline_outlined,
-    TaskbarDestination.settings => Icons.settings_outlined,
+    TaskbarDestination.settings => Icons.more_horiz_rounded,
   };
 
   IconData get selectedIcon => switch (this) {
@@ -39,7 +39,7 @@ enum TaskbarDestination {
     TaskbarDestination.search => Icons.search,
     TaskbarDestination.library => Icons.video_library,
     TaskbarDestination.downloads => Icons.download_for_offline_rounded,
-    TaskbarDestination.settings => Icons.settings,
+    TaskbarDestination.settings => Icons.more_horiz_rounded,
   };
 
   String label(AppLocalizations l10n) => switch (this) {
@@ -47,7 +47,8 @@ enum TaskbarDestination {
     TaskbarDestination.search => l10n.search,
     TaskbarDestination.library => l10n.library,
     TaskbarDestination.downloads => l10n.downloads,
-    TaskbarDestination.settings => l10n.settings,
+    TaskbarDestination.settings =>
+      l10n.localeName.toLowerCase().startsWith('ar') ? 'المزيد' : 'More',
   };
 }
 

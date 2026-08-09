@@ -5,7 +5,7 @@ import 'package:skystream/features/home/presentation/home_screen.dart';
 import 'package:skystream/features/search/presentation/search_screen.dart';
 import 'package:skystream/features/library/presentation/library_screen.dart';
 import 'package:skystream/features/library/presentation/downloads_screen.dart';
-import 'package:skystream/features/settings/presentation/settings_screen.dart';
+import 'package:skystream/features/more/presentation/more_screen.dart';
 import '../../features/details/presentation/details_screen.dart';
 import '../../features/home/presentation/view_all_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
@@ -106,7 +106,7 @@ class SettingsRoute extends GoRouteData with $SettingsRoute {
   const SettingsRoute();
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      const SettingsScreen();
+      const MoreScreen();
 }
 
 
