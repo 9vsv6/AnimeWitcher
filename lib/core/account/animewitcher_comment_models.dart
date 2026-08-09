@@ -4,6 +4,28 @@ import 'firestore_rest_client.dart';
 const String animeWitcherNativeProviderId =
     'com.fares669.animewitcher.native';
 
+enum AnimeWitcherCommentSort {
+  newest,
+  oldest,
+  mostLiked;
+
+  String get orderField => this == AnimeWitcherCommentSort.mostLiked ? 'likes' : 'date';
+
+  bool get descending => this != AnimeWitcherCommentSort.oldest;
+}
+
+class AnimeWitcherCommentPage {
+  const AnimeWitcherCommentPage({
+    required this.items,
+    required this.cursor,
+    required this.hasMore,
+  });
+
+  final List<AnimeWitcherComment> items;
+  final FirestoreDocument? cursor;
+  final bool hasMore;
+}
+
 class AnimeWitcherCommentTarget {
   const AnimeWitcherCommentTarget({
     required this.collectionPath,
@@ -34,6 +56,7 @@ class AnimeWitcherCommentTarget {
 class AnimeWitcherComment {
   const AnimeWitcherComment({
     required this.id,
+    required this.path,
     required this.text,
     required this.userId,
     required this.userName,
@@ -42,9 +65,12 @@ class AnimeWitcherComment {
     required this.spoiler,
     this.userPhotoUrl,
     this.date,
+    this.repliesClosed = false,
+    this.likedByMe = false,
   });
 
   final String id;
+  final String path;
   final String text;
   final String userId;
   final String userName;
@@ -53,12 +79,42 @@ class AnimeWitcherComment {
   final int replies;
   final bool spoiler;
   final DateTime? date;
+  final bool repliesClosed;
+  final bool likedByMe;
 
-  factory AnimeWitcherComment.fromDocument(FirestoreDocument document) {
+  String get repliesCollectionPath => '$path/replies';
+
+  AnimeWitcherComment copyWith({
+    int? likes,
+    int? replies,
+    bool? likedByMe,
+    bool? repliesClosed,
+  }) {
+    return AnimeWitcherComment(
+      id: id,
+      path: path,
+      text: text,
+      userId: userId,
+      userName: userName,
+      likes: likes ?? this.likes,
+      replies: replies ?? this.replies,
+      spoiler: spoiler,
+      userPhotoUrl: userPhotoUrl,
+      date: date,
+      repliesClosed: repliesClosed ?? this.repliesClosed,
+      likedByMe: likedByMe ?? this.likedByMe,
+    );
+  }
+
+  factory AnimeWitcherComment.fromDocument(
+    FirestoreDocument document, {
+    bool likedByMe = false,
+  }) {
     final fields = document.fields;
     final user = _stringMap(fields['user']);
     return AnimeWitcherComment(
       id: document.id,
+      path: document.path,
       text: _text(fields['comment']),
       userId: _text(fields['user_id']),
       userName: _firstNonEmpty(<dynamic>[
@@ -71,6 +127,8 @@ class AnimeWitcherComment {
       replies: _intValue(fields['replies']),
       spoiler: fields['spoiler'] == true,
       date: _dateValue(fields['date']),
+      repliesClosed: fields['replies_closed'] == true,
+      likedByMe: likedByMe,
     );
   }
 }

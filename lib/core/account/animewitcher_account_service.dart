@@ -299,18 +299,197 @@ class AnimeWitcherAccountService {
     return snapshot;
   }
 
-  Future<List<AnimeWitcherComment>> loadComments(
+  Future<AnimeWitcherCommentPage> loadComments(
     AnimeWitcherCommentTarget target, {
-    int limit = 50,
+    AnimeWitcherCommentSort sort = AnimeWitcherCommentSort.newest,
+    FirestoreDocument? cursor,
+    int limit = 20,
   }) async {
     final documents = await _firestore.queryPublishedComments(
       target.collectionPath,
+      orderField: sort.orderField,
+      descending: sort.descending,
+      startAfter: cursor,
       limit: limit,
     );
-    return documents
+    final comments = documents
         .map(AnimeWitcherComment.fromDocument)
         .where((comment) => comment.text.isNotEmpty)
         .toList(growable: false);
+    final hydrated = await _hydrateCommentLikes(comments);
+    return AnimeWitcherCommentPage(
+      items: hydrated,
+      cursor: documents.isEmpty ? cursor : documents.last,
+      hasMore: documents.length >= limit,
+    );
+  }
+
+  Future<AnimeWitcherCommentPage> loadReplies(
+    AnimeWitcherComment parent, {
+    AnimeWitcherCommentSort sort = AnimeWitcherCommentSort.newest,
+    FirestoreDocument? cursor,
+    int limit = 20,
+  }) async {
+    final documents = await _firestore.queryReplies(
+      parent.repliesCollectionPath,
+      orderField: sort.orderField,
+      descending: sort.descending,
+      startAfter: cursor,
+      limit: limit,
+    );
+    final replies = documents
+        .map(AnimeWitcherComment.fromDocument)
+        .where((reply) => reply.text.isNotEmpty)
+        .toList(growable: false);
+    final hydrated = await _hydrateCommentLikes(replies);
+    return AnimeWitcherCommentPage(
+      items: hydrated,
+      cursor: documents.isEmpty ? cursor : documents.last,
+      hasMore: documents.length >= limit,
+    );
+  }
+
+  Future<List<AnimeWitcherComment>> _hydrateCommentLikes(
+    List<AnimeWitcherComment> comments,
+  ) async {
+    final profile = _profile;
+    if (comments.isEmpty || profile == null || _session == null) return comments;
+    return _authenticated((token) async {
+      return Future.wait<AnimeWitcherComment>(
+        comments.map((comment) async {
+          if (comment.userId == profile.documentId) return comment;
+          try {
+            final like = await _firestore.getDocument(
+              '${comment.path}/likes/${profile.documentId}',
+              token,
+            );
+            return comment.copyWith(likedByMe: like != null);
+          } catch (_) {
+            // Reading comments must never fail just because the optional
+            // per-user like marker could not be fetched.
+            return comment;
+          }
+        }),
+      );
+    });
+  }
+
+  Future<AnimeWitcherComment> toggleCommentLike(
+    AnimeWitcherComment comment,
+  ) async {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher before liking comments.',
+      );
+    }
+    // AnimeWitcher does not let a user like their own comment/reply.
+    if (comment.userId == profile.documentId) return comment;
+
+    final likePath = '${comment.path}/likes/${profile.documentId}';
+    await _authenticated((token) async {
+      if (comment.likedByMe) {
+        await _firestore.deleteDocument(likePath, token);
+      } else {
+        // The official client writes a document whose only field is a
+        // Firestore server timestamp named `date`.
+        await _firestore.setDocumentWithServerTimestamps(
+          likePath,
+          const <String, dynamic>{},
+          token,
+          serverTimestampFields: const <String>{'date'},
+          merge: false,
+        );
+      }
+    });
+
+    return comment.copyWith(
+      likedByMe: !comment.likedByMe,
+      likes: comment.likedByMe
+          ? (comment.likes - 1).clamp(0, 1 << 31).toInt()
+          : comment.likes + 1,
+    );
+  }
+
+  Future<void> publishReply(
+    AnimeWitcherComment parent,
+    String rawReply,
+  ) async {
+    final reply = rawReply.trim();
+    if (reply.isEmpty) {
+      throw const AnimeWitcherAccountException(
+        'comment-empty',
+        'Enter a reply before publishing.',
+      );
+    }
+    if (reply.length > 500) {
+      throw const AnimeWitcherAccountException(
+        'comment-too-long',
+        'Replies can contain at most 500 characters.',
+      );
+    }
+    if (parent.repliesClosed) {
+      throw const AnimeWitcherAccountException(
+        'replies-closed',
+        'Replies are disabled for this comment.',
+      );
+    }
+
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher before publishing replies.',
+      );
+    }
+
+    await _authenticated((token) async {
+      final userDocument = await _firestore.getDocument(
+        'users/${profile.documentId}',
+        token,
+      );
+      if (userDocument?.fields['banned'] == true) {
+        throw const AnimeWitcherAccountException(
+          'comment-banned',
+          'This account is blocked from commenting.',
+        );
+      }
+      final registrationDate = _dateValue(
+        userDocument?.fields['registration_date'],
+      );
+      if (registrationDate != null &&
+          DateTime.now().toUtc().difference(registrationDate.toUtc()) <
+              const Duration(days: 7)) {
+        throw const AnimeWitcherAccountException(
+          'comment-account-too-new',
+          'The account must be at least seven days old before replying.',
+        );
+      }
+      final latestReply = await _firestore.latestReplyByUser(
+        userId: profile.documentId,
+        idToken: token,
+      );
+      final latestDate = _dateValue(latestReply?.fields['date']);
+      if (latestDate != null) {
+        final elapsed = DateTime.now().toUtc().difference(latestDate.toUtc());
+        if (!elapsed.isNegative && elapsed < const Duration(minutes: 1)) {
+          throw const AnimeWitcherAccountException(
+            'comment-cooldown',
+            'Wait a moment before publishing another reply.',
+          );
+        }
+      }
+      await _firestore.createDocument(
+        parent.repliesCollectionPath,
+        <String, dynamic>{
+          'comment': reply,
+          'likes': 0,
+          'user_id': profile.documentId,
+        },
+        token,
+      );
+    });
   }
 
   Future<void> publishComment(

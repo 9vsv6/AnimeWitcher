@@ -244,40 +244,95 @@ class FirestoreRestClient {
 
   Future<List<FirestoreDocument>> queryPublishedComments(
     String collectionPath, {
-    int limit = 50,
+    String orderField = 'date',
+    bool descending = true,
+    FirestoreDocument? startAfter,
+    int limit = 20,
+  }) {
+    return _querySocialDocuments(
+      collectionPath: collectionPath,
+      orderField: orderField,
+      descending: descending,
+      publishedOnly: true,
+      startAfter: startAfter,
+      limit: limit,
+    );
+  }
+
+  Future<List<FirestoreDocument>> queryReplies(
+    String collectionPath, {
+    String orderField = 'date',
+    bool descending = true,
+    FirestoreDocument? startAfter,
+    int limit = 20,
+  }) {
+    return _querySocialDocuments(
+      collectionPath: collectionPath,
+      orderField: orderField,
+      descending: descending,
+      publishedOnly: false,
+      startAfter: startAfter,
+      limit: limit,
+    );
+  }
+
+  Future<List<FirestoreDocument>> _querySocialDocuments({
+    required String collectionPath,
+    required String orderField,
+    required bool descending,
+    required bool publishedOnly,
+    required FirestoreDocument? startAfter,
+    required int limit,
   }) async {
     final normalized = collectionPath.replaceFirst(RegExp(r'/+$'), '');
-    final segments = normalized.split('/').where((segment) => segment.isNotEmpty).toList();
+    final segments = normalized
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList();
     if (segments.isEmpty) return const <FirestoreDocument>[];
     final collectionId = segments.removeLast();
     final parentPath = segments.join('/');
     final endpoint = parentPath.isEmpty
         ? '$_documentsBase:runQuery'
         : '$_documentsBase/${_encodedPath(parentPath)}:runQuery';
+    final structuredQuery = <String, dynamic>{
+      'from': <Map<String, dynamic>>[
+        <String, dynamic>{'collectionId': collectionId},
+      ],
+      if (publishedOnly)
+        'where': <String, dynamic>{
+          'fieldFilter': <String, dynamic>{
+            'field': <String, dynamic>{'fieldPath': 'published'},
+            'op': 'EQUAL',
+            'value': FirestoreValueCodec.encode(true),
+          },
+        },
+      'orderBy': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': orderField},
+          'direction': descending ? 'DESCENDING' : 'ASCENDING',
+        },
+        <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': '__name__'},
+          'direction': descending ? 'DESCENDING' : 'ASCENDING',
+        },
+      ],
+      if (startAfter != null)
+        'startAt': <String, dynamic>{
+          'values': <Map<String, dynamic>>[
+            FirestoreValueCodec.encode(startAfter.fields[orderField]),
+            FirestoreValueCodec.encode(FirestoreReference(startAfter.path)),
+          ],
+          // StructuredQuery.Cursor.before=false means start after this
+          // position, matching Query.startAfter(DocumentSnapshot).
+          'before': false,
+        },
+      'limit': limit.clamp(1, 100),
+    };
     try {
       final response = await _dio.post<dynamic>(
         endpoint,
-        data: <String, dynamic>{
-          'structuredQuery': <String, dynamic>{
-            'from': <Map<String, dynamic>>[
-              <String, dynamic>{'collectionId': collectionId},
-            ],
-            'where': <String, dynamic>{
-              'fieldFilter': <String, dynamic>{
-                'field': <String, dynamic>{'fieldPath': 'published'},
-                'op': 'EQUAL',
-                'value': FirestoreValueCodec.encode(true),
-              },
-            },
-            'orderBy': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'field': <String, dynamic>{'fieldPath': 'date'},
-                'direction': 'DESCENDING',
-              },
-            ],
-            'limit': limit.clamp(1, 100),
-          },
-        },
+        data: <String, dynamic>{'structuredQuery': structuredQuery},
         options: _publicOptions(),
       );
       return _decodeRunQueryDocuments(response.data);
@@ -338,6 +393,46 @@ class FirestoreRestClient {
             'from': <Map<String, dynamic>>[
               <String, dynamic>{
                 'collectionId': 'comments',
+                'allDescendants': true,
+              },
+            ],
+            'where': <String, dynamic>{
+              'fieldFilter': <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': 'user_id'},
+                'op': 'EQUAL',
+                'value': FirestoreValueCodec.encode(userId),
+              },
+            },
+            'orderBy': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': 'date'},
+                'direction': 'DESCENDING',
+              },
+            ],
+            'limit': 1,
+          },
+        },
+        options: _options(idToken),
+      );
+      final documents = _decodeRunQueryDocuments(response.data);
+      return documents.isEmpty ? null : documents.first;
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  Future<FirestoreDocument?> latestReplyByUser({
+    required String userId,
+    required String idToken,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        '$_documentsBase:runQuery',
+        data: <String, dynamic>{
+          'structuredQuery': <String, dynamic>{
+            'from': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'collectionId': 'replies',
                 'allDescendants': true,
               },
             ],
@@ -431,11 +526,11 @@ class FirestoreRestClient {
 
     final ordinaryFields = Map<String, dynamic>.from(fields)
       ..removeWhere((key, _) => serverTimestampFields.contains(key));
-    if (ordinaryFields.isEmpty) {
+    if (ordinaryFields.isEmpty && merge) {
       throw ArgumentError.value(
         fields,
         'fields',
-        'At least one ordinary field is required with a server timestamp.',
+        'Transform-only writes must replace the target document.',
       );
     }
 
