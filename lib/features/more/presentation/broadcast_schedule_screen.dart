@@ -1,0 +1,235 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/extensions/extension_manager.dart';
+import '../../../core/extensions/providers/animewitcher_native_provider.dart';
+import '../../../shared/widgets/multimedia_card.dart';
+import '../../details/presentation/details_screen.dart';
+
+class BroadcastScheduleScreen extends ConsumerStatefulWidget {
+  const BroadcastScheduleScreen({super.key});
+
+  @override
+  ConsumerState<BroadcastScheduleScreen> createState() =>
+      _BroadcastScheduleScreenState();
+}
+
+class _BroadcastScheduleScreenState
+    extends ConsumerState<BroadcastScheduleScreen> {
+  late Future<Map<String, List<MultimediaItem>>> _scheduleFuture;
+  late int _selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDay = _todayIndex();
+    _scheduleFuture = _loadSchedule();
+  }
+
+  int _todayIndex() {
+    return switch (DateTime.now().weekday) {
+      DateTime.saturday => 0,
+      DateTime.sunday => 1,
+      DateTime.monday => 2,
+      DateTime.tuesday => 3,
+      DateTime.wednesday => 4,
+      DateTime.thursday => 5,
+      DateTime.friday => 6,
+      _ => 0,
+    };
+  }
+
+  AnimeWitcherNativeProvider? _provider() {
+    final active = ref.read(activeProviderProvider);
+    if (active is AnimeWitcherNativeProvider) return active;
+    for (final provider in ref.read(extensionManagerProvider)) {
+      if (provider is AnimeWitcherNativeProvider) return provider;
+    }
+    return null;
+  }
+
+  Future<Map<String, List<MultimediaItem>>> _loadSchedule() async {
+    final provider = _provider();
+    if (provider == null) {
+      throw StateError('AnimeWitcher Native provider is unavailable');
+    }
+    return provider.getBroadcastSchedule();
+  }
+
+  bool _isArabic(BuildContext context) =>
+      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+
+  @override
+  Widget build(BuildContext context) {
+    final isArabic = _isArabic(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isArabic ? 'جدول البث' : 'Broadcast schedule'),
+      ),
+      body: FutureBuilder<Map<String, List<MultimediaItem>>>(
+        future: _scheduleFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, size: 42),
+                    const SizedBox(height: 12),
+                    Text(
+                      isArabic
+                          ? 'تعذر تحميل جدول البث'
+                          : 'Could not load the broadcast schedule',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.tonalIcon(
+                      onPressed: () {
+                        setState(() => _scheduleFuture = _loadSchedule());
+                      },
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: Text(isArabic ? 'إعادة المحاولة' : 'Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final schedule = snapshot.data!;
+          final day = animeWitcherBroadcastDays[_selectedDay];
+          final items = schedule[day] ?? const <MultimediaItem>[];
+          return Column(
+            children: [
+              _DayTabs(
+                selectedIndex: _selectedDay,
+                isArabic: isArabic,
+                onSelected: (value) => setState(() => _selectedDay = value),
+              ),
+              Divider(height: 1, color: Theme.of(context).dividerColor),
+              Expanded(
+                child: items.isEmpty
+                    ? Center(
+                        child: Text(
+                          isArabic
+                              ? 'لا يوجد بث مجدول لهذا اليوم'
+                              : 'No broadcasts scheduled for this day',
+                        ),
+                      )
+                    : _ScheduleGrid(items: items, day: day),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DayTabs extends StatelessWidget {
+  final int selectedIndex;
+  final bool isArabic;
+  final ValueChanged<int> onSelected;
+
+  const _DayTabs({
+    required this.selectedIndex,
+    required this.isArabic,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const english = <String>[
+      'Saturday',
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+    ];
+    final colors = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        children: [
+          for (var i = 0; i < animeWitcherBroadcastDays.length; i++) ...[
+            Material(
+              color: selectedIndex == i
+                  ? colors.primary
+                  : colors.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(24),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => onSelected(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 11,
+                  ),
+                  child: Text(
+                    isArabic ? animeWitcherBroadcastDays[i] : english[i],
+                    style: TextStyle(
+                      color: selectedIndex == i
+                          ? colors.onPrimary
+                          : colors.onSurface,
+                      fontWeight: selectedIndex == i
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (i != animeWitcherBroadcastDays.length - 1)
+              const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleGrid extends StatelessWidget {
+  final List<MultimediaItem> items;
+  final String day;
+
+  const _ScheduleGrid({required this.items, required this.day});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+    return GridView.builder(
+      key: PageStorageKey<String>('broadcast-$day'),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: isDesktop ? 240 : 150,
+        childAspectRatio: isDesktop ? 0.58 : 0.55,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return MultimediaCard(
+          key: ValueKey('broadcast-$day-${item.url}'),
+          imageUrl: item.posterImageUrl,
+          title: item.title,
+          heroTag: 'broadcast-$day-${item.id}-$index',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => DetailsScreen(item: item),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
