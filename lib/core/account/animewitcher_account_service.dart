@@ -1669,11 +1669,30 @@ class AnimeWitcherAccountService {
 
     final remoteProgress = _intValue(fields['progress']).clamp(0, 100);
     var duration = _intValue(fields['duration']);
-    final durationBasis = stopTimePosition > 0 ? stopTimePosition : position;
-    if (duration <= 0 && durationBasis > 0 && remoteProgress > 0) {
-      // Approximate total duration exactly as requested:
-      // total = stop_time * 100 / watched percentage.
-      duration = ((durationBasis * 100) / remoteProgress).round();
+    if (duration <= 0 && position > 0 && remoteProgress > 0) {
+      // AnimeWitcher stores stop_time about two seconds behind the player's
+      // real position, while progress is calculated from the real position and
+      // then truncated to an integer. Restore those two seconds for the
+      // duration estimate and compensate for the lost fractional percentage.
+      final watchedForEstimate = stopTimePosition > 0
+          ? stopTimePosition + 2000
+          : position;
+
+      if (remoteProgress <= 2 && previousDuration > 0) {
+        // At tiny percentages, one truncated percentage point is a very large
+        // error. A known duration for the same episode is more reliable.
+        duration = previousDuration;
+      } else if (remoteProgress >= 100) {
+        duration = watchedForEstimate;
+      } else {
+        // The real percentage lies in [progress, progress + 1). Convert that
+        // uncertainty to a duration range and use its midpoint.
+        final minimumDuration =
+            (watchedForEstimate * 100) / (remoteProgress + 1);
+        final maximumDuration =
+            (watchedForEstimate * 100) / remoteProgress;
+        duration = ((minimumDuration + maximumDuration) / 2).round();
+      }
     }
 
     // When the original app saved progress below 1%, its integer percentage is
