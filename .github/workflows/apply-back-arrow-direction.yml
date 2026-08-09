@@ -22,95 +22,116 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          def replace_once(text, old, new, label):
+          def rep(text, old_lines, new_lines, label):
+              old = '\n'.join(old_lines)
+              new = '\n'.join(new_lines)
               if old not in text:
                   raise SystemExit(f'{label} not found')
               return text.replace(old, new, 1)
 
           p = Path('lib/features/more/presentation/seasons_screen.dart')
           t = p.read_text(encoding='utf-8')
-          t = replace_once(t, """      appBar: AppBar(
-                title: Text(isArabic ? 'المواسم' : 'Seasons'),
-              ),""", """      appBar: PreferredSize(
-                preferredSize: const Size.fromHeight(kToolbarHeight),
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: AppBar(
-                    centerTitle: false,
-                    titleSpacing: 16,
-                    title: Align(
-                      alignment:
-                          isArabic ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Directionality(
-                        textDirection:
-                            isArabic ? TextDirection.rtl : TextDirection.ltr,
-                        child: Text(isArabic ? 'المواسم' : 'Seasons'),
-                      ),
-                    ),
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                    elevation: 0,
-                  ),
-                ),
-              ),""", 'seasons app bar')
-          t = replace_once(t, """      appBar: AppBar(title: Text(season)),""", """      appBar: PreferredSize(
-                preferredSize: const Size.fromHeight(kToolbarHeight),
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: AppBar(
-                    centerTitle: false,
-                    titleSpacing: 16,
-                    title: Align(
-                      alignment:
-                          isArabic ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Directionality(
-                        textDirection:
-                            isArabic ? TextDirection.rtl : TextDirection.ltr,
-                        child: Text(season),
-                      ),
-                    ),
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                    elevation: 0,
-                  ),
-                ),
-              ),""", 'season results app bar')
+          t = rep(t,
+            [
+              '      appBar: AppBar(',
+              "        title: Text(isArabic ? 'المواسم' : 'Seasons'),",
+              '      ),',
+            ],
+            [
+              '      appBar: PreferredSize(',
+              '        preferredSize: const Size.fromHeight(kToolbarHeight),',
+              '        child: Directionality(',
+              '          textDirection: TextDirection.ltr,',
+              '          child: AppBar(',
+              '            centerTitle: false,',
+              '            titleSpacing: 16,',
+              '            title: Align(',
+              '              alignment:',
+              '                  isArabic ? Alignment.centerRight : Alignment.centerLeft,',
+              '              child: Directionality(',
+              '                textDirection:',
+              '                    isArabic ? TextDirection.rtl : TextDirection.ltr,',
+              "                child: Text(isArabic ? 'المواسم' : 'Seasons'),",
+              '              ),',
+              '            ),',
+              '            leading: IconButton(',
+              '              icon: const Icon(Icons.arrow_back_rounded),',
+              '              onPressed: () => Navigator.of(context).pop(),',
+              '            ),',
+              '            elevation: 0,',
+              '          ),',
+              '        ),',
+              '      ),',
+            ],
+            'seasons app bar')
+          t = rep(t,
+            ['      appBar: AppBar(title: Text(season)),'],
+            [
+              '      appBar: PreferredSize(',
+              '        preferredSize: const Size.fromHeight(kToolbarHeight),',
+              '        child: Directionality(',
+              '          textDirection: TextDirection.ltr,',
+              '          child: AppBar(',
+              '            centerTitle: false,',
+              '            titleSpacing: 16,',
+              '            title: Align(',
+              '              alignment:',
+              '                  isArabic ? Alignment.centerRight : Alignment.centerLeft,',
+              '              child: Directionality(',
+              '                textDirection:',
+              '                    isArabic ? TextDirection.rtl : TextDirection.ltr,',
+              '                child: Text(season),',
+              '              ),',
+              '            ),',
+              '            leading: IconButton(',
+              '              icon: const Icon(Icons.arrow_back_rounded),',
+              '              onPressed: () => Navigator.of(context).pop(),',
+              '            ),',
+              '            elevation: 0,',
+              '          ),',
+              '        ),',
+              '      ),',
+            ],
+            'season results app bar')
           p.write_text(t, encoding='utf-8')
 
           p = Path('lib/features/more/presentation/broadcast_schedule_screen.dart')
           t = p.read_text(encoding='utf-8')
-          t = replace_once(t, """      appBar: AppBar(
-                title: Text(isArabic ? 'جدول البث' : 'Broadcast schedule'),
-              ),""", """      appBar: PreferredSize(
-                preferredSize: const Size.fromHeight(kToolbarHeight),
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: AppBar(
-                    centerTitle: false,
-                    titleSpacing: 16,
-                    title: Align(
-                      alignment:
-                          isArabic ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Directionality(
-                        textDirection:
-                            isArabic ? TextDirection.rtl : TextDirection.ltr,
-                        child: Text(
-                          isArabic ? 'جدول البث' : 'Broadcast schedule',
-                        ),
-                      ),
-                    ),
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                    elevation: 0,
-                  ),
-                ),
-              ),""", 'schedule app bar')
+          t = rep(t,
+            [
+              '      appBar: AppBar(',
+              "        title: Text(isArabic ? 'جدول البث' : 'Broadcast schedule'),",
+              '      ),',
+            ],
+            [
+              '      appBar: PreferredSize(',
+              '        preferredSize: const Size.fromHeight(kToolbarHeight),',
+              '        child: Directionality(',
+              '          textDirection: TextDirection.ltr,',
+              '          child: AppBar(',
+              '            centerTitle: false,',
+              '            titleSpacing: 16,',
+              '            title: Align(',
+              '              alignment:',
+              '                  isArabic ? Alignment.centerRight : Alignment.centerLeft,',
+              '              child: Directionality(',
+              '                textDirection:',
+              '                    isArabic ? TextDirection.rtl : TextDirection.ltr,',
+              '                child: Text(',
+              "                  isArabic ? 'جدول البث' : 'Broadcast schedule',",
+              '                ),',
+              '              ),',
+              '            ),',
+              '            leading: IconButton(',
+              '              icon: const Icon(Icons.arrow_back_rounded),',
+              '              onPressed: () => Navigator.of(context).pop(),',
+              '            ),',
+              '            elevation: 0,',
+              '          ),',
+              '        ),',
+              '      ),',
+            ],
+            'schedule app bar')
           p.write_text(t, encoding='utf-8')
           PY
 
