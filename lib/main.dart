@@ -26,6 +26,7 @@ import 'package:dpad/dpad.dart';
 import 'core/providers/device_info_provider.dart';
 import 'shared/widgets/loading_indicator.dart';
 import 'features/settings/presentation/general_settings_provider.dart';
+import 'core/account/account_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -270,6 +271,10 @@ class _MyAppState extends ConsumerState<MyApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    // Restore the AnimeWitcher session and reconcile account data without
+    // blocking the first frame. Local library/history remain immediately
+    // available while the async provider performs its merge in the background.
+    ref.watch(animeWitcherAccountControllerProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final appRouter = ref.watch(appRouterProvider);
     final locale = ref.watch(localeProvider);

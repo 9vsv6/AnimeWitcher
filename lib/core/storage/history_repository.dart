@@ -1,4 +1,9 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../account/account_providers.dart';
+import '../account/animewitcher_account_service.dart';
 import '../domain/entity/multimedia_item.dart';
 import 'storage_service.dart';
 
@@ -63,13 +68,17 @@ class HistoryItem {
 
 @Riverpod(keepAlive: true)
 HistoryRepository historyRepository(Ref ref) {
-  return HistoryRepository(ref.watch(storageServiceProvider));
+  return HistoryRepository(
+    ref.watch(storageServiceProvider),
+    ref.watch(animeWitcherAccountServiceProvider),
+  );
 }
 
 class HistoryRepository {
   final StorageService _storageService;
+  final AnimeWitcherAccountService _accountService;
 
-  HistoryRepository(this._storageService);
+  HistoryRepository(this._storageService, this._accountService);
 
   Future<void> saveProgress(
     MultimediaItem item,
@@ -93,10 +102,26 @@ class HistoryRepository {
       episodeTitle: episodeTitle,
       episodePosterUrl: episodePosterUrl,
     );
+    _syncInBackground(
+      _accountService.saveProgress(
+        item: item,
+        position: position,
+        duration: duration,
+        episodeUrl: lastEpisodeUrl,
+        episodeNumber: episode,
+        episodeTitle: episodeTitle,
+        episodePosterUrl: episodePosterUrl,
+      ),
+      'save playback progress',
+    );
   }
 
   Future<void> removeFromHistory(String url) async {
     await _storageService.removeFromHistory(url);
+    _syncInBackground(
+      _accountService.removeContinueWatching(url),
+      'remove continue-watching item',
+    );
   }
 
   Future<void> updateHistoryItemTimestampAndPosition(
@@ -110,10 +135,33 @@ class HistoryRepository {
       timestamp,
       position,
     );
+    _syncInBackground(
+      _accountService.saveProgress(
+        item: item.item,
+        position: position,
+        duration: item.duration,
+        episodeUrl: item.lastEpisodeUrl,
+        episodeNumber: item.episode,
+        episodeTitle: item.episodeTitle,
+        episodePosterUrl: item.episodePosterUrl,
+      ),
+      'update playback progress',
+    );
   }
 
   Future<void> clearAllHistory() async {
+    final urls = _storageService
+        .getWatchHistory()
+        .map((item) => (item['url'] ?? '').toString())
+        .where((url) => url.isNotEmpty)
+        .toList(growable: false);
     await _storageService.clearAllHistory();
+    for (final url in urls) {
+      _syncInBackground(
+        _accountService.removeContinueWatching(url),
+        'clear continue-watching item',
+      );
+    }
   }
 
   List<HistoryItem> getWatchHistory() {
@@ -163,5 +211,15 @@ class HistoryRepository {
 
   String? getLastEpisodeUrl(String url) {
     return _storageService.getLastEpisodeUrl(url);
+  }
+
+  void _syncInBackground(Future<void> operation, String label) {
+    unawaited(
+      operation.catchError((Object error) {
+        if (kDebugMode) {
+          debugPrint('[AnimeWitcherAccount] Could not $label: $error');
+        }
+      }),
+    );
   }
 }

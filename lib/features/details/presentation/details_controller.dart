@@ -16,6 +16,7 @@ import '../../library/presentation/history_provider.dart';
 import 'playback_launcher.dart';
 import '../../../core/services/download_service.dart';
 import 'downloaded_file_provider.dart';
+import 'details_item_merge.dart';
 
 part 'details_controller.g.dart';
 
@@ -443,6 +444,11 @@ class DetailsController extends _$DetailsController {
       );
       final current = state.item ?? initialItem;
       final currentEpisodes = state.episodes.asData?.value ?? current.episodes;
+      final completeDetails = mergeDetailsItem(
+        fallback: current,
+        incoming: withProvider,
+        episodes: currentEpisodes,
+      );
       final independent = provider.supportsIndependentDetailSections;
       final currentCast = state.cast.asData?.value ?? current.cast;
       final currentTrailers = state.trailers.asData?.value ?? current.trailers;
@@ -451,7 +457,7 @@ class DetailsController extends _$DetailsController {
           state.recommendations.asData?.value ?? current.recommendations;
       final currentNextAiring = current.nextAiring;
 
-      final rendered = withProvider.copyWith(
+      final rendered = completeDetails.copyWith(
         episodes: currentEpisodes,
         cast: independent ? currentCast : (withProvider.cast ?? currentCast),
         trailers: independent
@@ -534,11 +540,27 @@ class DetailsController extends _$DetailsController {
     final sorted =
         _processEpisodes(fetchedEpisodes, current, isInitial: true) ??
         const <Episode>[];
-    final merged = current.copyWith(episodes: sorted);
+    final merged = mergeDetailsItem(
+      fallback: contextItem,
+      incoming: current,
+      episodes: sorted,
+    );
     state = state.copyWith(
       details: state.details.hasValue ? AsyncData(merged) : null,
       episodes: AsyncData(sorted),
       item: merged,
+    );
+    unawaited(
+      ref
+          .read(episodeWatchRepositoryProvider)
+          .reconcileWithCloud(url, sorted)
+          .catchError((Object error) {
+            if (kDebugMode) {
+              debugPrint(
+                '[DetailsController] Watched-state sync deferred: $error',
+              );
+            }
+          }),
     );
     unawaited(
       _loadEpisodeMetadataInBackground(
@@ -778,7 +800,11 @@ class DetailsController extends _$DetailsController {
             isInitial: !canPreserveSelectedSeason,
           ) ??
           enriched;
-      final updatedItem = currentItem.copyWith(episodes: processed);
+      final updatedItem = mergeDetailsItem(
+        fallback: contextItem,
+        incoming: currentItem,
+        episodes: processed,
+      );
       state = state.copyWith(
         details: state.details.hasValue ? AsyncData(updatedItem) : null,
         episodes: AsyncData(processed),

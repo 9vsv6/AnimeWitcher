@@ -570,6 +570,7 @@ class StorageService {
     int? episode,
     String? episodeTitle,
     String? episodePosterUrl,
+    int? timestamp,
   }) async {
     final entry = {
       'title': item.title,
@@ -589,7 +590,7 @@ class StorageService {
       'episode': episode,
       'episodeTitle': episodeTitle,
       'episodePosterUrl': episodePosterUrl,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'timestamp': timestamp ?? DateTime.now().millisecondsSinceEpoch,
     };
 
     // Save main entry (keyed by series/movie URL)

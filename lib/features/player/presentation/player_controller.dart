@@ -15,6 +15,7 @@ import 'package:video_view/video_view.dart'
     show VideoController, SubtitleTrackConfig, VideoControllerPlaybackState;
 
 import '../../../../core/logger/app_logger.dart';
+import 'package:skystream/core/account/account_providers.dart';
 import '../../../../core/services/download_service.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
@@ -2580,6 +2581,20 @@ class PlayerController extends Notifier<PlayerState> {
           season: ep?.season,
           episode: ep?.episode,
         );
+        if (savedPos <= 0 && ep != null) {
+          try {
+            savedPos = await ref
+                .read(animeWitcherAccountServiceProvider)
+                .remoteEpisodePosition(
+                  mainUrl: _item.url,
+                  episodeUrl: historyEpisodeUrl,
+                );
+          } catch (error) {
+            if (kDebugMode) {
+              debugPrint('[Player] Cloud resume lookup deferred: $error');
+            }
+          }
+        }
       } else {
         savedPos = historyRepo.getPosition(_item.url);
       }

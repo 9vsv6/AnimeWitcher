@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:skystream/core/account/account_providers.dart';
 import '../../../../core/storage/history_repository.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../settings/presentation/general_settings_provider.dart';
@@ -11,6 +12,7 @@ part 'history_provider.g.dart';
 class WatchHistory extends _$WatchHistory {
   @override
   List<HistoryItem> build() {
+    ref.watch(accountDataRevisionProvider);
     final repository = ref.watch(historyRepositoryProvider);
     return repository.getWatchHistory();
   }

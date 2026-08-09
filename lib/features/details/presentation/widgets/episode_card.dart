@@ -7,6 +7,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
+import 'package:skystream/core/account/account_providers.dart';
 import 'package:skystream/core/storage/history_repository.dart';
 import 'package:skystream/core/storage/episode_watch_repository.dart';
 import 'package:skystream/core/services/download_service.dart';
@@ -72,6 +73,7 @@ class EpisodeCard extends HookConsumerWidget {
     );
 
     ref.watch(episodeWatchRevisionProvider);
+    ref.watch(accountDataRevisionProvider);
     final episodeWatchRepo = ref.watch(episodeWatchRepositoryProvider);
 
     final double progress = epDur > 0 ? (epPos / epDur).clamp(0.0, 1.0) : 0.0;

@@ -1,0 +1,513 @@
+import 'dart:math';
+
+import 'package:dio/dio.dart';
+
+import 'animewitcher_account_config.dart';
+import 'animewitcher_account_models.dart';
+
+class FirestoreReference {
+  const FirestoreReference(this.path);
+
+  final String path;
+}
+
+class FirestoreDocument {
+  const FirestoreDocument({
+    required this.id,
+    required this.path,
+    required this.fields,
+  });
+
+  final String id;
+  final String path;
+  final Map<String, dynamic> fields;
+}
+
+class FirestoreValueCodec {
+  const FirestoreValueCodec._();
+
+  static Map<String, dynamic> encode(dynamic value) {
+    if (value == null) return <String, dynamic>{'nullValue': null};
+    if (value is FirestoreReference) {
+      return <String, dynamic>{
+        'referenceValue':
+            'projects/${AnimeWitcherAccountConfig.projectId}'
+            '/databases/(default)/documents/${value.path}',
+      };
+    }
+    if (value is DateTime) {
+      return <String, dynamic>{
+        'timestampValue': value.toUtc().toIso8601String(),
+      };
+    }
+    if (value is bool) return <String, dynamic>{'booleanValue': value};
+    if (value is int) {
+      return <String, dynamic>{'integerValue': value.toString()};
+    }
+    if (value is double) return <String, dynamic>{'doubleValue': value};
+    if (value is num) {
+      return <String, dynamic>{'doubleValue': value.toDouble()};
+    }
+    if (value is Iterable) {
+      return <String, dynamic>{
+        'arrayValue': <String, dynamic>{
+          'values': value.map(encode).toList(growable: false),
+        },
+      };
+    }
+    if (value is Map) {
+      final fields = <String, dynamic>{};
+      value.forEach((dynamic key, dynamic nested) {
+        fields[key.toString()] = encode(nested);
+      });
+      return <String, dynamic>{
+        'mapValue': <String, dynamic>{'fields': fields},
+      };
+    }
+    return <String, dynamic>{'stringValue': value.toString()};
+  }
+
+  static dynamic decode(dynamic raw) {
+    if (raw is! Map) return null;
+    final value = Map<String, dynamic>.from(raw);
+    if (value.containsKey('nullValue')) return null;
+    if (value.containsKey('stringValue')) return value['stringValue'] as String?;
+    if (value.containsKey('booleanValue')) return value['booleanValue'] == true;
+    if (value.containsKey('integerValue')) {
+      return int.tryParse(value['integerValue'].toString()) ?? 0;
+    }
+    if (value.containsKey('doubleValue')) {
+      final number = value['doubleValue'];
+      return number is num
+          ? number.toDouble()
+          : double.tryParse(number.toString());
+    }
+    if (value.containsKey('timestampValue')) {
+      return DateTime.tryParse(value['timestampValue'].toString());
+    }
+    if (value.containsKey('referenceValue')) {
+      final reference = value['referenceValue'].toString();
+      const marker = '/documents/';
+      final markerIndex = reference.indexOf(marker);
+      return markerIndex < 0
+          ? reference
+          : reference.substring(markerIndex + marker.length);
+    }
+    if (value.containsKey('arrayValue')) {
+      final array = _map(value['arrayValue']);
+      final values = array['values'];
+      if (values is! List) return <dynamic>[];
+      return values.map(decode).toList(growable: false);
+    }
+    if (value.containsKey('mapValue')) {
+      return decodeFields(_map(_map(value['mapValue'])['fields']));
+    }
+    return null;
+  }
+
+  static Map<String, dynamic> encodeFields(Map<String, dynamic> fields) {
+    return fields.map<String, dynamic>(
+      (key, value) => MapEntry(key, encode(value)),
+    );
+  }
+
+  static Map<String, dynamic> decodeFields(Map<String, dynamic> fields) {
+    return fields.map<String, dynamic>(
+      (key, value) => MapEntry(key, decode(value)),
+    );
+  }
+}
+
+class FirestoreRestClient {
+  FirestoreRestClient({Dio? dio})
+    : _dio = dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 25),
+              sendTimeout: const Duration(seconds: 25),
+              headers: const <String, String>{'Accept': 'application/json'},
+            ),
+          );
+
+  final Dio _dio;
+
+  String get _databaseBase =>
+      'https://firestore.googleapis.com/v1/projects/'
+      '${AnimeWitcherAccountConfig.projectId}/databases/(default)';
+
+  String get _documentsBase =>
+      '$_databaseBase/documents';
+
+  String _documentResource(String path) =>
+      'projects/${AnimeWitcherAccountConfig.projectId}'
+      '/databases/(default)/documents/$path';
+
+  Future<FirestoreDocument?> getDocument(
+    String path,
+    String idToken,
+  ) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        '$_documentsBase/${_encodedPath(path)}',
+        options: _options(idToken),
+      );
+      return _decodeDocument(response.data);
+    } on DioException catch (error) {
+      if (error.response?.statusCode == 404) return null;
+      throw _firestoreException(error);
+    }
+  }
+
+  Future<List<FirestoreDocument>> listDocuments(
+    String collectionPath,
+    String idToken, {
+    int pageSize = 100,
+  }) async {
+    final output = <FirestoreDocument>[];
+    String? pageToken;
+    do {
+      try {
+        final response = await _dio.get<dynamic>(
+          '$_documentsBase/${_encodedPath(collectionPath)}',
+          queryParameters: <String, dynamic>{
+            'pageSize': pageSize,
+            if (pageToken != null) 'pageToken': pageToken,
+          },
+          options: _options(idToken),
+        );
+        final payload = _map(response.data);
+        final documents = payload['documents'];
+        if (documents is List) {
+          for (final raw in documents) {
+            final document = _decodeDocument(raw);
+            if (document != null) output.add(document);
+          }
+        }
+        pageToken = _optionalString(payload['nextPageToken']);
+      } on DioException catch (error) {
+        if (error.response?.statusCode == 404) return output;
+        throw _firestoreException(error);
+      }
+    } while (pageToken != null);
+    return output;
+  }
+
+  Future<List<FirestoreDocument>> queryByStringField({
+    required String collectionId,
+    required String field,
+    required String value,
+    required String idToken,
+    int limit = 20,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        '$_documentsBase:runQuery',
+        data: <String, dynamic>{
+          'structuredQuery': <String, dynamic>{
+            'from': <Map<String, dynamic>>[
+              <String, dynamic>{'collectionId': collectionId},
+            ],
+            'where': <String, dynamic>{
+              'fieldFilter': <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': field},
+                'op': 'EQUAL',
+                'value': FirestoreValueCodec.encode(value),
+              },
+            },
+            'limit': limit,
+          },
+        },
+        options: _options(idToken),
+      );
+      final values = response.data;
+      if (values is! List) return const <FirestoreDocument>[];
+      final output = <FirestoreDocument>[];
+      for (final raw in values) {
+        final result = _map(raw);
+        final document = _decodeDocument(result['document']);
+        if (document != null) output.add(document);
+      }
+      return output;
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  Future<FirestoreDocument> setDocument(
+    String path,
+    Map<String, dynamic> fields,
+    String idToken, {
+    bool merge = true,
+  }) async {
+    try {
+      final response = await _dio.patch<dynamic>(
+        '$_documentsBase/${_encodedPath(path)}',
+        queryParameters: merge
+            ? <String, dynamic>{
+                'updateMask.fieldPaths': fields.keys.toList(growable: false),
+              }
+            : null,
+        data: <String, dynamic>{
+          'fields': FirestoreValueCodec.encodeFields(fields),
+        },
+        options: _options(idToken),
+      );
+      final document = _decodeDocument(response.data);
+      if (document == null) {
+        throw const AnimeWitcherAccountException(
+          'invalid-firestore-response',
+          'The sync server returned an invalid document.',
+        );
+      }
+      return document;
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  /// Writes ordinary fields and lets Firestore assign authoritative server
+  /// timestamps in the same atomic commit. AnimeWitcher relies on
+  /// FieldValue.serverTimestamp() for ordering lists and resolving progress
+  /// conflicts, so client clock values must not be used for those fields.
+  Future<void> setDocumentWithServerTimestamps(
+    String path,
+    Map<String, dynamic> fields,
+    String idToken, {
+    required Set<String> serverTimestampFields,
+    bool merge = true,
+  }) async {
+    if (serverTimestampFields.isEmpty) {
+      await setDocument(path, fields, idToken, merge: merge);
+      return;
+    }
+
+    final ordinaryFields = Map<String, dynamic>.from(fields)
+      ..removeWhere((key, _) => serverTimestampFields.contains(key));
+    if (ordinaryFields.isEmpty) {
+      throw ArgumentError.value(
+        fields,
+        'fields',
+        'At least one ordinary field is required with a server timestamp.',
+      );
+    }
+
+    final write = <String, dynamic>{
+      'update': <String, dynamic>{
+        'name': _documentResource(path),
+        'fields': FirestoreValueCodec.encodeFields(ordinaryFields),
+      },
+      if (merge)
+        'updateMask': <String, dynamic>{
+          'fieldPaths': ordinaryFields.keys.toList(growable: false),
+        },
+      'updateTransforms': serverTimestampFields
+          .map<Map<String, dynamic>>(
+            (field) => <String, dynamic>{
+              'fieldPath': field,
+              'setToServerValue': 'REQUEST_TIME',
+            },
+          )
+          .toList(growable: false),
+    };
+    try {
+      await _dio.post<dynamic>(
+        '$_databaseBase/documents:commit',
+        data: <String, dynamic>{
+          'writes': <Map<String, dynamic>>[write],
+        },
+        options: _options(idToken),
+      );
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  Future<FirestoreDocument> addDocument(
+    String collectionPath,
+    Map<String, dynamic> fields,
+    String idToken,
+  ) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        '$_documentsBase/${_encodedPath(collectionPath)}',
+        data: <String, dynamic>{
+          'fields': FirestoreValueCodec.encodeFields(fields),
+        },
+        options: _options(idToken),
+      );
+      final document = _decodeDocument(response.data);
+      if (document == null) {
+        throw const AnimeWitcherAccountException(
+          'invalid-firestore-response',
+          'The sync server returned an invalid document.',
+        );
+      }
+      return document;
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  /// Creates a document with the same atomic server-timestamp behavior as
+  /// Firebase's FieldValue.serverTimestamp(). Firestore SDKs generate random
+  /// document IDs on the client, so doing that here still matches add().
+  Future<FirestoreDocument> createDocumentWithServerTimestamps(
+    String collectionPath,
+    Map<String, dynamic> fields,
+    String idToken, {
+    required Set<String> serverTimestampFields,
+    String? documentId,
+  }) async {
+    final id = documentId ?? _randomFirestoreDocumentId();
+    final path = '${collectionPath.replaceFirst(RegExp(r'/+$'), '')}/$id';
+    await setDocumentWithServerTimestamps(
+      path,
+      fields,
+      idToken,
+      serverTimestampFields: serverTimestampFields,
+      merge: false,
+    );
+    final document = await getDocument(path, idToken);
+    if (document == null) {
+      throw const AnimeWitcherAccountException(
+        'invalid-firestore-response',
+        'The sync server did not return the created document.',
+      );
+    }
+    return document;
+  }
+
+  /// Applies Firestore's atomic arrayUnion/arrayRemove equivalent while also
+  /// ensuring the watched-document metadata exists. This matches the official
+  /// AnimeWitcher client and prevents two devices updating different episodes
+  /// at the same time from overwriting each other's arrays.
+  Future<void> transformArrayField(
+    String path, {
+    required String idToken,
+    required String field,
+    required dynamic value,
+    required bool append,
+    Map<String, dynamic> baseFields = const <String, dynamic>{},
+  }) async {
+    final transform = <String, dynamic>{
+      'fieldPath': field,
+      if (append)
+        'appendMissingElements': <String, dynamic>{
+          'values': <Map<String, dynamic>>[FirestoreValueCodec.encode(value)],
+        }
+      else
+        'removeAllFromArray': <String, dynamic>{
+          'values': <Map<String, dynamic>>[FirestoreValueCodec.encode(value)],
+        },
+    };
+    final write = <String, dynamic>{
+      'update': <String, dynamic>{
+        'name': _documentResource(path),
+        'fields': FirestoreValueCodec.encodeFields(baseFields),
+      },
+      if (baseFields.isNotEmpty)
+        'updateMask': <String, dynamic>{
+          'fieldPaths': baseFields.keys.toList(growable: false),
+        },
+      'updateTransforms': <Map<String, dynamic>>[transform],
+    };
+    try {
+      await _dio.post<dynamic>(
+        '$_databaseBase/documents:commit',
+        data: <String, dynamic>{
+          'writes': <Map<String, dynamic>>[write],
+        },
+        options: _options(idToken),
+      );
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  Future<void> deleteDocument(String path, String idToken) async {
+    try {
+      await _dio.delete<dynamic>(
+        '$_documentsBase/${_encodedPath(path)}',
+        options: _options(idToken),
+      );
+    } on DioException catch (error) {
+      if (error.response?.statusCode == 404) return;
+      throw _firestoreException(error);
+    }
+  }
+
+  Options _options(String idToken) => Options(
+    contentType: Headers.jsonContentType,
+    headers: <String, String>{'Authorization': 'Bearer $idToken'},
+    listFormat: ListFormat.multi,
+  );
+
+  FirestoreDocument? _decodeDocument(dynamic raw) {
+    final source = _map(raw);
+    final name = _optionalString(source['name']);
+    if (name == null) return null;
+    const marker = '/documents/';
+    final markerIndex = name.indexOf(marker);
+    final path = markerIndex < 0
+        ? name
+        : name.substring(markerIndex + marker.length);
+    final segments = path.split('/');
+    return FirestoreDocument(
+      id: segments.isEmpty ? path : segments.last,
+      path: path,
+      fields: FirestoreValueCodec.decodeFields(_map(source['fields'])),
+    );
+  }
+}
+
+String _encodedPath(String path) => path
+    .split('/')
+    .where((segment) => segment.isNotEmpty)
+    .map(Uri.encodeComponent)
+    .join('/');
+
+String _randomFirestoreDocumentId() {
+  const alphabet =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  final random = Random.secure();
+  return List<String>.generate(
+    20,
+    (_) => alphabet[random.nextInt(alphabet.length)],
+    growable: false,
+  ).join();
+}
+
+Map<String, dynamic> _map(dynamic raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return <String, dynamic>{};
+}
+
+String? _optionalString(dynamic raw) {
+  final value = raw?.toString().trim() ?? '';
+  return value.isEmpty ? null : value;
+}
+
+AnimeWitcherAccountException _firestoreException(DioException error) {
+  final response = _map(error.response?.data);
+  final nested = _map(response['error']);
+  final status = (nested['status'] ?? '').toString().toUpperCase();
+  final message = (nested['message'] ?? error.message ?? '').toString();
+  if (error.response?.statusCode == 401 || status == 'UNAUTHENTICATED') {
+    return const AnimeWitcherAccountException(
+      'invalid-session',
+      'The account session has expired. Please sign in again.',
+    );
+  }
+  if (error.response?.statusCode == 403 || status == 'PERMISSION_DENIED') {
+    return const AnimeWitcherAccountException(
+      'permission-denied',
+      'The AnimeWitcher server rejected this sync operation.',
+    );
+  }
+  return AnimeWitcherAccountException(
+    'sync-failed',
+    message.isEmpty ? 'Could not synchronize account data.' : message,
+  );
+}

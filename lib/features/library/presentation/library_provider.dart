@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:skystream/core/account/account_providers.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/library_category.dart';
 import '../../../../core/storage/library_repository.dart';
@@ -11,6 +12,7 @@ part 'library_provider.g.dart';
 class Library extends _$Library {
   @override
   LibraryState build() {
+    ref.watch(accountDataRevisionProvider);
     final repository = ref.read(libraryRepositoryProvider);
     final category = repository.getSelectedCategory();
     final items = repository.getLibraryItems(category: category);

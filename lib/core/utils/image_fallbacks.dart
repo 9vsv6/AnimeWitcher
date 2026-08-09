@@ -32,6 +32,20 @@ class AppImageFallbacks {
 
   static String? _normalize(String? value) {
     final trimmed = value?.trim();
-    return (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    if (trimmed == null || trimmed.isEmpty) return null;
+
+    // Some provider documents contain serialized empty values. Treating one
+    // as a URL makes image widgets enter their error placeholder instead of
+    // continuing through the normal banner/poster fallback chain.
+    final normalized = trimmed.toLowerCase();
+    if (normalized == 'null' ||
+        normalized == 'undefined' ||
+        normalized == 'none' ||
+        normalized == 'n/a' ||
+        normalized == 'about:blank') {
+      return null;
+    }
+
+    return trimmed;
   }
 }

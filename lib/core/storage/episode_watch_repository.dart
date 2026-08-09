@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../account/account_providers.dart';
+import '../account/animewitcher_account_service.dart';
 import '../domain/entity/multimedia_item.dart';
 import 'history_repository.dart';
 import 'storage_service.dart';
@@ -23,6 +27,7 @@ final episodeWatchRepositoryProvider = Provider<EpisodeWatchRepository>((ref) {
   return EpisodeWatchRepository(
     ref.watch(storageServiceProvider),
     ref.watch(historyRepositoryProvider),
+    ref.watch(animeWitcherAccountServiceProvider),
     () => ref.read(episodeWatchRevisionProvider.notifier).bump(),
   );
 });
@@ -31,11 +36,13 @@ class EpisodeWatchRepository {
   EpisodeWatchRepository(
     this._storageService,
     this._historyRepository,
+    this._accountService,
     this._notifyChanged,
   );
 
   final StorageService _storageService;
   final HistoryRepository _historyRepository;
+  final AnimeWitcherAccountService _accountService;
   final void Function() _notifyChanged;
 
   static const String _storageKey = 'episode_watch_overrides_v1';
@@ -144,6 +151,10 @@ class EpisodeWatchRepository {
       return explicit;
     }
 
+    if (_accountService.isEpisodeWatchedCached(mainUrl, episode.url)) {
+      return true;
+    }
+
     final position = _historyRepository.getEpisodePosition(
       episode.url,
       mainUrl: mainUrl,
@@ -164,6 +175,13 @@ class EpisodeWatchRepository {
     final overrides = Map<String, bool>.from(_readOverrides());
     overrides[_episodeKey(episode)] = watched;
     await _persist(overrides);
+    _syncInBackground(
+      _accountService.setEpisodeWatched(
+        mainUrl: mainUrl,
+        episodeUrl: episode.url,
+        watched: watched,
+      ),
+    );
   }
 
   Future<void> setManyWatched(
@@ -171,12 +189,88 @@ class EpisodeWatchRepository {
     Iterable<Episode> episodes,
     bool watched,
   ) async {
+    final episodeList = episodes.toList(growable: false);
     final overrides = Map<String, bool>.from(_readOverrides());
 
-    for (final episode in episodes) {
+    for (final episode in episodeList) {
       overrides[_episodeKey(episode)] = watched;
     }
 
     await _persist(overrides);
+    for (final episode in episodeList) {
+      _syncInBackground(
+        _accountService.setEpisodeWatched(
+          mainUrl: mainUrl,
+          episodeUrl: episode.url,
+          watched: watched,
+        ),
+      );
+    }
+  }
+
+  /// Merges AnimeWitcher's watched array with SkyStream's explicit local
+  /// choices after the provider has resolved the real episode document IDs.
+  /// Local explicit true/false wins; otherwise a cloud watched mark is pulled
+  /// into local storage so it remains visible while offline.
+  Future<void> reconcileWithCloud(
+    String mainUrl,
+    Iterable<Episode> episodes,
+  ) async {
+    if (!_accountService.isSignedIn) return;
+    final remote = await _accountService.watchedEpisodeIds(mainUrl);
+    final overrides = Map<String, bool>.from(_readOverrides());
+    var changed = false;
+
+    for (final episode in episodes) {
+      final explicit = getExplicitState(mainUrl, episode);
+      if (explicit != null) {
+        _syncInBackground(
+          _accountService.setEpisodeWatched(
+            mainUrl: mainUrl,
+            episodeUrl: episode.url,
+            watched: explicit,
+          ),
+        );
+        continue;
+      }
+
+      final episodeId = episode.url.split('|').length < 2
+          ? null
+          : _decodeEpisodeId(episode.url);
+      if ((episodeId != null && remote.contains(episodeId)) ||
+          _accountService.isEpisodeWatchedCached(mainUrl, episode.url)) {
+        overrides[_episodeKey(episode)] = true;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await _persist(overrides);
+    } else {
+      _notifyChanged();
+    }
+  }
+
+  String? _decodeEpisodeId(String rawUrl) {
+    final parts = rawUrl.split('|');
+    if (parts.length < 2) return null;
+    final raw = parts.sublist(1).join('|');
+    try {
+      return Uri.decodeComponent(raw);
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  void _syncInBackground(Future<void> operation) {
+    unawaited(
+      operation.catchError((Object error) {
+        if (kDebugMode) {
+          debugPrint(
+            '[AnimeWitcherAccount] Could not sync watched episode: $error',
+          );
+        }
+      }),
+    );
   }
 }

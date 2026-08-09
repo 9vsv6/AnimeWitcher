@@ -6,6 +6,7 @@ import '../../../core/router/app_router.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/utils/image_fallbacks.dart';
+import 'details_item_merge.dart';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
@@ -448,6 +449,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final posterUrl =
         AppImageFallbacks.poster(item.posterUrl, label: item.title) ?? '';
     final providedBannerUrl = AppImageFallbacks.optional(item.bannerUrl);
+    final logoUrl = AppImageFallbacks.optional(item.logoUrl);
     final bannerUrl =
         AppImageFallbacks.banner(
           bannerUrl: item.bannerUrl,
@@ -485,41 +487,48 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   tag: 'banner_${item.url}',
                   child: bannerUrl.isEmpty
                       ? const ColoredBox(color: Colors.black)
-                      : CachedNetworkImage(
-                          imageUrl: bannerUrl,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                          memCacheWidth:
-                              (screenWidth *
-                                      MediaQuery.devicePixelRatioOf(context))
-                                  .round(),
-                          placeholder: (_, _) => const ColoredBox(
-                            color: Colors.black,
+                      : ColoredBox(
+                          color: Colors.black,
+                          child: CachedNetworkImage(
+                            key: ValueKey<String>('details_banner_$bannerUrl'),
+                            imageUrl: bannerUrl,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            memCacheWidth:
+                                (screenWidth *
+                                        MediaQuery.devicePixelRatioOf(context))
+                                    .round(),
+                            placeholder: (_, _) => const ColoredBox(
+                              color: Colors.black,
+                            ),
+                            errorWidget: (_, _, _) {
+                              if (providedBannerUrl != null &&
+                                  posterUrl.isNotEmpty &&
+                                  providedBannerUrl != posterUrl) {
+                                return CachedNetworkImage(
+                                  key: ValueKey<String>(
+                                    'details_banner_poster_$posterUrl',
+                                  ),
+                                  imageUrl: posterUrl,
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.center,
+                                  memCacheWidth:
+                                      (screenWidth *
+                                              MediaQuery.devicePixelRatioOf(
+                                                context,
+                                              ))
+                                          .round(),
+                                  placeholder: (_, _) => const ColoredBox(
+                                    color: Colors.black,
+                                  ),
+                                  errorWidget: (_, _, _) => const ColoredBox(
+                                    color: Colors.black,
+                                  ),
+                                );
+                              }
+                              return const ColoredBox(color: Colors.black);
+                            },
                           ),
-                          errorWidget: (_, _, _) {
-                            if (providedBannerUrl != null &&
-                                posterUrl.isNotEmpty &&
-                                providedBannerUrl != posterUrl) {
-                              return CachedNetworkImage(
-                                imageUrl: posterUrl,
-                                fit: BoxFit.cover,
-                                alignment: Alignment.center,
-                                memCacheWidth:
-                                    (screenWidth *
-                                            MediaQuery.devicePixelRatioOf(
-                                              context,
-                                            ))
-                                        .round(),
-                                placeholder: (_, _) => const ColoredBox(
-                                  color: Colors.black,
-                                ),
-                                errorWidget: (_, _, _) => const ColoredBox(
-                                  color: Colors.black,
-                                ),
-                              );
-                            }
-                            return const ColoredBox(color: Colors.black);
-                          },
                         ),
                 ),
                 // Keep the fade broad and finish on the same solid black as
@@ -562,8 +571,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   child: posterUrl.isEmpty
                       ? const ColoredBox(color: Colors.black)
                       : CachedNetworkImage(
+                          key: ValueKey<String>('details_poster_$posterUrl'),
                           imageUrl: posterUrl,
                           fit: BoxFit.cover,
+                          placeholder: (_, _) => const ColoredBox(
+                            color: Colors.black,
+                          ),
                           errorWidget: (_, _, _) => const ColoredBox(
                             color: Colors.black,
                           ),
@@ -584,12 +597,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 onLongPress: () => _copyAnimeTitle(context, item.title),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: item.logoUrl != null
+                  child: logoUrl != null
                       ? CachedNetworkImage(
-                          imageUrl: item.logoUrl!,
+                          imageUrl: logoUrl,
                           height: titleHeight,
                           fit: BoxFit.contain,
                           alignment: Alignment.centerLeft,
+                          placeholder: (_, _) => Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: titleStyle,
+                          ),
                           errorWidget: (_, _, _) => Text(
                             item.title,
                             maxLines: 1,
@@ -728,7 +747,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final isMovie = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
     );
-    final item = currentItem ?? details ?? widget.item;
+    final item = mergeDetailsItem(
+      fallback: widget.item,
+      incoming: currentItem ?? details ?? widget.item,
+      episodes: episodesAsync.asData?.value,
+    );
     final selectedEpisodeCount = ref.watch(
       detailsControllerProvider(
         widget.item.url,
