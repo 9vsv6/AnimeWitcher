@@ -270,7 +270,7 @@ private final class AppleLiquidGlassPlatformView: NSObject, FlutterPlatformView 
       effectView.effect = glassEffect
       effectView.cornerConfiguration = cornerRadius >= 900
         ? .capsule()
-        : .corners(radius: cornerRadius)
+        : .corners(radius: .fixed(cornerRadius))
     } else {
       rootView.clipsToBounds = true
       rootView.layer.cornerRadius = cornerRadius
