@@ -8,6 +8,7 @@ class ProviderSearchFilterOptions {
   final List<String> types;
   final List<String> ageRatings;
   final List<String> years;
+  final List<String> seasons;
   final List<String> genres;
 
   const ProviderSearchFilterOptions({
@@ -15,6 +16,7 @@ class ProviderSearchFilterOptions {
     this.types = const <String>[],
     this.ageRatings = const <String>[],
     this.years = const <String>[],
+    this.seasons = const <String>[],
     this.genres = const <String>[],
   });
 
@@ -23,6 +25,7 @@ class ProviderSearchFilterOptions {
       types.isEmpty &&
       ageRatings.isEmpty &&
       years.isEmpty &&
+      seasons.isEmpty &&
       genres.isEmpty;
 
   factory ProviderSearchFilterOptions.fromJson(Map<String, dynamic> json) {
@@ -41,6 +44,7 @@ class ProviderSearchFilterOptions {
       types: read('types'),
       ageRatings: read('ageRatings'),
       years: read('years'),
+      seasons: read('seasons'),
       genres: read('genres'),
     );
   }
@@ -51,6 +55,7 @@ class ProviderSearchFilters {
   final Set<String> types;
   final Set<String> ageRatings;
   final Set<String> years;
+  final Set<String> seasons;
   final Set<String> genres;
   final String sort;
 
@@ -59,6 +64,7 @@ class ProviderSearchFilters {
     this.types = const <String>{},
     this.ageRatings = const <String>{},
     this.years = const <String>{},
+    this.seasons = const <String>{},
     this.genres = const <String>{},
     this.sort = '',
   });
@@ -71,6 +77,7 @@ class ProviderSearchFilters {
       types.length +
       ageRatings.length +
       years.length +
+      seasons.length +
       genres.length;
 
   Map<String, dynamic> toJson() {
@@ -79,6 +86,7 @@ class ProviderSearchFilters {
       'types': types.toList(growable: false),
       'ageRatings': ageRatings.toList(growable: false),
       'years': years.toList(growable: false),
+      'seasons': seasons.toList(growable: false),
       'genres': genres.toList(growable: false),
       'sort': sort,
     };
@@ -89,6 +97,7 @@ class ProviderSearchFilters {
     Set<String>? types,
     Set<String>? ageRatings,
     Set<String>? years,
+    Set<String>? seasons,
     Set<String>? genres,
     String? sort,
   }) {
@@ -97,6 +106,7 @@ class ProviderSearchFilters {
       types: types ?? this.types,
       ageRatings: ageRatings ?? this.ageRatings,
       years: years ?? this.years,
+      seasons: seasons ?? this.seasons,
       genres: genres ?? this.genres,
       sort: sort ?? this.sort,
     );

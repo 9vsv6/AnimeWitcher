@@ -947,12 +947,36 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return '(${pieces.join(' $joiner ')})';
   }
 
+  String _seasonFilter(ProviderSearchFilters filters) {
+    final seasons = filters.seasons
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    if (seasons.isEmpty) return '';
+
+    final selectedYears = filters.years
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final years = selectedYears.isNotEmpty
+        ? selectedYears
+        : <String>[
+            for (var year = 2028; year >= 1961; year--) year.toString(),
+          ];
+    final values = <String>[
+      for (final season in seasons)
+        for (final year in years) '$season عام $year',
+    ];
+    return _filterGroup('details.season', values, 'OR');
+  }
+
   String _buildFilters(ProviderSearchFilters filters) {
     return <String>[
       _filterGroup('details.state', filters.statuses, 'OR'),
       _filterGroup('type', filters.types, 'OR'),
       _filterGroup('details.age', filters.ageRatings, 'OR'),
       _filterGroup('details.year', filters.years, 'OR'),
+      _seasonFilter(filters),
       _filterGroup('tags', filters.genres, 'AND'),
     ].where((value) => value.isNotEmpty).join(' AND ');
   }
@@ -967,6 +991,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       types: const <String>['مسلسل', 'اونا', 'اوفا', 'فيلم', 'خاصة'],
       ageRatings: const <String>['+17', '+13', 'لجميع الأعمار'],
       years: years,
+      seasons: const <String>['شتاء', 'ربيع', 'صيف', 'خريف'],
       genres: const <String>[
         'اكشن', 'مغامرات', 'دراما', 'كوميدي', 'خيال', 'اعادة بعث', 'عالم مختلف',
         'سينين', 'شوجو', 'شونين', 'رعب', 'غموض', 'رومانسي', 'خيال علمي',

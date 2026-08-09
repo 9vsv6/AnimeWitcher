@@ -27,6 +27,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
   late Set<String> _types;
   late Set<String> _ageRatings;
   late Set<String> _years;
+  late Set<String> _seasons;
   late Set<String> _genres;
 
   bool get _isArabic =>
@@ -40,6 +41,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
     _types = {...widget.initialValue.types};
     _ageRatings = {...widget.initialValue.ageRatings};
     _years = {...widget.initialValue.years};
+    _seasons = {...widget.initialValue.seasons};
     _genres = {...widget.initialValue.genres};
   }
 
@@ -55,12 +57,25 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
     });
   }
 
+  void _toggleSeason(String value) {
+    setState(() {
+      if (_seasons.contains(value)) {
+        _seasons.clear();
+      } else {
+        _seasons
+          ..clear()
+          ..add(value);
+      }
+    });
+  }
+
   void _clearAll() {
     setState(() {
       _statuses.clear();
       _types.clear();
       _ageRatings.clear();
       _years.clear();
+      _seasons.clear();
       _genres.clear();
     });
   }
@@ -70,6 +85,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
     types: {..._types},
     ageRatings: {..._ageRatings},
     years: {..._years},
+    seasons: {..._seasons},
     genres: {..._genres},
     sort: widget.initialValue.sort,
   );
@@ -174,7 +190,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                           _FilterTab(
                             icon: Icons.calendar_today_outlined,
                             label: _isArabic ? 'السنة' : 'Year',
-                            active: _years.isNotEmpty,
+                            active: _years.isNotEmpty || _seasons.isNotEmpty,
                           ),
                           _FilterTab(
                             icon: Icons.shield_outlined,
@@ -207,11 +223,13 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                         crossAxisCount: 3,
                         compact: true,
                       ),
-                      _MultiSelectGrid(
-                        values: widget.options.years,
-                        selected: _years,
-                        onToggle: (value) => _toggle(_years, value),
-                        crossAxisCount: 3,
+                      _SeasonYearGrid(
+                        seasons: widget.options.seasons,
+                        years: widget.options.years,
+                        selectedSeasons: _seasons,
+                        selectedYears: _years,
+                        onSeasonToggle: _toggleSeason,
+                        onYearToggle: (value) => _toggle(_years, value),
                       ),
                       _MultiSelectGrid(
                         values: widget.options.ageRatings,
@@ -312,6 +330,99 @@ class _FilterTab extends StatelessWidget {
           Text(label),
         ],
       ),
+    );
+  }
+}
+
+
+class _SeasonYearGrid extends StatelessWidget {
+  final List<String> seasons;
+  final List<String> years;
+  final Set<String> selectedSeasons;
+  final Set<String> selectedYears;
+  final ValueChanged<String> onSeasonToggle;
+  final ValueChanged<String> onYearToggle;
+
+  const _SeasonYearGrid({
+    required this.seasons,
+    required this.years,
+    required this.selectedSeasons,
+    required this.selectedYears,
+    required this.onSeasonToggle,
+    required this.onYearToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final values = <String>[...seasons, ...years];
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(LayoutConstants.spacingMd),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 1.85,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: values.length,
+      itemBuilder: (context, index) {
+        final isSeason = index < seasons.length;
+        final value = values[index];
+        final isSelected = isSeason
+            ? selectedSeasons.contains(value)
+            : selectedYears.contains(value);
+
+        return InkWell(
+          onTap: () => isSeason ? onSeasonToggle(value) : onYearToggle(value),
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? colors.primary.withValues(alpha: 0.2)
+                  : colors.onSurface.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isSelected
+                    ? colors.primary
+                    : colors.outlineVariant.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  size: 17,
+                  color: isSelected
+                      ? colors.primary
+                      : colors.onSurfaceVariant.withValues(alpha: 0.55),
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isSelected ? colors.primary : colors.onSurface,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
