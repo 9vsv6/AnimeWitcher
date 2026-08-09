@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -86,22 +87,11 @@ class PlayerLoadingOverlay extends StatelessWidget {
             Positioned(
               top: MediaQuery.viewPaddingOf(context).top + 16,
               left: 16,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: CustomButton(
-                  onPressed: onBack,
-                  child: const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.arrow_back,
-                      color: Colors.white,
-                      size: 34,
-                    ),
-                  ),
-                ),
+              child: AppleLiquidGlassBackButton(
+                size: 54,
+                foregroundColor: Colors.white,
+                fallbackColor: Colors.black54,
+                onPressed: onBack,
               ),
             ),
             Positioned.fill(

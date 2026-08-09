@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -584,8 +585,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               Positioned(
                 top: 8,
                 left: 8,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back),
+                child: AppleLiquidGlassBackButton(
+                  size: 48,
+                  foregroundColor: Colors.white,
+                  fallbackColor: Colors.transparent,
                   tooltip: AppLocalizations.of(context)!.goBack,
                   onPressed: _handleBack,
                 ),

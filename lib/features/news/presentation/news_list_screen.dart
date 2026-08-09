@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
@@ -114,8 +115,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
                 ),
               ),
             ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
+            leading: AppleLiquidGlassBackButton(
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             elevation: 0,

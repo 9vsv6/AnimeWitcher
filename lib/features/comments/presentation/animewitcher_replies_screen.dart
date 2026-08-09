@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:skystream/core/account/account_providers.dart';
@@ -213,8 +214,7 @@ class _AnimeWitcherRepliesScreenState
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
+            leading: AppleLiquidGlassBackButton(
               onPressed: () => Navigator.of(context).pop(),
             ),
             title: Align(

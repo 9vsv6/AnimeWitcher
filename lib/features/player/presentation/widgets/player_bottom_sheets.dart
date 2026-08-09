@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
@@ -243,11 +244,11 @@ class PlayerBottomSheets {
             children: [
               Row(
                 children: [
-                  IconButton(
+                  AppleLiquidGlassBackButton(
+                    size: 48,
+                    foregroundColor: HotstarPlayerStyle.secondaryText,
+                    fallbackColor: Colors.transparent,
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back),
-                    color: HotstarPlayerStyle.secondaryText,
-                    iconSize: 34,
                   ),
                   Expanded(
                     child: Text(

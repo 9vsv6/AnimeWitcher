@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -251,8 +252,7 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
                 ),
               ),
             ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
+            leading: AppleLiquidGlassBackButton(
               onPressed: () => context.pop(),
             ),
             elevation: 0,

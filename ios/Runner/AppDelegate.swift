@@ -36,6 +36,15 @@ import UserNotifications
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
+    if let glassRegistrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "SkyStreamAppleLiquidGlass"
+    ) {
+      glassRegistrar.register(
+        AppleLiquidGlassViewFactory(),
+        withId: "dev.akash.skystream/liquid_glass"
+      )
+    }
+
     let channel = FlutterMethodChannel(
       name: "dev.akash.skystream/download_continued_processing",
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
@@ -153,3 +162,55 @@ import UserNotifications
     downloadContinuedProcessingChannel = channel
   }
 }
+
+private final class AppleLiquidGlassViewFactory: NSObject, FlutterPlatformViewFactory {
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    AppleLiquidGlassPlatformView(frame: frame, arguments: args)
+  }
+}
+
+private final class AppleLiquidGlassPlatformView: NSObject, FlutterPlatformView {
+  private let rootView: UIView
+
+  init(frame: CGRect, arguments args: Any?) {
+    let parameters = args as? [String: Any]
+    let cornerRadius = (parameters?["cornerRadius"] as? NSNumber)?.doubleValue ?? 999
+    let requestedStyle = parameters?["style"] as? String ?? "regular"
+    let interactive = parameters?["interactive"] as? Bool ?? false
+
+    rootView = UIView(frame: frame)
+    rootView.backgroundColor = .clear
+    rootView.clipsToBounds = true
+    rootView.layer.cornerRadius = cornerRadius
+    rootView.isUserInteractionEnabled = false
+
+    let effectView = UIVisualEffectView(frame: rootView.bounds)
+    effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    effectView.isUserInteractionEnabled = false
+
+    if #available(iOS 26.0, *) {
+      let style: UIGlassEffect.Style = requestedStyle == "clear" ? .clear : .regular
+      let glassEffect = UIGlassEffect(style: style)
+      glassEffect.isInteractive = interactive
+      effectView.effect = glassEffect
+    } else {
+      effectView.effect = UIBlurEffect(style: .systemMaterial)
+    }
+
+    rootView.addSubview(effectView)
+    super.init()
+  }
+
+  func view() -> UIView {
+    rootView
+  }
+}
+

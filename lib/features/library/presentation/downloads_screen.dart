@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/device_info_provider.dart';
@@ -55,6 +56,9 @@ class DownloadsScreen extends ConsumerWidget {
     } else {
       page = Scaffold(
         appBar: AppBar(
+          leading: Navigator.of(context).canPop()
+              ? const AppleLiquidGlassBackButton()
+              : null,
           centerTitle: false,
           titleSpacing: 16,
           title: Align(

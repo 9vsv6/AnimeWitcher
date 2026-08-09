@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skystream/core/navigation/taskbar_destination.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 
 class CustomBottomNavBar extends StatelessWidget {
   final int currentBranchIndex;
@@ -83,41 +85,58 @@ class CustomBottomNavBar extends StatelessWidget {
         return Align(
           alignment: Alignment.bottomCenter,
           heightFactor: 1,
-          child: Container(
+          child: SizedBox(
             width: fullWidth,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(height / 2),
-              border: Border.all(
-                color: isDark
-                    ? theme.dividerColor.withValues(alpha: 0.3)
-                    : colorScheme.outline.withValues(alpha: 0.15),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(height / 2),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: Container(
-                  height: height,
-                  color: colorScheme.surface.withValues(alpha: 0.8),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      highlight,
-                      Row(children: tabs),
-                    ],
+            height: height,
+            child: defaultTargetPlatform == TargetPlatform.iOS
+                ? AppleLiquidGlassSurface(
+                    borderRadius: BorderRadius.circular(height / 2),
+                    interactive: true,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        highlight,
+                        Row(children: tabs),
+                      ],
+                    ),
+                  )
+                : Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(height / 2),
+                      border: Border.all(
+                        color: isDark
+                            ? theme.dividerColor.withValues(alpha: 0.3)
+                            : colorScheme.outline.withValues(alpha: 0.15),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: isDark ? 0.35 : 0.12,
+                          ),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(height / 2),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                        child: Container(
+                          height: height,
+                          color: colorScheme.surface.withValues(alpha: 0.8),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              highlight,
+                              Row(children: tabs),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
           ),
         );
       },

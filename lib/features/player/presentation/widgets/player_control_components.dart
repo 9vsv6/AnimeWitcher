@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import 'hotstar_player_style.dart';
@@ -45,13 +46,17 @@ class PlayerTopBar extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(leftPadding, 14, rightPadding, 24),
           child: Row(
             children: [
-              PlayerIconButton(
-                icon: Icons.arrow_back_rounded,
-                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                onPressed: onBack,
-                isTv: isTv,
-                focusNode: backFocusNode,
-                iconSize: isTv ? 34 : 30,
+              AppleLiquidGlassSurface(
+                borderRadius: BorderRadius.circular(999),
+                interactive: true,
+                child: PlayerIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  onPressed: onBack,
+                  isTv: isTv,
+                  focusNode: backFocusNode,
+                  iconSize: isTv ? 34 : 30,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(

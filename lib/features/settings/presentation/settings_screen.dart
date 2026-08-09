@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -62,7 +63,12 @@ class SettingsScreen extends ConsumerWidget {
     // Mobile layout
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.settings)),
+      appBar: AppBar(
+        leading: Navigator.of(context).canPop()
+            ? const AppleLiquidGlassBackButton()
+            : null,
+        title: Text(l10n.settings),
+      ),
       body: _buildSettingsList(context, ref, isTv),
     );
   }

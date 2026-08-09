@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -314,12 +315,8 @@ class HomeSearchDelegate extends SearchDelegate<void> {
   }
 
   Widget _buildBackButton(BuildContext context) {
-    return IconButton(
-      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-      icon: const Icon(
-        Icons.arrow_back_rounded,
-        textDirection: TextDirection.ltr,
-      ),
+    return AppleLiquidGlassBackButton(
+      size: 42,
       onPressed: () => close(context, null),
     );
   }

@@ -15,6 +15,7 @@ import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 
 import 'package:skystream/shared/widgets/custom_widgets.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 
 import '../../library/presentation/library_provider.dart';
 import '../../library/presentation/library_state.dart';
@@ -94,6 +95,76 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         offset: Offset(0, _detailsHeaderPullTranslation),
         child: child,
       ),
+    );
+  }
+
+  Widget _buildDetailsHeaderActions(
+    BuildContext context,
+    MultimediaItem item, {
+    required bool isFavorite,
+    required bool isBookmarked,
+    required dynamic libraryNotifier,
+    required Color foregroundColor,
+    Color? fallbackColor,
+  }) {
+    const favoriteRed = Color(0xFFFF3B30);
+    final colors = Theme.of(context).colorScheme;
+    final commentTarget = animeWitcherAnimeCommentTarget(item);
+
+    return AppleLiquidGlassActionGroup(
+      height: 46,
+      fallbackColor: fallbackColor,
+      children: [
+        if (commentTarget != null)
+          AppleLiquidGlassToolbarButton(
+            tooltip: appText(
+              context,
+              english: 'Comments',
+              arabic: 'التعليقات',
+            ),
+            icon: Icons.chat_bubble_outline_rounded,
+            color: foregroundColor,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => AnimeWitcherCommentsScreen(
+                    target: commentTarget,
+                  ),
+                ),
+              );
+            },
+          ),
+        AppleLiquidGlassToolbarButton(
+          tooltip: isFavorite
+              ? appText(
+                  context,
+                  english: 'Remove favorite',
+                  arabic: 'إزالة من المفضلة',
+                )
+              : appText(
+                  context,
+                  english: 'Add to favorites',
+                  arabic: 'إضافة إلى المفضلة',
+                ),
+          icon: isFavorite
+              ? Icons.favorite_rounded
+              : Icons.favorite_border_rounded,
+          color: isFavorite ? favoriteRed : foregroundColor,
+          onPressed: () => libraryNotifier.setFavorite(item, !isFavorite),
+        ),
+        AppleLiquidGlassToolbarButton(
+          tooltip: appText(
+            context,
+            english: 'Choose list',
+            arabic: 'اختر قائمة',
+          ),
+          icon: isBookmarked
+              ? Icons.bookmark_rounded
+              : Icons.bookmark_border_rounded,
+          color: isBookmarked ? colors.primary : foregroundColor,
+          onPressed: () => _showLibraryCategoryPicker(context, item),
+        ),
+      ],
     );
   }
 
@@ -836,18 +907,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     ),
                   ),
                 ),
-                // Mobile: back/bookmark excluded from D-pad traversal.
-                // Users navigate back via hardware Back key on TV remotes.
+                // Native Apple Liquid Glass header controls on iOS 26+.
+                leadingWidth: 64,
                 leading: _withDetailsHeaderPullReaction(
                   Focus(
                     descendantsAreTraversable: false,
-                    child: CustomButton(
-                      shape: const CircleBorder(),
-                      backgroundColor: Colors.black45,
-                      onPressed: () => context.pop(),
-                      child: const Icon(
-                        Icons.arrow_back_rounded,
-                        color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: AppleLiquidGlassBackButton(
+                        size: 46,
+                        foregroundColor: Colors.white,
+                        fallbackColor: Colors.black45,
+                        onPressed: () => context.pop(),
                       ),
                     ),
                   ),
@@ -856,80 +927,20 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   _withDetailsHeaderPullReaction(
                     Focus(
                       descendantsAreTraversable: false,
-                      child: IconButton(
-                        tooltip: isFavorite
-                            ? appText(context, english: 'Remove favorite', arabic: 'إزالة من المفضلة')
-                            : appText(context, english: 'Add to favorites', arabic: 'إضافة إلى المفضلة'),
-                        icon: Icon(
-                          isFavorite
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_border_rounded,
-                          color: isFavorite
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.white,
-                        ),
-                        onPressed: () => libraryNotifier.setFavorite(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _buildDetailsHeaderActions(
+                          context,
                           item,
-                          !isFavorite,
-                        ),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.black45,
+                          isFavorite: isFavorite,
+                          isBookmarked: isBookmarked,
+                          libraryNotifier: libraryNotifier,
                           foregroundColor: Colors.white,
+                          fallbackColor: Colors.black45,
                         ),
                       ),
                     ),
                   ),
-                  if (isAnimeWitcherCommentItem(item)) ...[
-                    const SizedBox(width: 6),
-                    _withDetailsHeaderPullReaction(
-                      Focus(
-                        descendantsAreTraversable: false,
-                        child: IconButton(
-                          tooltip: appText(context, english: 'Comments', arabic: 'التعليقات'),
-                          icon: const Icon(Icons.chat_bubble_outline_rounded),
-                          onPressed: () {
-                            final target = animeWitcherAnimeCommentTarget(item);
-                            if (target == null) return;
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => AnimeWitcherCommentsScreen(
-                                  target: target,
-                                ),
-                              ),
-                            );
-                          },
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.black45,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 6),
-                  _withDetailsHeaderPullReaction(
-                    Focus(
-                      descendantsAreTraversable: false,
-                      child: IconButton(
-                        tooltip: appText(context, english: 'Choose list', arabic: 'اختر قائمة'),
-                        icon: Icon(
-                          isBookmarked
-                              ? Icons.bookmark_rounded
-                              : Icons.bookmark_border_rounded,
-                          color: isBookmarked
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.white,
-                        ),
-                        onPressed: () =>
-                            _showLibraryCategoryPicker(context, item),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.black45,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                 ],
               ),
             ),
@@ -1297,73 +1308,29 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
-            // Back button — D-pad reachable (Up from Play)
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: () => context.pop(),
-              style: IconButton.styleFrom(
-                backgroundColor: isDark ? Colors.black45 : Colors.white54,
+            leadingWidth: 64,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: AppleLiquidGlassBackButton(
+                size: 46,
                 foregroundColor: textColor,
+                fallbackColor: isDark ? Colors.black45 : Colors.white54,
+                onPressed: () => context.pop(),
               ),
             ),
             actions: [
-              IconButton(
-                tooltip: isFavorite
-                    ? appText(context, english: 'Remove favorite', arabic: 'إزالة من المفضلة')
-                    : appText(context, english: 'Add to favorites', arabic: 'إضافة إلى المفضلة'),
-                icon: Icon(
-                  isFavorite
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  color: isFavorite
-                      ? Theme.of(context).colorScheme.primary
-                      : textColor,
-                ),
-                onPressed: () => libraryNotifier.setFavorite(item, !isFavorite),
-                style: IconButton.styleFrom(
-                  backgroundColor: isDark ? Colors.black45 : Colors.white54,
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _buildDetailsHeaderActions(
+                  context,
+                  item,
+                  isFavorite: isFavorite,
+                  isBookmarked: isBookmarked,
+                  libraryNotifier: libraryNotifier,
                   foregroundColor: textColor,
+                  fallbackColor: isDark ? Colors.black45 : Colors.white54,
                 ),
               ),
-              if (isAnimeWitcherCommentItem(item)) ...[
-                const SizedBox(width: 6),
-                IconButton(
-                  tooltip: appText(context, english: 'Comments', arabic: 'التعليقات'),
-                  icon: const Icon(Icons.chat_bubble_outline_rounded),
-                  onPressed: () {
-                    final target = animeWitcherAnimeCommentTarget(item);
-                    if (target == null) return;
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => AnimeWitcherCommentsScreen(target: target),
-                      ),
-                    );
-                  },
-                  style: IconButton.styleFrom(
-                    backgroundColor: isDark ? Colors.black45 : Colors.white54,
-                    foregroundColor: textColor,
-                  ),
-                ),
-              ],
-              const SizedBox(width: 6),
-              // Primary list selector — D-pad reachable
-              IconButton(
-                tooltip: appText(context, english: 'Choose list', arabic: 'اختر قائمة'),
-                icon: Icon(
-                  isBookmarked
-                      ? Icons.bookmark_rounded
-                      : Icons.bookmark_border_rounded,
-                  color: isBookmarked
-                      ? Theme.of(context).colorScheme.primary
-                      : textColor,
-                ),
-                onPressed: () => _showLibraryCategoryPicker(context, item),
-                style: IconButton.styleFrom(
-                  backgroundColor: isDark ? Colors.black45 : Colors.white54,
-                  foregroundColor: textColor,
-                ),
-              ),
-              const SizedBox(width: 8),
             ],
           ),
         ),

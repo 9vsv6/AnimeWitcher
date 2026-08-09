@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
@@ -87,8 +88,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
                 child: Text(isArabic ? 'المواسم' : 'Seasons'),
               ),
             ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
+            leading: AppleLiquidGlassBackButton(
               onPressed: () => Navigator.of(context).pop(),
             ),
             elevation: 0,
@@ -427,8 +427,7 @@ class _SeasonResultsScreen extends StatelessWidget {
                 child: Text(season),
               ),
             ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
+            leading: AppleLiquidGlassBackButton(
               onPressed: () => Navigator.of(context).pop(),
             ),
             elevation: 0,
