@@ -846,19 +846,23 @@ class DetailsController extends _$DetailsController {
   }) {
     if (episodes == null || episodes.isEmpty) {
       state = state.copyWith(
-        isMovie: contextItem.contentType == MultimediaContentType.movie,
+        isMovie:
+            contextItem.contentType == MultimediaContentType.movie ||
+            contextItem.contentType == MultimediaContentType.livestream,
         seasonMap: {},
       );
       return episodes;
     }
 
-    bool isMovie =
+    final isMovie =
         contextItem.contentType == MultimediaContentType.movie ||
         contextItem.contentType == MultimediaContentType.livestream;
 
-    if (!isMovie && episodes.length == 1) {
-      isMovie = true;
-    }
+    // Episode count must not decide the page layout. A one-episode anime/OVA/
+    // special is still episodic content and should keep the same Details /
+    // Episodes UI as every other anime. Reclassifying it as a movie only after
+    // the episodes request finishes caused the mobile page to visibly switch
+    // layouts for a fraction of a second while loading.
 
     if (isMovie) {
       state = state.copyWith(

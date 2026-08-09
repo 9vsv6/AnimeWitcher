@@ -698,8 +698,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   bool _isMovieType(dynamic raw) {
-    final value = _text(raw).toLowerCase();
+    final value = _text(raw).trim().toLowerCase();
     return value.contains('فيلم') ||
+        value.contains('فلم') ||
         value == 'movie' ||
         value == 'film' ||
         value.contains('movie');
