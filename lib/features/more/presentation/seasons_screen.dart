@@ -288,6 +288,7 @@ class _OtherSeasonsList extends StatelessWidget {
     };
 
     return ListView.separated(
+      key: const PageStorageKey<String>('other-seasons'),
       padding: const EdgeInsets.only(bottom: 110),
       itemCount: years.length,
       separatorBuilder: (_, _) => Divider(
@@ -417,7 +418,11 @@ class _SeasonGrid extends StatefulWidget {
   State<_SeasonGrid> createState() => _SeasonGridState();
 }
 
-class _SeasonGridState extends State<_SeasonGrid> {
+class _SeasonGridState extends State<_SeasonGrid>
+  @override
+  bool get wantKeepAlive => true;
+
+    with AutomaticKeepAliveClientMixin<_SeasonGrid> {
   final ScrollController _controller = ScrollController();
   final List<MultimediaItem> _items = <MultimediaItem>[];
   final Set<String> _seen = <String>{};
@@ -497,6 +502,7 @@ class _SeasonGridState extends State<_SeasonGrid> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (_items.isEmpty && _loading) {
       return const Center(child: CircularProgressIndicator());
     }
