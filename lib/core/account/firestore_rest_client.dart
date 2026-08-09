@@ -242,6 +242,145 @@ class FirestoreRestClient {
     }
   }
 
+  Future<List<FirestoreDocument>> queryPublishedComments(
+    String collectionPath, {
+    int limit = 50,
+  }) async {
+    final normalized = collectionPath.replaceFirst(RegExp(r'/+$'), '');
+    final segments = normalized.split('/').where((segment) => segment.isNotEmpty).toList();
+    if (segments.isEmpty) return const <FirestoreDocument>[];
+    final collectionId = segments.removeLast();
+    final parentPath = segments.join('/');
+    final endpoint = parentPath.isEmpty
+        ? '$_documentsBase:runQuery'
+        : '$_documentsBase/${_encodedPath(parentPath)}:runQuery';
+    try {
+      final response = await _dio.post<dynamic>(
+        endpoint,
+        data: <String, dynamic>{
+          'structuredQuery': <String, dynamic>{
+            'from': <Map<String, dynamic>>[
+              <String, dynamic>{'collectionId': collectionId},
+            ],
+            'where': <String, dynamic>{
+              'fieldFilter': <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': 'published'},
+                'op': 'EQUAL',
+                'value': FirestoreValueCodec.encode(true),
+              },
+            },
+            'orderBy': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': 'date'},
+                'direction': 'DESCENDING',
+              },
+            ],
+            'limit': limit.clamp(1, 100),
+          },
+        },
+        options: _publicOptions(),
+      );
+      return _decodeRunQueryDocuments(response.data);
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  Future<List<FirestoreDocument>> queryCommentsByUserInCollection({
+    required String collectionPath,
+    required String userId,
+    required String idToken,
+    int limit = 20,
+  }) async {
+    final normalized = collectionPath.replaceFirst(RegExp(r'/+$'), '');
+    final segments = normalized.split('/').where((segment) => segment.isNotEmpty).toList();
+    if (segments.isEmpty) return const <FirestoreDocument>[];
+    final collectionId = segments.removeLast();
+    final parentPath = segments.join('/');
+    final endpoint = parentPath.isEmpty
+        ? '$_documentsBase:runQuery'
+        : '$_documentsBase/${_encodedPath(parentPath)}:runQuery';
+    try {
+      final response = await _dio.post<dynamic>(
+        endpoint,
+        data: <String, dynamic>{
+          'structuredQuery': <String, dynamic>{
+            'from': <Map<String, dynamic>>[
+              <String, dynamic>{'collectionId': collectionId},
+            ],
+            'where': <String, dynamic>{
+              'fieldFilter': <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': 'user_id'},
+                'op': 'EQUAL',
+                'value': FirestoreValueCodec.encode(userId),
+              },
+            },
+            'limit': limit.clamp(1, 100),
+          },
+        },
+        options: _options(idToken),
+      );
+      return _decodeRunQueryDocuments(response.data);
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  Future<FirestoreDocument?> latestCommentByUser({
+    required String userId,
+    required String idToken,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        '$_documentsBase:runQuery',
+        data: <String, dynamic>{
+          'structuredQuery': <String, dynamic>{
+            'from': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'collectionId': 'comments',
+                'allDescendants': true,
+              },
+            ],
+            'where': <String, dynamic>{
+              'fieldFilter': <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': 'user_id'},
+                'op': 'EQUAL',
+                'value': FirestoreValueCodec.encode(userId),
+              },
+            },
+            'orderBy': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': 'date'},
+                'direction': 'DESCENDING',
+              },
+            ],
+            'limit': 1,
+          },
+        },
+        options: _options(idToken),
+      );
+      final documents = _decodeRunQueryDocuments(response.data);
+      return documents.isEmpty ? null : documents.first;
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
+  Future<FirestoreDocument> createDocument(
+    String collectionPath,
+    Map<String, dynamic> fields,
+    String idToken,
+  ) {
+    final normalized = collectionPath.replaceFirst(RegExp(r'/+$'), '');
+    final documentId = _randomFirestoreDocumentId();
+    return setDocument(
+      '$normalized/$documentId',
+      fields,
+      idToken,
+      merge: false,
+    );
+  }
+
   Future<FirestoreDocument> setDocument(
     String path,
     Map<String, dynamic> fields,
@@ -458,6 +597,19 @@ class FirestoreRestClient {
     }
   }
 
+  Options _publicOptions() {
+    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+      throw const AnimeWitcherAccountException(
+        'not-configured',
+        'AnimeWitcher account services are not configured.',
+      );
+    }
+    return Options(
+      contentType: Headers.jsonContentType,
+      listFormat: ListFormat.multi,
+    );
+  }
+
   Options _options(String idToken) {
     if (!AnimeWitcherAccountConfig.firebaseConfigured) {
       throw const AnimeWitcherAccountException(
@@ -571,6 +723,17 @@ class FirestoreRestClient {
     final match = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(raw?.toString() ?? '');
     if (match == null) return 0;
     return double.tryParse(match.group(0)!.replaceAll(',', '.'))?.round() ?? 0;
+  }
+
+  List<FirestoreDocument> _decodeRunQueryDocuments(dynamic raw) {
+    if (raw is! List) return const <FirestoreDocument>[];
+    final output = <FirestoreDocument>[];
+    for (final entry in raw) {
+      final result = _map(entry);
+      final document = _decodeDocument(result['document']);
+      if (document != null) output.add(document);
+    }
+    return output;
   }
 
   FirestoreDocument? _decodeDocument(dynamic raw) {

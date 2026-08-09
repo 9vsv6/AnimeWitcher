@@ -10,6 +10,7 @@ import '../storage/secure_token_storage.dart';
 import '../storage/storage_service.dart';
 import 'animewitcher_account_config.dart';
 import 'animewitcher_account_models.dart';
+import 'animewitcher_comment_models.dart';
 import 'animewitcher_sync_conflict.dart';
 import 'animewitcher_sync_ids.dart';
 import 'firebase_auth_rest_client.dart';
@@ -296,6 +297,148 @@ class AnimeWitcherAccountService {
       }
     }
     return snapshot;
+  }
+
+  Future<List<AnimeWitcherComment>> loadComments(
+    AnimeWitcherCommentTarget target, {
+    int limit = 50,
+  }) async {
+    final documents = await _firestore.queryPublishedComments(
+      target.collectionPath,
+      limit: limit,
+    );
+    return documents
+        .map(AnimeWitcherComment.fromDocument)
+        .where((comment) => comment.text.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<void> publishComment(
+    AnimeWitcherCommentTarget target,
+    String rawComment, {
+    bool spoiler = false,
+  }) async {
+    final comment = rawComment.trim();
+    if (comment.isEmpty) {
+      throw const AnimeWitcherAccountException(
+        'comment-empty',
+        'Enter a comment before publishing.',
+      );
+    }
+    if (comment.length > 500) {
+      throw const AnimeWitcherAccountException(
+        'comment-too-long',
+        'Comments can contain at most 500 characters.',
+      );
+    }
+
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher before publishing comments.',
+      );
+    }
+
+    await _authenticated((token) async {
+      final sourceDocument = await _firestore.getDocument(
+        target.sourceDocumentPath,
+        token,
+      );
+      if (sourceDocument?.fields['comments_closed'] == true) {
+        throw const AnimeWitcherAccountException(
+          'comments-closed',
+          'Comments are disabled for this item.',
+        );
+      }
+
+      final userDocument = await _firestore.getDocument(
+        'users/${profile.documentId}',
+        token,
+      );
+      if (userDocument == null) {
+        throw const AnimeWitcherAccountException(
+          'profile-not-found',
+          'The AnimeWitcher profile could not be found.',
+        );
+      }
+      if (userDocument.fields['banned'] == true) {
+        throw const AnimeWitcherAccountException(
+          'comment-banned',
+          'This account is blocked from commenting.',
+        );
+      }
+
+      final registrationDate = _dateValue(
+        userDocument.fields['registration_date'],
+      );
+      if (registrationDate != null &&
+          DateTime.now().toUtc().difference(registrationDate.toUtc()) <
+              const Duration(days: 7)) {
+        throw const AnimeWitcherAccountException(
+          'comment-account-too-new',
+          'The account must be at least seven days old before commenting.',
+        );
+      }
+
+      var commentsLimit = 1;
+      final constants = await _firestore.getDocument('Settings/constants', token);
+      final commentsSettingsRaw = constants?.fields['comments'];
+      if (commentsSettingsRaw is Map) {
+        final commentsSettings = commentsSettingsRaw.map<String, dynamic>(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+        if (commentsSettings.containsKey('limit')) {
+          commentsLimit = _intValue(commentsSettings['limit']);
+        }
+      }
+      if (commentsLimit <= 0) {
+        throw const AnimeWitcherAccountException(
+          'comment-limit',
+          'Comments are not available for this item.',
+        );
+      }
+      final ownComments = await _firestore.queryCommentsByUserInCollection(
+        collectionPath: target.collectionPath,
+        userId: profile.documentId,
+        idToken: token,
+        limit: commentsLimit,
+      );
+      if (ownComments.length >= commentsLimit) {
+        throw const AnimeWitcherAccountException(
+          'comment-limit',
+          'You reached the maximum number of comments for this item.',
+        );
+      }
+
+      final latestComment = await _firestore.latestCommentByUser(
+        userId: profile.documentId,
+        idToken: token,
+      );
+      final latestDate = _dateValue(latestComment?.fields['date']);
+      if (latestDate != null) {
+        final elapsed = DateTime.now().toUtc().difference(latestDate.toUtc());
+        if (!elapsed.isNegative && elapsed < const Duration(minutes: 1)) {
+          throw const AnimeWitcherAccountException(
+            'comment-cooldown',
+            'Wait a moment before publishing another comment.',
+          );
+        }
+      }
+
+      await _firestore.createDocument(
+        target.collectionPath,
+        <String, dynamic>{
+          'comment': comment,
+          'likes': 0,
+          'replies': 0,
+          'user_id': profile.documentId,
+          ...target.publishFields,
+          if (spoiler) 'spoiler': true,
+        },
+        token,
+      );
+    });
   }
 
   Future<void> syncAll() {

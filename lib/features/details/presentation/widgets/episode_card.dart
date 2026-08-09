@@ -8,6 +8,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
 import 'package:skystream/core/account/account_providers.dart';
+import 'package:skystream/core/account/animewitcher_comment_models.dart';
+import 'package:skystream/features/comments/presentation/animewitcher_comments_screen.dart';
 import 'package:skystream/core/storage/history_repository.dart';
 import 'package:skystream/core/storage/episode_watch_repository.dart';
 import 'package:skystream/core/services/download_service.dart';
@@ -425,7 +427,7 @@ class EpisodeCard extends HookConsumerWidget {
     FocusNode focusNode,
     FocusNode bodyFocusNode,
   ) {
-    final raw = _buildRawActionButton(
+    final rawDownload = _buildRawActionButton(
       context,
       ref,
       downloadedFile,
@@ -434,20 +436,54 @@ class EpisodeCard extends HookConsumerWidget {
       downloadProgressData,
       details,
     );
-    if (raw == null) return const SizedBox.shrink();
+    if (rawDownload == null) return const SizedBox.shrink();
 
+    final Widget downloadAction;
     // On desktop/TV the download icon stays visible for mouse clicks but
     // is NOT a separate D-pad focus target. Downloads are triggered via
     // Menu key or long-press OK (handled in the outer Focus.onKeyEvent).
-    // This keeps D-pad Right → next episode card in the grid.
     if (context.isDesktop) {
-      return ExcludeFocus(child: raw);
+      downloadAction = ExcludeFocus(child: rawDownload);
+    } else {
+      downloadAction = _FocusableActionWrapper(
+        focusNode: focusNode,
+        bodyFocusNode: bodyFocusNode,
+        child: rawDownload,
+      );
     }
 
-    return _FocusableActionWrapper(
-      focusNode: focusNode,
-      bodyFocusNode: bodyFocusNode,
-      child: raw,
+    final commentsTarget = isAnimeWitcherCommentItem(parentItem)
+        ? animeWitcherEpisodeCommentTarget(parentItem, episode)
+        : null;
+    if (commentsTarget == null) return downloadAction;
+
+    final commentsButton = IconButton(
+      tooltip: Localizations.localeOf(context).languageCode.toLowerCase() == 'ar'
+          ? 'تعليقات الحلقة'
+          : 'Episode comments',
+      icon: Icon(
+        Icons.chat_bubble_outline_rounded,
+        size: 27,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => AnimeWitcherCommentsScreen(target: commentsTarget),
+          ),
+        );
+      },
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        downloadAction,
+        const SizedBox(height: 2),
+        ExcludeFocus(child: commentsButton),
+      ],
     );
   }
 

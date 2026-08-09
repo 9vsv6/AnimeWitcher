@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/account/animewitcher_comment_models.dart';
+import '../../comments/presentation/animewitcher_comments_screen.dart';
 import '../../../core/utils/image_fallbacks.dart';
 import 'details_item_merge.dart';
 
@@ -877,6 +879,33 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       ),
                     ),
                   ),
+                  if (isAnimeWitcherCommentItem(item)) ...[
+                    const SizedBox(width: 6),
+                    _withDetailsHeaderPullReaction(
+                      Focus(
+                        descendantsAreTraversable: false,
+                        child: IconButton(
+                          tooltip: appText(context, english: 'Comments', arabic: 'التعليقات'),
+                          icon: const Icon(Icons.chat_bubble_outline_rounded),
+                          onPressed: () {
+                            final target = animeWitcherAnimeCommentTarget(item);
+                            if (target == null) return;
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => AnimeWitcherCommentsScreen(
+                                  target: target,
+                                ),
+                              ),
+                            );
+                          },
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.black45,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 6),
                   _withDetailsHeaderPullReaction(
                     Focus(
@@ -1296,6 +1325,26 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   foregroundColor: textColor,
                 ),
               ),
+              if (isAnimeWitcherCommentItem(item)) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: appText(context, english: 'Comments', arabic: 'التعليقات'),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded),
+                  onPressed: () {
+                    final target = animeWitcherAnimeCommentTarget(item);
+                    if (target == null) return;
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => AnimeWitcherCommentsScreen(target: target),
+                      ),
+                    );
+                  },
+                  style: IconButton.styleFrom(
+                    backgroundColor: isDark ? Colors.black45 : Colors.white54,
+                    foregroundColor: textColor,
+                  ),
+                ),
+              ],
               const SizedBox(width: 6),
               // Primary list selector — D-pad reachable
               IconButton(

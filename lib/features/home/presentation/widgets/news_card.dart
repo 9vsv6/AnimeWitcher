@@ -2,6 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/account/animewitcher_comment_models.dart';
+import '../../../comments/presentation/animewitcher_comments_screen.dart';
 
 class NewsCard extends StatelessWidget {
   const NewsCard({
@@ -68,12 +70,28 @@ class NewsCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (item.hasAnimeLink)
+                          if (item.hasAnimeLink) ...[
                             _NewsActionIcon(
                               icon: Icons.link_rounded,
                               onTap: onAnimeTap,
                               size: compact ? 20 : 28,
                             ),
+                            SizedBox(width: compact ? 7 : 10),
+                          ],
+                          _NewsActionIcon(
+                            icon: Icons.chat_bubble_outline_rounded,
+                            onTap: () {
+                              final target = animeWitcherNewsCommentTarget(item);
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => AnimeWitcherCommentsScreen(
+                                    target: target,
+                                  ),
+                                ),
+                              );
+                            },
+                            size: compact ? 20 : 28,
+                          ),
                         ],
                       ),
                     ),
