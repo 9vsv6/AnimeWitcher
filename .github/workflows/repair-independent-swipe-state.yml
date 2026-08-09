@@ -1,0 +1,59 @@
+name: Repair independent swipe state
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/repair-independent-swipe-state.yml'
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Repair season keep-alive declaration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('lib/features/more/presentation/seasons_screen.dart')
+          t = p.read_text(encoding='utf-8')
+          bad = '''class _SeasonGridState extends State<_SeasonGrid>
+            @override
+            bool get wantKeepAlive => true;
+
+              with AutomaticKeepAliveClientMixin<_SeasonGrid> {'''
+          good = '''class _SeasonGridState extends State<_SeasonGrid>
+              with AutomaticKeepAliveClientMixin<_SeasonGrid> {
+            @override
+            bool get wantKeepAlive => true;
+          '''
+          if bad not in t:
+              bad = '''class _SeasonGridState extends State<_SeasonGrid>
+  @override
+  bool get wantKeepAlive => true;
+
+    with AutomaticKeepAliveClientMixin<_SeasonGrid> {'''
+              good = '''class _SeasonGridState extends State<_SeasonGrid>
+    with AutomaticKeepAliveClientMixin<_SeasonGrid> {
+  @override
+  bool get wantKeepAlive => true;
+'''
+          if bad not in t:
+              raise SystemExit('malformed keep-alive declaration not found')
+          t = t.replace(bad, good, 1)
+          if 'super.build(context);' not in t[t.index('class _SeasonGridState'):]:
+              raise SystemExit('keep-alive build hook missing')
+          p.write_text(t, encoding='utf-8')
+          PY
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/repair-independent-swipe-state.yml
+          git add lib/features/more/presentation/seasons_screen.dart .github/workflows/repair-independent-swipe-state.yml
+          git commit -m "Repair independent season page state"
+          git push origin main
