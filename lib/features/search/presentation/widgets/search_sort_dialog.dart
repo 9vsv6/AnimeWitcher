@@ -1,6 +1,6 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+
+import '../../../../shared/widgets/apple_liquid_glass.dart';
 
 import '../../../../core/utils/localized_text.dart';
 
@@ -80,139 +80,136 @@ class _SearchSortDialogState extends State<SearchSortDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final radius = BorderRadius.circular(30);
 
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-      child: Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: 520),
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor.withValues(alpha: 0.96),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: theme.dividerColor.withValues(alpha: 0.5),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
-              ),
-            ],
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 56),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 620),
+        child: AppleLiquidGlassSurface(
+          borderRadius: radius,
+          style: 'regular',
+          interactive: true,
+          fallbackColor: colors.surfaceContainerHigh.withValues(alpha: 0.96),
+          fallbackBorder: BorderSide(
+            color: colors.outlineVariant.withValues(alpha: 0.34),
           ),
-          clipBehavior: Clip.antiAlias,
           child: Material(
             color: Colors.transparent,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.sort_rounded,
-                        color: colors.primary,
-                        size: 27,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          appText(
+            child: Directionality(
+              textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+                    child: Row(
+                      children: [
+                        Icon(Icons.sort_rounded, color: colors.primary, size: 28),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            appText(
+                              context,
+                              english: 'Sort by',
+                              arabic: 'الترتيب حسب',
+                            ),
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: appText(
                             context,
-                            english: 'Sort by',
-                            arabic: 'الترتيب حسب',
+                            english: 'Close',
+                            arabic: 'إغلاق',
                           ),
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: appText(
-                          context,
-                          english: 'Close',
-                          arabic: 'إغلاق',
-                        ),
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Divider(height: 1, color: theme.dividerColor),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 360),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: RadioGroup<SearchSortOption>(
-                      groupValue: _selected,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _selected = value);
-                        }
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (final option in SearchSortOption.values)
-                            RadioListTile<SearchSortOption>(
-                              value: option,
-                              title: Text(
-                                option.label(context),
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                  Divider(
+                    height: 1,
+                    color: colors.outlineVariant.withValues(alpha: 0.42),
+                  ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: RadioGroup<SearchSortOption>(
+                        groupValue: _selected,
+                        onChanged: (value) {
+                          if (value != null) setState(() => _selected = value);
+                        },
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final option in SearchSortOption.values)
+                              RadioListTile<SearchSortOption>(
+                                value: option,
+                                title: Text(
+                                  option.label(context),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                activeColor: colors.primary,
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
-                              activeColor: colors.primary,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Divider(height: 1, color: theme.dividerColor),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(
-                          appText(
-                            context,
-                            english: 'Cancel',
-                            arabic: 'إلغاء',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton(
-                        onPressed: () =>
-                            Navigator.of(context).pop(_selected.value),
-                        child: Text(
-                          appText(
-                            context,
-                            english: 'Apply',
-                            arabic: 'تطبيق',
-                          ),
-                        ),
-                      ),
-                    ],
+                  Divider(
+                    height: 1,
+                    color: colors.outlineVariant.withValues(alpha: 0.42),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text(
+                            appText(
+                              context,
+                              english: 'Cancel',
+                              arabic: 'إلغاء',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        FilledButton(
+                          onPressed: () =>
+                              Navigator.of(context).pop(_selected.value),
+                          child: Text(
+                            appText(
+                              context,
+                              english: 'Apply',
+                              arabic: 'تطبيق',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

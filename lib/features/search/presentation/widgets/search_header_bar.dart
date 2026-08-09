@@ -5,6 +5,7 @@ import '../search_provider.dart';
 import '../search_text_direction.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
+import '../../../../shared/widgets/apple_liquid_glass.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
 /// Redesigned static widescreen/desktop search control bar.
@@ -209,7 +210,8 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                 child: isCompact
                     ? const SizedBox.shrink()
                     : Row(
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisSize: MainAxisSize.max,
+                        mainAxisAlignment: MainAxisAlignment.end,
                         textDirection: TextDirection.ltr,
                         children: [
                           _SearchControlButton(
@@ -274,59 +276,74 @@ class _SearchControlButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final foreground = isActive ? colors.onPrimary : colors.onSurfaceVariant;
+    final foreground = isActive ? colors.primary : colors.onSurfaceVariant;
+    final radius = BorderRadius.circular(20);
 
     return Tooltip(
       message: tooltip,
-      child: CardsWrapper(
-        scaleFactor: 1.0,
-        onTap: () {
-          if (!isLoading) onTap();
-        },
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: isActive
-                ? colors.primary
-                : colors.surfaceContainerHighest.withValues(alpha: 0.25),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: colors.onSurface.withValues(alpha: 0.08),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isLoading)
-                const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Icon(icon, size: 18, color: foreground),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: foreground,
-                ),
-              ),
-              if (count > 0) ...[
-                const SizedBox(width: 6),
-                Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: foreground,
+      child: AppleLiquidGlassSurface(
+        borderRadius: radius,
+        style: 'regular',
+        interactive: true,
+        fallbackColor: colors.surfaceContainerHigh.withValues(alpha: 0.92),
+        fallbackBorder: BorderSide(
+          color: colors.outlineVariant.withValues(alpha: 0.30),
+        ),
+        child: CardsWrapper(
+          scaleFactor: 1.0,
+          onTap: () {
+            if (!isLoading) onTap();
+          },
+          borderRadius: radius,
+          child: SizedBox(
+            height: 38,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isLoading)
+                    SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: foreground,
+                      ),
+                    )
+                  else
+                    Icon(icon, size: 18, color: foreground),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: foreground,
+                    ),
                   ),
-                ),
-              ],
-            ],
+                  if (count > 0) ...[
+                    const SizedBox(width: 7),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: colors.onPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),

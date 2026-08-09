@@ -15,6 +15,7 @@ import 'widgets/search_header_bar.dart';
 import 'widgets/search_sort_dialog.dart';
 import 'widgets/bouncy_entry_animation.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/widgets/apple_liquid_glass.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
 class SearchScreen extends ConsumerStatefulWidget {
@@ -159,6 +160,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
       final selected = await showDialog<ProviderSearchFilters>(
         context: context,
+        useSafeArea: true,
+        barrierColor: Colors.black.withValues(alpha: 0.22),
         builder: (_) => ProviderSearchFilterDialog(
           options: options,
           initialValue: ref.read(searchProviderFiltersProvider),
@@ -177,6 +180,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Future<void> _showSearchSort() async {
     final selected = await showDialog<String>(
       context: context,
+      useSafeArea: true,
+      barrierColor: Colors.black.withValues(alpha: 0.22),
       builder: (_) => SearchSortDialog(
         initialValue: ref.read(searchProviderFiltersProvider).sort,
       ),
@@ -433,110 +438,115 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return _buildMobileLayout(context);
   }
 
+  Widget _buildMobileSearchActionGroup(BuildContext context) {
+    final theme = Theme.of(context);
+    final activeFilters = ref.watch(searchProviderFiltersProvider);
+    final isFilterActive = activeFilters.isNotEmpty;
+    final sortOption = SearchSortOption.fromValue(activeFilters.sort);
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: AppleLiquidGlassActionGroup(
+        height: 44,
+        children: [
+          AppleLiquidGlassToolbarButton(
+            width: 44,
+            icon: Icons.sort_rounded,
+            tooltip:
+                '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
+            color: activeFilters.sort.trim().isNotEmpty
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface,
+            onPressed: _showSearchSort,
+          ),
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: IconButton(
+              tooltip: appText(
+                context,
+                english: 'Filters',
+                arabic: 'الفلاتر',
+              ),
+              onPressed: _isLoadingProviderFilters ? null : _showSearchFilters,
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: isFilterActive
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurface,
+                padding: EdgeInsets.zero,
+              ),
+              icon: _isLoadingProviderFilters
+                  ? SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  : Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.tune_rounded, size: 20),
+                        if (isFilterActive)
+                          Positioned(
+                            right: -8,
+                            top: -8,
+                            child: Container(
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${activeFilters.count}',
+                                style: TextStyle(
+                                  color: theme.colorScheme.onPrimary,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMobileLayout(BuildContext context) {
     final searchResultsState = ref.watch(searchPagedResultsProvider);
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        actions: [
-          Padding(
-            padding: const EdgeInsetsDirectional.only(end: 12),
-            child: Builder(
-              builder: (context) {
-                final activeFilters = ref.watch(searchProviderFiltersProvider);
-                final isFilterActive = activeFilters.isNotEmpty;
-                final sortOption = SearchSortOption.fromValue(
-                  activeFilters.sort,
-                );
-
-                return Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip:
-                            '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: '
-                            '${sortOption.label(context)}',
-                        onPressed: _showSearchSort,
-                        style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary.withValues(
-                            alpha: 0.14,
-                          ),
-                          foregroundColor: theme.colorScheme.primary,
-                        ),
-                        icon: const Icon(Icons.sort_rounded, size: 20),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: appText(
-                          context,
-                          english: 'Filters',
-                          arabic: 'الفلاتر',
-                        ),
-                        onPressed: _isLoadingProviderFilters
-                            ? null
-                            : _showSearchFilters,
-                        style: IconButton.styleFrom(
-                          backgroundColor: isFilterActive
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.surfaceContainerHighest
-                                    .withValues(alpha: 0.3),
-                          foregroundColor: isFilterActive
-                              ? theme.colorScheme.onPrimary
-                              : theme.colorScheme.onSurface,
-                        ),
-                        icon: _isLoadingProviderFilters
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(Icons.tune_rounded, size: 20),
-                                  if (isFilterActive)
-                                    Positioned(
-                                      right: -7,
-                                      top: -7,
-                                      child: Container(
-                                        constraints: const BoxConstraints(
-                                          minWidth: 16,
-                                          minHeight: 16,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 4,
-                                        ),
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.onPrimary,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Text(
-                                          '${activeFilters.count}',
-                                          style: TextStyle(
-                                            color: theme.colorScheme.primary,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+        leadingWidth: isArabic ? 104 : null,
+        leading: isArabic
+            ? Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: _buildMobileSearchActionGroup(context),
+              )
+            : null,
+        actions: isArabic
+            ? null
+            : [
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: _buildMobileSearchActionGroup(context),
+                ),
+              ],
         title: GestureDetector(
           onTap: () => _focusNode.requestFocus(),
           behavior: HitTestBehavior.opaque,

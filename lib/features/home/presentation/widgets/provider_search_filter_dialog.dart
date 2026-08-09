@@ -1,6 +1,6 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+
+import '../../../../shared/widgets/apple_liquid_glass.dart';
 
 import '../../../../core/extensions/base_provider.dart';
 import '../../../../core/utils/layout_constants.dart';
@@ -98,31 +98,25 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
     final colors = theme.colorScheme;
     final height = MediaQuery.sizeOf(context).height * 0.82;
 
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-      child: Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(20),
-        child: Container(
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: SizedBox(
           width: double.infinity,
           height: height.clamp(520.0, 720.0).toDouble(),
-          constraints: const BoxConstraints(maxWidth: 560),
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: theme.dividerColor.withValues(alpha: 0.5),
+          child: AppleLiquidGlassSurface(
+            borderRadius: BorderRadius.circular(28),
+            style: 'regular',
+            interactive: true,
+            fallbackColor: colors.surfaceContainerHigh.withValues(alpha: 0.96),
+            fallbackBorder: BorderSide(
+              color: colors.outlineVariant.withValues(alpha: 0.34),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Material(
+            child: Material(
             color: Colors.transparent,
             child: Column(
               children: [
@@ -321,6 +315,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),
