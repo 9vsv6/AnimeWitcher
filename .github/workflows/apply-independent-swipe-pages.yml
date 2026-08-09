@@ -1,0 +1,131 @@
+name: Apply independent swipe pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-independent-swipe-pages.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Keep each swipe page independent
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          keepalive = '''class _KeepAlivePage extends StatefulWidget {
+            final Widget child;
+
+            const _KeepAlivePage({super.key, required this.child});
+
+            @override
+            State<_KeepAlivePage> createState() => _KeepAlivePageState();
+          }
+
+          class _KeepAlivePageState extends State<_KeepAlivePage>
+              with AutomaticKeepAliveClientMixin<_KeepAlivePage> {
+            @override
+            bool get wantKeepAlive => true;
+
+            @override
+            Widget build(BuildContext context) {
+              super.build(context);
+              return widget.child;
+            }
+          }
+
+          '''
+
+          p = Path('lib/features/more/presentation/seasons_screen.dart')
+          t = p.read_text(encoding='utf-8')
+          old = '''                  itemBuilder: (context, index) =>
+                              _tabBody(data, isArabic, index),
+          '''
+          new = '''                  itemBuilder: (context, index) => _KeepAlivePage(
+                            key: ValueKey('season-page-$index'),
+                            child: _tabBody(data, isArabic, index),
+                          ),
+          '''
+          if old not in t:
+              old = '''                  itemBuilder: (context, index) =>
+                      _tabBody(data, isArabic, index),
+          '''
+              new = '''                  itemBuilder: (context, index) => _KeepAlivePage(
+                    key: ValueKey('season-page-$index'),
+                    child: _tabBody(data, isArabic, index),
+                  ),
+          '''
+          if 'season-page-$index' not in t:
+              if old not in t:
+                  raise SystemExit('season page builder not found')
+              t = t.replace(old, new, 1)
+          if 'class _KeepAlivePage extends StatefulWidget' not in t:
+              marker = 'class _SeasonsBootstrap {'
+              if marker not in t:
+                  raise SystemExit('seasons bootstrap marker not found')
+              t = t.replace(marker, keepalive + marker, 1)
+          p.write_text(t, encoding='utf-8')
+
+          p = Path('lib/features/more/presentation/broadcast_schedule_screen.dart')
+          t = p.read_text(encoding='utf-8')
+          old = '''                  itemBuilder: (context, index) {
+                    final day = animeWitcherBroadcastDays[index];
+                    final items =
+                        schedule[day] ?? const <MultimediaItem>[];
+                    if (items.isEmpty) {
+                      return Center(
+                        child: Text(
+                          isArabic
+                              ? 'لا يوجد بث مجدول لهذا اليوم'
+                              : 'No broadcasts scheduled for this day',
+                        ),
+                      );
+                    }
+                    return _ScheduleGrid(items: items, day: day);
+                  },
+          '''
+          new = '''                  itemBuilder: (context, index) {
+                    final day = animeWitcherBroadcastDays[index];
+                    final items =
+                        schedule[day] ?? const <MultimediaItem>[];
+                    return _KeepAlivePage(
+                      key: ValueKey('schedule-page-$day'),
+                      child: items.isEmpty
+                          ? Center(
+                              child: Text(
+                                isArabic
+                                    ? 'لا يوجد بث مجدول لهذا اليوم'
+                                    : 'No broadcasts scheduled for this day',
+                              ),
+                            )
+                          : _ScheduleGrid(items: items, day: day),
+                    );
+                  },
+          '''
+          if 'schedule-page-$day' not in t:
+              if old not in t:
+                  raise SystemExit('schedule page builder not found')
+              t = t.replace(old, new, 1)
+          if 'class _KeepAlivePage extends StatefulWidget' not in t:
+              marker = 'class _DayTabs extends StatelessWidget {'
+              if marker not in t:
+                  raise SystemExit('day tabs marker not found')
+              t = t.replace(marker, keepalive + marker, 1)
+          p.write_text(t, encoding='utf-8')
+          PY
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/apply-independent-swipe-pages.yml
+          git add lib/features/more/presentation/seasons_screen.dart lib/features/more/presentation/broadcast_schedule_screen.dart .github/workflows/apply-independent-swipe-pages.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Keep season and schedule swipe pages independent"
+          git push origin main
