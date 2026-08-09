@@ -520,7 +520,8 @@ class FirestoreRestClient {
       final estimatedProgress = progress >= 100 ? 100.0 : progress + 0.5;
       position = ((duration * estimatedProgress) / 100)
           .round()
-          .clamp(0, duration);
+          .clamp(0, duration)
+          .toInt();
     }
 
     if (position == _intValue(fields['position']) &&
