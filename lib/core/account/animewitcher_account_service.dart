@@ -1288,7 +1288,8 @@ class AnimeWitcherAccountService {
       currentAccountUid: profile.uid,
     );
 
-    if (resolution == AnimeWitcherSyncResolution.uploadLocal) {
+    if (resolution == AnimeWitcherSyncResolution.uploadLocal &&
+        _hasMeaningfulPlayback(local)) {
       if (local != null) await _uploadHistoryEntry(local, profile);
       return;
     }
@@ -1556,7 +1557,8 @@ class AnimeWitcherAccountService {
         currentAccountUid: profile.uid,
       );
       if (local != null &&
-          resolution == AnimeWitcherSyncResolution.uploadLocal) {
+          resolution == AnimeWitcherSyncResolution.uploadLocal &&
+          _hasMeaningfulPlayback(local)) {
         await _uploadHistoryEntry(local, profile);
         continue;
       }
@@ -1629,8 +1631,30 @@ class AnimeWitcherAccountService {
         (episodeId == null
             ? null
             : AnimeWitcherSyncIds.episodeUrl(animeId, episodeId));
-    var position = _intValue(fields['position']);
-    if (position <= 0 && episodeId != null) {
+    Map<String, dynamic>? previousLocal;
+    for (final raw in _storage.getWatchHistory()) {
+      final localAnimeId = AnimeWitcherSyncIds.animeIdFromUrl(
+        (raw['url'] ?? '').toString(),
+      );
+      if (localAnimeId == animeId) {
+        previousLocal = raw;
+        break;
+      }
+    }
+    final sameEpisode = episodeUrl != null &&
+        _optionalString(previousLocal?['lastEpisodeUrl']) == episodeUrl;
+    final previousPosition =
+        sameEpisode ? _intValue(previousLocal?['position']) : 0;
+    final previousDuration =
+        sameEpisode ? _intValue(previousLocal?['duration']) : 0;
+
+    // AnimeWitcher v1.4.6 does not store a total duration in
+    // continue_watching. It stores the resume point as stop_time (milliseconds)
+    // in the episode's stop_times document and stores only an integer progress
+    // percentage in continue_watching. Prefer that authoritative stop_time over
+    // SkyStream's additive position field whenever it is available.
+    var position = 0;
+    if (episodeId != null) {
       final stop = await _authenticated(
         (token) => _firestore.getDocument(
           'users/${profile.documentId}/episodes_watched/$animeId/'
@@ -1640,10 +1664,27 @@ class AnimeWitcherAccountService {
       );
       position = _intValue(stop?.fields['stop_time']);
     }
-    var duration = _intValue(fields['duration']);
+    if (position <= 0) position = _intValue(fields['position']);
+
     final remoteProgress = _intValue(fields['progress']).clamp(0, 100);
+    var duration = _intValue(fields['duration']);
     if (duration <= 0 && position > 0 && remoteProgress > 0) {
       duration = ((position * 100) / remoteProgress).round();
+    }
+
+    // When the original app saved progress below 1%, its integer percentage is
+    // zero, so the server cannot reveal total duration. Keep a known local
+    // duration for the same episode instead of replacing it with 00:00.
+    if (duration <= 0 && previousDuration > 0) {
+      duration = previousDuration;
+    }
+    // If a stop_time lookup is temporarily unavailable but a known duration
+    // exists, reconstruct the watched position from AnimeWitcher's percentage.
+    if (position <= 0 && duration > 0 && remoteProgress > 0) {
+      position = ((duration * remoteProgress) / 100).round();
+    }
+    if (position <= 0 && remoteProgress == 0 && previousPosition > 0) {
+      position = previousPosition;
     }
     final syncedAt =
         remoteDate?.millisecondsSinceEpoch ??
@@ -1663,6 +1704,11 @@ class AnimeWitcherAccountService {
     if (episodeId != null) {
       _stopTimeCache['$animeId|$episodeId'] = position;
     }
+  }
+
+  bool _hasMeaningfulPlayback(Map<String, dynamic>? raw) {
+    if (raw == null) return false;
+    return _intValue(raw['position']) > 0 || _intValue(raw['duration']) > 0;
   }
 
   // -------------------------------------------------------------------------
