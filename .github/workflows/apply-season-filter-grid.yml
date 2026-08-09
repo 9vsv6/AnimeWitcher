@@ -1,0 +1,35 @@
+name: Apply season filter grid
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-season-filter-grid.yml'
+      - '.github/scripts/apply_season_filter_grid.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Apply season/year filter changes
+        run: python .github/scripts/apply_season_filter_grid.py
+      - name: Commit changes and remove one-off workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/core/extensions/base_provider.dart
+          git add lib/features/home/presentation/widgets/provider_search_filter_dialog.dart
+          git add lib/core/extensions/providers/animewitcher_native_provider.dart
+          git rm .github/workflows/apply-season-filter-grid.yml
+          git rm .github/scripts/apply_season_filter_grid.py
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Add AnimeWitcher season filters to year grid"
+          git push origin HEAD:main
