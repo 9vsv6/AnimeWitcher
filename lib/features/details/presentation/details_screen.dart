@@ -177,73 +177,61 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       ),
                     ),
                   ),
-                  for (final category in LibraryCategory.primaryValues)
+                  for (final category in LibraryCategory.primaryValues.where(
+                    (category) =>
+                        category != LibraryCategory.completed ||
+                        item.status == ShowStatus.completed,
+                  ))
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Opacity(
-                        opacity: category == LibraryCategory.completed &&
-                                item.status != ShowStatus.completed
-                            ? 0.42
-                            : 1,
-                        child: Material(
-                          color: currentCategory == category
-                              ? colors.primaryContainer.withValues(alpha: 0.70)
-                              : colors.surfaceContainerHighest.withValues(alpha: 0.46),
+                      child: Material(
+                        color: currentCategory == category
+                            ? colors.primaryContainer.withValues(alpha: 0.70)
+                            : colors.surfaceContainerHighest.withValues(alpha: 0.46),
+                        borderRadius: BorderRadius.circular(15),
+                        child: InkWell(
                           borderRadius: BorderRadius.circular(15),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(15),
-                            onTap: category == LibraryCategory.completed &&
-                                    item.status != ShowStatus.completed
-                                ? null
-                                : () => Navigator.of(sheetContext).pop(category),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 11,
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 38,
-                                    height: 38,
-                                    decoration: BoxDecoration(
-                                      color: currentCategory == category
-                                          ? colors.primary.withValues(alpha: 0.14)
-                                          : colors.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(11),
-                                    ),
-                                    child: Icon(
-                                      _libraryCategoryIcon(category),
-                                      size: 21,
-                                      color: currentCategory == category
-                                          ? colors.primary
-                                          : colors.onSurfaceVariant,
+                          onTap: () => Navigator.of(sheetContext).pop(category),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 11,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: currentCategory == category
+                                        ? colors.primary.withValues(alpha: 0.14)
+                                        : colors.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                  child: Icon(
+                                    _libraryCategoryIcon(category),
+                                    size: 21,
+                                    color: currentCategory == category
+                                        ? colors.primary
+                                        : colors.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _libraryCategoryLabel(sheetContext, category),
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      _libraryCategoryLabel(sheetContext, category),
-                                      style: theme.textTheme.bodyLarge?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
+                                ),
+                                if (currentCategory == category)
+                                  Icon(
+                                    Icons.check_rounded,
+                                    color: colors.primary,
+                                    size: 22,
                                   ),
-                                  if (category == LibraryCategory.completed &&
-                                      item.status != ShowStatus.completed)
-                                    Icon(
-                                      Icons.lock_outline_rounded,
-                                      color: colors.onSurfaceVariant,
-                                      size: 20,
-                                    )
-                                  else if (currentCategory == category)
-                                    Icon(
-                                      Icons.check_rounded,
-                                      color: colors.primary,
-                                      size: 22,
-                                    ),
-                                ],
-                              ),
+                              ],
                             ),
                           ),
                         ),

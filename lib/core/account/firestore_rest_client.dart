@@ -401,17 +401,30 @@ class FirestoreRestClient {
           'values': <Map<String, dynamic>>[FirestoreValueCodec.encode(value)],
         },
     };
-    final write = <String, dynamic>{
-      'update': <String, dynamic>{
-        'name': _documentResource(path),
-        'fields': FirestoreValueCodec.encodeFields(baseFields),
-      },
-      if (baseFields.isNotEmpty)
+    final Map<String, dynamic> write;
+    if (baseFields.isEmpty) {
+      // A transform-only write is the REST equivalent of
+      // DocumentReference.update(field, FieldValue.arrayUnion/arrayRemove).
+      // It changes only the requested array field and leaves every other
+      // Firestore field untouched.
+      write = <String, dynamic>{
+        'transform': <String, dynamic>{
+          'document': _documentResource(path),
+          'fieldTransforms': <Map<String, dynamic>>[transform],
+        },
+      };
+    } else {
+      write = <String, dynamic>{
+        'update': <String, dynamic>{
+          'name': _documentResource(path),
+          'fields': FirestoreValueCodec.encodeFields(baseFields),
+        },
         'updateMask': <String, dynamic>{
           'fieldPaths': baseFields.keys.toList(growable: false),
         },
-      'updateTransforms': <Map<String, dynamic>>[transform],
-    };
+        'updateTransforms': <Map<String, dynamic>>[transform],
+      };
+    }
     try {
       await _dio.post<dynamic>(
         '$_databaseBase/documents:commit',

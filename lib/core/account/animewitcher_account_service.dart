@@ -1160,27 +1160,45 @@ class AnimeWitcherAccountService {
     final values = Set<String>.from(await watchedEpisodeIds(mainUrl));
     if (watched) {
       values.add(episodeId);
+      await _authenticated(
+        (token) => _firestore.transformArrayField(
+          'users/${profile.documentId}/episodes_watched/$animeId',
+          idToken: token,
+          field: 'episodes_watched',
+          value: episodeId,
+          append: true,
+          baseFields: <String, dynamic>{
+            'user_id': profile.documentId,
+            'type': animeType,
+            'last_episode_watched_id': episodeId,
+          },
+        ),
+      );
     } else {
       values.remove(episodeId);
+      // AnimeWitcher v1.4.6 removes a single watched episode with only
+      // FieldValue.arrayRemove(episodeId). Do the REST equivalent here: no
+      // extra field updates are bundled into the unwatch write.
+      await _authenticated(
+        (token) => _firestore.transformArrayField(
+          'users/${profile.documentId}/episodes_watched/$animeId',
+          idToken: token,
+          field: 'episodes_watched',
+          value: episodeId,
+          append: false,
+        ),
+      );
     }
-    await _authenticated(
-      (token) => _firestore.transformArrayField(
-        'users/${profile.documentId}/episodes_watched/$animeId',
-        idToken: token,
-        field: 'episodes_watched',
-        value: episodeId,
-        append: watched,
-        baseFields: <String, dynamic>{
-          'user_id': profile.documentId,
-          'type': animeType,
-          if (!watched) 'all_eps_watched': false,
-          if (watched) 'last_episode_watched_id': episodeId,
-        },
-      ),
-    );
     if (!_isCurrentProfile(profile)) return;
-    if (!watched) _allEpisodesWatchedAnime.remove(animeId);
-    _watchedEpisodeCache[animeId] = values;
+    if (!watched) {
+      // Confirm the server mutation before dropping the pending operation.
+      final remoteValues = await watchedEpisodeIds(mainUrl, refresh: true);
+      if (!_isCurrentProfile(profile)) return;
+      _watchedEpisodeCache[animeId] = Set<String>.from(remoteValues);
+      _allEpisodesWatchedAnime.remove(animeId);
+    } else {
+      _watchedEpisodeCache[animeId] = values;
+    }
     _loadedWatchedAnime.add(animeId);
   }
 
