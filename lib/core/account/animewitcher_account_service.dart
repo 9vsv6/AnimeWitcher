@@ -1653,7 +1653,7 @@ class AnimeWitcherAccountService {
     // in the episode's stop_times document and stores only an integer progress
     // percentage in continue_watching. Prefer that authoritative stop_time over
     // SkyStream's additive position field whenever it is available.
-    var position = 0;
+    var stopTimePosition = 0;
     if (episodeId != null) {
       final stop = await _authenticated(
         (token) => _firestore.getDocument(
@@ -1662,14 +1662,18 @@ class AnimeWitcherAccountService {
           token,
         ),
       );
-      position = _intValue(stop?.fields['stop_time']);
+      stopTimePosition = _intValue(stop?.fields['stop_time']);
     }
+    var position = stopTimePosition;
     if (position <= 0) position = _intValue(fields['position']);
 
     final remoteProgress = _intValue(fields['progress']).clamp(0, 100);
     var duration = _intValue(fields['duration']);
-    if (duration <= 0 && position > 0 && remoteProgress > 0) {
-      duration = ((position * 100) / remoteProgress).round();
+    final durationBasis = stopTimePosition > 0 ? stopTimePosition : position;
+    if (duration <= 0 && durationBasis > 0 && remoteProgress > 0) {
+      // Approximate total duration exactly as requested:
+      // total = stop_time * 100 / watched percentage.
+      duration = ((durationBasis * 100) / remoteProgress).round();
     }
 
     // When the original app saved progress below 1%, its integer percentage is
