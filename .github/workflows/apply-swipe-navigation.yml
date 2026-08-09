@@ -99,9 +99,9 @@ jobs:
           )
           seasons = replace_once(
               seasons,
-              """Widget _tabBody(_SeasonsBootstrap data, bool isArabic) {
+              """  Widget _tabBody(_SeasonsBootstrap data, bool isArabic) {
             switch (_selectedTab) {""",
-              """Widget _tabBody(_SeasonsBootstrap data, bool isArabic, int index) {
+              """  Widget _tabBody(_SeasonsBootstrap data, bool isArabic, int index) {
             switch (index) {""",
               'seasons page body',
           )
@@ -157,69 +157,57 @@ jobs:
           )
           schedule = replace_once(
               schedule,
-              """          final schedule = snapshot.data!;
-                    final day = animeWitcherBroadcastDays[_selectedDay];
+              "onSelected: (value) => setState(() => _selectedDay = value),",
+              "onSelected: _selectDay,",
+              'schedule tab callback',
+          )
+          schedule = replace_once(
+              schedule,
+              """          final day = animeWitcherBroadcastDays[_selectedDay];
                     final items = schedule[day] ?? const <MultimediaItem>[];
-                    return Column(
-                      children: [
-                        _DayTabs(
-                          selectedIndex: _selectedDay,
-                          isArabic: isArabic,
-                          onSelected: (value) => setState(() => _selectedDay = value),
-                        ),
-                        Divider(height: 1, color: Theme.of(context).dividerColor),
-                        Expanded(
-                          child: items.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    isArabic
-                                        ? 'لا يوجد بث مجدول لهذا اليوم'
-                                        : 'No broadcasts scheduled for this day',
-                                  ),
-                                )
-                              : _ScheduleGrid(items: items, day: day),
-                        ),
-                      ],
-                    );
           """,
-              """          final schedule = snapshot.data!;
-                    return Column(
-                      children: [
-                        _DayTabs(
-                          selectedIndex: _selectedDay,
-                          isArabic: isArabic,
-                          onSelected: _selectDay,
+              "",
+              'schedule selected-day locals',
+          )
+          schedule = replace_once(
+              schedule,
+              """              Expanded(
+                        child: items.isEmpty
+                            ? Center(
+                                child: Text(
+                                  isArabic
+                                      ? 'لا يوجد بث مجدول لهذا اليوم'
+                                      : 'No broadcasts scheduled for this day',
+                                ),
+                              )
+                            : _ScheduleGrid(items: items, day: day),
+                      ),""",
+              """              Expanded(
+                        child: PageView.builder(
+                          controller: _pageController,
+                          itemCount: animeWitcherBroadcastDays.length,
+                          onPageChanged: (value) {
+                            if (value != _selectedDay) {
+                              setState(() => _selectedDay = value);
+                            }
+                          },
+                          itemBuilder: (context, index) {
+                            final day = animeWitcherBroadcastDays[index];
+                            final items =
+                                schedule[day] ?? const <MultimediaItem>[];
+                            if (items.isEmpty) {
+                              return Center(
+                                child: Text(
+                                  isArabic
+                                      ? 'لا يوجد بث مجدول لهذا اليوم'
+                                      : 'No broadcasts scheduled for this day',
+                                ),
+                              );
+                            }
+                            return _ScheduleGrid(items: items, day: day);
+                          },
                         ),
-                        Divider(height: 1, color: Theme.of(context).dividerColor),
-                        Expanded(
-                          child: PageView.builder(
-                            controller: _pageController,
-                            itemCount: animeWitcherBroadcastDays.length,
-                            onPageChanged: (value) {
-                              if (value != _selectedDay) {
-                                setState(() => _selectedDay = value);
-                              }
-                            },
-                            itemBuilder: (context, index) {
-                              final day = animeWitcherBroadcastDays[index];
-                              final items =
-                                  schedule[day] ?? const <MultimediaItem>[];
-                              if (items.isEmpty) {
-                                return Center(
-                                  child: Text(
-                                    isArabic
-                                        ? 'لا يوجد بث مجدول لهذا اليوم'
-                                        : 'No broadcasts scheduled for this day',
-                                  ),
-                                );
-                              }
-                              return _ScheduleGrid(items: items, day: day);
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-          """,
+                      ),""",
               'schedule page view',
           )
           schedule_path.write_text(schedule, encoding='utf-8')
