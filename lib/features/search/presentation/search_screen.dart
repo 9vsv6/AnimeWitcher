@@ -292,7 +292,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       if (selected == null || !mounted) return;
     }
 
-    _applySearchSort(selected);
+    final selectedValue = selected;
+    if (selectedValue == null || !mounted) return;
+    _applySearchSort(selectedValue);
   }
 
   void _resetResultsScrollPosition() {
