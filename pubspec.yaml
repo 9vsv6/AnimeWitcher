@@ -122,6 +122,12 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  config:
+    # Keep iOS plugin dependencies on CocoaPods. The current plugin set still
+    # contains packages without SwiftPM support, and the hybrid Xcode package
+    # graph can crash while resolving dependencies on CI.
+    enable-swift-package-manager: false
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
