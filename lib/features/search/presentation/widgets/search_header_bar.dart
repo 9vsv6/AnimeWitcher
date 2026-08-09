@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../search_provider.dart';
+import '../search_text_direction.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 
@@ -151,6 +152,11 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                         fontSize: 14,
                         color: theme.colorScheme.onSurface,
                       ),
+                      textDirection: searchTextDirection(
+                        value.text,
+                        fallback: Directionality.of(context),
+                      ),
+                      textAlign: TextAlign.start,
                       textAlignVertical: TextAlignVertical.center,
                       textInputAction: TextInputAction.search,
                       onChanged: widget.onChanged,

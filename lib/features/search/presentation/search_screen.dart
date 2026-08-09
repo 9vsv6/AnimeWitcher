@@ -8,6 +8,7 @@ import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../home/presentation/widgets/provider_search_filter_dialog.dart';
 import 'search_provider.dart';
+import 'search_text_direction.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
@@ -581,6 +582,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     fontSize: 14,
                     color: theme.colorScheme.onSurface,
                   ),
+                  textDirection: searchTextDirection(
+                    _controller.text,
+                    fallback: Directionality.of(context),
+                  ),
+                  textAlign: TextAlign.start,
                   textAlignVertical: TextAlignVertical.center,
                   textInputAction: TextInputAction.search,
                   onChanged: (val) {
