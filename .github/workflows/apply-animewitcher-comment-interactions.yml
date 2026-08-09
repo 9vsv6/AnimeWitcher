@@ -1,0 +1,21 @@
+name: Apply AnimeWitcher comment interactions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/apply-animewitcher-comment-interactions.yml
+      - .github/patch-parts/**
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply validated comment patch
+        run: python3 .github/patch-parts/apply.py
