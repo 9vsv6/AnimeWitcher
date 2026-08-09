@@ -206,19 +206,26 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
             resizeToAvoidBottomInset: false,
             extendBody: true,
             body: widget.navigationShell,
-            bottomNavigationBar: Padding(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                bottom: CustomBottomNavBar.bottomInsetFor(context),
-              ),
-              child: CustomBottomNavBar(
-                currentBranchIndex: widget.navigationShell.currentIndex,
-                destinations: taskbarDestinations,
-                onTap: (destination) =>
-                    _onItemTapped(destination.branchIndex, context),
-              ),
-            ),
+            bottomNavigationBar: CustomBottomNavBar.usesNativeAppleTabBar
+                ? CustomBottomNavBar(
+                    currentBranchIndex: widget.navigationShell.currentIndex,
+                    destinations: taskbarDestinations,
+                    onTap: (destination) =>
+                        _onItemTapped(destination.branchIndex, context),
+                  )
+                : Padding(
+                    padding: EdgeInsets.only(
+                      left: 24,
+                      right: 24,
+                      bottom: CustomBottomNavBar.bottomInsetFor(context),
+                    ),
+                    child: CustomBottomNavBar(
+                      currentBranchIndex: widget.navigationShell.currentIndex,
+                      destinations: taskbarDestinations,
+                      onTap: (destination) =>
+                          _onItemTapped(destination.branchIndex, context),
+                    ),
+                  ),
           ),
         );
       },

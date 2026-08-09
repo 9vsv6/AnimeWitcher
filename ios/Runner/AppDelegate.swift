@@ -51,6 +51,18 @@ import UserNotifications
         AppleSearchGlassActionsViewFactory(messenger: messenger),
         withId: "dev.akash.skystream/search_glass_actions"
       )
+      glassRegistrar.register(
+        AppleNativeTabBarViewFactory(messenger: messenger),
+        withId: "dev.akash.skystream/native_tab_bar"
+      )
+      glassRegistrar.register(
+        AppleNativeGlassButtonViewFactory(messenger: messenger),
+        withId: "dev.akash.skystream/native_glass_button"
+      )
+      glassRegistrar.register(
+        AppleNativeToolbarViewFactory(messenger: messenger),
+        withId: "dev.akash.skystream/native_toolbar"
+      )
     }
 
     let glassPresenter = FlutterMethodChannel(
@@ -227,6 +239,350 @@ import UserNotifications
 #endif
 
     downloadContinuedProcessingChannel = channel
+  }
+}
+
+private func skyStreamUIColor(_ value: Any?, fallback: UIColor = .label) -> UIColor {
+  guard let number = value as? NSNumber else { return fallback }
+  let argb = number.uint32Value
+  let alpha = CGFloat((argb >> 24) & 0xFF) / 255.0
+  let red = CGFloat((argb >> 16) & 0xFF) / 255.0
+  let green = CGFloat((argb >> 8) & 0xFF) / 255.0
+  let blue = CGFloat(argb & 0xFF) / 255.0
+  return UIColor(red: red, green: green, blue: blue, alpha: alpha)
+}
+
+private final class AppleNativeTabBarViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    AppleNativeTabBarPlatformView(
+      frame: frame,
+      viewId: viewId,
+      messenger: messenger,
+      arguments: args
+    )
+  }
+}
+
+private final class AppleNativeTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
+  private let rootView: UIView
+  private let tabBar = UITabBar()
+  private let channel: FlutterMethodChannel
+  private var itemIds: [String] = []
+
+  init(
+    frame: CGRect,
+    viewId: Int64,
+    messenger: FlutterBinaryMessenger,
+    arguments args: Any?
+  ) {
+    rootView = UIView(frame: frame)
+    channel = FlutterMethodChannel(
+      name: \"dev.akash.skystream/native_tab_bar/\\(viewId)\",
+      binaryMessenger: messenger
+    )
+    super.init()
+
+    rootView.backgroundColor = .clear
+    rootView.isOpaque = false
+
+    // Use Apple's actual tab bar. No custom background, blur, glass effect,
+    // UITabBarAppearance, or clipping is applied here. On iOS 26 the system
+    // itself provides the floating Liquid Glass appearance.
+    tabBar.translatesAutoresizingMaskIntoConstraints = false
+    tabBar.delegate = self
+    tabBar.isTranslucent = true
+    rootView.addSubview(tabBar)
+    NSLayoutConstraint.activate([
+      tabBar.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+      tabBar.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+      tabBar.topAnchor.constraint(equalTo: rootView.topAnchor),
+      tabBar.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+    ])
+
+    apply(arguments: args)
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(false)
+        return
+      }
+      switch call.method {
+      case \"update\":
+        self.apply(arguments: call.arguments)
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  deinit { channel.setMethodCallHandler(nil) }
+
+  func view() -> UIView { rootView }
+
+  private func apply(arguments: Any?) {
+    guard let values = arguments as? [String: Any] else { return }
+    let itemValues = values[\"items\"] as? [[String: Any]] ?? []
+    let selectedId = values[\"selectedId\"] as? String
+    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+
+    itemIds = itemValues.compactMap { $0[\"id\"] as? String }
+    let items: [UITabBarItem] = itemValues.enumerated().compactMap { index, item in
+      guard let id = item[\"id\"] as? String else { return nil }
+      let title = item[\"label\"] as? String
+      let symbol = item[\"symbol\"] as? String ?? \"circle\"
+      let selectedSymbol = item[\"selectedSymbol\"] as? String ?? symbol
+      let normalImage = UIImage(systemName: symbol, withConfiguration: symbolConfiguration)
+      let selectedImage = UIImage(systemName: selectedSymbol, withConfiguration: symbolConfiguration)
+      let barItem = UITabBarItem(title: title, image: normalImage, selectedImage: selectedImage)
+      barItem.tag = index
+      barItem.accessibilityIdentifier = id
+      return barItem
+    }
+
+    tabBar.items = items
+    tabBar.tintColor = skyStreamUIColor(values[\"tintColor\"], fallback: .systemBlue)
+    tabBar.unselectedItemTintColor = .secondaryLabel
+    if let selectedId, let selectedIndex = itemIds.firstIndex(of: selectedId),
+       selectedIndex < items.count {
+      tabBar.selectedItem = items[selectedIndex]
+    } else {
+      tabBar.selectedItem = items.first
+    }
+  }
+
+  func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+    let index = item.tag
+    guard index >= 0, index < itemIds.count else { return }
+    channel.invokeMethod(\"selected\", arguments: itemIds[index])
+  }
+}
+
+private final class AppleNativeGlassButtonViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    AppleNativeGlassButtonPlatformView(
+      frame: frame,
+      viewId: viewId,
+      messenger: messenger,
+      arguments: args
+    )
+  }
+}
+
+private final class AppleNativeGlassButtonPlatformView: NSObject, FlutterPlatformView {
+  private let rootView: UIView
+  private let button = UIButton(type: .system)
+  private let channel: FlutterMethodChannel
+
+  init(
+    frame: CGRect,
+    viewId: Int64,
+    messenger: FlutterBinaryMessenger,
+    arguments args: Any?
+  ) {
+    rootView = UIView(frame: frame)
+    channel = FlutterMethodChannel(
+      name: \"dev.akash.skystream/native_glass_button/\\(viewId)\",
+      binaryMessenger: messenger
+    )
+    super.init()
+
+    rootView.backgroundColor = .clear
+    rootView.isOpaque = false
+    button.translatesAutoresizingMaskIntoConstraints = false
+    rootView.addSubview(button)
+    NSLayoutConstraint.activate([
+      button.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+      button.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+      button.topAnchor.constraint(equalTo: rootView.topAnchor),
+      button.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+    ])
+    button.addTarget(self, action: #selector(pressed), for: .touchUpInside)
+    apply(arguments: args)
+
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(false)
+        return
+      }
+      switch call.method {
+      case \"update\":
+        self.apply(arguments: call.arguments)
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  deinit { channel.setMethodCallHandler(nil) }
+
+  func view() -> UIView { rootView }
+
+  private func apply(arguments: Any?) {
+    guard let values = arguments as? [String: Any] else { return }
+    let systemName = values[\"systemName\"] as? String ?? \"circle\"
+    let image = UIImage(
+      systemName: systemName,
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
+    )
+    let foreground = skyStreamUIColor(values[\"color\"], fallback: .label)
+
+    if #available(iOS 26.0, *) {
+      var configuration = UIButton.Configuration.glass()
+      configuration.image = image
+      configuration.baseForegroundColor = foreground
+      configuration.contentInsets = .zero
+      button.configuration = configuration
+      button.cornerConfiguration = .capsule()
+    } else if #available(iOS 15.0, *) {
+      var configuration = UIButton.Configuration.plain()
+      configuration.image = image
+      configuration.baseForegroundColor = foreground
+      configuration.contentInsets = .zero
+      button.configuration = configuration
+      button.layer.cornerRadius = min(button.bounds.width, button.bounds.height) / 2
+    } else {
+      button.setImage(image, for: .normal)
+      button.tintColor = foreground
+    }
+    button.isEnabled = values[\"enabled\"] as? Bool ?? true
+    button.accessibilityLabel = values[\"accessibilityLabel\"] as? String
+    button.accessibilityTraits = .button
+  }
+
+  @objc private func pressed() {
+    guard button.isEnabled else { return }
+    channel.invokeMethod(\"pressed\", arguments: nil)
+  }
+}
+
+private final class AppleNativeToolbarViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    AppleNativeToolbarPlatformView(
+      frame: frame,
+      viewId: viewId,
+      messenger: messenger,
+      arguments: args
+    )
+  }
+}
+
+private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformView {
+  private let rootView: UIView
+  private let toolbar = UIToolbar()
+  private let channel: FlutterMethodChannel
+
+  init(
+    frame: CGRect,
+    viewId: Int64,
+    messenger: FlutterBinaryMessenger,
+    arguments args: Any?
+  ) {
+    rootView = UIView(frame: frame)
+    channel = FlutterMethodChannel(
+      name: \"dev.akash.skystream/native_toolbar/\\(viewId)\",
+      binaryMessenger: messenger
+    )
+    super.init()
+
+    rootView.backgroundColor = .clear
+    rootView.isOpaque = false
+    toolbar.translatesAutoresizingMaskIntoConstraints = false
+    toolbar.isTranslucent = true
+    rootView.addSubview(toolbar)
+    NSLayoutConstraint.activate([
+      toolbar.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+      toolbar.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+      toolbar.topAnchor.constraint(equalTo: rootView.topAnchor),
+      toolbar.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+    ])
+    apply(arguments: args)
+
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(false)
+        return
+      }
+      switch call.method {
+      case \"update\":
+        self.apply(arguments: call.arguments)
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  deinit { channel.setMethodCallHandler(nil) }
+
+  func view() -> UIView { rootView }
+
+  private func apply(arguments: Any?) {
+    guard let values = arguments as? [String: Any] else { return }
+    let actions = values[\"actions\"] as? [[String: Any]] ?? []
+    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
+    let items: [UIBarButtonItem] = actions.enumerated().map { index, action in
+      let systemName = action[\"systemName\"] as? String ?? \"circle\"
+      let image = UIImage(systemName: systemName, withConfiguration: symbolConfiguration)
+      let item = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(itemPressed(_:)))
+      item.tag = index
+      item.isEnabled = action[\"enabled\"] as? Bool ?? true
+      item.tintColor = skyStreamUIColor(action[\"color\"], fallback: .label)
+      item.accessibilityLabel = action[\"accessibilityLabel\"] as? String
+      return item
+    }
+    // Leave UIToolbarAppearance untouched. On iOS 26 UIKit groups image
+    // bar-button items into the system Liquid Glass treatment automatically.
+    toolbar.setItems(items, animated: false)
+  }
+
+  @objc private func itemPressed(_ sender: UIBarButtonItem) {
+    channel.invokeMethod(\"pressed\", arguments: sender.tag)
   }
 }
 

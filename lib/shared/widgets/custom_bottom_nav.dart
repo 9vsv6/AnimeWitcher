@@ -22,12 +22,29 @@ class CustomBottomNavBar extends StatelessWidget {
 
   static const double height = 64;
 
+  static bool get usesNativeAppleTabBar =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  static double nativeAppleHeight(BuildContext context) =>
+      49 + MediaQuery.viewPaddingOf(context).bottom;
+
   static double bottomInsetFor(BuildContext context) =>
       math.max(MediaQuery.viewPaddingOf(context).bottom - 8, 12);
 
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context)!;
+    if (usesNativeAppleTabBar) {
+      return SizedBox(
+        height: nativeAppleHeight(context),
+        width: double.infinity,
+        child: _AppleNativeTabBar(
+          currentBranchIndex: currentBranchIndex,
+          destinations: destinations,
+          onTap: onTap,
+        ),
+      );
+    }
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -214,6 +231,106 @@ class _NavTabCellState extends State<_NavTabCell> {
           ),
         ),
       ),
+    );
+  }
+}
+
+const _appleNativeTabBarViewType = 'dev.akash.skystream/native_tab_bar';
+
+String _appleTabSymbol(TaskbarDestination destination, {required bool selected}) {
+  return switch (destination) {
+    TaskbarDestination.home => selected ? 'house.fill' : 'house',
+    TaskbarDestination.search => 'magnifyingglass',
+    TaskbarDestination.library => selected ? 'rectangle.stack.fill' : 'rectangle.stack',
+    TaskbarDestination.downloads =>
+      selected ? 'arrow.down.circle.fill' : 'arrow.down.circle',
+    TaskbarDestination.settings =>
+      selected ? 'ellipsis.circle.fill' : 'ellipsis.circle',
+  };
+}
+
+class _AppleNativeTabBar extends StatefulWidget {
+  const _AppleNativeTabBar({
+    required this.currentBranchIndex,
+    required this.destinations,
+    required this.onTap,
+  });
+
+  final int currentBranchIndex;
+  final List<TaskbarDestination> destinations;
+  final ValueChanged<TaskbarDestination> onTap;
+
+  @override
+  State<_AppleNativeTabBar> createState() => _AppleNativeTabBarState();
+}
+
+class _AppleNativeTabBarState extends State<_AppleNativeTabBar> {
+  MethodChannel? _channel;
+
+  Map<String, Object?> _state(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    String? selected;
+    for (final destination in widget.destinations) {
+      if (destination.branchIndex == widget.currentBranchIndex) {
+        selected = destination.id;
+        break;
+      }
+    }
+    return <String, Object?>{
+      'selectedId': selected,
+      'isRtl': Directionality.of(context) == TextDirection.rtl,
+      'tintColor': Theme.of(context).colorScheme.primary.toARGB32(),
+      'items': <Map<String, Object?>>[
+        for (final destination in widget.destinations)
+          <String, Object?>{
+            'id': destination.id,
+            'label': destination.label(l10n),
+            'symbol': _appleTabSymbol(destination, selected: false),
+            'selectedSymbol': _appleTabSymbol(destination, selected: true),
+          },
+      ],
+    };
+  }
+
+  @override
+  void didUpdateWidget(covariant _AppleNativeTabBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _channel?.invokeMethod<void>('update', _state(context));
+    });
+  }
+
+  void _onPlatformViewCreated(int id) {
+    final channel = MethodChannel('dev.akash.skystream/native_tab_bar/$id');
+    channel.setMethodCallHandler((call) async {
+      if (call.method != 'selected') return;
+      final selectedId = call.arguments as String?;
+      if (selectedId == null) return;
+      for (final destination in widget.destinations) {
+        if (destination.id == selectedId) {
+          widget.onTap(destination);
+          return;
+        }
+      }
+    });
+    _channel = channel;
+  }
+
+  @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    _channel = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return UiKitView(
+      viewType: _appleNativeTabBarViewType,
+      layoutDirection: Directionality.of(context),
+      creationParams: _state(context),
+      creationParamsCodec: const StandardMessageCodec(),
+      onPlatformViewCreated: _onPlatformViewCreated,
     );
   }
 }

@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 const _appleLiquidGlassViewType = 'dev.akash.skystream/liquid_glass';
+const _appleNativeGlassButtonViewType =
+    'dev.akash.skystream/native_glass_button';
+const _appleNativeToolbarViewType = 'dev.akash.skystream/native_toolbar';
 
 bool get _usesNativeAppleLiquidGlass =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -92,19 +95,37 @@ class AppleLiquidGlassBackButton extends StatelessWidget {
     final effectiveFallback = fallbackColor ?? colors.surfaceContainerHigh;
     final radius = BorderRadius.circular(size / 2);
 
+    final effectiveOnPressed =
+        onPressed ?? () => Navigator.of(context).maybePop();
+    final effectiveTooltip =
+        tooltip ?? MaterialLocalizations.of(context).backButtonTooltip;
+
+    if (_usesNativeAppleLiquidGlass) {
+      return Center(
+        child: _AppleNativeGlassIconButton(
+          systemName: 'chevron.left',
+          onPressed: effectiveOnPressed,
+          size: size,
+          color: effectiveForeground,
+          accessibilityLabel: effectiveTooltip,
+        ),
+      );
+    }
+
     return Center(
       child: SizedBox.square(
         dimension: size,
-        child: AppleLiquidGlassSurface(
-          borderRadius: radius,
-          interactive: true,
-          fallbackColor: effectiveFallback,
-          fallbackBorder: BorderSide(
-            color: colors.outlineVariant.withValues(alpha: 0.28),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: effectiveFallback,
+            borderRadius: radius,
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.28),
+            ),
           ),
           child: IconButton(
-            tooltip: tooltip ?? MaterialLocalizations.of(context).backButtonTooltip,
-            onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+            tooltip: effectiveTooltip,
+            onPressed: effectiveOnPressed,
             style: IconButton.styleFrom(
               backgroundColor: Colors.transparent,
               foregroundColor: effectiveForeground,
@@ -136,6 +157,18 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    if (_usesNativeAppleLiquidGlass &&
+        children.isNotEmpty &&
+        children.every((child) => child is AppleLiquidGlassToolbarButton)) {
+      final buttons = children.cast<AppleLiquidGlassToolbarButton>();
+      final canUseNative = buttons.every(
+        (button) => _appleSystemSymbolForIcon(button.icon) != null,
+      );
+      if (canUseNative) {
+        return _AppleNativeToolbar(buttons: buttons, height: height);
+      }
+    }
+
     return AppleLiquidGlassSurface(
       borderRadius: BorderRadius.circular(height / 2),
       interactive: true,
@@ -169,6 +202,18 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? Theme.of(context).colorScheme.onSurface;
+    final nativeSymbol = _appleSystemSymbolForIcon(icon);
+    if (_usesNativeAppleLiquidGlass && nativeSymbol != null) {
+      return _AppleNativeGlassIconButton(
+        systemName: nativeSymbol,
+        onPressed: onPressed,
+        size: width,
+        color: effectiveColor,
+        accessibilityLabel: tooltip,
+      );
+    }
+
     return SizedBox(
       width: width,
       height: double.infinity,
@@ -177,10 +222,206 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: Colors.transparent,
-          foregroundColor: color ?? Theme.of(context).colorScheme.onSurface,
+          foregroundColor: effectiveColor,
           padding: EdgeInsets.zero,
         ),
         icon: Icon(icon, color: color),
+      ),
+    );
+  }
+}
+\n\nString? _appleSystemSymbolForIcon(IconData icon) {
+  if (icon == Icons.chat_bubble_outline_rounded ||
+      icon == Icons.chat_bubble_outline) {
+    return 'bubble.left';
+  }
+  if (icon == Icons.favorite_rounded || icon == Icons.favorite) {
+    return 'heart.fill';
+  }
+  if (icon == Icons.favorite_border_rounded ||
+      icon == Icons.favorite_border) {
+    return 'heart';
+  }
+  if (icon == Icons.bookmark_rounded || icon == Icons.bookmark) {
+    return 'bookmark.fill';
+  }
+  if (icon == Icons.bookmark_border_rounded ||
+      icon == Icons.bookmark_border) {
+    return 'bookmark';
+  }
+  if (icon == Icons.sort_rounded || icon == Icons.sort) {
+    return 'arrow.up.arrow.down';
+  }
+  if (icon == Icons.tune_rounded || icon == Icons.tune) {
+    return 'slider.horizontal.3';
+  }
+  if (icon == Icons.refresh_rounded || icon == Icons.refresh) {
+    return 'arrow.clockwise';
+  }
+  if (icon == Icons.close_rounded || icon == Icons.close) {
+    return 'xmark';
+  }
+  if (icon == Icons.more_horiz_rounded || icon == Icons.more_horiz) {
+    return 'ellipsis';
+  }
+  if (icon == Icons.download_rounded || icon == Icons.download) {
+    return 'arrow.down';
+  }
+  if (icon == Icons.delete_outline_rounded || icon == Icons.delete_outline) {
+    return 'trash';
+  }
+  if (icon == Icons.share_outlined || icon == Icons.share) {
+    return 'square.and.arrow.up';
+  }
+  if (icon == Icons.link_rounded || icon == Icons.link) {
+    return 'link';
+  }
+  if (icon == Icons.visibility_outlined || icon == Icons.visibility) {
+    return 'eye';
+  }
+  if (icon == Icons.schedule_rounded || icon == Icons.schedule) {
+    return 'clock';
+  }
+  return null;
+}
+
+class _AppleNativeGlassIconButton extends StatefulWidget {
+  const _AppleNativeGlassIconButton({
+    required this.systemName,
+    required this.onPressed,
+    required this.size,
+    required this.color,
+    this.accessibilityLabel,
+  });
+
+  final String systemName;
+  final VoidCallback? onPressed;
+  final double size;
+  final Color color;
+  final String? accessibilityLabel;
+
+  @override
+  State<_AppleNativeGlassIconButton> createState() =>
+      _AppleNativeGlassIconButtonState();
+}
+
+class _AppleNativeGlassIconButtonState
+    extends State<_AppleNativeGlassIconButton> {
+  MethodChannel? _channel;
+
+  Map<String, Object?> get _state => <String, Object?>{
+    'systemName': widget.systemName,
+    'enabled': widget.onPressed != null,
+    'color': widget.color.toARGB32(),
+    'accessibilityLabel': widget.accessibilityLabel,
+  };
+
+  @override
+  void didUpdateWidget(covariant _AppleNativeGlassIconButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.systemName != widget.systemName ||
+        oldWidget.onPressed != widget.onPressed ||
+        oldWidget.color != widget.color ||
+        oldWidget.accessibilityLabel != widget.accessibilityLabel) {
+      _channel?.invokeMethod<void>('update', _state);
+    }
+  }
+
+  void _onPlatformViewCreated(int id) {
+    final channel = MethodChannel(
+      'dev.akash.skystream/native_glass_button/$id',
+    );
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'pressed') widget.onPressed?.call();
+    });
+    _channel = channel;
+  }
+
+  @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    _channel = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: widget.size,
+      child: UiKitView(
+        viewType: _appleNativeGlassButtonViewType,
+        layoutDirection: TextDirection.ltr,
+        creationParams: _state,
+        creationParamsCodec: const StandardMessageCodec(),
+        onPlatformViewCreated: _onPlatformViewCreated,
+      ),
+    );
+  }
+}
+
+class _AppleNativeToolbar extends StatefulWidget {
+  const _AppleNativeToolbar({required this.buttons, required this.height});
+
+  final List<AppleLiquidGlassToolbarButton> buttons;
+  final double height;
+
+  @override
+  State<_AppleNativeToolbar> createState() => _AppleNativeToolbarState();
+}
+
+class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
+  MethodChannel? _channel;
+
+  Map<String, Object?> get _state => <String, Object?>{
+    'actions': <Map<String, Object?>>[
+      for (final button in widget.buttons)
+        <String, Object?>{
+          'systemName': _appleSystemSymbolForIcon(button.icon),
+          'enabled': button.onPressed != null,
+          'color': (button.color ?? Theme.of(context).colorScheme.onSurface)
+              .toARGB32(),
+          'accessibilityLabel': button.tooltip,
+        },
+    ],
+  };
+
+  @override
+  void didUpdateWidget(covariant _AppleNativeToolbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _channel?.invokeMethod<void>('update', _state);
+    });
+  }
+
+  void _onPlatformViewCreated(int id) {
+    final channel = MethodChannel('dev.akash.skystream/native_toolbar/$id');
+    channel.setMethodCallHandler((call) async {
+      if (call.method != 'pressed') return;
+      final index = call.arguments as int?;
+      if (index == null || index < 0 || index >= widget.buttons.length) return;
+      widget.buttons[index].onPressed?.call();
+    });
+    _channel = channel;
+  }
+
+  @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    _channel = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.height * widget.buttons.length,
+      height: widget.height,
+      child: UiKitView(
+        viewType: _appleNativeToolbarViewType,
+        layoutDirection: Directionality.of(context),
+        creationParams: _state,
+        creationParamsCodec: const StandardMessageCodec(),
+        onPlatformViewCreated: _onPlatformViewCreated,
       ),
     );
   }
