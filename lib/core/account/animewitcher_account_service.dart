@@ -815,8 +815,8 @@ class AnimeWitcherAccountService {
       // Remove legacy random-ID favorite records after writing the canonical
       // document. The official app has migrated these server-side, but older
       // accounts can still contain them and would otherwise show duplicates.
-      final legacyFavorites = knownFavorites ??
-          await _authenticated(
+      final List<FirestoreDocument> legacyFavorites = knownFavorites ??
+          await _authenticated<List<FirestoreDocument>>(
             (token) => _firestore.listDocuments(
               '$root/fav_anime',
               token,
@@ -946,8 +946,8 @@ class AnimeWitcherAccountService {
     List<FirestoreDocument>? known,
   }) async {
     if (!_isCurrentProfile(profile)) return;
-    final docs = known ??
-        await _authenticated(
+    final List<FirestoreDocument> docs = known ??
+        await _authenticated<List<FirestoreDocument>>(
           (token) => _firestore.listDocuments(
             'users/${profile.documentId}/fav_anime',
             token,
