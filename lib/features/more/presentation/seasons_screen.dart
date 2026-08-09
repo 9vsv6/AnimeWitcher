@@ -71,8 +71,29 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
   Widget build(BuildContext context) {
     final isArabic = _isArabic(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isArabic ? 'المواسم' : 'Seasons'),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            centerTitle: false,
+            titleSpacing: 16,
+            title: Align(
+              alignment:
+                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
+              child: Directionality(
+                textDirection:
+                    isArabic ? TextDirection.rtl : TextDirection.ltr,
+                child: Text(isArabic ? 'المواسم' : 'Seasons'),
+              ),
+            ),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            elevation: 0,
+          ),
+        ),
       ),
       body: FutureBuilder<_SeasonsBootstrap>(
         future: _bootstrapFuture,
@@ -390,7 +411,30 @@ class _SeasonResultsScreen extends StatelessWidget {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     return Scaffold(
-      appBar: AppBar(title: Text(season)),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            centerTitle: false,
+            titleSpacing: 16,
+            title: Align(
+              alignment:
+                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
+              child: Directionality(
+                textDirection:
+                    isArabic ? TextDirection.rtl : TextDirection.ltr,
+                child: Text(season),
+              ),
+            ),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            elevation: 0,
+          ),
+        ),
+      ),
       body: _SeasonGrid(
         provider: provider,
         season: season,

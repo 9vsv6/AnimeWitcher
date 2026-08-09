@@ -85,8 +85,31 @@ class _BroadcastScheduleScreenState
   Widget build(BuildContext context) {
     final isArabic = _isArabic(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isArabic ? 'جدول البث' : 'Broadcast schedule'),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            centerTitle: false,
+            titleSpacing: 16,
+            title: Align(
+              alignment:
+                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
+              child: Directionality(
+                textDirection:
+                    isArabic ? TextDirection.rtl : TextDirection.ltr,
+                child: Text(
+                  isArabic ? 'جدول البث' : 'Broadcast schedule',
+                ),
+              ),
+            ),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            elevation: 0,
+          ),
+        ),
       ),
       body: FutureBuilder<Map<String, List<MultimediaItem>>>(
         future: _scheduleFuture,
