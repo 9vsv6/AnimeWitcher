@@ -16,14 +16,31 @@ class SeasonsScreen extends ConsumerStatefulWidget {
 
 class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
   late Future<_SeasonsBootstrap> _bootstrapFuture;
+  late final PageController _pageController;
   int _selectedTab = 1;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _selectedTab);
     _bootstrapFuture = _loadBootstrap();
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _selectTab(int value) {
+    if (value < 0 || value > 3 || value == _selectedTab) return;
+    setState(() => _selectedTab = value);
+    _pageController.animateToPage(
+      value,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
   AnimeWitcherNativeProvider? _provider() {
     final active = ref.read(activeProviderProvider);
     if (active is AnimeWitcherNativeProvider) return active;
@@ -80,10 +97,22 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
               _SeasonTabs(
                 selectedIndex: _selectedTab,
                 isArabic: isArabic,
-                onSelected: (value) => setState(() => _selectedTab = value),
+                onSelected: _selectTab,
               ),
               Divider(height: 1, color: Theme.of(context).dividerColor),
-              Expanded(child: _tabBody(data, isArabic)),
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: 4,
+                  onPageChanged: (value) {
+                    if (value != _selectedTab) {
+                      setState(() => _selectedTab = value);
+                    }
+                  },
+                  itemBuilder: (context, index) =>
+                      _tabBody(data, isArabic, index),
+                ),
+              ),
             ],
           );
         },
@@ -91,8 +120,8 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
     );
   }
 
-  Widget _tabBody(_SeasonsBootstrap data, bool isArabic) {
-    switch (_selectedTab) {
+  Widget _tabBody(_SeasonsBootstrap data, bool isArabic, int index) {
+    switch (index) {
       case 0:
         return _SeasonGrid(
           key: ValueKey('past-${data.config.past}'),

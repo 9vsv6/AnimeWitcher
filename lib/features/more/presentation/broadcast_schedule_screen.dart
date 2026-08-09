@@ -18,15 +18,36 @@ class BroadcastScheduleScreen extends ConsumerStatefulWidget {
 class _BroadcastScheduleScreenState
     extends ConsumerState<BroadcastScheduleScreen> {
   late Future<Map<String, List<MultimediaItem>>> _scheduleFuture;
+  late final PageController _pageController;
   late int _selectedDay;
 
   @override
   void initState() {
     super.initState();
     _selectedDay = _todayIndex();
+    _pageController = PageController(initialPage: _selectedDay);
     _scheduleFuture = _loadSchedule();
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _selectDay(int value) {
+    if (value < 0 ||
+        value >= animeWitcherBroadcastDays.length ||
+        value == _selectedDay) {
+      return;
+    }
+    setState(() => _selectedDay = value);
+    _pageController.animateToPage(
+      value,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
   int _todayIndex() {
     return switch (DateTime.now().weekday) {
       DateTime.saturday => 0,
@@ -103,26 +124,39 @@ class _BroadcastScheduleScreenState
           }
 
           final schedule = snapshot.data!;
-          final day = animeWitcherBroadcastDays[_selectedDay];
-          final items = schedule[day] ?? const <MultimediaItem>[];
           return Column(
             children: [
               _DayTabs(
                 selectedIndex: _selectedDay,
                 isArabic: isArabic,
-                onSelected: (value) => setState(() => _selectedDay = value),
+                onSelected: _selectDay,
               ),
               Divider(height: 1, color: Theme.of(context).dividerColor),
               Expanded(
-                child: items.isEmpty
-                    ? Center(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: animeWitcherBroadcastDays.length,
+                  onPageChanged: (value) {
+                    if (value != _selectedDay) {
+                      setState(() => _selectedDay = value);
+                    }
+                  },
+                  itemBuilder: (context, index) {
+                    final day = animeWitcherBroadcastDays[index];
+                    final items =
+                        schedule[day] ?? const <MultimediaItem>[];
+                    if (items.isEmpty) {
+                      return Center(
                         child: Text(
                           isArabic
                               ? 'لا يوجد بث مجدول لهذا اليوم'
                               : 'No broadcasts scheduled for this day',
                         ),
-                      )
-                    : _ScheduleGrid(items: items, day: day),
+                      );
+                    }
+                    return _ScheduleGrid(items: items, day: day);
+                  },
+                ),
               ),
             ],
           );
