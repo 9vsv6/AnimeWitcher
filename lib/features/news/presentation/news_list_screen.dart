@@ -103,21 +103,27 @@ class _NewsListScreenState extends State<NewsListScreen> {
           child: AppBar(
             centerTitle: false,
             titleSpacing: 16,
-            title: Align(
-              alignment:
-                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
-              child: Directionality(
-                textDirection:
-                    isArabic ? TextDirection.rtl : TextDirection.ltr,
-                child: Text(
-                  isArabic ? 'الأخبار' : 'News',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+            title: ApplePersistentGlassHeaderScope(
+              enabled: Navigator.of(context).canPop(),
+              onBack: () => Navigator.of(context).maybePop(),
+              child: Align(
+                alignment:
+                    isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection:
+                      isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  child: Text(
+                    isArabic ? 'الأخبار' : 'News',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ),
-            leading: AppleLiquidGlassBackButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
             elevation: 0,
           ),
         ),

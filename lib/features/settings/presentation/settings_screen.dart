@@ -65,14 +65,20 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text(l10n.settings),
-        actions: [
-          if (Navigator.of(context).canPop())
-            const Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: AppleLiquidGlassBackButton(),
-            ),
-        ],
+        title: ApplePersistentGlassHeaderScope(
+          enabled: Navigator.of(context).canPop(),
+          onBack: () => Navigator.of(context).maybePop(),
+          child: Text(l10n.settings),
+        ),
+        actions: appleUsesPersistentLiquidGlassHeader
+            ? const <Widget>[]
+            : [
+                if (Navigator.of(context).canPop())
+                  const Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: AppleLiquidGlassBackButton(),
+                  ),
+              ],
       ),
       body: _buildSettingsList(context, ref, isTv),
     );

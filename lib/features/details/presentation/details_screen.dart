@@ -977,6 +977,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         applePersistentGlassHeaderController.show(
           ApplePersistentGlassHeaderConfig(
             owner: this,
+            route: ModalRoute.of(context),
             onBack: () => context.pop(),
             backForegroundColor: headerForeground,
             backFallbackColor: headerFallback,

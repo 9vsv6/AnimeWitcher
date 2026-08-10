@@ -56,14 +56,19 @@ class _AnimeWitcherAccountScreenState
 
     return Scaffold(
       appBar: AppBar(
-        leading: Navigator.of(context).canPop()
+        leading: !appleUsesPersistentLiquidGlassHeader &&
+                Navigator.of(context).canPop()
             ? const AppleLiquidGlassBackButton()
             : null,
-        title: Text(
-          appText(
-            context,
-            english: 'AnimeWitcher account',
-            arabic: 'حساب AnimeWitcher',
+        title: ApplePersistentGlassHeaderScope(
+          enabled: Navigator.of(context).canPop(),
+          onBack: () => Navigator.of(context).maybePop(),
+          child: Text(
+            appText(
+              context,
+              english: 'AnimeWitcher account',
+              arabic: 'حساب AnimeWitcher',
+            ),
           ),
         ),
       ),

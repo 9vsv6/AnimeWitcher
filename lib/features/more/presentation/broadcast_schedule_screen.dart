@@ -93,20 +93,26 @@ class _BroadcastScheduleScreenState
           child: AppBar(
             centerTitle: false,
             titleSpacing: 16,
-            title: Align(
-              alignment:
-                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
-              child: Directionality(
-                textDirection:
-                    isArabic ? TextDirection.rtl : TextDirection.ltr,
-                child: Text(
-                  isArabic ? 'جدول البث' : 'Broadcast schedule',
+            title: ApplePersistentGlassHeaderScope(
+              enabled: Navigator.of(context).canPop(),
+              onBack: () => Navigator.of(context).pop(),
+              child: Align(
+                alignment:
+                    isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection:
+                      isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  child: Text(
+                    isArabic ? 'جدول البث' : 'Broadcast schedule',
+                  ),
                 ),
               ),
             ),
-            leading: AppleLiquidGlassBackButton(
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
             elevation: 0,
           ),
         ),

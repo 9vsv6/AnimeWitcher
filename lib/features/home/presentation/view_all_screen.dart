@@ -240,21 +240,25 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
           child: AppBar(
             centerTitle: false,
             titleSpacing: 16,
-            title: Align(
-              alignment:
-                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
-              child: Directionality(
-                textDirection:
-                    isArabic ? TextDirection.rtl : TextDirection.ltr,
-                child: Text(
-                  widget.title,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+            title: ApplePersistentGlassHeaderScope(
+              enabled: Navigator.of(context).canPop(),
+              onBack: () => context.pop(),
+              child: Align(
+                alignment:
+                    isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection:
+                      isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  child: Text(
+                    widget.title,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ),
-            leading: AppleLiquidGlassBackButton(
-              onPressed: () => context.pop(),
-            ),
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : AppleLiquidGlassBackButton(onPressed: () => context.pop()),
             elevation: 0,
           ),
         ),

@@ -46,19 +46,25 @@ class PlayerTopBar extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(leftPadding, 14, rightPadding, 24),
           child: Row(
             children: [
-              AppleLiquidGlassSurface(
-                borderRadius: BorderRadius.circular(999),
-                interactive: true,
-                child: PlayerIconButton(
-                  icon: Icons.arrow_back_rounded,
-                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                  onPressed: onBack,
-                  isTv: isTv,
-                  focusNode: backFocusNode,
-                  iconSize: isTv ? 34 : 30,
+              if (appleUsesPersistentLiquidGlassHeader)
+                // Preserve the title's original clearance while the actual
+                // back control lives in the route-independent overlay.
+                const SizedBox(width: 60)
+              else ...[
+                AppleLiquidGlassSurface(
+                  borderRadius: BorderRadius.circular(999),
+                  interactive: true,
+                  child: PlayerIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                    onPressed: onBack,
+                    isTv: isTv,
+                    focusNode: backFocusNode,
+                    iconSize: isTv ? 34 : 30,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

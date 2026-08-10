@@ -286,6 +286,7 @@ class _AnimeWitcherCommentsScreenState
         applePersistentGlassHeaderController.show(
           ApplePersistentGlassHeaderConfig(
             owner: this,
+            route: ModalRoute.of(context),
             onBack: () => Navigator.of(context).pop(),
             backForegroundColor: colors.onSurface,
             backFallbackColor: colors.surfaceContainerHigh,

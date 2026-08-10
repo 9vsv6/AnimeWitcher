@@ -227,6 +227,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   @override
   void dispose() {
+    applePersistentGlassHeaderController.hide(this);
     WidgetsBinding.instance.removeObserver(this);
 
     // Restore the system UI FIRST, before any disposal that could throw and
@@ -531,6 +532,27 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (appleUsesPersistentLiquidGlassHeader) {
+      final route = ModalRoute.of(context);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || route?.isCurrent == false) return;
+        applePersistentGlassHeaderController.show(
+          ApplePersistentGlassHeaderConfig(
+            owner: this,
+            route: route,
+            onBack: () => unawaited(_handleBack()),
+            backTooltip: AppLocalizations.of(context)!.goBack,
+            backForegroundColor: Colors.white,
+            backFallbackColor: Colors.black54,
+            // Player intentionally owns no trailing actions. The same physical
+            // header back control is rebound to this route while details
+            // comments/favorite/bookmark controls dismiss quickly.
+            trailingButtons: const <AppleLiquidGlassToolbarButton>[],
+          ),
+        );
+      });
+    }
+
     final errorMessage = ref.watch(
       playerControllerProvider.select((s) => s.errorMessage),
     );
@@ -580,19 +602,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   ),
                 ),
               ),
-              // Top-left back button — always visible for iOS/desktop
-              // where there may be no system back gesture.
-              Positioned(
-                top: 8,
-                left: 8,
-                child: AppleLiquidGlassBackButton(
-                  size: 48,
-                  foregroundColor: Colors.white,
-                  fallbackColor: Colors.transparent,
-                  tooltip: AppLocalizations.of(context)!.goBack,
-                  onPressed: _handleBack,
+              // iOS uses the single route-independent native back control.
+              // Other platforms keep the existing local player affordance.
+              if (!appleUsesPersistentLiquidGlassHeader)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: AppleLiquidGlassBackButton(
+                    size: 48,
+                    foregroundColor: Colors.white,
+                    fallbackColor: Colors.transparent,
+                    tooltip: AppLocalizations.of(context)!.goBack,
+                    onPressed: _handleBack,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

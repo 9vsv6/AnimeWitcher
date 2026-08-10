@@ -79,18 +79,24 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
           child: AppBar(
             centerTitle: false,
             titleSpacing: 16,
-            title: Align(
-              alignment:
-                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
-              child: Directionality(
-                textDirection:
-                    isArabic ? TextDirection.rtl : TextDirection.ltr,
-                child: Text(isArabic ? 'المواسم' : 'Seasons'),
+            title: ApplePersistentGlassHeaderScope(
+              enabled: Navigator.of(context).canPop(),
+              onBack: () => Navigator.of(context).pop(),
+              child: Align(
+                alignment:
+                    isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection:
+                      isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  child: Text(isArabic ? 'المواسم' : 'Seasons'),
+                ),
               ),
             ),
-            leading: AppleLiquidGlassBackButton(
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
             elevation: 0,
           ),
         ),
@@ -418,18 +424,24 @@ class _SeasonResultsScreen extends StatelessWidget {
           child: AppBar(
             centerTitle: false,
             titleSpacing: 16,
-            title: Align(
-              alignment:
-                  isArabic ? Alignment.centerRight : Alignment.centerLeft,
-              child: Directionality(
-                textDirection:
-                    isArabic ? TextDirection.rtl : TextDirection.ltr,
-                child: Text(season),
+            title: ApplePersistentGlassHeaderScope(
+              enabled: Navigator.of(context).canPop(),
+              onBack: () => Navigator.of(context).pop(),
+              child: Align(
+                alignment:
+                    isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection:
+                      isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  child: Text(season),
+                ),
               ),
             ),
-            leading: AppleLiquidGlassBackButton(
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
             elevation: 0,
           ),
         ),

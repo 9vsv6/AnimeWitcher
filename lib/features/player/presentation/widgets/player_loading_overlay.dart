@@ -84,16 +84,17 @@ class PlayerLoadingOverlay extends StatelessWidget {
                 ],
               ),
             ),
-            Positioned(
-              top: MediaQuery.viewPaddingOf(context).top + 16,
-              left: 16,
-              child: AppleLiquidGlassBackButton(
-                size: 54,
-                foregroundColor: Colors.white,
-                fallbackColor: Colors.black54,
-                onPressed: onBack,
+            if (!appleUsesPersistentLiquidGlassHeader)
+              Positioned(
+                top: MediaQuery.viewPaddingOf(context).top + 16,
+                left: 16,
+                child: AppleLiquidGlassBackButton(
+                  size: 54,
+                  foregroundColor: Colors.white,
+                  fallbackColor: Colors.black54,
+                  onPressed: onBack,
+                ),
               ),
-            ),
             Positioned.fill(
               child: Center(
                 child: Padding(

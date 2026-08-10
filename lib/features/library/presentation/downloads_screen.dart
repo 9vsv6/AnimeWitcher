@@ -56,16 +56,21 @@ class DownloadsScreen extends ConsumerWidget {
     } else {
       page = Scaffold(
         appBar: AppBar(
-          leading: Navigator.of(context).canPop()
+          leading: !appleUsesPersistentLiquidGlassHeader &&
+                  Navigator.of(context).canPop()
               ? const AppleLiquidGlassBackButton()
               : null,
           centerTitle: false,
           titleSpacing: 16,
-          title: Align(
-            alignment: titleAlignment,
-            child: Directionality(
-              textDirection: titleDirection,
-              child: Text(title),
+          title: ApplePersistentGlassHeaderScope(
+            enabled: Navigator.of(context).canPop(),
+            onBack: () => Navigator.of(context).maybePop(),
+            child: Align(
+              alignment: titleAlignment,
+              child: Directionality(
+                textDirection: titleDirection,
+                child: Text(title),
+              ),
             ),
           ),
         ),

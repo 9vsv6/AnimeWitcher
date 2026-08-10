@@ -21,6 +21,7 @@ bool get appleUsesPersistentLiquidGlassHeader => _usesNativeAppleLiquidGlass;
 class ApplePersistentGlassHeaderConfig {
   const ApplePersistentGlassHeaderConfig({
     required this.owner,
+    this.route,
     this.onBack,
     this.backTooltip,
     this.backForegroundColor,
@@ -30,6 +31,7 @@ class ApplePersistentGlassHeaderConfig {
   });
 
   final Object owner;
+  final ModalRoute<dynamic>? route;
   final VoidCallback? onBack;
   final String? backTooltip;
   final Color? backForegroundColor;
@@ -42,31 +44,118 @@ class ApplePersistentGlassHeaderController
     extends ValueNotifier<ApplePersistentGlassHeaderConfig?> {
   ApplePersistentGlassHeaderController() : super(null);
 
+  // Mirrors UINavigationController's navigation-item stack: screens keep one
+  // registered item while the single physical Liquid Glass chrome stays above
+  // the Navigator. Rebuilding a covered route updates its item in place rather
+  // than moving it to the top and stealing the visible controls.
   final List<ApplePersistentGlassHeaderConfig> _routeStack =
       <ApplePersistentGlassHeaderConfig>[];
+
+  bool _isCurrent(ApplePersistentGlassHeaderConfig config) =>
+      config.route == null || config.route!.isCurrent;
+
+  void _syncVisibleItem() {
+    ApplePersistentGlassHeaderConfig? next;
+    for (final entry in _routeStack.reversed) {
+      if (_isCurrent(entry)) {
+        next = entry;
+        break;
+      }
+    }
+    if (!identical(value, next)) value = next;
+  }
 
   void show(ApplePersistentGlassHeaderConfig config) {
     final existingIndex = _routeStack.indexWhere(
       (entry) => identical(entry.owner, config.owner),
     );
     if (existingIndex >= 0) {
-      _routeStack.removeAt(existingIndex);
+      _routeStack[existingIndex] = config;
+    } else {
+      _routeStack.add(config);
     }
-    _routeStack.add(config);
-    value = config;
+    _syncVisibleItem();
   }
 
   void hide(Object owner) {
-    final wasCurrent = identical(value?.owner, owner);
     _routeStack.removeWhere((entry) => identical(entry.owner, owner));
-    if (wasCurrent) {
-      value = _routeStack.isEmpty ? null : _routeStack.last;
-    }
+    _syncVisibleItem();
   }
 }
 
 final applePersistentGlassHeaderController =
     ApplePersistentGlassHeaderController();
+
+/// Registers one route's navigation item with the app-wide native Liquid Glass
+/// header. The physical controls live above the Navigator; this scope only
+/// changes their action/content as the top route changes.
+class ApplePersistentGlassHeaderScope extends StatefulWidget {
+  const ApplePersistentGlassHeaderScope({
+    super.key,
+    required this.child,
+    this.enabled = true,
+    this.onBack,
+    this.backTooltip,
+    this.backForegroundColor,
+    this.backFallbackColor,
+    this.trailing,
+    this.trailingButtons,
+  });
+
+  final Widget child;
+  final bool enabled;
+  final VoidCallback? onBack;
+  final String? backTooltip;
+  final Color? backForegroundColor;
+  final Color? backFallbackColor;
+  final Widget? trailing;
+  final List<AppleLiquidGlassToolbarButton>? trailingButtons;
+
+  @override
+  State<ApplePersistentGlassHeaderScope> createState() =>
+      _ApplePersistentGlassHeaderScopeState();
+}
+
+class _ApplePersistentGlassHeaderScopeState
+    extends State<ApplePersistentGlassHeaderScope> {
+  void _publish() {
+    if (!mounted || !appleUsesPersistentLiquidGlassHeader || !widget.enabled) {
+      applePersistentGlassHeaderController.hide(this);
+      return;
+    }
+    final hasTrailing = widget.trailing != null ||
+        (widget.trailingButtons?.isNotEmpty ?? false);
+    if (widget.onBack == null && !hasTrailing) {
+      applePersistentGlassHeaderController.hide(this);
+      return;
+    }
+    applePersistentGlassHeaderController.show(
+      ApplePersistentGlassHeaderConfig(
+        owner: this,
+        route: ModalRoute.of(context),
+        onBack: widget.onBack,
+        backTooltip: widget.backTooltip,
+        backForegroundColor: widget.backForegroundColor,
+        backFallbackColor: widget.backFallbackColor,
+        trailing: widget.trailing,
+        trailingButtons: widget.trailingButtons,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _publish());
+    return widget.child;
+  }
+
+  @override
+  void dispose() {
+    applePersistentGlassHeaderController.hide(this);
+    super.dispose();
+  }
+}
+
 
 /// A single route-independent Liquid Glass header layer.
 ///
@@ -143,11 +232,11 @@ class _ApplePersistentGlassHeaderOverlayState
                           top: (kToolbarHeight - 46) / 2,
                           child: AnimatedOpacity(
                             opacity: showBack ? 1 : 0,
-                            duration: const Duration(milliseconds: 220),
+                            duration: Duration(milliseconds: showBack ? 160 : 95),
                             curve: Curves.easeOutCubic,
                             child: AnimatedScale(
-                              scale: showBack ? 1 : 0.82,
-                              duration: const Duration(milliseconds: 260),
+                              scale: showBack ? 1 : 0.88,
+                              duration: Duration(milliseconds: showBack ? 190 : 110),
                               curve: Curves.easeOutBack,
                               child: AppleLiquidGlassBackButton(
                                 key: const ValueKey('persistent-liquid-back'),
@@ -165,14 +254,18 @@ class _ApplePersistentGlassHeaderOverlayState
                           // room while keeping the whole group fully on-screen.
                           right: 24,
                           top: (kToolbarHeight - 46) / 2,
-                          child: AnimatedOpacity(
-                            opacity: showTrailing ? 1 : 0,
-                            duration: const Duration(milliseconds: 180),
-                            curve: Curves.easeOutCubic,
-                            child: AnimatedScale(
+                          child: IgnorePointer(
+                            ignoring: !showTrailing,
+                            child: AnimatedOpacity(
+                              opacity: showTrailing ? 1 : 0,
+                              duration: Duration(
+                                milliseconds: showTrailing ? 150 : 80,
+                              ),
+                              curve: Curves.easeOutCubic,
+                              child: AnimatedScale(
                               alignment: Alignment.centerRight,
-                              scale: showTrailing ? 1 : 0.92,
-                              duration: const Duration(milliseconds: 220),
+                              scale: showTrailing ? 1 : 0.94,
+                              duration: Duration(milliseconds: showTrailing ? 180 : 95),
                               curve: Curves.easeOutCubic,
                               child: hasNativeToolbar || _lastTrailingButtons != null
                                   ? AppleLiquidGlassActionGroup(
@@ -187,6 +280,7 @@ class _ApplePersistentGlassHeaderOverlayState
                                           _lastTrailing ??
                                           const SizedBox.shrink(),
                                     ),
+                              ),
                             ),
                           ),
                         ),
