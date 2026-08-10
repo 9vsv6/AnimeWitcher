@@ -224,6 +224,7 @@ class _ApplePersistentGlassHeaderOverlayState
                 }
                 final effective = config ?? _lastConfig;
                 final visible = config != null;
+                final leavingGlassChrome = !visible;
                 final showBack = visible && effective?.onBack != null;
                 final activeButtons = config?.trailingButtons;
                 final hasNativeToolbar = activeButtons != null && activeButtons.isNotEmpty;
@@ -250,11 +251,23 @@ class _ApplePersistentGlassHeaderOverlayState
                           top: (kToolbarHeight - 46) / 2,
                           child: AnimatedOpacity(
                             opacity: showBack ? 1 : 0,
-                            duration: Duration(milliseconds: showBack ? 160 : 55),
+                            duration: Duration(
+                              milliseconds: leavingGlassChrome
+                                  ? 35
+                                  : (showBack ? 160 : 55),
+                            ),
                             curve: Curves.easeOutCubic,
                             child: AnimatedScale(
-                              scale: showBack ? 1 : 0.88,
-                              duration: Duration(milliseconds: showBack ? 190 : 70),
+                              // When leaving for a route with no Liquid Glass
+                              // chrome, keep geometry fixed and fade only.
+                              scale: leavingGlassChrome
+                                  ? 1
+                                  : (showBack ? 1 : 0.88),
+                              duration: Duration(
+                                milliseconds: leavingGlassChrome
+                                    ? 0
+                                    : (showBack ? 190 : 70),
+                              ),
                               curve: Curves.easeOutBack,
                               child: AppleLiquidGlassBackButton(
                                 key: const ValueKey('persistent-liquid-back'),
@@ -277,13 +290,22 @@ class _ApplePersistentGlassHeaderOverlayState
                             child: AnimatedOpacity(
                               opacity: showTrailing ? 1 : 0,
                               duration: Duration(
-                                milliseconds: showTrailing ? 150 : 80,
+                                milliseconds: leavingGlassChrome
+                                    ? 35
+                                    : (showTrailing ? 150 : 80),
                               ),
                               curve: Curves.easeOutCubic,
                               child: AnimatedScale(
                               alignment: Alignment.centerRight,
-                              scale: showTrailing ? 1 : 0.94,
-                              duration: Duration(milliseconds: showTrailing ? 180 : 95),
+                              // Same fast fade-only exit as the back button.
+                              scale: leavingGlassChrome
+                                  ? 1
+                                  : (showTrailing ? 1 : 0.94),
+                              duration: Duration(
+                                milliseconds: leavingGlassChrome
+                                    ? 0
+                                    : (showTrailing ? 180 : 95),
+                              ),
                               curve: Curves.easeOutCubic,
                               child: hasNativeToolbar || _lastTrailingButtons != null
                                   ? AppleLiquidGlassActionGroup(
