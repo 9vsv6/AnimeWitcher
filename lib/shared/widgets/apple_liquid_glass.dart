@@ -333,6 +333,7 @@ class _ApplePersistentGlassHeaderOverlayState
 
   bool _syncScheduled = false;
   String? _lastNativeSignature;
+  List<Map<String, Object?>> _lastNativeActions = const <Map<String, Object?>>[];
 
   @override
   void initState() {
@@ -380,28 +381,43 @@ class _ApplePersistentGlassHeaderOverlayState
     final config = applePersistentGlassHeaderController.value;
     final colors = Theme.of(context).colorScheme;
     final buttons = config?.trailingButtons ?? const <AppleLiquidGlassToolbarButton>[];
+    final desiredActions = <Map<String, Object?>>[
+      for (final button in buttons)
+        <String, Object?>{
+          'systemName': button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
+          'title': button.title,
+          'width': button.width,
+          'enabled': button.onPressed != null ||
+              (button.menuItems.isNotEmpty && button.onMenuSelected != null),
+          'color': (button.color ?? colors.onSurface).toARGB32(),
+          'accessibilityLabel': button.tooltip,
+          'selectedValue': button.selectedMenuValue,
+          'menuTintColor': button.menuTintColor?.toARGB32(),
+          'menuItems': button.menuItems
+              .map((item) => item.toPlatformValue())
+              .toList(growable: false),
+        },
+    ];
+
+    // Structural changes to iOS 26 Liquid Glass are expensive while Flutter is
+    // simultaneously animating a route underneath them. Keep the already-drawn
+    // native action group during the page push, then let the toolbar morph once
+    // the route reports completed. This matches Apple's container/identity model:
+    // one persistent glass surface changes content instead of being rebuilt while
+    // the background itself is moving every frame.
+    final routeAnimation = config?.route?.animation;
+    final deferActionMorph =
+        config?.deferTrailingMorphUntilRouteSettles == true &&
+        routeAnimation != null &&
+        routeAnimation.status != AnimationStatus.completed;
+    final actions = deferActionMorph ? _lastNativeActions : desiredActions;
+
     return <String, Object?>{
       'visible': config != null,
       'showBack': config?.onBack != null,
       'backColor': (config?.backForegroundColor ?? colors.onSurface).toARGB32(),
       'backAccessibilityLabel': config?.backTooltip,
-      'actions': <Map<String, Object?>>[
-        for (final button in buttons)
-          <String, Object?>{
-            'systemName': button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
-            'title': button.title,
-            'width': button.width,
-            'enabled': button.onPressed != null ||
-                (button.menuItems.isNotEmpty && button.onMenuSelected != null),
-            'color': (button.color ?? colors.onSurface).toARGB32(),
-            'accessibilityLabel': button.tooltip,
-            'selectedValue': button.selectedMenuValue,
-            'menuTintColor': button.menuTintColor?.toARGB32(),
-            'menuItems': button.menuItems
-                .map((item) => item.toPlatformValue())
-                .toList(growable: false),
-          },
-      ],
+      'actions': actions,
     };
   }
 
@@ -415,6 +431,13 @@ class _ApplePersistentGlassHeaderOverlayState
       final signature = jsonEncode(state);
       if (signature == _lastNativeSignature) return;
       _lastNativeSignature = signature;
+      final sentActions = state['actions'];
+      if (sentActions is List) {
+        _lastNativeActions = <Map<String, Object?>>[
+          for (final action in sentActions)
+            if (action is Map) Map<String, Object?>.from(action),
+        ];
+      }
       _nativeHeaderChannel.invokeMethod<void>('update', state);
     });
   }

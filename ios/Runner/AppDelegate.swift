@@ -515,7 +515,11 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
       backButton.centerYAnchor.constraint(equalTo: rootView.centerYAnchor),
       backButton.widthAnchor.constraint(equalToConstant: 46),
       backButton.heightAnchor.constraint(equalToConstant: 46),
-      toolbar.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -8),
+      // Leave extra visual breathing room for iOS 26 Liquid Glass. The system
+      // material can render a few points beyond UIToolbar's logical bounds, so
+      // pinning the host to the safe-area edge keeps the trailing capsule fully
+      // on-screen instead of clipping the last item.
+      toolbar.trailingAnchor.constraint(equalTo: rootView.safeAreaLayoutGuide.trailingAnchor, constant: -18),
       toolbar.centerYAnchor.constraint(equalTo: rootView.centerYAnchor),
       toolbar.heightAnchor.constraint(equalToConstant: 46),
       toolbarWidthConstraint!,
