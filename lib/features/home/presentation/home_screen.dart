@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skystream/core/navigation/taskbar_destination.dart';
 import 'home_provider.dart';
 import 'home_state.dart';
 import 'package:skystream/features/home/presentation/widgets/continue_watching_section.dart';
@@ -285,67 +286,100 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       );
     }
 
-    // Mobile layout: existing AppBar + FAB
-    return Scaffold(
+    // Mobile: keep the home controls in the app-wide native toolbar.
+    // The same UIKit toolbar instance later morphs into the details actions.
+    final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
+    final persistentButtons = <AppleLiquidGlassToolbarButton>[
+      AppleLiquidGlassToolbarButton(
+        width: 42,
+        tooltip: appText(
+          context,
+          english: 'Filters',
+          arabic: 'الفلاتر',
+        ),
+        icon: Icons.tune_rounded,
+        color: Theme.of(context).colorScheme.primary,
+        onPressed: _isLoadingProviderSearchFilters
+            ? null
+            : () => _showProviderSearchFilters(ref),
+      ),
+      AppleLiquidGlassToolbarButton(
+        width: 42,
+        tooltip: appText(
+          context,
+          english: 'Search',
+          arabic: 'بحث',
+        ),
+        icon: Icons.search_rounded,
+        color: Theme.of(context).colorScheme.onSurface,
+        onPressed: () => _openSearchPage(focusKeyboard: true),
+      ),
+    ];
+
+    final mobileScaffold = Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: AppBar(
-        systemOverlayStyle: overlayStyle,
-        forceMaterialTransparency: true,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: Text(l10n.appTitle),
-        actions: [
-          // Native iOS Liquid Glass controls. Their 42pt square bounds make
-          // Apple's capsule corner configuration resolve to a true circle.
-          Padding(
-            padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
-            child: SizedBox.square(
-              dimension: 42,
-              child: AppleLiquidGlassToolbarButton(
-                width: 42,
-                tooltip: appText(
-                  context,
-                  english: 'Filters',
-                  arabic: 'الفلاتر',
-                ),
-                icon: Icons.tune_rounded,
-                color: Theme.of(context).colorScheme.primary,
-                onPressed: _isLoadingProviderSearchFilters
-                    ? null
-                    : () => _showProviderSearchFilters(ref),
-              ),
-            ),
+            systemOverlayStyle: overlayStyle,
+            forceMaterialTransparency: true,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            title: Text(l10n.appTitle),
+            actions: usePersistentGlass
+                ? const <Widget>[SizedBox(width: 104)]
+                : [
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: LayoutConstants.spacingSm,
+                      ),
+                      child: SizedBox.square(
+                        dimension: 42,
+                        child: AppleLiquidGlassToolbarButton(
+                          width: 42,
+                          tooltip: appText(
+                            context,
+                            english: 'Filters',
+                            arabic: 'الفلاتر',
+                          ),
+                          icon: Icons.tune_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                          onPressed: _isLoadingProviderSearchFilters
+                              ? null
+                              : () => _showProviderSearchFilters(ref),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: LayoutConstants.spacingSm,
+                      ),
+                      child: Focus(
+                        focusNode: _firstActionFocusNode,
+                        child: SizedBox.square(
+                          dimension: 42,
+                          child: AppleLiquidGlassToolbarButton(
+                            width: 42,
+                            tooltip: appText(
+                              context,
+                              english: 'Search',
+                              arabic: 'بحث',
+                            ),
+                            icon: Icons.search_rounded,
+                            color: Theme.of(context).colorScheme.onSurface,
+                            onPressed: () =>
+                                _openSearchPage(focusKeyboard: true),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
-            child: Focus(
-              focusNode: _firstActionFocusNode,
-              child: SizedBox.square(
-                dimension: 42,
-                child: AppleLiquidGlassToolbarButton(
-                  width: 42,
-                  tooltip: appText(
-                    context,
-                    english: 'Search',
-                    arabic: 'بحث',
-                  ),
-                  icon: Icons.search_rounded,
-                  color: Theme.of(context).colorScheme.onSurface,
-                  onPressed: () => _openSearchPage(focusKeyboard: true),
-                ),
-              ),
-            ),
-          ),
-
-        ],
-      ),
         ),
       ),
       body: _buildBody(
@@ -354,6 +388,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         history,
         generalSettings.watchHistoryEnabled,
       ),
+    );
+
+    if (!usePersistentGlass) return mobileScaffold;
+    return ApplePersistentGlassHeaderScope(
+      branchIndex: TaskbarDestination.home.branchIndex,
+      trailingButtons: persistentButtons,
+      child: mobileScaffold,
     );
   }
 

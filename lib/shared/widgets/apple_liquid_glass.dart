@@ -30,6 +30,7 @@ class ApplePersistentGlassHeaderConfig {
     this.backFallbackColor,
     this.trailing,
     this.trailingButtons,
+    this.branchIndex,
   });
 
   final Object owner;
@@ -40,6 +41,7 @@ class ApplePersistentGlassHeaderConfig {
   final Color? backFallbackColor;
   final Widget? trailing;
   final List<AppleLiquidGlassToolbarButton>? trailingButtons;
+  final int? branchIndex;
 }
 
 class ApplePersistentGlassHeaderController
@@ -52,12 +54,26 @@ class ApplePersistentGlassHeaderController
   // than moving it to the top and stealing the visible controls.
   final List<ApplePersistentGlassHeaderConfig> _routeStack =
       <ApplePersistentGlassHeaderConfig>[];
+  int? _activeBranchIndex;
+
+  bool _belongsToActiveBranch(ApplePersistentGlassHeaderConfig config) =>
+      config.branchIndex == null ||
+      _activeBranchIndex == null ||
+      config.branchIndex == _activeBranchIndex;
 
   bool _isCurrent(ApplePersistentGlassHeaderConfig config) =>
-      config.route == null || config.route!.isCurrent;
+      _belongsToActiveBranch(config) &&
+      (config.route == null || config.route!.isCurrent);
 
   bool _isActive(ApplePersistentGlassHeaderConfig config) =>
-      config.route == null || config.route!.isActive;
+      _belongsToActiveBranch(config) &&
+      (config.route == null || config.route!.isActive);
+
+  void setActiveBranch(int index) {
+    if (_activeBranchIndex == index) return;
+    _activeBranchIndex = index;
+    _syncVisibleItem();
+  }
 
   void _syncVisibleItem() {
     ApplePersistentGlassHeaderConfig? next;
@@ -120,6 +136,7 @@ class ApplePersistentGlassHeaderScope extends StatefulWidget {
     this.backFallbackColor,
     this.trailing,
     this.trailingButtons,
+    this.branchIndex,
   });
 
   final Widget child;
@@ -130,6 +147,7 @@ class ApplePersistentGlassHeaderScope extends StatefulWidget {
   final Color? backFallbackColor;
   final Widget? trailing;
   final List<AppleLiquidGlassToolbarButton>? trailingButtons;
+  final int? branchIndex;
 
   @override
   State<ApplePersistentGlassHeaderScope> createState() =>
@@ -159,6 +177,7 @@ class _ApplePersistentGlassHeaderScopeState
         backFallbackColor: widget.backFallbackColor,
         trailing: widget.trailing,
         trailingButtons: widget.trailingButtons,
+        branchIndex: widget.branchIndex,
       ),
     );
   }
@@ -317,7 +336,7 @@ class _ApplePersistentGlassHeaderOverlayState
                                   ? AppleLiquidGlassActionGroup(
                                       key: const ValueKey('persistent-native-toolbar'),
                                       height: 46,
-                                      minimumCapacity: 3,
+                                      minimumCapacity: 5,
                                       children: toolbarButtons,
                                     )
                                   : KeyedSubtree(
@@ -534,6 +553,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Color? color;
   final String? tooltip;
+  final String? title;
   final double width;
   final List<AppleNativeMenuItem> menuItems;
   final String? selectedMenuValue;
@@ -546,6 +566,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
     required this.onPressed,
     this.color,
     this.tooltip,
+    this.title,
     this.width = 46,
     this.menuItems = const <AppleNativeMenuItem>[],
     this.selectedMenuValue,
@@ -564,6 +585,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
           onSelected: onMenuSelected!,
           accessibilityLabel: tooltip ?? '',
           systemImage: nativeSymbol,
+          title: title,
           selectedValue: selectedMenuValue,
           fallbackIcon: icon,
           size: width,
@@ -651,6 +673,20 @@ String? _appleSystemSymbolForIcon(IconData icon) {
   }
   if (icon == Icons.schedule_rounded || icon == Icons.schedule) {
     return 'clock';
+  }
+  if (icon == Icons.play_circle_fill_rounded ||
+      icon == Icons.play_circle_fill) {
+    return 'play.circle.fill';
+  }
+  if (icon == Icons.pause_circle_filled_rounded ||
+      icon == Icons.pause_circle_filled) {
+    return 'pause.circle.fill';
+  }
+  if (icon == Icons.check_circle_rounded || icon == Icons.check_circle) {
+    return 'checkmark.circle.fill';
+  }
+  if (icon == Icons.block_rounded || icon == Icons.block) {
+    return 'xmark.circle.fill';
   }
   return null;
 }
@@ -765,6 +801,7 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
       for (final button in widget.buttons)
         <String, Object?>{
           'systemName': _appleSystemSymbolForIcon(button.icon),
+          'title': button.title,
           'enabled': button.onPressed != null ||
               (button.menuItems.isNotEmpty && button.onMenuSelected != null),
           'color': (button.color ?? Theme.of(context).colorScheme.onSurface)

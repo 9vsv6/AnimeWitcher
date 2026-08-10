@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skystream/core/navigation/taskbar_destination.dart';
 
 import '../../../core/providers/device_info_provider.dart';
 import '../../../core/storage/library_category.dart';
@@ -89,6 +90,44 @@ class LibraryScreen extends ConsumerWidget {
     );
   }
 
+  AppleLiquidGlassToolbarButton _persistentCategoryButton(
+    BuildContext context,
+    WidgetRef ref,
+    LibraryCategory selected,
+  ) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return AppleLiquidGlassToolbarButton(
+      icon: _categoryIcon(selected),
+      title: _categoryLabel(context, selected),
+      width: isArabic ? 218 : 210,
+      tooltip: isArabic ? 'اختر قائمة' : 'Choose list',
+      color: primary,
+      menuTintColor: primary,
+      onPressed: null,
+      selectedMenuValue: selected.storageKey,
+      menuItems: <AppleNativeMenuItem>[
+        for (final category in LibraryCategory.values)
+          AppleNativeMenuItem(
+            value: category.storageKey,
+            label: _categoryLabel(context, category),
+            systemImage: _categorySystemImage(category),
+          ),
+      ],
+      onMenuSelected: (value) {
+        final category = LibraryCategory.values.firstWhere(
+          (candidate) => candidate.storageKey == value,
+          orElse: () => selected,
+        );
+        if (category != selected) {
+          ref.read(libraryProvider.notifier).selectCategory(category);
+        }
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(deviceProfileProvider).asData?.value;
@@ -118,11 +157,26 @@ class LibraryScreen extends ConsumerWidget {
       );
     }
 
-    return Scaffold(
+    final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
+    final mobileScaffold = Scaffold(
       appBar: AppBar(
-        title: _categorySelector(context, ref, selectedCategory),
+        title: usePersistentGlass
+            ? const SizedBox.shrink()
+            : _categorySelector(context, ref, selectedCategory),
+        actions: usePersistentGlass
+            ? const <Widget>[SizedBox(width: 230)]
+            : null,
       ),
       body: const BookmarksTab(),
+    );
+
+    if (!usePersistentGlass) return mobileScaffold;
+    return ApplePersistentGlassHeaderScope(
+      branchIndex: TaskbarDestination.library.branchIndex,
+      trailingButtons: <AppleLiquidGlassToolbarButton>[
+        _persistentCategoryButton(context, ref, selectedCategory),
+      ],
+      child: mobileScaffold,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skystream/core/navigation/taskbar_destination.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../core/providers/device_info_provider.dart';
@@ -519,6 +520,40 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return _buildMobileLayout(context);
   }
 
+  List<AppleLiquidGlassToolbarButton> _buildPersistentSearchButtons(
+    BuildContext context,
+  ) {
+    final activeFilters = ref.watch(searchProviderFiltersProvider);
+    final sortOption = SearchSortOption.fromValue(activeFilters.sort);
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return <AppleLiquidGlassToolbarButton>[
+      AppleLiquidGlassToolbarButton(
+        width: 42,
+        icon: Icons.sort_rounded,
+        tooltip:
+            '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
+        color: primary,
+        menuTintColor: primary,
+        onPressed: _showSearchSort,
+        selectedMenuValue: activeFilters.sort,
+        menuItems: _searchSortMenuItems(context),
+        onMenuSelected: _applySearchSort,
+      ),
+      AppleLiquidGlassToolbarButton(
+        width: 42,
+        icon: Icons.tune_rounded,
+        tooltip: appText(
+          context,
+          english: 'Filters',
+          arabic: 'الفلاتر',
+        ),
+        color: primary,
+        onPressed: _isLoadingProviderFilters ? null : _showSearchFilters,
+      ),
+    ];
+  }
+
   Widget _buildMobileSearchActionGroup(BuildContext context) {
     final activeFilters = ref.watch(searchProviderFiltersProvider);
     final sortOption = SearchSortOption.fromValue(activeFilters.sort);
@@ -552,15 +587,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final theme = Theme.of(context);
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
         leadingWidth: isArabic ? 104 : null,
         leading: isArabic
             ? Padding(
                 padding: const EdgeInsets.only(right: 10),
-                child: _buildMobileSearchActionGroup(context),
+                child: usePersistentGlass
+                    ? const SizedBox(width: 94)
+                    : _buildMobileSearchActionGroup(context),
               )
             : null,
         actions: isArabic
@@ -568,7 +606,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             : [
                 Padding(
                   padding: const EdgeInsets.only(right: 10),
-                  child: _buildMobileSearchActionGroup(context),
+                  child: usePersistentGlass
+                      ? const SizedBox(width: 94)
+                      : _buildMobileSearchActionGroup(context),
                 ),
               ],
         title: GestureDetector(
@@ -680,6 +720,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       ),
       body: _buildBody(context),
+    );
+
+    if (!usePersistentGlass) return scaffold;
+    return ApplePersistentGlassHeaderScope(
+      branchIndex: TaskbarDestination.search.branchIndex,
+      trailingButtons: _buildPersistentSearchButtons(context),
+      child: scaffold,
     );
   }
 

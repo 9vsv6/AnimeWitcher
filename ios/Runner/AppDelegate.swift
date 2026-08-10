@@ -545,13 +545,37 @@ private final class AppleNativeToolbarViewFactory: NSObject, FlutterPlatformView
   }
 }
 
+private final class SkyStreamPassthroughView: UIView {
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    let hit = super.hitTest(point, with: event)
+    return hit === self ? nil : hit
+  }
+}
+
+private final class SkyStreamPassthroughToolbar: UIToolbar {
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    guard let hit = super.hitTest(point, with: event) else { return nil }
+
+    // The persistent toolbar intentionally has a wider transparent host so a
+    // long library-category item can morph into the 3-action details group
+    // without recreating the platform view. Only actual controls should claim
+    // touches; the empty flexible-space region must pass taps through to Flutter.
+    var candidate: UIView? = hit
+    while let view = candidate, view !== self {
+      if view is UIControl { return hit }
+      candidate = view.superview
+    }
+    return nil
+  }
+}
+
 private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformView {
-  private let rootView: UIView
+  private let rootView: SkyStreamPassthroughView
   private let channel: FlutterMethodChannel
-  private let toolbar: UIToolbar
+  private let toolbar: SkyStreamPassthroughToolbar
   private var didApplyInitialState = false
   private var currentActionItems: [UIBarButtonItem] = []
-  private var currentActionKinds: [Bool] = []
+  private var currentActionKinds: [Int] = []
 
   init(
     frame: CGRect,
@@ -559,8 +583,8 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     messenger: FlutterBinaryMessenger,
     arguments args: Any?
   ) {
-    rootView = UIView(frame: frame)
-    toolbar = UIToolbar(frame: .zero)
+    rootView = SkyStreamPassthroughView(frame: frame)
+    toolbar = SkyStreamPassthroughToolbar(frame: .zero)
     channel = FlutterMethodChannel(
       name: "dev.akash.skystream/native_toolbar/\(viewId)",
       binaryMessenger: messenger
@@ -661,6 +685,16 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     return !menuItems.isEmpty
   }
 
+  private func actionTitle(_ action: [String: Any]) -> String? {
+    guard let raw = action["title"] as? String else { return nil }
+    let title = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return title.isEmpty ? nil : title
+  }
+
+  private func actionKind(_ action: [String: Any]) -> Int {
+    (actionHasMenu(action) ? 1 : 0) | (actionTitle(action) != nil ? 2 : 0)
+  }
+
   private func configureActionItem(
     _ item: UIBarButtonItem,
     actionIndex: Int,
@@ -672,6 +706,7 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
       systemName: systemName,
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
     )
+    item.title = actionTitle(action)
     item.tag = actionIndex
     item.isEnabled = action["enabled"] as? Bool ?? true
     item.tintColor = skyStreamUIColor(action["color"], fallback: .label)
@@ -698,10 +733,10 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
 
       if #available(iOS 14.0, *), let menu = makeMenu(actionIndex: index, action: action) {
         // A UIBarButtonItem-owned UIMenu is the native tap-to-open menu path.
-        // This avoids relying on a nested UIButton inside a visual-effect view,
-        // which was why the comments sort circle could appear but not open.
+        // A library category can also carry a title while remaining the same
+        // system toolbar item that morphs into the details action group.
         item = UIBarButtonItem(
-          title: nil,
+          title: actionTitle(action),
           image: image,
           primaryAction: nil,
           menu: menu
@@ -734,7 +769,7 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   private func apply(arguments: Any?, animated: Bool) {
     guard let values = arguments as? [String: Any] else { return }
     let actions = values["actions"] as? [[String: Any]] ?? []
-    let actionKinds = actions.map(actionHasMenu)
+    let actionKinds = actions.map(actionKind)
 
     // A favorite/bookmark state change only changes an item's image/tint/menu
     // state. Replacing the entire toolbar in that case makes UIKit run its

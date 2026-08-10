@@ -7,6 +7,7 @@ import 'package:skystream/core/providers/device_info_provider.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:skystream/shared/widgets/custom_bottom_nav.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:skystream/shared/widgets/app_sidebar.dart';
 
 import 'package:skystream/l10n/generated/app_localizations.dart';
@@ -39,6 +40,9 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
   }
 
   void _onItemTapped(int index, BuildContext context) {
+    if (appleUsesPersistentLiquidGlassHeader) {
+      applePersistentGlassHeaderController.setActiveBranch(index);
+    }
     widget.navigationShell.goBranch(
       index,
       initialLocation: index == widget.navigationShell.currentIndex,
@@ -87,6 +91,14 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
   @override
   Widget build(BuildContext context) {
     final deviceProfileAsync = ref.watch(deviceProfileProvider);
+    if (appleUsesPersistentLiquidGlassHeader) {
+      final activeBranch = widget.navigationShell.currentIndex;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          applePersistentGlassHeaderController.setActiveBranch(activeBranch);
+        }
+      });
+    }
     final generalSettings = ref.watch(generalSettingsProvider);
     final defaultIndex = _getRouteIndex(generalSettings.defaultHomeScreen);
     final taskbarDestinations = visibleTaskbarDestinations(
