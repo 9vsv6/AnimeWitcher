@@ -525,6 +525,7 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   private var toolbarWidthConstraint: NSLayoutConstraint!
   private var didApplyInitialState = false
   private var isCollapsed = false
+  private var previousItemCount = 0
 
   init(
     frame: CGRect,
@@ -661,17 +662,19 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     collapsedItem.tintColor = fullItems.first?.tintColor ?? .label
     collapsedItem.accessibilityLabel = "Sort"
 
-    let stateChanged = didApplyInitialState && collapsed != isCollapsed
-    isCollapsed = collapsed
-    didApplyInitialState = true
-
     let targetItems = collapsed ? [collapsedItem] : fullItems
     let targetWidth = collapsed ? itemExtent : expandedWidth
+    let structuralChange = didApplyInitialState && (
+      collapsed != isCollapsed || targetItems.count != previousItemCount
+    )
+    isCollapsed = collapsed
+    previousItemCount = targetItems.count
+    didApplyInitialState = true
 
-    toolbar.setItems(targetItems, animated: stateChanged)
+    toolbar.setItems(targetItems, animated: structuralChange)
     toolbarWidthConstraint.constant = targetWidth
 
-    guard stateChanged else {
+    guard structuralChange else {
       rootView.layoutIfNeeded()
       return
     }

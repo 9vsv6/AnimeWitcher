@@ -49,6 +49,7 @@ class _AnimeWitcherRepliesScreenState
 
   @override
   void dispose() {
+    applePersistentGlassHeaderController.hide(this);
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
@@ -193,15 +194,34 @@ class _AnimeWitcherRepliesScreenState
     final service = ref.read(animeWitcherAccountServiceProvider);
     final isSignedIn = accountState.asData?.value.isSignedIn ?? service.isSignedIn;
 
+    if (appleUsesPersistentLiquidGlassHeader) {
+      final colors = Theme.of(context).colorScheme;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        applePersistentGlassHeaderController.show(
+          ApplePersistentGlassHeaderConfig(
+            owner: this,
+            onBack: () => Navigator.of(context).pop(),
+            backForegroundColor: colors.onSurface,
+            backFallbackColor: colors.surfaceContainerHigh,
+            trailing: null,
+          ),
+        );
+      });
+    }
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: AppBar(
-            leading: AppleLiquidGlassBackButton(
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            automaticallyImplyLeading: false,
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
             title: Align(
               alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
               child: Directionality(

@@ -53,6 +53,7 @@ class _AnimeWitcherCommentsScreenState
 
   @override
   void dispose() {
+    applePersistentGlassHeaderController.hide(this);
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
@@ -205,6 +206,7 @@ class _AnimeWitcherCommentsScreenState
       ),
     );
     if (!mounted) return;
+    setState(() {});
     // The AnimeWitcher backend owns the authoritative replies counter.
     // Refresh the visible page after returning so it picks up server changes.
     await _loadInitial();
@@ -263,6 +265,39 @@ class _AnimeWitcherCommentsScreenState
     final service = ref.read(animeWitcherAccountServiceProvider);
     final isSignedIn = accountState.asData?.value.isSignedIn ?? service.isSignedIn;
 
+    if (appleUsesPersistentLiquidGlassHeader) {
+      final colors = Theme.of(context).colorScheme;
+      final trailing = AppleLiquidGlassActionGroup(
+        height: 46,
+        children: [
+          AppleLiquidGlassToolbarButton(
+            tooltip: isArabic ? 'ترتيب التعليقات' : 'Sort comments',
+            icon: Icons.filter_list_rounded,
+            color: colors.primary,
+            menuTintColor: colors.primary,
+            onPressed: null,
+            selectedMenuValue: _sort.name,
+            menuItems: _commentSortMenuItems(isArabic),
+            onMenuSelected: (value) {
+              _applyCommentSort(_commentSortFromValue(value));
+            },
+          ),
+        ],
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        applePersistentGlassHeaderController.show(
+          ApplePersistentGlassHeaderConfig(
+            owner: this,
+            onBack: () => Navigator.of(context).pop(),
+            backForegroundColor: colors.onSurface,
+            backFallbackColor: colors.surfaceContainerHigh,
+            trailing: trailing,
+          ),
+        );
+      });
+    }
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
@@ -271,9 +306,12 @@ class _AnimeWitcherCommentsScreenState
           child: AppBar(
             centerTitle: false,
             titleSpacing: 16,
-            leading: AppleLiquidGlassBackButton(
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            automaticallyImplyLeading: false,
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
             title: Align(
               alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
               child: Directionality(
@@ -281,24 +319,26 @@ class _AnimeWitcherCommentsScreenState
                 child: Text(isArabic ? 'التعليقات' : 'Comments'),
               ),
             ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: AppleNativeMenuButton(
-                  accessibilityLabel:
-                      isArabic ? 'ترتيب التعليقات' : 'Sort comments',
-                  systemImage: 'arrow.up.arrow.down',
-                  fallbackIcon: Icons.filter_list_rounded,
-                  size: 46,
-                  tintColor: Theme.of(context).colorScheme.primary,
-                  selectedValue: _sort.name,
-                  items: _commentSortMenuItems(isArabic),
-                  onSelected: (value) {
-                    _applyCommentSort(_commentSortFromValue(value));
-                  },
-                ),
-              ),
-            ],
+            actions: appleUsesPersistentLiquidGlassHeader
+                ? const <Widget>[]
+                : [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: AppleNativeMenuButton(
+                        accessibilityLabel:
+                            isArabic ? 'ترتيب التعليقات' : 'Sort comments',
+                        systemImage: 'arrow.up.arrow.down',
+                        fallbackIcon: Icons.filter_list_rounded,
+                        size: 46,
+                        tintColor: Theme.of(context).colorScheme.primary,
+                        selectedValue: _sort.name,
+                        items: _commentSortMenuItems(isArabic),
+                        onSelected: (value) {
+                          _applyCommentSort(_commentSortFromValue(value));
+                        },
+                      ),
+                    ),
+                  ],
           ),
         ),
       ),

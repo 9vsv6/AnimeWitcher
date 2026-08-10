@@ -12,6 +12,160 @@ const _appleNativeMenuButtonViewType =
 bool get _usesNativeAppleLiquidGlass =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
+
+/// True on iOS where SkyStream hosts the native Liquid Glass controls.
+/// Screens use this to hand their header actions to the persistent overlay
+/// instead of creating route-local platform views that slide with transitions.
+bool get appleUsesPersistentLiquidGlassHeader => _usesNativeAppleLiquidGlass;
+
+class ApplePersistentGlassHeaderConfig {
+  const ApplePersistentGlassHeaderConfig({
+    required this.owner,
+    this.onBack,
+    this.backTooltip,
+    this.backForegroundColor,
+    this.backFallbackColor,
+    this.trailing,
+  });
+
+  final Object owner;
+  final VoidCallback? onBack;
+  final String? backTooltip;
+  final Color? backForegroundColor;
+  final Color? backFallbackColor;
+  final Widget? trailing;
+}
+
+class ApplePersistentGlassHeaderController
+    extends ValueNotifier<ApplePersistentGlassHeaderConfig?> {
+  ApplePersistentGlassHeaderController() : super(null);
+
+  void show(ApplePersistentGlassHeaderConfig config) {
+    value = config;
+  }
+
+  void hide(Object owner) {
+    if (value?.owner == owner) value = null;
+  }
+}
+
+final applePersistentGlassHeaderController =
+    ApplePersistentGlassHeaderController();
+
+/// A single route-independent Liquid Glass header layer.
+///
+/// It lives above the Navigator in MaterialApp.builder, so route transitions
+/// never translate the actual UIKit platform views. Screens only replace the
+/// callbacks/content. The back control therefore stays at one physical
+/// position while its destination changes, and the trailing toolbar can morph
+/// between page-specific actions without spawning a second glass control.
+class ApplePersistentGlassHeaderOverlay extends StatefulWidget {
+  const ApplePersistentGlassHeaderOverlay({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<ApplePersistentGlassHeaderOverlay> createState() =>
+      _ApplePersistentGlassHeaderOverlayState();
+}
+
+class _ApplePersistentGlassHeaderOverlayState
+    extends State<ApplePersistentGlassHeaderOverlay> {
+  ApplePersistentGlassHeaderConfig? _lastConfig;
+  Widget? _lastTrailing;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_usesNativeAppleLiquidGlass) return widget.child;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.child,
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: ValueListenableBuilder<ApplePersistentGlassHeaderConfig?>(
+              valueListenable: applePersistentGlassHeaderController,
+              builder: (context, config, _) {
+                if (config != null) {
+                  _lastConfig = config;
+                  if (config.trailing != null) _lastTrailing = config.trailing;
+                }
+                final effective = config ?? _lastConfig;
+                final visible = config != null;
+                final showBack = visible && effective?.onBack != null;
+                final showTrailing = visible && config?.trailing != null;
+
+                return SizedBox(
+                  height: kToolbarHeight,
+                  child: IgnorePointer(
+                    ignoring: !visible,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned(
+                          left: 8,
+                          top: (kToolbarHeight - 46) / 2,
+                          child: AnimatedOpacity(
+                            opacity: showBack ? 1 : 0,
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            child: AnimatedScale(
+                              scale: showBack ? 1 : 0.82,
+                              duration: const Duration(milliseconds: 260),
+                              curve: Curves.easeOutBack,
+                              child: AppleLiquidGlassBackButton(
+                                key: const ValueKey('persistent-liquid-back'),
+                                size: 46,
+                                foregroundColor:
+                                    effective?.backForegroundColor,
+                                fallbackColor: effective?.backFallbackColor,
+                                tooltip: effective?.backTooltip,
+                                onPressed: effective?.onBack ?? () {},
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 12,
+                          top: (kToolbarHeight - 46) / 2,
+                          child: AnimatedOpacity(
+                            opacity: showTrailing ? 1 : 0,
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            child: AnimatedScale(
+                              alignment: Alignment.centerRight,
+                              scale: showTrailing ? 1 : 0.84,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutBack,
+                              child: KeyedSubtree(
+                                key: const ValueKey(
+                                  'persistent-liquid-trailing',
+                                ),
+                                child: config?.trailing ??
+                                    _lastTrailing ??
+                                    const SizedBox.shrink(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// A real iOS Liquid Glass surface backed by UIKit's UIGlassEffect on iOS 26+.
 ///
 /// Flutter only owns the content drawn above this surface. The material itself
@@ -479,7 +633,7 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     // UIToolbar keeps a small system inset around grouped bar items on
     // iOS 26. Reserve it in Flutter so the trailing bookmark is never clipped
     // by the screen edge while keeping the native glass group intact.
-    final nativeWidth = widget.height * widget.buttons.length + 16;
+    final nativeWidth = widget.height * widget.buttons.length + 32;
     return SizedBox(
       width: nativeWidth,
       height: widget.height,

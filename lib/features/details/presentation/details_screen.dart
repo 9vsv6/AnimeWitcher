@@ -68,7 +68,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   static const Duration _tabTransitionDuration = Duration(milliseconds: 260);
 
   bool _didTriggerAutoPlay = false;
-  bool _commentsTransitionCollapsed = false;
   int _selectedDetailsTab = 0;
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
@@ -134,8 +133,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return AppleLiquidGlassActionGroup(
       height: 46,
       fallbackColor: fallbackColor,
-      collapsed: _commentsTransitionCollapsed,
-      collapsedSystemImage: 'arrow.up.arrow.down',
       children: [
         if (commentTarget != null)
           AppleLiquidGlassToolbarButton(
@@ -197,23 +194,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     BuildContext context,
     AnimeWitcherCommentTarget target,
   ) async {
-    if (_commentsTransitionCollapsed) return;
-
-    // Start the native iOS Liquid Glass contraction first, then begin the
-    // route transition a frame later. This mirrors the system toolbar motion
-    // where the shared glass group compresses into the destination control.
-    setState(() => _commentsTransitionCollapsed = true);
-    await Future<void>.delayed(const Duration(milliseconds: 45));
-    if (!mounted) return;
-
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => AnimeWitcherCommentsScreen(target: target),
       ),
     );
-
-    if (!mounted) return;
-    setState(() => _commentsTransitionCollapsed = false);
+    if (!mounted || !appleUsesPersistentLiquidGlassHeader) return;
+    setState(() {});
   }
 
   String _libraryCategoryLabel(BuildContext context, LibraryCategory category) {
@@ -875,6 +862,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   @override
   void dispose() {
+    applePersistentGlassHeaderController.hide(this);
     _detailsScrollController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
@@ -954,6 +942,36 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     final l10n = AppLocalizations.of(context)!;
 
+    if (appleUsesPersistentLiquidGlassHeader) {
+      final headerForeground = isLarge
+          ? Theme.of(context).colorScheme.onSurface
+          : Colors.white;
+      final headerFallback = isLarge
+          ? Theme.of(context).colorScheme.surfaceContainerHigh
+          : Colors.black45;
+      final trailing = _buildDetailsHeaderActions(
+        context,
+        item,
+        isFavorite: isFavorite,
+        isBookmarked: isBookmarked,
+        libraryNotifier: libraryNotifier,
+        foregroundColor: headerForeground,
+        fallbackColor: headerFallback,
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        applePersistentGlassHeaderController.show(
+          ApplePersistentGlassHeaderConfig(
+            owner: this,
+            onBack: () => context.pop(),
+            backForegroundColor: headerForeground,
+            backFallbackColor: headerFallback,
+            trailing: trailing,
+          ),
+        );
+      });
+    }
+
     // ── Desktop / TV: Immersive hero layout ──
     if (isLarge) {
       return _buildDesktopLayout(
@@ -1031,41 +1049,45 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     mobileCollapseExtent,
                   ),
                 ),
-                // Native Apple Liquid Glass header controls on iOS 26+.
-                leadingWidth: 64,
-                leading: _withDetailsHeaderPullReaction(
-                  Focus(
-                    descendantsAreTraversable: false,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: AppleLiquidGlassBackButton(
-                        size: 46,
-                        foregroundColor: Colors.white,
-                        fallbackColor: Colors.black45,
-                        onPressed: () => context.pop(),
-                      ),
-                    ),
-                  ),
-                ),
-                actions: [
-                  _withDetailsHeaderPullReaction(
-                    Focus(
-                      descendantsAreTraversable: false,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _buildDetailsHeaderActions(
-                          context,
-                          item,
-                          isFavorite: isFavorite,
-                          isBookmarked: isBookmarked,
-                          libraryNotifier: libraryNotifier,
-                          foregroundColor: Colors.white,
-                          fallbackColor: Colors.black45,
+                automaticallyImplyLeading: false,
+                leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
+                leading: appleUsesPersistentLiquidGlassHeader
+                    ? null
+                    : _withDetailsHeaderPullReaction(
+                        Focus(
+                          descendantsAreTraversable: false,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: AppleLiquidGlassBackButton(
+                              size: 46,
+                              foregroundColor: Colors.white,
+                              fallbackColor: Colors.black45,
+                              onPressed: () => context.pop(),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                actions: appleUsesPersistentLiquidGlassHeader
+                    ? const <Widget>[]
+                    : [
+                        _withDetailsHeaderPullReaction(
+                          Focus(
+                            descendantsAreTraversable: false,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _buildDetailsHeaderActions(
+                                context,
+                                item,
+                                isFavorite: isFavorite,
+                                isBookmarked: isBookmarked,
+                                libraryNotifier: libraryNotifier,
+                                foregroundColor: Colors.white,
+                                fallbackColor: Colors.black45,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
               ),
             ),
             ..._buildMobileSlivers(
@@ -1432,30 +1454,35 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
-            leadingWidth: 64,
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: AppleLiquidGlassBackButton(
-                size: 46,
-                foregroundColor: textColor,
-                fallbackColor: isDark ? Colors.black45 : Colors.white54,
-                onPressed: () => context.pop(),
-              ),
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _buildDetailsHeaderActions(
-                  context,
-                  item,
-                  isFavorite: isFavorite,
-                  isBookmarked: isBookmarked,
-                  libraryNotifier: libraryNotifier,
-                  foregroundColor: textColor,
-                  fallbackColor: isDark ? Colors.black45 : Colors.white54,
-                ),
-              ),
-            ],
+            automaticallyImplyLeading: false,
+            leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: AppleLiquidGlassBackButton(
+                      size: 46,
+                      foregroundColor: textColor,
+                      fallbackColor: isDark ? Colors.black45 : Colors.white54,
+                      onPressed: () => context.pop(),
+                    ),
+                  ),
+            actions: appleUsesPersistentLiquidGlassHeader
+                ? const <Widget>[]
+                : [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _buildDetailsHeaderActions(
+                        context,
+                        item,
+                        isFavorite: isFavorite,
+                        isBookmarked: isBookmarked,
+                        libraryNotifier: libraryNotifier,
+                        foregroundColor: textColor,
+                        fallbackColor: isDark ? Colors.black45 : Colors.white54,
+                      ),
+                    ),
+                  ],
           ),
         ),
       ),

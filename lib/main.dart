@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter/material.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart'; // LogicalKeyboardKey, KeyDownEvent
 import 'package:flutter/foundation.dart'; // For kReleaseMode
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -400,6 +401,7 @@ class _MyAppState extends ConsumerState<MyApp>
               }
             }
 
+            result = ApplePersistentGlassHeaderOverlay(child: result);
             return result;
           },
         );
