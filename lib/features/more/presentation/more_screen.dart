@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/taskbar_visibility.dart';
 
 import '../../settings/presentation/settings_screen.dart';
 import 'broadcast_schedule_screen.dart';
@@ -32,8 +31,7 @@ class MoreScreen extends StatelessWidget {
               subtitle: isArabic
                   ? 'الموسم السابق والحالي والقادم وجميع المواسم'
                   : 'Previous, current, next, and all seasons',
-              onTap: () => pushWithTaskbarHidden<void>(
-                context,
+              onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const SeasonsScreen(),
                 ),
@@ -46,8 +44,7 @@ class MoreScreen extends StatelessWidget {
               subtitle: isArabic
                   ? 'الأنميات موزعة على أيام الأسبوع السبعة'
                   : 'Anime grouped across the seven weekdays',
-              onTap: () => pushWithTaskbarHidden<void>(
-                context,
+              onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const BroadcastScheduleScreen(),
                 ),
@@ -62,8 +59,7 @@ class MoreScreen extends StatelessWidget {
               subtitle: isArabic
                   ? 'إعدادات التطبيق والحساب والمشغل'
                   : 'App, account, and player settings',
-              onTap: () => pushWithTaskbarHidden<void>(
-                context,
+              onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const SettingsScreen(),
                 ),
