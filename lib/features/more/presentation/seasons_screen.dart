@@ -77,6 +77,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: AppBar(
+            automaticallyImplyLeading: false,
             centerTitle: false,
             titleSpacing: 16,
             title: ApplePersistentGlassHeaderScope(
@@ -422,6 +423,7 @@ class _SeasonResultsScreen extends StatelessWidget {
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: AppBar(
+            automaticallyImplyLeading: false,
             centerTitle: false,
             titleSpacing: 16,
             title: ApplePersistentGlassHeaderScope(

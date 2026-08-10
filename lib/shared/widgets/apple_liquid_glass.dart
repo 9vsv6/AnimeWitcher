@@ -54,14 +54,32 @@ class ApplePersistentGlassHeaderController
   bool _isCurrent(ApplePersistentGlassHeaderConfig config) =>
       config.route == null || config.route!.isCurrent;
 
+  bool _isActive(ApplePersistentGlassHeaderConfig config) =>
+      config.route == null || config.route!.isActive;
+
   void _syncVisibleItem() {
     ApplePersistentGlassHeaderConfig? next;
+
+    // Prefer the navigation item owned by the current route. During an iOS
+    // push/pop transition there can be a short interval where neither route
+    // reports isCurrent. Falling back to the newest still-active route keeps
+    // the single physical Liquid Glass back button mounted and only rebinds
+    // its action, matching a UINavigationBar instead of fading/recreating it.
     for (final entry in _routeStack.reversed) {
       if (_isCurrent(entry)) {
         next = entry;
         break;
       }
     }
+    if (next == null) {
+      for (final entry in _routeStack.reversed) {
+        if (_isActive(entry)) {
+          next = entry;
+          break;
+        }
+      }
+    }
+
     if (!identical(value, next)) value = next;
   }
 
@@ -232,11 +250,11 @@ class _ApplePersistentGlassHeaderOverlayState
                           top: (kToolbarHeight - 46) / 2,
                           child: AnimatedOpacity(
                             opacity: showBack ? 1 : 0,
-                            duration: Duration(milliseconds: showBack ? 160 : 95),
+                            duration: Duration(milliseconds: showBack ? 160 : 55),
                             curve: Curves.easeOutCubic,
                             child: AnimatedScale(
                               scale: showBack ? 1 : 0.88,
-                              duration: Duration(milliseconds: showBack ? 190 : 110),
+                              duration: Duration(milliseconds: showBack ? 190 : 70),
                               curve: Curves.easeOutBack,
                               child: AppleLiquidGlassBackButton(
                                 key: const ValueKey('persistent-liquid-back'),

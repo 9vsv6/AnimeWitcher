@@ -91,6 +91,7 @@ class _BroadcastScheduleScreenState
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: AppBar(
+            automaticallyImplyLeading: false,
             centerTitle: false,
             titleSpacing: 16,
             title: ApplePersistentGlassHeaderScope(
