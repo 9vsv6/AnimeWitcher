@@ -117,6 +117,71 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
+  List<AppleLiquidGlassToolbarButton> _buildDetailsHeaderButtons(
+    BuildContext context,
+    MultimediaItem item, {
+    required bool isFavorite,
+    required bool isBookmarked,
+    required dynamic libraryNotifier,
+    required Color foregroundColor,
+  }) {
+    const favoriteRed = Color(0xFFFF3B30);
+    final colors = Theme.of(context).colorScheme;
+    final commentTarget = animeWitcherAnimeCommentTarget(item);
+
+    return <AppleLiquidGlassToolbarButton>[
+      if (commentTarget != null)
+        AppleLiquidGlassToolbarButton(
+          tooltip: appText(
+            context,
+            english: 'Comments',
+            arabic: 'التعليقات',
+          ),
+          icon: Icons.chat_bubble_outline_rounded,
+          color: foregroundColor,
+          onPressed: () => _openAnimeComments(context, commentTarget),
+        ),
+      AppleLiquidGlassToolbarButton(
+        tooltip: isFavorite
+            ? appText(
+                context,
+                english: 'Remove favorite',
+                arabic: 'إزالة من المفضلة',
+              )
+            : appText(
+                context,
+                english: 'Add to favorites',
+                arabic: 'إضافة إلى المفضلة',
+              ),
+        icon: isFavorite
+            ? Icons.favorite_rounded
+            : Icons.favorite_border_rounded,
+        color: isFavorite ? favoriteRed : foregroundColor,
+        onPressed: () => libraryNotifier.setFavorite(item, !isFavorite),
+      ),
+      AppleLiquidGlassToolbarButton(
+        tooltip: appText(
+          context,
+          english: 'Choose list',
+          arabic: 'اختر قائمة',
+        ),
+        icon: isBookmarked
+            ? Icons.bookmark_rounded
+            : Icons.bookmark_border_rounded,
+        color: isBookmarked ? colors.primary : foregroundColor,
+        menuTintColor: colors.primary,
+        onPressed: () => _showLibraryCategoryPicker(context, item),
+        selectedMenuValue: libraryNotifier.itemCategory(item.url)?.storageKey,
+        menuItems: _libraryCategoryMenuItems(
+          context,
+          item,
+          libraryNotifier.itemCategory(item.url),
+        ),
+        onMenuSelected: (value) => _handleLibraryMenuSelection(item, value),
+      ),
+    ];
+  }
+
   Widget _buildDetailsHeaderActions(
     BuildContext context,
     MultimediaItem item, {
@@ -126,67 +191,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     required Color foregroundColor,
     Color? fallbackColor,
   }) {
-    const favoriteRed = Color(0xFFFF3B30);
-    final colors = Theme.of(context).colorScheme;
-    final commentTarget = animeWitcherAnimeCommentTarget(item);
-
     return AppleLiquidGlassActionGroup(
       height: 46,
       fallbackColor: fallbackColor,
-      children: [
-        if (commentTarget != null)
-          AppleLiquidGlassToolbarButton(
-            tooltip: appText(
-              context,
-              english: 'Comments',
-              arabic: 'التعليقات',
-            ),
-            icon: Icons.chat_bubble_outline_rounded,
-            color: foregroundColor,
-            onPressed: () => _openAnimeComments(context, commentTarget),
-          ),
-        AppleLiquidGlassToolbarButton(
-          tooltip: isFavorite
-              ? appText(
-                  context,
-                  english: 'Remove favorite',
-                  arabic: 'إزالة من المفضلة',
-                )
-              : appText(
-                  context,
-                  english: 'Add to favorites',
-                  arabic: 'إضافة إلى المفضلة',
-                ),
-          icon: isFavorite
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
-          color: isFavorite ? favoriteRed : foregroundColor,
-          onPressed: () => libraryNotifier.setFavorite(item, !isFavorite),
-        ),
-        AppleLiquidGlassToolbarButton(
-          tooltip: appText(
-            context,
-            english: 'Choose list',
-            arabic: 'اختر قائمة',
-          ),
-          icon: isBookmarked
-              ? Icons.bookmark_rounded
-              : Icons.bookmark_border_rounded,
-          color: isBookmarked ? colors.primary : foregroundColor,
-          menuTintColor: colors.primary,
-          // Non-iOS fallback keeps the existing sheet. On iOS the native
-          // UIToolbar attaches the UIMenu directly to this bar button, so the
-          // Liquid Glass menu grows from the bookmark control itself.
-          onPressed: () => _showLibraryCategoryPicker(context, item),
-          selectedMenuValue: libraryNotifier.itemCategory(item.url)?.storageKey,
-          menuItems: _libraryCategoryMenuItems(
-            context,
-            item,
-            libraryNotifier.itemCategory(item.url),
-          ),
-          onMenuSelected: (value) => _handleLibraryMenuSelection(item, value),
-        ),
-      ],
+      children: _buildDetailsHeaderButtons(
+        context,
+        item,
+        isFavorite: isFavorite,
+        isBookmarked: isBookmarked,
+        libraryNotifier: libraryNotifier,
+        foregroundColor: foregroundColor,
+      ),
     );
   }
 
@@ -949,14 +964,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       final headerFallback = isLarge
           ? Theme.of(context).colorScheme.surfaceContainerHigh
           : Colors.black45;
-      final trailing = _buildDetailsHeaderActions(
+      final trailingButtons = _buildDetailsHeaderButtons(
         context,
         item,
         isFavorite: isFavorite,
         isBookmarked: isBookmarked,
         libraryNotifier: libraryNotifier,
         foregroundColor: headerForeground,
-        fallbackColor: headerFallback,
       );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -966,7 +980,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             onBack: () => context.pop(),
             backForegroundColor: headerForeground,
             backFallbackColor: headerFallback,
-            trailing: trailing,
+            trailingButtons: trailingButtons,
           ),
         );
       });

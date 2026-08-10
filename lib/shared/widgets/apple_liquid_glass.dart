@@ -26,6 +26,7 @@ class ApplePersistentGlassHeaderConfig {
     this.backForegroundColor,
     this.backFallbackColor,
     this.trailing,
+    this.trailingButtons,
   });
 
   final Object owner;
@@ -34,6 +35,7 @@ class ApplePersistentGlassHeaderConfig {
   final Color? backForegroundColor;
   final Color? backFallbackColor;
   final Widget? trailing;
+  final List<AppleLiquidGlassToolbarButton>? trailingButtons;
 }
 
 class ApplePersistentGlassHeaderController
@@ -73,6 +75,7 @@ class _ApplePersistentGlassHeaderOverlayState
     extends State<ApplePersistentGlassHeaderOverlay> {
   ApplePersistentGlassHeaderConfig? _lastConfig;
   Widget? _lastTrailing;
+  List<AppleLiquidGlassToolbarButton>? _lastTrailingButtons;
 
   @override
   Widget build(BuildContext context) {
@@ -94,11 +97,25 @@ class _ApplePersistentGlassHeaderOverlayState
                 if (config != null) {
                   _lastConfig = config;
                   if (config.trailing != null) _lastTrailing = config.trailing;
+                  if (config.trailingButtons != null) {
+                    _lastTrailingButtons = config.trailingButtons;
+                  }
                 }
                 final effective = config ?? _lastConfig;
                 final visible = config != null;
                 final showBack = visible && effective?.onBack != null;
-                final showTrailing = visible && config?.trailing != null;
+                final activeButtons = config?.trailingButtons;
+                final hasNativeToolbar = activeButtons != null && activeButtons.isNotEmpty;
+                final showTrailing = visible &&
+                    (hasNativeToolbar || config?.trailing != null);
+
+                // Keep the trailing control in one fixed 3-button-wide slot.
+                // The UIKit toolbar inside this slot changes its own width/items,
+                // which lets iOS animate the Liquid Glass capsule into the single
+                // comments-sort circle without creating a second platform view.
+                final toolbarButtons = activeButtons ??
+                    _lastTrailingButtons ??
+                    const <AppleLiquidGlassToolbarButton>[];
 
                 return SizedBox(
                   height: kToolbarHeight,
@@ -121,8 +138,7 @@ class _ApplePersistentGlassHeaderOverlayState
                               child: AppleLiquidGlassBackButton(
                                 key: const ValueKey('persistent-liquid-back'),
                                 size: 46,
-                                foregroundColor:
-                                    effective?.backForegroundColor,
+                                foregroundColor: effective?.backForegroundColor,
                                 fallbackColor: effective?.backFallbackColor,
                                 tooltip: effective?.backTooltip,
                                 onPressed: effective?.onBack ?? () {},
@@ -131,25 +147,32 @@ class _ApplePersistentGlassHeaderOverlayState
                           ),
                         ),
                         Positioned(
-                          right: 12,
+                          // Give the UIKit bar a little more trailing breathing
+                          // room while keeping the whole group fully on-screen.
+                          right: 8,
                           top: (kToolbarHeight - 46) / 2,
                           child: AnimatedOpacity(
                             opacity: showTrailing ? 1 : 0,
-                            duration: const Duration(milliseconds: 220),
+                            duration: const Duration(milliseconds: 180),
                             curve: Curves.easeOutCubic,
                             child: AnimatedScale(
                               alignment: Alignment.centerRight,
-                              scale: showTrailing ? 1 : 0.84,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeOutBack,
-                              child: KeyedSubtree(
-                                key: const ValueKey(
-                                  'persistent-liquid-trailing',
-                                ),
-                                child: config?.trailing ??
-                                    _lastTrailing ??
-                                    const SizedBox.shrink(),
-                              ),
+                              scale: showTrailing ? 1 : 0.92,
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
+                              child: hasNativeToolbar || _lastTrailingButtons != null
+                                  ? AppleLiquidGlassActionGroup(
+                                      key: const ValueKey('persistent-native-toolbar'),
+                                      height: 46,
+                                      minimumCapacity: 3,
+                                      children: toolbarButtons,
+                                    )
+                                  : KeyedSubtree(
+                                      key: const ValueKey('persistent-custom-trailing'),
+                                      child: config?.trailing ??
+                                          _lastTrailing ??
+                                          const SizedBox.shrink(),
+                                    ),
                             ),
                           ),
                         ),
@@ -304,6 +327,7 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
   final Color? fallbackColor;
   final bool collapsed;
   final String collapsedSystemImage;
+  final int minimumCapacity;
 
   const AppleLiquidGlassActionGroup({
     super.key,
@@ -312,6 +336,7 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
     this.fallbackColor,
     this.collapsed = false,
     this.collapsedSystemImage = 'arrow.up.arrow.down',
+    this.minimumCapacity = 0,
   });
 
   @override
@@ -330,6 +355,7 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
           height: height,
           collapsed: collapsed,
           collapsedSystemImage: collapsedSystemImage,
+          minimumCapacity: minimumCapacity,
         );
       }
     }
@@ -555,12 +581,14 @@ class _AppleNativeToolbar extends StatefulWidget {
     required this.height,
     required this.collapsed,
     required this.collapsedSystemImage,
+    required this.minimumCapacity,
   });
 
   final List<AppleLiquidGlassToolbarButton> buttons;
   final double height;
   final bool collapsed;
   final String collapsedSystemImage;
+  final int minimumCapacity;
 
   @override
   State<_AppleNativeToolbar> createState() => _AppleNativeToolbarState();
@@ -633,7 +661,10 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     // UIToolbar keeps a small system inset around grouped bar items on
     // iOS 26. Reserve it in Flutter so the trailing bookmark is never clipped
     // by the screen edge while keeping the native glass group intact.
-    final nativeWidth = widget.height * widget.buttons.length + 32;
+    final capacity = widget.minimumCapacity > widget.buttons.length
+        ? widget.minimumCapacity
+        : widget.buttons.length;
+    final nativeWidth = widget.height * capacity + 32;
     return SizedBox(
       width: nativeWidth,
       height: widget.height,

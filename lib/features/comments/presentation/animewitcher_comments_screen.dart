@@ -267,23 +267,20 @@ class _AnimeWitcherCommentsScreenState
 
     if (appleUsesPersistentLiquidGlassHeader) {
       final colors = Theme.of(context).colorScheme;
-      final trailing = AppleLiquidGlassActionGroup(
-        height: 46,
-        children: [
-          AppleLiquidGlassToolbarButton(
-            tooltip: isArabic ? 'ترتيب التعليقات' : 'Sort comments',
-            icon: Icons.filter_list_rounded,
-            color: colors.primary,
-            menuTintColor: colors.primary,
-            onPressed: null,
-            selectedMenuValue: _sort.name,
-            menuItems: _commentSortMenuItems(isArabic),
-            onMenuSelected: (value) {
-              _applyCommentSort(_commentSortFromValue(value));
-            },
-          ),
-        ],
-      );
+      final trailingButtons = <AppleLiquidGlassToolbarButton>[
+        AppleLiquidGlassToolbarButton(
+          tooltip: isArabic ? 'ترتيب التعليقات' : 'Sort comments',
+          icon: Icons.filter_list_rounded,
+          color: Colors.white,
+          menuTintColor: colors.primary,
+          onPressed: null,
+          selectedMenuValue: _sort.name,
+          menuItems: _commentSortMenuItems(isArabic),
+          onMenuSelected: (value) {
+            _applyCommentSort(_commentSortFromValue(value));
+          },
+        ),
+      ];
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         applePersistentGlassHeaderController.show(
@@ -292,7 +289,7 @@ class _AnimeWitcherCommentsScreenState
             onBack: () => Navigator.of(context).pop(),
             backForegroundColor: colors.onSurface,
             backFallbackColor: colors.surfaceContainerHigh,
-            trailing: trailing,
+            trailingButtons: trailingButtons,
           ),
         );
       });
@@ -312,11 +309,17 @@ class _AnimeWitcherCommentsScreenState
                 : AppleLiquidGlassBackButton(
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-            title: Align(
-              alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
-              child: Directionality(
-                textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-                child: Text(isArabic ? 'التعليقات' : 'Comments'),
+            title: Padding(
+              padding: EdgeInsets.only(
+                right: appleUsesPersistentLiquidGlassHeader && isArabic ? 62 : 0,
+                left: appleUsesPersistentLiquidGlassHeader && !isArabic ? 62 : 0,
+              ),
+              child: Align(
+                alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  child: Text(isArabic ? 'التعليقات' : 'Comments'),
+                ),
               ),
             ),
             actions: appleUsesPersistentLiquidGlassHeader
@@ -330,7 +333,7 @@ class _AnimeWitcherCommentsScreenState
                         systemImage: 'arrow.up.arrow.down',
                         fallbackIcon: Icons.filter_list_rounded,
                         size: 46,
-                        tintColor: Theme.of(context).colorScheme.primary,
+                        tintColor: Colors.white,
                         selectedValue: _sort.name,
                         items: _commentSortMenuItems(isArabic),
                         onSelected: (value) {

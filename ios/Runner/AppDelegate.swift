@@ -669,11 +669,13 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     let itemExtent = CGFloat(
       (values["itemExtent"] as? NSNumber)?.doubleValue ?? 46
     )
+    let itemCount = max(actions.count, 1)
+    let desiredExpandedWidth = itemExtent * CGFloat(itemCount) + (itemCount > 1 ? 16 : 0)
     let expandedWidth = max(
       itemExtent,
       min(
         rootView.bounds.width > 0 ? rootView.bounds.width : toolbarWidthConstraint.constant,
-        itemExtent * CGFloat(max(actions.count, 1)) + 16
+        desiredExpandedWidth
       )
     )
     let collapsedSystemName = values["collapsedSystemImage"] as? String
