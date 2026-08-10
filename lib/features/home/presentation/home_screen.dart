@@ -26,7 +26,6 @@ import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import 'widgets/dashboard_header_bar.dart';
-import 'widgets/provider_search_filter_dialog.dart';
 import 'widgets/news_section.dart';
 import 'package:skystream/features/news/presentation/news_list_screen.dart';
 import 'package:skystream/features/news/presentation/news_utils.dart';
@@ -59,8 +58,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
   final FocusNode _firstActionFocusNode = FocusNode();
-  bool _isLoadingProviderSearchFilters = false;
-  final Map<String, ProviderSearchFilterOptions> _searchFilterOptionsCache = {};
 
   /// Carousel controller exposed by HomeHeroCarousel via [onControllerReady].
   /// Used by DashboardHeaderBar arrows.
@@ -175,53 +172,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     });
   }
 
-  Future<void> _showProviderSearchFilters(WidgetRef ref) async {
-    final provider = ref.read(activeProviderProvider);
-    if (provider == null || _isLoadingProviderSearchFilters) return;
-
-    setState(() => _isLoadingProviderSearchFilters = true);
-    ProviderSearchFilters? selected;
-    try {
-      final options =
-          _searchFilterOptionsCache[provider.packageName] ??
-          await provider.getSearchFilterOptions();
-      _searchFilterOptionsCache[provider.packageName] = options;
-
-      if (!mounted) return;
-      if (options.isEmpty) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                Localizations.localeOf(context).languageCode == 'ar'
-                    ? 'هذه الإضافة لا توفر فلاتر بحث'
-                    : 'This provider does not expose search filters',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        return;
-      }
-
-      selected = await showDialog<ProviderSearchFilters>(
-        context: context,
-        builder: (dialogContext) => ProviderSearchFilterDialog(
-          options: options,
-          initialValue: ref.read(searchProviderFiltersProvider),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingProviderSearchFilters = false);
-      }
-    }
-
-    if (!mounted || selected == null) return;
-    ref.read(searchProviderFiltersProvider.notifier).set(selected);
-    ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
-    _openSearchPage(clearQuery: true);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +181,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final generalSettings = ref.watch(generalSettingsProvider);
     final l10n = AppLocalizations.of(context)!;
     final activeProvider = ref.watch(activeProviderProvider);
-    final activeSearchFilters = ref.watch(searchProviderFiltersProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final overlayStyle = isDark
@@ -261,9 +210,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               child: DashboardHeaderBar(
                 searchFocusNode: _firstActionFocusNode,
                 onShowSearch: () => _openSearchPage(focusKeyboard: true),
-                onShowSearchFilters: () => _showProviderSearchFilters(ref),
-                searchFilters: activeSearchFilters,
-                isFilterLoading: _isLoadingProviderSearchFilters,
                 onPrevious: _carouselController != null
                     ? () => _carouselController!.previousPage()
                     : null,
@@ -294,28 +240,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         width: 42,
         tooltip: appText(
           context,
-          english: 'Filters',
-          arabic: 'الفلاتر',
-        ),
-        icon: Icons.tune_rounded,
-        color: Theme.of(context).colorScheme.primary,
-        onPressed: _isLoadingProviderSearchFilters
-            ? null
-            : () => _showProviderSearchFilters(ref),
-      ),
-      AppleLiquidGlassToolbarButton(
-        width: 42,
-        tooltip: appText(
-          context,
           english: 'Search',
           arabic: 'بحث',
         ),
         icon: Icons.search_rounded,
-        color: Theme.of(context).colorScheme.onSurface,
+        color: Theme.of(context).colorScheme.primary,
         onPressed: () => _openSearchPage(focusKeyboard: true),
       ),
     ];
-
     final mobileScaffold = Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
@@ -332,29 +264,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             scrolledUnderElevation: 0,
             title: Text(l10n.appTitle),
             actions: usePersistentGlass
-                ? const <Widget>[SizedBox(width: 104)]
+                ? const <Widget>[SizedBox(width: 58)]
                 : [
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        right: LayoutConstants.spacingSm,
-                      ),
-                      child: SizedBox.square(
-                        dimension: 42,
-                        child: AppleLiquidGlassToolbarButton(
-                          width: 42,
-                          tooltip: appText(
-                            context,
-                            english: 'Filters',
-                            arabic: 'الفلاتر',
-                          ),
-                          icon: Icons.tune_rounded,
-                          color: Theme.of(context).colorScheme.primary,
-                          onPressed: _isLoadingProviderSearchFilters
-                              ? null
-                              : () => _showProviderSearchFilters(ref),
-                        ),
-                      ),
-                    ),
                     Padding(
                       padding: const EdgeInsets.only(
                         right: LayoutConstants.spacingSm,
@@ -371,9 +282,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               arabic: 'بحث',
                             ),
                             icon: Icons.search_rounded,
-                            color: Theme.of(context).colorScheme.onSurface,
-                            onPressed: () =>
-                                _openSearchPage(focusKeyboard: true),
+                            color: Theme.of(context).colorScheme.primary,
+                            onPressed: () => _openSearchPage(focusKeyboard: true),
                           ),
                         ),
                       ),

@@ -64,6 +64,10 @@ import UserNotifications
         withId: "dev.akash.skystream/native_toolbar"
       )
       glassRegistrar.register(
+        AppleNativeSearchFieldViewFactory(messenger: messenger),
+        withId: "dev.akash.skystream/native_search_field"
+      )
+      glassRegistrar.register(
         AppleNativeMenuButtonViewFactory(messenger: messenger),
         withId: "dev.akash.skystream/native_menu_button"
       )
@@ -519,6 +523,178 @@ private final class AppleNativeGlassButtonPlatformView: NSObject, FlutterPlatfor
   }
 }
 
+
+private final class AppleNativeSearchFieldViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    AppleNativeSearchFieldPlatformView(
+      frame: frame,
+      viewId: viewId,
+      messenger: messenger,
+      arguments: args
+    )
+  }
+}
+
+private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatformView, UITextFieldDelegate {
+  private let rootView: UIView
+  private let effectView: UIVisualEffectView
+  private let searchField = UISearchTextField(frame: .zero)
+  private let channel: FlutterMethodChannel
+  private var loadingIndicator: UIActivityIndicatorView?
+
+  init(
+    frame: CGRect,
+    viewId: Int64,
+    messenger: FlutterBinaryMessenger,
+    arguments args: Any?
+  ) {
+    rootView = UIView(frame: frame)
+    if #available(iOS 26.0, *) {
+      let glass = UIGlassEffect(style: .regular)
+      glass.isInteractive = true
+      effectView = UIVisualEffectView(effect: glass)
+    } else {
+      effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+    }
+    channel = FlutterMethodChannel(
+      name: "dev.akash.skystream/native_search_field/\(viewId)",
+      binaryMessenger: messenger
+    )
+    super.init()
+
+    rootView.backgroundColor = .clear
+    rootView.isOpaque = false
+    rootView.clipsToBounds = false
+
+    effectView.translatesAutoresizingMaskIntoConstraints = false
+    if #available(iOS 26.0, *) {
+      effectView.cornerConfiguration = .capsule()
+    } else {
+      effectView.layer.cornerRadius = 21
+      effectView.layer.cornerCurve = .continuous
+      effectView.clipsToBounds = true
+    }
+    rootView.addSubview(effectView)
+
+    searchField.translatesAutoresizingMaskIntoConstraints = false
+    searchField.backgroundColor = .clear
+    searchField.borderStyle = .none
+    searchField.clearButtonMode = .whileEditing
+    searchField.returnKeyType = .search
+    searchField.autocorrectionType = .no
+    searchField.autocapitalizationType = .none
+    searchField.delegate = self
+    searchField.addTarget(self, action: #selector(textChanged), for: .editingChanged)
+
+    effectView.contentView.addSubview(searchField)
+    NSLayoutConstraint.activate([
+      effectView.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+      effectView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+      effectView.topAnchor.constraint(equalTo: rootView.topAnchor),
+      effectView.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+      searchField.leadingAnchor.constraint(equalTo: effectView.contentView.leadingAnchor, constant: 14),
+      searchField.trailingAnchor.constraint(equalTo: effectView.contentView.trailingAnchor, constant: -12),
+      searchField.topAnchor.constraint(equalTo: effectView.contentView.topAnchor),
+      searchField.bottomAnchor.constraint(equalTo: effectView.contentView.bottomAnchor),
+    ])
+
+    apply(arguments: args)
+
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(false)
+        return
+      }
+      switch call.method {
+      case "update":
+        self.apply(arguments: call.arguments)
+        result(true)
+      case "focus":
+        self.searchField.becomeFirstResponder()
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  deinit { channel.setMethodCallHandler(nil) }
+  func view() -> UIView { rootView }
+
+  private func apply(arguments: Any?) {
+    guard let values = arguments as? [String: Any] else { return }
+    let text = values["text"] as? String ?? ""
+    let placeholder = values["placeholder"] as? String ?? ""
+    let tint = skyStreamUIColor(values["tintColor"], fallback: .systemBlue)
+    let textColor = skyStreamUIColor(values["textColor"], fallback: .label)
+    let placeholderColor = skyStreamUIColor(
+      values["placeholderColor"],
+      fallback: .secondaryLabel
+    )
+    let rtl = values["rtl"] as? Bool ?? false
+    let loading = values["loading"] as? Bool ?? false
+    let height = (values["height"] as? NSNumber)?.doubleValue ?? 42
+
+    if searchField.text != text { searchField.text = text }
+    searchField.textColor = textColor
+    searchField.tintColor = tint
+    if let searchImageView = searchField.leftView as? UIImageView {
+      searchImageView.tintColor = tint
+    }
+    searchField.attributedPlaceholder = NSAttributedString(
+      string: placeholder,
+      attributes: [.foregroundColor: placeholderColor]
+    )
+    searchField.semanticContentAttribute = rtl ? .forceRightToLeft : .forceLeftToRight
+    searchField.textAlignment = rtl ? .right : .left
+    if #unavailable(iOS 26.0) {
+      effectView.layer.cornerRadius = CGFloat(height / 2)
+    }
+    updateLoading(loading, tint: tint)
+  }
+
+  private func updateLoading(_ loading: Bool, tint: UIColor) {
+    if loading {
+      let indicator = loadingIndicator ?? UIActivityIndicatorView(style: .medium)
+      indicator.color = tint
+      indicator.startAnimating()
+      loadingIndicator = indicator
+      searchField.rightView = indicator
+      searchField.rightViewMode = .always
+      searchField.clearButtonMode = .never
+    } else {
+      loadingIndicator?.stopAnimating()
+      searchField.rightView = nil
+      searchField.rightViewMode = .never
+      searchField.clearButtonMode = .whileEditing
+    }
+  }
+
+  @objc private func textChanged() {
+    channel.invokeMethod("changed", arguments: searchField.text ?? "")
+  }
+
+  func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+    channel.invokeMethod("submitted", arguments: textField.text ?? "")
+    return true
+  }
+}
+
 private final class AppleNativeToolbarViewFactory: NSObject, FlutterPlatformViewFactory {
   private let messenger: FlutterBinaryMessenger
 
@@ -576,6 +752,9 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   private var didApplyInitialState = false
   private var currentActionItems: [UIBarButtonItem] = []
   private var currentActionKinds: [Int] = []
+  private var pendingArguments: Any?
+  private var pendingAnimated = false
+  private var updateScheduled = false
 
   init(
     frame: CGRect,
@@ -629,7 +808,7 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
       }
       switch call.method {
       case "update":
-        self.apply(arguments: call.arguments, animated: true)
+        self.scheduleApply(arguments: call.arguments, animated: true)
         result(true)
       default:
         result(FlutterMethodNotImplemented)
@@ -639,6 +818,27 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
 
   deinit { channel.setMethodCallHandler(nil) }
   func view() -> UIView { rootView }
+
+  private func scheduleApply(arguments: Any?, animated: Bool) {
+    pendingArguments = arguments
+    pendingAnimated = pendingAnimated || animated
+    guard !updateScheduled else { return }
+    updateScheduled = true
+
+    // Flutter can publish several header states in the same frame while a route
+    // is pushing and async detail state is settling. Applying each one makes
+    // UIToolbar start overlapping Liquid Glass transitions. Coalesce them to the
+    // latest state for this run-loop turn, then let UIKit animate only once.
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.updateScheduled = false
+      let arguments = self.pendingArguments
+      let animated = self.pendingAnimated
+      self.pendingArguments = nil
+      self.pendingAnimated = false
+      self.apply(arguments: arguments, animated: animated)
+    }
+  }
 
   private func makeMenu(
     actionIndex: Int,

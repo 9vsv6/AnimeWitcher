@@ -36,6 +36,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _isLoadingProviderFilters = false;
   int _lastFocusRequest = 0;
   int _lastClearRequest = 0;
+  int _nativeFocusGeneration = 0;
 
   @override
   void initState() {
@@ -75,7 +76,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _clearButtonFocusNode.onKeyEvent = (node, event) {
       if (event is KeyDownEvent) {
         if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-          _focusNode.requestFocus();
+          _requestSearchFocus();
           return KeyEventResult.handled;
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -100,7 +101,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _firstResultFocusNode.onKeyEvent = (node, event) {
       if (event is KeyDownEvent &&
           event.logicalKey == LogicalKeyboardKey.arrowUp) {
-        _focusNode.requestFocus();
+        _requestSearchFocus();
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
@@ -109,6 +110,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   void _onTextChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _requestSearchFocus() {
+    final profile = ref.read(deviceProfileProvider).asData?.value;
+    final usesNativeMobileSearch = appleUsesPersistentLiquidGlassHeader &&
+        profile?.isTv != true &&
+        !context.isTabletOrLarger;
+    if (usesNativeMobileSearch) {
+      _nativeFocusGeneration++;
+      if (mounted) setState(() {});
+      return;
+    }
+    _focusNode.requestFocus();
   }
 
 
@@ -304,7 +318,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ref
         .read(searchSuggestionControllerProvider.notifier)
         .onQueryChanged(suggestion);
-    _focusNode.requestFocus();
+    _requestSearchFocus();
   }
 
   @override
@@ -323,7 +337,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       _lastFocusRequest = focusRequest;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _focusNode.requestFocus();
+        _requestSearchFocus();
         final textLength = _controller.text.length;
         _controller.selection = TextSelection.collapsed(offset: textLength);
       });
@@ -611,7 +625,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       : _buildMobileSearchActionGroup(context),
                 ),
               ],
-        title: GestureDetector(
+        title: usePersistentGlass
+            ? AppleNativeGlassSearchField(
+                controller: _controller,
+                placeholder: l10n.searchHint,
+                tintColor: theme.colorScheme.primary,
+                textColor: theme.colorScheme.onSurface,
+                placeholderColor: theme.colorScheme.onSurfaceVariant,
+                focusRequest: _nativeFocusGeneration,
+                loading: searchResultsState.isLoading,
+                textDirection: searchTextDirection(
+                  _controller.text,
+                  fallback: Directionality.of(context),
+                ),
+                height: 46,
+                onChanged: (val) {
+                  ref
+                      .read(searchSuggestionControllerProvider.notifier)
+                      .onQueryChanged(val);
+                },
+                onSubmitted: _submitSearch,
+              )
+            : GestureDetector(
           onTap: () => _focusNode.requestFocus(),
           behavior: HitTestBehavior.opaque,
           child: SizedBox(

@@ -8,6 +8,8 @@ const _appleLiquidGlassViewType = 'dev.akash.skystream/liquid_glass';
 const _appleNativeGlassButtonViewType =
     'dev.akash.skystream/native_glass_button';
 const _appleNativeToolbarViewType = 'dev.akash.skystream/native_toolbar';
+const _appleNativeSearchFieldViewType =
+    'dev.akash.skystream/native_search_field';
 const _appleNativeMenuButtonViewType =
     'dev.akash.skystream/native_menu_button';
 
@@ -21,7 +23,7 @@ bool get _usesNativeAppleLiquidGlass =>
 bool get appleUsesPersistentLiquidGlassHeader => _usesNativeAppleLiquidGlass;
 
 class ApplePersistentGlassHeaderConfig {
-  const ApplePersistentGlassHeaderConfig({
+  ApplePersistentGlassHeaderConfig({
     required this.owner,
     this.route,
     this.onBack,
@@ -34,14 +36,37 @@ class ApplePersistentGlassHeaderConfig {
   });
 
   final Object owner;
-  final ModalRoute<dynamic>? route;
-  final VoidCallback? onBack;
-  final String? backTooltip;
-  final Color? backForegroundColor;
-  final Color? backFallbackColor;
-  final Widget? trailing;
-  final List<AppleLiquidGlassToolbarButton>? trailingButtons;
-  final int? branchIndex;
+  ModalRoute<dynamic>? route;
+  VoidCallback? onBack;
+  String? backTooltip;
+  Color? backForegroundColor;
+  Color? backFallbackColor;
+  Widget? trailing;
+  List<AppleLiquidGlassToolbarButton>? trailingButtons;
+  int? branchIndex;
+
+  bool visuallyMatches(ApplePersistentGlassHeaderConfig other) {
+    final sameCustomTrailing = trailing == null && other.trailing == null ||
+        identical(trailing, other.trailing);
+    return (onBack != null) == (other.onBack != null) &&
+        backTooltip == other.backTooltip &&
+        backForegroundColor == other.backForegroundColor &&
+        backFallbackColor == other.backFallbackColor &&
+        branchIndex == other.branchIndex &&
+        sameCustomTrailing &&
+        _sameToolbarButtons(trailingButtons, other.trailingButtons);
+  }
+
+  void updateFrom(ApplePersistentGlassHeaderConfig other) {
+    route = other.route;
+    onBack = other.onBack;
+    backTooltip = other.backTooltip;
+    backForegroundColor = other.backForegroundColor;
+    backFallbackColor = other.backFallbackColor;
+    trailing = other.trailing;
+    trailingButtons = other.trailingButtons;
+    branchIndex = other.branchIndex;
+  }
 }
 
 class ApplePersistentGlassHeaderController
@@ -105,12 +130,26 @@ class ApplePersistentGlassHeaderController
     final existingIndex = _routeStack.indexWhere(
       (entry) => identical(entry.owner, config.owner),
     );
-    if (existingIndex >= 0) {
-      _routeStack[existingIndex] = config;
-    } else {
+    if (existingIndex < 0) {
       _routeStack.add(config);
+      _syncVisibleItem();
+      return;
     }
+
+    final existing = _routeStack[existingIndex];
+    final wasVisible = identical(value, existing);
+    final visualChanged = !existing.visuallyMatches(config);
+
+    // Rebuilds from async details/search state frequently recreate callbacks even
+    // when the visible Liquid Glass chrome is identical. Mutate the registered
+    // navigation item in place so those rebuilds don't force the platform view
+    // through another composition/layout pass during a route transition.
+    existing.updateFrom(config);
     _syncVisibleItem();
+
+    if (wasVisible && identical(value, existing) && visualChanged) {
+      notifyListeners();
+    }
   }
 
   void hide(Object owner) {
@@ -619,6 +658,48 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
 }
 
 
+
+bool _sameToolbarButtons(
+  List<AppleLiquidGlassToolbarButton>? a,
+  List<AppleLiquidGlassToolbarButton>? b,
+) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null || a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    final left = a[i];
+    final right = b[i];
+    if (left.icon != right.icon ||
+        left.color != right.color ||
+        left.tooltip != right.tooltip ||
+        left.title != right.title ||
+        left.width != right.width ||
+        left.selectedMenuValue != right.selectedMenuValue ||
+        left.menuTintColor != right.menuTintColor ||
+        (left.onPressed != null) != (right.onPressed != null) ||
+        (left.onMenuSelected != null) != (right.onMenuSelected != null) ||
+        !_sameMenuItems(left.menuItems, right.menuItems)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _sameMenuItems(List<AppleNativeMenuItem> a, List<AppleNativeMenuItem> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    final left = a[i];
+    final right = b[i];
+    if (left.value != right.value ||
+        left.label != right.label ||
+        left.systemImage != right.systemImage ||
+        left.destructive != right.destructive) {
+      return false;
+    }
+  }
+  return true;
+}
+
 String? _appleSystemSymbolForIcon(IconData icon) {
   if (icon == Icons.chat_bubble_outline_rounded ||
       icon == Icons.chat_bubble_outline) {
@@ -829,6 +910,7 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
   @override
   void didUpdateWidget(covariant _AppleNativeToolbar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_stateSignature == _lastSentStateSignature) return;
     WidgetsBinding.instance.addPostFrameCallback((_) => _sendStateIfChanged());
   }
 
@@ -887,6 +969,147 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
   }
 }
 
+
+
+/// A native iOS search field backed by Apple's UIGlassEffect + UISearchTextField.
+/// The entire editable control is one UIKit platform view, so the system glass
+/// and text input are composited together instead of stacking a Flutter field
+/// over a separate blur surface.
+class AppleNativeGlassSearchField extends StatefulWidget {
+  const AppleNativeGlassSearchField({
+    super.key,
+    required this.controller,
+    required this.placeholder,
+    required this.onChanged,
+    required this.onSubmitted,
+    required this.tintColor,
+    required this.textColor,
+    required this.placeholderColor,
+    this.focusRequest = 0,
+    this.loading = false,
+    this.textDirection = TextDirection.ltr,
+    this.height = 42,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
+  final Color tintColor;
+  final Color textColor;
+  final Color placeholderColor;
+  final int focusRequest;
+  final bool loading;
+  final TextDirection textDirection;
+  final double height;
+
+  @override
+  State<AppleNativeGlassSearchField> createState() =>
+      _AppleNativeGlassSearchFieldState();
+}
+
+class _AppleNativeGlassSearchFieldState
+    extends State<AppleNativeGlassSearchField> {
+  MethodChannel? _channel;
+  bool _updatingFromNative = false;
+  String? _lastSentSignature;
+
+  Map<String, Object?> get _state => <String, Object?>{
+        'text': widget.controller.text,
+        'placeholder': widget.placeholder,
+        'tintColor': widget.tintColor.toARGB32(),
+        'textColor': widget.textColor.toARGB32(),
+        'placeholderColor': widget.placeholderColor.toARGB32(),
+        'rtl': widget.textDirection == TextDirection.rtl,
+        'loading': widget.loading,
+        'height': widget.height,
+      };
+
+  String get _signature => jsonEncode(_state);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_controllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant AppleNativeGlassSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      oldWidget.controller.removeListener(_controllerChanged);
+      widget.controller.addListener(_controllerChanged);
+    }
+    _sendStateIfChanged();
+    if (oldWidget.focusRequest != widget.focusRequest && widget.focusRequest > 0) {
+      _channel?.invokeMethod<void>('focus');
+    }
+  }
+
+  void _controllerChanged() {
+    if (_updatingFromNative) return;
+    _sendStateIfChanged();
+  }
+
+  void _sendStateIfChanged() {
+    if (!mounted || _channel == null) return;
+    final signature = _signature;
+    if (signature == _lastSentSignature) return;
+    _lastSentSignature = signature;
+    _channel?.invokeMethod<void>('update', _state);
+  }
+
+  void _onPlatformViewCreated(int id) {
+    final channel = MethodChannel('dev.akash.skystream/native_search_field/$id');
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'changed' && call.arguments is String) {
+        final text = call.arguments as String;
+        _updatingFromNative = true;
+        widget.controller.value = TextEditingValue(
+          text: text,
+          selection: TextSelection.collapsed(offset: text.length),
+        );
+        _updatingFromNative = false;
+        _lastSentSignature = _signature;
+        widget.onChanged(text);
+        return;
+      }
+      if (call.method == 'submitted' && call.arguments is String) {
+        widget.onSubmitted(call.arguments as String);
+      }
+    });
+    _channel = channel;
+    _lastSentSignature = _signature;
+    if (widget.focusRequest > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _channel?.invokeMethod<void>('focus');
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_controllerChanged);
+    _channel?.setMethodCallHandler(null);
+    _channel = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_usesNativeAppleLiquidGlass) return const SizedBox.shrink();
+    return SizedBox(
+      height: widget.height,
+      child: UiKitView(
+        viewType: _appleNativeSearchFieldViewType,
+        layoutDirection: widget.textDirection,
+        creationParams: _state,
+        creationParamsCodec: const StandardMessageCodec(),
+        onPlatformViewCreated: _onPlatformViewCreated,
+      ),
+    );
+  }
+}
 
 class AppleNativeMenuItem {
   const AppleNativeMenuItem({
