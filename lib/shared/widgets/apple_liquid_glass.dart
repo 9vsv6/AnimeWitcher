@@ -79,6 +79,11 @@ class ApplePersistentGlassHeaderController
   // than moving it to the top and stealing the visible controls.
   final List<ApplePersistentGlassHeaderConfig> _routeStack =
       <ApplePersistentGlassHeaderConfig>[];
+  final Set<Object> _poppingOwners = <Object>{};
+  final Map<Object, Animation<double>> _routeAnimations =
+      <Object, Animation<double>>{};
+  final Map<Object, AnimationStatusListener> _routeAnimationListeners =
+      <Object, AnimationStatusListener>{};
   int? _activeBranchIndex;
 
   bool _belongsToActiveBranch(ApplePersistentGlassHeaderConfig config) =>
@@ -87,12 +92,54 @@ class ApplePersistentGlassHeaderController
       config.branchIndex == _activeBranchIndex;
 
   bool _isCurrent(ApplePersistentGlassHeaderConfig config) =>
+      !_poppingOwners.contains(config.owner) &&
       _belongsToActiveBranch(config) &&
       (config.route == null || config.route!.isCurrent);
 
   bool _isActive(ApplePersistentGlassHeaderConfig config) =>
+      !_poppingOwners.contains(config.owner) &&
       _belongsToActiveBranch(config) &&
       (config.route == null || config.route!.isActive);
+
+  void _detachRouteAnimation(Object owner) {
+    final animation = _routeAnimations.remove(owner);
+    final listener = _routeAnimationListeners.remove(owner);
+    if (animation != null && listener != null) {
+      animation.removeStatusListener(listener);
+    }
+  }
+
+  void _trackRouteAnimation(ApplePersistentGlassHeaderConfig config) {
+    final animation = config.route?.animation;
+    final oldAnimation = _routeAnimations[config.owner];
+    if (identical(animation, oldAnimation)) return;
+
+    _detachRouteAnimation(config.owner);
+    if (animation == null) return;
+
+    void listener(AnimationStatus status) {
+      // A route stays `isCurrent` for most of its pop transition. Waiting for
+      // dispose therefore leaves the old Liquid Glass back button visible over
+      // the destination root page. Treat reverse animation as "already leaving"
+      // so the controller immediately reveals the previous header (or none).
+      if (status == AnimationStatus.reverse) {
+        if (_poppingOwners.add(config.owner)) _syncVisibleItem();
+        return;
+      }
+
+      // Interactive iOS back gestures can be cancelled. Restore the route's
+      // header as soon as its animation starts moving forward again.
+      if (status == AnimationStatus.forward ||
+          status == AnimationStatus.completed) {
+        if (_poppingOwners.remove(config.owner)) _syncVisibleItem();
+      }
+    }
+
+    _routeAnimations[config.owner] = animation;
+    _routeAnimationListeners[config.owner] = listener;
+    animation.addStatusListener(listener);
+    listener(animation.status);
+  }
 
   void setActiveBranch(int index) {
     if (_activeBranchIndex == index) return;
@@ -132,6 +179,7 @@ class ApplePersistentGlassHeaderController
     );
     if (existingIndex < 0) {
       _routeStack.add(config);
+      _trackRouteAnimation(config);
       _syncVisibleItem();
       return;
     }
@@ -145,6 +193,7 @@ class ApplePersistentGlassHeaderController
     // navigation item in place so those rebuilds don't force the platform view
     // through another composition/layout pass during a route transition.
     existing.updateFrom(config);
+    _trackRouteAnimation(existing);
     _syncVisibleItem();
 
     if (wasVisible && identical(value, existing) && visualChanged) {
@@ -154,6 +203,8 @@ class ApplePersistentGlassHeaderController
 
   void hide(Object owner) {
     _routeStack.removeWhere((entry) => identical(entry.owner, owner));
+    _poppingOwners.remove(owner);
+    _detachRouteAnimation(owner);
     _syncVisibleItem();
   }
 }
