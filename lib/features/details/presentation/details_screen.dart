@@ -162,7 +162,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               ? Icons.bookmark_rounded
               : Icons.bookmark_border_rounded,
           color: isBookmarked ? colors.primary : foregroundColor,
+          // Non-iOS fallback keeps the existing sheet. On iOS the native
+          // UIToolbar attaches the UIMenu directly to this bar button, so the
+          // Liquid Glass menu grows from the bookmark control itself.
           onPressed: () => _showLibraryCategoryPicker(context, item),
+          selectedMenuValue: libraryNotifier.itemCategory(item.url)?.storageKey,
+          menuItems: _libraryCategoryMenuItems(
+            context,
+            item,
+            libraryNotifier.itemCategory(item.url),
+          ),
+          onMenuSelected: (value) => _handleLibraryMenuSelection(item, value),
         ),
       ],
     );
@@ -192,6 +202,71 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       LibraryCategory.completed => Icons.check_circle_rounded,
       LibraryCategory.notInterested => Icons.block_rounded,
     };
+  }
+
+
+  String _libraryCategorySystemImage(LibraryCategory category) {
+    return switch (category) {
+      LibraryCategory.favorite => 'heart.fill',
+      LibraryCategory.watching => 'play.circle.fill',
+      LibraryCategory.continueLater => 'pause.circle.fill',
+      LibraryCategory.planToWatch => 'clock',
+      LibraryCategory.completed => 'checkmark.circle.fill',
+      LibraryCategory.notInterested => 'xmark.circle.fill',
+    };
+  }
+
+  List<AppleNativeMenuItem> _libraryCategoryMenuItems(
+    BuildContext context,
+    MultimediaItem item,
+    LibraryCategory? currentCategory,
+  ) {
+    final items = <AppleNativeMenuItem>[
+      for (final category in LibraryCategory.primaryValues.where(
+        (category) =>
+            category != LibraryCategory.completed ||
+            item.status == ShowStatus.completed,
+      ))
+        AppleNativeMenuItem(
+          value: category.storageKey,
+          label: _libraryCategoryLabel(context, category),
+          systemImage: _libraryCategorySystemImage(category),
+        ),
+    ];
+    if (currentCategory != null) {
+      items.add(
+        AppleNativeMenuItem(
+          value: _removeLibraryAction,
+          label: Localizations.localeOf(context).languageCode == 'ar'
+              ? 'إزالة من القائمة'
+              : 'Remove from list',
+          systemImage: 'trash',
+          destructive: true,
+        ),
+      );
+    }
+    return items;
+  }
+
+  Future<void> _handleLibraryMenuSelection(
+    MultimediaItem item,
+    String value,
+  ) async {
+    final notifier = ref.read(libraryProvider.notifier);
+    if (value == _removeLibraryAction) {
+      await notifier.clearItemCategory(item.url);
+      return;
+    }
+    LibraryCategory? category;
+    for (final candidate in LibraryCategory.primaryValues) {
+      if (candidate.storageKey == value) {
+        category = candidate;
+        break;
+      }
+    }
+    if (category != null) {
+      await notifier.addItem(item, category: category);
+    }
   }
 
   Future<void> _showLibraryCategoryPicker(

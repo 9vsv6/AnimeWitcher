@@ -574,12 +574,42 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     let items: [UIBarButtonItem] = actions.enumerated().map { index, action in
       let systemName = action["systemName"] as? String ?? "circle"
       let image = UIImage(systemName: systemName, withConfiguration: symbolConfiguration)
-      let item = UIBarButtonItem(
-        image: image,
-        style: .plain,
-        target: self,
-        action: #selector(itemPressed(_:))
-      )
+      let selectedValue = action["selectedValue"] as? String
+      let menuItems = action["menuItems"] as? [[String: Any]] ?? []
+
+      let item: UIBarButtonItem
+      if #available(iOS 14.0, *), !menuItems.isEmpty {
+        let menuActions: [UIAction] = menuItems.compactMap { menuItem in
+          guard let value = menuItem["value"] as? String,
+                let label = menuItem["label"] as? String else { return nil }
+          let menuImage = (menuItem["systemImage"] as? String)
+            .flatMap { UIImage(systemName: $0) }
+          var attributes: UIMenuElement.Attributes = []
+          if menuItem["destructive"] as? Bool == true {
+            attributes.insert(.destructive)
+          }
+          return UIAction(
+            title: label,
+            image: menuImage,
+            attributes: attributes,
+            state: value == selectedValue ? .on : .off
+          ) { [weak self] _ in
+            self?.channel.invokeMethod(
+              "selected",
+              arguments: ["index": index, "value": value]
+            )
+          }
+        }
+        let menu = UIMenu(children: menuActions)
+        item = UIBarButtonItem(image: image, primaryAction: nil, menu: menu)
+      } else {
+        item = UIBarButtonItem(
+          image: image,
+          style: .plain,
+          target: self,
+          action: #selector(itemPressed(_:))
+        )
+      }
       item.tag = index
       item.isEnabled = action["enabled"] as? Bool ?? true
       item.tintColor = skyStreamUIColor(action["color"], fallback: .label)
@@ -675,7 +705,21 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
       systemName: systemName,
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
     )
+    let title = (values["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
     skyStreamConfigureGlassButton(button, image: image)
+    if #available(iOS 15.0, *), var configuration = button.configuration {
+      configuration.title = (title?.isEmpty == false) ? title : nil
+      configuration.imagePadding = (title?.isEmpty == false) ? 8 : 0
+      configuration.contentInsets = (title?.isEmpty == false)
+        ? NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14)
+        : .zero
+      button.configuration = configuration
+    } else {
+      button.setTitle((title?.isEmpty == false) ? title : nil, for: .normal)
+    }
+    button.semanticContentAttribute = (values["isRtl"] as? Bool == true)
+      ? .forceRightToLeft
+      : .forceLeftToRight
     button.isEnabled = values["enabled"] as? Bool ?? true
     button.accessibilityLabel = values["accessibilityLabel"] as? String
     button.accessibilityTraits = .button
@@ -687,9 +731,14 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
             let label = item["label"] as? String else { return nil }
       let systemImage = item["systemImage"] as? String
       let actionImage = systemImage.flatMap { UIImage(systemName: $0) }
+      var attributes: UIMenuElement.Attributes = []
+      if item["destructive"] as? Bool == true {
+        attributes.insert(.destructive)
+      }
       return UIAction(
         title: label,
         image: actionImage,
+        attributes: attributes,
         state: value == selectedValue ? .on : .off
       ) { [weak self] _ in
         self?.channel.invokeMethod("selected", arguments: value)

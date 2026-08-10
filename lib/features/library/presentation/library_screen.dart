@@ -5,6 +5,7 @@ import '../../../core/providers/device_info_provider.dart';
 import '../../../core/storage/library_category.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
+import '../../../shared/widgets/apple_liquid_glass.dart';
 import 'library_provider.dart';
 import 'widgets/bookmarks_tab.dart';
 
@@ -38,115 +39,52 @@ class LibraryScreen extends ConsumerWidget {
     };
   }
 
+
+  String _categorySystemImage(LibraryCategory category) {
+    return switch (category) {
+      LibraryCategory.favorite => 'heart.fill',
+      LibraryCategory.watching => 'play.circle.fill',
+      LibraryCategory.continueLater => 'pause.circle.fill',
+      LibraryCategory.planToWatch => 'clock',
+      LibraryCategory.completed => 'checkmark.circle.fill',
+      LibraryCategory.notInterested => 'xmark.circle.fill',
+    };
+  }
+
   Widget _categorySelector(
     BuildContext context,
     WidgetRef ref,
     LibraryCategory selected,
   ) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final textStyle = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w700,
-    );
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final label = _categoryLabel(context, selected);
 
-    // PopupMenu paints Theme.highlightColor behind initialValue. Keep only
-    // the custom yellow selected-row fill defined below.
-    return Theme(
-      data: theme.copyWith(highlightColor: Colors.transparent),
-      child: PopupMenuButton<LibraryCategory>(
-        tooltip: isArabic ? 'اختر قائمة' : 'Choose list',
-        initialValue: selected,
-        position: PopupMenuPosition.under,
-        offset: const Offset(0, 8),
-        elevation: 14,
-        color: colors.surfaceContainerHigh,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        constraints: const BoxConstraints(minWidth: 250, maxWidth: 310),
-        onSelected: (category) {
+    return AppleNativeMenuButton(
+      accessibilityLabel: isArabic ? 'اختر قائمة' : 'Choose list',
+      systemImage: _categorySystemImage(selected),
+      fallbackIcon: _categoryIcon(selected),
+      title: label,
+      width: isArabic ? 218 : 210,
+      size: 44,
+      selectedValue: selected.storageKey,
+      items: <AppleNativeMenuItem>[
+        for (final category in LibraryCategory.values)
+          AppleNativeMenuItem(
+            value: category.storageKey,
+            label: _categoryLabel(context, category),
+            systemImage: _categorySystemImage(category),
+          ),
+      ],
+      onSelected: (value) {
+        final category = LibraryCategory.values.firstWhere(
+          (candidate) => candidate.storageKey == value,
+          orElse: () => selected,
+        );
+        if (category != selected) {
           ref.read(libraryProvider.notifier).selectCategory(category);
-        },
-        itemBuilder: (context) => LibraryCategory.values
-            .map(
-              (category) => PopupMenuItem<LibraryCategory>(
-                value: category,
-                height: 54,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: category == selected
-                        ? colors.primaryContainer.withValues(alpha: 0.72)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: category == selected
-                              ? colors.primary.withValues(alpha: 0.14)
-                              : colors.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          _categoryIcon(category),
-                          size: 19,
-                          color: category == selected
-                              ? colors.primary
-                              : colors.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _categoryLabel(context, category),
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: category == selected
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (category == selected)
-                        Icon(Icons.check_rounded, size: 21, color: colors.primary),
-                    ],
-                  ),
-                ),
-              ),
-            )
-            .toList(growable: false),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerHigh.withValues(alpha: 0.78),
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(
-              color: colors.outlineVariant.withValues(alpha: 0.45),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(_categoryIcon(selected), size: 20, color: colors.primary),
-                const SizedBox(width: 8),
-                Text(_categoryLabel(context, selected), style: textStyle),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 21,
-                  color: colors.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+        }
+      },
     );
   }
 

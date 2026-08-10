@@ -192,6 +192,9 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
   final Color? color;
   final String? tooltip;
   final double width;
+  final List<AppleNativeMenuItem> menuItems;
+  final String? selectedMenuValue;
+  final ValueChanged<String>? onMenuSelected;
 
   const AppleLiquidGlassToolbarButton({
     super.key,
@@ -200,6 +203,9 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
     this.color,
     this.tooltip,
     this.width = 46,
+    this.menuItems = const <AppleNativeMenuItem>[],
+    this.selectedMenuValue,
+    this.onMenuSelected,
   });
 
   @override
@@ -207,6 +213,17 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
     final effectiveColor = color ?? Theme.of(context).colorScheme.onSurface;
     final nativeSymbol = _appleSystemSymbolForIcon(icon);
     if (_usesNativeAppleLiquidGlass && nativeSymbol != null) {
+      if (menuItems.isNotEmpty && onMenuSelected != null) {
+        return AppleNativeMenuButton(
+          items: menuItems,
+          onSelected: onMenuSelected!,
+          accessibilityLabel: tooltip ?? '',
+          systemImage: nativeSymbol,
+          selectedValue: selectedMenuValue,
+          fallbackIcon: icon,
+          size: width,
+        );
+      }
       return _AppleNativeGlassIconButton(
         systemName: nativeSymbol,
         onPressed: onPressed,
@@ -379,10 +396,15 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
       for (final button in widget.buttons)
         <String, Object?>{
           'systemName': _appleSystemSymbolForIcon(button.icon),
-          'enabled': button.onPressed != null,
+          'enabled': button.onPressed != null ||
+              (button.menuItems.isNotEmpty && button.onMenuSelected != null),
           'color': (button.color ?? Theme.of(context).colorScheme.onSurface)
               .toARGB32(),
           'accessibilityLabel': button.tooltip,
+          'selectedValue': button.selectedMenuValue,
+          'menuItems': button.menuItems
+              .map((item) => item.toPlatformValue())
+              .toList(growable: false),
         },
     ],
   };
@@ -398,10 +420,21 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
   void _onPlatformViewCreated(int id) {
     final channel = MethodChannel('dev.akash.skystream/native_toolbar/$id');
     channel.setMethodCallHandler((call) async {
-      if (call.method != 'pressed') return;
-      final index = call.arguments as int?;
-      if (index == null || index < 0 || index >= widget.buttons.length) return;
-      widget.buttons[index].onPressed?.call();
+      if (call.method == 'pressed') {
+        final index = call.arguments as int?;
+        if (index == null || index < 0 || index >= widget.buttons.length) return;
+        widget.buttons[index].onPressed?.call();
+        return;
+      }
+      if (call.method == 'selected' && call.arguments is Map) {
+        final args = Map<Object?, Object?>.from(call.arguments as Map);
+        final index = args['index'] as int?;
+        final value = args['value'] as String?;
+        if (index == null || value == null || index < 0 || index >= widget.buttons.length) {
+          return;
+        }
+        widget.buttons[index].onMenuSelected?.call(value);
+      }
     });
     _channel = channel;
   }
@@ -435,16 +468,19 @@ class AppleNativeMenuItem {
     required this.value,
     required this.label,
     this.systemImage,
+    this.destructive = false,
   });
 
   final String value;
   final String label;
   final String? systemImage;
+  final bool destructive;
 
   Map<String, Object?> toPlatformValue() => <String, Object?>{
     'value': value,
     'label': label,
     'systemImage': systemImage,
+    'destructive': destructive,
   };
 }
 
@@ -462,6 +498,8 @@ class AppleNativeMenuButton extends StatefulWidget {
     required this.accessibilityLabel,
     required this.systemImage,
     this.selectedValue,
+    this.title,
+    this.width,
     this.fallbackIcon = Icons.sort_rounded,
     this.size = 44,
     this.enabled = true,
@@ -472,6 +510,8 @@ class AppleNativeMenuButton extends StatefulWidget {
   final String accessibilityLabel;
   final String systemImage;
   final String? selectedValue;
+  final String? title;
+  final double? width;
   final IconData fallbackIcon;
   final double size;
   final bool enabled;
@@ -486,6 +526,8 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
   Map<String, Object?> get _state => <String, Object?>{
     'systemImage': widget.systemImage,
     'selectedValue': widget.selectedValue,
+    'title': widget.title,
+    'isRtl': Directionality.of(context) == TextDirection.rtl,
     'accessibilityLabel': widget.accessibilityLabel,
     'enabled': widget.enabled,
     'items': widget.items
@@ -522,9 +564,11 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
 
   @override
   Widget build(BuildContext context) {
+    final width = widget.width ?? widget.size;
     if (_usesNativeAppleLiquidGlass) {
-      return SizedBox.square(
-        dimension: widget.size,
+      return SizedBox(
+        width: width,
+        height: widget.size,
         child: UiKitView(
           viewType: _appleNativeMenuButtonViewType,
           layoutDirection: Directionality.of(context),
@@ -535,12 +579,12 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
       );
     }
 
-    return SizedBox.square(
-      dimension: widget.size,
+    return SizedBox(
+      width: width,
+      height: widget.size,
       child: PopupMenuButton<String>(
         enabled: widget.enabled,
         tooltip: widget.accessibilityLabel,
-        icon: Icon(widget.fallbackIcon),
         onSelected: widget.onSelected,
         itemBuilder: (context) => [
           for (final item in widget.items)
@@ -552,13 +596,40 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
                     width: 28,
                     child: widget.selectedValue == item.value
                         ? const Icon(Icons.check_rounded, size: 20)
-                        : null,
+                        : Icon(widget.fallbackIcon, size: 18),
                   ),
                   Expanded(child: Text(item.label)),
                 ],
               ),
             ),
         ],
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(widget.size / 2),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(widget.fallbackIcon, size: 19),
+                if (widget.title != null && widget.title!.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      widget.title!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 4),
+                const Icon(Icons.keyboard_arrow_down_rounded, size: 19),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
