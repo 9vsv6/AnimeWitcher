@@ -283,9 +283,13 @@ class _ApplePersistentGlassHeaderOverlayState
                           ),
                         ),
                         Positioned(
-                          // Give the UIKit bar a little more trailing breathing
-                          // room while keeping the whole group fully on-screen.
-                          right: 24,
+                          // Mirror the back button's 8pt screen inset. The native
+                          // UIToolbar already reserves its own system trailing margin,
+                          // so this keeps both the 3-action capsule and its 1-action
+                          // comments-sort state fully on-screen while moving the sort
+                          // circle back to the visual right edge. The same platform view
+                          // stays mounted, so the UIKit 3 -> 1 morph is untouched.
+                          right: 8,
                           top: (kToolbarHeight - 46) / 2,
                           child: IgnorePointer(
                             ignoring: !showTrailing,
