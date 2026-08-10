@@ -697,6 +697,38 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     }
   }
 
+  private func desiredToolbarHostWidth(actions: [[String: Any]]) -> CGFloat {
+    // The toolbar is a root-level native overlay above Flutter. Its transparent
+    // host must be no wider than the controls it actually contains; otherwise
+    // that invisible UIView sits on top of the search field and creates a dead
+    // tap zone. Keep the same UIToolbar instance for Liquid Glass morphing, but
+    // resize only its non-visible host geometry as the action set changes.
+    var contentWidth: CGFloat = 32
+    let titleFont = UIFont.systemFont(ofSize: 17, weight: .regular)
+
+    for action in actions {
+      if let title = actionTitle(action) {
+        let measured = (title as NSString).size(withAttributes: [.font: titleFont]).width
+        contentWidth += max(46, measured + 58)
+      } else {
+        contentWidth += 46
+      }
+    }
+
+    return min(max(contentWidth, 78), 262)
+  }
+
+  private func updateToolbarHostWidth(actions: [[String: Any]]) {
+    let width = desiredToolbarHostWidth(actions: actions)
+    guard toolbarWidthConstraint?.constant != width else { return }
+    // This only changes the transparent hit-test host. Do not animate it: the
+    // visible Liquid Glass transition is still owned by UIToolbar.setItems.
+    UIView.performWithoutAnimation {
+      toolbarWidthConstraint?.constant = width
+      rootView.layoutIfNeeded()
+    }
+  }
+
   private func makeActionItems(actions: [[String: Any]]) -> [UIBarButtonItem] {
     let actionItems: [UIBarButtonItem] = actions.enumerated().map { index, action in
       let systemName = action["systemName"] as? String ?? "circle"
@@ -731,6 +763,7 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
   }
 
   private func applyToolbar(actions: [[String: Any]], animated: Bool) {
+    updateToolbarHostWidth(actions: actions)
     let actionKinds = actions.map(actionKind)
     if didApplyInitialToolbarState,
        currentActionItems.count == actions.count,
