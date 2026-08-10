@@ -56,7 +56,6 @@ class _NoScrollbarBehavior extends ScrollBehavior {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
-  final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
   final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
   final FocusNode _firstActionFocusNode = FocusNode();
   bool _isLoadingProviderSearchFilters = false;
@@ -97,17 +96,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // can stall the rendering pipeline during bounce / direction-change.
     if (_isWidescreenForScroll()) return;
 
-    final opacity = (_scrollController.offset * 0.8 / 300).clamp(0.0, 1.0);
-    if (opacity != _appBarOpacityNotifier.value) {
-      _appBarOpacityNotifier.value = opacity;
-    }
   }
 
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _appBarOpacityNotifier.dispose();
     _showBottomFade.dispose();
     _firstActionFocusNode.dispose();
     super.dispose();
@@ -302,20 +296,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         systemOverlayStyle: overlayStyle,
         forceMaterialTransparency: true,
         backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         elevation: 0,
-        flexibleSpace: ValueListenableBuilder<double>(
-          valueListenable: _appBarOpacityNotifier,
-          // Apply the fade via the color's alpha channel rather than an
-          // Opacity widget. Opacity forces a saveLayer() every frame for as
-          // long as the AppBar is in the tree (even at opacity 1.0), which
-          // shows up on the perf overlay as a constant raster cost. Alpha
-          // blending on a Container fill costs ~0.
-          builder: (context, opacity, _) => Container(
-            color: Theme.of(
-              context,
-            ).scaffoldBackgroundColor.withValues(alpha: opacity),
-          ),
-        ),
+        scrolledUnderElevation: 0,
         title: Text(l10n.appTitle),
         actions: [
           // Native iOS Liquid Glass controls. Their 42pt square bounds make
