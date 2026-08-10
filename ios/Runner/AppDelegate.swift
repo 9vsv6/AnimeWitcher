@@ -547,12 +547,15 @@ private final class AppleNativeToolbarViewFactory: NSObject, FlutterPlatformView
 
 private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformView {
   private let rootView: UIView
-  private let toolbar = UIToolbar()
   private let channel: FlutterMethodChannel
-  private var toolbarWidthConstraint: NSLayoutConstraint!
+  private var legacyToolbar: UIToolbar?
+  private var glassContainerView: UIVisualEffectView?
+  private var glassSlots: [UIVisualEffectView] = []
+  private var actionButtons: [UIButton] = []
+  private var currentActionCount = 0
   private var didApplyInitialState = false
-  private var isCollapsed = false
-  private var previousItemCount = 0
+  private var itemExtent: CGFloat = 46
+  private var hostWidth: CGFloat = 170
 
   init(
     frame: CGRect,
@@ -569,17 +572,13 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
 
     rootView.backgroundColor = .clear
     rootView.isOpaque = false
-    toolbar.translatesAutoresizingMaskIntoConstraints = false
-    toolbar.isTranslucent = true
-    rootView.addSubview(toolbar)
-    toolbarWidthConstraint = toolbar.widthAnchor.constraint(equalToConstant: max(46, frame.width))
-    NSLayoutConstraint.activate([
-      toolbar.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
-      toolbar.topAnchor.constraint(equalTo: rootView.topAnchor),
-      toolbar.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
-      toolbarWidthConstraint,
-    ])
-    apply(arguments: args)
+
+    if #available(iOS 26.0, *) {
+      setUpGlassContainer()
+    } else {
+      setUpLegacyToolbar()
+    }
+    apply(arguments: args, animated: false)
 
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self else {
@@ -588,7 +587,7 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
       }
       switch call.method {
       case "update":
-        self.apply(arguments: call.arguments)
+        self.apply(arguments: call.arguments, animated: true)
         result(true)
       default:
         result(FlutterMethodNotImplemented)
@@ -599,16 +598,328 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   deinit { channel.setMethodCallHandler(nil) }
   func view() -> UIView { rootView }
 
-  private func makeItems(
-    actions: [[String: Any]],
-    symbolConfiguration: UIImage.SymbolConfiguration
-  ) -> [UIBarButtonItem] {
-    actions.enumerated().map { index, action in
+  @available(iOS 26.0, *)
+  private func setUpGlassContainer() {
+    let containerEffect = UIGlassContainerEffect()
+    // Apple's container spacing controls when neighboring droplets begin to
+    // interact. Keeping this smaller than the icon extent gives the three
+    // controls one continuous capsule at rest and a fluid merge to one circle.
+    containerEffect.spacing = 10
+    let container = UIVisualEffectView(effect: containerEffect)
+    container.translatesAutoresizingMaskIntoConstraints = false
+    container.backgroundColor = .clear
+    container.isUserInteractionEnabled = true
+    rootView.addSubview(container)
+    NSLayoutConstraint.activate([
+      container.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+      container.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+      container.topAnchor.constraint(equalTo: rootView.topAnchor),
+      container.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+    ])
+    glassContainerView = container
+  }
+
+  private func setUpLegacyToolbar() {
+    let toolbar = UIToolbar()
+    toolbar.translatesAutoresizingMaskIntoConstraints = false
+    toolbar.isTranslucent = true
+    rootView.addSubview(toolbar)
+    NSLayoutConstraint.activate([
+      toolbar.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+      toolbar.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+      toolbar.topAnchor.constraint(equalTo: rootView.topAnchor),
+      toolbar.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+    ])
+    legacyToolbar = toolbar
+  }
+
+  @available(iOS 26.0, *)
+  private func makeGlassEffect() -> UIGlassEffect {
+    let effect = UIGlassEffect(style: .regular)
+    effect.isInteractive = true
+    return effect
+  }
+
+  @available(iOS 26.0, *)
+  private func ensureGlassSlotCount(_ count: Int) {
+    guard let container = glassContainerView else { return }
+    while glassSlots.count < count {
+      let slot = UIVisualEffectView(effect: nil)
+      slot.backgroundColor = .clear
+      slot.isOpaque = false
+      slot.isUserInteractionEnabled = true
+      slot.cornerConfiguration = .capsule()
+
+      let button = UIButton(type: .system)
+      button.translatesAutoresizingMaskIntoConstraints = false
+      button.backgroundColor = .clear
+      button.addTarget(self, action: #selector(glassButtonPressed(_:)), for: .touchUpInside)
+      slot.contentView.addSubview(button)
+      NSLayoutConstraint.activate([
+        button.leadingAnchor.constraint(equalTo: slot.contentView.leadingAnchor),
+        button.trailingAnchor.constraint(equalTo: slot.contentView.trailingAnchor),
+        button.topAnchor.constraint(equalTo: slot.contentView.topAnchor),
+        button.bottomAnchor.constraint(equalTo: slot.contentView.bottomAnchor),
+      ])
+
+      container.contentView.addSubview(slot)
+      glassSlots.append(slot)
+      actionButtons.append(button)
+    }
+  }
+
+  private func frameForAction(index: Int, count: Int, extent: CGFloat) -> CGRect {
+    let rightInset: CGFloat = 8
+    let step = max(1, extent - 2)
+    let availableWidth = max(rootView.bounds.width, hostWidth)
+    let anchorX = max(0, availableWidth - rightInset - extent)
+    let x = anchorX - CGFloat(max(0, count - 1 - index)) * step
+    let y = max(0, (rootView.bounds.height - extent) / 2)
+    return CGRect(x: x, y: y, width: extent, height: extent)
+  }
+
+  @available(iOS 26.0, *)
+  private func configureGlassButton(
+    slot: Int,
+    actionIndex: Int,
+    action: [String: Any],
+    crossfadeImage: Bool
+  ) {
+    guard slot < actionButtons.count else { return }
+    let button = actionButtons[slot]
+    button.tag = actionIndex
+    button.isUserInteractionEnabled = true
+    button.isEnabled = action["enabled"] as? Bool ?? true
+    button.accessibilityLabel = action["accessibilityLabel"] as? String
+    button.accessibilityTraits = .button
+
+    let systemName = action["systemName"] as? String ?? "circle"
+    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
+    let image = UIImage(systemName: systemName, withConfiguration: symbolConfiguration)
+    let foreground = skyStreamUIColor(action["color"], fallback: .label)
+
+    let applyImage = {
+      button.setImage(image, for: .normal)
+      button.tintColor = foreground
+    }
+    if crossfadeImage {
+      UIView.transition(
+        with: button,
+        duration: 0.18,
+        options: [.transitionCrossDissolve, .beginFromCurrentState, .allowAnimatedContent],
+        animations: applyImage
+      )
+    } else {
+      applyImage()
+    }
+
+    let selectedValue = action["selectedValue"] as? String
+    let menuTint = skyStreamUIColor(
+      action["menuTintColor"],
+      fallback: foreground
+    )
+    let menuItems = action["menuItems"] as? [[String: Any]] ?? []
+    let menuActions: [UIAction] = menuItems.compactMap { menuItem in
+      guard let value = menuItem["value"] as? String,
+            let label = menuItem["label"] as? String else { return nil }
+      let isDestructive = menuItem["destructive"] as? Bool == true
+      let menuImage = (menuItem["systemImage"] as? String).flatMap { name -> UIImage? in
+        if isDestructive { return UIImage(systemName: name) }
+        return skyStreamMenuImage(named: name, tintColor: menuTint)
+      }
+      var attributes: UIMenuElement.Attributes = []
+      if isDestructive { attributes.insert(.destructive) }
+      return UIAction(
+        title: label,
+        image: menuImage,
+        attributes: attributes,
+        state: value == selectedValue ? .on : .off
+      ) { [weak self] _ in
+        self?.channel.invokeMethod(
+          "selected",
+          arguments: ["index": actionIndex, "value": value]
+        )
+      }
+    }
+    button.menu = menuActions.isEmpty ? nil : UIMenu(children: menuActions)
+    button.showsMenuAsPrimaryAction = !menuActions.isEmpty
+    if #available(iOS 16.0, *) {
+      button.preferredMenuElementOrder = .fixed
+    }
+  }
+
+  @available(iOS 26.0, *)
+  private func setGlassEffect(_ slot: Int, enabled: Bool, animated: Bool) {
+    guard slot < glassSlots.count else { return }
+    let update = {
+      self.glassSlots[slot].effect = enabled ? self.makeGlassEffect() : nil
+    }
+    if animated {
+      UIView.animate(
+        withDuration: 0.18,
+        delay: 0,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: update
+      )
+    } else {
+      update()
+    }
+  }
+
+  @available(iOS 26.0, *)
+  private func applyGlass(actions: [[String: Any]], animated: Bool) {
+    let newCount = actions.count
+    let oldCount = currentActionCount
+    let slotCount = max(max(oldCount, newCount), 1)
+    ensureGlassSlotCount(slotCount)
+
+    let anchorFrame = frameForAction(index: 0, count: 1, extent: itemExtent)
+    let structuralChange = didApplyInitialState && oldCount != newCount
+
+    if !didApplyInitialState {
+      for index in 0..<glassSlots.count {
+        if index < newCount {
+          configureGlassButton(
+            slot: index,
+            actionIndex: index,
+            action: actions[index],
+            crossfadeImage: false
+          )
+          glassSlots[index].frame = frameForAction(
+            index: index,
+            count: newCount,
+            extent: itemExtent
+          )
+          actionButtons[index].alpha = 1
+          setGlassEffect(index, enabled: true, animated: false)
+        } else {
+          actionButtons[index].alpha = 0
+          setGlassEffect(index, enabled: false, animated: false)
+        }
+      }
+      currentActionCount = newCount
+      didApplyInitialState = true
+      return
+    }
+
+    if oldCount > 1 && newCount == 1 {
+      // Keep slot 0 alive and turn its content into the destination action.
+      // The other droplets move into the same frame. UIGlassContainerEffect
+      // performs the actual Liquid Glass merge while the content fades.
+      configureGlassButton(
+        slot: 0,
+        actionIndex: 0,
+        action: actions[0],
+        crossfadeImage: true
+      )
+      setGlassEffect(0, enabled: true, animated: false)
+      for index in 1..<oldCount where index < actionButtons.count {
+        actionButtons[index].isUserInteractionEnabled = false
+      }
+
+      let animations = {
+        for index in 0..<oldCount where index < self.glassSlots.count {
+          self.glassSlots[index].frame = anchorFrame
+          if index > 0 { self.actionButtons[index].alpha = 0 }
+        }
+      }
+      let completion: (Bool) -> Void = { _ in
+        for index in 1..<oldCount where index < self.glassSlots.count {
+          self.setGlassEffect(index, enabled: false, animated: true)
+        }
+      }
+      UIView.animate(
+        springDuration: animated ? 0.46 : 0.0,
+        bounce: 0.06,
+        initialSpringVelocity: 0.0,
+        delay: 0,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: animations,
+        completion: completion
+      )
+    } else if oldCount == 1 && newCount > 1 {
+      // Apple's guidance for splitting glass is to first place the new droplets
+      // at the same position, then animate them apart together.
+      for index in 0..<newCount {
+        glassSlots[index].frame = anchorFrame
+        configureGlassButton(
+          slot: index,
+          actionIndex: index,
+          action: actions[index],
+          crossfadeImage: index == 0
+        )
+        setGlassEffect(index, enabled: true, animated: false)
+        actionButtons[index].alpha = index == 0 ? 1 : 0
+      }
+      rootView.layoutIfNeeded()
+      UIView.animate(
+        springDuration: animated ? 0.46 : 0.0,
+        bounce: 0.06,
+        initialSpringVelocity: 0.0,
+        delay: 0,
+        options: [.beginFromCurrentState, .allowUserInteraction]
+      ) {
+        for index in 0..<newCount {
+          self.glassSlots[index].frame = self.frameForAction(
+            index: index,
+            count: newCount,
+            extent: self.itemExtent
+          )
+          self.actionButtons[index].alpha = 1
+        }
+      }
+    } else {
+      // Same-count updates keep the native views intact. Generic count changes
+      // still animate geometry and materialization without replacing the host.
+      let maxCount = max(oldCount, newCount)
+      for index in 0..<newCount {
+        configureGlassButton(
+          slot: index,
+          actionIndex: index,
+          action: actions[index],
+          crossfadeImage: structuralChange
+        )
+        setGlassEffect(index, enabled: true, animated: structuralChange && animated)
+      }
+      UIView.animate(
+        springDuration: structuralChange && animated ? 0.42 : 0.0,
+        bounce: 0.04,
+        initialSpringVelocity: 0.0,
+        delay: 0,
+        options: [.beginFromCurrentState, .allowUserInteraction]
+      ) {
+        for index in 0..<maxCount where index < self.glassSlots.count {
+          if index < newCount {
+            self.glassSlots[index].frame = self.frameForAction(
+              index: index,
+              count: newCount,
+              extent: self.itemExtent
+            )
+            self.actionButtons[index].alpha = 1
+          } else {
+            self.glassSlots[index].frame = anchorFrame
+            self.actionButtons[index].alpha = 0
+          }
+        }
+      } completion: { _ in
+        if newCount < maxCount {
+          for index in newCount..<maxCount where index < self.glassSlots.count {
+            self.setGlassEffect(index, enabled: false, animated: animated)
+          }
+        }
+      }
+    }
+
+    currentActionCount = newCount
+  }
+
+  private func makeLegacyItems(actions: [[String: Any]]) -> [UIBarButtonItem] {
+    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
+    return actions.enumerated().map { index, action in
       let systemName = action["systemName"] as? String ?? "circle"
       let image = UIImage(systemName: systemName, withConfiguration: symbolConfiguration)
       let selectedValue = action["selectedValue"] as? String
       let menuItems = action["menuItems"] as? [[String: Any]] ?? []
-
       let item: UIBarButtonItem
       if #available(iOS 14.0, *), !menuItems.isEmpty {
         let menuActions: [UIAction] = menuItems.compactMap { menuItem in
@@ -621,38 +932,22 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
           let isDestructive = menuItem["destructive"] as? Bool == true
           let menuImage = (menuItem["systemImage"] as? String).flatMap { name -> UIImage? in
             guard let image = UIImage(systemName: name) else { return nil }
-            return isDestructive
-              ? image
-              : image.withTintColor(menuTint, renderingMode: .alwaysOriginal)
+            return isDestructive ? image : image.withTintColor(menuTint, renderingMode: .alwaysOriginal)
           }
           var attributes: UIMenuElement.Attributes = []
-          if isDestructive {
-            attributes.insert(.destructive)
-          }
+          if isDestructive { attributes.insert(.destructive) }
           return UIAction(
             title: label,
             image: menuImage,
             attributes: attributes,
             state: value == selectedValue ? .on : .off
           ) { [weak self] _ in
-            self?.channel.invokeMethod(
-              "selected",
-              arguments: ["index": index, "value": value]
-            )
+            self?.channel.invokeMethod("selected", arguments: ["index": index, "value": value])
           }
         }
-        item = UIBarButtonItem(
-          image: image,
-          primaryAction: nil,
-          menu: UIMenu(children: menuActions)
-        )
+        item = UIBarButtonItem(image: image, primaryAction: nil, menu: UIMenu(children: menuActions))
       } else {
-        item = UIBarButtonItem(
-          image: image,
-          style: .plain,
-          target: self,
-          action: #selector(itemPressed(_:))
-        )
+        item = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(legacyItemPressed(_:)))
       }
       item.tag = index
       item.isEnabled = action["enabled"] as? Bool ?? true
@@ -662,77 +957,27 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     }
   }
 
-  private func apply(arguments: Any?) {
+  private func apply(arguments: Any?, animated: Bool) {
     guard let values = arguments as? [String: Any] else { return }
     let actions = values["actions"] as? [[String: Any]] ?? []
-    let collapsed = values["collapsed"] as? Bool ?? false
-    let itemExtent = CGFloat(
-      (values["itemExtent"] as? NSNumber)?.doubleValue ?? 46
-    )
-    let itemCount = max(actions.count, 1)
-    let desiredExpandedWidth = itemExtent * CGFloat(itemCount) + (itemCount > 1 ? 16 : 0)
-    let expandedWidth = max(
-      itemExtent,
-      min(
-        rootView.bounds.width > 0 ? rootView.bounds.width : toolbarWidthConstraint.constant,
-        desiredExpandedWidth
-      )
-    )
-    let collapsedSystemName = values["collapsedSystemImage"] as? String
-      ?? "arrow.up.arrow.down"
-    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
-    let fullItems = makeItems(actions: actions, symbolConfiguration: symbolConfiguration)
+    itemExtent = CGFloat((values["itemExtent"] as? NSNumber)?.doubleValue ?? 46)
+    hostWidth = CGFloat((values["hostWidth"] as? NSNumber)?.doubleValue ?? max(46, rootView.bounds.width))
 
-    let collapsedImage = UIImage(
-      systemName: collapsedSystemName,
-      withConfiguration: symbolConfiguration
-    )
-    let collapsedItem = UIBarButtonItem(image: collapsedImage, style: .plain, target: nil, action: nil)
-    collapsedItem.tintColor = fullItems.first?.tintColor ?? .label
-    collapsedItem.accessibilityLabel = "Sort"
-
-    let targetItems = collapsed ? [collapsedItem] : fullItems
-    let targetWidth = collapsed ? itemExtent : expandedWidth
-    let structuralChange = didApplyInitialState && (
-      collapsed != isCollapsed || targetItems.count != previousItemCount
-    )
-    isCollapsed = collapsed
-    previousItemCount = targetItems.count
-    didApplyInitialState = true
-
-    toolbar.setItems(targetItems, animated: structuralChange)
-    toolbarWidthConstraint.constant = targetWidth
-
-    guard structuralChange else {
-      rootView.layoutIfNeeded()
-      return
-    }
-
-    // Keep the morph entirely inside UIKit's standard iOS 26 toolbar. The
-    // system owns the Liquid Glass material/grouping while this spring only
-    // drives the trailing-aligned geometry change from capsule to circle.
-    if #available(iOS 17.0, *) {
-      UIView.animate(
-        springDuration: 0.42,
-        bounce: 0.0,
-        initialSpringVelocity: 0.0,
-        delay: 0,
-        options: [.beginFromCurrentState, .allowUserInteraction]
-      ) {
-        self.rootView.layoutIfNeeded()
-      }
+    if #available(iOS 26.0, *) {
+      applyGlass(actions: actions, animated: animated)
     } else {
-      UIView.animate(
-        withDuration: 0.36,
-        delay: 0,
-        options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction]
-      ) {
-        self.rootView.layoutIfNeeded()
-      }
+      legacyToolbar?.setItems(makeLegacyItems(actions: actions), animated: animated)
+      currentActionCount = actions.count
+      didApplyInitialState = true
     }
   }
 
-  @objc private func itemPressed(_ sender: UIBarButtonItem) {
+  @objc private func glassButtonPressed(_ sender: UIButton) {
+    guard sender.isEnabled else { return }
+    channel.invokeMethod("pressed", arguments: sender.tag)
+  }
+
+  @objc private func legacyItemPressed(_ sender: UIBarButtonItem) {
     channel.invokeMethod("pressed", arguments: sender.tag)
   }
 }

@@ -282,7 +282,7 @@ class _AnimeWitcherCommentsScreenState
         ),
       ];
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
         applePersistentGlassHeaderController.show(
           ApplePersistentGlassHeaderConfig(
             owner: this,
@@ -311,8 +311,8 @@ class _AnimeWitcherCommentsScreenState
                   ),
             title: Padding(
               padding: EdgeInsets.only(
-                right: appleUsesPersistentLiquidGlassHeader && isArabic ? 62 : 0,
-                left: appleUsesPersistentLiquidGlassHeader && !isArabic ? 62 : 0,
+                right: appleUsesPersistentLiquidGlassHeader && isArabic ? 92 : 0,
+                left: appleUsesPersistentLiquidGlassHeader && !isArabic ? 92 : 0,
               ),
               child: Align(
                 alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,

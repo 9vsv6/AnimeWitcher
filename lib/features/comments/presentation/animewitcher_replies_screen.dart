@@ -197,7 +197,7 @@ class _AnimeWitcherRepliesScreenState
     if (appleUsesPersistentLiquidGlassHeader) {
       final colors = Theme.of(context).colorScheme;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
         applePersistentGlassHeaderController.show(
           ApplePersistentGlassHeaderConfig(
             owner: this,

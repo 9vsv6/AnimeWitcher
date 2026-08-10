@@ -42,12 +42,26 @@ class ApplePersistentGlassHeaderController
     extends ValueNotifier<ApplePersistentGlassHeaderConfig?> {
   ApplePersistentGlassHeaderController() : super(null);
 
+  final List<ApplePersistentGlassHeaderConfig> _routeStack =
+      <ApplePersistentGlassHeaderConfig>[];
+
   void show(ApplePersistentGlassHeaderConfig config) {
+    final existingIndex = _routeStack.indexWhere(
+      (entry) => identical(entry.owner, config.owner),
+    );
+    if (existingIndex >= 0) {
+      _routeStack.removeAt(existingIndex);
+    }
+    _routeStack.add(config);
     value = config;
   }
 
   void hide(Object owner) {
-    if (value?.owner == owner) value = null;
+    final wasCurrent = identical(value?.owner, owner);
+    _routeStack.removeWhere((entry) => identical(entry.owner, owner));
+    if (wasCurrent) {
+      value = _routeStack.isEmpty ? null : _routeStack.last;
+    }
   }
 }
 
@@ -149,7 +163,7 @@ class _ApplePersistentGlassHeaderOverlayState
                         Positioned(
                           // Give the UIKit bar a little more trailing breathing
                           // room while keeping the whole group fully on-screen.
-                          right: 8,
+                          right: 24,
                           top: (kToolbarHeight - 46) / 2,
                           child: AnimatedOpacity(
                             opacity: showTrailing ? 1 : 0,
@@ -601,6 +615,11 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     'collapsed': widget.collapsed,
     'collapsedSystemImage': widget.collapsedSystemImage,
     'itemExtent': widget.height,
+    'hostWidth': widget.height *
+            (widget.minimumCapacity > widget.buttons.length
+                ? widget.minimumCapacity
+                : widget.buttons.length) +
+        32,
     'actions': <Map<String, Object?>>[
       for (final button in widget.buttons)
         <String, Object?>{

@@ -973,7 +973,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         foregroundColor: headerForeground,
       );
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
         applePersistentGlassHeaderController.show(
           ApplePersistentGlassHeaderConfig(
             owner: this,
