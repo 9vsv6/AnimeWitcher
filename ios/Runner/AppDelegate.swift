@@ -1122,6 +1122,11 @@ private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatfor
   }
 
   func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+    // The Search key should behave like a committed search, not just emit the
+    // query. Dismiss the native iOS keyboard first, then let Flutter submit the
+    // final text to searchQueryProvider. The Flutter fallback already unfocuses
+    // in _submitSearch; this mirrors that behavior for UISearchTextField.
+    textField.resignFirstResponder()
     channel.invokeMethod("submitted", arguments: textField.text ?? "")
     return true
   }
