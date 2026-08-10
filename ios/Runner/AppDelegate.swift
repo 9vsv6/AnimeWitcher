@@ -785,12 +785,12 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
   private func apply(arguments: Any?) {
     guard let values = arguments as? [String: Any] else { return }
     let systemName = values["systemImage"] as? String ?? "arrow.up.arrow.down"
+    let tintColor = skyStreamUIColor(values["tintColor"], fallback: .label)
     let image = UIImage(
       systemName: systemName,
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-    )
+    )?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
     let title = (values["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let tintColor = skyStreamUIColor(values["tintColor"], fallback: .label)
     skyStreamConfigureGlassButton(button, image: image, foreground: tintColor)
     button.tintColor = tintColor
     if #available(iOS 15.0, *), var configuration = button.configuration {
@@ -997,7 +997,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     let stack = UIStackView(arrangedSubviews: [sortButton, filterButton])
     stack.axis = .horizontal
     stack.spacing = 8
-    stack.distribution = .fillEqually
+    stack.distribution = .fill
     stack.translatesAutoresizingMaskIntoConstraints = false
     rootView.addSubview(stack)
     NSLayoutConstraint.activate([

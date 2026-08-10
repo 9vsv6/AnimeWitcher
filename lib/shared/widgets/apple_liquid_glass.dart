@@ -993,15 +993,23 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
   Widget build(BuildContext context) {
     final height = widget.height;
     if (_usesNativeAppleLiquidGlass) {
-      return SizedBox(
-        width: height * 2 + 8,
-        height: height,
-        child: UiKitView(
-          viewType: _appleSearchGlassActionsViewType,
-          layoutDirection: Directionality.of(context),
-          creationParams: _state,
-          creationParamsCodec: const StandardMessageCodec(),
-          onPlatformViewCreated: _onPlatformViewCreated,
+      // AppBar gives leading/actions its full toolbar height. Keep the native
+      // controls in an Align so UIKit receives the requested square height
+      // instead of being stretched vertically into rounded rectangles.
+      return Align(
+        alignment: Alignment.center,
+        widthFactor: 1,
+        heightFactor: 1,
+        child: SizedBox(
+          width: height * 2 + 8,
+          height: height,
+          child: UiKitView(
+            viewType: _appleSearchGlassActionsViewType,
+            layoutDirection: Directionality.of(context),
+            creationParams: _state,
+            creationParamsCodec: const StandardMessageCodec(),
+            onPlatformViewCreated: _onPlatformViewCreated,
+          ),
         ),
       );
     }
