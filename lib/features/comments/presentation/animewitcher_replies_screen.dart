@@ -179,21 +179,6 @@ class _AnimeWitcherRepliesScreenState
     }
   }
 
-  Future<void> _chooseSort() async {
-    final selected = await showModalBottomSheet<AnimeWitcherCommentSort>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => _ReplySortSheet(
-        current: _sort,
-        isArabic: _isArabic(context),
-      ),
-    );
-    if (selected == null || selected == _sort || !mounted) return;
-    setState(() => _sort = selected);
-    if (_scrollController.hasClients) _scrollController.jumpTo(0);
-    await _loadInitial();
-  }
-
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -224,19 +209,6 @@ class _AnimeWitcherRepliesScreenState
                 child: Text(isArabic ? 'الردود' : 'Replies'),
               ),
             ),
-            actions: [
-              IconButton(
-                tooltip: isArabic ? 'ترتيب الردود' : 'Sort replies',
-                onPressed: _chooseSort,
-                icon: const Icon(Icons.filter_list_rounded),
-              ),
-              IconButton(
-                tooltip: isArabic ? 'تحديث' : 'Refresh',
-                onPressed: _loadInitial,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-              const SizedBox(width: 4),
-            ],
           ),
         ),
       ),
@@ -540,56 +512,6 @@ class _AnimeWitcherRepliesScreenState
       ),
     );
   }
-}
-
-class _ReplySortSheet extends StatelessWidget {
-  const _ReplySortSheet({
-    required this.current,
-    required this.isArabic,
-  });
-
-  final AnimeWitcherCommentSort current;
-  final bool isArabic;
-
-  @override
-  Widget build(BuildContext context) {
-    final options = <(AnimeWitcherCommentSort, IconData)>[
-      (AnimeWitcherCommentSort.newest, Icons.schedule_rounded),
-      (AnimeWitcherCommentSort.oldest, Icons.history_rounded),
-      (AnimeWitcherCommentSort.mostLiked, Icons.favorite_rounded),
-    ];
-    return SafeArea(
-      child: Directionality(
-        textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final option in options)
-                ListTile(
-                  leading: Icon(option.$2),
-                  title: Text(_replySortLabel(option.$1, isArabic)),
-                  trailing: current == option.$1
-                      ? const Icon(Icons.check_rounded)
-                      : null,
-                  onTap: () => Navigator.of(context).pop(option.$1),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _replySortLabel(AnimeWitcherCommentSort sort, bool isArabic) {
-  return switch (sort) {
-    AnimeWitcherCommentSort.newest => isArabic ? 'الأحدث' : 'Newest',
-    AnimeWitcherCommentSort.oldest => isArabic ? 'الأقدم' : 'Oldest',
-    AnimeWitcherCommentSort.mostLiked =>
-      isArabic ? 'الأكثر اعجابا' : 'Most liked',
-  };
 }
 
 String _replyErrorText(Object error, bool isArabic) {
