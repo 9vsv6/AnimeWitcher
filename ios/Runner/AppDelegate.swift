@@ -606,6 +606,8 @@ private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatfor
 
     let searchTap = UITapGestureRecognizer(target: self, action: #selector(searchSurfaceTapped(_:)))
     searchTap.cancelsTouchesInView = false
+    searchTap.delaysTouchesBegan = false
+    searchTap.delaysTouchesEnded = false
     searchTap.delegate = self
     rootView.addGestureRecognizer(searchTap)
 
@@ -696,6 +698,16 @@ private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatfor
 
   func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
     searchTapStartedFocused = searchField.isFirstResponder
+    return true
+  }
+
+  func gestureRecognizer(
+    _ gestureRecognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+  ) -> Bool {
+    // UISearchTextField owns internal selection/tap recognizers. Let the surface
+    // recognizer observe the same tap so tapping anywhere in the glass can toggle
+    // first-responder state without stealing cursor/selection behavior.
     return true
   }
 

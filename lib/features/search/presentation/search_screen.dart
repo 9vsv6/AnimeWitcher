@@ -619,11 +619,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
     final searchPlaceholder = isArabic ? 'Search...' : l10n.searchHint;
-    const persistentSearchActionsWidth = 152.0;
+    const persistentSearchActionsWidth = 140.0;
 
     final scaffold = Scaffold(
       appBar: AppBar(
-        titleSpacing: 16,
+        titleSpacing: 12,
         leadingWidth: isArabic
             ? (usePersistentGlass ? persistentSearchActionsWidth + 10 : 104)
             : null,

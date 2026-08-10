@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/services.dart';
 
 const _appleLiquidGlassViewType = 'dev.akash.skystream/liquid_glass';
@@ -33,6 +35,7 @@ class ApplePersistentGlassHeaderConfig {
     this.trailing,
     this.trailingButtons,
     this.branchIndex,
+    this.deferTrailingMorphUntilRouteSettles = false,
   });
 
   final Object owner;
@@ -44,6 +47,7 @@ class ApplePersistentGlassHeaderConfig {
   Widget? trailing;
   List<AppleLiquidGlassToolbarButton>? trailingButtons;
   int? branchIndex;
+  bool deferTrailingMorphUntilRouteSettles;
 
   bool visuallyMatches(ApplePersistentGlassHeaderConfig other) {
     final sameCustomTrailing = trailing == null && other.trailing == null ||
@@ -53,6 +57,8 @@ class ApplePersistentGlassHeaderConfig {
         backForegroundColor == other.backForegroundColor &&
         backFallbackColor == other.backFallbackColor &&
         branchIndex == other.branchIndex &&
+        deferTrailingMorphUntilRouteSettles ==
+            other.deferTrailingMorphUntilRouteSettles &&
         sameCustomTrailing &&
         _sameToolbarButtons(trailingButtons, other.trailingButtons);
   }
@@ -66,6 +72,8 @@ class ApplePersistentGlassHeaderConfig {
     trailing = other.trailing;
     trailingButtons = other.trailingButtons;
     branchIndex = other.branchIndex;
+    deferTrailingMorphUntilRouteSettles =
+        other.deferTrailingMorphUntilRouteSettles;
   }
 }
 
@@ -131,7 +139,17 @@ class ApplePersistentGlassHeaderController
       // header as soon as its animation starts moving forward again.
       if (status == AnimationStatus.forward ||
           status == AnimationStatus.completed) {
-        if (_poppingOwners.remove(config.owner)) _syncVisibleItem();
+        final restored = _poppingOwners.remove(config.owner);
+        if (restored) {
+          _syncVisibleItem();
+        } else if (status == AnimationStatus.completed &&
+            config.deferTrailingMorphUntilRouteSettles &&
+            identical(value, config)) {
+          // The page is fully settled. Rebuild the persistent overlay now so the
+          // native toolbar can run its structural Liquid Glass morph without
+          // competing with Flutter's route transition.
+          notifyListeners();
+        }
       }
     }
 
@@ -227,6 +245,7 @@ class ApplePersistentGlassHeaderScope extends StatefulWidget {
     this.trailing,
     this.trailingButtons,
     this.branchIndex,
+    this.deferTrailingMorphUntilRouteSettles = false,
   });
 
   final Widget child;
@@ -238,6 +257,7 @@ class ApplePersistentGlassHeaderScope extends StatefulWidget {
   final Widget? trailing;
   final List<AppleLiquidGlassToolbarButton>? trailingButtons;
   final int? branchIndex;
+  final bool deferTrailingMorphUntilRouteSettles;
 
   @override
   State<ApplePersistentGlassHeaderScope> createState() =>
@@ -268,6 +288,8 @@ class _ApplePersistentGlassHeaderScopeState
         trailing: widget.trailing,
         trailingButtons: widget.trailingButtons,
         branchIndex: widget.branchIndex,
+        deferTrailingMorphUntilRouteSettles:
+            widget.deferTrailingMorphUntilRouteSettles,
       ),
     );
   }
@@ -308,6 +330,8 @@ class _ApplePersistentGlassHeaderOverlayState
   ApplePersistentGlassHeaderConfig? _lastConfig;
   Widget? _lastTrailing;
   List<AppleLiquidGlassToolbarButton>? _lastTrailingButtons;
+  Object? _lastPresentedOwner;
+  Object? _deferredTrailingOwner;
 
   @override
   Widget build(BuildContext context) {
@@ -326,21 +350,43 @@ class _ApplePersistentGlassHeaderOverlayState
             child: ValueListenableBuilder<ApplePersistentGlassHeaderConfig?>(
               valueListenable: applePersistentGlassHeaderController,
               builder: (context, config, _) {
+                var deferTrailingMorph = false;
                 if (config != null) {
+                  final routeStatus = config.route?.animation?.status;
+                  final enteringNewOwner =
+                      !identical(_lastPresentedOwner, config.owner);
+                  if (config.deferTrailingMorphUntilRouteSettles &&
+                      routeStatus == AnimationStatus.forward &&
+                      enteringNewOwner) {
+                    _deferredTrailingOwner = config.owner;
+                  }
+                  deferTrailingMorph =
+                      identical(_deferredTrailingOwner, config.owner) &&
+                      routeStatus == AnimationStatus.forward;
+                  if (!deferTrailingMorph &&
+                      identical(_deferredTrailingOwner, config.owner)) {
+                    _deferredTrailingOwner = null;
+                  }
+
                   _lastConfig = config;
                   if (config.trailing != null) _lastTrailing = config.trailing;
-                  if (config.trailingButtons != null) {
+                  if (!deferTrailingMorph && config.trailingButtons != null) {
                     _lastTrailingButtons = config.trailingButtons;
                   }
+                  _lastPresentedOwner = config.owner;
                 }
                 final effective = config ?? _lastConfig;
                 final visible = config != null;
                 final leavingGlassChrome = !visible;
                 final showBack = visible && effective?.onBack != null;
-                final activeButtons = config?.trailingButtons;
-                final hasNativeToolbar = activeButtons != null && activeButtons.isNotEmpty;
+                final activeButtons = deferTrailingMorph
+                    ? _lastTrailingButtons
+                    : config?.trailingButtons;
+                final hasNativeToolbar =
+                    activeButtons != null && activeButtons.isNotEmpty;
                 final showTrailing = visible &&
-                    (hasNativeToolbar || config?.trailing != null);
+                    (hasNativeToolbar ||
+                        (!deferTrailingMorph && config?.trailing != null));
 
                 // Keep the trailing control in one fixed 3-button-wide slot.
                 // The UIKit toolbar inside this slot changes its own width/items,
@@ -994,6 +1040,7 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
       height: widget.height,
       child: UiKitView(
         viewType: _appleNativeToolbarViewType,
+        hitTestBehavior: PlatformViewHitTestBehavior.translucent,
         layoutDirection: Directionality.of(context),
         creationParams: _state,
         creationParamsCodec: const StandardMessageCodec(),
@@ -1136,6 +1183,10 @@ class _AppleNativeGlassSearchFieldState
       height: widget.height,
       child: UiKitView(
         viewType: _appleNativeSearchFieldViewType,
+        hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+        gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+          Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+        },
         layoutDirection: widget.textDirection,
         creationParams: _state,
         creationParamsCodec: const StandardMessageCodec(),
