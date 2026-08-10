@@ -610,7 +610,7 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
         children.every((child) => child is AppleLiquidGlassToolbarButton)) {
       final buttons = children.cast<AppleLiquidGlassToolbarButton>();
       final canUseNative = buttons.every(
-        (button) => _appleSystemSymbolForIcon(button.icon) != null,
+        (button) => (button.systemImage ?? _appleSystemSymbolForIcon(button.icon)) != null,
       );
       if (canUseNative) {
         return _AppleNativeToolbar(
@@ -640,6 +640,7 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
 
 class AppleLiquidGlassToolbarButton extends StatelessWidget {
   final IconData icon;
+  final String? systemImage;
   final VoidCallback? onPressed;
   final Color? color;
   final String? tooltip;
@@ -653,6 +654,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
   const AppleLiquidGlassToolbarButton({
     super.key,
     required this.icon,
+    this.systemImage,
     required this.onPressed,
     this.color,
     this.tooltip,
@@ -667,7 +669,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveColor = color ?? Theme.of(context).colorScheme.onSurface;
-    final nativeSymbol = _appleSystemSymbolForIcon(icon);
+    final nativeSymbol = systemImage ?? _appleSystemSymbolForIcon(icon);
     if (_usesNativeAppleLiquidGlass && nativeSymbol != null) {
       if (menuItems.isNotEmpty && onMenuSelected != null) {
         return AppleNativeMenuButton(
@@ -720,6 +722,7 @@ bool _sameToolbarButtons(
     final left = a[i];
     final right = b[i];
     if (left.icon != right.icon ||
+        left.systemImage != right.systemImage ||
         left.color != right.color ||
         left.tooltip != right.tooltip ||
         left.title != right.title ||
@@ -932,7 +935,7 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     'actions': <Map<String, Object?>>[
       for (final button in widget.buttons)
         <String, Object?>{
-          'systemName': _appleSystemSymbolForIcon(button.icon),
+          'systemName': button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
           'title': button.title,
           'enabled': button.onPressed != null ||
               (button.menuItems.isNotEmpty && button.onMenuSelected != null),

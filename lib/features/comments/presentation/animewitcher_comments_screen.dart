@@ -228,22 +228,38 @@ class _AnimeWitcherCommentsScreenState
     return _sort;
   }
 
+  String _commentSortSystemImage(AnimeWitcherCommentSort sort) {
+    return switch (sort) {
+      AnimeWitcherCommentSort.newest => 'clock',
+      AnimeWitcherCommentSort.oldest => 'clock.arrow.circlepath',
+      AnimeWitcherCommentSort.mostLiked => 'heart',
+    };
+  }
+
+  IconData _commentSortFallbackIcon(AnimeWitcherCommentSort sort) {
+    return switch (sort) {
+      AnimeWitcherCommentSort.newest => Icons.schedule_rounded,
+      AnimeWitcherCommentSort.oldest => Icons.history_rounded,
+      AnimeWitcherCommentSort.mostLiked => Icons.favorite_border_rounded,
+    };
+  }
+
   List<AppleNativeMenuItem> _commentSortMenuItems(bool isArabic) {
     return <AppleNativeMenuItem>[
       AppleNativeMenuItem(
         value: AnimeWitcherCommentSort.newest.name,
         label: _sortLabel(AnimeWitcherCommentSort.newest, isArabic),
-        systemImage: 'clock',
+        systemImage: _commentSortSystemImage(AnimeWitcherCommentSort.newest),
       ),
       AppleNativeMenuItem(
         value: AnimeWitcherCommentSort.oldest.name,
         label: _sortLabel(AnimeWitcherCommentSort.oldest, isArabic),
-        systemImage: 'clock.arrow.circlepath',
+        systemImage: _commentSortSystemImage(AnimeWitcherCommentSort.oldest),
       ),
       AppleNativeMenuItem(
         value: AnimeWitcherCommentSort.mostLiked.name,
         label: _sortLabel(AnimeWitcherCommentSort.mostLiked, isArabic),
-        systemImage: 'heart',
+        systemImage: _commentSortSystemImage(AnimeWitcherCommentSort.mostLiked),
       ),
     ];
   }
@@ -269,8 +285,11 @@ class _AnimeWitcherCommentsScreenState
       final colors = Theme.of(context).colorScheme;
       final trailingButtons = <AppleLiquidGlassToolbarButton>[
         AppleLiquidGlassToolbarButton(
+          width: isArabic ? 150 : 140,
           tooltip: isArabic ? 'ترتيب التعليقات' : 'Sort comments',
-          icon: Icons.sort_rounded,
+          icon: _commentSortFallbackIcon(_sort),
+          systemImage: _commentSortSystemImage(_sort),
+          title: _sortLabel(_sort, isArabic),
           color: Colors.white,
           menuTintColor: colors.primary,
           onPressed: null,

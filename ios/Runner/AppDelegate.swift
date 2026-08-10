@@ -858,10 +858,8 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
             let label = menuItem["label"] as? String else { return nil }
       let isDestructive = menuItem["destructive"] as? Bool == true
       let image = (menuItem["systemImage"] as? String).flatMap { name -> UIImage? in
-        guard let image = UIImage(systemName: name) else { return nil }
-        return isDestructive
-          ? image
-          : image.withTintColor(menuTint, renderingMode: .alwaysOriginal)
+        if isDestructive { return UIImage(systemName: name) }
+        return skyStreamMenuImage(named: name, tintColor: menuTint)
       }
       var attributes: UIMenuElement.Attributes = []
       if isDestructive { attributes.insert(.destructive) }
@@ -902,14 +900,12 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     actionCount: Int
   ) {
     let systemName = action["systemName"] as? String ?? "circle"
-    item.image = UIImage(
-      systemName: systemName,
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
-    )
+    let actionTint = skyStreamUIColor(action["color"], fallback: .label)
+    item.image = skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
     item.title = actionTitle(action)
     item.tag = actionIndex
     item.isEnabled = action["enabled"] as? Bool ?? true
-    item.tintColor = skyStreamUIColor(action["color"], fallback: .label)
+    item.tintColor = actionTint
     item.accessibilityLabel = action["accessibilityLabel"] as? String
     if actionHasMenu(action), #available(iOS 14.0, *) {
       item.menu = makeMenu(actionIndex: actionIndex, action: action)
@@ -924,11 +920,10 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   }
 
   private func makeActionItems(actions: [[String: Any]]) -> [UIBarButtonItem] {
-    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
-
     let actionItems: [UIBarButtonItem] = actions.enumerated().map { index, action in
       let systemName = action["systemName"] as? String ?? "circle"
-      let image = UIImage(systemName: systemName, withConfiguration: symbolConfiguration)
+      let actionTint = skyStreamUIColor(action["color"], fallback: .label)
+      let image = skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
       let item: UIBarButtonItem
 
       if #available(iOS 14.0, *), let menu = makeMenu(actionIndex: index, action: action) {

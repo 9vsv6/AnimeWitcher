@@ -234,15 +234,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         AppleNativeMenuItem(
           value: option.value,
           label: option.label(context),
-          systemImage: switch (option) {
-            SearchSortOption.mostFavorited => 'star.fill',
-            SearchSortOption.productionDateAscending => 'calendar',
-            SearchSortOption.productionDateDescending => 'calendar',
-            SearchSortOption.nameAscending => 'textformat.abc',
-            SearchSortOption.nameDescending => 'skystream.zyx',
-          },
+          systemImage: _searchSortSystemImage(option),
         ),
     ];
+  }
+
+  String _searchSortSystemImage(SearchSortOption option) {
+    return switch (option) {
+      SearchSortOption.mostFavorited => 'star.fill',
+      SearchSortOption.productionDateAscending => 'arrow.up',
+      SearchSortOption.productionDateDescending => 'arrow.down',
+      SearchSortOption.nameAscending => 'textformat.abc',
+      SearchSortOption.nameDescending => 'skystream.zyx',
+    };
+  }
+
+  IconData _searchSortFallbackIcon(SearchSortOption option) {
+    return switch (option) {
+      SearchSortOption.mostFavorited => Icons.star_rounded,
+      SearchSortOption.productionDateAscending => Icons.arrow_upward_rounded,
+      SearchSortOption.productionDateDescending => Icons.arrow_downward_rounded,
+      SearchSortOption.nameAscending => Icons.sort_by_alpha_rounded,
+      SearchSortOption.nameDescending => Icons.sort_by_alpha_rounded,
+    };
   }
 
   Future<void> _showSearchSort() async {
@@ -543,8 +557,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     return <AppleLiquidGlassToolbarButton>[
       AppleLiquidGlassToolbarButton(
-        width: 42,
-        icon: Icons.sort_rounded,
+        width: 190,
+        icon: _searchSortFallbackIcon(sortOption),
+        systemImage: _searchSortSystemImage(sortOption),
+        title: sortOption.label(context),
         tooltip:
             '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
         color: primary,
