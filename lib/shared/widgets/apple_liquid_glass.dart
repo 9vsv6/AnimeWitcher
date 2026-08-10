@@ -327,151 +327,136 @@ class ApplePersistentGlassHeaderOverlay extends StatefulWidget {
 
 class _ApplePersistentGlassHeaderOverlayState
     extends State<ApplePersistentGlassHeaderOverlay> {
-  ApplePersistentGlassHeaderConfig? _lastConfig;
-  Widget? _lastTrailing;
-  List<AppleLiquidGlassToolbarButton>? _lastTrailingButtons;
-  Object? _lastPresentedOwner;
-  Object? _deferredTrailingOwner;
+  static const MethodChannel _nativeHeaderChannel = MethodChannel(
+    'dev.akash.skystream/persistent_glass_header',
+  );
+
+  bool _syncScheduled = false;
+  String? _lastNativeSignature;
+
+  @override
+  void initState() {
+    super.initState();
+    applePersistentGlassHeaderController.addListener(_scheduleNativeSync);
+    _nativeHeaderChannel.setMethodCallHandler(_handleNativeHeaderCall);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleNativeSync());
+  }
+
+  Future<void> _handleNativeHeaderCall(MethodCall call) async {
+    // Read the controller at interaction time rather than caching callbacks.
+    // Covered routes can refresh their callbacks without changing the visual
+    // header state, and the one native overlay should always invoke the current
+    // navigation item just like UINavigationController does.
+    final config = applePersistentGlassHeaderController.value;
+    if (config == null) return;
+
+    switch (call.method) {
+      case 'back':
+        config.onBack?.call();
+        return;
+      case 'pressed':
+        final index = call.arguments as int?;
+        final buttons = config.trailingButtons;
+        if (index == null || buttons == null || index < 0 || index >= buttons.length) {
+          return;
+        }
+        buttons[index].onPressed?.call();
+        return;
+      case 'selected':
+        if (call.arguments is! Map) return;
+        final args = Map<Object?, Object?>.from(call.arguments as Map);
+        final index = args['index'] as int?;
+        final value = args['value'] as String?;
+        final buttons = config.trailingButtons;
+        if (index == null || value == null || buttons == null || index < 0 || index >= buttons.length) {
+          return;
+        }
+        buttons[index].onMenuSelected?.call(value);
+        return;
+    }
+  }
+
+  Map<String, Object?> _nativeState() {
+    final config = applePersistentGlassHeaderController.value;
+    final colors = Theme.of(context).colorScheme;
+    final buttons = config?.trailingButtons ?? const <AppleLiquidGlassToolbarButton>[];
+    return <String, Object?>{
+      'visible': config != null,
+      'showBack': config?.onBack != null,
+      'backColor': (config?.backForegroundColor ?? colors.onSurface).toARGB32(),
+      'backAccessibilityLabel': config?.backTooltip,
+      'actions': <Map<String, Object?>>[
+        for (final button in buttons)
+          <String, Object?>{
+            'systemName': button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
+            'title': button.title,
+            'width': button.width,
+            'enabled': button.onPressed != null ||
+                (button.menuItems.isNotEmpty && button.onMenuSelected != null),
+            'color': (button.color ?? colors.onSurface).toARGB32(),
+            'accessibilityLabel': button.tooltip,
+            'selectedValue': button.selectedMenuValue,
+            'menuTintColor': button.menuTintColor?.toARGB32(),
+            'menuItems': button.menuItems
+                .map((item) => item.toPlatformValue())
+                .toList(growable: false),
+          },
+      ],
+    };
+  }
+
+  void _scheduleNativeSync() {
+    if (!mounted || _syncScheduled) return;
+    _syncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncScheduled = false;
+      if (!mounted) return;
+      final state = _nativeState();
+      final signature = jsonEncode(state);
+      if (signature == _lastNativeSignature) return;
+      _lastNativeSignature = signature;
+      _nativeHeaderChannel.invokeMethod<void>('update', state);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleNativeSync();
+  }
+
+  @override
+  void dispose() {
+    applePersistentGlassHeaderController.removeListener(_scheduleNativeSync);
+    _nativeHeaderChannel.setMethodCallHandler(null);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     if (!_usesNativeAppleLiquidGlass) return widget.child;
 
+    // The persistent back button and toolbar are now direct UIKit subviews of
+    // FlutterViewController.view, not UiKitView platform views inside Flutter's
+    // scene. This removes the extra Quartz-composited platform surfaces from
+    // route animations. Keep only the rare custom Flutter trailing widget here.
     return Stack(
       fit: StackFit.expand,
       children: [
         widget.child,
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: SafeArea(
-            bottom: false,
-            child: ValueListenableBuilder<ApplePersistentGlassHeaderConfig?>(
-              valueListenable: applePersistentGlassHeaderController,
-              builder: (context, config, _) {
-                var deferTrailingMorph = false;
-                if (config != null) {
-                  final routeStatus = config.route?.animation?.status;
-                  final enteringNewOwner =
-                      !identical(_lastPresentedOwner, config.owner);
-                  if (config.deferTrailingMorphUntilRouteSettles &&
-                      routeStatus == AnimationStatus.forward &&
-                      enteringNewOwner) {
-                    _deferredTrailingOwner = config.owner;
-                  }
-                  deferTrailingMorph =
-                      identical(_deferredTrailingOwner, config.owner) &&
-                      routeStatus == AnimationStatus.forward;
-                  if (!deferTrailingMorph &&
-                      identical(_deferredTrailingOwner, config.owner)) {
-                    _deferredTrailingOwner = null;
-                  }
-
-                  _lastConfig = config;
-                  if (config.trailing != null) _lastTrailing = config.trailing;
-                  if (!deferTrailingMorph && config.trailingButtons != null) {
-                    _lastTrailingButtons = config.trailingButtons;
-                  }
-                  _lastPresentedOwner = config.owner;
-                }
-                final effective = config ?? _lastConfig;
-                final visible = config != null;
-                final leavingGlassChrome = !visible;
-                final showBack = visible && effective?.onBack != null;
-                final activeButtons = deferTrailingMorph
-                    ? _lastTrailingButtons
-                    : config?.trailingButtons;
-                final hasNativeToolbar =
-                    activeButtons != null && activeButtons.isNotEmpty;
-                final showTrailing = visible &&
-                    (hasNativeToolbar ||
-                        (!deferTrailingMorph && config?.trailing != null));
-
-                // Keep the trailing control in one fixed 3-button-wide slot.
-                // The UIKit toolbar inside this slot changes its own width/items,
-                // which lets iOS animate the Liquid Glass capsule into the single
-                // comments-sort circle without creating a second platform view.
-                final toolbarButtons = activeButtons ??
-                    _lastTrailingButtons ??
-                    const <AppleLiquidGlassToolbarButton>[];
-
-                return SizedBox(
-                  height: kToolbarHeight,
-                  child: IgnorePointer(
-                    ignoring: !visible,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned(
-                          left: 8,
-                          top: (kToolbarHeight - 46) / 2,
-                          child: AnimatedOpacity(
-                            opacity: showBack ? 1 : 0,
-                            // Do not fade/scale native glass while a page is
-                            // entering. UIKit already animates its own material;
-                            // stacking a Flutter opacity/transform animation on
-                            // top adds another compositing pass. Keep only the
-                            // requested very-fast fade when the control leaves.
-                            duration: Duration(
-                              milliseconds: showBack ? 0 : 35,
-                            ),
-                            curve: Curves.easeOutCubic,
-                            child: AppleLiquidGlassBackButton(
-                              key: const ValueKey('persistent-liquid-back'),
-                              size: 46,
-                              foregroundColor: effective?.backForegroundColor,
-                              fallbackColor: effective?.backFallbackColor,
-                              tooltip: effective?.backTooltip,
-                              onPressed: effective?.onBack ?? () {},
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          // Mirror the back button's 8pt screen inset. The native
-                          // UIToolbar already reserves its own system trailing margin,
-                          // so this keeps both the 3-action capsule and its 1-action
-                          // comments-sort state fully on-screen while moving the sort
-                          // circle back to the visual right edge. The same platform view
-                          // stays mounted, so the UIKit 3 -> 1 morph is untouched.
-                          right: 8,
-                          top: (kToolbarHeight - 46) / 2,
-                          child: IgnorePointer(
-                            ignoring: !showTrailing,
-                            child: AnimatedOpacity(
-                              opacity: showTrailing ? 1 : 0,
-                              // Structural Liquid Glass changes are animated by
-                              // the persistent native UIToolbar itself. Avoid a
-                              // second Flutter scale/fade-in animation during the
-                              // route transition; only fade out when no actions
-                              // remain on the destination page.
-                              duration: Duration(
-                                milliseconds: showTrailing ? 0 : 35,
-                              ),
-                              curve: Curves.easeOutCubic,
-                              child: hasNativeToolbar || _lastTrailingButtons != null
-                                  ? AppleLiquidGlassActionGroup(
-                                      key: const ValueKey('persistent-native-toolbar'),
-                                      height: 46,
-                                      minimumCapacity: 5,
-                                      children: toolbarButtons,
-                                    )
-                                  : KeyedSubtree(
-                                      key: const ValueKey('persistent-custom-trailing'),
-                                      child: config?.trailing ??
-                                          _lastTrailing ??
-                                          const SizedBox.shrink(),
-                                    ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+        ValueListenableBuilder<ApplePersistentGlassHeaderConfig?>(
+          valueListenable: applePersistentGlassHeaderController,
+          builder: (context, config, _) {
+            if (config?.trailing == null ||
+                (config?.trailingButtons?.isNotEmpty ?? false)) {
+              return const SizedBox.shrink();
+            }
+            return Positioned(
+              top: MediaQuery.paddingOf(context).top + (kToolbarHeight - 46) / 2,
+              right: 8,
+              child: config!.trailing!,
+            );
+          },
         ),
       ],
     );

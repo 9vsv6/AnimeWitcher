@@ -7,6 +7,8 @@ import UserNotifications
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var downloadContinuedProcessingChannel: FlutterMethodChannel?
   private var liquidGlassPresenterChannel: FlutterMethodChannel?
+  private var persistentGlassHeaderChannel: FlutterMethodChannel?
+  private var persistentGlassHeaderController: ApplePersistentGlassHeaderNativeController?
 
   override func application(
     _ application: UIApplication,
@@ -39,6 +41,28 @@ import UserNotifications
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
     let messenger = engineBridge.applicationRegistrar.messenger()
+
+    let persistentHeaderChannel = FlutterMethodChannel(
+      name: "dev.akash.skystream/persistent_glass_header",
+      binaryMessenger: messenger
+    )
+    let persistentHeaderController = ApplePersistentGlassHeaderNativeController(
+      channel: persistentHeaderChannel,
+      hostViewProvider: { [weak self] in
+        self?.window?.rootViewController?.view
+      }
+    )
+    persistentGlassHeaderChannel = persistentHeaderChannel
+    persistentGlassHeaderController = persistentHeaderController
+    persistentHeaderChannel.setMethodCallHandler { [weak persistentHeaderController] call, result in
+      switch call.method {
+      case "update":
+        persistentHeaderController?.apply(arguments: call.arguments)
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
 
     if let glassRegistrar = engineBridge.pluginRegistry.registrar(
       forPlugin: "SkyStreamAppleLiquidGlass"
@@ -427,6 +451,320 @@ private func skyStreamConfigureGlassButton(
     button.setImage(image, for: .normal)
     button.tintColor = foreground
     button.backgroundColor = .secondarySystemBackground
+  }
+}
+
+
+private final class ApplePersistentGlassHeaderNativeController: NSObject {
+  private let channel: FlutterMethodChannel
+  private let hostViewProvider: () -> UIView?
+  private let rootView = SkyStreamPassthroughView(frame: .zero)
+  private let backButton = UIButton(type: .system)
+  private let toolbar = SkyStreamPassthroughToolbar(frame: .zero)
+  private var toolbarWidthConstraint: NSLayoutConstraint?
+  private weak var installedHostView: UIView?
+  private var lastArguments: Any?
+  private var attachmentRetryScheduled = false
+  private var didApplyInitialToolbarState = false
+  private var currentActionItems: [UIBarButtonItem] = []
+  private var currentActionKinds: [Int] = []
+  private var toolbarVisible = false
+  private var backVisible = false
+
+  init(
+    channel: FlutterMethodChannel,
+    hostViewProvider: @escaping () -> UIView?
+  ) {
+    self.channel = channel
+    self.hostViewProvider = hostViewProvider
+    super.init()
+
+    rootView.backgroundColor = .clear
+    rootView.isOpaque = false
+    rootView.clipsToBounds = false
+
+    backButton.translatesAutoresizingMaskIntoConstraints = false
+    backButton.alpha = 0
+    backButton.isHidden = true
+    backButton.addTarget(self, action: #selector(backPressed), for: .touchUpInside)
+    rootView.addSubview(backButton)
+
+    toolbar.translatesAutoresizingMaskIntoConstraints = false
+    toolbar.isTranslucent = true
+    toolbar.clipsToBounds = false
+    toolbar.alpha = 0
+    toolbar.isHidden = true
+    if #unavailable(iOS 26.0) {
+      toolbar.setBackgroundImage(UIImage(), forToolbarPosition: .any, barMetrics: .default)
+      toolbar.setShadowImage(UIImage(), forToolbarPosition: .any)
+      toolbar.backgroundColor = .clear
+    }
+    rootView.addSubview(toolbar)
+
+    toolbarWidthConstraint = toolbar.widthAnchor.constraint(equalToConstant: 262)
+    NSLayoutConstraint.activate([
+      backButton.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 8),
+      backButton.centerYAnchor.constraint(equalTo: rootView.centerYAnchor),
+      backButton.widthAnchor.constraint(equalToConstant: 46),
+      backButton.heightAnchor.constraint(equalToConstant: 46),
+      toolbar.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -8),
+      toolbar.centerYAnchor.constraint(equalTo: rootView.centerYAnchor),
+      toolbar.heightAnchor.constraint(equalToConstant: 46),
+      toolbarWidthConstraint!,
+    ])
+  }
+
+  func apply(arguments: Any?) {
+    lastArguments = arguments
+    guard ensureAttached() else { return }
+    guard let values = arguments as? [String: Any] else { return }
+
+    installedHostView?.bringSubviewToFront(rootView)
+    let visible = values["visible"] as? Bool ?? false
+    let showBack = visible && (values["showBack"] as? Bool ?? false)
+    let backColor = skyStreamUIColor(values["backColor"], fallback: .label)
+    let backImage = UIImage(
+      systemName: "chevron.left",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
+    )
+    UIView.performWithoutAnimation {
+      skyStreamConfigureGlassButton(backButton, image: backImage, foreground: backColor)
+      backButton.accessibilityLabel = values["backAccessibilityLabel"] as? String
+      backButton.accessibilityTraits = .button
+      backButton.layoutIfNeeded()
+    }
+    setBackVisible(showBack)
+
+    let actions = visible ? (values["actions"] as? [[String: Any]] ?? []) : []
+    if actions.isEmpty {
+      setToolbarVisible(false)
+    } else {
+      let wasVisible = toolbarVisible
+      setToolbarVisible(true)
+      applyToolbar(actions: actions, animated: wasVisible)
+    }
+  }
+
+  private func ensureAttached() -> Bool {
+    guard let hostView = hostViewProvider() else {
+      scheduleAttachmentRetry()
+      return false
+    }
+    if installedHostView !== hostView || rootView.superview !== hostView {
+      rootView.removeFromSuperview()
+      rootView.translatesAutoresizingMaskIntoConstraints = false
+      hostView.addSubview(rootView)
+      NSLayoutConstraint.activate([
+        rootView.leadingAnchor.constraint(equalTo: hostView.leadingAnchor),
+        rootView.trailingAnchor.constraint(equalTo: hostView.trailingAnchor),
+        rootView.topAnchor.constraint(equalTo: hostView.safeAreaLayoutGuide.topAnchor),
+        rootView.heightAnchor.constraint(equalToConstant: 56),
+      ])
+      installedHostView = hostView
+    }
+    hostView.bringSubviewToFront(rootView)
+    return true
+  }
+
+  private func scheduleAttachmentRetry() {
+    guard !attachmentRetryScheduled else { return }
+    attachmentRetryScheduled = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+      guard let self else { return }
+      self.attachmentRetryScheduled = false
+      if let arguments = self.lastArguments {
+        self.apply(arguments: arguments)
+      }
+    }
+  }
+
+  private func setBackVisible(_ visible: Bool) {
+    guard backVisible != visible else { return }
+    backVisible = visible
+    backButton.layer.removeAllAnimations()
+    if visible {
+      backButton.isHidden = false
+      backButton.alpha = 1
+      return
+    }
+    UIView.animate(
+      withDuration: 0.035,
+      delay: 0,
+      options: [.beginFromCurrentState, .curveEaseOut, .allowUserInteraction]
+    ) { [weak self] in
+      self?.backButton.alpha = 0
+    } completion: { [weak self] _ in
+      guard let self, !self.backVisible else { return }
+      self.backButton.isHidden = true
+    }
+  }
+
+  private func setToolbarVisible(_ visible: Bool) {
+    guard toolbarVisible != visible else { return }
+    toolbarVisible = visible
+    toolbar.layer.removeAllAnimations()
+    if visible {
+      toolbar.isHidden = false
+      toolbar.alpha = 1
+      return
+    }
+    UIView.animate(
+      withDuration: 0.035,
+      delay: 0,
+      options: [.beginFromCurrentState, .curveEaseOut, .allowUserInteraction]
+    ) { [weak self] in
+      self?.toolbar.alpha = 0
+    } completion: { [weak self] _ in
+      guard let self, !self.toolbarVisible else { return }
+      self.toolbar.isHidden = true
+    }
+  }
+
+  private func actionHasMenu(_ action: [String: Any]) -> Bool {
+    let menuItems = action["menuItems"] as? [[String: Any]] ?? []
+    return !menuItems.isEmpty
+  }
+
+  private func actionTitle(_ action: [String: Any]) -> String? {
+    guard let raw = action["title"] as? String else { return nil }
+    let title = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return title.isEmpty ? nil : title
+  }
+
+  private func actionKind(_ action: [String: Any]) -> Int {
+    (actionHasMenu(action) ? 1 : 0) | (actionTitle(action) != nil ? 2 : 0)
+  }
+
+  private func makeMenu(actionIndex: Int, action: [String: Any]) -> UIMenu? {
+    guard #available(iOS 14.0, *) else { return nil }
+    let selectedValue = action["selectedValue"] as? String
+    let menuTint = skyStreamUIColor(
+      action["menuTintColor"],
+      fallback: skyStreamUIColor(action["color"], fallback: .label)
+    )
+    let rawItems = action["menuItems"] as? [[String: Any]] ?? []
+    guard !rawItems.isEmpty else { return nil }
+    let children: [UIAction] = rawItems.compactMap { [weak self] menuItem in
+      guard let value = menuItem["value"] as? String,
+            let label = menuItem["label"] as? String else { return nil }
+      let isDestructive = menuItem["destructive"] as? Bool == true
+      let image = (menuItem["systemImage"] as? String).flatMap { name -> UIImage? in
+        if isDestructive { return UIImage(systemName: name) }
+        return skyStreamMenuImage(named: name, tintColor: menuTint)
+      }
+      var attributes: UIMenuElement.Attributes = []
+      if isDestructive { attributes.insert(.destructive) }
+      return UIAction(
+        title: label,
+        image: image,
+        attributes: attributes,
+        state: value == selectedValue ? .on : .off
+      ) { _ in
+        self?.channel.invokeMethod(
+          "selected",
+          arguments: ["index": actionIndex, "value": value]
+        )
+      }
+    }
+    return UIMenu(children: children)
+  }
+
+  private func configureActionItem(
+    _ item: UIBarButtonItem,
+    actionIndex: Int,
+    action: [String: Any],
+    actionCount: Int
+  ) {
+    let systemName = action["systemName"] as? String ?? "circle"
+    let actionTint = skyStreamUIColor(action["color"], fallback: .label)
+    item.image = skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
+    item.title = actionTitle(action)
+    item.tag = actionIndex
+    item.isEnabled = action["enabled"] as? Bool ?? true
+    item.tintColor = actionTint
+    item.accessibilityLabel = action["accessibilityLabel"] as? String
+    if actionHasMenu(action), #available(iOS 14.0, *) {
+      item.menu = makeMenu(actionIndex: actionIndex, action: action)
+    } else if #available(iOS 14.0, *) {
+      item.menu = nil
+    }
+    if #available(iOS 26.0, *) {
+      item.sharesBackground = true
+      item.hidesSharedBackground = false
+      item.identifier = actionIndex == actionCount - 1
+        ? "skystream.trailing.anchor"
+        : "skystream.trailing.item.\(actionIndex)"
+    }
+  }
+
+  private func makeActionItems(actions: [[String: Any]]) -> [UIBarButtonItem] {
+    let actionItems: [UIBarButtonItem] = actions.enumerated().map { index, action in
+      let systemName = action["systemName"] as? String ?? "circle"
+      let actionTint = skyStreamUIColor(action["color"], fallback: .label)
+      let image = skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
+      let item: UIBarButtonItem
+      if #available(iOS 14.0, *), let menu = makeMenu(actionIndex: index, action: action) {
+        item = UIBarButtonItem(
+          title: actionTitle(action),
+          image: image,
+          primaryAction: nil,
+          menu: menu
+        )
+      } else {
+        item = UIBarButtonItem(
+          image: image,
+          style: .plain,
+          target: self,
+          action: #selector(itemPressed(_:))
+        )
+      }
+      configureActionItem(
+        item,
+        actionIndex: index,
+        action: action,
+        actionCount: actions.count
+      )
+      return item
+    }
+    guard !actionItems.isEmpty else { return [] }
+    return [UIBarButtonItem(systemItem: .flexibleSpace)] + actionItems
+  }
+
+  private func applyToolbar(actions: [[String: Any]], animated: Bool) {
+    let actionKinds = actions.map(actionKind)
+    if didApplyInitialToolbarState,
+       currentActionItems.count == actions.count,
+       currentActionKinds == actionKinds {
+      UIView.performWithoutAnimation {
+        for (index, action) in actions.enumerated() {
+          configureActionItem(
+            currentActionItems[index],
+            actionIndex: index,
+            action: action,
+            actionCount: actions.count
+          )
+        }
+        toolbar.layoutIfNeeded()
+      }
+      return
+    }
+
+    let items = makeActionItems(actions: actions)
+    currentActionItems = items.dropFirst().map { $0 }
+    currentActionKinds = actionKinds
+    let shouldAnimate = didApplyInitialToolbarState && animated
+    toolbar.setItems(items, animated: shouldAnimate)
+    didApplyInitialToolbarState = true
+  }
+
+  @objc private func backPressed() {
+    guard backButton.isEnabled else { return }
+    channel.invokeMethod("back", arguments: nil)
+  }
+
+  @objc private func itemPressed(_ sender: UIBarButtonItem) {
+    guard sender.isEnabled else { return }
+    channel.invokeMethod("pressed", arguments: sender.tag)
   }
 }
 
