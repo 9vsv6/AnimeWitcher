@@ -157,6 +157,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               ? Icons.bookmark_rounded
               : Icons.bookmark_border_rounded,
           color: isBookmarked ? colors.primary : foregroundColor,
+          menuTintColor: colors.primary,
           // Non-iOS fallback keeps the existing sheet. On iOS the native
           // UIToolbar attaches the UIMenu directly to this bar button, so the
           // Liquid Glass menu grows from the bookmark control itself.

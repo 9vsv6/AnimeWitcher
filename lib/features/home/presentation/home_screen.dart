@@ -20,6 +20,7 @@ import 'package:skystream/core/router/app_router.dart';
 import '../../../shared/widgets/cards_wrapper.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
+import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
@@ -317,56 +318,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ),
         title: Text(l10n.appTitle),
         actions: [
-          // Search filters use the active provider's own supported values.
+          // Native iOS Liquid Glass controls. Their 42pt square bounds make
+          // Apple's capsule corner configuration resolve to a true circle.
           Padding(
             padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
-            child: CardsWrapper(
-              onTap: () => _showProviderSearchFilters(ref),
-              borderRadius: BorderRadius.circular(50),
-              child: CircleAvatar(
-                backgroundColor: activeSearchFilters.isNotEmpty
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.1),
-                radius: 18,
-                child: _isLoadingProviderSearchFilters
-                    ? SizedBox.square(
-                        dimension: 17,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: activeSearchFilters.isNotEmpty
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context).colorScheme.primary,
-                        ),
-                      )
-                    : Icon(
-                        Icons.tune_rounded,
-                        color: activeSearchFilters.isNotEmpty
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurface,
-                        size: 18,
-                      ),
+            child: SizedBox.square(
+              dimension: 42,
+              child: AppleLiquidGlassToolbarButton(
+                width: 42,
+                tooltip: appText(
+                  context,
+                  english: 'Filters',
+                  arabic: 'الفلاتر',
+                ),
+                icon: Icons.tune_rounded,
+                color: Theme.of(context).colorScheme.primary,
+                onPressed: _isLoadingProviderSearchFilters
+                    ? null
+                    : () => _showProviderSearchFilters(ref),
               ),
             ),
           ),
-
-          // 1. Search Action Button
           Padding(
             padding: const EdgeInsets.only(right: LayoutConstants.spacingSm),
-            child: CardsWrapper(
+            child: Focus(
               focusNode: _firstActionFocusNode,
-              onTap: () => _openSearchPage(focusKeyboard: true),
-              borderRadius: BorderRadius.circular(50),
-              child: CircleAvatar(
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.1),
-                radius: 18,
-                child: Icon(
-                  Icons.search,
+              child: SizedBox.square(
+                dimension: 42,
+                child: AppleLiquidGlassToolbarButton(
+                  width: 42,
+                  tooltip: appText(
+                    context,
+                    english: 'Search',
+                    arabic: 'بحث',
+                  ),
+                  icon: Icons.search_rounded,
                   color: Theme.of(context).colorScheme.onSurface,
-                  size: 18,
+                  onPressed: () => _openSearchPage(focusKeyboard: true),
                 ),
               ),
             ),

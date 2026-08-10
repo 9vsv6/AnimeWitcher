@@ -235,6 +235,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                           onSortPressed: widget.onShowSort,
                           onSortSelected: widget.onSortSelected,
                           onFilterPressed: widget.onShowFilters,
+                          tintColor: theme.colorScheme.primary,
                           height: 38,
                         ),
                       ),

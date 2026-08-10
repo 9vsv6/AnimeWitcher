@@ -204,6 +204,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
   final List<AppleNativeMenuItem> menuItems;
   final String? selectedMenuValue;
   final ValueChanged<String>? onMenuSelected;
+  final Color? menuTintColor;
 
   const AppleLiquidGlassToolbarButton({
     super.key,
@@ -215,6 +216,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
     this.menuItems = const <AppleNativeMenuItem>[],
     this.selectedMenuValue,
     this.onMenuSelected,
+    this.menuTintColor,
   });
 
   @override
@@ -231,6 +233,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
           selectedValue: selectedMenuValue,
           fallbackIcon: icon,
           size: width,
+          tintColor: menuTintColor ?? effectiveColor,
         );
       }
       return _AppleNativeGlassIconButton(
@@ -284,6 +287,9 @@ String? _appleSystemSymbolForIcon(IconData icon) {
   }
   if (icon == Icons.tune_rounded || icon == Icons.tune) {
     return 'slider.horizontal.3';
+  }
+  if (icon == Icons.search_rounded || icon == Icons.search) {
+    return 'magnifyingglass';
   }
   if (icon == Icons.refresh_rounded || icon == Icons.refresh) {
     return 'arrow.clockwise';
@@ -423,6 +429,7 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
               .toARGB32(),
           'accessibilityLabel': button.tooltip,
           'selectedValue': button.selectedMenuValue,
+          'menuTintColor': button.menuTintColor?.toARGB32(),
           'menuItems': button.menuItems
               .map((item) => item.toPlatformValue())
               .toList(growable: false),
@@ -528,6 +535,7 @@ class AppleNativeMenuButton extends StatefulWidget {
     this.fallbackIcon = Icons.sort_rounded,
     this.size = 44,
     this.enabled = true,
+    this.tintColor,
   });
 
   final List<AppleNativeMenuItem> items;
@@ -540,6 +548,7 @@ class AppleNativeMenuButton extends StatefulWidget {
   final IconData fallbackIcon;
   final double size;
   final bool enabled;
+  final Color? tintColor;
 
   @override
   State<AppleNativeMenuButton> createState() => _AppleNativeMenuButtonState();
@@ -555,6 +564,7 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
     'isRtl': Directionality.of(context) == TextDirection.rtl,
     'accessibilityLabel': widget.accessibilityLabel,
     'enabled': widget.enabled,
+    'tintColor': widget.tintColor?.toARGB32(),
     'items': widget.items
         .map((item) => item.toPlatformValue())
         .toList(growable: false),
@@ -620,8 +630,16 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
                   SizedBox(
                     width: 28,
                     child: widget.selectedValue == item.value
-                        ? const Icon(Icons.check_rounded, size: 20)
-                        : Icon(widget.fallbackIcon, size: 18),
+                        ? Icon(
+                            Icons.check_rounded,
+                            size: 20,
+                            color: widget.tintColor,
+                          )
+                        : Icon(
+                            widget.fallbackIcon,
+                            size: 18,
+                            color: widget.tintColor,
+                          ),
                   ),
                   Expanded(child: Text(item.label)),
                 ],
@@ -638,7 +656,7 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(widget.fallbackIcon, size: 19),
+                Icon(widget.fallbackIcon, size: 19, color: widget.tintColor),
                 if (widget.title != null && widget.title!.isNotEmpty) ...[
                   const SizedBox(width: 8),
                   Flexible(
@@ -686,6 +704,7 @@ Future<String?> showAppleNativeSearchSort({
   required String initialValue,
   required List<Map<String, String>> items,
   required bool isArabic,
+  required Color tintColor,
 }) async {
   return _appleLiquidGlassPresenterChannel.invokeMethod<String>(
     'showSearchSort',
@@ -693,6 +712,7 @@ Future<String?> showAppleNativeSearchSort({
       'initialValue': initialValue,
       'items': items,
       'isArabic': isArabic,
+      'tintColor': tintColor.toARGB32(),
     },
   );
 }
@@ -707,6 +727,7 @@ Future<Map<String, dynamic>?> showAppleNativeSearchFilters({
   required Map<String, Object?> options,
   required Map<String, Object?> initialValue,
   required bool isArabic,
+  required Color tintColor,
 }) async {
   final response = await _appleLiquidGlassPresenterChannel.invokeMethod<Object?>(
     'showSearchFilters',
@@ -714,6 +735,7 @@ Future<Map<String, dynamic>?> showAppleNativeSearchFilters({
       'options': options,
       'initialValue': initialValue,
       'isArabic': isArabic,
+      'tintColor': tintColor.toARGB32(),
     },
   );
   if (response == null) return null;
@@ -740,7 +762,8 @@ class AppleSearchGlassActions extends StatefulWidget {
     this.filterCount = 0,
     this.isFilterLoading = false,
     this.isArabic = false,
-    this.height = 44,
+    this.height = 42,
+    this.tintColor,
   });
 
   /// Fallback used outside iOS, where the existing Flutter sort dialog remains.
@@ -755,6 +778,7 @@ class AppleSearchGlassActions extends StatefulWidget {
   final bool isFilterLoading;
   final bool isArabic;
   final double height;
+  final Color? tintColor;
 
   @override
   State<AppleSearchGlassActions> createState() =>
@@ -774,6 +798,8 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
         .toList(growable: false),
     'sortAccessibilityLabel': widget.sortAccessibilityLabel,
     'filterAccessibilityLabel': widget.filterAccessibilityLabel,
+    'tintColor': (widget.tintColor ?? Theme.of(context).colorScheme.primary)
+        .toARGB32(),
   };
 
   @override
@@ -833,12 +859,14 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
           width: height,
           icon: Icons.sort_rounded,
           tooltip: widget.sortAccessibilityLabel,
+          color: widget.tintColor ?? Theme.of(context).colorScheme.primary,
           onPressed: widget.onSortPressed,
         ),
         AppleLiquidGlassToolbarButton(
           width: height,
           icon: Icons.tune_rounded,
           tooltip: widget.filterAccessibilityLabel,
+          color: widget.tintColor ?? Theme.of(context).colorScheme.primary,
           onPressed: widget.isFilterLoading ? null : widget.onFilterPressed,
         ),
       ],

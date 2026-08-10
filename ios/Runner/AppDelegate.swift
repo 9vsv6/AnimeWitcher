@@ -586,10 +586,19 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
         let menuActions: [UIAction] = menuItems.compactMap { menuItem in
           guard let value = menuItem["value"] as? String,
                 let label = menuItem["label"] as? String else { return nil }
-          let menuImage = (menuItem["systemImage"] as? String)
-            .flatMap { UIImage(systemName: $0) }
+          let menuTint = skyStreamUIColor(
+            action["menuTintColor"],
+            fallback: skyStreamUIColor(action["color"], fallback: .label)
+          )
+          let isDestructive = menuItem["destructive"] as? Bool == true
+          let menuImage = (menuItem["systemImage"] as? String).flatMap { name -> UIImage? in
+            guard let image = UIImage(systemName: name) else { return nil }
+            return isDestructive
+              ? image
+              : image.withTintColor(menuTint, renderingMode: .alwaysOriginal)
+          }
           var attributes: UIMenuElement.Attributes = []
-          if menuItem["destructive"] as? Bool == true {
+          if isDestructive {
             attributes.insert(.destructive)
           }
           return UIAction(
@@ -778,7 +787,9 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
     )
     let title = (values["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-    skyStreamConfigureGlassButton(button, image: image)
+    let tintColor = skyStreamUIColor(values["tintColor"], fallback: .label)
+    skyStreamConfigureGlassButton(button, image: image, foreground: tintColor)
+    button.tintColor = tintColor
     if #available(iOS 15.0, *), var configuration = button.configuration {
       configuration.title = (title?.isEmpty == false) ? title : nil
       configuration.imagePadding = (title?.isEmpty == false) ? 8 : 0
@@ -802,9 +813,15 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
       guard let value = item["value"] as? String,
             let label = item["label"] as? String else { return nil }
       let systemImage = item["systemImage"] as? String
-      let actionImage = systemImage.flatMap { UIImage(systemName: $0) }
+      let isDestructive = item["destructive"] as? Bool == true
+      let actionImage = systemImage.flatMap { name -> UIImage? in
+        guard let image = UIImage(systemName: name) else { return nil }
+        return isDestructive
+          ? image
+          : image.withTintColor(tintColor, renderingMode: .alwaysOriginal)
+      }
       var attributes: UIMenuElement.Attributes = []
-      if item["destructive"] as? Bool == true {
+      if isDestructive {
         attributes.insert(.destructive)
       }
       return UIAction(
@@ -968,7 +985,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     filterBadge.textAlignment = .center
     filterBadge.font = .systemFont(ofSize: 9, weight: .bold)
     filterBadge.textColor = .white
-    filterBadge.backgroundColor = .systemBlue
+    filterBadge.backgroundColor = .label
     filterBadge.layer.cornerRadius = 8
     filterBadge.clipsToBounds = true
     filterBadge.isHidden = true
@@ -987,6 +1004,8 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
       stack.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
       sortButton.widthAnchor.constraint(equalTo: sortButton.heightAnchor),
       filterButton.widthAnchor.constraint(equalTo: filterButton.heightAnchor),
+      sortButton.heightAnchor.constraint(equalTo: rootView.heightAnchor),
+      filterButton.heightAnchor.constraint(equalTo: rootView.heightAnchor),
     ])
 
     filterButton.addSubview(filterBadge)
@@ -1005,24 +1024,32 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     guard let values = arguments as? [String: Any] else { return }
     filterCount = (values["filterCount"] as? NSNumber)?.intValue ?? 0
     filterLoading = values["filterLoading"] as? Bool ?? false
+    let tintColor = skyStreamUIColor(values["tintColor"], fallback: .label)
     filterButton.isEnabled = !filterLoading
     filterBadge.text = filterCount > 99 ? "99+" : "\(filterCount)"
+    filterBadge.backgroundColor = tintColor
     filterBadge.isHidden = filterCount <= 0 || filterLoading
     sortButton.accessibilityLabel = values["sortAccessibilityLabel"] as? String
     filterButton.accessibilityLabel = values["filterAccessibilityLabel"] as? String
+    sortButton.tintColor = tintColor
+    filterButton.tintColor = tintColor
 
-    if #available(iOS 15.0, *), var configuration = filterButton.configuration {
-      configuration.showsActivityIndicator = filterLoading
-      configuration.image = filterLoading
-        ? nil
-        : UIImage(
-            systemName: "slider.horizontal.3",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-          )
-      configuration.baseForegroundColor = filterCount > 0 ? .systemBlue : .label
-      filterButton.configuration = configuration
-    } else {
-      filterButton.tintColor = filterCount > 0 ? .systemBlue : .label
+    if #available(iOS 15.0, *) {
+      if var sortConfiguration = sortButton.configuration {
+        sortConfiguration.baseForegroundColor = tintColor
+        sortButton.configuration = sortConfiguration
+      }
+      if var filterConfiguration = filterButton.configuration {
+        filterConfiguration.showsActivityIndicator = filterLoading
+        filterConfiguration.image = filterLoading
+          ? nil
+          : UIImage(
+              systemName: "slider.horizontal.3",
+              withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+            )
+        filterConfiguration.baseForegroundColor = tintColor
+        filterButton.configuration = filterConfiguration
+      }
     }
 
     let selectedValue = values["sortValue"] as? String
@@ -1031,7 +1058,9 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
       guard let value = item["value"] as? String,
             let label = item["label"] as? String else { return nil }
       let symbolName = item["systemImage"] as? String
-      let image = symbolName.flatMap { UIImage(systemName: $0) }
+      let image = symbolName.flatMap { name in
+        UIImage(systemName: name)?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
+      }
       return UIAction(
         title: label,
         image: image,
@@ -1080,6 +1109,7 @@ private struct AppleSearchSortItem: Identifiable {
 private struct AppleSearchSortOverlay: View {
   let items: [AppleSearchSortItem]
   let isArabic: Bool
+  let tintColor: Color
   let onCancel: () -> Void
   let onApply: (String) -> Void
   @State private var selected: String
@@ -1088,11 +1118,13 @@ private struct AppleSearchSortOverlay: View {
     items: [AppleSearchSortItem],
     initialValue: String,
     isArabic: Bool,
+    tintColor: Color,
     onCancel: @escaping () -> Void,
     onApply: @escaping (String) -> Void
   ) {
     self.items = items
     self.isArabic = isArabic
+    self.tintColor = tintColor
     self.onCancel = onCancel
     self.onApply = onApply
     let defaultValue = items.first?.id ?? ""
@@ -1135,7 +1167,7 @@ private struct AppleSearchSortOverlay: View {
                   Spacer()
                   Image(systemName: selected == item.id ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(selected == item.id ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(selected == item.id ? tintColor : Color.secondary)
                 }
                 .padding(.horizontal, 20)
                 .frame(minHeight: 58)
@@ -1166,6 +1198,7 @@ private struct AppleSearchSortOverlay: View {
       .glassEffect(.regular, in: .rect(cornerRadius: 30))
       .padding(.horizontal, 18)
     }
+    .tint(tintColor)
     .environment(\.layoutDirection, isArabic ? .rightToLeft : .leftToRight)
   }
 }
@@ -1191,6 +1224,7 @@ private struct AppleSearchFilterOverlay: View {
   let seasons: [String]
   let genres: [String]
   let isArabic: Bool
+  let tintColor: Color
   let onCancel: () -> Void
   let onApply: ([String: Any]) -> Void
 
@@ -1206,6 +1240,7 @@ private struct AppleSearchFilterOverlay: View {
     options: [String: Any],
     initialValue: [String: Any],
     isArabic: Bool,
+    tintColor: Color,
     onCancel: @escaping () -> Void,
     onApply: @escaping ([String: Any]) -> Void
   ) {
@@ -1216,6 +1251,7 @@ private struct AppleSearchFilterOverlay: View {
     seasons = skyStreamStrings(options["seasons"])
     genres = skyStreamStrings(options["genres"])
     self.isArabic = isArabic
+    self.tintColor = tintColor
     self.onCancel = onCancel
     self.onApply = onApply
     _selectedStatuses = State(initialValue: Set(skyStreamStrings(initialValue["statuses"])))
@@ -1301,7 +1337,7 @@ private struct AppleSearchFilterOverlay: View {
             .frame(maxWidth: .infinity, minHeight: 46)
             .padding(.horizontal, 8)
             .background(
-              isSelected ? Color.accentColor : Color.primary.opacity(0.07),
+              isSelected ? tintColor : Color.primary.opacity(0.07),
               in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
         }
@@ -1400,12 +1436,12 @@ private struct AppleSearchFilterOverlay: View {
                     Text(tabLabel(item))
                       .font(.subheadline.weight(.semibold))
                   }
-                  .foregroundStyle(tab == item ? Color.accentColor : Color.secondary)
+                  .foregroundStyle(tab == item ? tintColor : Color.secondary)
                   .padding(.horizontal, 10)
                   .frame(height: 44)
                   .overlay(alignment: .bottom) {
                     if tab == item {
-                      Capsule().fill(Color.accentColor).frame(height: 3)
+                      Capsule().fill(tintColor).frame(height: 3)
                     }
                   }
                 }
@@ -1464,6 +1500,7 @@ private struct AppleSearchFilterOverlay: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
+    .tint(tintColor)
     .environment(\.layoutDirection, isArabic ? .rightToLeft : .leftToRight)
   }
 }
@@ -1482,11 +1519,15 @@ private func presentAppleSearchSort(
   }
   let initialValue = arguments["initialValue"] as? String ?? ""
   let isArabic = arguments["isArabic"] as? Bool ?? false
+  let tintColor = Color(
+    uiColor: skyStreamUIColor(arguments["tintColor"], fallback: .systemBlue)
+  )
   var hostingController: UIHostingController<AppleSearchSortOverlay>?
   let overlay = AppleSearchSortOverlay(
     items: items,
     initialValue: initialValue,
     isArabic: isArabic,
+    tintColor: tintColor,
     onCancel: {
       hostingController?.dismiss(animated: true) { result(nil) }
     },
@@ -1511,11 +1552,15 @@ private func presentAppleSearchFilters(
   let options = arguments["options"] as? [String: Any] ?? [:]
   let initialValue = arguments["initialValue"] as? [String: Any] ?? [:]
   let isArabic = arguments["isArabic"] as? Bool ?? false
+  let tintColor = Color(
+    uiColor: skyStreamUIColor(arguments["tintColor"], fallback: .systemBlue)
+  )
   var hostingController: UIHostingController<AppleSearchFilterOverlay>?
   let overlay = AppleSearchFilterOverlay(
     options: options,
     initialValue: initialValue,
     isArabic: isArabic,
+    tintColor: tintColor,
     onCancel: {
       hostingController?.dismiss(animated: true) { result(nil) }
     },

@@ -67,6 +67,7 @@ class LibraryScreen extends ConsumerWidget {
       title: label,
       width: isArabic ? 218 : 210,
       size: 44,
+      tintColor: Theme.of(context).colorScheme.primary,
       selectedValue: selected.storageKey,
       items: <AppleNativeMenuItem>[
         for (final category in LibraryCategory.values)

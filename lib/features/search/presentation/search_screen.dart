@@ -193,6 +193,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             isArabic:
                 Localizations.localeOf(context).languageCode.toLowerCase() ==
                 'ar',
+            tintColor: Theme.of(context).colorScheme.primary,
             options: <String, Object?>{
               'statuses': options.statuses,
               'types': options.types,
@@ -282,6 +283,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           isArabic:
               Localizations.localeOf(context).languageCode.toLowerCase() ==
               'ar',
+          tintColor: Theme.of(context).colorScheme.primary,
           items: SearchSortOption.values
               .map(
                 (option) => <String, String>{
@@ -576,6 +578,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         english: 'Filters',
         arabic: 'الفلاتر',
       ),
+      tintColor: Theme.of(context).colorScheme.primary,
+      height: 42,
       onSortPressed: _showSearchSort,
       onSortSelected: _applySearchSort,
       onFilterPressed: _showSearchFilters,
