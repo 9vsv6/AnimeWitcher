@@ -145,11 +145,19 @@ class ApplePersistentGlassHeaderController
         } else if (status == AnimationStatus.completed &&
             config.deferTrailingMorphUntilRouteSettles &&
             identical(value, config)) {
-          // The page is fully settled. Rebuild the persistent overlay now so the
-          // native toolbar can run its structural Liquid Glass morph without
-          // competing with Flutter's route transition.
+          // Details has finished pushing. Wake the native overlay so it can
+          // replace the root controls once, without a Liquid Glass morph.
           notifyListeners();
         }
+        return;
+      }
+
+      if (status == AnimationStatus.dismissed &&
+          config.deferTrailingMorphUntilRouteSettles) {
+        // When Details finishes popping back to Home/Search/Library, the visible
+        // controller is already the root item. Notify again so the toolbar can
+        // swap from Details controls only after the route animation is over.
+        notifyListeners();
       }
     }
 
@@ -220,10 +228,20 @@ class ApplePersistentGlassHeaderController
   }
 
   void hide(Object owner) {
+    final removedDeferredDetails = _routeStack.any(
+      (entry) =>
+          identical(entry.owner, owner) &&
+          entry.deferTrailingMorphUntilRouteSettles,
+    );
     _routeStack.removeWhere((entry) => identical(entry.owner, owner));
     _poppingOwners.remove(owner);
     _detachRouteAnimation(owner);
     _syncVisibleItem();
+    if (removedDeferredDetails) {
+      // Guarantees the frozen Details toolbar is flushed to the root controls
+      // even if the route is disposed before a final dismissed-status callback.
+      notifyListeners();
+    }
   }
 }
 
@@ -334,6 +352,8 @@ class _ApplePersistentGlassHeaderOverlayState
   bool _syncScheduled = false;
   String? _lastNativeSignature;
   List<Map<String, Object?>> _lastNativeActions = const <Map<String, Object?>>[];
+  ApplePersistentGlassHeaderConfig? _lastRenderedActionConfig;
+  bool _nativeStateUsesDesiredActions = true;
 
   @override
   void initState() {
@@ -399,24 +419,55 @@ class _ApplePersistentGlassHeaderOverlayState
         },
     ];
 
-    // Structural changes to iOS 26 Liquid Glass are expensive while Flutter is
-    // simultaneously animating a route underneath them. Keep the already-drawn
-    // native action group during the page push, then let the toolbar morph once
-    // the route reports completed. This matches Apple's container/identity model:
-    // one persistent glass surface changes content instead of being rebuilt while
-    // the background itself is moving every frame.
-    final routeAnimation = config?.route?.animation;
-    final deferActionMorph =
-        config?.deferTrailingMorphUntilRouteSettles == true &&
-        routeAnimation != null &&
-        routeAnimation.status != AnimationStatus.completed;
-    final actions = deferActionMorph ? _lastNativeActions : desiredActions;
+    final isDetails = config?.deferTrailingMorphUntilRouteSettles == true;
+    final isRootBranch = config?.branchIndex != null;
+    final lastConfig = _lastRenderedActionConfig;
+    final lastWasDetails =
+        lastConfig?.deferTrailingMorphUntilRouteSettles == true;
+    final lastWasRootBranch = lastConfig?.branchIndex != null;
+
+    // Do not change the expensive native toolbar structure while Flutter is
+    // pushing Details. Keep Home/Search/Library controls completely static until
+    // the route settles, then replace them without animation.
+    final currentAnimation = config?.route?.animation;
+    final detailsPushInProgress = isDetails &&
+        lastWasRootBranch &&
+        currentAnimation != null &&
+        currentAnimation.status != AnimationStatus.completed;
+
+    // Apply the same rule in reverse. During Details -> Home/Search/Library keep
+    // the Details toolbar frozen until the outgoing Details route is dismissed.
+    // This removes Liquid Glass work from both sides of the page transition.
+    final previousDetailsAnimation = lastConfig?.route?.animation;
+    final detailsPopToRootInProgress = isRootBranch &&
+        lastWasDetails &&
+        previousDetailsAnimation != null &&
+        previousDetailsAnimation.status == AnimationStatus.reverse;
+
+    final freezeActions = detailsPushInProgress || detailsPopToRootInProgress;
+    final actions = freezeActions ? _lastNativeActions : desiredActions;
+    _nativeStateUsesDesiredActions = !freezeActions;
+
+    // Explicitly disable UIToolbar's structural animation only for
+    // Home/Search/Library <-> Details. Other transitions, especially
+    // Details <-> Comments, keep Apple's native toolbar morph animation.
+    final rootDetailsSwap = !freezeActions &&
+        ((isDetails && lastWasRootBranch) ||
+            (isRootBranch && lastWasDetails));
+
+    final renderedConfig = freezeActions ? lastConfig : config;
+    final renderedIsDetails =
+        renderedConfig?.deferTrailingMorphUntilRouteSettles == true;
 
     return <String, Object?>{
       'visible': config != null,
       'showBack': config?.onBack != null,
       'backColor': (config?.backForegroundColor ?? colors.onSurface).toARGB32(),
       'backAccessibilityLabel': config?.backTooltip,
+      // Move the three Details actions farther left, but keep the toolbar's
+      // geometry frozen during push/pop so constraint work cannot hitch the route.
+      'toolbarTrailingInset': renderedIsDetails ? 34.0 : 18.0,
+      'animateToolbarChanges': !rootDetailsSwap,
       'actions': actions,
     };
   }
@@ -437,6 +488,9 @@ class _ApplePersistentGlassHeaderOverlayState
           for (final action in sentActions)
             if (action is Map) Map<String, Object?>.from(action),
         ];
+      }
+      if (_nativeStateUsesDesiredActions) {
+        _lastRenderedActionConfig = applePersistentGlassHeaderController.value;
       }
       _nativeHeaderChannel.invokeMethod<void>('update', state);
     });

@@ -470,6 +470,7 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
   private let backButton = UIButton(type: .system)
   private let toolbar = SkyStreamPassthroughToolbar(frame: .zero)
   private var toolbarWidthConstraint: NSLayoutConstraint?
+  private var toolbarTrailingConstraint: NSLayoutConstraint?
   private weak var installedHostView: UIView?
   private var lastArguments: Any?
   private var attachmentRetryScheduled = false
@@ -510,16 +511,16 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     rootView.addSubview(toolbar)
 
     toolbarWidthConstraint = toolbar.widthAnchor.constraint(equalToConstant: 262)
+    toolbarTrailingConstraint = toolbar.trailingAnchor.constraint(
+      equalTo: rootView.safeAreaLayoutGuide.trailingAnchor,
+      constant: -18
+    )
     NSLayoutConstraint.activate([
       backButton.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 8),
       backButton.centerYAnchor.constraint(equalTo: rootView.centerYAnchor),
       backButton.widthAnchor.constraint(equalToConstant: 46),
       backButton.heightAnchor.constraint(equalToConstant: 46),
-      // Leave extra visual breathing room for iOS 26 Liquid Glass. The system
-      // material can render a few points beyond UIToolbar's logical bounds, so
-      // pinning the host to the safe-area edge keeps the trailing capsule fully
-      // on-screen instead of clipping the last item.
-      toolbar.trailingAnchor.constraint(equalTo: rootView.safeAreaLayoutGuide.trailingAnchor, constant: -18),
+      toolbarTrailingConstraint!,
       toolbar.centerYAnchor.constraint(equalTo: rootView.centerYAnchor),
       toolbar.heightAnchor.constraint(equalToConstant: 46),
       toolbarWidthConstraint!,
@@ -532,6 +533,15 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     guard let values = arguments as? [String: Any] else { return }
 
     installedHostView?.bringSubviewToFront(rootView)
+    if let insetNumber = values["toolbarTrailingInset"] as? NSNumber {
+      let trailingConstant = -CGFloat(truncating: insetNumber)
+      if toolbarTrailingConstraint?.constant != trailingConstant {
+        UIView.performWithoutAnimation {
+          toolbarTrailingConstraint?.constant = trailingConstant
+          rootView.layoutIfNeeded()
+        }
+      }
+    }
     let visible = values["visible"] as? Bool ?? false
     let showBack = visible && (values["showBack"] as? Bool ?? false)
     let backColor = skyStreamUIColor(values["backColor"], fallback: .label)
@@ -548,12 +558,16 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     setBackVisible(showBack)
 
     let actions = visible ? (values["actions"] as? [[String: Any]] ?? []) : []
+    let animateToolbarChanges = values["animateToolbarChanges"] as? Bool ?? true
     if actions.isEmpty {
       setToolbarVisible(false)
     } else {
       let wasVisible = toolbarVisible
       setToolbarVisible(true)
-      applyToolbar(actions: actions, animated: wasVisible)
+      applyToolbar(
+        actions: actions,
+        animated: wasVisible && animateToolbarChanges
+      )
     }
   }
 
