@@ -371,6 +371,33 @@ private final class AppleNativeTabBarPlatformView: NSObject, FlutterPlatformView
   }
 }
 
+private func skyStreamMenuImage(
+  named name: String,
+  tintColor: UIColor,
+  pointSize: CGFloat = 18
+) -> UIImage? {
+  if name == "skystream.zyx" {
+    let font = UIFont.systemFont(ofSize: 15, weight: .medium)
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: font,
+      .foregroundColor: tintColor,
+    ]
+    let text = "ZYX" as NSString
+    let measured = text.size(withAttributes: attributes)
+    let size = CGSize(width: ceil(measured.width), height: ceil(max(measured.height, 18)))
+    let renderer = UIGraphicsImageRenderer(size: size)
+    return renderer.image { _ in
+      let y = (size.height - measured.height) / 2
+      text.draw(at: CGPoint(x: 0, y: y), withAttributes: attributes)
+    }.withRenderingMode(.alwaysOriginal)
+  }
+
+  return UIImage(
+    systemName: name,
+    withConfiguration: UIImage.SymbolConfiguration(pointSize: pointSize, weight: .semibold)
+  )?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
+}
+
 private func skyStreamConfigureGlassButton(
   _ button: UIButton,
   image: UIImage?,
@@ -818,10 +845,10 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
       let systemImage = item["systemImage"] as? String
       let isDestructive = item["destructive"] as? Bool == true
       let actionImage = systemImage.flatMap { name -> UIImage? in
-        guard let image = UIImage(systemName: name) else { return nil }
-        return isDestructive
-          ? image
-          : image.withTintColor(tintColor, renderingMode: .alwaysOriginal)
+        if isDestructive {
+          return UIImage(systemName: name)
+        }
+        return skyStreamMenuImage(named: name, tintColor: tintColor)
       }
       var attributes: UIMenuElement.Attributes = []
       if isDestructive {
@@ -1062,7 +1089,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
             let label = item["label"] as? String else { return nil }
       let symbolName = item["systemImage"] as? String
       let image = symbolName.flatMap { name in
-        UIImage(systemName: name)?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
+        skyStreamMenuImage(named: name, tintColor: tintColor)
       }
       return UIAction(
         title: label,

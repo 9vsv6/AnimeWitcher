@@ -163,6 +163,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (providers.isEmpty) return;
 
     setState(() => _isLoadingProviderFilters = true);
+    ProviderSearchFilters? selected;
     try {
       final options = await providers.first.getSearchFilterOptions();
       if (!mounted) return;
@@ -182,64 +183,23 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         return;
       }
 
-      final initialValue = ref.read(searchProviderFiltersProvider);
-      ProviderSearchFilters? selected;
-      var nativeFailed = false;
-      final nativeAvailable = await appleNativeLiquidGlassAvailable();
-
-      if (nativeAvailable && mounted) {
-        try {
-          final nativeValue = await showAppleNativeSearchFilters(
-            isArabic:
-                Localizations.localeOf(context).languageCode.toLowerCase() ==
-                'ar',
-            tintColor: Theme.of(context).colorScheme.primary,
-            options: <String, Object?>{
-              'statuses': options.statuses,
-              'types': options.types,
-              'ageRatings': options.ageRatings,
-              'years': options.years,
-              'seasons': options.seasons,
-              'genres': options.genres,
-            },
-            initialValue: <String, Object?>{
-              'statuses': initialValue.statuses.toList(growable: false),
-              'types': initialValue.types.toList(growable: false),
-              'ageRatings': initialValue.ageRatings.toList(growable: false),
-              'years': initialValue.years.toList(growable: false),
-              'seasons': initialValue.seasons.toList(growable: false),
-              'genres': initialValue.genres.toList(growable: false),
-            },
-          );
-          if (!mounted || nativeValue == null) return;
-          selected = _nativeFiltersToModel(nativeValue, initialValue.sort);
-        } on PlatformException {
-          nativeFailed = true;
-        } on MissingPluginException {
-          nativeFailed = true;
-        }
-      }
-
-      if (!nativeAvailable || nativeFailed) {
-        selected = await showDialog<ProviderSearchFilters>(
-          context: context,
-          useSafeArea: true,
-          barrierColor: Colors.black.withValues(alpha: 0.22),
-          builder: (_) => ProviderSearchFilterDialog(
-            options: options,
-            initialValue: initialValue,
-          ),
-        );
-      }
-
-      if (selected != null && mounted) {
-        _resetResultsScrollPosition();
-        ref.read(searchProviderFiltersProvider.notifier).set(selected);
-        ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
-      }
+      // Use the exact same filter surface as the Home page so both entry
+      // points have identical tabs, spacing, selection behavior, and glass.
+      selected = await showDialog<ProviderSearchFilters>(
+        context: context,
+        builder: (dialogContext) => ProviderSearchFilterDialog(
+          options: options,
+          initialValue: ref.read(searchProviderFiltersProvider),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoadingProviderFilters = false);
     }
+
+    if (!mounted || selected == null) return;
+    _resetResultsScrollPosition();
+    ref.read(searchProviderFiltersProvider.notifier).set(selected);
+    ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
   }
 
   void _applySearchSort(String selected) {
@@ -264,7 +224,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             SearchSortOption.productionDateAscending => 'calendar',
             SearchSortOption.productionDateDescending => 'calendar',
             SearchSortOption.nameAscending => 'textformat.abc',
-            SearchSortOption.nameDescending => 'textformat.abc',
+            SearchSortOption.nameDescending => 'skystream.zyx',
           },
         ),
     ];
