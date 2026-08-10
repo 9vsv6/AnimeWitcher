@@ -55,6 +55,10 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
     final searchResultsAsync = ref.watch(searchResultsProvider);
     final isCompact = widget.isCompact;
     final isDark = theme.brightness == Brightness.dark;
+    final searchHint =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar'
+            ? 'Search...'
+            : l10n.searchHint;
 
     return Center(
       child: Container(
@@ -63,10 +67,12 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Static Search Field (Wrapped in GestureDetector so tapping anywhere focuses the text field)
+            // Static Search Field (tap anywhere to toggle keyboard focus)
             GestureDetector(
               onTap: () {
-                if (!widget.searchFocusNode.hasFocus) {
+                if (widget.searchFocusNode.hasFocus) {
+                  widget.searchFocusNode.unfocus();
+                } else {
                   widget.searchFocusNode.requestFocus();
                 }
               },
@@ -169,7 +175,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                       onChanged: widget.onChanged,
                       onSubmitted: widget.onSubmitted,
                       decoration: InputDecoration(
-                        hintText: l10n.searchHint,
+                        hintText: searchHint,
                         border: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         enabledBorder: InputBorder.none,
@@ -186,7 +192,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                         prefixIcon: Icon(
                           Icons.search_rounded,
                           size: 20,
-                          color: theme.colorScheme.onSurfaceVariant,
+                          color: theme.colorScheme.primary,
                         ),
                         prefixIconConstraints: const BoxConstraints(
                           minWidth: 46,

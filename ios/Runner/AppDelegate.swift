@@ -380,19 +380,21 @@ private func skyStreamMenuImage(
   tintColor: UIColor,
   pointSize: CGFloat = 18
 ) -> UIImage? {
-  if name == "skystream.zyx" {
+  if name == "skystream.abc" || name == "skystream.zyx" {
     let font = UIFont.systemFont(ofSize: 15, weight: .medium)
     let attributes: [NSAttributedString.Key: Any] = [
       .font: font,
       .foregroundColor: tintColor,
     ]
-    let text = "ZYX" as NSString
+    let text = (name == "skystream.abc" ? "ABC" : "ZYX") as NSString
     let measured = text.size(withAttributes: attributes)
-    let size = CGSize(width: ceil(measured.width), height: ceil(max(measured.height, 18)))
+    // Use one fixed canvas so ABC and ZYX have identical visual/icon bounds.
+    let size = CGSize(width: 34, height: 18)
     let renderer = UIGraphicsImageRenderer(size: size)
     return renderer.image { _ in
+      let x = (size.width - measured.width) / 2
       let y = (size.height - measured.height) / 2
-      text.draw(at: CGPoint(x: 0, y: y), withAttributes: attributes)
+      text.draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
     }.withRenderingMode(.alwaysOriginal)
   }
 
@@ -550,12 +552,13 @@ private final class AppleNativeSearchFieldViewFactory: NSObject, FlutterPlatform
   }
 }
 
-private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatformView, UITextFieldDelegate {
+private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatformView, UITextFieldDelegate, UIGestureRecognizerDelegate {
   private let rootView: UIView
   private let effectView: UIVisualEffectView
   private let searchField = UISearchTextField(frame: .zero)
   private let channel: FlutterMethodChannel
   private var loadingIndicator: UIActivityIndicatorView?
+  private var searchTapStartedFocused = false
 
   init(
     frame: CGRect,
@@ -600,6 +603,11 @@ private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatfor
     searchField.autocapitalizationType = .none
     searchField.delegate = self
     searchField.addTarget(self, action: #selector(textChanged), for: .editingChanged)
+
+    let searchTap = UITapGestureRecognizer(target: self, action: #selector(searchSurfaceTapped(_:)))
+    searchTap.cancelsTouchesInView = false
+    searchTap.delegate = self
+    rootView.addGestureRecognizer(searchTap)
 
     effectView.contentView.addSubview(searchField)
     NSLayoutConstraint.activate([
@@ -660,7 +668,8 @@ private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatfor
       string: placeholder,
       attributes: [.foregroundColor: placeholderColor]
     )
-    searchField.semanticContentAttribute = rtl ? .forceRightToLeft : .forceLeftToRight
+    // Keep the yellow magnifying glass on the physical left even in Arabic.
+    searchField.semanticContentAttribute = .forceLeftToRight
     searchField.textAlignment = rtl ? .right : .left
     if #unavailable(iOS 26.0) {
       effectView.layer.cornerRadius = CGFloat(height / 2)
@@ -683,6 +692,20 @@ private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatfor
       searchField.rightViewMode = .never
       searchField.clearButtonMode = .whileEditing
     }
+  }
+
+  func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    searchTapStartedFocused = searchField.isFirstResponder
+    return true
+  }
+
+  @objc private func searchSurfaceTapped(_ gestureRecognizer: UITapGestureRecognizer) {
+    if searchTapStartedFocused {
+      searchField.resignFirstResponder()
+    } else {
+      searchField.becomeFirstResponder()
+    }
+    searchTapStartedFocused = false
   }
 
   @objc private func textChanged() {

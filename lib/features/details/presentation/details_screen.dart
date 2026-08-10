@@ -128,6 +128,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     const favoriteRed = Color(0xFFFF3B30);
     final colors = Theme.of(context).colorScheme;
     final commentTarget = animeWitcherAnimeCommentTarget(item);
+    final LibraryCategory? currentCategory = libraryNotifier.itemCategory(item.url);
 
     return <AppleLiquidGlassToolbarButton>[
       if (commentTarget != null)
@@ -165,17 +166,20 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           english: 'Choose list',
           arabic: 'اختر قائمة',
         ),
-        icon: isBookmarked
-            ? Icons.bookmark_rounded
-            : Icons.bookmark_border_rounded,
-        color: isBookmarked ? colors.primary : foregroundColor,
+        icon: currentCategory == null
+            ? Icons.bookmark_border_rounded
+            : _libraryCategoryIcon(currentCategory),
+        systemImage: currentCategory == null
+            ? 'bookmark'
+            : _libraryCategorySystemImage(currentCategory),
+        color: currentCategory != null ? colors.primary : foregroundColor,
         menuTintColor: colors.primary,
         onPressed: () => _showLibraryCategoryPicker(context, item),
-        selectedMenuValue: libraryNotifier.itemCategory(item.url)?.storageKey,
+        selectedMenuValue: currentCategory?.storageKey,
         menuItems: _libraryCategoryMenuItems(
           context,
           item,
-          libraryNotifier.itemCategory(item.url),
+          currentCategory,
         ),
         onMenuSelected: (value) => _handleLibraryMenuSelection(item, value),
       ),

@@ -290,7 +290,7 @@ class _AnimeWitcherCommentsScreenState
           icon: _commentSortFallbackIcon(_sort),
           systemImage: _commentSortSystemImage(_sort),
           title: _sortLabel(_sort, isArabic),
-          color: Colors.white,
+          color: colors.primary,
           menuTintColor: colors.primary,
           onPressed: null,
           selectedMenuValue: _sort.name,
@@ -353,7 +353,7 @@ class _AnimeWitcherCommentsScreenState
                         systemImage: 'arrow.up.arrow.down',
                         fallbackIcon: Icons.filter_list_rounded,
                         size: 46,
-                        tintColor: Colors.white,
+                        tintColor: Theme.of(context).colorScheme.primary,
                         selectedValue: _sort.name,
                         items: _commentSortMenuItems(isArabic),
                         onSelected: (value) {

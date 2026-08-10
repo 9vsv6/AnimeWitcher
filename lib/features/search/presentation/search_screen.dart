@@ -244,7 +244,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       SearchSortOption.mostFavorited => 'star.fill',
       SearchSortOption.productionDateAscending => 'arrow.up',
       SearchSortOption.productionDateDescending => 'arrow.down',
-      SearchSortOption.nameAscending => 'textformat.abc',
+      SearchSortOption.nameAscending => 'skystream.abc',
       SearchSortOption.nameDescending => 'skystream.zyx',
     };
   }
@@ -618,16 +618,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
+    final searchPlaceholder = isArabic ? 'Search...' : l10n.searchHint;
+    const persistentSearchActionsWidth = 152.0;
 
     final scaffold = Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        leadingWidth: isArabic ? 104 : null,
+        leadingWidth: isArabic
+            ? (usePersistentGlass ? persistentSearchActionsWidth + 10 : 104)
+            : null,
         leading: isArabic
             ? Padding(
                 padding: const EdgeInsets.only(right: 10),
                 child: usePersistentGlass
-                    ? const SizedBox(width: 94)
+                    ? const SizedBox(width: persistentSearchActionsWidth)
                     : _buildMobileSearchActionGroup(context),
               )
             : null,
@@ -637,14 +641,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 Padding(
                   padding: const EdgeInsets.only(right: 10),
                   child: usePersistentGlass
-                      ? const SizedBox(width: 94)
+                      ? const SizedBox(width: persistentSearchActionsWidth)
                       : _buildMobileSearchActionGroup(context),
                 ),
               ],
         title: usePersistentGlass
             ? AppleNativeGlassSearchField(
                 controller: _controller,
-                placeholder: l10n.searchHint,
+                placeholder: searchPlaceholder,
                 tintColor: theme.colorScheme.primary,
                 textColor: theme.colorScheme.onSurface,
                 placeholderColor: theme.colorScheme.onSurfaceVariant,
@@ -663,7 +667,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 onSubmitted: _submitSearch,
               )
             : GestureDetector(
-          onTap: () => _focusNode.requestFocus(),
+          onTap: () {
+            if (_focusNode.hasFocus) {
+              _focusNode.unfocus();
+            } else {
+              _focusNode.requestFocus();
+            }
+          },
           behavior: HitTestBehavior.opaque,
           child: SizedBox(
             height: 42,
@@ -721,7 +731,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   },
                   onSubmitted: _submitSearch,
                   decoration: InputDecoration(
-                    hintText: l10n.searchHint,
+                    hintText: searchPlaceholder,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(
                         LayoutConstants.radiusPill,
@@ -752,7 +762,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     prefixIcon: Icon(
                       Icons.search,
                       size: 18,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: theme.colorScheme.primary,
                     ),
                     prefixIconConstraints: const BoxConstraints(
                       minWidth: 44,
