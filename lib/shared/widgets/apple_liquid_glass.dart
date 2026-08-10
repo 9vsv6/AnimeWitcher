@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -744,6 +746,7 @@ class _AppleNativeToolbar extends StatefulWidget {
 
 class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
   MethodChannel? _channel;
+  String? _lastSentStateSignature;
 
   Map<String, Object?> get _state => <String, Object?>{
     'collapsed': widget.collapsed,
@@ -772,12 +775,20 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     ],
   };
 
+  String get _stateSignature => jsonEncode(_state);
+
+  void _sendStateIfChanged() {
+    if (!mounted || _channel == null) return;
+    final signature = _stateSignature;
+    if (signature == _lastSentStateSignature) return;
+    _lastSentStateSignature = signature;
+    _channel?.invokeMethod<void>('update', _state);
+  }
+
   @override
   void didUpdateWidget(covariant _AppleNativeToolbar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _channel?.invokeMethod<void>('update', _state);
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sendStateIfChanged());
   }
 
   void _onPlatformViewCreated(int id) {
@@ -800,6 +811,9 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
       }
     });
     _channel = channel;
+    // creationParams already contain the current state; don't immediately
+    // replay it as an animated update when the first Flutter rebuild arrives.
+    _lastSentStateSignature = _stateSignature;
   }
 
   @override

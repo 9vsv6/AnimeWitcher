@@ -550,6 +550,8 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   private let channel: FlutterMethodChannel
   private let toolbar: UIToolbar
   private var didApplyInitialState = false
+  private var currentActionItems: [UIBarButtonItem] = []
+  private var currentActionKinds: [Bool] = []
 
   init(
     frame: CGRect,
@@ -654,6 +656,38 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     return UIMenu(children: children)
   }
 
+  private func actionHasMenu(_ action: [String: Any]) -> Bool {
+    let menuItems = action["menuItems"] as? [[String: Any]] ?? []
+    return !menuItems.isEmpty
+  }
+
+  private func configureActionItem(
+    _ item: UIBarButtonItem,
+    actionIndex: Int,
+    action: [String: Any],
+    actionCount: Int
+  ) {
+    let systemName = action["systemName"] as? String ?? "circle"
+    item.image = UIImage(
+      systemName: systemName,
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
+    )
+    item.tag = actionIndex
+    item.isEnabled = action["enabled"] as? Bool ?? true
+    item.tintColor = skyStreamUIColor(action["color"], fallback: .label)
+    item.accessibilityLabel = action["accessibilityLabel"] as? String
+    if actionHasMenu(action), #available(iOS 14.0, *) {
+      item.menu = makeMenu(actionIndex: actionIndex, action: action)
+    }
+    if #available(iOS 26.0, *) {
+      item.sharesBackground = true
+      item.hidesSharedBackground = false
+      item.identifier = actionIndex == actionCount - 1
+        ? "skystream.trailing.anchor"
+        : "skystream.trailing.item.\(actionIndex)"
+    }
+  }
+
   private func makeActionItems(actions: [[String: Any]]) -> [UIBarButtonItem] {
     let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
 
@@ -681,21 +715,12 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
         )
       }
 
-      item.tag = index
-      item.isEnabled = action["enabled"] as? Bool ?? true
-      item.tintColor = skyStreamUIColor(action["color"], fallback: .label)
-      item.accessibilityLabel = action["accessibilityLabel"] as? String
-      if #available(iOS 26.0, *) {
-        // Keep all adjacent image actions in a single system-owned glass
-        // background. Give the trailing-most control one stable identity so
-        // UIKit can match it to the comments sort item across the 3 -> 1
-        // transition; the capsule then contracts toward the same trailing edge.
-        item.sharesBackground = true
-        item.hidesSharedBackground = false
-        item.identifier = index == actions.count - 1
-          ? "skystream.trailing.anchor"
-          : "skystream.trailing.item.\(index)"
-      }
+      configureActionItem(
+        item,
+        actionIndex: index,
+        action: action,
+        actionCount: actions.count
+      )
       return item
     }
 
@@ -709,12 +734,37 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   private func apply(arguments: Any?, animated: Bool) {
     guard let values = arguments as? [String: Any] else { return }
     let actions = values["actions"] as? [[String: Any]] ?? []
+    let actionKinds = actions.map(actionHasMenu)
+
+    // A favorite/bookmark state change only changes an item's image/tint/menu
+    // state. Replacing the entire toolbar in that case makes UIKit run its
+    // setItems transition again, which causes the Liquid Glass capsule to
+    // dissolve/stretch even though its geometry never changed. Keep the same
+    // UIBarButtonItem instances and update them in place instead.
+    if didApplyInitialState,
+       currentActionItems.count == actions.count,
+       currentActionKinds == actionKinds {
+      UIView.performWithoutAnimation {
+        for (index, action) in actions.enumerated() {
+          configureActionItem(
+            currentActionItems[index],
+            actionIndex: index,
+            action: action,
+            actionCount: actions.count
+          )
+        }
+        toolbar.layoutIfNeeded()
+      }
+      return
+    }
+
     let items = makeActionItems(actions: actions)
+    currentActionItems = items.dropFirst().map { $0 }
+    currentActionKinds = actionKinds
     let shouldAnimate = didApplyInitialState && animated
 
-    // Let UIToolbar own the item geometry/material transition. This is the
-    // UIKit-supported animated update path and keeps the same toolbar instance
-    // alive while route-specific controls change.
+    // Reserve setItems(animated:) for real structural transitions such as the
+    // details 3-button group morphing into the single comments-sort control.
     toolbar.setItems(items, animated: shouldAnimate)
     didApplyInitialState = true
   }
