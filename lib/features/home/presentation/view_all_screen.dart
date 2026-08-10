@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skystream/core/navigation/taskbar_destination.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
@@ -238,10 +239,12 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: AppBar(
+            automaticallyImplyLeading: false,
             centerTitle: false,
             titleSpacing: 16,
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
+              branchIndex: TaskbarDestination.home.branchIndex,
               onBack: () => context.pop(),
               child: Align(
                 alignment:
