@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/navigation/taskbar_destination.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
@@ -245,7 +244,7 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
               branchIndex: TaskbarDestination.home.branchIndex,
-              onBack: () => context.pop(),
+              onBack: () => Navigator.of(context).maybePop(),
               child: Align(
                 alignment:
                     isArabic ? Alignment.centerRight : Alignment.centerLeft,
@@ -261,7 +260,9 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
             ),
             leading: appleUsesPersistentLiquidGlassHeader
                 ? null
-                : AppleLiquidGlassBackButton(onPressed: () => context.pop()),
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
             elevation: 0,
           ),
         ),
