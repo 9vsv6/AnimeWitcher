@@ -8,7 +8,6 @@ import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:skystream/shared/widgets/custom_bottom_nav.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
-import 'package:skystream/shared/widgets/taskbar_visibility.dart';
 import 'package:skystream/shared/widgets/app_sidebar.dart';
 
 import 'package:skystream/l10n/generated/app_localizations.dart';
@@ -215,39 +214,30 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
               widget.navigationShell.goBranch(defaultIndex);
             }
           },
-          child: ValueListenableBuilder<int>(
-            valueListenable: appTaskbarHiddenDepth,
-            child: widget.navigationShell,
-            builder: (context, hiddenDepth, navigationChild) {
-              final hideTaskbar = hiddenDepth > 0;
-              return Scaffold(
-                resizeToAvoidBottomInset: false,
-                extendBody: true,
-                body: navigationChild,
-                bottomNavigationBar: hideTaskbar
-                    ? null
-                    : CustomBottomNavBar.usesNativeAppleTabBar
-                    ? CustomBottomNavBar(
-                        currentBranchIndex: widget.navigationShell.currentIndex,
-                        destinations: taskbarDestinations,
-                        onTap: (destination) =>
-                            _onItemTapped(destination.branchIndex, context),
-                      )
-                    : Padding(
-                        padding: EdgeInsets.only(
-                          left: 24,
-                          right: 24,
-                          bottom: CustomBottomNavBar.bottomInsetFor(context),
-                        ),
-                        child: CustomBottomNavBar(
-                          currentBranchIndex: widget.navigationShell.currentIndex,
-                          destinations: taskbarDestinations,
-                          onTap: (destination) =>
-                              _onItemTapped(destination.branchIndex, context),
-                        ),
-                      ),
-              );
-            },
+          child: Scaffold(
+            resizeToAvoidBottomInset: false,
+            extendBody: true,
+            body: widget.navigationShell,
+            bottomNavigationBar: CustomBottomNavBar.usesNativeAppleTabBar
+                ? CustomBottomNavBar(
+                    currentBranchIndex: widget.navigationShell.currentIndex,
+                    destinations: taskbarDestinations,
+                    onTap: (destination) =>
+                        _onItemTapped(destination.branchIndex, context),
+                  )
+                : Padding(
+                    padding: EdgeInsets.only(
+                      left: 24,
+                      right: 24,
+                      bottom: CustomBottomNavBar.bottomInsetFor(context),
+                    ),
+                    child: CustomBottomNavBar(
+                      currentBranchIndex: widget.navigationShell.currentIndex,
+                      destinations: taskbarDestinations,
+                      onTap: (destination) =>
+                          _onItemTapped(destination.branchIndex, context),
+                    ),
+                  ),
           ),
         );
       },
