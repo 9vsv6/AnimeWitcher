@@ -99,6 +99,25 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
+  Widget _withDetailsHeaderCollapseFade(
+    Widget child,
+    double collapseExtent,
+  ) {
+    return AnimatedBuilder(
+      animation: _detailsScrollController,
+      child: child,
+      builder: (context, child) {
+        final offset = _detailsScrollController.hasClients
+            ? _detailsScrollController.offset
+            : 0.0;
+        final opacity = (1.0 - (offset / collapseExtent))
+            .clamp(0.0, 1.0)
+            .toDouble();
+        return Opacity(opacity: opacity, child: child);
+      },
+    );
+  }
+
   Widget _buildDetailsHeaderActions(
     BuildContext context,
     MultimediaItem item, {
@@ -967,6 +986,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         (mobileHeaderHeight - MediaQuery.paddingOf(context).top)
             .clamp(kToolbarHeight, mobileHeaderHeight)
             .toDouble();
+    final mobileCollapseExtent = (mobileExpandedHeight - kToolbarHeight)
+        .clamp(1.0, double.infinity)
+        .toDouble();
 
     // ── Mobile: AnimeWitcher-sized overlapping details header ──
     return Scaffold(
@@ -988,17 +1010,25 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 pinned: true,
                 expandedHeight: mobileExpandedHeight,
                 stretch: true,
-                backgroundColor: Colors.black,
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                forceMaterialTransparency: true,
                 flexibleSpace: FlexibleSpaceBar(
                   stretchModes: const [
                     StretchMode.zoomBackground,
                   ],
-                  background: _withDetailsHeaderPullReaction(
-                    _buildAnimeWitcherMobileHeader(
-                      context,
-                      item,
-                      detailsAsync,
+                  background: _withDetailsHeaderCollapseFade(
+                    _withDetailsHeaderPullReaction(
+                      _buildAnimeWitcherMobileHeader(
+                        context,
+                        item,
+                        detailsAsync,
+                      ),
                     ),
+                    mobileCollapseExtent,
                   ),
                 ),
                 // Native Apple Liquid Glass header controls on iOS 26+.

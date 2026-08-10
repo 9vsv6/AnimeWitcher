@@ -64,10 +64,15 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        leading: Navigator.of(context).canPop()
-            ? const AppleLiquidGlassBackButton()
-            : null,
+        automaticallyImplyLeading: false,
         title: Text(l10n.settings),
+        actions: [
+          if (Navigator.of(context).canPop())
+            const Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: AppleLiquidGlassBackButton(),
+            ),
+        ],
       ),
       body: _buildSettingsList(context, ref, isTv),
     );
