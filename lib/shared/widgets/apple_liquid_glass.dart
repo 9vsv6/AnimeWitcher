@@ -249,7 +249,9 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
     );
   }
 }
-\n\nString? _appleSystemSymbolForIcon(IconData icon) {
+
+
+String? _appleSystemSymbolForIcon(IconData icon) {
   if (icon == Icons.chat_bubble_outline_rounded ||
       icon == Icons.chat_bubble_outline) {
     return 'bubble.left';
