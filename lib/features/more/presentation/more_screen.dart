@@ -31,7 +31,7 @@ class MoreScreen extends StatelessWidget {
               subtitle: isArabic
                   ? 'الموسم السابق والحالي والقادم وجميع المواسم'
                   : 'Previous, current, next, and all seasons',
-              onTap: () => Navigator.of(context).push(
+              onTap: () => Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const SeasonsScreen(),
                 ),
@@ -44,7 +44,7 @@ class MoreScreen extends StatelessWidget {
               subtitle: isArabic
                   ? 'الأنميات موزعة على أيام الأسبوع السبعة'
                   : 'Anime grouped across the seven weekdays',
-              onTap: () => Navigator.of(context).push(
+              onTap: () => Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const BroadcastScheduleScreen(),
                 ),
@@ -59,7 +59,7 @@ class MoreScreen extends StatelessWidget {
               subtitle: isArabic
                   ? 'إعدادات التطبيق والحساب والمشغل'
                   : 'App, account, and player settings',
-              onTap: () => Navigator.of(context).push(
+              onTap: () => Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const SettingsScreen(),
                 ),
