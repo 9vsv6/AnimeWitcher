@@ -252,6 +252,23 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
   }
 
+  List<AppleNativeMenuItem> _searchSortMenuItems(BuildContext context) {
+    return <AppleNativeMenuItem>[
+      for (final option in SearchSortOption.values)
+        AppleNativeMenuItem(
+          value: option.value,
+          label: option.label(context),
+          systemImage: switch (option) {
+            SearchSortOption.mostFavorited => 'star.fill',
+            SearchSortOption.productionDateAscending => 'calendar',
+            SearchSortOption.productionDateDescending => 'calendar',
+            SearchSortOption.nameAscending => 'textformat.abc',
+            SearchSortOption.nameDescending => 'textformat.abc',
+          },
+        ),
+    ];
+  }
+
   Future<void> _showSearchSort() async {
     final current = ref.read(searchProviderFiltersProvider);
     String? selected;
@@ -506,6 +523,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     isCompact: false,
                     onShowFilters: _showSearchFilters,
                     onShowSort: _showSearchSort,
+                    onSortSelected: _applySearchSort,
+                    sortValue: ref.watch(searchProviderFiltersProvider).sort,
+                    sortItems: _searchSortMenuItems(context),
                     sortTooltip:
                         '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: '
                         '${SearchSortOption.fromValue(ref.watch(searchProviderFiltersProvider).sort).label(context)}',
@@ -547,6 +567,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       filterCount: activeFilters.count,
       isFilterLoading: _isLoadingProviderFilters,
       isArabic: isArabic,
+      sortValue: activeFilters.sort,
+      sortItems: _searchSortMenuItems(context),
       sortAccessibilityLabel:
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
       filterAccessibilityLabel: appText(
@@ -555,6 +577,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         arabic: 'الفلاتر',
       ),
       onSortPressed: _showSearchSort,
+      onSortSelected: _applySearchSort,
       onFilterPressed: _showSearchFilters,
     );
   }

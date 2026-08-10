@@ -210,21 +210,40 @@ class _AnimeWitcherCommentsScreenState
     await _loadInitial();
   }
 
-  Future<void> _chooseSort() async {
-    final selected = await showModalBottomSheet<AnimeWitcherCommentSort>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => _CommentSortSheet(
-        current: _sort,
-        isArabic: _isArabic(context),
-      ),
-    );
-    if (selected == null || selected == _sort || !mounted) return;
+  Future<void> _applyCommentSort(AnimeWitcherCommentSort selected) async {
+    if (selected == _sort || !mounted) return;
     setState(() => _sort = selected);
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
     }
     await _loadInitial();
+  }
+
+  AnimeWitcherCommentSort _commentSortFromValue(String value) {
+    for (final option in AnimeWitcherCommentSort.values) {
+      if (option.name == value) return option;
+    }
+    return _sort;
+  }
+
+  List<AppleNativeMenuItem> _commentSortMenuItems(bool isArabic) {
+    return <AppleNativeMenuItem>[
+      AppleNativeMenuItem(
+        value: AnimeWitcherCommentSort.newest.name,
+        label: _sortLabel(AnimeWitcherCommentSort.newest, isArabic),
+        systemImage: 'clock',
+      ),
+      AppleNativeMenuItem(
+        value: AnimeWitcherCommentSort.oldest.name,
+        label: _sortLabel(AnimeWitcherCommentSort.oldest, isArabic),
+        systemImage: 'clock.arrow.circlepath',
+      ),
+      AppleNativeMenuItem(
+        value: AnimeWitcherCommentSort.mostLiked.name,
+        label: _sortLabel(AnimeWitcherCommentSort.mostLiked, isArabic),
+        systemImage: 'heart',
+      ),
+    ];
   }
 
   void _showMessage(String message) {
@@ -263,10 +282,16 @@ class _AnimeWitcherCommentsScreenState
               ),
             ),
             actions: [
-              IconButton(
-                tooltip: isArabic ? 'ترتيب التعليقات' : 'Sort comments',
-                onPressed: _chooseSort,
-                icon: const Icon(Icons.filter_list_rounded),
+              AppleNativeMenuButton(
+                accessibilityLabel:
+                    isArabic ? 'ترتيب التعليقات' : 'Sort comments',
+                systemImage: 'arrow.up.arrow.down',
+                fallbackIcon: Icons.filter_list_rounded,
+                selectedValue: _sort.name,
+                items: _commentSortMenuItems(isArabic),
+                onSelected: (value) {
+                  _applyCommentSort(_commentSortFromValue(value));
+                },
               ),
               IconButton(
                 tooltip: isArabic ? 'تحديث' : 'Refresh',
@@ -629,47 +654,6 @@ class _ReactionButton extends StatelessWidget {
                       color: foreground,
                     ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CommentSortSheet extends StatelessWidget {
-  const _CommentSortSheet({
-    required this.current,
-    required this.isArabic,
-  });
-
-  final AnimeWitcherCommentSort current;
-  final bool isArabic;
-
-  @override
-  Widget build(BuildContext context) {
-    final options = <(AnimeWitcherCommentSort, IconData)>[
-      (AnimeWitcherCommentSort.newest, Icons.schedule_rounded),
-      (AnimeWitcherCommentSort.oldest, Icons.history_rounded),
-      (AnimeWitcherCommentSort.mostLiked, Icons.favorite_rounded),
-    ];
-    return SafeArea(
-      child: Directionality(
-        textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final option in options)
-                ListTile(
-                  leading: Icon(option.$2),
-                  title: Text(_sortLabel(option.$1, isArabic)),
-                  trailing: current == option.$1
-                      ? const Icon(Icons.check_rounded)
-                      : null,
-                  onTap: () => Navigator.of(context).pop(option.$1),
-                ),
             ],
           ),
         ),

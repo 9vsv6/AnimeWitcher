@@ -6,6 +6,8 @@ const _appleLiquidGlassViewType = 'dev.akash.skystream/liquid_glass';
 const _appleNativeGlassButtonViewType =
     'dev.akash.skystream/native_glass_button';
 const _appleNativeToolbarViewType = 'dev.akash.skystream/native_toolbar';
+const _appleNativeMenuButtonViewType =
+    'dev.akash.skystream/native_menu_button';
 
 bool get _usesNativeAppleLiquidGlass =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -428,6 +430,140 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
 }
 
 
+class AppleNativeMenuItem {
+  const AppleNativeMenuItem({
+    required this.value,
+    required this.label,
+    this.systemImage,
+  });
+
+  final String value;
+  final String label;
+  final String? systemImage;
+
+  Map<String, Object?> toPlatformValue() => <String, Object?>{
+    'value': value,
+    'label': label,
+    'systemImage': systemImage,
+  };
+}
+
+/// A system UIButton whose primary action is a UIMenu.
+///
+/// This is the same UIKit menu path used by Apple apps: the menu is attached
+/// to the button with `menu` + `showsMenuAsPrimaryAction`, so iOS owns the
+/// presentation, Liquid Glass material, morphing, selection checkmark, and
+/// dismissal behavior. No Flutter dialog or custom blur is involved on iOS.
+class AppleNativeMenuButton extends StatefulWidget {
+  const AppleNativeMenuButton({
+    super.key,
+    required this.items,
+    required this.onSelected,
+    required this.accessibilityLabel,
+    required this.systemImage,
+    this.selectedValue,
+    this.fallbackIcon = Icons.sort_rounded,
+    this.size = 44,
+    this.enabled = true,
+  });
+
+  final List<AppleNativeMenuItem> items;
+  final ValueChanged<String> onSelected;
+  final String accessibilityLabel;
+  final String systemImage;
+  final String? selectedValue;
+  final IconData fallbackIcon;
+  final double size;
+  final bool enabled;
+
+  @override
+  State<AppleNativeMenuButton> createState() => _AppleNativeMenuButtonState();
+}
+
+class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
+  MethodChannel? _channel;
+
+  Map<String, Object?> get _state => <String, Object?>{
+    'systemImage': widget.systemImage,
+    'selectedValue': widget.selectedValue,
+    'accessibilityLabel': widget.accessibilityLabel,
+    'enabled': widget.enabled,
+    'items': widget.items
+        .map((item) => item.toPlatformValue())
+        .toList(growable: false),
+  };
+
+  @override
+  void didUpdateWidget(covariant AppleNativeMenuButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _channel?.invokeMethod<void>('update', _state);
+    });
+  }
+
+  void _onPlatformViewCreated(int id) {
+    final channel = MethodChannel(
+      'dev.akash.skystream/native_menu_button/$id',
+    );
+    channel.setMethodCallHandler((call) async {
+      if (call.method != 'selected') return;
+      final value = call.arguments as String?;
+      if (value != null) widget.onSelected(value);
+    });
+    _channel = channel;
+  }
+
+  @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    _channel = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_usesNativeAppleLiquidGlass) {
+      return SizedBox.square(
+        dimension: widget.size,
+        child: UiKitView(
+          viewType: _appleNativeMenuButtonViewType,
+          layoutDirection: Directionality.of(context),
+          creationParams: _state,
+          creationParamsCodec: const StandardMessageCodec(),
+          onPlatformViewCreated: _onPlatformViewCreated,
+        ),
+      );
+    }
+
+    return SizedBox.square(
+      dimension: widget.size,
+      child: PopupMenuButton<String>(
+        enabled: widget.enabled,
+        tooltip: widget.accessibilityLabel,
+        icon: Icon(widget.fallbackIcon),
+        onSelected: widget.onSelected,
+        itemBuilder: (context) => [
+          for (final item in widget.items)
+            PopupMenuItem<String>(
+              value: item.value,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 28,
+                    child: widget.selectedValue == item.value
+                        ? const Icon(Icons.check_rounded, size: 20)
+                        : null,
+                  ),
+                  Expanded(child: Text(item.label)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 const _appleSearchGlassActionsViewType =
     'dev.akash.skystream/search_glass_actions';
 const _appleLiquidGlassPresenterChannel = MethodChannel(
@@ -499,7 +635,10 @@ class AppleSearchGlassActions extends StatefulWidget {
   const AppleSearchGlassActions({
     super.key,
     required this.onSortPressed,
+    required this.onSortSelected,
     required this.onFilterPressed,
+    required this.sortValue,
+    required this.sortItems,
     required this.sortAccessibilityLabel,
     required this.filterAccessibilityLabel,
     this.filterCount = 0,
@@ -508,8 +647,12 @@ class AppleSearchGlassActions extends StatefulWidget {
     this.height = 44,
   });
 
+  /// Fallback used outside iOS, where the existing Flutter sort dialog remains.
   final VoidCallback onSortPressed;
+  final ValueChanged<String> onSortSelected;
   final VoidCallback onFilterPressed;
+  final String sortValue;
+  final List<AppleNativeMenuItem> sortItems;
   final String sortAccessibilityLabel;
   final String filterAccessibilityLabel;
   final int filterCount;
@@ -529,6 +672,10 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
     'filterCount': widget.filterCount,
     'filterLoading': widget.isFilterLoading,
     'isArabic': widget.isArabic,
+    'sortValue': widget.sortValue,
+    'sortItems': widget.sortItems
+        .map((item) => item.toPlatformValue())
+        .toList(growable: false),
     'sortAccessibilityLabel': widget.sortAccessibilityLabel,
     'filterAccessibilityLabel': widget.filterAccessibilityLabel,
   };
@@ -536,13 +683,9 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
   @override
   void didUpdateWidget(covariant AppleSearchGlassActions oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.filterCount != widget.filterCount ||
-        oldWidget.isFilterLoading != widget.isFilterLoading ||
-        oldWidget.isArabic != widget.isArabic ||
-        oldWidget.sortAccessibilityLabel != widget.sortAccessibilityLabel ||
-        oldWidget.filterAccessibilityLabel != widget.filterAccessibilityLabel) {
-      _channel?.invokeMethod<void>('update', _state);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _channel?.invokeMethod<void>('update', _state);
+    });
   }
 
   @override
@@ -558,8 +701,9 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
     );
     channel.setMethodCallHandler((call) async {
       switch (call.method) {
-        case 'sortPressed':
-          widget.onSortPressed();
+        case 'sortSelected':
+          final value = call.arguments as String?;
+          if (value != null) widget.onSortSelected(value);
           break;
         case 'filterPressed':
           widget.onFilterPressed();
@@ -578,7 +722,7 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
         height: height,
         child: UiKitView(
           viewType: _appleSearchGlassActionsViewType,
-          layoutDirection: TextDirection.ltr,
+          layoutDirection: Directionality.of(context),
           creationParams: _state,
           creationParamsCodec: const StandardMessageCodec(),
           onPlatformViewCreated: _onPlatformViewCreated,

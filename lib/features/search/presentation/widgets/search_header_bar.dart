@@ -17,6 +17,9 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onShowFilters;
   final VoidCallback onShowSort;
+  final ValueChanged<String> onSortSelected;
+  final String sortValue;
+  final List<AppleNativeMenuItem> sortItems;
   final String sortTooltip;
   final int activeFilterCount;
   final bool isFilterLoading;
@@ -31,6 +34,9 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
     required this.onChanged,
     required this.onShowFilters,
     required this.onShowSort,
+    required this.onSortSelected,
+    required this.sortValue,
+    required this.sortItems,
     required this.sortTooltip,
     required this.activeFilterCount,
     required this.isFilterLoading,
@@ -218,6 +224,8 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                                   .languageCode
                                   .toLowerCase() ==
                               'ar',
+                          sortValue: widget.sortValue,
+                          sortItems: widget.sortItems,
                           sortAccessibilityLabel: widget.sortTooltip,
                           filterAccessibilityLabel: appText(
                             context,
@@ -225,6 +233,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                             arabic: 'الفلاتر',
                           ),
                           onSortPressed: widget.onShowSort,
+                          onSortSelected: widget.onSortSelected,
                           onFilterPressed: widget.onShowFilters,
                           height: 38,
                         ),

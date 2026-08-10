@@ -63,6 +63,10 @@ import UserNotifications
         AppleNativeToolbarViewFactory(messenger: messenger),
         withId: "dev.akash.skystream/native_toolbar"
       )
+      glassRegistrar.register(
+        AppleNativeMenuButtonViewFactory(messenger: messenger),
+        withId: "dev.akash.skystream/native_menu_button"
+      )
     }
 
     let glassPresenter = FlutterMethodChannel(
@@ -292,17 +296,13 @@ private final class AppleNativeTabBarPlatformView: NSObject, FlutterPlatformView
   ) {
     rootView = UIView(frame: frame)
     channel = FlutterMethodChannel(
-      name: \"dev.akash.skystream/native_tab_bar/\\(viewId)\",
+      name: "dev.akash.skystream/native_tab_bar/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
 
     rootView.backgroundColor = .clear
     rootView.isOpaque = false
-
-    // Use Apple's actual tab bar. No custom background, blur, glass effect,
-    // UITabBarAppearance, or clipping is applied here. On iOS 26 the system
-    // itself provides the floating Liquid Glass appearance.
     tabBar.translatesAutoresizingMaskIntoConstraints = false
     tabBar.delegate = self
     tabBar.isTranslucent = true
@@ -313,15 +313,15 @@ private final class AppleNativeTabBarPlatformView: NSObject, FlutterPlatformView
       tabBar.topAnchor.constraint(equalTo: rootView.topAnchor),
       tabBar.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
     ])
-
     apply(arguments: args)
+
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self else {
         result(false)
         return
       }
       switch call.method {
-      case \"update\":
+      case "update":
         self.apply(arguments: call.arguments)
         result(true)
       default:
@@ -336,39 +336,64 @@ private final class AppleNativeTabBarPlatformView: NSObject, FlutterPlatformView
 
   private func apply(arguments: Any?) {
     guard let values = arguments as? [String: Any] else { return }
-    let itemValues = values[\"items\"] as? [[String: Any]] ?? []
-    let selectedId = values[\"selectedId\"] as? String
-    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+    let items = values["items"] as? [[String: Any]] ?? []
+    let selectedId = values["selectedId"] as? String
+    itemIds = items.compactMap { $0["id"] as? String }
 
-    itemIds = itemValues.compactMap { $0[\"id\"] as? String }
-    let items: [UITabBarItem] = itemValues.enumerated().compactMap { index, item in
-      guard let id = item[\"id\"] as? String else { return nil }
-      let title = item[\"label\"] as? String
-      let symbol = item[\"symbol\"] as? String ?? \"circle\"
-      let selectedSymbol = item[\"selectedSymbol\"] as? String ?? symbol
-      let normalImage = UIImage(systemName: symbol, withConfiguration: symbolConfiguration)
-      let selectedImage = UIImage(systemName: selectedSymbol, withConfiguration: symbolConfiguration)
-      let barItem = UITabBarItem(title: title, image: normalImage, selectedImage: selectedImage)
-      barItem.tag = index
-      barItem.accessibilityIdentifier = id
-      return barItem
+    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+    tabBar.items = items.map { item in
+      let title = item["label"] as? String
+      let symbol = item["symbol"] as? String ?? "circle"
+      let selectedSymbol = item["selectedSymbol"] as? String ?? symbol
+      return UITabBarItem(
+        title: title,
+        image: UIImage(systemName: symbol, withConfiguration: symbolConfiguration),
+        selectedImage: UIImage(systemName: selectedSymbol, withConfiguration: symbolConfiguration)
+      )
     }
 
-    tabBar.items = items
-    tabBar.tintColor = skyStreamUIColor(values[\"tintColor\"], fallback: .systemBlue)
-    tabBar.unselectedItemTintColor = .secondaryLabel
-    if let selectedId, let selectedIndex = itemIds.firstIndex(of: selectedId),
-       selectedIndex < items.count {
-      tabBar.selectedItem = items[selectedIndex]
-    } else {
-      tabBar.selectedItem = items.first
+    if let tint = values["tintColor"] {
+      tabBar.tintColor = skyStreamUIColor(tint, fallback: .systemBlue)
+    }
+    if let selectedId,
+       let index = itemIds.firstIndex(of: selectedId),
+       let items = tabBar.items,
+       index < items.count {
+      tabBar.selectedItem = items[index]
     }
   }
 
   func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
-    let index = item.tag
-    guard index >= 0, index < itemIds.count else { return }
-    channel.invokeMethod(\"selected\", arguments: itemIds[index])
+    guard let items = tabBar.items,
+          let index = items.firstIndex(of: item),
+          index < itemIds.count else { return }
+    channel.invokeMethod("selected", arguments: itemIds[index])
+  }
+}
+
+private func skyStreamConfigureGlassButton(
+  _ button: UIButton,
+  image: UIImage?,
+  foreground: UIColor = .label
+) {
+  if #available(iOS 26.0, *) {
+    var configuration = UIButton.Configuration.glass()
+    configuration.image = image
+    configuration.baseForegroundColor = foreground
+    configuration.contentInsets = .zero
+    button.configuration = configuration
+    button.cornerConfiguration = .capsule()
+  } else if #available(iOS 15.0, *) {
+    var configuration = UIButton.Configuration.plain()
+    configuration.image = image
+    configuration.baseForegroundColor = foreground
+    configuration.contentInsets = .zero
+    button.configuration = configuration
+    button.backgroundColor = .secondarySystemBackground
+  } else {
+    button.setImage(image, for: .normal)
+    button.tintColor = foreground
+    button.backgroundColor = .secondarySystemBackground
   }
 }
 
@@ -411,7 +436,7 @@ private final class AppleNativeGlassButtonPlatformView: NSObject, FlutterPlatfor
   ) {
     rootView = UIView(frame: frame)
     channel = FlutterMethodChannel(
-      name: \"dev.akash.skystream/native_glass_button/\\(viewId)\",
+      name: "dev.akash.skystream/native_glass_button/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
@@ -435,7 +460,7 @@ private final class AppleNativeGlassButtonPlatformView: NSObject, FlutterPlatfor
         return
       }
       switch call.method {
-      case \"update\":
+      case "update":
         self.apply(arguments: call.arguments)
         result(true)
       default:
@@ -445,44 +470,25 @@ private final class AppleNativeGlassButtonPlatformView: NSObject, FlutterPlatfor
   }
 
   deinit { channel.setMethodCallHandler(nil) }
-
   func view() -> UIView { rootView }
 
   private func apply(arguments: Any?) {
     guard let values = arguments as? [String: Any] else { return }
-    let systemName = values[\"systemName\"] as? String ?? \"circle\"
+    let systemName = values["systemName"] as? String ?? "circle"
     let image = UIImage(
       systemName: systemName,
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
     )
-    let foreground = skyStreamUIColor(values[\"color\"], fallback: .label)
-
-    if #available(iOS 26.0, *) {
-      var configuration = UIButton.Configuration.glass()
-      configuration.image = image
-      configuration.baseForegroundColor = foreground
-      configuration.contentInsets = .zero
-      button.configuration = configuration
-      button.cornerConfiguration = .capsule()
-    } else if #available(iOS 15.0, *) {
-      var configuration = UIButton.Configuration.plain()
-      configuration.image = image
-      configuration.baseForegroundColor = foreground
-      configuration.contentInsets = .zero
-      button.configuration = configuration
-      button.layer.cornerRadius = min(button.bounds.width, button.bounds.height) / 2
-    } else {
-      button.setImage(image, for: .normal)
-      button.tintColor = foreground
-    }
-    button.isEnabled = values[\"enabled\"] as? Bool ?? true
-    button.accessibilityLabel = values[\"accessibilityLabel\"] as? String
+    let foreground = skyStreamUIColor(values["color"], fallback: .label)
+    skyStreamConfigureGlassButton(button, image: image, foreground: foreground)
+    button.isEnabled = values["enabled"] as? Bool ?? true
+    button.accessibilityLabel = values["accessibilityLabel"] as? String
     button.accessibilityTraits = .button
   }
 
   @objc private func pressed() {
     guard button.isEnabled else { return }
-    channel.invokeMethod(\"pressed\", arguments: nil)
+    channel.invokeMethod("pressed", arguments: nil)
   }
 }
 
@@ -525,7 +531,7 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   ) {
     rootView = UIView(frame: frame)
     channel = FlutterMethodChannel(
-      name: \"dev.akash.skystream/native_toolbar/\\(viewId)\",
+      name: "dev.akash.skystream/native_toolbar/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
@@ -549,7 +555,7 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
         return
       }
       switch call.method {
-      case \"update\":
+      case "update":
         self.apply(arguments: call.arguments)
         result(true)
       default:
@@ -559,30 +565,141 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   }
 
   deinit { channel.setMethodCallHandler(nil) }
-
   func view() -> UIView { rootView }
 
   private func apply(arguments: Any?) {
     guard let values = arguments as? [String: Any] else { return }
-    let actions = values[\"actions\"] as? [[String: Any]] ?? []
+    let actions = values["actions"] as? [[String: Any]] ?? []
     let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
     let items: [UIBarButtonItem] = actions.enumerated().map { index, action in
-      let systemName = action[\"systemName\"] as? String ?? \"circle\"
+      let systemName = action["systemName"] as? String ?? "circle"
       let image = UIImage(systemName: systemName, withConfiguration: symbolConfiguration)
-      let item = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(itemPressed(_:)))
+      let item = UIBarButtonItem(
+        image: image,
+        style: .plain,
+        target: self,
+        action: #selector(itemPressed(_:))
+      )
       item.tag = index
-      item.isEnabled = action[\"enabled\"] as? Bool ?? true
-      item.tintColor = skyStreamUIColor(action[\"color\"], fallback: .label)
-      item.accessibilityLabel = action[\"accessibilityLabel\"] as? String
+      item.isEnabled = action["enabled"] as? Bool ?? true
+      item.tintColor = skyStreamUIColor(action["color"], fallback: .label)
+      item.accessibilityLabel = action["accessibilityLabel"] as? String
       return item
     }
-    // Leave UIToolbarAppearance untouched. On iOS 26 UIKit groups image
-    // bar-button items into the system Liquid Glass treatment automatically.
     toolbar.setItems(items, animated: false)
   }
 
   @objc private func itemPressed(_ sender: UIBarButtonItem) {
-    channel.invokeMethod(\"pressed\", arguments: sender.tag)
+    channel.invokeMethod("pressed", arguments: sender.tag)
+  }
+}
+
+private final class AppleNativeMenuButtonViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    AppleNativeMenuButtonPlatformView(
+      frame: frame,
+      viewId: viewId,
+      messenger: messenger,
+      arguments: args
+    )
+  }
+}
+
+private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatformView {
+  private let rootView: UIView
+  private let button = UIButton(type: .system)
+  private let channel: FlutterMethodChannel
+
+  init(
+    frame: CGRect,
+    viewId: Int64,
+    messenger: FlutterBinaryMessenger,
+    arguments args: Any?
+  ) {
+    rootView = UIView(frame: frame)
+    channel = FlutterMethodChannel(
+      name: "dev.akash.skystream/native_menu_button/\(viewId)",
+      binaryMessenger: messenger
+    )
+    super.init()
+
+    rootView.backgroundColor = .clear
+    rootView.isOpaque = false
+    button.translatesAutoresizingMaskIntoConstraints = false
+    rootView.addSubview(button)
+    NSLayoutConstraint.activate([
+      button.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+      button.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+      button.topAnchor.constraint(equalTo: rootView.topAnchor),
+      button.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+    ])
+    apply(arguments: args)
+
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(false)
+        return
+      }
+      switch call.method {
+      case "update":
+        self.apply(arguments: call.arguments)
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  deinit { channel.setMethodCallHandler(nil) }
+  func view() -> UIView { rootView }
+
+  private func apply(arguments: Any?) {
+    guard let values = arguments as? [String: Any] else { return }
+    let systemName = values["systemImage"] as? String ?? "arrow.up.arrow.down"
+    let image = UIImage(
+      systemName: systemName,
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+    )
+    skyStreamConfigureGlassButton(button, image: image)
+    button.isEnabled = values["enabled"] as? Bool ?? true
+    button.accessibilityLabel = values["accessibilityLabel"] as? String
+    button.accessibilityTraits = .button
+
+    let selectedValue = values["selectedValue"] as? String
+    let items = values["items"] as? [[String: Any]] ?? []
+    let actions: [UIAction] = items.compactMap { item in
+      guard let value = item["value"] as? String,
+            let label = item["label"] as? String else { return nil }
+      let systemImage = item["systemImage"] as? String
+      let actionImage = systemImage.flatMap { UIImage(systemName: $0) }
+      return UIAction(
+        title: label,
+        image: actionImage,
+        state: value == selectedValue ? .on : .off
+      ) { [weak self] _ in
+        self?.channel.invokeMethod("selected", arguments: value)
+      }
+    }
+    button.menu = UIMenu(children: actions)
+    button.showsMenuAsPrimaryAction = !actions.isEmpty
+    if #available(iOS 16.0, *) {
+      button.preferredMenuElementOrder = .fixed
+    }
   }
 }
 
@@ -711,28 +828,28 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     }
   }
 
-  deinit {
-    channel.setMethodCallHandler(nil)
-  }
-
+  deinit { channel.setMethodCallHandler(nil) }
   func view() -> UIView { rootView }
 
   private func configureControls(arguments: Any?) {
-    configure(button: sortButton, systemName: "arrow.up.arrow.down")
-    configure(button: filterButton, systemName: "slider.horizontal.3")
-    sortButton.addTarget(self, action: #selector(sortPressed), for: .touchUpInside)
+    let sortImage = UIImage(
+      systemName: "arrow.up.arrow.down",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+    )
+    let filterImage = UIImage(
+      systemName: "slider.horizontal.3",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+    )
+    skyStreamConfigureGlassButton(sortButton, image: sortImage)
+    skyStreamConfigureGlassButton(filterButton, image: filterImage)
     filterButton.addTarget(self, action: #selector(filterPressed), for: .touchUpInside)
 
     filterBadge.textAlignment = .center
     filterBadge.font = .systemFont(ofSize: 9, weight: .bold)
     filterBadge.textColor = .white
     filterBadge.backgroundColor = .systemBlue
-    if #available(iOS 26.0, *) {
-      filterBadge.cornerConfiguration = .capsule()
-    } else {
-      filterBadge.layer.cornerRadius = 8
-      filterBadge.clipsToBounds = true
-    }
+    filterBadge.layer.cornerRadius = 8
+    filterBadge.clipsToBounds = true
     filterBadge.isHidden = true
     filterBadge.isAccessibilityElement = false
 
@@ -763,37 +880,6 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     apply(arguments: arguments)
   }
 
-  private func configure(button: UIButton, systemName: String) {
-    let image = UIImage(
-      systemName: systemName,
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-    )
-    if #available(iOS 26.0, *) {
-      // Apple's standard control style. UIKit owns the actual Liquid Glass,
-      // lensing, highlights, press response, and accessibility behavior.
-      var configuration = UIButton.Configuration.glass()
-      configuration.image = image
-      configuration.baseForegroundColor = .label
-      configuration.contentInsets = .zero
-      button.configuration = configuration
-      button.cornerConfiguration = .capsule()
-    } else if #available(iOS 15.0, *) {
-      var configuration = UIButton.Configuration.plain()
-      configuration.image = image
-      configuration.baseForegroundColor = .label
-      configuration.contentInsets = .zero
-      button.configuration = configuration
-      button.backgroundColor = .secondarySystemBackground
-      button.layer.cornerRadius = 22
-    } else {
-      button.setImage(image, for: .normal)
-      button.tintColor = .label
-      button.backgroundColor = .secondarySystemBackground
-      button.layer.cornerRadius = 22
-    }
-    button.accessibilityTraits = .button
-  }
-
   private func apply(arguments: Any?) {
     guard let values = arguments as? [String: Any] else { return }
     filterCount = (values["filterCount"] as? NSNumber)?.intValue ?? 0
@@ -817,10 +903,27 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     } else {
       filterButton.tintColor = filterCount > 0 ? .systemBlue : .label
     }
-  }
 
-  @objc private func sortPressed() {
-    channel.invokeMethod("sortPressed", arguments: nil)
+    let selectedValue = values["sortValue"] as? String
+    let items = values["sortItems"] as? [[String: Any]] ?? []
+    let actions: [UIAction] = items.compactMap { item in
+      guard let value = item["value"] as? String,
+            let label = item["label"] as? String else { return nil }
+      let symbolName = item["systemImage"] as? String
+      let image = symbolName.flatMap { UIImage(systemName: $0) }
+      return UIAction(
+        title: label,
+        image: image,
+        state: value == selectedValue ? .on : .off
+      ) { [weak self] _ in
+        self?.channel.invokeMethod("sortSelected", arguments: value)
+      }
+    }
+    sortButton.menu = UIMenu(children: actions)
+    sortButton.showsMenuAsPrimaryAction = !actions.isEmpty
+    if #available(iOS 16.0, *) {
+      sortButton.preferredMenuElementOrder = .fixed
+    }
   }
 
   @objc private func filterPressed() {
