@@ -270,7 +270,7 @@ class _AnimeWitcherCommentsScreenState
       final trailingButtons = <AppleLiquidGlassToolbarButton>[
         AppleLiquidGlassToolbarButton(
           tooltip: isArabic ? 'ترتيب التعليقات' : 'Sort comments',
-          icon: Icons.filter_list_rounded,
+          icon: Icons.sort_rounded,
           color: Colors.white,
           menuTintColor: colors.primary,
           onPressed: null,
