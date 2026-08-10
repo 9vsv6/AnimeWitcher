@@ -522,6 +522,9 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   private let rootView: UIView
   private let toolbar = UIToolbar()
   private let channel: FlutterMethodChannel
+  private var toolbarWidthConstraint: NSLayoutConstraint!
+  private var didApplyInitialState = false
+  private var isCollapsed = false
 
   init(
     frame: CGRect,
@@ -541,11 +544,12 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     toolbar.translatesAutoresizingMaskIntoConstraints = false
     toolbar.isTranslucent = true
     rootView.addSubview(toolbar)
+    toolbarWidthConstraint = toolbar.widthAnchor.constraint(equalToConstant: max(46, frame.width))
     NSLayoutConstraint.activate([
-      toolbar.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
       toolbar.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
       toolbar.topAnchor.constraint(equalTo: rootView.topAnchor),
       toolbar.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+      toolbarWidthConstraint,
     ])
     apply(arguments: args)
 
@@ -567,11 +571,11 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   deinit { channel.setMethodCallHandler(nil) }
   func view() -> UIView { rootView }
 
-  private func apply(arguments: Any?) {
-    guard let values = arguments as? [String: Any] else { return }
-    let actions = values["actions"] as? [[String: Any]] ?? []
-    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
-    let items: [UIBarButtonItem] = actions.enumerated().map { index, action in
+  private func makeItems(
+    actions: [[String: Any]],
+    symbolConfiguration: UIImage.SymbolConfiguration
+  ) -> [UIBarButtonItem] {
+    actions.enumerated().map { index, action in
       let systemName = action["systemName"] as? String ?? "circle"
       let image = UIImage(systemName: systemName, withConfiguration: symbolConfiguration)
       let selectedValue = action["selectedValue"] as? String
@@ -600,8 +604,11 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
             )
           }
         }
-        let menu = UIMenu(children: menuActions)
-        item = UIBarButtonItem(image: image, primaryAction: nil, menu: menu)
+        item = UIBarButtonItem(
+          image: image,
+          primaryAction: nil,
+          menu: UIMenu(children: menuActions)
+        )
       } else {
         item = UIBarButtonItem(
           image: image,
@@ -616,7 +623,72 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
       item.accessibilityLabel = action["accessibilityLabel"] as? String
       return item
     }
-    toolbar.setItems(items, animated: false)
+  }
+
+  private func apply(arguments: Any?) {
+    guard let values = arguments as? [String: Any] else { return }
+    let actions = values["actions"] as? [[String: Any]] ?? []
+    let collapsed = values["collapsed"] as? Bool ?? false
+    let itemExtent = CGFloat(
+      (values["itemExtent"] as? NSNumber)?.doubleValue ?? 46
+    )
+    let expandedWidth = max(
+      itemExtent,
+      min(
+        rootView.bounds.width > 0 ? rootView.bounds.width : toolbarWidthConstraint.constant,
+        itemExtent * CGFloat(max(actions.count, 1)) + 16
+      )
+    )
+    let collapsedSystemName = values["collapsedSystemImage"] as? String
+      ?? "arrow.up.arrow.down"
+    let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
+    let fullItems = makeItems(actions: actions, symbolConfiguration: symbolConfiguration)
+
+    let collapsedImage = UIImage(
+      systemName: collapsedSystemName,
+      withConfiguration: symbolConfiguration
+    )
+    let collapsedItem = UIBarButtonItem(image: collapsedImage, style: .plain, target: nil, action: nil)
+    collapsedItem.tintColor = fullItems.first?.tintColor ?? .label
+    collapsedItem.accessibilityLabel = "Sort"
+
+    let stateChanged = didApplyInitialState && collapsed != isCollapsed
+    isCollapsed = collapsed
+    didApplyInitialState = true
+
+    let targetItems = collapsed ? [collapsedItem] : fullItems
+    let targetWidth = collapsed ? itemExtent : expandedWidth
+
+    toolbar.setItems(targetItems, animated: stateChanged)
+    toolbarWidthConstraint.constant = targetWidth
+
+    guard stateChanged else {
+      rootView.layoutIfNeeded()
+      return
+    }
+
+    // Keep the morph entirely inside UIKit's standard iOS 26 toolbar. The
+    // system owns the Liquid Glass material/grouping while this spring only
+    // drives the trailing-aligned geometry change from capsule to circle.
+    if #available(iOS 17.0, *) {
+      UIView.animate(
+        springDuration: 0.42,
+        bounce: 0.0,
+        initialSpringVelocity: 0.0,
+        delay: 0,
+        options: [.beginFromCurrentState, .allowUserInteraction]
+      ) {
+        self.rootView.layoutIfNeeded()
+      }
+    } else {
+      UIView.animate(
+        withDuration: 0.36,
+        delay: 0,
+        options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction]
+      ) {
+        self.rootView.layoutIfNeeded()
+      }
+    }
   }
 
   @objc private func itemPressed(_ sender: UIBarButtonItem) {

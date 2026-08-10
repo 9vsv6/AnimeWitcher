@@ -68,6 +68,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   static const Duration _tabTransitionDuration = Duration(milliseconds: 260);
 
   bool _didTriggerAutoPlay = false;
+  bool _commentsTransitionCollapsed = false;
   int _selectedDetailsTab = 0;
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
@@ -114,6 +115,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return AppleLiquidGlassActionGroup(
       height: 46,
       fallbackColor: fallbackColor,
+      collapsed: _commentsTransitionCollapsed,
+      collapsedSystemImage: 'arrow.up.arrow.down',
       children: [
         if (commentTarget != null)
           AppleLiquidGlassToolbarButton(
@@ -124,15 +127,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             ),
             icon: Icons.chat_bubble_outline_rounded,
             color: foregroundColor,
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => AnimeWitcherCommentsScreen(
-                    target: commentTarget,
-                  ),
-                ),
-              );
-            },
+            onPressed: () => _openAnimeComments(context, commentTarget),
           ),
         AppleLiquidGlassToolbarButton(
           tooltip: isFavorite
@@ -176,6 +171,29 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
       ],
     );
+  }
+
+  Future<void> _openAnimeComments(
+    BuildContext context,
+    AnimeWitcherCommentTarget target,
+  ) async {
+    if (_commentsTransitionCollapsed) return;
+
+    // Start the native iOS Liquid Glass contraction first, then begin the
+    // route transition a frame later. This mirrors the system toolbar motion
+    // where the shared glass group compresses into the destination control.
+    setState(() => _commentsTransitionCollapsed = true);
+    await Future<void>.delayed(const Duration(milliseconds: 45));
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AnimeWitcherCommentsScreen(target: target),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() => _commentsTransitionCollapsed = false);
   }
 
   String _libraryCategoryLabel(BuildContext context, LibraryCategory category) {

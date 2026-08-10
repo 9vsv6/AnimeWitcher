@@ -148,12 +148,16 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
   final List<Widget> children;
   final double height;
   final Color? fallbackColor;
+  final bool collapsed;
+  final String collapsedSystemImage;
 
   const AppleLiquidGlassActionGroup({
     super.key,
     required this.children,
     this.height = 46,
     this.fallbackColor,
+    this.collapsed = false,
+    this.collapsedSystemImage = 'arrow.up.arrow.down',
   });
 
   @override
@@ -167,7 +171,12 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
         (button) => _appleSystemSymbolForIcon(button.icon) != null,
       );
       if (canUseNative) {
-        return _AppleNativeToolbar(buttons: buttons, height: height);
+        return _AppleNativeToolbar(
+          buttons: buttons,
+          height: height,
+          collapsed: collapsed,
+          collapsedSystemImage: collapsedSystemImage,
+        );
       }
     }
 
@@ -381,10 +390,17 @@ class _AppleNativeGlassIconButtonState
 }
 
 class _AppleNativeToolbar extends StatefulWidget {
-  const _AppleNativeToolbar({required this.buttons, required this.height});
+  const _AppleNativeToolbar({
+    required this.buttons,
+    required this.height,
+    required this.collapsed,
+    required this.collapsedSystemImage,
+  });
 
   final List<AppleLiquidGlassToolbarButton> buttons;
   final double height;
+  final bool collapsed;
+  final String collapsedSystemImage;
 
   @override
   State<_AppleNativeToolbar> createState() => _AppleNativeToolbarState();
@@ -394,6 +410,9 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
   MethodChannel? _channel;
 
   Map<String, Object?> get _state => <String, Object?>{
+    'collapsed': widget.collapsed,
+    'collapsedSystemImage': widget.collapsedSystemImage,
+    'itemExtent': widget.height,
     'actions': <Map<String, Object?>>[
       for (final button in widget.buttons)
         <String, Object?>{
@@ -450,8 +469,12 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
 
   @override
   Widget build(BuildContext context) {
+    // UIToolbar keeps a small system inset around grouped bar items on
+    // iOS 26. Reserve it in Flutter so the trailing bookmark is never clipped
+    // by the screen edge while keeping the native glass group intact.
+    final nativeWidth = widget.height * widget.buttons.length + 16;
     return SizedBox(
-      width: widget.height * widget.buttons.length,
+      width: nativeWidth,
       height: widget.height,
       child: UiKitView(
         viewType: _appleNativeToolbarViewType,

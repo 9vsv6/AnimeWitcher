@@ -282,23 +282,21 @@ class _AnimeWitcherCommentsScreenState
               ),
             ),
             actions: [
-              AppleNativeMenuButton(
-                accessibilityLabel:
-                    isArabic ? 'ترتيب التعليقات' : 'Sort comments',
-                systemImage: 'arrow.up.arrow.down',
-                fallbackIcon: Icons.filter_list_rounded,
-                selectedValue: _sort.name,
-                items: _commentSortMenuItems(isArabic),
-                onSelected: (value) {
-                  _applyCommentSort(_commentSortFromValue(value));
-                },
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: AppleNativeMenuButton(
+                  accessibilityLabel:
+                      isArabic ? 'ترتيب التعليقات' : 'Sort comments',
+                  systemImage: 'arrow.up.arrow.down',
+                  fallbackIcon: Icons.filter_list_rounded,
+                  size: 46,
+                  selectedValue: _sort.name,
+                  items: _commentSortMenuItems(isArabic),
+                  onSelected: (value) {
+                    _applyCommentSort(_commentSortFromValue(value));
+                  },
+                ),
               ),
-              IconButton(
-                tooltip: isArabic ? 'تحديث' : 'Refresh',
-                onPressed: _loadInitial,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-              const SizedBox(width: 4),
             ],
           ),
         ),
