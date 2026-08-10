@@ -852,7 +852,10 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     // is pushing and async detail state is settling. Applying each one makes
     // UIToolbar start overlapping Liquid Glass transitions. Coalesce them to the
     // latest state for this run-loop turn, then let UIKit animate only once.
-    DispatchQueue.main.async { [weak self] in
+    // Start the native structural morph on the next display interval rather
+    // than competing with Flutter's first route-transition frame. Updates that
+    // arrive during that interval are still coalesced into the latest state.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.016) { [weak self] in
       guard let self else { return }
       self.updateScheduled = false
       let arguments = self.pendingArguments

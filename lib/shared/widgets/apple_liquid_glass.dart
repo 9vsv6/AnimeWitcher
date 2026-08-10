@@ -362,32 +362,22 @@ class _ApplePersistentGlassHeaderOverlayState
                           top: (kToolbarHeight - 46) / 2,
                           child: AnimatedOpacity(
                             opacity: showBack ? 1 : 0,
+                            // Do not fade/scale native glass while a page is
+                            // entering. UIKit already animates its own material;
+                            // stacking a Flutter opacity/transform animation on
+                            // top adds another compositing pass. Keep only the
+                            // requested very-fast fade when the control leaves.
                             duration: Duration(
-                              milliseconds: leavingGlassChrome
-                                  ? 35
-                                  : (showBack ? 160 : 55),
+                              milliseconds: showBack ? 0 : 35,
                             ),
                             curve: Curves.easeOutCubic,
-                            child: AnimatedScale(
-                              // When leaving for a route with no Liquid Glass
-                              // chrome, keep geometry fixed and fade only.
-                              scale: leavingGlassChrome
-                                  ? 1
-                                  : (showBack ? 1 : 0.88),
-                              duration: Duration(
-                                milliseconds: leavingGlassChrome
-                                    ? 0
-                                    : (showBack ? 190 : 70),
-                              ),
-                              curve: Curves.easeOutBack,
-                              child: AppleLiquidGlassBackButton(
-                                key: const ValueKey('persistent-liquid-back'),
-                                size: 46,
-                                foregroundColor: effective?.backForegroundColor,
-                                fallbackColor: effective?.backFallbackColor,
-                                tooltip: effective?.backTooltip,
-                                onPressed: effective?.onBack ?? () {},
-                              ),
+                            child: AppleLiquidGlassBackButton(
+                              key: const ValueKey('persistent-liquid-back'),
+                              size: 46,
+                              foregroundColor: effective?.backForegroundColor,
+                              fallbackColor: effective?.backFallbackColor,
+                              tooltip: effective?.backTooltip,
+                              onPressed: effective?.onBack ?? () {},
                             ),
                           ),
                         ),
@@ -404,22 +394,13 @@ class _ApplePersistentGlassHeaderOverlayState
                             ignoring: !showTrailing,
                             child: AnimatedOpacity(
                               opacity: showTrailing ? 1 : 0,
+                              // Structural Liquid Glass changes are animated by
+                              // the persistent native UIToolbar itself. Avoid a
+                              // second Flutter scale/fade-in animation during the
+                              // route transition; only fade out when no actions
+                              // remain on the destination page.
                               duration: Duration(
-                                milliseconds: leavingGlassChrome
-                                    ? 35
-                                    : (showTrailing ? 150 : 80),
-                              ),
-                              curve: Curves.easeOutCubic,
-                              child: AnimatedScale(
-                              alignment: Alignment.centerRight,
-                              // Same fast fade-only exit as the back button.
-                              scale: leavingGlassChrome
-                                  ? 1
-                                  : (showTrailing ? 1 : 0.94),
-                              duration: Duration(
-                                milliseconds: leavingGlassChrome
-                                    ? 0
-                                    : (showTrailing ? 180 : 95),
+                                milliseconds: showTrailing ? 0 : 35,
                               ),
                               curve: Curves.easeOutCubic,
                               child: hasNativeToolbar || _lastTrailingButtons != null
@@ -435,7 +416,6 @@ class _ApplePersistentGlassHeaderOverlayState
                                           _lastTrailing ??
                                           const SizedBox.shrink(),
                                     ),
-                              ),
                             ),
                           ),
                         ),

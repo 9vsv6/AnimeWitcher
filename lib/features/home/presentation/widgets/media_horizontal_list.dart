@@ -22,6 +22,7 @@ class MediaHorizontalList extends StatefulWidget {
   final bool fixedPhysicalDirection;
   final String? heroTagPrefix;
   final Future<ProviderMediaPage> Function(int offset)? loadViewAllPage;
+  final bool forcePortrait;
 
   const MediaHorizontalList({
     super.key,
@@ -33,6 +34,7 @@ class MediaHorizontalList extends StatefulWidget {
     this.fixedPhysicalDirection = false,
     this.heroTagPrefix,
     this.loadViewAllPage,
+    this.forcePortrait = false,
   });
 
   @override
@@ -72,7 +74,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     super.initState();
     _scrollController = ScrollController();
 
-    if (widget.mediaList.isNotEmpty) {
+    if (!widget.forcePortrait && widget.mediaList.isNotEmpty) {
       final url = widget.mediaList.first.posterImageUrl;
       final cached = _lookupCached(url);
       if (cached != null) {
@@ -86,8 +88,9 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
   @override
   void didUpdateWidget(MediaHorizontalList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.mediaList.isNotEmpty &&
-        oldWidget.mediaList != widget.mediaList) {
+    if (!widget.forcePortrait &&
+        widget.mediaList.isNotEmpty &&
+        (oldWidget.mediaList != widget.mediaList || oldWidget.forcePortrait)) {
       final url = widget.mediaList.first.posterImageUrl;
       final cached = _lookupCached(url);
       if (cached != null) {
@@ -101,7 +104,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
   }
 
   Future<void> _checkAspectRatio() async {
-    if (widget.mediaList.isEmpty) return;
+    if (widget.forcePortrait || widget.mediaList.isEmpty) return;
     final url = widget.mediaList.first.posterImageUrl;
     if (url.isEmpty) return;
     final isPortrait = await ImageUtils.isImagePortrait(url);
@@ -142,12 +145,13 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
         : localeDirection;
 
     final isDesktop = context.isDesktop;
+    final isPortrait = widget.forcePortrait || _isPortrait;
 
     final double cardWidth = isDesktop
-        ? (_isPortrait ? 200.0 : 300.0)
-        : (_isPortrait ? 130.0 : 200.0);
+        ? (isPortrait ? 200.0 : 300.0)
+        : (isPortrait ? 130.0 : 200.0);
 
-    final double imageHeight = cardWidth / (_isPortrait ? (2 / 3) : (16 / 9));
+    final double imageHeight = cardWidth / (isPortrait ? (2 / 3) : (16 / 9));
     final double listHeight = imageHeight + 40.0;
 
     return Directionality(
@@ -309,7 +313,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                         title: itemTitle,
                         episodeBadge: item.episodeBadge,
                         heroTag: uniqueTag,
-                        isPortrait: _isPortrait,
+                        isPortrait: isPortrait,
                         onTap: () {
                           if (widget.onTap != null) {
                             widget.onTap!(item);

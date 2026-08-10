@@ -378,6 +378,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ).push<void>(context);
           },
           heroTagPrefix: 'home',
+          forcePortrait: _isLatestAddedSectionTitle(entry.key),
         ),
       );
       if (news.isNotEmpty && index == newsAfterIndex) {
