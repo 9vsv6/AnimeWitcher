@@ -36,6 +36,11 @@ class ViewAllScreen extends ConsumerStatefulWidget {
   /// user approaches the bottom, so View All never downloads the full catalog.
   final Future<ProviderMediaPage> Function(int offset)? loadPage;
 
+  /// Forces portrait cards in this View All grid. Used by sections such as
+  /// Latest Added Works so mobile keeps the same compact 3-card row layout
+  /// as the home section instead of switching to two landscape cards.
+  final bool forcePortrait;
+
   const ViewAllScreen({
     super.key,
     required this.title,
@@ -43,6 +48,7 @@ class ViewAllScreen extends ConsumerStatefulWidget {
     required this.category,
     this.onTap,
     this.loadPage,
+    this.forcePortrait = false,
   });
 
   @override
@@ -71,7 +77,9 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
       if (_providerSeen.add(key)) _providerItems.add(item);
     }
 
-    if (widget.initialMediaList.isNotEmpty) {
+    if (widget.forcePortrait) {
+      _isPortrait = true;
+    } else if (widget.initialMediaList.isNotEmpty) {
       _checkAspectRatio();
     }
 
@@ -150,7 +158,7 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
   }
 
   Future<void> _checkAspectRatio() async {
-    if (widget.initialMediaList.isEmpty) return;
+    if (widget.forcePortrait || widget.initialMediaList.isEmpty) return;
     final url = widget.initialMediaList.first.posterImageUrl;
     if (url.isEmpty) return;
     final isPortrait = await ImageUtils.isImagePortrait(url);

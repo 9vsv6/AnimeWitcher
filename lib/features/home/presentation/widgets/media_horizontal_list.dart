@@ -237,6 +237,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                           category: widget.category,
                           onTap: widget.onTap,
                           loadPage: widget.loadViewAllPage,
+                          forcePortrait: widget.forcePortrait,
                         ),
                       ),
                     );
