@@ -46,10 +46,18 @@ import UserNotifications
       name: "dev.akash.skystream/persistent_glass_header",
       binaryMessenger: messenger
     )
+    // With Flutter's UIScene lifecycle, AppDelegate.window can stay nil because
+    // the scene owns the window. Resolve the UIViewController that is actually
+    // displaying this Flutter engine through its plugin registrar instead.
+    // Keep AppDelegate.window only as a legacy fallback.
+    let persistentHeaderRegistrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "SkyStreamPersistentGlassHeaderHost"
+    )
     let persistentHeaderController = ApplePersistentGlassHeaderNativeController(
       channel: persistentHeaderChannel,
       hostViewProvider: { [weak self] in
-        self?.window?.rootViewController?.view
+        persistentHeaderRegistrar?.viewController?.view
+          ?? self?.window?.rootViewController?.view
       }
     )
     persistentGlassHeaderChannel = persistentHeaderChannel
