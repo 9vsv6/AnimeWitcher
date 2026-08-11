@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' as intl;
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/extensions/extension_manager.dart';
@@ -197,7 +197,7 @@ class _StatisticsGrid extends StatelessWidget {
         return _StatisticCard(
           icon: meta.icon,
           label: meta.label,
-          value: NumberFormat.decimalPattern().format(entry.value),
+          value: intl.NumberFormat.decimalPattern().format(entry.value),
         );
       },
     );
