@@ -205,12 +205,6 @@ class PlayerMetadataScrimState extends State<PlayerMetadataScrim>
     _scheduleMetadataVisibility();
   }
 
-  /// Public method so the parent can force-hide the scrim (e.g. on uiReset).
-  void forceHide() {
-    _visibilityToken++;
-    _hideScrim();
-  }
-
   void _showScrim() {
     if (!mounted || _isVisible) return;
     setState(() => _isVisible = true);

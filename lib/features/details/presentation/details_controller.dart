@@ -211,10 +211,6 @@ class DetailsController extends _$DetailsController {
     );
   }
 
-  bool isEpisodeSelected(Episode episode) {
-    return state.selectedEpisodeKeys.contains(episodeSelectionKey(episode));
-  }
-
   void toggleEpisodeSelection(Episode episode) {
     final next = Set<String>.from(state.selectedEpisodeKeys);
     final key = episodeSelectionKey(episode);
@@ -290,10 +286,6 @@ class DetailsController extends _$DetailsController {
         isInitial: false,
       );
     }
-  }
-
-  void setRangeIndex(int index) {
-    state = state.copyWith(selectedRangeIndex: index);
   }
 
   void setDubStatus(DubStatus status) {

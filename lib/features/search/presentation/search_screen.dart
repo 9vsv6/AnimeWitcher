@@ -33,9 +33,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final FocusNode _firstSuggestionFocusNode = FocusNode();
   final FocusNode _firstResultFocusNode = FocusNode();
   final ScrollController _resultsScrollController = ScrollController();
+  ProviderSubscription<int>? _clearRequestSub;
+  ProviderSubscription<int>? _focusRequestSub;
   bool _isLoadingProviderFilters = false;
-  int _lastFocusRequest = 0;
-  int _lastClearRequest = 0;
   int _nativeFocusGeneration = 0;
 
   @override
@@ -43,8 +43,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     super.initState();
     // Restore any previously committed query into the text field.
     _controller.text = ref.read(searchQueryProvider);
-    _lastFocusRequest = ref.read(searchFocusRequestProvider);
-    _lastClearRequest = ref.read(searchClearRequestProvider);
+    _clearRequestSub = ref.listenManual<int>(
+      searchClearRequestProvider,
+      (previous, next) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _controller.clear();
+        });
+      },
+    );
+    _focusRequestSub = ref.listenManual<int>(
+      searchFocusRequestProvider,
+      (previous, next) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _requestSearchFocus();
+          final textLength = _controller.text.length;
+          _controller.selection = TextSelection.collapsed(offset: textLength);
+        });
+      },
+    );
     _controller.addListener(_onTextChanged);
     _resultsScrollController.addListener(_onResultsScroll);
     ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
@@ -135,6 +152,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   void dispose() {
+    _clearRequestSub?.close();
+    _focusRequestSub?.close();
     _controller.removeListener(_onTextChanged);
     _resultsScrollController.removeListener(_onResultsScroll);
     _resultsScrollController.dispose();
@@ -337,26 +356,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final clearRequest = ref.watch(searchClearRequestProvider);
-    if (clearRequest != _lastClearRequest) {
-      _lastClearRequest = clearRequest;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _controller.clear();
-      });
-    }
-
-    final focusRequest = ref.watch(searchFocusRequestProvider);
-    if (focusRequest != _lastFocusRequest) {
-      _lastFocusRequest = focusRequest;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _requestSearchFocus();
-        final textLength = _controller.text.length;
-        _controller.selection = TextSelection.collapsed(offset: textLength);
-      });
-    }
-
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/navigation/taskbar_destination.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
@@ -10,7 +9,6 @@ import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
-import 'controllers/view_all_controller.dart';
 
 enum ViewAllCategory {
   popularMovies,
@@ -26,7 +24,7 @@ enum ViewAllCategory {
   providerContent,
 }
 
-class ViewAllScreen extends ConsumerStatefulWidget {
+class ViewAllScreen extends StatefulWidget {
   final String title;
   final List<MultimediaItem> initialMediaList;
   final ViewAllCategory category;
@@ -52,10 +50,10 @@ class ViewAllScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<ViewAllScreen> createState() => _ViewAllScreenState();
+  State<ViewAllScreen> createState() => _ViewAllScreenState();
 }
 
-class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
+class _ViewAllScreenState extends State<ViewAllScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<MultimediaItem> _providerItems = <MultimediaItem>[];
   final Set<String> _providerSeen = <String>{};
@@ -70,7 +68,9 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
+    if (_isProvider) {
+      _scrollController.addListener(_onScroll);
+    }
 
     for (final item in widget.initialMediaList) {
       final key = _itemKey(item);
@@ -83,19 +83,13 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
       _checkAspectRatio();
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_isProvider) {
+    if (_isProvider) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         _providerHasMore = widget.loadPage != null;
         if (_providerHasMore) _loadNextProviderPage();
-        return;
-      }
-
-      final controller = ref.read(
-        viewAllControllerProvider(widget.category).notifier,
-      );
-      controller.init(widget.initialMediaList);
-      _checkInitialFill();
-    });
+      });
+    }
   }
 
   String _itemKey(MultimediaItem item) {
@@ -167,68 +161,28 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
     }
   }
 
-  void _checkInitialFill() {
-    if (!context.mounted || _isProvider) return;
-    if (_scrollController.hasClients &&
-        _scrollController.position.maxScrollExtent <= 0) {
-      final state = ref.read(viewAllControllerProvider(widget.category));
-      if (state.hasMore && !state.isLoading) {
-        ref
-            .read(viewAllControllerProvider(widget.category).notifier)
-            .fetchNextPage()
-            .then((_) {
-              if (context.mounted) {
-                WidgetsBinding.instance.addPostFrameCallback(
-                  (_) => _checkInitialFill(),
-                );
-              }
-            });
-      }
-    }
-  }
-
   void _onScroll() {
-    if (!_scrollController.hasClients) return;
+    if (!_isProvider || !_scrollController.hasClients) return;
     if (_scrollController.position.pixels <
         _scrollController.position.maxScrollExtent - 500) {
       return;
     }
-
-    if (_isProvider) {
-      _loadNextProviderPage();
-    } else {
-      ref
-          .read(viewAllControllerProvider(widget.category).notifier)
-          .fetchNextPage();
-    }
+    _loadNextProviderPage();
   }
 
   @override
   void dispose() {
-    _scrollController
-      ..removeListener(_onScroll)
-      ..dispose();
+    if (_isProvider) {
+      _scrollController.removeListener(_onScroll);
+    }
+    _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final ViewAllState? controllerState = _isProvider
-        ? null
-        : ref.watch(viewAllControllerProvider(widget.category));
-
-    if (!_isProvider) {
-      ref.listen(viewAllControllerProvider(widget.category), (previous, next) {
-        if (next.items.isEmpty && !next.isLoading && next.page == 1) {
-          _checkInitialFill();
-        }
-      });
-    }
-
-    final items = _isProvider ? _providerItems : controllerState!.items;
-    final isLoading = _isProvider
-        ? _providerLoading
-        : controllerState!.isLoading;
+    final items = _isProvider ? _providerItems : widget.initialMediaList;
+    final isLoading = _isProvider && _providerLoading;
 
     final isDesktop = context.isDesktop;
     final maxExtent = isDesktop

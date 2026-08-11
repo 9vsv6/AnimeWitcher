@@ -51,12 +51,6 @@ class Library extends _$Library {
     refresh();
   }
 
-  Future<void> moveItem(String url, LibraryCategory category) async {
-    final repository = ref.read(libraryRepositoryProvider);
-    await repository.moveToCategory(url, category);
-    refresh();
-  }
-
   Future<void> clearItemCategory(String url) async {
     final repository = ref.read(libraryRepositoryProvider);
     await repository.clearCategory(url);
@@ -69,17 +63,6 @@ class Library extends _$Library {
     refresh();
   }
 
-  Future<void> removeItem(String url) async {
-    final repository = ref.read(libraryRepositoryProvider);
-    await repository.removeFromLibrary(url);
-    refresh();
-  }
-
-  bool isBookmarked(String url) {
-    final repository = ref.read(libraryRepositoryProvider);
-    return repository.isInLibrary(url);
-  }
-
   bool isFavorite(String url) {
     final repository = ref.read(libraryRepositoryProvider);
     return repository.isFavorite(url);
@@ -90,7 +73,4 @@ class Library extends _$Library {
     return repository.getItemCategory(url);
   }
 
-  Future<void> clearAll() async {
-    // repository.clearAll() if it exists
-  }
 }

@@ -746,12 +746,6 @@ class DownloadService {
     return null;
   }
 
-  // Check if battery optimizations are ignored
-  Future<bool> isIgnoringBatteryOptimizations() async {
-    if (!Platform.isAndroid) return true;
-    return await Permission.ignoreBatteryOptimizations.isGranted;
-  }
-
   // Request user to disable battery optimizations for persistent downloads
   Future<void> requestIgnoreBatteryOptimizations() async {
     if (!Platform.isAndroid) return;

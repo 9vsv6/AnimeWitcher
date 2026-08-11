@@ -446,7 +446,6 @@ class PlayerController extends Notifier<PlayerState> {
   static const double _saveThresholdPercent = 0.05; // 5% of video
 
   // Subscriptions to prevent leaks
-  StreamSubscription<dynamic>? _videoParamsSub;
   StreamSubscription<dynamic>? _errorSub;
   StreamSubscription<dynamic>? _playingSub;
   StreamSubscription<dynamic>? _positionSub;
@@ -745,7 +744,6 @@ class PlayerController extends Notifier<PlayerState> {
     // disposeController() being called, clean up subscriptions.
     ref.onDispose(() {
       _stallTimer?.cancel();
-      _videoParamsSub?.cancel();
       _errorSub?.cancel();
       _playingSub?.cancel();
       _positionSub?.cancel();
@@ -868,7 +866,6 @@ class PlayerController extends Notifier<PlayerState> {
 
     _setupEventDrivenProgressSaving();
     _setupErrorListener();
-    _setupVideoParamsListener();
     _setupDurationListener();
     _setupBufferingMonitor();
     _setupRateListener();
@@ -1386,15 +1383,6 @@ class PlayerController extends Notifier<PlayerState> {
     });
   }
 
-  void _setupVideoParamsListener() {
-    // Intentionally empty: videoParams fires as soon as the container is parsed,
-    // before any frames are rendered or position advances. Using it as a
-    // confirmation trigger caused premature overlay dismissal → flickering retries.
-    // Confirmation is handled solely by position > 0 (positionSub) and the
-    // video_view position listener, which are reliable indicators of real playback.
-    _videoParamsSub = _player.stream.videoParams.listen((_) {});
-  }
-
   void _setupBufferingMonitor() {
     _bufferingSub?.cancel();
     _bufferingSub = _player.stream.buffering.listen((isBuffering) {
@@ -1710,7 +1698,7 @@ class PlayerController extends Notifier<PlayerState> {
         // Do NOT call _confirmPlaybackStarted() here — media_kit fires
         // playing=true as soon as open() is called, before any frames arrive.
         // Confirmation happens in _positionSub (position > 0) and
-        // _setupVideoParamsListener (video dimensions received).
+        // Real playback confirmation comes from position/frame signals.
       }
     });
 
@@ -2982,10 +2970,6 @@ class PlayerController extends Notifier<PlayerState> {
     state = state.copyWith(showNextEpisodeOverlay: false);
   }
 
-  void toggleEpisodeList() {
-    state = state.copyWith(showEpisodeList: !state.showEpisodeList);
-  }
-
   void openEpisodeList() {
     state = state.copyWith(showEpisodeList: true);
   }
@@ -3203,7 +3187,6 @@ class PlayerController extends Notifier<PlayerState> {
     _stallRecoveryGuardTimer?.cancel();
     _stallRecoveryGuardTimer = null;
 
-    _videoParamsSub?.cancel();
     _errorSub?.cancel();
     _playingSub?.cancel();
     _positionSub?.cancel();

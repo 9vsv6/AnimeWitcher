@@ -604,20 +604,6 @@ class StorageService {
         true;
   }
 
-  // --- Extension Persistence ---
-
-  Future<void> setExtensionData(String key, String? value) async {
-    if (value == null) {
-      await _extensionsBox.delete(key);
-    } else {
-      await _extensionsBox.put(key, value);
-    }
-  }
-
-  String? getExtensionData(String key) {
-    return _extensionsBox.get(key) as String?;
-  }
-
   // --- Custom Plugin Overrides ---
 
   Future<void> setCustomBaseUrl(String packageName, String? url) async {

@@ -522,61 +522,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     state = AsyncData(syncedSettings);
   }
 
-  Future<void> resetSubtitleAppearanceSettings() async {
-    final current = state.requireValue;
-    final newState = current.copyWith(
-      subFixedTextSize: () => null,
-      subTypeface: () => null,
-      subTypefaceFilePath: () => null,
-      subEdgeType: 1,
-      subEdgeSize: () => null,
-      subBackgroundRadius: () => null,
-      subElevation: 20,
-      subRemoveBloat: true,
-      subRemoveCaptions: false,
-      subUpperCase: false,
-      subBold: false,
-      subItalic: false,
-      subForegroundColor: 0xFFFFFFFF,
-      subBackgroundColor: 0x00000000,
-      subEdgeColor: 0xFF000000,
-      subBackgroundOpacity: 0.5,
-      subAlignment: () => null,
-      // Reset legacy settings as well
-      subtitleSize: 22.0,
-      subtitleColor: 0xFFFFFFFF,
-      subtitleBackgroundColor: 0x00000000,
-      subtitleBackgroundOpacity: 0.5,
-    );
-
-    final storage = _repository;
-    await storage.setPlayerSetting('player_sub_fixed_text_size', null);
-    await storage.setPlayerSetting('player_sub_typeface', null);
-    await storage.setPlayerSetting('player_sub_typeface_file_path', null);
-    await storage.setPlayerSetting('player_sub_edge_type', 1);
-    await storage.setPlayerSetting('player_sub_edge_size', null);
-    await storage.setPlayerSetting('player_sub_bg_radius', null);
-    await storage.setPlayerSetting('player_sub_elevation', 20);
-    await storage.setPlayerSetting('player_sub_remove_bloat', true);
-    await storage.setPlayerSetting('player_sub_remove_captions', false);
-    await storage.setPlayerSetting('player_sub_uppercase', false);
-    await storage.setPlayerSetting('player_sub_bold', false);
-    await storage.setPlayerSetting('player_sub_italic', false);
-    await storage.setPlayerSetting('player_sub_foreground_color', 0xFFFFFFFF);
-    await storage.setPlayerSetting('player_sub_background_color', 0x00000000);
-    await storage.setPlayerSetting('player_sub_edge_color', 0xFF000000);
-    await storage.setPlayerSetting('player_sub_background_opacity', 0.5);
-    await storage.setPlayerSetting('player_sub_alignment', null);
-
-    // Reset legacy keys in storage too
-    await storage.setPlayerSetting('player_sub_size', 22.0);
-    await storage.setPlayerSetting('player_sub_color', 0xFFFFFFFF);
-    await storage.setPlayerSetting('player_sub_bg', 0x00000000);
-    await storage.setPlayerSetting('player_sub_bg_opacity', 0.5);
-
-    state = AsyncData(newState);
-  }
-
   Future<void> setLeftGesture(PlayerGesture g) async {
     await _repository.setPlayerSetting('player_gesture_left', g.name);
     state = AsyncData(state.requireValue.copyWith(leftGesture: g));
@@ -675,37 +620,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setReadaheadSeconds(int seconds) async {
     await _repository.setPlayerSetting('player_readahead', seconds);
     state = AsyncData(state.requireValue.copyWith(readaheadSeconds: seconds));
-  }
-
-  Future<void> setSubtitlePosition(double pos) async {
-    await _repository.setPlayerSetting('player_sub_pos', pos);
-    state = AsyncData(state.requireValue.copyWith(subtitlePosition: pos));
-  }
-
-  Future<void> setSubtitleBackgroundOpacity(double val) async {
-    await _repository.setPlayerSetting('player_sub_bg_opacity', val);
-    state = AsyncData(
-      state.requireValue.copyWith(subtitleBackgroundOpacity: val),
-    );
-  }
-
-  Future<void> resetSubtitleSettings() async {
-    final current = state.requireValue;
-    final newState = current.copyWith(
-      subtitleSize: 22.0,
-      subtitleColor: 0xFFFFFFFF,
-      subtitleBackgroundColor: 0x00000000,
-      subtitleBackgroundOpacity: 0.5,
-      subtitlePosition: 100.0,
-    );
-
-    await _repository.setPlayerSetting('player_sub_size', 22.0);
-    await _repository.setPlayerSetting('player_sub_color', 0xFFFFFFFF);
-    await _repository.setPlayerSetting('player_sub_bg', 0x00000000);
-    await _repository.setPlayerSetting('player_sub_bg_opacity', 0.5);
-    await _repository.setPlayerSetting('player_sub_pos', 100.0);
-
-    state = AsyncData(newState);
   }
 
   Future<void> setShowRemainingTime(bool val) async {

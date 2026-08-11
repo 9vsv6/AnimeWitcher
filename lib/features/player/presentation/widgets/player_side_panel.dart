@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:ui' show ImageFilter, FontFeature;
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
@@ -10,7 +10,6 @@ import '../../../../core/storage/history_repository.dart';
 import '../player_controller.dart';
 import '../../../details/presentation/playback_launcher.dart';
 import 'hotstar_player_style.dart';
-import 'player_utils.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
 import 'package:skystream/core/utils/episode_label.dart';

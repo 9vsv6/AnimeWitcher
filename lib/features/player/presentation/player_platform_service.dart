@@ -16,14 +16,6 @@ class PlayerPlatformService {
     }
   }
 
-  void syncPipState(bool isPlaying) {
-    if (Platform.isAndroid) {
-      const MethodChannel(
-        'dev.akash.skystream.player/pip',
-      ).invokeMethod('setPipState', {'isPlaying': isPlaying});
-    }
-  }
-
   void toggleOrientation(BuildContext context) {
     final orientation = MediaQuery.of(context).orientation;
     if (orientation == Orientation.landscape) {
