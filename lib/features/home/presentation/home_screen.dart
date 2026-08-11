@@ -437,7 +437,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       HomeError(:final message) => _buildErrorState(context, message, ref),
       HomeSuccess(:final data, :final news) => _withGradientEdgeHint(
         RefreshIndicator(
-          onRefresh: () async => ref.read(homeDataProvider.notifier).fetch(),
+          onRefresh: () async {
+            ref.read(watchHistoryProvider.notifier).refresh();
+            await ref.read(homeDataProvider.notifier).fetch();
+          },
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [

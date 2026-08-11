@@ -19,6 +19,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
   late Future<_SeasonsBootstrap> _bootstrapFuture;
   late final PageController _pageController;
   int _selectedTab = 1;
+  int _reloadGeneration = 0;
 
   @override
   void initState() {
@@ -63,6 +64,15 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
       config: config,
       allSeasons: allSeasons,
     );
+  }
+
+  Future<void> _refreshSeasons() async {
+    final future = _loadBootstrap();
+    setState(() {
+      _reloadGeneration++;
+      _bootstrapFuture = future;
+    });
+    await future;
   }
 
   bool _isArabic(BuildContext context) =>
@@ -137,8 +147,10 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
                       setState(() => _selectedTab = value);
                     }
                   },
-                  itemBuilder: (context, index) =>
-                      _tabBody(data, isArabic, index),
+                  itemBuilder: (context, index) => RefreshIndicator(
+                    onRefresh: _refreshSeasons,
+                    child: _tabBody(data, isArabic, index),
+                  ),
                 ),
               ),
             ],
@@ -152,7 +164,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
     switch (index) {
       case 0:
         return _SeasonGrid(
-          key: ValueKey('past-${data.config.past}'),
+          key: ValueKey('past-${data.config.past}-$_reloadGeneration'),
           provider: data.provider,
           season: data.config.past,
           emptyLabel: isArabic
@@ -161,7 +173,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
         );
       case 1:
         return _SeasonGrid(
-          key: ValueKey('current-${data.config.current}'),
+          key: ValueKey('current-${data.config.current}-$_reloadGeneration'),
           provider: data.provider,
           season: data.config.current,
           emptyLabel: isArabic
@@ -170,7 +182,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
         );
       case 2:
         return _SeasonGrid(
-          key: ValueKey('next-${data.config.next}'),
+          key: ValueKey('next-${data.config.next}-$_reloadGeneration'),
           provider: data.provider,
           season: data.config.next,
           emptyLabel: isArabic
@@ -179,6 +191,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
         );
       default:
         return _OtherSeasonsList(
+          key: ValueKey('other-seasons-$_reloadGeneration'),
           provider: data.provider,
           allSeasons: data.allSeasons,
           isArabic: isArabic,
@@ -275,6 +288,7 @@ class _OtherSeasonsList extends StatelessWidget {
   final bool isArabic;
 
   const _OtherSeasonsList({
+    super.key,
     required this.provider,
     required this.allSeasons,
     required this.isArabic,
@@ -317,6 +331,7 @@ class _OtherSeasonsList extends StatelessWidget {
 
     return ListView.separated(
       key: const PageStorageKey<String>('other-seasons'),
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 110),
       itemCount: years.length,
       separatorBuilder: (_, _) => Divider(
@@ -561,13 +576,29 @@ class _SeasonGridState extends State<_SeasonGrid>
   Widget build(BuildContext context) {
     super.build(context);
     if (_items.isEmpty && _loading) {
-      return const Center(child: CircularProgressIndicator());
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 180),
+          Center(child: CircularProgressIndicator()),
+        ],
+      );
     }
     if (_items.isEmpty && _error != null) {
-      return _LoadError(message: widget.emptyLabel, onRetry: _loadNext);
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(top: 120),
+        children: [
+          _LoadError(message: widget.emptyLabel, onRetry: _loadNext),
+        ],
+      );
     }
     if (_items.isEmpty) {
-      return Center(child: Text(widget.emptyLabel));
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(top: 120),
+        children: [Center(child: Text(widget.emptyLabel))],
+      );
     }
 
     final isDesktop = MediaQuery.sizeOf(context).width >= 900;

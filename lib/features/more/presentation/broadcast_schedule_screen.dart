@@ -79,6 +79,12 @@ class _BroadcastScheduleScreenState
     return provider.getBroadcastSchedule();
   }
 
+  Future<void> _refreshSchedule() async {
+    final future = _loadSchedule();
+    setState(() => _scheduleFuture = future);
+    await future;
+  }
+
   bool _isArabic(BuildContext context) =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
@@ -175,16 +181,23 @@ class _BroadcastScheduleScreenState
                     final day = animeWitcherBroadcastDays[index];
                     final items =
                         schedule[day] ?? const <MultimediaItem>[];
-                    if (items.isEmpty) {
-                      return Center(
-                        child: Text(
-                          isArabic
-                              ? 'لا يوجد بث مجدول لهذا اليوم'
-                              : 'No broadcasts scheduled for this day',
-                        ),
-                      );
-                    }
-                    return _ScheduleGrid(items: items, day: day);
+                    return RefreshIndicator(
+                      onRefresh: _refreshSchedule,
+                      child: items.isEmpty
+                          ? ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(24, 120, 24, 110),
+                              children: [
+                                Text(
+                                  isArabic
+                                      ? 'لا يوجد بث مجدول لهذا اليوم'
+                                      : 'No broadcasts scheduled for this day',
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            )
+                          : _ScheduleGrid(items: items, day: day),
+                    );
                   },
                 ),
               ),
@@ -272,6 +285,7 @@ class _ScheduleGrid extends StatelessWidget {
     final isDesktop = MediaQuery.sizeOf(context).width >= 900;
     return GridView.builder(
       key: PageStorageKey<String>('broadcast-$day'),
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: isDesktop ? 240 : 150,
