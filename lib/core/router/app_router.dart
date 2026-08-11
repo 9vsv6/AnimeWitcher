@@ -1,41 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:go_router/go_router.dart';
-import 'package:skystream/features/home/presentation/home_screen.dart';
-import 'package:skystream/features/search/presentation/search_screen.dart';
-import 'package:skystream/features/library/presentation/library_screen.dart';
-import 'package:skystream/features/library/presentation/downloads_screen.dart';
-import 'package:skystream/features/more/presentation/more_screen.dart';
-import '../../features/details/presentation/details_screen.dart';
-import '../../features/home/presentation/view_all_screen.dart';
-import '../../features/player/presentation/player_screen.dart';
-import '../domain/entity/multimedia_item.dart';
-import '../navigation/taskbar_destination.dart';
-import '../extensions/base_provider.dart';
-import 'package:skystream/shared/widgets/app_scaffold.dart';
-import '../../core/storage/settings_repository.dart';
 import 'package:flutter/foundation.dart';
+import '../../features/home/presentation/home_screen.dart';
+import '../../features/search/presentation/search_screen.dart';
+import '../../features/library/presentation/library_screen.dart';
+import '../../features/downloads/presentation/downloads_screen.dart';
+import '../../features/more/presentation/more_screen.dart';
+import '../../features/details/presentation/details_screen.dart';
+import '../../features/player/presentation/player_screen.dart';
+import '../../features/home/presentation/view_all_screen.dart';
+import '../domain/entity/multimedia_item.dart';
+import '../../features/home/presentation/home_provider.dart';
+import '../../shared/widgets/app_scaffold.dart';
+import '../settings/settings_repository.dart';
 
 part 'app_router.g.dart';
 
-// --- Route Data Classes ---
-
 @TypedStatefulShellRoute<AppShellRouteData>(
-  branches: [
+  branches: <TypedStatefulShellBranch<StatefulShellBranchData>>[
     TypedStatefulShellBranch<HomeBranchData>(
-      routes: [TypedGoRoute<HomeRoute>(path: '/home')],
+      routes: <TypedRoute<RouteData>>[TypedGoRoute<HomeRoute>(path: '/home')],
     ),
     TypedStatefulShellBranch<SearchBranchData>(
-      routes: [TypedGoRoute<SearchRoute>(path: '/search')],
+      routes: <TypedRoute<RouteData>>[TypedGoRoute<SearchRoute>(path: '/search')],
     ),
     TypedStatefulShellBranch<LibraryBranchData>(
-      routes: [TypedGoRoute<LibraryRoute>(path: '/library')],
+      routes: <TypedRoute<RouteData>>[
+        TypedGoRoute<LibraryRoute>(path: '/library'),
+      ],
     ),
     TypedStatefulShellBranch<DownloadsBranchData>(
-      routes: [TypedGoRoute<DownloadsRoute>(path: '/downloads')],
+      routes: <TypedRoute<RouteData>>[
+        TypedGoRoute<DownloadsRoute>(path: '/downloads'),
+      ],
     ),
     TypedStatefulShellBranch<SettingsBranchData>(
-      routes: [
+      routes: <TypedRoute<RouteData>>[
         TypedGoRoute<SettingsRoute>(path: '/settings'),
       ],
     ),
@@ -43,6 +44,8 @@ part 'app_router.g.dart';
 )
 class AppShellRouteData extends StatefulShellRouteData {
   const AppShellRouteData();
+
+  static final GlobalKey<NavigatorState> $navigatorKey = rootNavigatorKey;
 
   @override
   Widget builder(
@@ -74,7 +77,6 @@ class SearchRoute extends GoRouteData with $SearchRoute {
   Widget build(BuildContext context, GoRouterState state) =>
       const SearchScreen();
 }
-
 
 class LibraryBranchData extends StatefulShellBranchData {
   const LibraryBranchData();
@@ -109,13 +111,22 @@ class SettingsRoute extends GoRouteData with $SettingsRoute {
       const MoreScreen();
 }
 
-
 // --- Typed Extras ---
 
 class DetailsRouteExtra {
-  const DetailsRouteExtra({required this.item, this.autoPlay = false});
+  const DetailsRouteExtra({
+    required this.item,
+    this.autoPlay = false,
+    this.resumeEpisodeUrl,
+    this.resumeEpisodeNumber,
+    this.resumeSeason,
+  });
+
   final MultimediaItem item;
   final bool autoPlay;
+  final String? resumeEpisodeUrl;
+  final int? resumeEpisodeNumber;
+  final int? resumeSeason;
 }
 
 class PlayerRouteExtra {
@@ -153,10 +164,15 @@ class DetailsRoute extends GoRouteData with $DetailsRoute {
 
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    return DetailsScreen(item: $extra.item, autoPlay: $extra.autoPlay);
+    return DetailsScreen(
+      item: $extra.item,
+      autoPlay: $extra.autoPlay,
+      resumeEpisodeUrl: $extra.resumeEpisodeUrl,
+      resumeEpisodeNumber: $extra.resumeEpisodeNumber,
+      resumeSeason: $extra.resumeSeason,
+    );
   }
 }
-
 
 @TypedGoRoute<ViewAllRoute>(path: '/view-all')
 class ViewAllRoute extends GoRouteData with $ViewAllRoute {
