@@ -30,6 +30,55 @@ const List<String> animeWitcherBroadcastDays = <String>[
   'الجمعة',
 ];
 
+enum AnimeWitcherGlobalRanking { all, continuing, movies, series, ova, ona }
+
+extension AnimeWitcherGlobalRankingInfo on AnimeWitcherGlobalRanking {
+  String get queryType => switch (this) {
+        AnimeWitcherGlobalRanking.all => 'all_ranking_mal',
+        AnimeWitcherGlobalRanking.continuing => 'continuing_ranking_mal',
+        AnimeWitcherGlobalRanking.movies => 'movies_ranking_mal',
+        AnimeWitcherGlobalRanking.series => 'series_ranking_mal',
+        AnimeWitcherGlobalRanking.ova => 'ova_ranking_mal',
+        AnimeWitcherGlobalRanking.ona => 'ona_ranking_mal',
+      };
+
+  String get arabicTitle => switch (this) {
+        AnimeWitcherGlobalRanking.all => 'أفضل الأنميات',
+        AnimeWitcherGlobalRanking.continuing => 'أفضل الأنميات المستمرة',
+        AnimeWitcherGlobalRanking.movies => 'أفضل الأفلام',
+        AnimeWitcherGlobalRanking.series => 'أفضل المسلسلات',
+        AnimeWitcherGlobalRanking.ova => 'أفضل الاوفا',
+        AnimeWitcherGlobalRanking.ona => 'أفضل الاونا',
+      };
+
+  String get englishTitle => switch (this) {
+        AnimeWitcherGlobalRanking.all => 'Top anime',
+        AnimeWitcherGlobalRanking.continuing => 'Top ongoing anime',
+        AnimeWitcherGlobalRanking.movies => 'Top movies',
+        AnimeWitcherGlobalRanking.series => 'Top series',
+        AnimeWitcherGlobalRanking.ova => 'Top OVA',
+        AnimeWitcherGlobalRanking.ona => 'Top ONA',
+      };
+
+  String? get filterField => switch (this) {
+        AnimeWitcherGlobalRanking.all => null,
+        AnimeWitcherGlobalRanking.continuing => 'details.state',
+        AnimeWitcherGlobalRanking.movies => 'type',
+        AnimeWitcherGlobalRanking.series => 'type',
+        AnimeWitcherGlobalRanking.ova => 'type',
+        AnimeWitcherGlobalRanking.ona => 'type',
+      };
+
+  String? get filterValue => switch (this) {
+        AnimeWitcherGlobalRanking.all => null,
+        AnimeWitcherGlobalRanking.continuing => 'مستمر',
+        AnimeWitcherGlobalRanking.movies => 'فيلم',
+        AnimeWitcherGlobalRanking.series => 'مسلسل',
+        AnimeWitcherGlobalRanking.ova => 'اوفا',
+        AnimeWitcherGlobalRanking.ona => 'اونا',
+      };
+}
+
 /// Native AnimeWitcher implementation used during the JS-to-native migration.
 ///
 /// It mirrors the current plugin's Firestore/Algolia metadata, independent
@@ -1473,47 +1522,50 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     );
   }
 
-  Future<Map<String, dynamic>> getGlobalStatistics() async {
-    final statisticsPayload = await _getJson(_firestoreUrl('Settings/statistics'));
-    final viewsPayload = await _getJson(_firestoreUrl('Settings/views5'));
+  Future<List<MultimediaItem>> getGlobalRanking(
+    AnimeWitcherGlobalRanking ranking, {
+    int limit = 100,
+  }) async {
+    // AnimeWitcher v1.4.6 AnimeRankingActivity creates one AnimeListFragment
+    // per ranking query type. AnimeListFragment.getQuery reads anime_list,
+    // applies the category filter below, and orders every ranking by MAL rank
+    // ascending (rank 1 first). Keep that request shape here instead of using
+    // Settings/statistics, which contains unrelated global counters.
+    final filterField = ranking.filterField;
+    final filterValue = ranking.filterValue;
+    final structuredQuery = <String, dynamic>{
+      'from': const <Map<String, dynamic>>[
+        <String, dynamic>{'collectionId': 'anime_list'},
+      ],
+      if (filterField != null && filterValue != null)
+        'where': <String, dynamic>{
+          'fieldFilter': <String, dynamic>{
+            'field': <String, dynamic>{'fieldPath': filterField},
+            'op': 'EQUAL',
+            'value': <String, dynamic>{'stringValue': filterValue},
+          },
+        },
+      'orderBy': const <Map<String, dynamic>>[
+        <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': 'details.mal_rank'},
+          'direction': 'ASCENDING',
+        },
+      ],
+      'limit': limit.clamp(1, 100),
+    };
 
-    final output = <String, dynamic>{};
-    if (statisticsPayload != null) {
-      output.addAll(_firestoreFields(statisticsPayload['fields']));
+    final raw = await _postAny(
+      _firestoreRunQueryUrl(),
+      <String, dynamic>{'structuredQuery': structuredQuery},
+    );
+    final hits = <Map<String, dynamic>>[];
+    for (final rowRaw in _list(raw)) {
+      final document = _map(_map(rowRaw)['document']);
+      if (document.isEmpty) continue;
+      final hit = _firestoreDocumentHit(document);
+      if (hit.isNotEmpty) hits.add(hit);
     }
-    if (viewsPayload != null) {
-      final views = _firestoreFields(viewsPayload['fields']);
-      for (final entry in views.entries) {
-        output.putIfAbsent(entry.key, () => entry.value);
-      }
-    }
-
-    // AnimeWitcher also keeps the sharded global view counter below views5.
-    // Use it only as a fallback when the aggregate document does not expose
-    // a usable views value.
-    final currentViews = output['views'];
-    final hasViews = currentViews is num && currentViews > 0 ||
-        currentViews is String && (num.tryParse(currentViews) ?? 0) > 0;
-    if (!hasViews) {
-      final shardsPayload = await _getJson(
-        '${_firestoreUrl('Settings/views5/shards')}?pageSize=100',
-      );
-      num shardTotal = 0;
-      if (shardsPayload != null) {
-        for (final rawDocument in _list(shardsPayload['documents'])) {
-          final document = _map(rawDocument);
-          final fields = _firestoreFields(document['fields']);
-          final raw = fields['views'];
-          if (raw is num) {
-            shardTotal += raw;
-          } else {
-            shardTotal += num.tryParse(_text(raw)) ?? 0;
-          }
-        }
-      }
-      if (shardTotal > 0) output['views'] = shardTotal;
-    }
-    return output;
+    return _dedupeHitsWithAniListPosters(hits);
   }
 
 

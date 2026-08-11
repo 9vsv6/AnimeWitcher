@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart' as intl;
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 
+import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/providers/animewitcher_native_provider.dart';
+import '../../../shared/widgets/multimedia_card.dart';
+import '../../details/presentation/details_screen.dart';
 
 class GlobalStatisticsScreen extends ConsumerStatefulWidget {
   const GlobalStatisticsScreen({super.key});
@@ -16,12 +18,21 @@ class GlobalStatisticsScreen extends ConsumerStatefulWidget {
 
 class _GlobalStatisticsScreenState
     extends ConsumerState<GlobalStatisticsScreen> {
-  late Future<Map<String, dynamic>> _future;
+  late final PageController _pageController;
+  final Map<AnimeWitcherGlobalRanking, Future<List<MultimediaItem>>> _loads =
+      <AnimeWitcherGlobalRanking, Future<List<MultimediaItem>>>{};
+  int _selectedRanking = 0;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   AnimeWitcherNativeProvider? _provider() {
@@ -33,18 +44,40 @@ class _GlobalStatisticsScreenState
     return null;
   }
 
-  Future<Map<String, dynamic>> _load() async {
+  Future<List<MultimediaItem>> _load(AnimeWitcherGlobalRanking ranking) {
     final provider = _provider();
     if (provider == null) {
-      throw StateError('AnimeWitcher Native provider is unavailable');
+      return Future<List<MultimediaItem>>.error(
+        StateError('AnimeWitcher Native provider is unavailable'),
+      );
     }
-    return provider.getGlobalStatistics();
+    return provider.getGlobalRanking(ranking);
   }
 
-  Future<void> _refresh() async {
-    final next = _load();
-    setState(() => _future = next);
+  Future<List<MultimediaItem>> _futureFor(
+    AnimeWitcherGlobalRanking ranking,
+  ) {
+    return _loads.putIfAbsent(ranking, () => _load(ranking));
+  }
+
+  Future<void> _refresh(AnimeWitcherGlobalRanking ranking) async {
+    final next = _load(ranking);
+    setState(() => _loads[ranking] = next);
     await next;
+  }
+
+  void _selectRanking(int value) {
+    if (value < 0 ||
+        value >= AnimeWitcherGlobalRanking.values.length ||
+        value == _selectedRanking) {
+      return;
+    }
+    setState(() => _selectedRanking = value);
+    _pageController.animateToPage(
+      value,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   bool _isArabic(BuildContext context) =>
@@ -66,9 +99,11 @@ class _GlobalStatisticsScreenState
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
               child: Align(
-                alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                alignment:
+                    isArabic ? Alignment.centerRight : Alignment.centerLeft,
                 child: Directionality(
-                  textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  textDirection:
+                      isArabic ? TextDirection.rtl : TextDirection.ltr,
                   child: Text(
                     isArabic ? 'الإحصائيات العالمية' : 'Global statistics',
                   ),
@@ -84,218 +119,180 @@ class _GlobalStatisticsScreenState
           ),
         ),
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _StatisticsError(isArabic: isArabic, onRetry: _refresh);
-          }
-          final counters = _flattenCounters(snapshot.data ?? const {});
-          if (counters.isEmpty) {
-            return Center(
-              child: Text(
-                isArabic
-                    ? 'لا توجد إحصائيات متاحة حاليًا'
-                    : 'No statistics are available right now',
+      body: Column(
+        children: [
+          _RankingTabs(
+            selectedIndex: _selectedRanking,
+            isArabic: isArabic,
+            onSelected: _selectRanking,
+          ),
+          Divider(height: 1, color: Theme.of(context).dividerColor),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: AnimeWitcherGlobalRanking.values.length,
+              onPageChanged: (value) {
+                if (value != _selectedRanking) {
+                  setState(() => _selectedRanking = value);
+                }
+              },
+              itemBuilder: (context, index) {
+                final ranking = AnimeWitcherGlobalRanking.values[index];
+                return FutureBuilder<List<MultimediaItem>>(
+                  future: _futureFor(ranking),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return _RankingError(
+                        isArabic: isArabic,
+                        onRetry: () => _refresh(ranking),
+                      );
+                    }
+                    final items = snapshot.data ?? const <MultimediaItem>[];
+                    if (items.isEmpty) {
+                      return RefreshIndicator(
+                        onRefresh: () => _refresh(ranking),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            SizedBox(
+                              height: MediaQuery.sizeOf(context).height * 0.55,
+                              child: Center(
+                                child: Text(
+                                  isArabic
+                                      ? 'لا توجد نتائج في هذا التصنيف حاليًا'
+                                      : 'No results in this ranking right now',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return _RankingGrid(
+                      items: items,
+                      ranking: ranking,
+                      onRefresh: () => _refresh(ranking),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RankingTabs extends StatelessWidget {
+  const _RankingTabs({
+    required this.selectedIndex,
+    required this.isArabic,
+    required this.onSelected,
+  });
+
+  final int selectedIndex;
+  final bool isArabic;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final rankings = AnimeWitcherGlobalRanking.values;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        children: [
+          for (var i = 0; i < rankings.length; i++) ...[
+            Material(
+              color: selectedIndex == i
+                  ? colors.primary
+                  : colors.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(24),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => onSelected(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 11,
+                  ),
+                  child: Text(
+                    isArabic
+                        ? rankings[i].arabicTitle
+                        : rankings[i].englishTitle,
+                    style: TextStyle(
+                      color: selectedIndex == i
+                          ? colors.onPrimary
+                          : colors.onSurface,
+                      fontWeight: selectedIndex == i
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
               ),
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: _StatisticsGrid(counters: counters, isArabic: isArabic),
+            ),
+            if (i != rankings.length - 1) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RankingGrid extends StatelessWidget {
+  const _RankingGrid({
+    required this.items,
+    required this.ranking,
+    required this.onRefresh,
+  });
+
+  final List<MultimediaItem> items;
+  final AnimeWitcherGlobalRanking ranking;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: GridView.builder(
+        key: PageStorageKey<String>('global-ranking-${ranking.queryType}'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: isDesktop ? 240 : 150,
+          childAspectRatio: isDesktop ? 0.58 : 0.55,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return MultimediaCard(
+            key: ValueKey('${ranking.queryType}-${item.url}'),
+            imageUrl: item.posterImageUrl,
+            title: item.title,
+            heroTag: 'global-ranking-${ranking.queryType}-${item.id}-$index',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => DetailsScreen(item: item),
+              ),
+            ),
           );
         },
       ),
     );
   }
-
-  List<_StatisticEntry> _flattenCounters(Map<String, dynamic> source) {
-    final values = <String, num>{};
-
-    void visit(String prefix, dynamic value) {
-      if (value is num) {
-        values[prefix] = value;
-        return;
-      }
-      if (value is String) {
-        final parsed = num.tryParse(value.replaceAll(',', '').trim());
-        if (parsed != null) values[prefix] = parsed;
-        return;
-      }
-      if (value is Map) {
-        for (final entry in value.entries) {
-          final key = entry.key.toString();
-          visit(prefix.isEmpty ? key : '$prefix.$key', entry.value);
-        }
-      }
-    }
-
-    for (final entry in source.entries) {
-      visit(entry.key, entry.value);
-    }
-
-    const preferred = <String>[
-      'views',
-      'episodes_views',
-      'movies_views',
-      'servers_open_count',
-      'users',
-      'users_count',
-      'anime_count',
-      'episodes_count',
-      'movies_count',
-      'unity_ads_requests',
-      'unity_ads_displayed',
-      'unity_ads_failed',
-    ];
-    int rank(String key) {
-      final normalized = key.split('.').last.toLowerCase();
-      final index = preferred.indexOf(normalized);
-      return index < 0 ? preferred.length : index;
-    }
-
-    final entries = values.entries
-        .where((entry) => entry.key.trim().isNotEmpty)
-        .map((entry) => _StatisticEntry(key: entry.key, value: entry.value))
-        .toList();
-    entries.sort((a, b) {
-      final byRank = rank(a.key).compareTo(rank(b.key));
-      if (byRank != 0) return byRank;
-      return a.key.compareTo(b.key);
-    });
-    return entries;
-  }
 }
 
-class _StatisticsGrid extends StatelessWidget {
-  const _StatisticsGrid({required this.counters, required this.isArabic});
-
-  final List<_StatisticEntry> counters;
-  final bool isArabic;
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final maxExtent = width >= 1000 ? 300.0 : width >= 600 ? 260.0 : 210.0;
-    return GridView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: maxExtent,
-        childAspectRatio: width >= 600 ? 1.8 : 1.45,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: counters.length,
-      itemBuilder: (context, index) {
-        final entry = counters[index];
-        final normalized = entry.key.split('.').last.toLowerCase();
-        final meta = _metadata(normalized, isArabic);
-        return _StatisticCard(
-          icon: meta.icon,
-          label: meta.label,
-          value: intl.NumberFormat.decimalPattern().format(entry.value),
-        );
-      },
-    );
-  }
-
-  _StatisticMeta _metadata(String key, bool isArabic) {
-    switch (key) {
-      case 'views':
-        return _StatisticMeta(Icons.visibility_rounded, isArabic ? 'المشاهدات' : 'Views');
-      case 'episodes_views':
-        return _StatisticMeta(Icons.play_circle_rounded, isArabic ? 'مشاهدات الحلقات' : 'Episode views');
-      case 'movies_views':
-        return _StatisticMeta(Icons.movie_rounded, isArabic ? 'مشاهدات الأفلام' : 'Movie views');
-      case 'servers_open_count':
-        return _StatisticMeta(Icons.dns_rounded, isArabic ? 'فتح السيرفرات' : 'Server opens');
-      case 'users':
-      case 'users_count':
-        return _StatisticMeta(Icons.people_alt_rounded, isArabic ? 'المستخدمون' : 'Users');
-      case 'anime_count':
-        return _StatisticMeta(Icons.live_tv_rounded, isArabic ? 'الأنميات' : 'Anime');
-      case 'episodes_count':
-        return _StatisticMeta(Icons.video_library_rounded, isArabic ? 'الحلقات' : 'Episodes');
-      case 'movies_count':
-        return _StatisticMeta(Icons.local_movies_rounded, isArabic ? 'الأفلام' : 'Movies');
-      case 'unity_ads_requests':
-        return _StatisticMeta(Icons.ads_click_rounded, isArabic ? 'طلبات الإعلانات' : 'Ad requests');
-      case 'unity_ads_displayed':
-        return _StatisticMeta(Icons.ondemand_video_rounded, isArabic ? 'الإعلانات المعروضة' : 'Ads displayed');
-      case 'unity_ads_failed':
-        return _StatisticMeta(Icons.warning_amber_rounded, isArabic ? 'الإعلانات الفاشلة' : 'Failed ads');
-      default:
-        final label = key.replaceAll('_', ' ').replaceAll('.', ' · ');
-        return _StatisticMeta(Icons.bar_chart_rounded, label);
-    }
-  }
-}
-
-class _StatisticCard extends StatelessWidget {
-  const _StatisticCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: colors.primary.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(icon, color: colors.primary),
-            ),
-            const Spacer(),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.fade,
-              softWrap: false,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatisticsError extends StatelessWidget {
-  const _StatisticsError({required this.isArabic, required this.onRetry});
+class _RankingError extends StatelessWidget {
+  const _RankingError({required this.isArabic, required this.onRetry});
 
   final bool isArabic;
   final Future<void> Function() onRetry;
@@ -312,8 +309,8 @@ class _StatisticsError extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               isArabic
-                  ? 'تعذر تحميل الإحصائيات العالمية'
-                  : 'Could not load global statistics',
+                  ? 'تعذر تحميل هذا التصنيف'
+                  : 'Could not load this ranking',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
@@ -327,16 +324,4 @@ class _StatisticsError extends StatelessWidget {
       ),
     );
   }
-}
-
-class _StatisticEntry {
-  const _StatisticEntry({required this.key, required this.value});
-  final String key;
-  final num value;
-}
-
-class _StatisticMeta {
-  const _StatisticMeta(this.icon, this.label);
-  final IconData icon;
-  final String label;
 }
