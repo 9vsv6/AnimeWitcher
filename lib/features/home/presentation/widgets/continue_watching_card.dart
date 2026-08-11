@@ -202,7 +202,13 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
 
         unawaited(
           DetailsRoute(
-            $extra: DetailsRouteExtra(item: item, autoPlay: true),
+            $extra: DetailsRouteExtra(
+              item: item,
+              autoPlay: true,
+              resumeEpisodeUrl: widget.historyItem.lastEpisodeUrl,
+              resumeEpisodeNumber: widget.historyItem.episode,
+              resumeSeason: widget.historyItem.season,
+            ),
           ).push<void>(context),
         );
       },
