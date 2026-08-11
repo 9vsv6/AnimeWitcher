@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../settings/presentation/settings_screen.dart';
 import 'broadcast_schedule_screen.dart';
+import 'coming_soon_screen.dart';
+import 'global_statistics_screen.dart';
+import 'recent_watched_screen.dart';
 import 'seasons_screen.dart';
 
 class MoreScreen extends StatelessWidget {
@@ -21,52 +24,89 @@ class MoreScreen extends StatelessWidget {
         title: Text(isArabic ? 'المزيد' : 'More'),
         centerTitle: false,
       ),
-      body: Padding(
+      body: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
-        child: Column(
-          children: [
-            _MoreTile(
-              icon: Icons.calendar_month_rounded,
-              title: isArabic ? 'المواسم' : 'Seasons',
-              subtitle: isArabic
-                  ? 'الموسم السابق والحالي والقادم وجميع المواسم'
-                  : 'Previous, current, next, and all seasons',
-              onTap: () => Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const SeasonsScreen(),
-                ),
+        children: [
+          _MoreTile(
+            icon: Icons.history_rounded,
+            title: isArabic ? 'آخر المشاهدات' : 'Recently watched',
+            subtitle: isArabic
+                ? 'آخر الأنميات والأفلام التي شاهدتها'
+                : 'Anime and movies you watched recently',
+            onTap: () => Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const RecentWatchedScreen(),
               ),
             ),
-            const SizedBox(height: 12),
-            _MoreTile(
-              icon: Icons.calendar_view_week_rounded,
-              title: isArabic ? 'جدول البث' : 'Broadcast schedule',
-              subtitle: isArabic
-                  ? 'الأنميات موزعة على أيام الأسبوع السبعة'
-                  : 'Anime grouped across the seven weekdays',
-              onTap: () => Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const BroadcastScheduleScreen(),
-                ),
+          ),
+          const SizedBox(height: 12),
+          _MoreTile(
+            icon: Icons.upcoming_rounded,
+            title: isArabic ? 'القادم قريبًا' : 'Coming soon',
+            subtitle: isArabic
+                ? 'الأعمال القادمة حسب بيانات AnimeWitcher'
+                : 'Upcoming titles from AnimeWitcher',
+            onTap: () => Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ComingSoonScreen(),
               ),
             ),
-            const Spacer(),
-            Divider(color: theme.dividerColor.withValues(alpha: 0.55)),
-            const SizedBox(height: 8),
-            _MoreTile(
-              icon: Icons.settings_rounded,
-              title: isArabic ? 'الإعدادات' : 'Settings',
-              subtitle: isArabic
-                  ? 'إعدادات التطبيق والحساب والمشغل'
-                  : 'App, account, and player settings',
-              onTap: () => Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const SettingsScreen(),
-                ),
+          ),
+          const SizedBox(height: 12),
+          _MoreTile(
+            icon: Icons.query_stats_rounded,
+            title: isArabic ? 'الإحصائيات العالمية' : 'Global statistics',
+            subtitle: isArabic
+                ? 'إحصائيات المشاهدات والحلقات والأفلام'
+                : 'Global viewing, episode, and movie statistics',
+            onTap: () => Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const GlobalStatisticsScreen(),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          _MoreTile(
+            icon: Icons.calendar_month_rounded,
+            title: isArabic ? 'المواسم' : 'Seasons',
+            subtitle: isArabic
+                ? 'الموسم السابق والحالي والقادم وجميع المواسم'
+                : 'Previous, current, next, and all seasons',
+            onTap: () => Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const SeasonsScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _MoreTile(
+            icon: Icons.calendar_view_week_rounded,
+            title: isArabic ? 'جدول البث' : 'Broadcast schedule',
+            subtitle: isArabic
+                ? 'الأنميات موزعة على أيام الأسبوع السبعة'
+                : 'Anime grouped across the seven weekdays',
+            onTap: () => Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const BroadcastScheduleScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Divider(color: theme.dividerColor.withValues(alpha: 0.55)),
+          const SizedBox(height: 8),
+          _MoreTile(
+            icon: Icons.settings_rounded,
+            title: isArabic ? 'الإعدادات' : 'Settings',
+            subtitle: isArabic
+                ? 'إعدادات التطبيق والحساب والمشغل'
+                : 'App, account, and player settings',
+            onTap: () => Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const SettingsScreen(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

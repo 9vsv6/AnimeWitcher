@@ -11,6 +11,7 @@ class MultimediaCard extends ConsumerWidget {
   final String? imageUrl;
   final String title;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final String heroTag;
   final bool isPortrait;
   final FocusNode? focusNode;
@@ -29,6 +30,7 @@ class MultimediaCard extends ConsumerWidget {
     required this.imageUrl,
     required this.title,
     required this.onTap,
+    this.onLongPress,
     required this.heroTag,
     this.isPortrait = true,
     this.focusNode,
@@ -98,6 +100,7 @@ class MultimediaCard extends ConsumerWidget {
     return RepaintBoundary(
       child: CardsWrapper(
         onTap: onTap,
+        onLongPress: onLongPress,
         focusNode: focusNode,
         scaleFactor: 1.05,
         child: SizedBox(

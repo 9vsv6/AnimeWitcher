@@ -1,0 +1,154 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+
+import '../../../core/services/notification_service.dart';
+import '../../../shared/widgets/multimedia_card.dart';
+import '../../details/presentation/details_screen.dart';
+import '../../library/presentation/history_provider.dart';
+
+class RecentWatchedScreen extends ConsumerWidget {
+  const RecentWatchedScreen({super.key});
+
+  bool _isArabic(BuildContext context) =>
+      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isArabic = _isArabic(context);
+    final history = ref.watch(watchHistoryProvider).toList(growable: false)
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            automaticallyImplyLeading: false,
+            centerTitle: false,
+            titleSpacing: 16,
+            title: ApplePersistentGlassHeaderScope(
+              enabled: Navigator.of(context).canPop(),
+              onBack: () => Navigator.of(context).pop(),
+              child: Align(
+                alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  child: Text(isArabic ? 'آخر المشاهدات' : 'Recently watched'),
+                ),
+              ),
+            ),
+            leading: appleUsesPersistentLiquidGlassHeader
+                ? null
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+            elevation: 0,
+          ),
+        ),
+      ),
+      body: history.isEmpty
+          ? _EmptyRecentWatched(isArabic: isArabic)
+          : _RecentWatchedGrid(
+              items: history,
+              isArabic: isArabic,
+              onRemove: (historyItem) {
+                HapticFeedback.mediumImpact();
+                unawaited(
+                  ref
+                      .read(watchHistoryProvider.notifier)
+                      .removeFromHistory(historyItem.item.url)
+                      .then((_) {
+                    if (!context.mounted) return;
+                    ref.read(notificationServiceProvider).showSuccess(
+                          isArabic
+                              ? 'تم حذف ${historyItem.item.title} من آخر المشاهدات'
+                              : '${historyItem.item.title} removed from recent history',
+                        );
+                  }),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _RecentWatchedGrid extends StatelessWidget {
+  const _RecentWatchedGrid({
+    required this.items,
+    required this.isArabic,
+    required this.onRemove,
+  });
+
+  final List<HistoryItem> items;
+  final bool isArabic;
+  final ValueChanged<HistoryItem> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: isDesktop ? 240 : 150,
+        childAspectRatio: isDesktop ? 0.58 : 0.55,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final history = items[index];
+        final item = history.item;
+        final episode = history.episode;
+        final badge = episode != null && episode > 0
+            ? (isArabic ? 'حلقة $episode' : 'Episode $episode')
+            : null;
+        return MultimediaCard(
+          key: ValueKey('recent-${item.url}'),
+          imageUrl: item.posterImageUrl,
+          title: item.title,
+          episodeBadge: badge,
+          heroTag: 'recent-${item.id}-$index',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => DetailsScreen(item: item),
+            ),
+          ),
+          onLongPress: () => onRemove(history),
+        );
+      },
+    );
+  }
+}
+
+class _EmptyRecentWatched extends StatelessWidget {
+  const _EmptyRecentWatched({required this.isArabic});
+
+  final bool isArabic;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.history_rounded, size: 52, color: colors.primary),
+            const SizedBox(height: 14),
+            Text(
+              isArabic ? 'لا توجد مشاهدات حتى الآن' : 'Nothing watched yet',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

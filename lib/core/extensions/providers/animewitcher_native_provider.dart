@@ -1416,6 +1416,107 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
 
+  int _upcomingHomeSectionScore(_OfficialHomeSection section) {
+    final text = '${section.title} ${section.type} ${section.indexName} ${section.searchText}'
+        .toLowerCase();
+    final title = section.title.toLowerCase();
+    final type = section.type.toLowerCase();
+    var score = 0;
+    if (RegExp(r'الموسم القادم|الموسم التالي|next season|upcoming season|season[._ ]?next|next[._ ]?season')
+        .hasMatch(text)) {
+      score += 1000;
+    }
+    if (RegExp(r'next|upcoming|season_next|next_season').hasMatch(type)) {
+      score += 1000;
+    }
+    if (RegExp(r'قادم قريب[اأ]?|القادم|التالي|upcoming').hasMatch(title)) {
+      score += 450;
+    }
+    return score;
+  }
+
+  _OfficialHomeSection? _officialUpcomingSection(
+    List<_OfficialHomeSection> sections,
+  ) {
+    _OfficialHomeSection? best;
+    var bestScore = 0;
+    for (final section in sections) {
+      final score = _upcomingHomeSectionScore(section);
+      if (score > bestScore) {
+        best = section;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  Future<ProviderMediaPage> getUpcomingPage({
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    await _refreshRemoteConstants();
+    final sections = await _fetchOfficialHomeSections();
+    final official = _officialUpcomingSection(sections);
+    if (official != null) {
+      return _loadHomePage(
+        official.title,
+        offset: offset,
+        limit: limit,
+      );
+    }
+
+    final config = await getSeasonConfig();
+    return getSeasonPage(
+      config.next,
+      offset: offset,
+      limit: limit,
+    );
+  }
+
+  Future<Map<String, dynamic>> getGlobalStatistics() async {
+    final statisticsPayload = await _getJson(_firestoreUrl('Settings/statistics'));
+    final viewsPayload = await _getJson(_firestoreUrl('Settings/views5'));
+
+    final output = <String, dynamic>{};
+    if (statisticsPayload != null) {
+      output.addAll(_firestoreFields(statisticsPayload['fields']));
+    }
+    if (viewsPayload != null) {
+      final views = _firestoreFields(viewsPayload['fields']);
+      for (final entry in views.entries) {
+        output.putIfAbsent(entry.key, () => entry.value);
+      }
+    }
+
+    // AnimeWitcher also keeps the sharded global view counter below views5.
+    // Use it only as a fallback when the aggregate document does not expose
+    // a usable views value.
+    final currentViews = output['views'];
+    final hasViews = currentViews is num && currentViews > 0 ||
+        currentViews is String && (num.tryParse(currentViews) ?? 0) > 0;
+    if (!hasViews) {
+      final shardsPayload = await _getJson(
+        '${_firestoreUrl('Settings/views5/shards')}?pageSize=100',
+      );
+      num shardTotal = 0;
+      if (shardsPayload != null) {
+        for (final rawDocument in _list(shardsPayload['documents'])) {
+          final document = _map(rawDocument);
+          final fields = _firestoreFields(document['fields']);
+          final raw = fields['views'];
+          if (raw is num) {
+            shardTotal += raw;
+          } else {
+            shardTotal += num.tryParse(_text(raw)) ?? 0;
+          }
+        }
+      }
+      if (shardTotal > 0) output['views'] = shardTotal;
+    }
+    return output;
+  }
+
+
   Future<ProviderNewsPage> _loadNewsPage({
     int offset = 0,
     int limit = 20,
