@@ -53,11 +53,13 @@ class _GentleTopOverscrollPhysics extends BouncingScrollPhysics {
 
 class _DeferredDetailSection extends StatefulWidget {
   const _DeferredDetailSection({
+    required this.enabled,
     required this.placeholderHeight,
     required this.onVisible,
     required this.child,
   });
 
+  final bool enabled;
   final double placeholderHeight;
   final Future<void> Function() onVisible;
   final Widget child;
@@ -91,11 +93,11 @@ class _DeferredDetailSectionState extends State<_DeferredDetailSection> {
   }
 
   void _scheduleVisibilityCheck() {
-    if (_activated || _checkScheduled || !mounted) return;
+    if (!widget.enabled || _activated || _checkScheduled || !mounted) return;
     _checkScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkScheduled = false;
-      if (!mounted || _activated) return;
+      if (!mounted || !widget.enabled || _activated) return;
       final renderObject = context.findRenderObject();
       if (renderObject is! RenderBox || !renderObject.hasSize) return;
       final top = renderObject.localToGlobal(Offset.zero).dy;
@@ -1625,8 +1627,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     // sections until the user actually scrolls near them.
     widgets.add(
       _DeferredDetailSection(
+        enabled: _selectedDetailsTab == 0,
         placeholderHeight: 210,
-        onVisible: controller.loadCastIfNeeded,
+        onVisible: () => _selectedDetailsTab == 0
+            ? controller.loadCastIfNeeded()
+            : Future<void>.value(),
         child: castSection(),
       ),
     );
@@ -1647,15 +1652,21 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     widgets.add(
       _DeferredDetailSection(
+        enabled: _selectedDetailsTab == 0,
         placeholderHeight: 230,
-        onVisible: controller.loadRecommendationsIfNeeded,
+        onVisible: () => _selectedDetailsTab == 0
+            ? controller.loadRecommendationsIfNeeded()
+            : Future<void>.value(),
         child: recommendationsSection(),
       ),
     );
     widgets.add(
       _DeferredDetailSection(
+        enabled: _selectedDetailsTab == 0,
         placeholderHeight: 230,
-        onVisible: controller.loadRelatedIfNeeded,
+        onVisible: () => _selectedDetailsTab == 0
+            ? controller.loadRelatedIfNeeded()
+            : Future<void>.value(),
         child: relatedSection(),
       ),
     );
