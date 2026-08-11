@@ -578,6 +578,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   void _switchDetailsTab(int targetTab) {
     if (targetTab == _selectedDetailsTab) return;
 
+    if (targetTab == 1) {
+      ref
+          .read(detailsControllerProvider(widget.item.url).notifier)
+          .loadEpisodesOnDemand();
+    }
+
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final entersFromLeft = isRtl ? targetTab == 1 : targetTab == 0;
     _tabSlideFrom = Offset(entersFromLeft ? -0.16 : 0.16, 0);
@@ -1805,8 +1811,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               const SizedBox(height: 12),
               Text(
                 isArabic
-                    ? 'يتم تحميل الحلقات في الخلفية…'
-                    : 'Episodes are loading in the background…',
+                    ? 'يتم تحميل الحلقات…'
+                    : 'Episodes are loading…',
                 textAlign: TextAlign.center,
               ),
             ],

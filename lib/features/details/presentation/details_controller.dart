@@ -110,6 +110,7 @@ class DetailsController extends _$DetailsController {
   Future<void>? _episodesLoadFuture;
   SkyStreamProvider? _lastEpisodesProvider;
   String? _lastEpisodesUrl;
+  bool _episodesRequested = false;
   bool _loadStarted = false;
   bool _castLoadStarted = false;
   bool _relatedLoadStarted = false;
@@ -312,7 +313,7 @@ class DetailsController extends _$DetailsController {
 
     state = state.copyWith(
       details: const AsyncLoading(),
-      episodes: const AsyncLoading(),
+      episodes: const AsyncData(<Episode>[]),
       cast: const AsyncLoading(),
       trailers: const AsyncLoading(),
       related: const AsyncLoading(),
@@ -382,17 +383,13 @@ class DetailsController extends _$DetailsController {
       _lastEpisodesProvider = provider;
       _lastEpisodesUrl = item.url;
 
-      // Load only the data needed for the initial details/episodes view.
-      // Heavy lower-page sections (cast, related titles, recommendations) are
-      // requested lazily when their section approaches the viewport.
+      // Initial navigation loads only the details data. Episodes are requested
+      // lazily the first time the Episodes tab is opened. Autoplay routes are
+      // the intentional exception because playback cannot start without them.
       unawaited(_loadBasicDetails(provider, item, generation));
-      _episodesLoadFuture = _loadEpisodesInBackground(
-        provider,
-        item.url,
-        item,
-        generation,
-      );
-      unawaited(_episodesLoadFuture!);
+      if (autoPlay || _episodesRequested) {
+        unawaited(loadEpisodesOnDemand());
+      }
 
       if (provider.supportsIndependentDetailSections) {
         unawaited(
@@ -491,7 +488,9 @@ class DetailsController extends _$DetailsController {
       );
 
       final inlineEpisodes = fetchedItem.episodes ?? const <Episode>[];
-      if (inlineEpisodes.isNotEmpty && state.episodes is! AsyncData) {
+      if (_episodesRequested &&
+          inlineEpisodes.isNotEmpty &&
+          (state.episodes.asData?.value.isEmpty ?? true)) {
         _applyEpisodes(
           provider,
           initialItem.url,
@@ -864,6 +863,30 @@ class DetailsController extends _$DetailsController {
     }
   }
 
+  Future<void> loadEpisodesOnDemand() async {
+    _episodesRequested = true;
+    if (_episodesLoadFuture != null) {
+      if (state.episodes.isLoading) await _episodesLoadFuture;
+      return;
+    }
+
+    final provider = _lastEpisodesProvider;
+    final url = _lastEpisodesUrl;
+    final currentItem = state.item;
+    if (provider == null || url == null || currentItem == null) return;
+
+
+    state = state.copyWith(episodes: const AsyncLoading());
+    final generation = _loadGeneration;
+    _episodesLoadFuture = _loadEpisodesInBackground(
+      provider,
+      url,
+      currentItem,
+      generation,
+    );
+    await _episodesLoadFuture;
+  }
+
   Future<void> retryEpisodes() async {
     final provider = _lastEpisodesProvider;
     final url = _lastEpisodesUrl;
@@ -873,6 +896,7 @@ class DetailsController extends _$DetailsController {
       return;
     }
 
+    _episodesRequested = true;
     state = state.copyWith(episodes: const AsyncLoading());
     final generation = _loadGeneration;
     _episodesLoadFuture = _loadEpisodesInBackground(
@@ -999,7 +1023,10 @@ class DetailsController extends _$DetailsController {
     Episode? specificEpisode,
     String? overrideUrl,
   }) async {
-    if (state.episodes.isLoading && _episodesLoadFuture != null) {
+    if (!_episodesRequested) {
+      await loadEpisodesOnDemand();
+      if (!ref.mounted) return;
+    } else if (state.episodes.isLoading && _episodesLoadFuture != null) {
       await _episodesLoadFuture;
       if (!ref.mounted) return;
     }
