@@ -22,23 +22,15 @@ class AnimeInformationSection extends StatelessWidget {
     return null;
   }
 
-  String? _durationLabel(
-    BuildContext context,
-    Map<String, String> data,
-  ) {
+  String? _durationLabel(BuildContext context, Map<String, String> data) {
     final raw = _clean(data['awDuration']);
     int? minutes;
-
     if (raw != null) {
       final match = RegExp(r'[0-9]+').firstMatch(raw);
       minutes = match == null ? null : int.tryParse(match.group(0)!);
     }
-
-    if (minutes == null || minutes <= 0) {
-      minutes = item.duration;
-    }
+    if (minutes == null || minutes <= 0) minutes = item.duration;
     if (minutes == null || minutes <= 0) return null;
-
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     return isArabic ? '$minutes دقيقة' : '$minutes minutes';
@@ -49,110 +41,52 @@ class AnimeInformationSection extends StatelessWidget {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final data = item.syncData ?? const <String, String>{};
+    final colors = Theme.of(context).colorScheme;
 
-    _AnimeInfoEntry? entry(
-      String ar,
-      String en,
-      dynamic value,
-      IconData icon, {
-      bool numberBeforeUnit = false,
-    }) {
+    _AnimeInfoEntry? entry(String ar, String en, dynamic value) {
       final cleaned = _clean(value);
       if (cleaned == null) return null;
-      return _AnimeInfoEntry(
-        label: isArabic ? ar : en,
-        value: cleaned,
-        icon: icon,
-        numberBeforeUnit: numberBeforeUnit,
-      );
+      return _AnimeInfoEntry(label: isArabic ? ar : en, value: cleaned);
     }
 
-    final rows = <List<_AnimeInfoEntry?>>[
-      [
-        entry(
-          'المصدر',
-          'Source',
-          _read(data, const ['awSource']) ?? item.source,
-          Icons.menu_book_rounded,
-        ),
-        entry(
-          'مدة الحلقة',
-          'Episode duration',
-          _durationLabel(context, data),
-          Icons.timer_outlined,
-          numberBeforeUnit: isArabic,
-        ),
-      ],
-      [
-        entry(
-          'بداية العرض',
-          'Start date',
-          _read(data, const ['awStartDate']),
-          Icons.play_circle_outline_rounded,
-        ),
-        entry(
-          'نهاية العرض',
-          'End date',
-          _read(data, const ['awEndDate']),
-          Icons.stop_circle_outlined,
-        ),
-      ],
-      [
-        entry(
-          'الاستديو',
-          'Studio',
-          _read(data, const ['awStudio']),
-          Icons.apartment_rounded,
-        ),
-      ],
-    ];
+    final entries = <_AnimeInfoEntry?>[
+      entry('المصدر', 'Source', _read(data, const ['awSource']) ?? item.source),
+      entry('مدة الحلقة', 'Episode duration', _durationLabel(context, data)),
+      entry('بداية العرض', 'Start date', _read(data, const ['awStartDate'])),
+      entry('نهاية العرض', 'End date', _read(data, const ['awEndDate'])),
+      entry('الاستديو', 'Studio', _read(data, const ['awStudio'])),
+      entry('العنوان الإنجليزي', 'English title', _read(data, const ['awEnglishTitle'])),
+    ].whereType<_AnimeInfoEntry>().toList(growable: false);
 
-    final englishTitle = entry(
-      'العنوان الإنجليزي',
-      'English title',
-      _read(data, const ['awEnglishTitle']),
-      Icons.translate_rounded,
-    );
+    if (entries.isEmpty) return const SizedBox.shrink();
 
-    final hasRows = rows.any((row) => row.any((value) => value != null));
-    if (!hasRows && englishTitle == null) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          isArabic ? 'معلومات الأنمي' : 'Anime information',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.38),
         ),
-        const SizedBox(height: 10),
-        for (final row in rows) ...[
-          if (row.any((value) => value != null))
-            Row(
-              // The section is inside a vertically unbounded scroll view.
-              // Stretch would request an infinite height at runtime.
-              crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final cellWidth = (constraints.maxWidth - 20) / 2;
+            return Wrap(
+              spacing: 20,
+              runSpacing: 22,
               children: [
-                for (var index = 0; index < row.length; index++) ...[
-                  if (row[index] != null)
-                    Expanded(child: _AnimeInfoCard(entry: row[index]!)),
-                  if (index == 0 &&
-                      row.length > 1 &&
-                      row[0] != null &&
-                      row[1] != null)
-                    const SizedBox(width: 8),
-                ],
+                for (final value in entries)
+                  SizedBox(
+                    width: cellWidth,
+                    child: _AnimeInfoValue(entry: value),
+                  ),
               ],
-            ),
-          if (row.any((value) => value != null)) const SizedBox(height: 8),
-        ],
-        if (englishTitle != null)
-          SizedBox(
-            width: double.infinity,
-            child: _AnimeInfoCard(entry: englishTitle),
-          ),
-      ],
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -160,111 +94,43 @@ class AnimeInformationSection extends StatelessWidget {
 class _AnimeInfoEntry {
   final String label;
   final String value;
-  final IconData icon;
-  final bool numberBeforeUnit;
 
-  const _AnimeInfoEntry({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.numberBeforeUnit = false,
-  });
+  const _AnimeInfoEntry({required this.label, required this.value});
 }
 
-class _AnimeInfoCard extends StatelessWidget {
+class _AnimeInfoValue extends StatelessWidget {
   final _AnimeInfoEntry entry;
 
-  const _AnimeInfoCard({required this.entry});
+  const _AnimeInfoValue({required this.entry});
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(entry.icon, size: 18, color: colors.primary),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colors.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  if (entry.numberBeforeUnit)
-                    _NumberBeforeUnitText(
-                      value: entry.value,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    )
-                  else
-                    SelectableText(
-                      entry.value,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NumberBeforeUnitText extends StatelessWidget {
-  final String value;
-  final TextStyle? style;
-
-  const _NumberBeforeUnitText({required this.value, this.style});
-
-  @override
-  Widget build(BuildContext context) {
-    final separatorIndex = value.indexOf(' ');
-    if (separatorIndex <= 0 || separatorIndex >= value.length - 1) {
-      return SelectableText(value, style: style);
-    }
-
-    final number = value.substring(0, separatorIndex);
-    final unit = value.substring(separatorIndex + 1);
-
-    return Semantics(
-      label: value,
-      child: ExcludeSemantics(
-        child: Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            textDirection: TextDirection.rtl,
-            children: [
-              Text(number, style: style),
-              const SizedBox(width: 4),
-              Text(unit, style: style),
-            ],
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          entry.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.titleSmall?.copyWith(
+            color: colors.onSurface,
+            fontWeight: FontWeight.w700,
           ),
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          entry.value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.bodyMedium?.copyWith(
+            color: colors.onSurfaceVariant,
+            height: 1.25,
+          ),
+        ),
+      ],
     );
   }
 }
