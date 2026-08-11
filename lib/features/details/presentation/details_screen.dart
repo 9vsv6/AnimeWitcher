@@ -1939,79 +1939,69 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   ) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final genres = _normalizedGenres(item);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.synopsis,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.38),
         ),
-        const SizedBox(height: 8),
-        ExpandableText(
-          text: item.description ?? l10n.noDescription,
-          maxLines: 4,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.textTheme.bodyMedium?.color,
-            height: 1.5,
-          ),
-        ),
-        if (detailsState.hasError) ...[
-          const SizedBox(height: 18),
-          Text(
-            l10n.errorPrefix(detailsState.error.toString()),
-            style: TextStyle(color: colors.error),
-          ),
-        ],
-        if (genres.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          Text(
-            isArabic ? 'التصنيفات' : 'Genres',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ExpandableText(
+              text: item.description ?? l10n.noDescription,
+              maxLines: 4,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: colors.onSurfaceVariant,
+                height: 1.55,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final genre in genres)
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.primary,
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors.primary.withValues(alpha: 0.18),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 10,
-                    ),
-                    child: Text(
-                      genre,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: colors.onPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
+            if (detailsState.hasError) ...[
+              const SizedBox(height: 12),
+              Text(
+                l10n.errorPrefix(detailsState.error.toString()),
+                style: TextStyle(color: colors.error),
+              ),
             ],
-          ),
-        ],
-      ],
+            if (genres.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 7,
+                runSpacing: 7,
+                children: [
+                  for (final genre in genres)
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        child: Text(
+                          genre,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colors.onPrimary,
+                            fontWeight: FontWeight.w600,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
