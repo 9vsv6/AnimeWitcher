@@ -28,7 +28,6 @@ import '../../../../core/utils/app_utils.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/stream_response_validator.dart';
 import '../../settings/presentation/player_settings_provider.dart';
-import '../../settings/presentation/general_settings_provider.dart';
 import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/services/local_proxy_service.dart';
 import '../../../../core/network/http_defaults.dart';
@@ -3116,67 +3115,58 @@ class PlayerController extends Notifier<PlayerState> {
           _hasMarkedWatched = true;
         }
 
-        final historyEnabled = ref
-            .read(generalSettingsProvider)
-            .watchHistoryEnabled;
-        if (historyEnabled) {
-          final continueNotifier = ref.read(continueWatchingProvider.notifier);
-          final pId =
-              _item.provider ??
-              ref.read(activeProviderProvider)?.packageName ??
-              'Unknown';
-          final itemToSave = _item.copyWith(provider: pId);
+        final continueNotifier = ref.read(continueWatchingProvider.notifier);
+        final pId =
+            _item.provider ??
+            ref.read(activeProviderProvider)?.packageName ??
+            'Unknown';
+        final itemToSave = _item.copyWith(provider: pId);
 
-          if (!isSeries) {
+        if (!isSeries) {
+          continueNotifier.remove(_item.url);
+          return;
+        } else if (currentEpisode != null) {
+          // Find next episode
+          List<Episode> episodes = _item.episodes ?? const <Episode>[];
+          if (currentEpisode.dubStatus != DubStatus.none) {
+            episodes = episodes
+                .where((e) => e.dubStatus == currentEpisode.dubStatus)
+                .toList();
+          }
+          final currentIndex = episodes.indexOf(currentEpisode);
+          if (currentIndex != -1 && currentIndex < episodes.length - 1) {
+            final nextEpisode = episodes[currentIndex + 1];
+            // Save NEXT episode as current progress (reset to 0)
+            continueNotifier.saveProgress(
+              itemToSave,
+              0,
+              0,
+              lastStreamUrl: null,
+              lastEpisodeUrl: nextEpisode.url,
+              season: nextEpisode.season,
+              episode: nextEpisode.episode,
+              episodeTitle: nextEpisode.name,
+              episodePosterUrl: _episodeArtwork(nextEpisode),
+            );
+            return;
+          } else {
+            // Last episode of the series completed
             continueNotifier.remove(_item.url);
             return;
-          } else if (currentEpisode != null) {
-            // Find next episode
-            List<Episode> episodes = _item.episodes ?? const <Episode>[];
-            if (isSeries && currentEpisode.dubStatus != DubStatus.none) {
-              episodes = episodes
-                  .where((e) => e.dubStatus == currentEpisode.dubStatus)
-                  .toList();
-            }
-            final currentIndex = episodes.indexOf(currentEpisode);
-            if (currentIndex != -1 && currentIndex < episodes.length - 1) {
-              final nextEpisode = episodes[currentIndex + 1];
-              // Save NEXT episode as current progress (reset to 0)
-              continueNotifier.saveProgress(
-                itemToSave,
-                0,
-                0,
-                lastStreamUrl: null,
-                lastEpisodeUrl: nextEpisode.url,
-                season: nextEpisode.season,
-                episode: nextEpisode.episode,
-                episodeTitle: nextEpisode.name,
-                episodePosterUrl: _episodeArtwork(nextEpisode),
-              );
-              return;
-            } else {
-              // Last episode of the series completed
-              continueNotifier.remove(_item.url);
-              return;
-            }
           }
         }
       }
 
-      // 3. Normal Local Progress Saving (controlled by settings)
+      // 3. Normal local progress saving.
       if (progressPercent > 5 || isSeries) {
-        final historyEnabled = ref
-            .read(generalSettingsProvider)
-            .watchHistoryEnabled;
-        if (historyEnabled) {
-          final pId =
-              _item.provider ??
-              ref.read(activeProviderProvider)?.packageName ??
-              'Unknown';
-          final itemToSave = _item.copyWith(provider: pId);
-          ref
-              .read(watchHistoryProvider.notifier)
-              .saveProgress(
+        final pId =
+            _item.provider ??
+            ref.read(activeProviderProvider)?.packageName ??
+            'Unknown';
+        final itemToSave = _item.copyWith(provider: pId);
+        ref
+            .read(watchHistoryProvider.notifier)
+            .saveProgress(
                 itemToSave,
                 pos,
                 dur,
@@ -3187,7 +3177,6 @@ class PlayerController extends Notifier<PlayerState> {
                 episodeTitle: currentEpisode?.name,
                 episodePosterUrl: _episodeArtwork(currentEpisode),
               );
-        }
       }
     } catch (e) {
       if (kDebugMode) debugPrint("History save failed: $e");

@@ -512,15 +512,6 @@ class StorageService {
     return value.map((item) => item.toString()).toSet();
   }
 
-  Future<void> setTitlePosition(String position) async {
-    await _settingsBox.put('title_position', position);
-  }
-
-  String getTitlePosition() {
-    return (_settingsBox.get('title_position', defaultValue: 'below')
-            as String?) ??
-        'below';
-  }
 
   Future<void> setDevLoadAssets(bool enabled) async {
     await _settingsBox.put('dev_load_assets', enabled);
@@ -557,11 +548,6 @@ class StorageService {
 
   static const String _kEpisodeImagesFromAniZip =
       'anime_source_episode_images_anizip';
-  static const String _kPostersFromAniList =
-      'anime_source_posters_anilist';
-  static const String _kCastFromAniList = 'anime_source_cast_anilist';
-  static const String _kRecommendationsFromAniList =
-      'anime_source_recommendations_anilist';
 
   Future<void> setEpisodeImagesFromAniZipEnabled(bool enabled) async {
     await _settingsBox.put(_kEpisodeImagesFromAniZip, enabled);
@@ -575,38 +561,8 @@ class StorageService {
         true;
   }
 
-  Future<void> setPostersFromAniListEnabled(bool enabled) async {
-    await _settingsBox.put(_kPostersFromAniList, enabled);
-  }
 
-  bool isPostersFromAniListEnabled() {
-    return (_settingsBox.get(
-              _kPostersFromAniList,
-              defaultValue: true,
-            ) as bool?) ??
-        true;
-  }
 
-  Future<void> setCastFromAniListEnabled(bool enabled) async {
-    await _settingsBox.put(_kCastFromAniList, enabled);
-  }
-
-  bool isCastFromAniListEnabled() {
-    return (_settingsBox.get(_kCastFromAniList, defaultValue: true) as bool?) ??
-        true;
-  }
-
-  Future<void> setRecommendationsFromAniListEnabled(bool enabled) async {
-    await _settingsBox.put(_kRecommendationsFromAniList, enabled);
-  }
-
-  bool isRecommendationsFromAniListEnabled() {
-    return (_settingsBox.get(
-              _kRecommendationsFromAniList,
-              defaultValue: true,
-            ) as bool?) ??
-        true;
-  }
 
   // --- Custom Plugin Overrides ---
 
@@ -641,16 +597,6 @@ class StorageService {
         as String;
   }
 
-  // --- Watch History Toggle ---
-  Future<void> setWatchHistoryEnabled(bool enabled) async {
-    await _settingsBox.put('watch_history_enabled', enabled);
-  }
-
-  bool isWatchHistoryEnabled() {
-    return (_settingsBox.get('watch_history_enabled', defaultValue: true)
-            as bool?) ??
-        true;
-  }
 
   // --- Window Settings ---
   Future<void> setAlwaysOnTop(bool enabled) async {
@@ -1152,19 +1098,10 @@ class StorageService {
     return _playbackEntry(_getKey(url))?['lastEpisodeUrl'] as String?;
   }
 
-  static const String _kExtensionRepoUrls = 'extension_repo_urls';
-
-  Future<void> clearPreferences({bool keepRepos = true}) async {
+  Future<void> clearPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      // Preserve extension repo URLs so installed extensions remain visible after Reset Data
-      final savedRepoUrls = prefs.getStringList(_kExtensionRepoUrls);
-
       await prefs.clear();
-
-      if (keepRepos && savedRepoUrls != null && savedRepoUrls.isNotEmpty) {
-        await prefs.setStringList(_kExtensionRepoUrls, savedRepoUrls);
-      }
 
       // Delete Hive Boxes (Library, History, Settings, Extensions)
       try {
@@ -1236,8 +1173,8 @@ class StorageService {
         await extDir.delete(recursive: true);
       }
 
-      // Clear Preferences (Hive + Prefs) - For Factory Reset, we do NOT keep repos.
-      await clearPreferences(keepRepos: false);
+      // Clear preferences and local databases.
+      await clearPreferences();
 
       try {
         await Hive.deleteBoxFromDisk(kDownloadMetadataBox);

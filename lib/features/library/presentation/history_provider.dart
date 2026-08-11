@@ -3,7 +3,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:skystream/core/account/account_providers.dart';
 import '../../../../core/storage/history_repository.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
-import '../../settings/presentation/general_settings_provider.dart';
 
 export '../../../../core/storage/history_repository.dart' show HistoryItem;
 
@@ -63,8 +62,6 @@ class WatchHistory extends _$WatchHistory {
     String? episodeTitle,
     String? episodePosterUrl,
   }) async {
-    final enabled = ref.read(generalSettingsProvider).watchHistoryEnabled;
-    if (!enabled) return;
     final repository = ref.read(historyRepositoryProvider);
     await repository.recordOpened(
       item,
@@ -88,8 +85,6 @@ class WatchHistory extends _$WatchHistory {
     String? episodeTitle,
     String? episodePosterUrl,
   }) async {
-    final enabled = ref.read(generalSettingsProvider).watchHistoryEnabled;
-    if (!enabled) return;
 
     // For livestreams, we don't save progress but we still want it in history
     final isLivestream = item.contentType == MultimediaContentType.livestream;

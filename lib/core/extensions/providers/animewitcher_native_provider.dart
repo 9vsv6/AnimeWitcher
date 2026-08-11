@@ -95,19 +95,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   static const String _firestoreProjectId = 'animewitcher-1c66d';
   static const String _defaultAlgoliaAppId = '5UIU27G8CZ';
   static const String _defaultAlgoliaApiKey = 'ef06c5ee4a0d213c011694f18861805c';
-  static const String _aniListUrl = 'https://graphql.anilist.co';
   static const String _aniZipUrl = 'https://api.ani.zip/mappings';
 
   String _algoliaAppId = _defaultAlgoliaAppId;
   String _algoliaApiKey = _defaultAlgoliaApiKey;
   String _serverLoadType = '';
-  final Map<int, String> _aniListPosterCache = <int, String>{};
-  final Map<int, Future<void>> _aniListPosterRequests =
-      <int, Future<void>>{};
-  final Map<String, Map<String, dynamic>> _aniListMediaCache =
-      <String, Map<String, dynamic>>{};
-  final Map<String, Future<Map<String, dynamic>>> _aniListMediaRequests =
-      <String, Future<Map<String, dynamic>>>{};
   final Map<String, Map<String, dynamic>> _animeDocumentCache =
       <String, Map<String, dynamic>>{};
   final Map<String, DateTime> _animeDocumentExpiresAt = <String, DateTime>{};
@@ -154,7 +146,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   static const Duration _episodeDataTtl = Duration(minutes: 1);
   static const Duration _relatedDataTtl = Duration(minutes: 5);
   static const int _previewSize = 10;
-  static const int _maxCastItems = 25;
   static const int _maxRelatedItems = 10;
   static const int _maxRecommendations = 10;
 
@@ -162,13 +153,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   bool get _useAniZipEpisodeImages =>
       _settings.isEpisodeImagesFromAniZipEnabled();
 
-  bool get _useAniListPosters =>
-      _settings.isPostersFromAniListEnabled();
-
-  bool get _useAniListCast => _settings.isCastFromAniListEnabled();
-
-  bool get _useAniListRecommendations =>
-      _settings.isRecommendationsFromAniListEnabled();
 
   @override
   String get packageName => 'com.fares669.animewitcher.native';
@@ -501,7 +485,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     'rating',
     'dubbed',
     'poster',
-    'aniList_poster',
     'cover_uri',
   ];
 
@@ -515,7 +498,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     'path',
     'type',
     'poster',
-    'aniList_poster',
     'cover_uri',
     'tags',
     'mal_id',
@@ -749,18 +731,12 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
   String _posterFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
-    final aniListPoster = _map(source['aniList_poster']);
-
     // AnimeWitcher exposes a dedicated large poster for cards and details.
-    // Prefer it everywhere so normal cards do not upscale the smaller
-    // poster_uri/medium asset. AniList remains a separate opt-in override
-    // through preferredPoster when its setting is enabled.
+    // Prefer it everywhere so normal cards do not upscale the smaller asset.
     for (final candidate in <dynamic>[
       poster['large'],
       source['poster_uri'],
       poster['medium'],
-      aniListPoster['large'],
-      aniListPoster['medium'],
       source['cover_uri'],
     ]) {
       final value = _text(candidate);
@@ -843,7 +819,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   MultimediaItem _mapHit(
     Map<String, dynamic> source, {
     bool recent = false,
-    String? preferredPoster,
   }) {
     final title = _text(
       source['name'] ?? source['english_title'] ?? source['objectID'],
@@ -875,9 +850,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return MultimediaItem(
       title: title.isEmpty ? 'AnimeWitcher' : title,
       url: _makeAnimeUrl(source),
-      posterUrl: preferredPoster?.trim().isNotEmpty == true
-          ? preferredPoster!.trim()
-          : _posterFromHit(source),
+      posterUrl: _posterFromHit(source),
       description: description.isEmpty ? null : description,
       contentType:
           _isMovieType(source['type']) ? MultimediaContentType.movie : MultimediaContentType.anime,
@@ -890,131 +863,15 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     );
   }
 
-  Future<void> _loadAniListPosterBatch(List<int> ids) async {
-    const query = r'''
-      query AnimeWitcherPosters($ids: [Int]) {
-        Page(page: 1, perPage: 50) {
-          media(type: ANIME, idMal_in: $ids) {
-            idMal
-            coverImage { extraLarge large medium }
-          }
-        }
-      }
-    ''';
-    final payload = await _postJson(
-      _aniListUrl,
-      <String, dynamic>{
-        'query': query,
-        'variables': <String, dynamic>{'ids': ids},
-      },
-    );
-    final media = _list(_map(_map(payload?['data'])['Page'])['media']);
-    for (final raw in media) {
-      final entry = _map(raw);
-      final id = _positiveInt(entry['idMal']);
-      final image = _pickAniListImage(entry['coverImage']);
-      if (id > 0 && image.isNotEmpty) _aniListPosterCache[id] = image;
-    }
-  }
-
-  Future<Map<int, String>> _aniListPostersForHits(
-    Iterable<Map<String, dynamic>> hits,
-  ) async {
-    if (!_useAniListPosters) return const <int, String>{};
-    final ids = hits.map(_malId).where((id) => id > 0).toSet().toList();
-    if (ids.isEmpty) return const <int, String>{};
-
-    final waits = <Future<void>>{};
-    final missing = <int>[];
-    for (final id in ids) {
-      if (_aniListPosterCache.containsKey(id)) continue;
-      final inFlight = _aniListPosterRequests[id];
-      if (inFlight != null) {
-        waits.add(inFlight);
-      } else {
-        missing.add(id);
-      }
-    }
-
-    final created = <MapEntry<List<int>, Future<void>>>[];
-    for (var start = 0; start < missing.length; start += 50) {
-      final end = (start + 50).clamp(0, missing.length).toInt();
-      final batch = missing.sublist(start, end);
-      final request = _loadAniListPosterBatch(batch);
-      for (final id in batch) {
-        _aniListPosterRequests[id] = request;
-      }
-      waits.add(request);
-      created.add(MapEntry<List<int>, Future<void>>(batch, request));
-    }
-    try {
-      if (waits.isNotEmpty) await Future.wait(waits);
-    } finally {
-      for (final entry in created) {
-        for (final id in entry.key) {
-          if (identical(_aniListPosterRequests[id], entry.value)) {
-            _aniListPosterRequests.remove(id);
-          }
-        }
-      }
-    }
-
-    return <int, String>{
-      for (final id in ids)
-        if (_aniListPosterCache[id]?.isNotEmpty == true)
-          id: _aniListPosterCache[id]!,
-    };
-  }
-
-  Future<List<Map<String, dynamic>>> _hydrateRecentHitsForPosters(
-    List<Map<String, dynamic>> hits,
-  ) async {
-    final missingIds = <String>{};
-    for (final hit in hits) {
-      if (_malId(hit) > 0) continue;
-      final animeId = _animeIdFromHit(hit);
-      if (animeId.isNotEmpty) missingIds.add(animeId);
-    }
-    if (missingIds.isEmpty) return hits;
-
-    final documents = await Future.wait(
-      missingIds.map((animeId) async => MapEntry(
-            animeId,
-            await _fetchAnimeDocument(animeId),
-          )),
-    );
-    final byId = <String, Map<String, dynamic>>{
-      for (final entry in documents) entry.key: entry.value,
-    };
-
-    return hits.map((hit) {
-      if (_malId(hit) > 0) return hit;
-      final animeId = _animeIdFromHit(hit);
-      final document = byId[animeId];
-      if (document == null || document.isEmpty) return hit;
-      // Anime document supplies MAL/poster/details metadata while the recent
-      // record remains authoritative for episode badge/date fields.
-      return _mergeMaps(document, hit);
-    }).toList(growable: false);
-  }
-
-  Future<List<MultimediaItem>> _dedupeHitsWithAniListPosters(
+  Future<List<MultimediaItem>> _dedupeHits(
     Iterable<dynamic> hits, {
     bool recent = false,
   }) async {
-    var maps = hits.map(_map).where((hit) => hit.isNotEmpty).toList();
-    if (recent && _useAniListPosters) {
-      maps = await _hydrateRecentHitsForPosters(maps);
-    }
-    final posters = await _aniListPostersForHits(maps);
+    final maps = hits.map(_map).where((hit) => hit.isNotEmpty).toList();
     final seen = <String>{};
     final output = <MultimediaItem>[];
     for (final hit in maps) {
-      final item = _mapHit(
-        hit,
-        recent: recent,
-        preferredPoster: posters[_malId(hit)],
-      );
+      final item = _mapHit(hit, recent: recent);
       if (item.title.trim().isEmpty || item.url.trim().isEmpty) continue;
       if (!seen.add(item.url)) continue;
       output.add(item);
@@ -1174,7 +1031,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       attributes: _searchAttributes,
     );
     final rawHits = _list(payload['hits']);
-    final items = await _dedupeHitsWithAniListPosters(rawHits);
+    final items = await _dedupeHits(rawHits);
     final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
     final hasMore = nbPages > 0
         ? pageNumber + 1 < nbPages
@@ -1228,7 +1085,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
     final lists = await Future.wait(
       animeWitcherBroadcastDays.map(
-        (day) => _dedupeHitsWithAniListPosters(grouped[day]!),
+        (day) => _dedupeHits(grouped[day]!),
       ),
     );
     return <String, List<MultimediaItem>>{
@@ -1321,7 +1178,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       cancelToken: cancelToken,
     );
     final rawHits = _list(payload['hits']);
-    final items = await _dedupeHitsWithAniListPosters(rawHits);
+    final items = await _dedupeHits(rawHits);
     final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
     final hasMore = nbPages > 0 ? pageNumber + 1 < nbPages : rawHits.length >= safeLimit;
     return ProviderMediaPage(
@@ -1451,7 +1308,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
     final payload = await load(plan.index);
     final rawHits = _list(payload['hits']);
-    final items = await _dedupeHitsWithAniListPosters(
+    final items = await _dedupeHits(
       rawHits,
       recent: plan.recent,
     );
@@ -1565,7 +1422,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       final hit = _firestoreDocumentHit(document);
       if (hit.isNotEmpty) hits.add(hit);
     }
-    return _dedupeHitsWithAniListPosters(hits);
+    return _dedupeHits(hits);
   }
 
 
@@ -1818,11 +1675,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       source['story'] ?? source['description'] ?? details['story'] ?? details['description'],
     );
     final malId = _malId(source);
-    final providerPoster = _posterFromHit(source);
-    final aniListPosters = malId > 0
-        ? await _aniListPostersForHits(<Map<String, dynamic>>[source])
-        : const <int, String>{};
-    final poster = aniListPosters[malId] ?? providerPoster;
+    final poster = _posterFromHit(source);
     final providerCover = _coverFromHit(source);
     final banner = providerCover.isNotEmpty ? providerCover : poster;
     final syncData = <String, String>{};
@@ -1911,108 +1764,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final match = RegExp(r'\d+').firstMatch(_normalizeDigits(_text(raw)));
     final value = match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
     return value > 0 ? value : 0;
-  }
-
-  String _pickAniListName(dynamic raw) {
-    final source = _map(raw);
-    for (final key in const <String>['userPreferred', 'full', 'english', 'romaji', 'native']) {
-      final value = _text(source[key]);
-      if (value.isNotEmpty) return value;
-    }
-    return '';
-  }
-
-  String _pickAniListImage(dynamic raw) {
-    final source = _map(raw);
-    for (final key in const <String>['extraLarge', 'large', 'medium']) {
-      final value = _text(source[key]);
-      if (value.isNotEmpty) return value;
-    }
-    return '';
-  }
-
-  Future<Map<String, dynamic>> _aniListMedia(
-    int malId, {
-    required bool includeCast,
-    required bool includeRecommendations,
-  }) async {
-    if (malId <= 0 || !includeCast && !includeRecommendations) {
-      return <String, dynamic>{};
-    }
-    final key = '$malId:${includeCast ? 1 : 0}:${includeRecommendations ? 1 : 0}';
-    final cached = _aniListMediaCache[key];
-    if (cached != null) return cached;
-    final inFlight = _aniListMediaRequests[key];
-    if (inFlight != null) return inFlight;
-
-    final fields = <String>[
-      'id',
-      'idMal',
-      if (includeCast)
-        r'''
-          characters(page: 1, perPage: 25, sort: [ROLE, RELEVANCE, ID]) {
-            edges {
-              role
-              node {
-                id
-                name { full native userPreferred }
-                image { large medium }
-              }
-              voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
-                id
-                name { full native userPreferred }
-                image { large medium }
-              }
-            }
-          }
-        ''',
-      if (includeRecommendations)
-        r'''
-          recommendations(page: 1, perPage: 25, sort: [RATING_DESC, ID]) {
-            nodes {
-              id
-              rating
-              mediaRecommendation {
-                id
-                idMal
-                type
-                format
-                status
-                title { romaji english native userPreferred }
-              }
-            }
-          }
-        ''',
-    ];
-    final query = r'''
-      query AnimeWitcherSkyStream($idMal: Int!) {
-        Media(idMal: $idMal, type: ANIME) {
-    ''' +
-        fields.join('\n') +
-        r'''
-        }
-      }
-    ''';
-    final request = () async {
-      final payload = await _postJson(
-        _aniListUrl,
-        <String, dynamic>{
-          'query': query,
-          'variables': <String, dynamic>{'idMal': malId},
-        },
-      );
-      final media = _map(_map(payload?['data'])['Media']);
-      if (media.isNotEmpty) _aniListMediaCache[key] = media;
-      return media;
-    }();
-    _aniListMediaRequests[key] = request;
-    try {
-      return await request;
-    } finally {
-      if (identical(_aniListMediaRequests[key], request)) {
-        _aniListMediaRequests.remove(key);
-      }
-    }
   }
 
   String _characterRole(dynamic raw) {
@@ -2146,48 +1897,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   @override
   Future<List<Actor>> getCast(String url) async {
     final route = _parseAnimeUrl(url);
-    final source = await _detailSource(url);
-    if (!_useAniListCast) {
-      return _animeWitcherServerCast(route.animeId);
-    }
-
-    final media = await _aniListMedia(
-      _malId(source),
-      includeCast: true,
-      includeRecommendations: _useAniListRecommendations,
-    );
-    final edges = _list(_map(media['characters'])['edges']);
-    final output = <Actor>[];
-    final seen = <String>{};
-    for (final raw in edges) {
-      final edge = _map(raw);
-      final character = _map(edge['node']);
-      final name = _pickAniListName(character['name']);
-      final key = _text(character['id']).isEmpty ? name : _text(character['id']);
-      if (name.isEmpty || !seen.add(key)) continue;
-      Actor? voiceActor;
-      for (final voiceRaw in _list(edge['voiceActors'])) {
-        final voice = _map(voiceRaw);
-        final voiceName = _pickAniListName(voice['name']);
-        if (voiceName.isEmpty) continue;
-        final voiceImage = _pickAniListImage(voice['image']);
-        voiceActor = Actor(
-          name: voiceName,
-          image: voiceImage.isEmpty ? null : voiceImage,
-          role: 'مؤدي الصوت الياباني',
-        );
-        break;
-      }
-      final image = _pickAniListImage(character['image']);
-      output.add(Actor(
-        name: name,
-        image: image.isEmpty ? null : image,
-        role: _characterRole(edge['role']),
-        voiceActor: voiceActor,
-      ));
-      if (output.length >= _maxCastItems) break;
-    }
-    if (output.isNotEmpty) return output;
     return _animeWitcherServerCast(route.animeId);
   }
 
@@ -2427,9 +2136,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     Map<String, dynamic> hit, {
     String? relationType,
     String? relationLabel,
-    String? preferredPoster,
   }) {
-    final item = _mapHit(hit, preferredPoster: preferredPoster);
+    final item = _mapHit(hit);
     return MultimediaItem(
       title: item.title,
       url: item.url,
@@ -2453,7 +2161,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final relations = _officialRelations(source);
     if (relations.isEmpty) return const <MultimediaItem>[];
     final resolved = await _resolveMalIds(relations.map((item) => item.malId));
-    final posters = await _aniListPostersForHits(resolved.values);
     final output = <MultimediaItem>[];
     for (final relation in relations) {
       final hit = resolved[relation.malId];
@@ -2462,7 +2169,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         hit,
         relationType: relation.type,
         relationLabel: relation.label,
-        preferredPoster: posters[relation.malId],
       ));
     }
     return output;
@@ -2499,14 +2205,10 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       hits.add(hit);
     }
 
-    final posters = await _aniListPostersForHits(hits);
     final output = <MultimediaItem>[];
     final seenUrls = <String>{};
     for (final hit in hits) {
-      final item = _relatedItem(
-        hit,
-        preferredPoster: posters[_malId(hit)],
-      );
+      final item = _relatedItem(hit);
       if (!seenUrls.add(item.url)) continue;
       output.add(item);
       if (output.length >= _maxRecommendations) break;
@@ -2518,52 +2220,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   Future<List<MultimediaItem>> getRecommendations(String url) async {
     final route = _parseAnimeUrl(url);
     final source = await _detailSource(url);
-    if (!_useAniListRecommendations) {
-      return _animeWitcherRecommendations(route.animeId, source);
-    }
-
-    final currentMal = _malId(source);
-    final media = await _aniListMedia(
-      currentMal,
-      includeCast: _useAniListCast,
-      includeRecommendations: true,
-    );
-    final nodes = _list(_map(media['recommendations'])['nodes'])
-        .map(_map)
-        .toList(growable: false)
-      ..sort((a, b) {
-        final left =
-            a['rating'] is num ? (a['rating'] as num).toDouble() : 0.0;
-        final right =
-            b['rating'] is num ? (b['rating'] as num).toDouble() : 0.0;
-        return right.compareTo(left);
-      });
-    final ids = <int>[];
-    final seen = <int>{};
-    for (final recommendation in nodes) {
-      final target = _map(recommendation['mediaRecommendation']);
-      if (_text(target['type']).isNotEmpty &&
-          _text(target['type']).toUpperCase() != 'ANIME') {
-        continue;
-      }
-      final id = _positiveInt(target['idMal']);
-      if (id <= 0 || id == currentMal || !seen.add(id)) continue;
-      ids.add(id);
-      if (ids.length >= _maxRecommendations) break;
-    }
-    final resolved = await _resolveMalIds(ids);
-    final posters = await _aniListPostersForHits(resolved.values);
-    final output = <MultimediaItem>[];
-    for (final id in ids) {
-      final hit = resolved[id];
-      if (hit == null) continue;
-      output.add(_relatedItem(
-        hit,
-        preferredPoster: posters[id],
-      ));
-      if (output.length >= _maxRecommendations) break;
-    }
-    if (output.isNotEmpty) return output;
     return _animeWitcherRecommendations(route.animeId, source);
   }
 
@@ -2596,27 +2252,23 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     if (_statusFromHit(source) == ShowStatus.completed) return null;
     final unixTime = _nextEpisodeTimestamp(source);
     if (unixTime <= 0) return null;
-    final route = _parseAnimeUrl(url);
-    final records = await _episodeRecords(route.animeId);
-    var latest = 0;
-    for (final record in records) {
-      if (record.number > latest) latest = record.number;
-    }
-    if (latest <= 0) {
-      for (final raw in <dynamic>[
-        source['episode_id'],
-        source['episode'],
-        source['latest_episode'],
-        source['last_episode'],
-      ]) {
-        final value = _positiveInt(raw);
-        if (value > latest) latest = value;
-      }
-    }
-    if (latest <= 0) return null;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     if (unixTime < now - 5 * 60) return null;
-    return NextAiring(episode: latest + 1, unixTime: unixTime);
+
+    // The countdown does not depend on loading the episode list. Keep an
+    // optional episode hint only when AnimeWitcher already exposes one in the
+    // detail payload; the UI only needs the airing timestamp.
+    var latest = 0;
+    for (final raw in <dynamic>[
+      source['episode_id'],
+      source['episode'],
+      source['latest_episode'],
+      source['last_episode'],
+    ]) {
+      final value = _positiveInt(raw);
+      if (value > latest) latest = value;
+    }
+    return NextAiring(episode: latest > 0 ? latest + 1 : 0, unixTime: unixTime);
   }
 
   String _normalizeDigits(String value) {

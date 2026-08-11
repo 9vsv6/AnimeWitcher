@@ -6,35 +6,27 @@ import '../../../core/storage/settings_repository.dart';
 part 'general_settings_provider.g.dart';
 
 class GeneralSettings {
-  final bool watchHistoryEnabled;
   final String defaultHomeScreen;
   final bool alwaysOnTop;
-  final String titlePosition;
   final List<String> taskbarOrder;
   final Set<String> hiddenTaskbarItems;
 
   const GeneralSettings({
-    this.watchHistoryEnabled = true,
     this.defaultHomeScreen = '/home',
     this.alwaysOnTop = false,
-    this.titlePosition = 'below',
     this.taskbarOrder = defaultTaskbarOrderIds,
     this.hiddenTaskbarItems = const <String>{},
   });
 
   GeneralSettings copyWith({
-    bool? watchHistoryEnabled,
     String? defaultHomeScreen,
     bool? alwaysOnTop,
-    String? titlePosition,
     List<String>? taskbarOrder,
     Set<String>? hiddenTaskbarItems,
   }) {
     return GeneralSettings(
-      watchHistoryEnabled: watchHistoryEnabled ?? this.watchHistoryEnabled,
       defaultHomeScreen: defaultHomeScreen ?? this.defaultHomeScreen,
       alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
-      titlePosition: titlePosition ?? this.titlePosition,
       taskbarOrder: taskbarOrder ?? this.taskbarOrder,
       hiddenTaskbarItems: hiddenTaskbarItems ?? this.hiddenTaskbarItems,
     );
@@ -54,24 +46,17 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
     );
 
     return GeneralSettings(
-      watchHistoryEnabled: repository.isWatchHistoryEnabled(),
       defaultHomeScreen: resolveInitialTaskbarRoute(
         repository.getDefaultHomeScreen(),
         order,
         hidden,
       ),
       alwaysOnTop: repository.isAlwaysOnTop(),
-      titlePosition: repository.getTitlePosition(),
       taskbarOrder: order,
       hiddenTaskbarItems: hidden,
     );
   }
 
-  Future<void> setWatchHistoryEnabled(bool enabled) async {
-    final repository = ref.read(settingsRepositoryProvider);
-    await repository.setWatchHistoryEnabled(enabled);
-    state = state.copyWith(watchHistoryEnabled: enabled);
-  }
 
   Future<void> setDefaultHomeScreen(String path) async {
     final repository = ref.read(settingsRepositoryProvider);
@@ -119,9 +104,4 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
     state = state.copyWith(alwaysOnTop: enabled);
   }
 
-  Future<void> setTitlePosition(String position) async {
-    final repository = ref.read(settingsRepositoryProvider);
-    await repository.setTitlePosition(position);
-    state = state.copyWith(titlePosition: position);
-  }
 }

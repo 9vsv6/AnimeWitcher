@@ -12,7 +12,6 @@ import '../../../../shared/widgets/loading_indicator.dart';
 import '../player_settings_provider.dart';
 import '../general_settings_provider.dart';
 import '../../../../core/providers/locale_provider.dart';
-import '../../../../core/providers/anime_data_source_settings_provider.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
 
@@ -91,63 +90,6 @@ void showDefaultHomeScreenDialog(
                   ref
                       .read(generalSettingsProvider.notifier)
                       .setDefaultHomeScreen(opt['route']!);
-                  Navigator.pop<void>(context);
-                },
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-/// Returns a localized label for a title position.
-String getTitlePositionLabel(String position, AppLocalizations l10n) {
-  switch (position) {
-    case 'inside':
-      return l10n.titlePositionInsidePoster;
-    case 'below':
-    default:
-      return l10n.titlePositionBelowPoster;
-  }
-}
-
-/// Shows a dialog to pick the title position on poster cards.
-void showTitlePositionDialog(
-  BuildContext context,
-  WidgetRef ref,
-  String current,
-) {
-  final l10n = AppLocalizations.of(context)!;
-  final options = <Map<String, String>>[
-    {'label': l10n.titlePositionBelowPoster, 'value': 'below'},
-    {'label': l10n.titlePositionInsidePoster, 'value': 'inside'},
-  ];
-
-  showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(l10n.titlePosition),
-      content: RadioGroup<String>(
-        groupValue: current,
-        onChanged: (val) {
-          if (val == null) return;
-          ref.read(generalSettingsProvider.notifier).setTitlePosition(val);
-          Navigator.pop<void>(context);
-        },
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((opt) {
-              return ListTile(
-                title: Text(opt['label']!),
-                leading: Radio<String>(value: opt['value']!),
-                onTap: () {
-                  ref
-                      .read(generalSettingsProvider.notifier)
-                      .setTitlePosition(opt['value']!);
                   Navigator.pop<void>(context);
                 },
               );
@@ -557,48 +499,6 @@ void showThemeDialog(
   );
 }
 
-/// Shows a dialog to reset data.
-void showResetDataDialog(BuildContext context, WidgetRef ref) {
-  final l10n = AppLocalizations.of(context)!;
-  final callerContext = context;
-  showDialog<void>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(l10n.resetDataDialogTitle),
-      content: Text(l10n.resetDataDialogContent),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop<void>(dialogContext),
-          child: Text(
-            l10n.cancel,
-            style: TextStyle(
-              color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        TextButton(
-          onPressed: () async {
-            Navigator.pop<void>(dialogContext);
-
-            // Clear Preferences ONLY
-            await ref.read(settingsRepositoryProvider).clearPreferences();
-
-            // Restart App - use caller's context; dialog context may be disposed after pop
-            if (callerContext.mounted) {
-              await AppUtils.restartApp(callerContext);
-            }
-          },
-          style: TextButton.styleFrom(
-            foregroundColor: Theme.of(dialogContext).colorScheme.tertiary,
-          ),
-          child: Text(l10n.resetDataKeepExtensions),
-        ),
-      ],
-    ),
-  );
-}
-
 /// Shows a dialog to factory reset.
 void showFactoryResetDialog(BuildContext context, WidgetRef ref) {
   final l10n = AppLocalizations.of(context)!;
@@ -848,109 +748,3 @@ void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
 }
 
 
-/// Shows the AnimeWitcher/AniZip/AniList source controls.
-void showAnimeDataSourcesDialog(BuildContext context, WidgetRef ref) {
-  final isArabic =
-      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-  final settings = ref.read(animeDataSourceSettingsProvider);
-  final notifier = ref.read(animeDataSourceSettingsProvider.notifier);
-  final metadata = [
-    (
-      icon: Icons.image_rounded,
-      label: appText(
-        context,
-        english: 'Episode images from AniZip',
-        arabic: 'صور الحلقات من AniZip',
-      ),
-    ),
-    (
-      icon: Icons.photo_library_rounded,
-      label: appText(
-        context,
-        english: 'Anime posters from AniList',
-        arabic: 'بوسترات الأنمي من AniList',
-      ),
-    ),
-    (
-      icon: Icons.people_alt_rounded,
-      label: appText(
-        context,
-        english: 'Characters from AniList',
-        arabic: 'الشخصيات من AniList',
-      ),
-    ),
-    (
-      icon: Icons.auto_awesome_rounded,
-      label: appText(
-        context,
-        english: 'More like this from AniList',
-        arabic: 'المزيد مثل هذا من AniList',
-      ),
-    ),
-  ];
-  final setters = [
-    notifier.setEpisodeImagesFromAniZip,
-    notifier.setPostersFromAniList,
-    notifier.setCastFromAniList,
-    notifier.setRecommendationsFromAniList,
-  ];
-  final values = [
-    settings.episodeImagesFromAniZip,
-    settings.postersFromAniList,
-    settings.castFromAniList,
-    settings.recommendationsFromAniList,
-  ];
-
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (context, setState) {
-        return AlertDialog(
-          surfaceTintColor: Colors.transparent,
-          title: Text(
-            appText(
-              context,
-              english: 'Anime data sources',
-              arabic: 'مصادر بيانات الأنمي',
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var i = 0; i < metadata.length; i++)
-                  SwitchListTile(
-                    secondary: Icon(metadata[i].icon),
-                    title: Text(metadata[i].label),
-                    subtitle: Text(
-                      values[i]
-                          ? (isArabic ? 'مفعّل' : 'Enabled')
-                          : (isArabic
-                              ? 'متوقف — AnimeWitcher'
-                              : 'Disabled — AnimeWitcher'),
-                    ),
-                    value: values[i],
-                    onChanged: (val) {
-                      setters[i](val);
-                      setState(() => values[i] = val);
-                    },
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop<void>(ctx),
-              child: Text(
-                AppLocalizations.of(ctx)!.close,
-                style: TextStyle(
-                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    ),
-  );
-}

@@ -2250,7 +2250,6 @@ class AnimeWitcherAccountService {
     final source = document.fields;
     final details = _map(source['details']);
     final poster = _map(source['poster']);
-    final aniListPoster = _map(source['aniList_poster']);
     final title = _optionalString(source['name']) ??
         _optionalString(source['english_title']) ??
         animeId;
@@ -2258,8 +2257,6 @@ class AnimeWitcherAccountService {
       poster['large'],
       source['poster_uri'],
       poster['medium'],
-      aniListPoster['large'],
-      aniListPoster['medium'],
       source['cover_uri'],
     ]);
     final banner = _firstString(<dynamic>[

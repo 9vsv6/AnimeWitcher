@@ -7,7 +7,6 @@ import 'home_state.dart';
 import 'package:skystream/features/home/presentation/widgets/continue_watching_section.dart';
 import 'package:skystream/features/search/presentation/search_provider.dart';
 import 'package:skystream/features/library/presentation/history_provider.dart';
-import '../../settings/presentation/general_settings_provider.dart';
 import 'widgets/home_hero_carousel.dart';
 import 'widgets/media_horizontal_list.dart';
 import 'view_all_screen.dart';
@@ -178,7 +177,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.build(context);
     final homeDataAsync = ref.watch(homeDataProvider);
     final continueWatching = ref.watch(continueWatchingProvider);
-    final generalSettings = ref.watch(generalSettingsProvider);
     final l10n = AppLocalizations.of(context)!;
     final activeProvider = ref.watch(activeProviderProvider);
 
@@ -223,7 +221,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 context,
                 homeDataAsync,
                 continueWatching,
-                generalSettings.watchHistoryEnabled,
                 isWidescreen: true,
               ),
             ),
@@ -299,7 +296,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         context,
         homeDataAsync,
         continueWatching,
-        generalSettings.watchHistoryEnabled,
       ),
     );
 
@@ -396,7 +392,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     BuildContext context,
     HomeState state,
     List<HistoryItem> continueWatching,
-    bool watchHistoryEnabled,
     {
     bool isWidescreen = false,
   }) {
@@ -485,7 +480,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
 
-              if (watchHistoryEnabled && continueWatching.isNotEmpty)
+              if (continueWatching.isNotEmpty)
                 SliverToBoxAdapter(
                   child: ContinueWatchingSection(
                     title: l10n.continueWatching,

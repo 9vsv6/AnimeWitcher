@@ -48,13 +48,6 @@ class SettingsRepository {
   Set<String> getHiddenTaskbarItems() =>
       _storageService.getHiddenTaskbarItems();
 
-  Future<void> setTitlePosition(String position) async {
-    await _storageService.setTitlePosition(position);
-  }
-
-  String getTitlePosition() {
-    return _storageService.getTitlePosition();
-  }
 
   Future<void> setDevLoadAssets(bool enabled) async {
     await _storageService.setDevLoadAssets(enabled);
@@ -78,23 +71,8 @@ class SettingsRepository {
   bool isEpisodeImagesFromAniZipEnabled() =>
       _storageService.isEpisodeImagesFromAniZipEnabled();
 
-  Future<void> setPostersFromAniListEnabled(bool enabled) =>
-      _storageService.setPostersFromAniListEnabled(enabled);
 
-  bool isPostersFromAniListEnabled() =>
-      _storageService.isPostersFromAniListEnabled();
 
-  Future<void> setCastFromAniListEnabled(bool enabled) =>
-      _storageService.setCastFromAniListEnabled(enabled);
-
-  bool isCastFromAniListEnabled() =>
-      _storageService.isCastFromAniListEnabled();
-
-  Future<void> setRecommendationsFromAniListEnabled(bool enabled) =>
-      _storageService.setRecommendationsFromAniListEnabled(enabled);
-
-  bool isRecommendationsFromAniListEnabled() =>
-      _storageService.isRecommendationsFromAniListEnabled();
 
   Future<void> setCustomBaseUrl(String packageName, String? url) =>
       _storageService.setCustomBaseUrl(packageName, url);
@@ -118,13 +96,6 @@ class SettingsRepository {
     return _storageService.getExploreLanguage();
   }
 
-  Future<void> setWatchHistoryEnabled(bool enabled) async {
-    await _storageService.setWatchHistoryEnabled(enabled);
-  }
-
-  bool isWatchHistoryEnabled() {
-    return _storageService.isWatchHistoryEnabled();
-  }
 
   Future<void> setAlwaysOnTop(bool enabled) async {
     await _storageService.setAlwaysOnTop(enabled);
@@ -158,9 +129,6 @@ class SettingsRepository {
     return _storageService.getPlayerSetting<T>(key, defaultValue: defaultValue);
   }
 
-  Future<void> clearPreferences({bool keepRepos = true}) async {
-    await _storageService.clearPreferences(keepRepos: keepRepos);
-  }
 
   Future<void> deleteAllData() async {
     await _storageService.deleteAllData();

@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../core/providers/device_info_provider.dart';
+import '../../../core/providers/anime_data_source_settings_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/account/account_providers.dart';
 import '../../../core/account/animewitcher_account_models.dart';
@@ -88,6 +89,7 @@ class SettingsScreen extends ConsumerWidget {
     final versionAsync = ref.watch(appVersionProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final generalSettings = ref.watch(generalSettingsProvider);
+    final animeDataSettings = ref.watch(animeDataSourceSettingsProvider);
     final accountState = ref.watch(animeWitcherAccountControllerProvider);
     final accountProfile = accountState.asData?.value.profile;
 
@@ -179,24 +181,6 @@ class SettingsScreen extends ConsumerWidget {
                   onTap: () => showThemeDialog(context, ref, themeMode),
                 ),
                 SettingsTile(
-                  icon: Icons.history_rounded,
-                  title: l10n.recordWatchHistory,
-                  subtitle: generalSettings.watchHistoryEnabled
-                      ? l10n.enabled
-                      : l10n.disabled,
-                  trailing: Switch(
-                    value: generalSettings.watchHistoryEnabled,
-                    onChanged: (val) => ref
-                        .read(generalSettingsProvider.notifier)
-                        .setWatchHistoryEnabled(val),
-                  ),
-                  onTap: () => ref
-                      .read(generalSettingsProvider.notifier)
-                      .setWatchHistoryEnabled(
-                        !generalSettings.watchHistoryEnabled,
-                      ),
-                ),
-                SettingsTile(
                   icon: Icons.home_rounded,
                   title: l10n.defaultHomeScreen,
                   subtitle: getHomeScreenLabel(
@@ -222,19 +206,6 @@ class SettingsScreen extends ConsumerWidget {
                     ref,
                     generalSettings.taskbarOrder,
                     generalSettings.hiddenTaskbarItems,
-                  ),
-                ),
-                SettingsTile(
-                  icon: Icons.title_rounded,
-                  title: l10n.titlePosition,
-                  subtitle: getTitlePositionLabel(
-                    generalSettings.titlePosition,
-                    l10n,
-                  ),
-                  onTap: () => showTitlePositionDialog(
-                    context,
-                    ref,
-                    generalSettings.titlePosition,
                   ),
                 ),
                 SettingsTile(
@@ -391,27 +362,38 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: LayoutConstants.spacingLg),
+
             SettingsGroup(
               title: appText(
                 context,
-                english: 'Anime data sources',
-                arabic: 'مصادر بيانات الأنمي',
+                english: 'Episodes',
+                arabic: 'الحلقات',
               ),
               children: [
                 SettingsTile(
-                  icon: Icons.cloud_sync_rounded,
+                  icon: Icons.image_rounded,
                   title: appText(
                     context,
-                    english: 'Anime data sources',
-                    arabic: 'مصادر بيانات الأنمي',
+                    english: 'Episode images',
+                    arabic: 'صور الحلقات',
                   ),
                   subtitle: appText(
                     context,
-                    english: 'Control AniZip and AniList sources',
-                    arabic: 'التحكم بمصادر AniZip وAniList',
+                    english: 'Use episode images from AniZip',
+                    arabic: 'استخدام صور الحلقات من AniZip',
+                  ),
+                  trailing: Switch(
+                    value: animeDataSettings.episodeImagesFromAniZip,
+                    onChanged: (value) => ref
+                        .read(animeDataSourceSettingsProvider.notifier)
+                        .setEpisodeImagesFromAniZip(value),
                   ),
                   isLast: true,
-                  onTap: () => showAnimeDataSourcesDialog(context, ref),
+                  onTap: () => ref
+                      .read(animeDataSourceSettingsProvider.notifier)
+                      .setEpisodeImagesFromAniZip(
+                        !animeDataSettings.episodeImagesFromAniZip,
+                      ),
                 ),
               ],
             ),
@@ -433,12 +415,6 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                     onTap: () => showClearCacheDialog(context, ref),
                   ),
-                SettingsTile(
-                  icon: Icons.restore_rounded,
-                  title: l10n.resetDataKeepExtensions,
-                  subtitle: l10n.resetDataSubtitle,
-                  onTap: () => showResetDataDialog(context, ref),
-                ),
                 SettingsTile(
                   icon: Icons.delete_forever_rounded,
                   title: l10n.factoryReset,

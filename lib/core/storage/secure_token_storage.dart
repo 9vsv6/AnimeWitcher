@@ -6,7 +6,7 @@ import 'storage_service.dart';
 
 part 'secure_token_storage.g.dart';
 
-/// Platform-secure storage for OAuth credentials (MAL/AniList access + refresh tokens). Backed by Keychain (iOS/macOS), Keystore (Android),
+/// Platform-secure storage for OAuth credentials. Backed by Keychain (iOS/macOS), Keystore (Android),
 /// Credentials API (Windows), and libsecret (Linux). Falls back to the
 /// pre-existing Hive-backed [StorageService] on a per-key read if the secure
 /// backend throws — so a missing libsecret install on Linux degrades gracefully
