@@ -694,54 +694,51 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Hero(
-                  tag: 'banner_${item.url}',
-                  child: bannerUrl.isEmpty
-                      ? const ColoredBox(color: Colors.black)
-                      : ColoredBox(
-                          color: Colors.black,
-                          child: CachedNetworkImage(
-                            key: ValueKey<String>('details_banner_$bannerUrl'),
-                            imageUrl: bannerUrl,
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            memCacheWidth:
-                                (screenWidth *
-                                        MediaQuery.devicePixelRatioOf(context))
-                                    .round(),
-                            placeholder: (_, _) => const ColoredBox(
-                              color: Colors.black,
-                            ),
-                            errorWidget: (_, _, _) {
-                              if (providedBannerUrl != null &&
-                                  posterUrl.isNotEmpty &&
-                                  providedBannerUrl != posterUrl) {
-                                return CachedNetworkImage(
-                                  key: ValueKey<String>(
-                                    'details_banner_poster_$posterUrl',
-                                  ),
-                                  imageUrl: posterUrl,
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment.center,
-                                  memCacheWidth:
-                                      (screenWidth *
-                                              MediaQuery.devicePixelRatioOf(
-                                                context,
-                                              ))
-                                          .round(),
-                                  placeholder: (_, _) => const ColoredBox(
-                                    color: Colors.black,
-                                  ),
-                                  errorWidget: (_, _, _) => const ColoredBox(
-                                    color: Colors.black,
-                                  ),
-                                );
-                              }
-                              return const ColoredBox(color: Colors.black);
-                            },
+                bannerUrl.isEmpty
+                    ? const ColoredBox(color: Colors.black)
+                    : ColoredBox(
+                        color: Colors.black,
+                        child: CachedNetworkImage(
+                          key: ValueKey<String>('details_banner_$bannerUrl'),
+                          imageUrl: bannerUrl,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          memCacheWidth:
+                              (screenWidth *
+                                      MediaQuery.devicePixelRatioOf(context))
+                                  .round(),
+                          placeholder: (_, _) => const ColoredBox(
+                            color: Colors.black,
                           ),
+                          errorWidget: (_, _, _) {
+                            if (providedBannerUrl != null &&
+                                posterUrl.isNotEmpty &&
+                                providedBannerUrl != posterUrl) {
+                              return CachedNetworkImage(
+                                key: ValueKey<String>(
+                                  'details_banner_poster_$posterUrl',
+                                ),
+                                imageUrl: posterUrl,
+                                fit: BoxFit.cover,
+                                alignment: Alignment.center,
+                                memCacheWidth:
+                                    (screenWidth *
+                                            MediaQuery.devicePixelRatioOf(
+                                              context,
+                                            ))
+                                        .round(),
+                                placeholder: (_, _) => const ColoredBox(
+                                  color: Colors.black,
+                                ),
+                                errorWidget: (_, _, _) => const ColoredBox(
+                                  color: Colors.black,
+                                ),
+                              );
+                            }
+                            return const ColoredBox(color: Colors.black);
+                          },
                         ),
-                ),
+                      ),
                 // Keep the fade broad and finish on the same solid black as
                 // the content below. Ending at a translucent black leaves a
                 // visible horizontal seam where the banner meets the page.
@@ -772,27 +769,24 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _showPosterViewer(context, item),
-              child: Hero(
-                tag: 'poster_${item.url}',
-                child: Material(
-                  color: Colors.black,
-                  elevation: sdp(6),
-                  borderRadius: BorderRadius.circular(sdp(5)),
-                  clipBehavior: Clip.antiAlias,
-                  child: posterUrl.isEmpty
-                      ? const ColoredBox(color: Colors.black)
-                      : CachedNetworkImage(
-                          key: ValueKey<String>('details_poster_$posterUrl'),
-                          imageUrl: posterUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (_, _) => const ColoredBox(
-                            color: Colors.black,
-                          ),
-                          errorWidget: (_, _, _) => const ColoredBox(
-                            color: Colors.black,
-                          ),
+              child: Material(
+                color: Colors.black,
+                elevation: sdp(6),
+                borderRadius: BorderRadius.circular(sdp(5)),
+                clipBehavior: Clip.antiAlias,
+                child: posterUrl.isEmpty
+                    ? const ColoredBox(color: Colors.black)
+                    : CachedNetworkImage(
+                        key: ValueKey<String>('details_poster_$posterUrl'),
+                        imageUrl: posterUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => const ColoredBox(
+                          color: Colors.black,
                         ),
-                ),
+                        errorWidget: (_, _, _) => const ColoredBox(
+                          color: Colors.black,
+                        ),
+                      ),
               ),
             ),
           ),
@@ -1060,27 +1054,27 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 pinned: true,
                 expandedHeight: mobileExpandedHeight,
                 stretch: true,
-                backgroundColor: Colors.transparent,
+                // Keep an opaque black fallback under the artwork. FlexibleSpaceBar
+                // applies its own automatic background fade during route/sliver
+                // layout changes; that exposed a neutral gray frame while short
+                // movie / one-episode pages were still settling. Render the header
+                // directly so only our explicit collapse fade can affect it.
+                backgroundColor: Colors.black,
                 surfaceTintColor: Colors.transparent,
                 shadowColor: Colors.transparent,
                 elevation: 0,
                 scrolledUnderElevation: 0,
-                forceMaterialTransparency: true,
-                flexibleSpace: FlexibleSpaceBar(
-                  stretchModes: const [
-                    StretchMode.zoomBackground,
-                  ],
-                  background: _withDetailsHeaderCollapseFade(
-                    _withDetailsHeaderPullReaction(
-                      _buildAnimeWitcherMobileHeader(
-                        context,
-                        item,
-                        detailsAsync,
-                      ),
+                forceMaterialTransparency: false,
+                flexibleSpace: _withDetailsHeaderCollapseFade(
+                  _withDetailsHeaderPullReaction(
+                    _buildAnimeWitcherMobileHeader(
+                      context,
+                      item,
+                      detailsAsync,
                     ),
-                    mobileCollapseExtent,
-                    loading: detailsAsync.isLoading || episodesAsync.isLoading,
                   ),
+                  mobileCollapseExtent,
+                  loading: detailsAsync.isLoading || episodesAsync.isLoading,
                 ),
                 automaticallyImplyLeading: false,
                 leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,

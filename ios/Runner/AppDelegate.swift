@@ -491,6 +491,9 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     rootView.backgroundColor = .clear
     rootView.isOpaque = false
     rootView.clipsToBounds = false
+    // Keep the persistent Liquid Glass chrome above Flutter route imagery and
+    // any transient platform-view composition during push/pop transitions.
+    rootView.layer.zPosition = 10_000
 
     backButton.translatesAutoresizingMaskIntoConstraints = false
     backButton.alpha = 0
@@ -600,6 +603,7 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
       ])
       installedHostView = hostView
     }
+    rootView.layer.zPosition = 10_000
     hostView.bringSubviewToFront(rootView)
     return true
   }
