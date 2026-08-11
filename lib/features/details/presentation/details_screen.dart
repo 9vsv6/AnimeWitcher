@@ -951,9 +951,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final currentItem = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.item),
     );
-    final isMovie = ref.watch(
-      detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
-    );
+    // Movies and one-episode anime share the exact same mobile layout, so
+    // iPhone/iPad-small pages must not rebuild just because isMovie resolves.
+    // Desktop still uses the flag for hero-specific playback presentation.
+    final isMovie = isLarge
+        ? ref.watch(
+            detailsControllerProvider(widget.item.url).select((s) => s.isMovie),
+          )
+        : false;
     final item = mergeDetailsItem(
       fallback: widget.item,
       incoming: currentItem ?? details ?? widget.item,
@@ -1037,11 +1042,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     // ── Mobile: AnimeWitcher-sized overlapping details header ──
     return Scaffold(
       bottomNavigationBar:
-          selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
+          selectedEpisodeCount == 0 || _selectedDetailsTab != 1
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       body: _buildDetailsTabSwipeRegion(
-        enabled: !isMovie,
+        enabled: true,
         child: CustomScrollView(
           controller: _detailsScrollController,
           physics: const _GentleTopOverscrollPhysics(
@@ -1127,7 +1132,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               trailersAsync,
               relatedAsync,
               recommendationsAsync,
-              isMovie,
               l10n,
             ),
           ],
@@ -1470,7 +1474,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     return Scaffold(
       bottomNavigationBar:
-          selectedEpisodeCount == 0 || (!isMovie && _selectedDetailsTab != 1)
+          selectedEpisodeCount == 0 || _selectedDetailsTab != 1
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       extendBodyBehindAppBar: true,
@@ -1514,7 +1518,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
       ),
       body: _buildDetailsTabSwipeRegion(
-        enabled: !isMovie,
+        enabled: true,
         child: DetailsDesktopHero(
           displayItem: item,
           baseItem: widget.item,
@@ -1532,7 +1536,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             trailersState,
             relatedState,
             recommendationsState,
-            isMovie,
             l10n,
           ),
         ),
@@ -1801,25 +1804,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<Trailer>> trailersState,
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
-    bool isMovie,
     AppLocalizations l10n,
   ) {
-    final tabContent = _selectedDetailsTab == 0 || isMovie
+    final tabContent = _selectedDetailsTab == 0
         ? <Widget>[
             _buildSynopsisAndGenres(context, item, detailsState, l10n),
             const SizedBox(height: 28),
             AnimeInformationSection(item: item),
-            if (isMovie) ...[
-              const SizedBox(height: 24),
-              _episodeLoadStatus(context, episodesState),
-              if (episodesState.hasValue &&
-                  (episodesState.value?.isNotEmpty ?? false))
-                DetailsDesktopEpisodeColumn(
-                  parentItem: item,
-                  itemUrl: widget.item.url,
-                  isMovie: true,
-                ),
-            ],
             ..._buildIndependentDetailSections(
               context,
               item,
@@ -1847,13 +1838,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!isMovie) ...[
-          _buildDetailsPageTabs(context, episodesState),
-          const SizedBox(height: 24),
-        ],
+        _buildDetailsPageTabs(context, episodesState),
+        const SizedBox(height: 24),
         _buildTabTransition(
           child: Column(
-            key: ValueKey<int>(isMovie ? 0 : _selectedDetailsTab),
+            key: ValueKey<int>(_selectedDetailsTab),
             crossAxisAlignment: CrossAxisAlignment.start,
             children: tabContent,
           ),
@@ -1873,10 +1862,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<Trailer>> trailersState,
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
-    bool isMovie,
     AppLocalizations l10n,
   ) {
-    final showDetailsPage = _selectedDetailsTab == 0 || isMovie;
+    final showDetailsPage = _selectedDetailsTab == 0;
     final episodeReady =
         episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
 
@@ -1897,7 +1885,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 NextAiringWidget(nextAiring: item.nextAiring!),
               ],
               const SizedBox(height: 24),
-              if (!isMovie) _buildDetailsPageTabs(context, episodesState),
+              _buildDetailsPageTabs(context, episodesState),
             ],
           ),
         ),
@@ -1917,10 +1905,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   _buildSynopsisAndGenres(context, item, detailsState, l10n),
                   const SizedBox(height: 28),
                   AnimeInformationSection(item: item),
-                  if (isMovie) ...[
-                    const SizedBox(height: 20),
-                    _episodeLoadStatus(context, episodesState),
-                  ],
                   ..._buildIndependentDetailSections(
                     context,
                     item,
@@ -1938,18 +1922,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
       );
 
-      if (isMovie && episodeReady) {
-        slivers.add(
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            sliver: SliverDetailsEpisodeList(
-              parentItem: item,
-              itemUrl: widget.item.url,
-              isMovie: true,
-            ),
-          ),
-        );
-      }
     } else {
       slivers.add(
         SliverToBoxAdapter(
