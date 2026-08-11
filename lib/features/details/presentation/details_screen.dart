@@ -54,8 +54,18 @@ class _GentleTopOverscrollPhysics extends BouncingScrollPhysics {
 class DetailsScreen extends ConsumerStatefulWidget {
   final MultimediaItem item;
   final bool autoPlay;
+  final String? resumeEpisodeUrl;
+  final int? resumeEpisodeNumber;
+  final int? resumeSeason;
 
-  const DetailsScreen({super.key, required this.item, this.autoPlay = false});
+  const DetailsScreen({
+    super.key,
+    required this.item,
+    this.autoPlay = false,
+    this.resumeEpisodeUrl,
+    this.resumeEpisodeNumber,
+    this.resumeSeason,
+  });
 
   @override
   ConsumerState<DetailsScreen> createState() => _DetailsScreenState();
@@ -866,6 +876,31 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
+  Episode? _resumeEpisodeFrom(List<Episode> episodes) {
+    final resumeUrl = widget.resumeEpisodeUrl?.trim();
+    if (resumeUrl != null && resumeUrl.isNotEmpty) {
+      for (final episode in episodes) {
+        if (episode.url.trim() == resumeUrl) return episode;
+      }
+    }
+
+    final resumeNumber = widget.resumeEpisodeNumber;
+    if (resumeNumber == null || resumeNumber <= 0) return null;
+
+    final resumeSeason = widget.resumeSeason;
+    Episode? numberMatch;
+    for (final episode in episodes) {
+      if (episode.episode != resumeNumber) continue;
+      numberMatch ??= episode;
+      if (resumeSeason != null &&
+          resumeSeason > 0 &&
+          episode.season == resumeSeason) {
+        return episode;
+      }
+    }
+    return numberMatch;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -911,12 +946,25 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       }
 
       final item = nextState.item ?? nextState.details.value ?? widget.item;
+      final episodes = nextState.episodes.value ?? const <Episode>[];
+      final resumeEpisode = _resumeEpisodeFrom(episodes);
+      final resumeUrl = widget.resumeEpisodeUrl?.trim();
+      final fallbackResumeUrl = resumeEpisode == null &&
+              resumeUrl != null &&
+              resumeUrl.isNotEmpty
+          ? resumeUrl
+          : null;
       _didTriggerAutoPlay = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
         ref
             .read(detailsControllerProvider(widget.item.url).notifier)
-            .handlePlayPress(context, item);
+            .handlePlayPress(
+              context,
+              item,
+              specificEpisode: resumeEpisode,
+              overrideUrl: fallbackResumeUrl,
+            );
       });
     });
     // Watch library state so the icon refreshes after add/remove, but check
