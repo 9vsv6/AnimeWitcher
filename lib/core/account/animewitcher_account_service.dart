@@ -262,6 +262,11 @@ class AnimeWitcherAccountService {
   }
 
   Future<void> signOut() async {
+    // Remove this device from the previous account before discarding the ID
+    // token; otherwise a signed-out device can keep receiving account pushes.
+    try {
+      await clearNotificationToken();
+    } catch (_) {}
     if (_googleInitialized) {
       try {
         await _googleSignIn.signOut();
@@ -946,6 +951,89 @@ class AnimeWitcherAccountService {
     });
   }
 
+  Future<void> updateNotificationRegistration({
+    String? fcmToken,
+    required String notificationScope,
+  }) async {
+    final profile = _profile;
+    if (profile == null || _session == null) return;
+
+    final normalizedScope = switch (notificationScope) {
+      'favorites_watching' => 'favorites_watching',
+      'off' => 'off',
+      _ => 'all',
+    };
+    final backendPreference = switch (normalizedScope) {
+      'off' => 'غير مفعل',
+      'favorites_watching' => 'المفضلة',
+      _ => 'الكل',
+    };
+
+    final fields = <String, dynamic>{
+      if (fcmToken != null) 'fcm_token': fcmToken,
+      'settings': <String, dynamic>{
+        'new_episodes_notif': backendPreference,
+        'skystream_notification_scope': normalizedScope,
+        'skystream_include_watching': normalizedScope == 'favorites_watching',
+      },
+    };
+    final fieldPaths = <String>[
+      if (fcmToken != null) 'fcm_token',
+      'settings.new_episodes_notif',
+      'settings.skystream_notification_scope',
+      'settings.skystream_include_watching',
+    ];
+
+    await _authenticated(
+      (token) => _firestore.patchDocumentFields(
+        'users/${profile.documentId}',
+        fields,
+        fieldPaths,
+        token,
+      ),
+    );
+    if (normalizedScope == 'favorites_watching') {
+      await syncNotificationAnimeIds();
+    }
+  }
+
+  Future<void> clearNotificationToken() async {
+    final profile = _profile;
+    if (profile == null || _session == null) return;
+    await _authenticated(
+      (token) => _firestore.patchDocumentFields(
+        'users/${profile.documentId}',
+        const <String, dynamic>{'fcm_token': ''},
+        const <String>['fcm_token'],
+        token,
+      ),
+    );
+  }
+
+  Future<void> syncNotificationAnimeIds() async {
+    final profile = _profile;
+    if (profile == null || _session == null) return;
+    final ids = <String>{};
+    for (final item in _storage.getLibraryItems()) {
+      final animeId = AnimeWitcherSyncIds.animeIdFromUrl(item.url);
+      if (animeId == null) continue;
+      final favorite = _storage.isLibraryItemFavorite(item.url);
+      final rawCategory = _storage.getLibraryItemCategory(item.url);
+      final watching = rawCategory != null &&
+          LibraryCategory.fromStorageKey(rawCategory) == LibraryCategory.watching;
+      if (favorite || watching) ids.add(animeId);
+    }
+    final sorted = ids.toList(growable: false)..sort();
+    await _authenticated(
+      (token) => _firestore.patchDocumentFields(
+        'users/${profile.documentId}',
+        <String, dynamic>{'notification_anime_ids': sorted},
+        const <String>['notification_anime_ids'],
+        token,
+      ),
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Anime lists
   // -------------------------------------------------------------------------
@@ -1116,6 +1204,7 @@ class AnimeWitcherAccountService {
         knownFavorites: knownFavorites,
       ),
     );
+    await syncNotificationAnimeIds();
   }
 
   Future<void> _saveLibraryItemInternal(
@@ -1212,6 +1301,7 @@ class AnimeWitcherAccountService {
     });
     if (!isSignedIn) return;
     await _deleteLibraryRemote(animeId, profile);
+    await syncNotificationAnimeIds();
     await _removePendingMutation(
       _pendingLibraryDeletesKey,
       mutationId,

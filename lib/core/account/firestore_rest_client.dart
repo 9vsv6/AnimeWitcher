@@ -508,6 +508,39 @@ class FirestoreRestClient {
     }
   }
 
+  Future<FirestoreDocument> patchDocumentFields(
+    String path,
+    Map<String, dynamic> fields,
+    List<String> fieldPaths,
+    String idToken,
+  ) async {
+    if (fieldPaths.isEmpty) {
+      throw ArgumentError.value(fieldPaths, 'fieldPaths', 'Must not be empty.');
+    }
+    try {
+      final response = await _dio.patch<dynamic>(
+        '$_documentsBase/${_encodedPath(path)}',
+        queryParameters: <String, dynamic>{
+          'updateMask.fieldPaths': fieldPaths,
+        },
+        data: <String, dynamic>{
+          'fields': FirestoreValueCodec.encodeFields(fields),
+        },
+        options: _options(idToken),
+      );
+      final document = _decodeDocument(response.data);
+      if (document == null) {
+        throw const AnimeWitcherAccountException(
+          'invalid-firestore-response',
+          'The sync server returned an invalid document.',
+        );
+      }
+      return document;
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
   /// Writes ordinary fields and lets Firestore assign authoritative server
   /// timestamps in the same atomic commit. AnimeWitcher relies on
   /// FieldValue.serverTimestamp() for ordering lists and resolving progress

@@ -99,6 +99,9 @@ dependencies:
   # Native Google identity; Firebase email/password and Firestore use the
   # official REST APIs so account sync stays lightweight on every platform.
   google_sign_in: ^7.2.0
+  # Official Firebase Cloud Messaging client for new-episode push notifications.
+  firebase_core: ^4.12.1
+  firebase_messaging: ^16.4.3
 
 
 dev_dependencies:

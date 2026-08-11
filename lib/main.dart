@@ -19,6 +19,7 @@ import 'core/providers/update_provider.dart';
 import 'core/widgets/update_dialog.dart';
 import 'core/services/download_service.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/push_notification_service.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
@@ -32,6 +33,7 @@ import 'core/account/account_providers.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  await prepareAnimeWitcherFirebaseMessaging();
 
   // Cap Flutter's image cache. Default is 1000 entries / 100 MB which is too
   // generous for low-RAM TVs and even most phones — decoded media posters fill
@@ -185,6 +187,7 @@ class _MyAppState extends ConsumerState<MyApp>
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(downloadServiceProvider).init();
+      unawaited(ref.read(pushNotificationServiceProvider).initialize());
       _checkAppUpdates();
     });
   }
@@ -311,6 +314,15 @@ class _MyAppState extends ConsumerState<MyApp>
     // blocking the first frame. Local library/history remain immediately
     // available while the async provider performs its merge in the background.
     ref.watch(animeWitcherAccountControllerProvider);
+    ref.listen(animeWitcherAccountControllerProvider, (previous, next) {
+      final wasSignedIn = previous?.asData?.value.isSignedIn == true;
+      final isSignedIn = next.asData?.value.isSignedIn == true;
+      if (isSignedIn && !wasSignedIn) {
+        unawaited(
+          ref.read(pushNotificationServiceProvider).syncCurrentRegistration(),
+        );
+      }
+    });
     final themeMode = ref.watch(appThemeModeProvider);
     final appRouter = ref.watch(appRouterProvider);
     final locale = ref.watch(localeProvider);

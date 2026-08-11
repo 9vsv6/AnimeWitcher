@@ -8,20 +8,14 @@ import UserNotifications
   private var downloadContinuedProcessingChannel: FlutterMethodChannel?
   private var liquidGlassPresenterChannel: FlutterMethodChannel?
   private var persistentGlassHeaderChannel: FlutterMethodChannel?
+  private var notificationChannel: FlutterMethodChannel?
   private var persistentGlassHeaderController: ApplePersistentGlassHeaderNativeController?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    if #available(iOS 10.0, *) {
-      UNUserNotificationCenter.current().delegate = self
-      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-        if granted {
-          print("[AppDelegate] Notification permission granted")
-        }
-      }
-    }
+    UNUserNotificationCenter.current().delegate = self
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
@@ -41,6 +35,30 @@ import UserNotifications
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
     let messenger = engineBridge.applicationRegistrar.messenger()
+
+    let systemNotificationChannel = FlutterMethodChannel(
+      name: "dev.akash.skystream/notifications",
+      binaryMessenger: messenger
+    )
+    systemNotificationChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(false)
+        return
+      }
+      switch call.method {
+      case "ensureChannel":
+        result(true)
+      case "requestPermission":
+        self.requestNotificationPermission(result: result)
+      case "scheduleTestNotification":
+        self.scheduleSystemNotification(arguments: call.arguments, result: result)
+      case "showNotification":
+        self.showSystemNotification(arguments: call.arguments, result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    notificationChannel = systemNotificationChannel
 
     let persistentHeaderChannel = FlutterMethodChannel(
       name: "dev.akash.skystream/persistent_glass_header",
@@ -279,6 +297,91 @@ import UserNotifications
 #endif
 
     downloadContinuedProcessingChannel = channel
+  }
+
+  private func requestNotificationPermission(result: @escaping FlutterResult) {
+    UNUserNotificationCenter.current().requestAuthorization(
+      options: [.alert, .badge, .sound]
+    ) { granted, error in
+      if let error {
+        DispatchQueue.main.async {
+          result(FlutterError(
+            code: "NOTIFICATION_PERMISSION_ERROR",
+            message: error.localizedDescription,
+            details: nil
+          ))
+        }
+        return
+      }
+      if granted {
+        DispatchQueue.main.async {
+          UIApplication.shared.registerForRemoteNotifications()
+        }
+      }
+      DispatchQueue.main.async { result(granted) }
+    }
+  }
+
+  private func scheduleSystemNotification(
+    arguments: Any?,
+    result: @escaping FlutterResult
+  ) {
+    let args = arguments as? [String: Any]
+    let seconds = max(1.0, (args?["delaySeconds"] as? NSNumber)?.doubleValue ?? 15.0)
+    let title = args?["title"] as? String ?? "AnimeWitcher"
+    let body = args?["body"] as? String ?? "Notification test"
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = body
+    content.sound = .default
+    let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+    let request = UNNotificationRequest(
+      identifier: "animewitcher-test-\(UUID().uuidString)",
+      content: content,
+      trigger: trigger
+    )
+    UNUserNotificationCenter.current().add(request) { error in
+      DispatchQueue.main.async {
+        if let error {
+          result(FlutterError(
+            code: "NOTIFICATION_SCHEDULE_ERROR",
+            message: error.localizedDescription,
+            details: nil
+          ))
+        } else {
+          result(true)
+        }
+      }
+    }
+  }
+
+  private func showSystemNotification(
+    arguments: Any?,
+    result: @escaping FlutterResult
+  ) {
+    let args = arguments as? [String: Any]
+    let content = UNMutableNotificationContent()
+    content.title = args?["title"] as? String ?? "AnimeWitcher"
+    content.body = args?["body"] as? String ?? ""
+    content.sound = .default
+    let request = UNNotificationRequest(
+      identifier: "animewitcher-now-\(UUID().uuidString)",
+      content: content,
+      trigger: nil
+    )
+    UNUserNotificationCenter.current().add(request) { error in
+      DispatchQueue.main.async {
+        if let error {
+          result(FlutterError(
+            code: "NOTIFICATION_SHOW_ERROR",
+            message: error.localizedDescription,
+            details: nil
+          ))
+        } else {
+          result(true)
+        }
+      }
+    }
   }
 }
 

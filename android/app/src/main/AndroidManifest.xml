@@ -41,6 +41,9 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <receiver
+            android:name=".AnimeWitcherNotificationReceiver"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -75,6 +78,9 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="anime_witcher_general" />
 
         <!-- Explicitly enable Impeller -->
         <meta-data
