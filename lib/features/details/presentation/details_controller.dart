@@ -7,11 +7,9 @@ import 'package:collection/collection.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
-import '../../../../core/storage/library_repository.dart';
 
 import 'package:skystream/core/storage/episode_watch_repository.dart';
 import 'package:skystream/core/storage/storage_service.dart';
-import '../../library/presentation/library_provider.dart';
 import '../../library/presentation/history_provider.dart';
 import 'playback_launcher.dart';
 import '../../../core/services/download_service.dart';
@@ -194,12 +192,6 @@ class DetailsController extends _$DetailsController {
         true;
 
     return DetailsState(isAscending: savedAscending);
-  }
-
-  void init(MultimediaItem initialItem) {
-    if (state.item == null) {
-      state = state.copyWith(item: initialItem);
-    }
   }
 
   void setSeason(int season) {
@@ -913,27 +905,7 @@ class DetailsController extends _$DetailsController {
     await _episodesLoadFuture;
   }
 
-  Future<void> retryEpisodes() async {
-    final provider = _lastEpisodesProvider;
-    final url = _lastEpisodesUrl;
-    final currentItem = state.item;
-
-    if (provider == null || url == null || currentItem == null) {
-      return;
-    }
-
-    _episodesRequested = true;
-    state = state.copyWith(episodes: const AsyncLoading());
-    final generation = _loadGeneration;
-    _episodesLoadFuture = _loadEpisodesInBackground(
-      provider,
-      url,
-      currentItem,
-      generation,
-    );
-    await _episodesLoadFuture;
-  }
-
+  Future<void> retryEpisodes() => loadEpisodesOnDemand();
 
   List<Episode>? _processEpisodes(
     List<Episode>? episodes,
@@ -1027,20 +999,6 @@ class DetailsController extends _$DetailsController {
       selectedDubStatus: selectedDubStatus,
     );
     return episodes;
-  }
-
-  void toggleLibrary() {
-    final item = state.details.value;
-    if (item == null) return;
-
-    final libraryRepo = ref.read(libraryRepositoryProvider);
-    final wasInLibrary = libraryRepo.isInLibrary(item.url);
-
-    if (wasInLibrary) {
-      ref.read(libraryProvider.notifier).removeItem(item.url);
-    } else {
-      ref.read(libraryProvider.notifier).addItem(item);
-    }
   }
 
   Future<void> handlePlayPress(

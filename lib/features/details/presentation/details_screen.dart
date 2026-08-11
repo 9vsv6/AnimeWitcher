@@ -18,7 +18,6 @@ import 'package:skystream/shared/widgets/custom_widgets.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 
 import '../../library/presentation/library_provider.dart';
-import '../../library/presentation/library_state.dart';
 import '../../../core/storage/library_category.dart';
 
 import 'details_controller.dart';
@@ -187,18 +186,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   Widget _withDetailsHeaderCollapseFade(
     Widget child,
-    double collapseExtent, {
-    required bool loading,
-  }) {
-    // While details/episodes are loading, the sliver list is temporarily much
-    // shorter than its final extent. Flutter can correct the scroll position as
-    // those async slivers appear, which briefly reports a collapsed offset even
-    // though the user has just opened the page. Fading the whole flexible header
-    // from that transient offset exposes the SliverAppBar's neutral background as
-    // a large gray block. Keep the hero fully visible until the initial layout is
-    // stable, then resume the normal collapse fade.
-    if (loading) return child;
-
+    double collapseExtent,
+  ) {
     return AnimatedBuilder(
       animation: _detailsScrollController,
       child: child,
@@ -218,7 +207,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     BuildContext context,
     MultimediaItem item, {
     required bool isFavorite,
-    required bool isBookmarked,
     required dynamic libraryNotifier,
     required Color foregroundColor,
   }) {
@@ -287,7 +275,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     BuildContext context,
     MultimediaItem item, {
     required bool isFavorite,
-    required bool isBookmarked,
     required dynamic libraryNotifier,
     required Color foregroundColor,
     Color? fallbackColor,
@@ -299,7 +286,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         context,
         item,
         isFavorite: isFavorite,
-        isBookmarked: isBookmarked,
         libraryNotifier: libraryNotifier,
         foregroundColor: foregroundColor,
       ),
@@ -1052,7 +1038,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     // membership globally instead of only inside the currently selected list.
     ref.watch(libraryProvider);
     final libraryNotifier = ref.read(libraryProvider.notifier);
-    final isBookmarked = libraryNotifier.itemCategory(widget.item.url) != null;
     final isFavorite = libraryNotifier.isFavorite(widget.item.url);
     final isLarge = context.isTabletOrLarger;
 
@@ -1156,7 +1141,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         context,
         item,
         isFavorite: isFavorite,
-        isBookmarked: isBookmarked,
         libraryNotifier: libraryNotifier,
         foregroundColor: headerForeground,
       );
@@ -1181,7 +1165,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       return _buildDesktopLayout(
         context,
         item,
-        details,
         detailsAsync,
         episodesAsync,
         castAsync,
@@ -1189,7 +1172,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         relatedAsync,
         recommendationsAsync,
         isMovie,
-        isBookmarked,
         isFavorite,
         libraryNotifier,
         l10n,
@@ -1252,7 +1234,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     ),
                   ),
                   mobileCollapseExtent,
-                  loading: detailsAsync.isLoading || episodesAsync.isLoading,
                 ),
                 automaticallyImplyLeading: false,
                 leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
@@ -1284,7 +1265,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                                 context,
                                 item,
                                 isFavorite: isFavorite,
-                                isBookmarked: isBookmarked,
                                 libraryNotifier: libraryNotifier,
                                 foregroundColor: Colors.white,
                                 fallbackColor: Colors.black45,
@@ -1298,7 +1278,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             ..._buildMobileSlivers(
               context,
               item,
-              details,
               detailsAsync,
               episodesAsync,
               castAsync,
@@ -1629,9 +1608,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       _DeferredDetailSection(
         enabled: _selectedDetailsTab == 0,
         placeholderHeight: 210,
-        onVisible: () => _selectedDetailsTab == 0
-            ? controller.loadCastIfNeeded()
-            : Future<void>.value(),
+        onVisible: controller.loadCastIfNeeded,
         child: castSection(),
       ),
     );
@@ -1654,9 +1631,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       _DeferredDetailSection(
         enabled: _selectedDetailsTab == 0,
         placeholderHeight: 230,
-        onVisible: () => _selectedDetailsTab == 0
-            ? controller.loadRecommendationsIfNeeded()
-            : Future<void>.value(),
+        onVisible: controller.loadRecommendationsIfNeeded,
         child: recommendationsSection(),
       ),
     );
@@ -1664,9 +1639,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       _DeferredDetailSection(
         enabled: _selectedDetailsTab == 0,
         placeholderHeight: 230,
-        onVisible: () => _selectedDetailsTab == 0
-            ? controller.loadRelatedIfNeeded()
-            : Future<void>.value(),
+        onVisible: controller.loadRelatedIfNeeded,
         child: relatedSection(),
       ),
     );
@@ -1677,7 +1650,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Widget _buildDesktopLayout(
     BuildContext context,
     MultimediaItem item,
-    MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
     AsyncValue<List<Episode>> episodesState,
     AsyncValue<List<Actor>> castState,
@@ -1685,7 +1657,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     bool isMovie,
-    bool isBookmarked,
     bool isFavorite,
     dynamic libraryNotifier,
     AppLocalizations l10n,
@@ -1729,7 +1700,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                         context,
                         item,
                         isFavorite: isFavorite,
-                        isBookmarked: isBookmarked,
                         libraryNotifier: libraryNotifier,
                         foregroundColor: textColor,
                         fallbackColor: isDark ? Colors.black45 : Colors.white54,
@@ -1751,7 +1721,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: _buildDesktopContentBelow(
             context,
             item,
-            details,
             detailsState,
             episodesState,
             castState,
@@ -2009,7 +1978,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Widget _buildDesktopContentBelow(
     BuildContext context,
     MultimediaItem item,
-    MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
     AsyncValue<List<Episode>> episodesState,
     AsyncValue<List<Actor>> castState,
@@ -2067,7 +2035,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   List<Widget> _buildMobileSlivers(
     BuildContext context,
     MultimediaItem item,
-    MultimediaItem? details,
     AsyncValue<MultimediaItem?> detailsState,
     AsyncValue<List<Episode>> episodesState,
     AsyncValue<List<Actor>> castState,
