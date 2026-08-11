@@ -68,7 +68,9 @@ class _DeferredDetailSection extends StatefulWidget {
 }
 
 class _DeferredDetailSectionState extends State<_DeferredDetailSection> {
-  static const double _preloadExtent = 140;
+  // Do not prefetch lower detail sections off-screen. Their network request
+  // starts only when the section itself reaches the viewport.
+  static const double _preloadExtent = 0;
   ScrollPosition? _position;
   bool _activated = false;
   bool _checkScheduled = false;
@@ -1602,17 +1604,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       return const SizedBox.shrink();
     }
 
-    // Match the AnimeWitcher lower-page order while deferring the expensive
-    // sections until the user actually scrolls near them.
-    widgets.add(
-      _DeferredDetailSection(
-        enabled: _selectedDetailsTab == 0,
-        placeholderHeight: 210,
-        onVisible: controller.loadCastIfNeeded,
-        child: castSection(),
-      ),
-    );
-
+    // Lower-page order: trailer -> related -> recommendations -> cast.
+    // Related, recommendations and cast stay completely deferred until their
+    // own placeholder reaches the viewport on the Details tab.
     if (trailers.isNotEmpty) {
       widgets.addAll([
         const SizedBox(height: 32),
@@ -1631,6 +1625,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       _DeferredDetailSection(
         enabled: _selectedDetailsTab == 0,
         placeholderHeight: 230,
+        onVisible: controller.loadRelatedIfNeeded,
+        child: relatedSection(),
+      ),
+    );
+    widgets.add(
+      _DeferredDetailSection(
+        enabled: _selectedDetailsTab == 0,
+        placeholderHeight: 230,
         onVisible: controller.loadRecommendationsIfNeeded,
         child: recommendationsSection(),
       ),
@@ -1638,9 +1640,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     widgets.add(
       _DeferredDetailSection(
         enabled: _selectedDetailsTab == 0,
-        placeholderHeight: 230,
-        onVisible: controller.loadRelatedIfNeeded,
-        child: relatedSection(),
+        placeholderHeight: 210,
+        onVisible: controller.loadCastIfNeeded,
+        child: castSection(),
       ),
     );
 
