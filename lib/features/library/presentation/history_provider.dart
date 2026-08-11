@@ -22,6 +22,12 @@ class WatchHistory extends _$WatchHistory {
     state = repository.getWatchHistory();
   }
 
+  Future<void> refreshFromServer() async {
+    final repository = ref.read(historyRepositoryProvider);
+    await repository.syncRecentWatched();
+    refresh();
+  }
+
   Future<void> clearAllHistory() async {
     final repository = ref.read(historyRepositoryProvider);
     await repository.clearAllHistory();

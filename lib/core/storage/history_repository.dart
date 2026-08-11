@@ -164,6 +164,10 @@ class HistoryRepository {
     }
   }
 
+  Future<void> syncRecentWatched() async {
+    await _accountService.syncRecentWatched();
+  }
+
   List<HistoryItem> getWatchHistory() {
     final rawItems = _storageService.getWatchHistory();
     return rawItems.map((map) => HistoryItem.fromMap(map)).toList();
