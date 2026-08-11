@@ -222,7 +222,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               child: _buildBody(
                 context,
                 homeDataAsync,
-                history,
+                continueWatching,
                 generalSettings.watchHistoryEnabled,
                 isWidescreen: true,
               ),
@@ -298,7 +298,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       body: _buildBody(
         context,
         homeDataAsync,
-        history,
+        continueWatching,
         generalSettings.watchHistoryEnabled,
       ),
     );
@@ -395,7 +395,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildBody(
     BuildContext context,
     HomeState state,
-    List<dynamic> history,
+    List<HistoryItem> continueWatching,
     bool watchHistoryEnabled,
     {
     bool isWidescreen = false,
