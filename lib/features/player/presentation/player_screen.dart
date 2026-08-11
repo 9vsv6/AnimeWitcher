@@ -530,26 +530,33 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (mounted) context.pop();
   }
 
+  void _publishPersistentPlayerHeader({required bool controlsVisible}) {
+    if (!mounted || !appleUsesPersistentLiquidGlassHeader) return;
+    final route = ModalRoute.of(context);
+    if (route?.isCurrent == false) return;
+
+    // Keep the player registered as the top persistent header owner even when
+    // its chrome is hidden. Removing the owner would expose the Details header
+    // underneath the player. Only toggle the physical back control itself so
+    // it follows the player's controls visibility exactly.
+    applePersistentGlassHeaderController.show(
+      ApplePersistentGlassHeaderConfig(
+        owner: this,
+        route: route,
+        onBack: controlsVisible ? () => unawaited(_handleBack()) : null,
+        backTooltip: AppLocalizations.of(context)!.goBack,
+        backForegroundColor: Theme.of(context).colorScheme.primary,
+        backFallbackColor: Colors.black54,
+        trailingButtons: const <AppleLiquidGlassToolbarButton>[],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (appleUsesPersistentLiquidGlassHeader) {
-      final route = ModalRoute.of(context);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || route?.isCurrent == false) return;
-        applePersistentGlassHeaderController.show(
-          ApplePersistentGlassHeaderConfig(
-            owner: this,
-            route: route,
-            onBack: () => unawaited(_handleBack()),
-            backTooltip: AppLocalizations.of(context)!.goBack,
-            backForegroundColor: Colors.white,
-            backFallbackColor: Colors.black54,
-            // Player intentionally owns no trailing actions. The same physical
-            // header back control is rebound to this route while details
-            // comments/favorite/bookmark controls dismiss quickly.
-            trailingButtons: const <AppleLiquidGlassToolbarButton>[],
-          ),
-        );
+        _publishPersistentPlayerHeader(controlsVisible: _controlsVisible.value);
       });
     }
 
@@ -766,9 +773,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           onRequestRootFocus: () =>
                               _rootFocusNode.requestFocus(),
                           onVisibilityChanged: (v) {
-                            if (mounted) {
-                              _controlsVisible.value = v;
-                            }
+                            if (!mounted) return;
+                            _controlsVisible.value = v;
+                            _publishPersistentPlayerHeader(controlsVisible: v);
                           },
                         ),
                       ),
