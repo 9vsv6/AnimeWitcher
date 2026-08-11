@@ -51,6 +51,79 @@ class _GentleTopOverscrollPhysics extends BouncingScrollPhysics {
   }
 }
 
+class _DeferredDetailSection extends StatefulWidget {
+  const _DeferredDetailSection({
+    required this.placeholderHeight,
+    required this.onVisible,
+    required this.child,
+  });
+
+  final double placeholderHeight;
+  final Future<void> Function() onVisible;
+  final Widget child;
+
+  @override
+  State<_DeferredDetailSection> createState() => _DeferredDetailSectionState();
+}
+
+class _DeferredDetailSectionState extends State<_DeferredDetailSection> {
+  static const double _preloadExtent = 140;
+  ScrollPosition? _position;
+  bool _activated = false;
+  bool _checkScheduled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = Scrollable.maybeOf(context)?.position;
+    if (!identical(next, _position)) {
+      _position?.removeListener(_scheduleVisibilityCheck);
+      _position = next;
+      _position?.addListener(_scheduleVisibilityCheck);
+    }
+    _scheduleVisibilityCheck();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeferredDetailSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleVisibilityCheck();
+  }
+
+  void _scheduleVisibilityCheck() {
+    if (_activated || _checkScheduled || !mounted) return;
+    _checkScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkScheduled = false;
+      if (!mounted || _activated) return;
+      final renderObject = context.findRenderObject();
+      if (renderObject is! RenderBox || !renderObject.hasSize) return;
+      final top = renderObject.localToGlobal(Offset.zero).dy;
+      final bottom = top + renderObject.size.height;
+      final viewportHeight = MediaQuery.sizeOf(context).height;
+      if (top <= viewportHeight + _preloadExtent &&
+          bottom >= -_preloadExtent) {
+        setState(() => _activated = true);
+        widget.onVisible();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_scheduleVisibilityCheck);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_activated) {
+      return SizedBox(height: widget.placeholderHeight);
+    }
+    return widget.child;
+  }
+}
+
 class DetailsScreen extends ConsumerStatefulWidget {
   final MultimediaItem item;
   final bool autoPlay;
@@ -1427,18 +1500,86 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       recommendationsState.asData?.value ?? item.recommendations,
       related,
     );
+    final controller = ref.read(
+      detailsControllerProvider(widget.item.url).notifier,
+    );
     final widgets = <Widget>[];
 
-    if (cast.isNotEmpty) {
-      widgets.addAll([const SizedBox(height: 32), CastCarousel(cast: cast)]);
-    } else if (castState.isLoading) {
-      widgets.add(
-        _sectionLoadingPlaceholder(
+    Widget castSection() {
+      if (cast.isNotEmpty) {
+        return Column(
+          children: [const SizedBox(height: 32), CastCarousel(cast: cast)],
+        );
+      }
+      if (castState.isLoading) {
+        return _sectionLoadingPlaceholder(
           context,
           isArabic ? 'طاقم الشخصيات' : 'Cast',
-        ),
-      );
+        );
+      }
+      return const SizedBox.shrink();
     }
+
+    Widget recommendationsSection() {
+      if (recommendations.isNotEmpty) {
+        return Column(
+          children: [
+            const SizedBox(height: 32),
+            RecommendationsCarousel(
+              items: recommendations,
+              onItemTap: (recommendation) {
+                final target = _inheritProvider(item, recommendation);
+                DetailsRoute(
+                  $extra: DetailsRouteExtra(item: target),
+                ).push<void>(context);
+              },
+            ),
+          ],
+        );
+      }
+      if (recommendationsState.isLoading) {
+        return _sectionLoadingPlaceholder(
+          context,
+          isArabic ? 'المزيد مثل هذا' : 'More Like This',
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    Widget relatedSection() {
+      if (related.isNotEmpty) {
+        return Column(
+          children: [
+            const SizedBox(height: 32),
+            RecommendationsCarousel(
+              title: l10n.relatedAnime,
+              items: related,
+              showRelationBadge: true,
+              onItemTap: (relatedItem) {
+                final target = _inheritProvider(item, relatedItem);
+                DetailsRoute(
+                  $extra: DetailsRouteExtra(item: target),
+                ).push<void>(context);
+              },
+            ),
+          ],
+        );
+      }
+      if (relatedState.isLoading) {
+        return _sectionLoadingPlaceholder(context, l10n.relatedAnime);
+      }
+      return const SizedBox.shrink();
+    }
+
+    // Match the AnimeWitcher lower-page order while deferring the expensive
+    // sections until the user actually scrolls near them.
+    widgets.add(
+      _DeferredDetailSection(
+        placeholderHeight: 210,
+        onVisible: controller.loadCastIfNeeded,
+        child: castSection(),
+      ),
+    );
 
     if (trailers.isNotEmpty) {
       widgets.addAll([
@@ -1454,48 +1595,20 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       );
     }
 
-    if (related.isNotEmpty) {
-      widgets.addAll([
-        const SizedBox(height: 32),
-        RecommendationsCarousel(
-          title: l10n.relatedAnime,
-          items: related,
-          showRelationBadge: true,
-          onItemTap: (relatedItem) {
-            final target = _inheritProvider(item, relatedItem);
-            DetailsRoute(
-              $extra: DetailsRouteExtra(item: target),
-            ).push<void>(context);
-          },
-        ),
-      ]);
-    } else if (relatedState.isLoading) {
-      widgets.add(
-        _sectionLoadingPlaceholder(context, l10n.relatedAnime),
-      );
-    }
-
-    if (recommendations.isNotEmpty) {
-      widgets.addAll([
-        const SizedBox(height: 32),
-        RecommendationsCarousel(
-          items: recommendations,
-          onItemTap: (recommendation) {
-            final target = _inheritProvider(item, recommendation);
-            DetailsRoute(
-              $extra: DetailsRouteExtra(item: target),
-            ).push<void>(context);
-          },
-        ),
-      ]);
-    } else if (recommendationsState.isLoading) {
-      widgets.add(
-        _sectionLoadingPlaceholder(
-          context,
-          isArabic ? 'المزيد مثل هذا' : 'More Like This',
-        ),
-      );
-    }
+    widgets.add(
+      _DeferredDetailSection(
+        placeholderHeight: 230,
+        onVisible: controller.loadRecommendationsIfNeeded,
+        child: recommendationsSection(),
+      ),
+    );
+    widgets.add(
+      _DeferredDetailSection(
+        placeholderHeight: 230,
+        onVisible: controller.loadRelatedIfNeeded,
+        child: relatedSection(),
+      ),
+    );
 
     return widgets;
   }

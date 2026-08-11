@@ -111,6 +111,9 @@ class DetailsController extends _$DetailsController {
   SkyStreamProvider? _lastEpisodesProvider;
   String? _lastEpisodesUrl;
   bool _loadStarted = false;
+  bool _castLoadStarted = false;
+  bool _relatedLoadStarted = false;
+  bool _recommendationsLoadStarted = false;
   int _loadGeneration = 0;
 
   @override
@@ -379,7 +382,9 @@ class DetailsController extends _$DetailsController {
       _lastEpisodesProvider = provider;
       _lastEpisodesUrl = item.url;
 
-      // Every part starts immediately. No request waits for another request.
+      // Load only the data needed for the initial details/episodes view.
+      // Heavy lower-page sections (cast, related titles, recommendations) are
+      // requested lazily when their section approaches the viewport.
       unawaited(_loadBasicDetails(provider, item, generation));
       _episodesLoadFuture = _loadEpisodesInBackground(
         provider,
@@ -390,20 +395,8 @@ class DetailsController extends _$DetailsController {
       unawaited(_episodesLoadFuture!);
 
       if (provider.supportsIndependentDetailSections) {
-        unawaited(_loadCastInBackground(provider, item.url, item, generation));
         unawaited(
           _loadTrailersInBackground(provider, item.url, item, generation),
-        );
-        unawaited(
-          _loadRelatedInBackground(provider, item.url, item, generation),
-        );
-        unawaited(
-          _loadRecommendationsInBackground(
-            provider,
-            item.url,
-            item,
-            generation,
-          ),
         );
         unawaited(
           _loadNextAiringInBackground(
@@ -600,6 +593,59 @@ class DetailsController extends _$DetailsController {
         _episodesLoadFuture = null;
       }
     }
+  }
+
+  Future<void> loadCastIfNeeded() async {
+    if (_castLoadStarted || state.cast.hasValue) return;
+    final provider = _lastEpisodesProvider;
+    final url = _lastEpisodesUrl;
+    final currentItem = state.item;
+    if (provider == null ||
+        url == null ||
+        currentItem == null ||
+        !provider.supportsIndependentDetailSections) {
+      return;
+    }
+    _castLoadStarted = true;
+    state = state.copyWith(cast: const AsyncLoading());
+    await _loadCastInBackground(provider, url, currentItem, _loadGeneration);
+  }
+
+  Future<void> loadRelatedIfNeeded() async {
+    if (_relatedLoadStarted || state.related.hasValue) return;
+    final provider = _lastEpisodesProvider;
+    final url = _lastEpisodesUrl;
+    final currentItem = state.item;
+    if (provider == null ||
+        url == null ||
+        currentItem == null ||
+        !provider.supportsIndependentDetailSections) {
+      return;
+    }
+    _relatedLoadStarted = true;
+    state = state.copyWith(related: const AsyncLoading());
+    await _loadRelatedInBackground(provider, url, currentItem, _loadGeneration);
+  }
+
+  Future<void> loadRecommendationsIfNeeded() async {
+    if (_recommendationsLoadStarted || state.recommendations.hasValue) return;
+    final provider = _lastEpisodesProvider;
+    final url = _lastEpisodesUrl;
+    final currentItem = state.item;
+    if (provider == null ||
+        url == null ||
+        currentItem == null ||
+        !provider.supportsIndependentDetailSections) {
+      return;
+    }
+    _recommendationsLoadStarted = true;
+    state = state.copyWith(recommendations: const AsyncLoading());
+    await _loadRecommendationsInBackground(
+      provider,
+      url,
+      currentItem,
+      _loadGeneration,
+    );
   }
 
   Future<void> _loadCastInBackground(
