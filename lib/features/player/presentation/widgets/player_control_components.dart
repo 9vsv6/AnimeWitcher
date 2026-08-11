@@ -61,6 +61,7 @@ class PlayerTopBar extends StatelessWidget {
                     isTv: isTv,
                     focusNode: backFocusNode,
                     iconSize: isTv ? 34 : 30,
+                    foregroundColor: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -243,6 +244,7 @@ class PlayerIconButton extends StatefulWidget {
   /// Optional icon-size override (the tap target grows to match). Used by the
   /// top-bar back button so it reads at the same weight as the title.
   final double? iconSize;
+  final Color? foregroundColor;
 
   const PlayerIconButton({
     super.key,
@@ -253,6 +255,7 @@ class PlayerIconButton extends StatefulWidget {
     this.highlight = false,
     this.focusNode,
     this.iconSize,
+    this.foregroundColor,
   });
 
   @override
@@ -268,7 +271,9 @@ class _PlayerIconButtonState extends State<PlayerIconButton> {
     final double box = glyph + (widget.isTv ? 20 : 18);
 
     Color iconColor;
-    if (_hovered) {
+    if (widget.foregroundColor != null) {
+      iconColor = widget.foregroundColor!;
+    } else if (_hovered) {
       iconColor = HotstarPlayerStyle.accent;
     } else if (widget.highlight) {
       iconColor = HotstarPlayerStyle.accent;

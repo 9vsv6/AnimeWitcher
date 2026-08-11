@@ -435,7 +435,9 @@ class _ApplePersistentGlassHeaderOverlayState
     return <String, Object?>{
       'visible': config != null,
       'showBack': config?.onBack != null,
-      'backColor': (config?.backForegroundColor ?? colors.onSurface).toARGB32(),
+      // Back controls are a single app-wide accent affordance. Keep the native
+      // persistent button on the active theme color regardless of page artwork.
+      'backColor': colors.primary.toARGB32(),
       'backAccessibilityLabel': config?.backTooltip,
       'toolbarTrailingInset': isInstantRoute ? 34.0 : 18.0,
       'animateToolbarChanges': !involvesInstantRoute,
@@ -606,7 +608,9 @@ class AppleLiquidGlassBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final effectiveForeground = foregroundColor ?? colors.onSurface;
+    // Every navigation back affordance follows the active theme accent.
+    // Callers may still customize the glass fallback surface independently.
+    final effectiveForeground = colors.primary;
     final effectiveFallback = fallbackColor ?? colors.surfaceContainerHigh;
     final radius = BorderRadius.circular(size / 2);
 

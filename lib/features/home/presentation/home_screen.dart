@@ -262,7 +262,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             shadowColor: Colors.transparent,
             elevation: 0,
             scrolledUnderElevation: 0,
-            title: Text(l10n.appTitle),
+            title: Text(
+              l10n.appTitle,
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
             actions: usePersistentGlass
                 ? const <Widget>[SizedBox(width: 58)]
                 : [
