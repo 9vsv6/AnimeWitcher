@@ -195,7 +195,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
             ).push<void>(context),
           );
           unawaited(
-            ref.read(watchHistoryProvider.notifier).removeFromHistory(item.url),
+            ref.read(continueWatchingProvider.notifier).remove(item.url),
           );
           return;
         }
@@ -248,8 +248,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                   ),
                   onTap: () {
                     ref
-                        .read(watchHistoryProvider.notifier)
-                        .removeFromHistory(item.url);
+                        .read(continueWatchingProvider.notifier)
+                        .remove(item.url);
                     Navigator.pop(context);
                     ref
                         .read(notificationServiceProvider)

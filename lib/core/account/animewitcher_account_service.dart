@@ -37,6 +37,8 @@ class AnimeWitcherAccountService {
       'animewitcher_account_pending_library_deletes_v1';
   static const String _pendingContinueDeletesKey =
       'animewitcher_account_pending_continue_deletes_v1';
+  static const String _pendingLastWatchedDeletesKey =
+      'animewitcher_account_pending_last_watched_deletes_v1';
   static const String animeWitcherProvider =
       'com.fares669.animewitcher.native';
 
@@ -629,43 +631,26 @@ class AnimeWitcherAccountService {
   Future<void> syncRecentWatched() async {
     if (!isSignedIn) return;
     final profile = _profile!;
-
-    // First reconcile local progress with continue_watching. This also flushes
-    // pending offline writes, so a watch made in SkyStream is on the server
-    // before we read the server-backed recent list.
-    await _syncContinueWatching();
+    await _pendingStorageWrite;
+    await _flushPendingLastWatchedDeletes(profile);
     if (!_isCurrentProfile(profile)) return;
 
-    final results = await Future.wait<List<FirestoreDocument>>(<Future<List<FirestoreDocument>>>[
-      _authenticated(
-        (token) => _firestore.listDocuments(
-          'users/${profile.documentId}/last_watched',
-          token,
-        ),
+    // AnimeWitcher keeps last_watched as its own collection. It is the only
+    // server source for Recently Watched; removing a continue_watching document
+    // must never remove or reorder this history.
+    final recentDocs = await _authenticated(
+      (token) => _firestore.listDocuments(
+        'users/${profile.documentId}/last_watched',
+        token,
       ),
-      _authenticated(
-        (token) => _firestore.listDocuments(
-          'users/${profile.documentId}/continue_watching',
-          token,
-        ),
-      ),
-    ]);
+    );
     if (!_isCurrentProfile(profile)) return;
+    recentDocs.sort((a, b) {
+      final aDate = _dateValue(a.fields['date'])?.millisecondsSinceEpoch ?? 0;
+      final bDate = _dateValue(b.fields['date'])?.millisecondsSinceEpoch ?? 0;
+      return bDate.compareTo(aDate);
+    });
 
-    final recentDocs = results[0].toList(growable: false)
-      ..sort((a, b) {
-        final aDate = _dateValue(a.fields['date'])?.millisecondsSinceEpoch ?? 0;
-        final bDate = _dateValue(b.fields['date'])?.millisecondsSinceEpoch ?? 0;
-        return bDate.compareTo(aDate);
-      });
-    final continueByAnime = <String, FirestoreDocument>{};
-    for (final document in results[1]) {
-      final animeId =
-          _optionalString(document.fields['anime_id']) ?? document.id;
-      continueByAnime[animeId] = document;
-    }
-
-    final seen = <String>{};
     final localByAnime = <String, Map<String, dynamic>>{};
     for (final raw in _storage.getWatchHistory()) {
       final animeId = AnimeWitcherSyncIds.animeIdFromUrl(
@@ -678,30 +663,14 @@ class AnimeWitcherAccountService {
       if (!_isCurrentProfile(profile)) return;
       final animeId =
           _optionalString(recent.fields['anime_id']) ?? recent.id;
-      if (animeId.isEmpty || !seen.add(animeId)) continue;
-      final watchedAt = _dateValue(recent.fields['date']);
-      final progressDocument = continueByAnime[animeId];
-
-      if (progressDocument != null) {
-        await _importRemoteHistoryEntry(
-          animeId: animeId,
-          fields: progressDocument.fields,
-          profile: profile,
-          remoteDate: watchedAt ?? _dateValue(progressDocument.fields['date_updated']),
-        );
-        continue;
-      }
-
-      // Completed/old entries can remain in last_watched after they disappear
-      // from continue_watching. Preserve known local episode state if present;
-      // otherwise resolve the anime document and create a zero-position history
-      // record so the server entry still appears in Recently Watched.
+      if (animeId.isEmpty) continue;
+      final watchedAt =
+          _dateValue(recent.fields['date']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final timestamp = watchedAt.millisecondsSinceEpoch;
       final local = localByAnime[animeId];
-      final timestamp =
-          watchedAt?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
       if (local != null) {
         final url = _optionalString(local['url']);
-        if (url != null) {
+        if (url != null && timestamp > 0) {
           await _storage.updateHistoryItemTimestampAndPosition(
             url,
             _optionalString(local['lastEpisodeUrl']),
@@ -723,22 +692,96 @@ class AnimeWitcherAccountService {
         item,
         0,
         0,
-        timestamp: timestamp,
+        timestamp: timestamp > 0
+            ? timestamp
+            : DateTime.now().millisecondsSinceEpoch,
         syncedAccountUid: profile.uid,
-        syncedAt: timestamp,
+        syncedAt: timestamp > 0
+            ? timestamp
+            : DateTime.now().millisecondsSinceEpoch,
       );
     }
+  }
 
-    // Compatibility fallback: accounts created by older clients may have
-    // continue_watching entries without a matching last_watched document.
-    for (final entry in continueByAnime.entries) {
+  Future<void> recordLastWatched({
+    required MultimediaItem item,
+  }) async {
+    if (!isSignedIn) return;
+    final animeId = AnimeWitcherSyncIds.animeIdFromUrl(item.url);
+    final profile = _profile;
+    if (animeId == null || profile == null) return;
+    await _enqueueProgressWrite(animeId, () async {
       if (!_isCurrentProfile(profile)) return;
-      if (!seen.add(entry.key)) continue;
-      await _importRemoteHistoryEntry(
-        animeId: entry.key,
-        fields: entry.value.fields,
-        profile: profile,
-        remoteDate: _dateValue(entry.value.fields['date_updated']),
+      await _authenticated(
+        (token) => _firestore.setDocumentWithServerTimestamps(
+          'users/${profile.documentId}/last_watched/$animeId',
+          <String, dynamic>{'anime_id': animeId},
+          token,
+          serverTimestampFields: const <String>{'date'},
+        ),
+      );
+      if (!_isCurrentProfile(profile)) return;
+      await _storage.markHistoryItemSynced(
+        item.url,
+        accountUid: profile.uid,
+        syncedAt: DateTime.now().millisecondsSinceEpoch,
+      );
+    });
+  }
+
+  Future<void> removeLastWatched(String mainUrl) async {
+    final animeId = AnimeWitcherSyncIds.animeIdFromUrl(mainUrl);
+    final profile = _profile;
+    if (animeId == null || profile == null) return;
+    final mutationId = _pendingMutationId(animeId);
+    final revision = _nextMutationRevision();
+    await _mutatePending(_pendingLastWatchedDeletesKey, (values) {
+      values[mutationId] = <String, dynamic>{
+        'anime_id': animeId,
+        'owner_uid': profile.uid,
+        'revision': revision,
+      };
+    });
+    if (!isSignedIn) return;
+    await _deleteLastWatchedRemote(animeId, profile);
+    await _removePendingMutation(
+      _pendingLastWatchedDeletesKey,
+      mutationId,
+      revision,
+    );
+  }
+
+  Future<void> _deleteLastWatchedRemote(
+    String animeId,
+    AnimeWitcherProfile profile,
+  ) {
+    return _enqueueProgressWrite(animeId, () async {
+      if (!_isCurrentProfile(profile)) return;
+      await _authenticated(
+        (token) => _firestore.deleteDocument(
+          'users/${profile.documentId}/last_watched/$animeId',
+          token,
+        ),
+      );
+    });
+  }
+
+  Future<void> _flushPendingLastWatchedDeletes(
+    AnimeWitcherProfile profile,
+  ) async {
+    final pending = _readPendingMutations(_pendingLastWatchedDeletesKey);
+    for (final entry in pending.entries) {
+      if (!_isCurrentProfile(profile)) return;
+      final mutation = entry.value;
+      if (!_mutationBelongsToProfile(mutation, profile)) continue;
+      final animeId = _optionalString(mutation['anime_id']);
+      final revision = _optionalString(mutation['revision']);
+      if (animeId == null || revision == null) continue;
+      await _deleteLastWatchedRemote(animeId, profile);
+      await _removePendingMutation(
+        _pendingLastWatchedDeletesKey,
+        entry.key,
+        revision,
       );
     }
   }
@@ -1691,10 +1734,7 @@ class AnimeWitcherAccountService {
     if (pendingWrite != null) {
       try {
         await pendingWrite;
-      } catch (_) {
-        // The local history entry remains newer than its last acknowledged
-        // revision, so the conflict resolver below will retry the upload.
-      }
+      } catch (_) {}
     }
     await _pendingStorageWrite;
     await _flushPendingContinueDeletes(profile);
@@ -1709,7 +1749,7 @@ class AnimeWitcherAccountService {
     if (!_isCurrentProfile(profile)) return;
 
     Map<String, dynamic>? local;
-    for (final raw in _storage.getWatchHistory()) {
+    for (final raw in _storage.getContinueWatching()) {
       final localAnimeId = AnimeWitcherSyncIds.animeIdFromUrl(
         (raw['url'] ?? '').toString(),
       );
@@ -1719,40 +1759,43 @@ class AnimeWitcherAccountService {
       }
     }
 
-    final localUpdatedAt = local == null ? 0 : _intValue(local['timestamp']);
     final resolution = resolveAnimeWitcherSyncConflict(
       remoteExists: remote != null,
-      localUpdatedAt: localUpdatedAt,
+      localUpdatedAt: local == null ? 0 : _intValue(local['timestamp']),
       remoteUpdatedAt:
-          _dateValue(remote?.fields['date_updated'])?.millisecondsSinceEpoch ??
-          0,
-      syncedAccountUid: _optionalString(
-        local?['animeWitcherSyncedUid'],
-      ),
+          _dateValue(remote?.fields['date_updated'])?.millisecondsSinceEpoch ?? 0,
+      syncedAccountUid: _optionalString(local?['animeWitcherSyncedUid']),
       localSyncedAt: _intValue(local?['animeWitcherSyncedAt']),
       currentAccountUid: profile.uid,
     );
 
     if (resolution == AnimeWitcherSyncResolution.uploadLocal &&
         _hasMeaningfulPlayback(local)) {
-      if (local != null) await _uploadHistoryEntry(local, profile);
+      if (local != null) await _uploadContinueWatchingEntry(local, profile);
       return;
     }
     if (resolution == AnimeWitcherSyncResolution.deleteLocal) {
       if (local != null) {
         final localUrl = _optionalString(local['url']);
-        if (localUrl != null) await _storage.removeFromHistory(localUrl);
+        if (localUrl != null) {
+          await _storage.removeFromContinueWatching(localUrl);
+        }
       }
       return;
     }
     if (remote != null) {
-      await _importRemoteHistoryEntry(
+      await _importRemoteContinueWatchingEntry(
         animeId: animeId,
         fields: remote.fields,
         profile: profile,
         remoteDate: _dateValue(remote.fields['date_updated']),
       );
     }
+  }
+
+  Future<void> syncContinueWatching() async {
+    if (!isSignedIn) return;
+    await _syncContinueWatching();
   }
 
   Future<void> saveProgress({
@@ -1788,6 +1831,40 @@ class AnimeWitcherAccountService {
     );
   }
 
+  Future<void> saveContinueWatchingProgress({
+    required MultimediaItem item,
+    required int position,
+    required int duration,
+    String? episodeUrl,
+    int? episodeNumber,
+    String? episodeTitle,
+    String? episodePosterUrl,
+  }) async {
+    if (!isSignedIn) return;
+    final animeId = AnimeWitcherSyncIds.animeIdFromUrl(item.url);
+    final episodeId = episodeUrl == null
+        ? null
+        : AnimeWitcherSyncIds.episodeIdFromUrl(episodeUrl);
+    final profile = _profile;
+    if (animeId == null || profile == null) return;
+    return _enqueueProgressWrite(
+      animeId,
+      () => _saveProgressInternal(
+        item: item,
+        animeId: animeId,
+        episodeId: episodeId,
+        profile: profile,
+        position: position,
+        duration: duration,
+        episodeUrl: episodeUrl,
+        episodeNumber: episodeNumber,
+        episodeTitle: episodeTitle,
+        episodePosterUrl: episodePosterUrl,
+        updateLastWatched: false,
+      ),
+    );
+  }
+
   Future<void> _saveProgressInternal({
     required MultimediaItem item,
     required String animeId,
@@ -1799,6 +1876,7 @@ class AnimeWitcherAccountService {
     required int? episodeNumber,
     required String? episodeTitle,
     required String? episodePosterUrl,
+    bool updateLastWatched = true,
   }) async {
     if (!_isCurrentProfile(profile)) return;
     final progress = duration > 0
@@ -1855,25 +1933,35 @@ class AnimeWitcherAccountService {
             .then((_) {}),
       ),
     );
-    operations.add(
-      _authenticated(
-        (token) => _firestore
-            .setDocumentWithServerTimestamps(
-              'users/${profile.documentId}/last_watched/$animeId',
-              <String, dynamic>{'anime_id': animeId},
-              token,
-              serverTimestampFields: const <String>{'date'},
-            )
-            .then((_) {}),
-      ),
-    );
+    if (updateLastWatched) {
+      operations.add(
+        _authenticated(
+          (token) => _firestore
+              .setDocumentWithServerTimestamps(
+                'users/${profile.documentId}/last_watched/$animeId',
+                <String, dynamic>{'anime_id': animeId},
+                token,
+                serverTimestampFields: const <String>{'date'},
+              )
+              .then((_) {}),
+        ),
+      );
+    }
     await Future.wait(operations);
     if (!_isCurrentProfile(profile)) return;
-    await _storage.markHistoryItemSynced(
+    final syncedAt = DateTime.now().millisecondsSinceEpoch;
+    await _storage.markContinueWatchingItemSynced(
       item.url,
       accountUid: profile.uid,
-      syncedAt: DateTime.now().millisecondsSinceEpoch,
+      syncedAt: syncedAt,
     );
+    if (updateLastWatched) {
+      await _storage.markHistoryItemSynced(
+        item.url,
+        accountUid: profile.uid,
+        syncedAt: syncedAt,
+      );
+    }
     if (episodeId != null) {
       _stopTimeCache['$animeId|$episodeId'] = cloudStopPosition;
     }
@@ -1927,18 +2015,12 @@ class AnimeWitcherAccountService {
       animeId,
       () {
         if (!_isCurrentProfile(profile)) return Future<void>.value();
-        return _authenticated((token) async {
-          await Future.wait<void>(<Future<void>>[
-            _firestore.deleteDocument(
-              'users/${profile.documentId}/continue_watching/$animeId',
-              token,
-            ),
-            _firestore.deleteDocument(
-              'users/${profile.documentId}/last_watched/$animeId',
-              token,
-            ),
-          ]);
-        });
+        return _authenticated(
+          (token) => _firestore.deleteDocument(
+            'users/${profile.documentId}/continue_watching/$animeId',
+            token,
+          ),
+        );
       },
     );
   }
@@ -1975,8 +2057,9 @@ class AnimeWitcherAccountService {
       ),
     );
     if (!_isCurrentProfile(profile)) return;
+
     final localByAnime = <String, Map<String, dynamic>>{};
-    for (final raw in _storage.getWatchHistory()) {
+    for (final raw in _storage.getContinueWatching()) {
       final id = AnimeWitcherSyncIds.animeIdFromUrl(
         (raw['url'] ?? '').toString(),
       );
@@ -1992,29 +2075,24 @@ class AnimeWitcherAccountService {
     for (final entry in remoteByAnime.entries) {
       if (!_isCurrentProfile(profile)) return;
       final animeId = entry.key;
-      final document = entry.value;
-      final fields = document.fields;
+      final fields = entry.value.fields;
       final remoteDate = _dateValue(fields['date_updated']);
       final local = localByAnime[animeId];
-      final localTimestamp = local == null ? 0 : _intValue(local['timestamp']);
       final resolution = resolveAnimeWitcherSyncConflict(
         remoteExists: true,
-        localUpdatedAt: localTimestamp,
+        localUpdatedAt: local == null ? 0 : _intValue(local['timestamp']),
         remoteUpdatedAt: remoteDate?.millisecondsSinceEpoch ?? 0,
-        syncedAccountUid: _optionalString(
-          local?['animeWitcherSyncedUid'],
-        ),
+        syncedAccountUid: _optionalString(local?['animeWitcherSyncedUid']),
         localSyncedAt: _intValue(local?['animeWitcherSyncedAt']),
         currentAccountUid: profile.uid,
       );
       if (local != null &&
           resolution == AnimeWitcherSyncResolution.uploadLocal &&
           _hasMeaningfulPlayback(local)) {
-        await _uploadHistoryEntry(local, profile);
+        await _uploadContinueWatchingEntry(local, profile);
         continue;
       }
-
-      await _importRemoteHistoryEntry(
+      await _importRemoteContinueWatchingEntry(
         animeId: animeId,
         fields: fields,
         profile: profile,
@@ -2026,36 +2104,33 @@ class AnimeWitcherAccountService {
       if (!_isCurrentProfile(profile)) return;
       if (remoteByAnime.containsKey(entry.key)) continue;
       final raw = entry.value;
-      final syncedUid = _optionalString(raw['animeWitcherSyncedUid']);
-      final syncedAt = _intValue(raw['animeWitcherSyncedAt']);
-      final localTimestamp = _intValue(raw['timestamp']);
       final resolution = resolveAnimeWitcherSyncConflict(
         remoteExists: false,
-        localUpdatedAt: localTimestamp,
+        localUpdatedAt: _intValue(raw['timestamp']),
         remoteUpdatedAt: 0,
-        syncedAccountUid: syncedUid,
-        localSyncedAt: syncedAt,
+        syncedAccountUid: _optionalString(raw['animeWitcherSyncedUid']),
+        localSyncedAt: _intValue(raw['animeWitcherSyncedAt']),
         currentAccountUid: profile.uid,
       );
       if (resolution == AnimeWitcherSyncResolution.deleteLocal) {
-        // A record that was synchronized before and is now absent remotely was
-        // deleted by another device. Do not recreate it from stale local data.
         final url = _optionalString(raw['url']);
-        if (url != null) await _storage.removeFromHistory(url);
+        if (url != null) await _storage.removeFromContinueWatching(url);
         continue;
       }
-      await _uploadHistoryEntry(raw, profile);
+      if (_hasMeaningfulPlayback(raw)) {
+        await _uploadContinueWatchingEntry(raw, profile);
+      }
     }
   }
 
-  Future<void> _uploadHistoryEntry(
+  Future<void> _uploadContinueWatchingEntry(
     Map<String, dynamic> raw,
     AnimeWitcherProfile profile,
   ) async {
     if (!_isCurrentProfile(profile)) return;
     final item = _itemFromHistory(raw);
     if (item == null) return;
-    await saveProgress(
+    await saveContinueWatchingProgress(
       item: item,
       position: _intValue(raw['position']),
       duration: _intValue(raw['duration']),
@@ -2066,7 +2141,7 @@ class AnimeWitcherAccountService {
     );
   }
 
-  Future<void> _importRemoteHistoryEntry({
+  Future<void> _importRemoteContinueWatchingEntry({
     required String animeId,
     required Map<String, dynamic> fields,
     required AnimeWitcherProfile profile,
@@ -2083,7 +2158,7 @@ class AnimeWitcherAccountService {
             ? null
             : AnimeWitcherSyncIds.episodeUrl(animeId, episodeId));
     Map<String, dynamic>? previousLocal;
-    for (final raw in _storage.getWatchHistory()) {
+    for (final raw in _storage.getContinueWatching()) {
       final localAnimeId = AnimeWitcherSyncIds.animeIdFromUrl(
         (raw['url'] ?? '').toString(),
       );
@@ -2099,11 +2174,6 @@ class AnimeWitcherAccountService {
     final previousDuration =
         sameEpisode ? _intValue(previousLocal?['duration']) : 0;
 
-    // AnimeWitcher v1.4.6 does not store a total duration in
-    // continue_watching. It stores the resume point as stop_time (milliseconds)
-    // in the episode's stop_times document and stores only an integer progress
-    // percentage in continue_watching. Prefer that authoritative stop_time over
-    // SkyStream's additive position field whenever it is available.
     var stopTimePosition = 0;
     if (episodeId != null) {
       final stop = await _authenticated(
@@ -2117,43 +2187,23 @@ class AnimeWitcherAccountService {
     }
     var position = stopTimePosition;
     if (position <= 0) position = _intValue(fields['position']);
-
     final remoteProgress = _intValue(fields['progress']).clamp(0, 100);
     var duration = _intValue(fields['duration']);
     if (duration <= 0 && position > 0 && remoteProgress > 0) {
-      // AnimeWitcher stores stop_time about two seconds behind the player's
-      // real position, while progress is calculated from the real position and
-      // then truncated to an integer. Restore those two seconds for the
-      // duration estimate and compensate for the lost fractional percentage.
-      final watchedForEstimate = stopTimePosition > 0
-          ? stopTimePosition + 2000
-          : position;
-
+      final watchedForEstimate =
+          stopTimePosition > 0 ? stopTimePosition + 2000 : position;
       if (remoteProgress <= 2 && previousDuration > 0) {
-        // At tiny percentages, one truncated percentage point is a very large
-        // error. A known duration for the same episode is more reliable.
         duration = previousDuration;
       } else if (remoteProgress >= 100) {
         duration = watchedForEstimate;
       } else {
-        // The real percentage lies in [progress, progress + 1). Convert that
-        // uncertainty to a duration range and use its midpoint.
         final minimumDuration =
             (watchedForEstimate * 100) / (remoteProgress + 1);
-        final maximumDuration =
-            (watchedForEstimate * 100) / remoteProgress;
+        final maximumDuration = (watchedForEstimate * 100) / remoteProgress;
         duration = ((minimumDuration + maximumDuration) / 2).round();
       }
     }
-
-    // When the original app saved progress below 1%, its integer percentage is
-    // zero, so the server cannot reveal total duration. Keep a known local
-    // duration for the same episode instead of replacing it with 00:00.
-    if (duration <= 0 && previousDuration > 0) {
-      duration = previousDuration;
-    }
-    // If a stop_time lookup is temporarily unavailable but a known duration
-    // exists, reconstruct the watched position from AnimeWitcher's percentage.
+    if (duration <= 0 && previousDuration > 0) duration = previousDuration;
     if (position <= 0 && duration > 0 && remoteProgress > 0) {
       position = ((duration * remoteProgress) / 100).round();
     }
@@ -2161,9 +2211,8 @@ class AnimeWitcherAccountService {
       position = previousPosition;
     }
     final syncedAt =
-        remoteDate?.millisecondsSinceEpoch ??
-        DateTime.now().millisecondsSinceEpoch;
-    await _storage.saveProgress(
+        remoteDate?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
+    await _storage.saveContinueWatchingProgress(
       item,
       position,
       duration,
@@ -2182,7 +2231,9 @@ class AnimeWitcherAccountService {
 
   bool _hasMeaningfulPlayback(Map<String, dynamic>? raw) {
     if (raw == null) return false;
-    return _intValue(raw['position']) > 0 || _intValue(raw['duration']) > 0;
+    return _intValue(raw['position']) > 0 ||
+        _intValue(raw['duration']) > 0 ||
+        (_optionalString(raw['lastEpisodeUrl'])?.isNotEmpty ?? false);
   }
 
   // -------------------------------------------------------------------------

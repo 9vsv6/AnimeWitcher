@@ -102,6 +102,17 @@ class HistoryRepository {
       episodeTitle: episodeTitle,
       episodePosterUrl: episodePosterUrl,
     );
+    await _storageService.saveContinueWatchingProgress(
+      item,
+      position,
+      duration,
+      lastStreamUrl: lastStreamUrl,
+      lastEpisodeUrl: lastEpisodeUrl,
+      season: season,
+      episode: episode,
+      episodeTitle: episodeTitle,
+      episodePosterUrl: episodePosterUrl,
+    );
     _syncInBackground(
       _accountService.saveProgress(
         item: item,
@@ -119,8 +130,8 @@ class HistoryRepository {
   Future<void> removeFromHistory(String url) async {
     await _storageService.removeFromHistory(url);
     _syncInBackground(
-      _accountService.removeContinueWatching(url),
-      'remove continue-watching item',
+      _accountService.removeLastWatched(url),
+      'remove recently-watched item',
     );
   }
 
@@ -136,16 +147,8 @@ class HistoryRepository {
       position,
     );
     _syncInBackground(
-      _accountService.saveProgress(
-        item: item.item,
-        position: position,
-        duration: item.duration,
-        episodeUrl: item.lastEpisodeUrl,
-        episodeNumber: item.episode,
-        episodeTitle: item.episodeTitle,
-        episodePosterUrl: item.episodePosterUrl,
-      ),
-      'update playback progress',
+      _accountService.recordLastWatched(item: item.item),
+      'update recently-watched timestamp',
     );
   }
 
@@ -158,10 +161,102 @@ class HistoryRepository {
     await _storageService.clearAllHistory();
     for (final url in urls) {
       _syncInBackground(
+        _accountService.removeLastWatched(url),
+        'clear recently-watched item',
+      );
+    }
+  }
+
+  Future<void> recordOpened(
+    MultimediaItem item, {
+    String? lastEpisodeUrl,
+    int? season,
+    int? episode,
+    String? episodeTitle,
+    String? episodePosterUrl,
+  }) async {
+    await _storageService.recordHistoryOpen(
+      item,
+      lastEpisodeUrl: lastEpisodeUrl,
+      season: season,
+      episode: episode,
+      episodeTitle: episodeTitle,
+      episodePosterUrl: episodePosterUrl,
+    );
+    _syncInBackground(
+      _accountService.recordLastWatched(item: item),
+      'record recently-watched item',
+    );
+  }
+
+  Future<void> saveContinueWatchingProgress(
+    MultimediaItem item,
+    int position,
+    int duration, {
+    String? lastStreamUrl,
+    String? lastEpisodeUrl,
+    int? season,
+    int? episode,
+    String? episodeTitle,
+    String? episodePosterUrl,
+  }) async {
+    await _storageService.saveContinueWatchingProgress(
+      item,
+      position,
+      duration,
+      lastStreamUrl: lastStreamUrl,
+      lastEpisodeUrl: lastEpisodeUrl,
+      season: season,
+      episode: episode,
+      episodeTitle: episodeTitle,
+      episodePosterUrl: episodePosterUrl,
+    );
+    _syncInBackground(
+      _accountService.saveContinueWatchingProgress(
+        item: item,
+        position: position,
+        duration: duration,
+        episodeUrl: lastEpisodeUrl,
+        episodeNumber: episode,
+        episodeTitle: episodeTitle,
+        episodePosterUrl: episodePosterUrl,
+      ),
+      'save continue-watching progress',
+    );
+  }
+
+  Future<void> removeContinueWatching(String url) async {
+    await _storageService.removeFromContinueWatching(url);
+    _syncInBackground(
+      _accountService.removeContinueWatching(url),
+      'remove continue-watching item',
+    );
+  }
+
+  Future<void> clearContinueWatching() async {
+    final urls = _storageService
+        .getContinueWatching()
+        .map((item) => (item['url'] ?? '').toString())
+        .where((url) => url.isNotEmpty)
+        .toList(growable: false);
+    await _storageService.clearAllContinueWatching();
+    for (final url in urls) {
+      _syncInBackground(
         _accountService.removeContinueWatching(url),
         'clear continue-watching item',
       );
     }
+  }
+
+  Future<void> syncContinueWatching() async {
+    await _accountService.syncContinueWatching();
+  }
+
+  List<HistoryItem> getContinueWatching() {
+    return _storageService
+        .getContinueWatching()
+        .map(HistoryItem.fromMap)
+        .toList(growable: false);
   }
 
   Future<void> syncRecentWatched() async {

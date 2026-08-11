@@ -2039,8 +2039,8 @@ class PlayerController extends Notifier<PlayerState> {
       }
 
       if (lastUrl == null) {
-        final historyList = ref.read(watchHistoryProvider);
-        final previousState = historyList.firstWhere(
+        final continueList = ref.read(continueWatchingProvider);
+        final previousState = continueList.firstWhere(
           (h) => h.item.url == _item.url,
           orElse: () => HistoryItem(
             item: _item,
@@ -2904,6 +2904,22 @@ class PlayerController extends Notifier<PlayerState> {
     unawaited(setSubtitleDelay(0.0));
   }
 
+  Future<void> _recordEpisodeOpened(Episode episode) async {
+    final pId =
+        _item.provider ??
+        ref.read(activeProviderProvider)?.packageName ??
+        'Unknown';
+    final itemToSave = _item.copyWith(provider: pId);
+    await ref.read(watchHistoryProvider.notifier).recordOpened(
+      itemToSave,
+      lastEpisodeUrl: episode.url,
+      season: episode.season,
+      episode: episode.episode,
+      episodeTitle: episode.name,
+      episodePosterUrl: _episodeArtwork(episode),
+    );
+  }
+
   Future<void> playNextEpisode({StreamResult? selectedSource}) async {
     final nextEpisode = this.nextEpisode;
     if (nextEpisode == null) return;
@@ -2931,6 +2947,7 @@ class PlayerController extends Notifier<PlayerState> {
     _hasConfirmedPlaybackFrame = false;
     _videoUrl = finalUrl;
     _episode = nextEpisode;
+    await _recordEpisodeOpened(nextEpisode);
     _userAddedExternalSubtitles.clear();
     _resetPerEpisodeState();
     unawaited(_fetchAndLogSkipSegments());
@@ -3006,6 +3023,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     _episode = episode;
     _videoUrl = finalUrl;
+    await _recordEpisodeOpened(episode);
     _hasConfirmedPlaybackFrame = false;
     _suppressNextEpisodeDetection = true;
     _userAddedExternalSubtitles.clear();
@@ -3102,7 +3120,7 @@ class PlayerController extends Notifier<PlayerState> {
             .read(generalSettingsProvider)
             .watchHistoryEnabled;
         if (historyEnabled) {
-          final historyNotifier = ref.read(watchHistoryProvider.notifier);
+          final continueNotifier = ref.read(continueWatchingProvider.notifier);
           final pId =
               _item.provider ??
               ref.read(activeProviderProvider)?.packageName ??
@@ -3110,7 +3128,7 @@ class PlayerController extends Notifier<PlayerState> {
           final itemToSave = _item.copyWith(provider: pId);
 
           if (!isSeries) {
-            historyNotifier.removeFromHistory(_item.url);
+            continueNotifier.remove(_item.url);
             return;
           } else if (currentEpisode != null) {
             // Find next episode
@@ -3124,7 +3142,7 @@ class PlayerController extends Notifier<PlayerState> {
             if (currentIndex != -1 && currentIndex < episodes.length - 1) {
               final nextEpisode = episodes[currentIndex + 1];
               // Save NEXT episode as current progress (reset to 0)
-              historyNotifier.saveProgress(
+              continueNotifier.saveProgress(
                 itemToSave,
                 0,
                 0,
@@ -3138,7 +3156,7 @@ class PlayerController extends Notifier<PlayerState> {
               return;
             } else {
               // Last episode of the series completed
-              historyNotifier.removeFromHistory(_item.url);
+              continueNotifier.remove(_item.url);
               return;
             }
           }

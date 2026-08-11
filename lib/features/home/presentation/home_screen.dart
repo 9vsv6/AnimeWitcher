@@ -177,7 +177,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     super.build(context);
     final homeDataAsync = ref.watch(homeDataProvider);
-    final history = ref.watch(watchHistoryProvider);
+    final continueWatching = ref.watch(continueWatchingProvider);
     final generalSettings = ref.watch(generalSettingsProvider);
     final l10n = AppLocalizations.of(context)!;
     final activeProvider = ref.watch(activeProviderProvider);
@@ -438,8 +438,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       HomeSuccess(:final data, :final news) => _withGradientEdgeHint(
         RefreshIndicator(
           onRefresh: () async {
-            ref.read(watchHistoryProvider.notifier).refresh();
-            await ref.read(homeDataProvider.notifier).fetch();
+            await Future.wait<void>([
+              ref.read(continueWatchingProvider.notifier).refreshFromServer(),
+              ref.read(homeDataProvider.notifier).fetch(),
+            ]);
           },
           child: CustomScrollView(
             controller: _scrollController,
@@ -483,11 +485,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
 
-              if (watchHistoryEnabled && history.isNotEmpty)
+              if (watchHistoryEnabled && continueWatching.isNotEmpty)
                 SliverToBoxAdapter(
                   child: ContinueWatchingSection(
                     title: l10n.continueWatching,
-                    items: history.cast<HistoryItem>(),
+                    items: continueWatching,
                     topPadding: isWidescreen ? 0 : null,
                   ),
                 ),

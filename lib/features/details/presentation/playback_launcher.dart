@@ -18,6 +18,7 @@ import '../../../shared/widgets/loading_dialog.dart';
 import '../../../core/utils/app_utils.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../../../core/services/notification_service.dart';
+import '../../library/presentation/history_provider.dart';
 
 part 'playback_launcher.g.dart';
 
@@ -187,6 +188,21 @@ class PlaybackLauncher {
     }
   }
 
+  Future<void> _recordEpisodeOpened(
+    MultimediaItem item,
+    Episode? episode,
+  ) async {
+    if (episode == null) return;
+    await _ref.read(watchHistoryProvider.notifier).recordOpened(
+      item,
+      lastEpisodeUrl: episode.url,
+      season: episode.season,
+      episode: episode.episode,
+      episodeTitle: episode.name,
+      episodePosterUrl: episode.posterUrl,
+    );
+  }
+
   Future<void> play(
     BuildContext context,
     String url, {
@@ -211,6 +227,7 @@ class PlaybackLauncher {
 
     // Downloaded files are already playable and do not need a source list.
     if (AppUtils.isLocalFile(localOrEpisodeUrl)) {
+      await _recordEpisodeOpened(item, resolvedEpisode);
       if (settings.preferredPlayer != null) {
         final stream = StreamResult(url: localOrEpisodeUrl, source: 'Local');
         await _launchStream(
@@ -258,6 +275,7 @@ class PlaybackLauncher {
       try {
         final resolved = await _resolveSelectedSource(context, provider, selected);
         if (resolved == null || !context.mounted) return;
+        await _recordEpisodeOpened(item, resolvedEpisode);
         await _launchStream(
           context,
           resolved,
@@ -280,6 +298,7 @@ class PlaybackLauncher {
     final selectedUrl = selected.requiresResolution
         ? selected.url
         : localOrEpisodeUrl;
+    await _recordEpisodeOpened(item, resolvedEpisode);
     await PlayerRoute(
       $extra: PlayerRouteExtra(
         item: item,

@@ -109,8 +109,8 @@ class _ContinueWatchingSectionState
                           TextButton(
                             onPressed: () {
                               ref
-                                  .read(watchHistoryProvider.notifier)
-                                  .clearAllHistory();
+                                  .read(continueWatchingProvider.notifier)
+                                  .clearAll();
                               Navigator.pop(context);
                               ref
                                   .read(notificationServiceProvider)

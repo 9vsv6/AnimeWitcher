@@ -21,11 +21,13 @@ class StorageService {
   late Box<dynamic> _settingsBox;
   late Box<dynamic> _extensionsBox;
   late Box<dynamic> _historyBox;
+  late Box<dynamic> _continueWatchingBox;
 
   static const String kLibraryBox = 'library_box';
   static const String kSettingsBox = 'settings_box';
   static const String kExtensionsBox = 'extension_data_box';
   static const String kDownloadMetadataBox = 'download_metadata_box';
+  static const String kContinueWatchingBox = 'continue_watching_box';
 
   Future<void> init() async {
     final supportDir = await getApplicationSupportDirectory();
@@ -38,6 +40,8 @@ class StorageService {
       kDownloadMetadataBox,
     ); // Open but no need to keep late reference if we use Hive.box()
     await initHistory();
+    _continueWatchingBox = await _safeOpenBox(kContinueWatchingBox);
+    await _migrateContinueWatchingStorage();
   }
 
   Future<Box<dynamic>> _safeOpenBox(String boxName) async {
@@ -719,6 +723,38 @@ class StorageService {
     _historyBox = await _safeOpenBox(kHistoryBox);
   }
 
+  static const String _kContinueWatchingMigrationV1 =
+      'continue_watching_storage_v1_migrated';
+  List<Map<String, dynamic>>? _cachedContinueWatching;
+  bool _continueWatchingCacheDirty = true;
+
+  Future<void> _migrateContinueWatchingStorage() async {
+    if (_settingsBox.get(_kContinueWatchingMigrationV1, defaultValue: false) ==
+        true) {
+      return;
+    }
+
+    // Before the two concepts were separated, the home Continue Watching row
+    // read directly from history_box. Copy the old entries once so upgrades do
+    // not lose the user's resume list. Future history-only entries never enter
+    // this box.
+    if (_continueWatchingBox.isEmpty) {
+      final migrated = <dynamic, dynamic>{};
+      for (var i = 0; i < _historyBox.length; i++) {
+        final key = _historyBox.keyAt(i);
+        final value = _historyBox.get(key);
+        if (key != null && value is Map) {
+          migrated[key] = Map<dynamic, dynamic>.from(value);
+        }
+      }
+      if (migrated.isNotEmpty) {
+        await _continueWatchingBox.putAll(migrated);
+      }
+    }
+    await _settingsBox.put(_kContinueWatchingMigrationV1, true);
+    _continueWatchingCacheDirty = true;
+  }
+
   Future<void> saveProgress(
     MultimediaItem item,
     int positionMillis,
@@ -780,6 +816,165 @@ class StorageService {
     }
 
     _historyCacheDirty = true;
+  }
+
+  Future<void> recordHistoryOpen(
+    MultimediaItem item, {
+    String? lastEpisodeUrl,
+    int? season,
+    int? episode,
+    String? episodeTitle,
+    String? episodePosterUrl,
+  }) async {
+    final mainRaw = _historyBox.get(_getKey(item.url));
+    final main = mainRaw is Map
+        ? Map<String, dynamic>.from(mainRaw)
+        : <String, dynamic>{};
+    Map<String, dynamic> progressSource = main;
+    if (lastEpisodeUrl != null && lastEpisodeUrl.isNotEmpty) {
+      final episodeRaw = _historyBox.get('EP_${_getKey(lastEpisodeUrl)}');
+      if (episodeRaw is Map) {
+        progressSource = Map<String, dynamic>.from(episodeRaw);
+      } else if (main['lastEpisodeUrl'] != lastEpisodeUrl) {
+        progressSource = <String, dynamic>{};
+      }
+    }
+
+    await saveProgress(
+      item,
+      (progressSource['position'] as int?) ?? 0,
+      (progressSource['duration'] as int?) ?? 0,
+      lastStreamUrl: progressSource['lastStreamUrl'] as String?,
+      lastEpisodeUrl: lastEpisodeUrl,
+      season: season,
+      episode: episode,
+      episodeTitle: episodeTitle,
+      episodePosterUrl: episodePosterUrl,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  Future<void> saveContinueWatchingProgress(
+    MultimediaItem item,
+    int positionMillis,
+    int durationMillis, {
+    String? lastStreamUrl,
+    String? lastEpisodeUrl,
+    int? season,
+    int? episode,
+    String? episodeTitle,
+    String? episodePosterUrl,
+    int? timestamp,
+    String? syncedAccountUid,
+    int? syncedAt,
+  }) async {
+    final existing = _continueWatchingBox.get(_getKey(item.url));
+    final previous = existing is Map
+        ? Map<dynamic, dynamic>.from(existing)
+        : const <dynamic, dynamic>{};
+    final entry = <String, dynamic>{
+      'title': item.title,
+      'url': item.url,
+      'posterUrl': item.posterUrl,
+      'bannerUrl': item.bannerUrl,
+      'description': item.description,
+      'contentType': item.contentType.name,
+      'provider': item.provider,
+      'tmdbId': item.tmdbId,
+      'imdbId': item.imdbId,
+      'position': positionMillis,
+      'duration': durationMillis,
+      'lastStreamUrl': lastStreamUrl,
+      'lastEpisodeUrl': lastEpisodeUrl,
+      'season': season,
+      'episode': episode,
+      'episodeTitle': episodeTitle,
+      'episodePosterUrl': episodePosterUrl,
+      'timestamp': timestamp ?? DateTime.now().millisecondsSinceEpoch,
+      if (syncedAccountUid != null)
+        'animeWitcherSyncedUid': syncedAccountUid
+      else if (previous['animeWitcherSyncedUid'] != null)
+        'animeWitcherSyncedUid': previous['animeWitcherSyncedUid'],
+      if (syncedAt != null)
+        'animeWitcherSyncedAt': syncedAt
+      else if (previous['animeWitcherSyncedAt'] != null)
+        'animeWitcherSyncedAt': previous['animeWitcherSyncedAt'],
+    };
+
+    await _continueWatchingBox.put(_getKey(item.url), entry);
+    final isSeries =
+        item.contentType == MultimediaContentType.series ||
+        item.contentType == MultimediaContentType.anime;
+    if (isSeries && lastEpisodeUrl != null && lastEpisodeUrl.isNotEmpty) {
+      await _continueWatchingBox.put('EP_${_getKey(lastEpisodeUrl)}', entry);
+    }
+    _continueWatchingCacheDirty = true;
+  }
+
+  Future<void> markContinueWatchingItemSynced(
+    String url, {
+    required String accountUid,
+    required int syncedAt,
+  }) async {
+    final mainKey = _getKey(url);
+    final raw = _continueWatchingBox.get(mainKey);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['animeWitcherSyncedUid'] = accountUid;
+    entry['animeWitcherSyncedAt'] = syncedAt;
+    await _continueWatchingBox.put(mainKey, entry);
+
+    final lastEpisodeUrl = entry['lastEpisodeUrl'] as String?;
+    if (lastEpisodeUrl != null && lastEpisodeUrl.isNotEmpty) {
+      final episodeKey = 'EP_${_getKey(lastEpisodeUrl)}';
+      final episodeRaw = _continueWatchingBox.get(episodeKey);
+      if (episodeRaw is Map) {
+        final episodeEntry = Map<String, dynamic>.from(episodeRaw);
+        episodeEntry['animeWitcherSyncedUid'] = accountUid;
+        episodeEntry['animeWitcherSyncedAt'] = syncedAt;
+        await _continueWatchingBox.put(episodeKey, episodeEntry);
+      }
+    }
+    _continueWatchingCacheDirty = true;
+  }
+
+  Future<void> removeFromContinueWatching(String url) async {
+    final mainKey = _getKey(url);
+    await _continueWatchingBox.delete(mainKey);
+    final keysToDelete = <dynamic>[];
+    for (var i = 0; i < _continueWatchingBox.length; i++) {
+      final key = _continueWatchingBox.keyAt(i);
+      if (key is! String || !key.startsWith('EP_')) continue;
+      final raw = _continueWatchingBox.get(key);
+      if (raw is Map && raw['url'] == url) keysToDelete.add(key);
+    }
+    await _continueWatchingBox.deleteAll(keysToDelete);
+    _continueWatchingCacheDirty = true;
+  }
+
+  Future<void> clearAllContinueWatching() async {
+    await _continueWatchingBox.clear();
+    _continueWatchingCacheDirty = true;
+  }
+
+  List<Map<String, dynamic>> getContinueWatching() {
+    if (!_continueWatchingCacheDirty && _cachedContinueWatching != null) {
+      return _cachedContinueWatching!;
+    }
+    final items = <Map<String, dynamic>>[];
+    for (var i = 0; i < _continueWatchingBox.length; i++) {
+      final key = _continueWatchingBox.keyAt(i);
+      if (key is String && key.startsWith('EP_')) continue;
+      final raw = _continueWatchingBox.getAt(i);
+      if (raw is Map) items.add(Map<String, dynamic>.from(raw));
+    }
+    items.sort(
+      (a, b) => ((b['timestamp'] as int?) ?? 0)
+          .compareTo((a['timestamp'] as int?) ?? 0),
+    );
+    _cachedContinueWatching = items;
+    _continueWatchingCacheDirty = false;
+    return items;
   }
 
   Future<void> markHistoryItemSynced(
@@ -889,21 +1084,19 @@ class StorageService {
     return items;
   }
 
-  int getPosition(String url) {
-    // Check main entry first (movies use this)
-    final key = _getKey(url);
-    if (_historyBox.containsKey(key)) {
-      final map = _historyBox.get(key) as Map;
-      return (map['position'] as int?) ?? 0;
-    }
+  Map<dynamic, dynamic>? _playbackEntry(String key) {
+    final continueRaw = _continueWatchingBox.get(key);
+    if (continueRaw is Map) return continueRaw;
+    final historyRaw = _historyBox.get(key);
+    if (historyRaw is Map) return historyRaw;
+    return null;
+  }
 
-    // Fallback to episode if applicable (for legacy or mixed lookups)
-    final epKey = "EP_${_getKey(url)}";
-    if (_historyBox.containsKey(epKey)) {
-      final map = _historyBox.get(epKey) as Map;
-      return (map['position'] as int?) ?? 0;
-    }
-    return 0;
+  int getPosition(String url) {
+    final main = _playbackEntry(_getKey(url));
+    if (main != null) return (main['position'] as int?) ?? 0;
+    final episode = _playbackEntry('EP_${_getKey(url)}');
+    return (episode?['position'] as int?) ?? 0;
   }
 
   int getEpisodePosition(
@@ -912,38 +1105,24 @@ class StorageService {
     int? season,
     int? episode,
   }) {
-    final epKey = "EP_${_getKey(epUrl)}";
-    if (_historyBox.containsKey(epKey)) {
-      final map = _historyBox.get(epKey) as Map;
-      return (map['position'] as int?) ?? 0;
-    }
-
-    // Fallback: If we have season/episode info, look into the main item entry
+    final ep = _playbackEntry('EP_${_getKey(epUrl)}');
+    if (ep != null) return (ep['position'] as int?) ?? 0;
     if (mainUrl != null && season != null && episode != null) {
-      final mainKey = _getKey(mainUrl);
-      if (_historyBox.containsKey(mainKey)) {
-        final map = _historyBox.get(mainKey) as Map;
-        if (map['season'] == season && map['episode'] == episode) {
-          return (map['position'] as int?) ?? 0;
-        }
+      final main = _playbackEntry(_getKey(mainUrl));
+      if (main != null &&
+          main['season'] == season &&
+          main['episode'] == episode) {
+        return (main['position'] as int?) ?? 0;
       }
     }
     return 0;
   }
 
   int getDuration(String url) {
-    final key = _getKey(url);
-    if (_historyBox.containsKey(key)) {
-      final map = _historyBox.get(key) as Map;
-      return (map['duration'] as int?) ?? 0;
-    }
-
-    final epKey = "EP_${_getKey(url)}";
-    if (_historyBox.containsKey(epKey)) {
-      final map = _historyBox.get(epKey) as Map;
-      return (map['duration'] as int?) ?? 0;
-    }
-    return 0;
+    final main = _playbackEntry(_getKey(url));
+    if (main != null) return (main['duration'] as int?) ?? 0;
+    final episode = _playbackEntry('EP_${_getKey(url)}');
+    return (episode?['duration'] as int?) ?? 0;
   }
 
   int getEpisodeDuration(
@@ -952,41 +1131,25 @@ class StorageService {
     int? season,
     int? episode,
   }) {
-    final epKey = "EP_${_getKey(epUrl)}";
-    if (_historyBox.containsKey(epKey)) {
-      final map = _historyBox.get(epKey) as Map;
-      return (map['duration'] as int?) ?? 0;
-    }
-
-    // Fallback: Look into main item entry
+    final ep = _playbackEntry('EP_${_getKey(epUrl)}');
+    if (ep != null) return (ep['duration'] as int?) ?? 0;
     if (mainUrl != null && season != null && episode != null) {
-      final mainKey = _getKey(mainUrl);
-      if (_historyBox.containsKey(mainKey)) {
-        final map = _historyBox.get(mainKey) as Map;
-        if (map['season'] == season && map['episode'] == episode) {
-          return (map['duration'] as int?) ?? 0;
-        }
+      final main = _playbackEntry(_getKey(mainUrl));
+      if (main != null &&
+          main['season'] == season &&
+          main['episode'] == episode) {
+        return (main['duration'] as int?) ?? 0;
       }
     }
     return 0;
   }
 
   String? getLastStreamUrl(String url) {
-    final key = _getKey(url);
-    if (_historyBox.containsKey(key)) {
-      final map = _historyBox.get(key) as Map;
-      return map['lastStreamUrl'] as String?;
-    }
-    return null;
+    return _playbackEntry(_getKey(url))?['lastStreamUrl'] as String?;
   }
 
   String? getLastEpisodeUrl(String url) {
-    final key = _getKey(url);
-    if (_historyBox.containsKey(key)) {
-      final map = _historyBox.get(key) as Map;
-      return map['lastEpisodeUrl'] as String?;
-    }
-    return null;
+    return _playbackEntry(_getKey(url))?['lastEpisodeUrl'] as String?;
   }
 
   static const String _kExtensionRepoUrls = 'extension_repo_urls';
@@ -1021,6 +1184,12 @@ class StorageService {
         await Hive.deleteBoxFromDisk(kHistoryBox);
       } catch (e) {
         if (kDebugMode) debugPrint('Error deleting history box: $e');
+      }
+      try {
+        if (_continueWatchingBox.isOpen) await _continueWatchingBox.close();
+        await Hive.deleteBoxFromDisk(kContinueWatchingBox);
+      } catch (e) {
+        if (kDebugMode) debugPrint('Error deleting continue watching box: $e');
       }
       try {
         if (_extensionsBox.isOpen) await _extensionsBox.close();
