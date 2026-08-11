@@ -986,7 +986,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             backForegroundColor: headerForeground,
             backFallbackColor: headerFallback,
             trailingButtons: trailingButtons,
-            deferTrailingMorphUntilRouteSettles: true,
+            instantRouteBoundary: true,
           ),
         );
       });

@@ -555,15 +555,27 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
       backButton.accessibilityTraits = .button
       backButton.layoutIfNeeded()
     }
-    setBackVisible(showBack)
+    let instantVisibilityChanges = values["instantVisibilityChanges"] as? Bool ?? false
+    setBackVisible(showBack, animated: !instantVisibilityChanges)
 
     let actions = visible ? (values["actions"] as? [[String: Any]] ?? []) : []
     let animateToolbarChanges = values["animateToolbarChanges"] as? Bool ?? true
+    let hardCutToolbar = values["hardCutToolbar"] as? Bool ?? false
+    if hardCutToolbar {
+      toolbar.layer.removeAllAnimations()
+      UIView.performWithoutAnimation {
+        toolbar.setItems([], animated: false)
+        toolbar.layoutIfNeeded()
+      }
+      currentActionItems = []
+      currentActionKinds = []
+      didApplyInitialToolbarState = false
+    }
     if actions.isEmpty {
-      setToolbarVisible(false)
+      setToolbarVisible(false, animated: !instantVisibilityChanges)
     } else {
       let wasVisible = toolbarVisible
-      setToolbarVisible(true)
+      setToolbarVisible(true, animated: !instantVisibilityChanges)
       applyToolbar(
         actions: actions,
         animated: wasVisible && animateToolbarChanges
@@ -604,13 +616,20 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     }
   }
 
-  private func setBackVisible(_ visible: Bool) {
+  private func setBackVisible(_ visible: Bool, animated: Bool = true) {
     guard backVisible != visible else { return }
     backVisible = visible
     backButton.layer.removeAllAnimations()
     if visible {
       backButton.isHidden = false
       backButton.alpha = 1
+      return
+    }
+    if !animated {
+      UIView.performWithoutAnimation {
+        backButton.alpha = 0
+        backButton.isHidden = true
+      }
       return
     }
     UIView.animate(
@@ -625,13 +644,20 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     }
   }
 
-  private func setToolbarVisible(_ visible: Bool) {
+  private func setToolbarVisible(_ visible: Bool, animated: Bool = true) {
     guard toolbarVisible != visible else { return }
     toolbarVisible = visible
     toolbar.layer.removeAllAnimations()
     if visible {
       toolbar.isHidden = false
       toolbar.alpha = 1
+      return
+    }
+    if !animated {
+      UIView.performWithoutAnimation {
+        toolbar.alpha = 0
+        toolbar.isHidden = true
+      }
       return
     }
     UIView.animate(
@@ -812,7 +838,14 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     currentActionItems = items.dropFirst().map { $0 }
     currentActionKinds = actionKinds
     let shouldAnimate = didApplyInitialToolbarState && animated
-    toolbar.setItems(items, animated: shouldAnimate)
+    if shouldAnimate {
+      toolbar.setItems(items, animated: true)
+    } else {
+      UIView.performWithoutAnimation {
+        toolbar.setItems(items, animated: false)
+        toolbar.layoutIfNeeded()
+      }
+    }
     didApplyInitialToolbarState = true
   }
 

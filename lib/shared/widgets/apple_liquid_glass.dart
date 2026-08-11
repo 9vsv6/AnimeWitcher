@@ -36,6 +36,7 @@ class ApplePersistentGlassHeaderConfig {
     this.trailingButtons,
     this.branchIndex,
     this.deferTrailingMorphUntilRouteSettles = false,
+    this.instantRouteBoundary = false,
   });
 
   final Object owner;
@@ -48,6 +49,7 @@ class ApplePersistentGlassHeaderConfig {
   List<AppleLiquidGlassToolbarButton>? trailingButtons;
   int? branchIndex;
   bool deferTrailingMorphUntilRouteSettles;
+  bool instantRouteBoundary;
 
   bool visuallyMatches(ApplePersistentGlassHeaderConfig other) {
     final sameCustomTrailing = trailing == null && other.trailing == null ||
@@ -59,6 +61,7 @@ class ApplePersistentGlassHeaderConfig {
         branchIndex == other.branchIndex &&
         deferTrailingMorphUntilRouteSettles ==
             other.deferTrailingMorphUntilRouteSettles &&
+        instantRouteBoundary == other.instantRouteBoundary &&
         sameCustomTrailing &&
         _sameToolbarButtons(trailingButtons, other.trailingButtons);
   }
@@ -74,6 +77,7 @@ class ApplePersistentGlassHeaderConfig {
     branchIndex = other.branchIndex;
     deferTrailingMorphUntilRouteSettles =
         other.deferTrailingMorphUntilRouteSettles;
+    instantRouteBoundary = other.instantRouteBoundary;
   }
 }
 
@@ -351,14 +355,12 @@ class _ApplePersistentGlassHeaderOverlayState
 
   bool _syncScheduled = false;
   String? _lastNativeSignature;
-  List<Map<String, Object?>> _lastNativeActions = const <Map<String, Object?>>[];
   ApplePersistentGlassHeaderConfig? _lastRenderedActionConfig;
-  bool _nativeStateUsesDesiredActions = true;
 
   @override
   void initState() {
     super.initState();
-    applePersistentGlassHeaderController.addListener(_scheduleNativeSync);
+    applePersistentGlassHeaderController.addListener(_handleHeaderChanged);
     _nativeHeaderChannel.setMethodCallHandler(_handleNativeHeaderCall);
     WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleNativeSync());
   }
@@ -419,57 +421,55 @@ class _ApplePersistentGlassHeaderOverlayState
         },
     ];
 
-    final isDetails = config?.deferTrailingMorphUntilRouteSettles == true;
-    final isRootBranch = config?.branchIndex != null;
+    final isInstantRoute = config?.instantRouteBoundary == true;
     final lastConfig = _lastRenderedActionConfig;
-    final lastWasDetails =
-        lastConfig?.deferTrailingMorphUntilRouteSettles == true;
-    final lastWasRootBranch = lastConfig?.branchIndex != null;
+    final lastWasInstantRoute = lastConfig?.instantRouteBoundary == true;
+    final crossesInstantBoundary =
+        lastConfig != null && isInstantRoute != lastWasInstantRoute;
+    final involvesInstantRoute = isInstantRoute || lastWasInstantRoute;
 
-    // Do not change the expensive native toolbar structure while Flutter is
-    // pushing Details. Keep Home/Search/Library controls completely static until
-    // the route settles, then replace them without animation.
-    final currentAnimation = config?.route?.animation;
-    final detailsPushInProgress = isDetails &&
-        lastWasRootBranch &&
-        currentAnimation != null &&
-        currentAnimation.status != AnimationStatus.completed;
-
-    // Apply the same rule in reverse. During Details -> Home/Search/Library keep
-    // the Details toolbar frozen until the outgoing Details route is dismissed.
-    // This removes Liquid Glass work from both sides of the page transition.
-    final previousDetailsAnimation = lastConfig?.route?.animation;
-    final detailsPopToRootInProgress = isRootBranch &&
-        lastWasDetails &&
-        previousDetailsAnimation != null &&
-        previousDetailsAnimation.status == AnimationStatus.reverse;
-
-    final freezeActions = detailsPushInProgress || detailsPopToRootInProgress;
-    final actions = freezeActions ? _lastNativeActions : desiredActions;
-    _nativeStateUsesDesiredActions = !freezeActions;
-
-    // Explicitly disable UIToolbar's structural animation only for
-    // Home/Search/Library <-> Details. Other transitions, especially
-    // Details <-> Comments, keep Apple's native toolbar morph animation.
-    final rootDetailsSwap = !freezeActions &&
-        ((isDetails && lastWasRootBranch) ||
-            (isRootBranch && lastWasDetails));
-
-    final renderedConfig = freezeActions ? lastConfig : config;
-    final renderedIsDetails =
-        renderedConfig?.deferTrailingMorphUntilRouteSettles == true;
-
+    // Anime Details is intentionally isolated from the persistent Liquid Glass
+    // used by Home/Search/Library. Crossing that boundary is a hard cut: send
+    // the new controls immediately and never morph/fade the Details glass into
+    // another page's glass (or vice versa).
     return <String, Object?>{
       'visible': config != null,
       'showBack': config?.onBack != null,
       'backColor': (config?.backForegroundColor ?? colors.onSurface).toARGB32(),
       'backAccessibilityLabel': config?.backTooltip,
-      // Move the three Details actions farther left, but keep the toolbar's
-      // geometry frozen during push/pop so constraint work cannot hitch the route.
-      'toolbarTrailingInset': renderedIsDetails ? 34.0 : 18.0,
-      'animateToolbarChanges': !rootDetailsSwap,
-      'actions': actions,
+      'toolbarTrailingInset': isInstantRoute ? 34.0 : 18.0,
+      'animateToolbarChanges': !involvesInstantRoute,
+      'instantVisibilityChanges': involvesInstantRoute,
+      'hardCutToolbar': crossesInstantBoundary,
+      'actions': desiredActions,
     };
+  }
+
+  void _handleHeaderChanged() {
+    if (!mounted) return;
+    final next = applePersistentGlassHeaderController.value;
+    final nextIsInstant = next?.instantRouteBoundary == true;
+    final previousWasInstant =
+        _lastRenderedActionConfig?.instantRouteBoundary == true;
+
+    // Do not wait for another Flutter frame when entering/leaving Anime Details.
+    // The UIKit overlay is updated in the same route-animation tick.
+    if (nextIsInstant != previousWasInstant &&
+        (nextIsInstant || previousWasInstant)) {
+      _syncNativeNow();
+      return;
+    }
+    _scheduleNativeSync();
+  }
+
+  void _syncNativeNow() {
+    if (!mounted) return;
+    final state = _nativeState();
+    final signature = jsonEncode(state);
+    if (signature == _lastNativeSignature) return;
+    _lastNativeSignature = signature;
+    _lastRenderedActionConfig = applePersistentGlassHeaderController.value;
+    _nativeHeaderChannel.invokeMethod<void>('update', state);
   }
 
   void _scheduleNativeSync() {
@@ -477,22 +477,7 @@ class _ApplePersistentGlassHeaderOverlayState
     _syncScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncScheduled = false;
-      if (!mounted) return;
-      final state = _nativeState();
-      final signature = jsonEncode(state);
-      if (signature == _lastNativeSignature) return;
-      _lastNativeSignature = signature;
-      final sentActions = state['actions'];
-      if (sentActions is List) {
-        _lastNativeActions = <Map<String, Object?>>[
-          for (final action in sentActions)
-            if (action is Map) Map<String, Object?>.from(action),
-        ];
-      }
-      if (_nativeStateUsesDesiredActions) {
-        _lastRenderedActionConfig = applePersistentGlassHeaderController.value;
-      }
-      _nativeHeaderChannel.invokeMethod<void>('update', state);
+      _syncNativeNow();
     });
   }
 
@@ -504,7 +489,7 @@ class _ApplePersistentGlassHeaderOverlayState
 
   @override
   void dispose() {
-    applePersistentGlassHeaderController.removeListener(_scheduleNativeSync);
+    applePersistentGlassHeaderController.removeListener(_handleHeaderChanged);
     _nativeHeaderChannel.setMethodCallHandler(null);
     super.dispose();
   }
