@@ -1,20 +1,12 @@
 package dev.akash.skystream
 
-import android.Manifest
-import android.app.AlarmManager
-import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.app.PictureInPictureParams
 import android.os.Build
-import android.os.SystemClock
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
 
@@ -22,9 +14,6 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "dev.akash.skystream.player/pip"
     private val TV_CHANNEL = "dev.akash.skystream/tv_channel"
     private val PLAYER_CHANNEL = "dev.akash.skystream/external_player"
-    private val NOTIFICATION_CHANNEL = "dev.akash.skystream/notifications"
-    private val NOTIFICATION_PERMISSION_REQUEST = 9417
-    private var pendingNotificationPermissionResult: MethodChannel.Result? = null
 
     private var isPlaying = false
 
@@ -104,32 +93,6 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // System notification channel. Test notifications are scheduled by the OS,
-        // so they still fire after the Flutter process has been removed.
-        MethodChannel(messenger, NOTIFICATION_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "ensureChannel" -> {
-                    AnimeWitcherNotificationReceiver.ensureChannel(this)
-                    result.success(true)
-                }
-                "requestPermission" -> requestNotificationPermission(result)
-                "scheduleTestNotification" -> {
-                    val delaySeconds = (call.argument<Number>("delaySeconds")?.toLong() ?: 15L).coerceAtLeast(1L)
-                    val title = call.argument<String>("title") ?: "AnimeWitcher"
-                    val body = call.argument<String>("body") ?: "Notification test"
-                    scheduleSystemNotification(delaySeconds, title, body)
-                    result.success(true)
-                }
-                "showNotification" -> {
-                    val title = call.argument<String>("title") ?: "AnimeWitcher"
-                    val body = call.argument<String>("body") ?: ""
-                    AnimeWitcherNotificationReceiver.showNotification(this, title, body)
-                    result.success(true)
-                }
-                else -> result.notImplemented()
-            }
-        }
-
         // External Player Channel — uses native Intent to avoid Uri.parse() issues
         MethodChannel(messenger, PLAYER_CHANNEL).setMethodCallHandler { call, result ->
             if (call.method == "launchVideoInPlayer") {
@@ -176,63 +139,6 @@ class MainActivity : FlutterActivity() {
         }
     }
     
-    private fun requestNotificationPermission(result: MethodChannel.Result) {
-        AnimeWitcherNotificationReceiver.ensureChannel(this)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            result.success(true)
-            return
-        }
-        if (pendingNotificationPermissionResult != null) {
-            result.error("PERMISSION_IN_PROGRESS", "A notification permission request is already active", null)
-            return
-        }
-        pendingNotificationPermissionResult = result
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-            NOTIFICATION_PERMISSION_REQUEST,
-        )
-    }
-
-    private fun scheduleSystemNotification(delaySeconds: Long, title: String, body: String) {
-        AnimeWitcherNotificationReceiver.ensureChannel(this)
-        val intent = Intent(this, AnimeWitcherNotificationReceiver::class.java).apply {
-            putExtra(AnimeWitcherNotificationReceiver.EXTRA_TITLE, title)
-            putExtra(AnimeWitcherNotificationReceiver.EXTRA_BODY, body)
-        }
-        val requestCode = (System.currentTimeMillis() and 0x7fffffff).toInt()
-        val pendingIntent = PendingIntent.getBroadcast(
-            this,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val triggerAt = SystemClock.elapsedRealtime() + delaySeconds * 1000L
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                triggerAt,
-                pendingIntent,
-            )
-        } else {
-            alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != NOTIFICATION_PERMISSION_REQUEST) return
-        val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
-        pendingNotificationPermissionResult?.success(granted)
-        pendingNotificationPermissionResult = null
-    }
-
     // Action Constants
     private val ACTION_MEDIA_CONTROL = "media_control"
     private val EXTRA_CONTROL_TYPE = "control_type"

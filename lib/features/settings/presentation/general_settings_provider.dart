@@ -5,22 +5,6 @@ import '../../../core/storage/settings_repository.dart';
 
 part 'general_settings_provider.g.dart';
 
-enum EpisodeNotificationPreference {
-  all('all'),
-  favoritesAndWatching('favorites_watching'),
-  off('off');
-
-  const EpisodeNotificationPreference(this.storageValue);
-  final String storageValue;
-
-  static EpisodeNotificationPreference fromStorageValue(String? value) {
-    for (final preference in values) {
-      if (preference.storageValue == value) return preference;
-    }
-    return EpisodeNotificationPreference.all;
-  }
-}
-
 class GeneralSettings {
   final bool watchHistoryEnabled;
   final String defaultHomeScreen;
@@ -28,7 +12,6 @@ class GeneralSettings {
   final String titlePosition;
   final List<String> taskbarOrder;
   final Set<String> hiddenTaskbarItems;
-  final EpisodeNotificationPreference episodeNotificationPreference;
 
   const GeneralSettings({
     this.watchHistoryEnabled = true,
@@ -37,7 +20,6 @@ class GeneralSettings {
     this.titlePosition = 'below',
     this.taskbarOrder = defaultTaskbarOrderIds,
     this.hiddenTaskbarItems = const <String>{},
-    this.episodeNotificationPreference = EpisodeNotificationPreference.all,
   });
 
   GeneralSettings copyWith({
@@ -47,7 +29,6 @@ class GeneralSettings {
     String? titlePosition,
     List<String>? taskbarOrder,
     Set<String>? hiddenTaskbarItems,
-    EpisodeNotificationPreference? episodeNotificationPreference,
   }) {
     return GeneralSettings(
       watchHistoryEnabled: watchHistoryEnabled ?? this.watchHistoryEnabled,
@@ -56,8 +37,6 @@ class GeneralSettings {
       titlePosition: titlePosition ?? this.titlePosition,
       taskbarOrder: taskbarOrder ?? this.taskbarOrder,
       hiddenTaskbarItems: hiddenTaskbarItems ?? this.hiddenTaskbarItems,
-      episodeNotificationPreference:
-          episodeNotificationPreference ?? this.episodeNotificationPreference,
     );
   }
 }
@@ -85,19 +64,7 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
       titlePosition: repository.getTitlePosition(),
       taskbarOrder: order,
       hiddenTaskbarItems: hidden,
-      episodeNotificationPreference:
-          EpisodeNotificationPreference.fromStorageValue(
-            repository.getEpisodeNotificationPreference(),
-          ),
     );
-  }
-
-  Future<void> setEpisodeNotificationPreference(
-    EpisodeNotificationPreference preference,
-  ) async {
-    final repository = ref.read(settingsRepositoryProvider);
-    await repository.setEpisodeNotificationPreference(preference.storageValue);
-    state = state.copyWith(episodeNotificationPreference: preference);
   }
 
   Future<void> setWatchHistoryEnabled(bool enabled) async {

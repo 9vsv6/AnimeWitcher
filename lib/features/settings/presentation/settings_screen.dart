@@ -9,7 +9,6 @@ import '../../../core/providers/device_info_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/account/account_providers.dart';
 import '../../../core/account/animewitcher_account_models.dart';
-import '../../../core/services/push_notification_service.dart';
 
 import 'account_screen.dart';
 import 'widgets/settings_widgets.dart';
@@ -164,55 +163,6 @@ class SettingsScreen extends ConsumerWidget {
                       builder: (_) => const AnimeWitcherAccountScreen(),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: LayoutConstants.spacingLg),
-            SettingsGroup(
-              title: isArabic ? 'الإشعارات' : 'Notifications',
-              children: [
-                SettingsTile(
-                  icon: Icons.notifications_active_rounded,
-                  title: isArabic
-                      ? 'إشعارات الحلقات الجديدة'
-                      : 'New episode notifications',
-                  subtitle: _episodeNotificationPreferenceLabel(
-                    generalSettings.episodeNotificationPreference,
-                    isArabic,
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _showEpisodeNotificationDialog(
-                    context,
-                    ref,
-                    generalSettings.episodeNotificationPreference,
-                  ),
-                ),
-                SettingsTile(
-                  icon: Icons.notification_add_rounded,
-                  title: isArabic ? 'اختبار الإشعارات' : 'Test notifications',
-                  subtitle: isArabic
-                      ? 'أرسل إشعار اختبار بعد 15 ثانية ثم أغلق التطبيق بالكامل'
-                      : 'Send a test notification in 15 seconds, then fully close the app',
-                  isLast: true,
-                  onTap: () async {
-                    final scheduled = await ref
-                        .read(pushNotificationServiceProvider)
-                        .scheduleTestNotification();
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          scheduled
-                              ? (isArabic
-                                    ? 'تمت جدولة الإشعار بعد 15 ثانية. أغلق التطبيق الآن.'
-                                    : 'Notification scheduled for 15 seconds. Close the app now.')
-                              : (isArabic
-                                    ? 'تعذر جدولة الإشعار. تأكد من السماح بالإشعارات.'
-                                    : 'Could not schedule the notification. Check notification permission.'),
-                        ),
-                      ),
-                    );
-                  },
                 ),
               ],
             ),
@@ -555,86 +505,6 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-String _episodeNotificationPreferenceLabel(
-  EpisodeNotificationPreference preference,
-  bool isArabic,
-) {
-  return switch (preference) {
-    EpisodeNotificationPreference.all =>
-      isArabic ? 'كل الحلقات الجديدة' : 'All new episodes',
-    EpisodeNotificationPreference.favoritesAndWatching => isArabic
-        ? 'الأنميات المفضلة وأشاهدها الآن'
-        : 'Favorites and currently watching',
-    EpisodeNotificationPreference.off =>
-      isArabic ? 'عدم إرسال إشعارات' : 'Do not send notifications',
-  };
-}
-
-Future<void> _showEpisodeNotificationDialog(
-  BuildContext context,
-  WidgetRef ref,
-  EpisodeNotificationPreference current,
-) async {
-  final isArabic =
-      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-  final selected = await showDialog<EpisodeNotificationPreference>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(
-        isArabic ? 'إشعارات الحلقات الجديدة' : 'New episode notifications',
-      ),
-      contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final preference in EpisodeNotificationPreference.values)
-            ListTile(
-              leading: Icon(
-                switch (preference) {
-                  EpisodeNotificationPreference.all =>
-                    Icons.notifications_active_rounded,
-                  EpisodeNotificationPreference.favoritesAndWatching =>
-                    Icons.favorite_rounded,
-                  EpisodeNotificationPreference.off =>
-                    Icons.notifications_off_rounded,
-                },
-              ),
-              title: Text(
-                _episodeNotificationPreferenceLabel(preference, isArabic),
-              ),
-              trailing: preference == current
-                  ? Icon(
-                      Icons.check_circle_rounded,
-                      color: Theme.of(dialogContext).colorScheme.primary,
-                    )
-                  : null,
-              onTap: () => Navigator.of(dialogContext).pop(preference),
-            ),
-        ],
-      ),
-    ),
-  );
-  if (selected == null || selected == current) return;
-
-  await ref
-      .read(generalSettingsProvider.notifier)
-      .setEpisodeNotificationPreference(selected);
-  try {
-    await ref.read(pushNotificationServiceProvider).applyPreference(selected);
-  } catch (error) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isArabic
-              ? 'تم حفظ الخيار محليًا، لكن تعذرت مزامنته مع خادم الإشعارات.'
-              : 'The option was saved locally, but notification server sync failed.',
         ),
       ),
     );

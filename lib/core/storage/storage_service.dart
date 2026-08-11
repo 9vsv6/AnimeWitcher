@@ -518,18 +518,6 @@ class StorageService {
         'below';
   }
 
-  Future<void> setEpisodeNotificationPreference(String preference) async {
-    await _settingsBox.put('episode_notification_preference', preference);
-  }
-
-  String getEpisodeNotificationPreference() {
-    final value = _settingsBox.get(
-      'episode_notification_preference',
-      defaultValue: 'all',
-    );
-    return value?.toString() ?? 'all';
-  }
-
   Future<void> setDevLoadAssets(bool enabled) async {
     await _settingsBox.put('dev_load_assets', enabled);
   }

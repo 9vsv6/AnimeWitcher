@@ -56,12 +56,6 @@ class SettingsRepository {
     return _storageService.getTitlePosition();
   }
 
-  Future<void> setEpisodeNotificationPreference(String preference) =>
-      _storageService.setEpisodeNotificationPreference(preference);
-
-  String getEpisodeNotificationPreference() =>
-      _storageService.getEpisodeNotificationPreference();
-
   Future<void> setDevLoadAssets(bool enabled) async {
     await _storageService.setDevLoadAssets(enabled);
   }
