@@ -1078,6 +1078,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final currentItem = ref.watch(
       detailsControllerProvider(widget.item.url).select((s) => s.item),
     );
+    final initialPageReady = ref.watch(
+      detailsControllerProvider(widget.item.url).select(
+        (s) => s.basicDetailsResolved && s.nextAiringResolved,
+      ),
+    );
     // Movies and one-episode anime share the exact same mobile layout, so
     // iPhone/iPad-small pages must not rebuild just because isMovie resolves.
     // Desktop still uses the flag for hero-specific playback presentation.
@@ -1098,6 +1103,45 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
 
     final l10n = AppLocalizations.of(context)!;
+
+    if (!initialPageReady) {
+      if (appleUsesPersistentLiquidGlassHeader) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+          applePersistentGlassHeaderController.show(
+            ApplePersistentGlassHeaderConfig(
+              owner: this,
+              route: ModalRoute.of(context),
+              onBack: () => context.pop(),
+              backForegroundColor: Theme.of(context).colorScheme.primary,
+              backFallbackColor: Colors.black45,
+              trailingButtons: const <AppleLiquidGlassToolbarButton>[],
+              instantRouteBoundary: true,
+            ),
+          );
+        });
+      }
+      return Scaffold(
+        backgroundColor: Colors.black,
+        appBar: appleUsesPersistentLiquidGlassHeader
+            ? null
+            : AppBar(
+                backgroundColor: Colors.black,
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                leading: AppleLiquidGlassBackButton(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  fallbackColor: Colors.black45,
+                  onPressed: () => context.pop(),
+                ),
+              ),
+        body: Center(
+          child: AppLoadingIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      );
+    }
 
     if (appleUsesPersistentLiquidGlassHeader) {
       final headerForeground = isLarge

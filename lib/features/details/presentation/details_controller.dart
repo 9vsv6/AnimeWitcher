@@ -46,6 +46,8 @@ class DetailsState {
   final int selectedRangeIndex;
   final DubStatus selectedDubStatus;
   final Set<String> selectedEpisodeKeys;
+  final bool basicDetailsResolved;
+  final bool nextAiringResolved;
 
   const DetailsState({
     this.details = const AsyncLoading(),
@@ -64,6 +66,8 @@ class DetailsState {
     this.selectedRangeIndex = 0,
     this.selectedDubStatus = DubStatus.none,
     this.selectedEpisodeKeys = const <String>{},
+    this.basicDetailsResolved = false,
+    this.nextAiringResolved = false,
   });
 
   DetailsState copyWith({
@@ -83,6 +87,8 @@ class DetailsState {
     int? selectedRangeIndex,
     DubStatus? selectedDubStatus,
     Set<String>? selectedEpisodeKeys,
+    bool? basicDetailsResolved,
+    bool? nextAiringResolved,
   }) {
     return DetailsState(
       details: details ?? this.details,
@@ -101,6 +107,8 @@ class DetailsState {
       selectedRangeIndex: selectedRangeIndex ?? this.selectedRangeIndex,
       selectedDubStatus: selectedDubStatus ?? this.selectedDubStatus,
       selectedEpisodeKeys: selectedEpisodeKeys ?? this.selectedEpisodeKeys,
+      basicDetailsResolved: basicDetailsResolved ?? this.basicDetailsResolved,
+      nextAiringResolved: nextAiringResolved ?? this.nextAiringResolved,
     );
   }
 }
@@ -318,6 +326,8 @@ class DetailsController extends _$DetailsController {
       trailers: const AsyncLoading(),
       related: const AsyncLoading(),
       recommendations: const AsyncLoading(),
+      basicDetailsResolved: false,
+      nextAiringResolved: false,
       item: item,
       isMovie:
           item.contentType == MultimediaContentType.movie ||
@@ -355,6 +365,8 @@ class DetailsController extends _$DetailsController {
           recommendations: AsyncData(
             rendered.recommendations ?? const <MultimediaItem>[],
           ),
+          basicDetailsResolved: true,
+          nextAiringResolved: true,
           item: rendered,
         );
         return;
@@ -382,6 +394,9 @@ class DetailsController extends _$DetailsController {
 
       _lastEpisodesProvider = provider;
       _lastEpisodesUrl = item.url;
+      if (!provider.supportsIndependentDetailSections) {
+        state = state.copyWith(nextAiringResolved: true);
+      }
 
       // Initial navigation loads only the details data. Episodes are requested
       // lazily the first time the Episodes tab is opened. Autoplay routes are
@@ -414,6 +429,8 @@ class DetailsController extends _$DetailsController {
         trailers: AsyncError<List<Trailer>>(error, stackTrace),
         related: AsyncError<List<MultimediaItem>>(error, stackTrace),
         recommendations: AsyncError<List<MultimediaItem>>(error, stackTrace),
+        basicDetailsResolved: true,
+        nextAiringResolved: true,
       );
     }
   }
@@ -470,6 +487,7 @@ class DetailsController extends _$DetailsController {
 
       state = state.copyWith(
         details: AsyncData(rendered),
+        basicDetailsResolved: true,
         item: rendered,
         cast: independent
             ? null
@@ -504,6 +522,7 @@ class DetailsController extends _$DetailsController {
       if (!ref.mounted || generation != _loadGeneration) return;
       state = state.copyWith(
         details: AsyncError<MultimediaItem?>(error, stackTrace),
+        basicDetailsResolved: true,
         cast: provider.supportsIndependentDetailSections
             ? null
             : AsyncError<List<Actor>>(error, stackTrace),
@@ -739,6 +758,10 @@ class DetailsController extends _$DetailsController {
     } catch (error) {
       if (kDebugMode) {
         debugPrint('Next-airing loading failed: $error');
+      }
+    } finally {
+      if (ref.mounted && generation == _loadGeneration) {
+        state = state.copyWith(nextAiringResolved: true);
       }
     }
   }
