@@ -72,7 +72,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
   Offset _tabSlideFrom = Offset.zero;
-  final ScrollController _detailsScrollController = ScrollController();
+  final ScrollController _detailsScrollController = ScrollController(
+    keepScrollOffset: false,
+  );
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
 
@@ -100,8 +102,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
   Widget _withDetailsHeaderCollapseFade(
     Widget child,
-    double collapseExtent,
-  ) {
+    double collapseExtent, {
+    required bool loading,
+  }) {
+    // While details/episodes are loading, the sliver list is temporarily much
+    // shorter than its final extent. Flutter can correct the scroll position as
+    // those async slivers appear, which briefly reports a collapsed offset even
+    // though the user has just opened the page. Fading the whole flexible header
+    // from that transient offset exposes the SliverAppBar's neutral background as
+    // a large gray block. Keep the hero fully visible until the initial layout is
+    // stable, then resume the normal collapse fade.
+    if (loading) return child;
+
     return AnimatedBuilder(
       animation: _detailsScrollController,
       child: child,
@@ -1067,6 +1079,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       ),
                     ),
                     mobileCollapseExtent,
+                    loading: detailsAsync.isLoading || episodesAsync.isLoading,
                   ),
                 ),
                 automaticallyImplyLeading: false,
