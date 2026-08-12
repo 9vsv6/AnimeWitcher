@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
@@ -43,7 +44,12 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
   Widget build(BuildContext context) {
     if (widget.results.isEmpty) return const SizedBox.shrink();
 
-    final isLarge = context.isTabletOrLarger;
+    final isDesktopPlatform =
+        kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+    final isLarge = isDesktopPlatform || context.isTabletOrLarger;
     if (!isLarge) {
       final mobileColumns = context.isHandsetLandscape
           ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
