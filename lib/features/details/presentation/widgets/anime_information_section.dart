@@ -43,19 +43,33 @@ class AnimeInformationSection extends StatelessWidget {
     final data = item.syncData ?? const <String, String>{};
     final colors = Theme.of(context).colorScheme;
 
-    _AnimeInfoEntry? entry(String ar, String en, dynamic value) {
+    _AnimeInfoEntry? entry(
+      String ar,
+      String en,
+      dynamic value, {
+      bool showFullValue = false,
+    }) {
       final cleaned = _clean(value);
       if (cleaned == null) return null;
-      return _AnimeInfoEntry(label: isArabic ? ar : en, value: cleaned);
+      return _AnimeInfoEntry(
+        label: isArabic ? ar : en,
+        value: cleaned,
+        showFullValue: showFullValue,
+      );
     }
 
     final entries = <_AnimeInfoEntry?>[
       entry('المصدر', 'Source', _read(data, const ['awSource']) ?? item.source),
       entry('مدة الحلقة', 'Episode duration', _durationLabel(context, data)),
-      entry('بداية العرض', 'Start date', _read(data, const ['awStartDate'])),
-      entry('نهاية العرض', 'End date', _read(data, const ['awEndDate'])),
+      entry('بداية العرض', 'Start date', _read(data, const ['awStartDate']) ?? '?'),
+      entry('نهاية العرض', 'End date', _read(data, const ['awEndDate']) ?? '?'),
       entry('الاستديو', 'Studio', _read(data, const ['awStudio'])),
-      entry('العنوان الإنجليزي', 'English title', _read(data, const ['awEnglishTitle'])),
+      entry(
+        'العنوان الإنجليزي',
+        'English title',
+        _read(data, const ['awEnglishTitle']),
+        showFullValue: true,
+      ),
     ].whereType<_AnimeInfoEntry>().toList(growable: false);
 
     if (entries.isEmpty) return const SizedBox.shrink();
@@ -94,8 +108,13 @@ class AnimeInformationSection extends StatelessWidget {
 class _AnimeInfoEntry {
   final String label;
   final String value;
+  final bool showFullValue;
 
-  const _AnimeInfoEntry({required this.label, required this.value});
+  const _AnimeInfoEntry({
+    required this.label,
+    required this.value,
+    this.showFullValue = false,
+  });
 }
 
 class _AnimeInfoValue extends StatelessWidget {
@@ -123,8 +142,8 @@ class _AnimeInfoValue extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           entry.value,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+          maxLines: entry.showFullValue ? null : 2,
+          overflow: entry.showFullValue ? TextOverflow.visible : TextOverflow.ellipsis,
           style: textTheme.bodyMedium?.copyWith(
             color: colors.onSurfaceVariant,
             height: 1.25,
