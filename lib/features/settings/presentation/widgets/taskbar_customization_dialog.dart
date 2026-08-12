@@ -21,15 +21,19 @@ Future<void> showTaskbarCustomizationDialog(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setState) {
-        final maxHeight = (MediaQuery.sizeOf(context).height * 0.68)
-            .clamp(360.0, 560.0)
+        final viewport = MediaQuery.sizeOf(context);
+        final maxHeight = (viewport.height - 120)
+            .clamp(160.0, 560.0)
+            .toDouble();
+        final contentWidth = (viewport.width - 64)
+            .clamp(240.0, 520.0)
             .toDouble();
 
         return AlertDialog(
           surfaceTintColor: Colors.transparent,
           title: Text(isArabic ? 'تخصيص شريط المهام' : 'Customize taskbar'),
           content: SizedBox(
-            width: 520,
+            width: contentWidth,
             height: maxHeight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

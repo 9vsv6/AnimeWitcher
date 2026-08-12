@@ -976,6 +976,11 @@ class _SubtitleAppearanceDialogState
     );
   }
 
+  double _pickerListHeight(BuildContext context, double preferredHeight) {
+    final available = MediaQuery.sizeOf(context).height - 150;
+    return available.clamp(120.0, preferredHeight).toDouble();
+  }
+
   String _fontDisplayName(BuildContext context, int index) {
     if (index == 0) {
       return appText(
@@ -1007,7 +1012,7 @@ class _SubtitleAppearanceDialogState
           ),
           content: SizedBox(
             width: 300,
-            height: 400,
+            height: _pickerListHeight(context, 400.0),
             child: ListView(
               children: [
                 ListTile(
@@ -1098,7 +1103,7 @@ class _SubtitleAppearanceDialogState
           ),
           content: SizedBox(
             width: 300,
-            height: 400,
+            height: _pickerListHeight(context, 400.0),
             child: ListView(
               children: [
                 ...List.generate(_builtInFonts.length, (idx) {
@@ -1302,7 +1307,7 @@ class _SubtitleAppearanceDialogState
           ),
           content: SizedBox(
             width: 300,
-            height: 300,
+            height: _pickerListHeight(context, 300.0),
             child: ListView(
               children: List.generate(edgeTypes.length, (int i) {
                 return ListTile(
@@ -1511,7 +1516,7 @@ class _SubtitleAppearanceDialogState
           ),
           content: SizedBox(
             width: 300,
-            height: 350,
+            height: _pickerListHeight(context, 350.0),
             child: ListView(
               children: [
                 ListTile(
@@ -1650,7 +1655,7 @@ class _SubtitleAppearanceDialogState
           ),
           content: SizedBox(
             width: 300,
-            height: 380,
+            height: _pickerListHeight(context, 380.0),
             child: ListView(
               children: [
                 ListTile(

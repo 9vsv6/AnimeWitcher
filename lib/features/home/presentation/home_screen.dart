@@ -682,8 +682,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildCarouselShimmer(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final heroHeight = size.height * 0.60;
-    final isDesktop =
-        size.width > LayoutConstants.exploreCarouselDesktopBreakpoint;
+    final isDesktop = context.isDesktop;
 
     if (isDesktop) {
       return Padding(
@@ -712,7 +711,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Widget _buildListShimmer(BuildContext context) {
     final isDesktop = context.isDesktop;
-    final cardWidth = isDesktop ? 200.0 : 130.0;
+    final isDesktopLandscape = context.isDesktopLandscape;
+    final isHandsetLandscape = context.isHandsetLandscape;
+    final spacing = isDesktop
+        ? LayoutConstants.spacingLg
+        : LayoutConstants.spacingSm;
+    final cardWidth = isDesktopLandscape
+        ? ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(
+            context,
+            horizontalPadding: LayoutConstants.dashboardContentPadding,
+            spacing: spacing,
+          )
+        : isHandsetLandscape
+        ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
+            context,
+            horizontalPadding: LayoutConstants.spacingMd,
+            spacing: spacing,
+          )
+        : (isDesktop ? 200.0 : 130.0);
     final imageHeight = cardWidth / (2 / 3);
     final listHeight = imageHeight + 40.0;
 
@@ -751,11 +767,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
             scrollDirection: Axis.horizontal,
             itemCount: 10,
-            separatorBuilder: (_, _) => SizedBox(
-              width: isDesktop
-                  ? LayoutConstants.spacingLg
-                  : LayoutConstants.spacingSm,
-            ),
+            separatorBuilder: (_, _) => SizedBox(width: spacing),
             itemBuilder: (context, index) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

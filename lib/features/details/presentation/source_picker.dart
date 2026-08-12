@@ -18,7 +18,7 @@ Future<StreamResult?> showStreamSourcePicker(
     builder: (sheetContext) => SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

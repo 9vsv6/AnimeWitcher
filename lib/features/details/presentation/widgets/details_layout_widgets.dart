@@ -953,8 +953,12 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
 
             // Small lists remain compact. Large lists receive a bounded,
             // independently scrollable viewport so ListView can recycle rows.
-            final maximumHeight = (MediaQuery.sizeOf(context).height * 0.72)
-                .clamp(420.0, 820.0)
+            final viewportHeight = MediaQuery.sizeOf(context).height;
+            final availableHeight = (viewportHeight - 160)
+                .clamp(220.0, 820.0)
+                .toDouble();
+            final maximumHeight = (viewportHeight * 0.72)
+                .clamp(220.0, availableHeight)
                 .toDouble();
             final desiredHeight =
                 (rowCount * 220.0) +

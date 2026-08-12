@@ -53,9 +53,15 @@ class PlayerBottomSheets {
             final compactWidth = (size.width - 32)
                 .clamp(280.0, 360.0)
                 .toDouble();
-            final maxWidth = size.width >= 900 ? 520.0 : compactWidth;
+            final maxWidth = isCompact
+                ? compactWidth
+                : (size.width >= 900 ? 520.0 : compactWidth);
+            final verticalInsets = isCompact ? 32.0 : 48.0;
+            final availableHeight = (size.height - verticalInsets)
+                .clamp(120.0, isCompact ? 340.0 : 420.0)
+                .toDouble();
             final compactHeight = (size.height * (isCompact ? 0.58 : 0.68))
-                .clamp(isCompact ? 260.0 : 340.0, isCompact ? 340.0 : 420.0)
+                .clamp(120.0, availableHeight)
                 .toDouble();
 
             return Dialog(

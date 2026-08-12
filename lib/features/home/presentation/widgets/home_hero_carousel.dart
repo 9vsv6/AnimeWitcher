@@ -207,9 +207,11 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     if (widget.movies.isEmpty) return const SizedBox.shrink();
 
     final size = MediaQuery.sizeOf(context);
-    final heroHeight = size.height * 0.60;
-    final isDesktop =
-        size.width > LayoutConstants.exploreCarouselDesktopBreakpoint;
+    final isDesktop = context.isDesktop;
+    final isCompactLandscape =
+        context.isHandsetLandscape ||
+        (context.isDesktopLandscape && size.height < 560);
+    final heroHeight = size.height * (isCompactLandscape ? 0.72 : 0.60);
 
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv ?? context.isTv;
@@ -663,6 +665,10 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     final title = movie.title;
     final year = movie.year?.toString() ?? '';
     final genres = movie.tags?.join(' • ') ?? '';
+    final size = MediaQuery.sizeOf(context);
+    final compactLandscape =
+        context.isHandsetLandscape ||
+        (context.isDesktopLandscape && size.height < 560);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: isDesktop
@@ -671,11 +677,24 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
       children: [
         if (logoUrl != null)
           Padding(
-            padding: const EdgeInsets.only(bottom: LayoutConstants.spacingLg),
-            child: _buildLogo(logoUrl, title, isDesktop: isDesktop),
+            padding: EdgeInsets.only(
+              bottom: compactLandscape
+                  ? LayoutConstants.spacingSm
+                  : LayoutConstants.spacingLg,
+            ),
+            child: _buildLogo(
+              logoUrl,
+              title,
+              isDesktop: isDesktop,
+              compactLandscape: compactLandscape,
+            ),
           )
         else
-          _buildTitleFallback(title, isDesktop: isDesktop),
+          _buildTitleFallback(
+            title,
+            isDesktop: isDesktop,
+            compactLandscape: compactLandscape,
+          ),
         Wrap(
           alignment: isDesktop ? WrapAlignment.start : WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -717,42 +736,60 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     );
   }
 
-  Widget _buildLogo(String logoUrl, String title, {bool isDesktop = false}) {
+  Widget _buildLogo(
+    String logoUrl,
+    String title, {
+    bool isDesktop = false,
+    bool compactLandscape = false,
+  }) {
+    final logoHeight = compactLandscape ? 88.0 : 140.0;
+    final logoWidth = compactLandscape ? 220.0 : 300.0;
     if (logoUrl.toLowerCase().endsWith('.svg')) {
       return SvgPicture.network(
         logoUrl,
-        height: 140,
-        width: 300,
+        height: logoHeight,
+        width: logoWidth,
         fit: BoxFit.contain,
         placeholderBuilder: (context) =>
-            const SizedBox(height: 140, width: 300),
-        errorBuilder: (context, error, stackTrace) =>
-            _buildTitleFallback(title, isDesktop: isDesktop),
+            SizedBox(height: logoHeight, width: logoWidth),
+        errorBuilder: (context, error, stackTrace) => _buildTitleFallback(
+          title,
+          isDesktop: isDesktop,
+          compactLandscape: compactLandscape,
+        ),
       );
     }
     return CachedNetworkImage(
       imageUrl: logoUrl,
-      height: 140,
-      width: 300,
+      height: logoHeight,
+      width: logoWidth,
       fit: BoxFit.contain,
       alignment: Alignment.bottomCenter,
-      placeholder: (context, url) => const SizedBox(height: 140, width: 300),
-      errorWidget: (context, url, error) =>
-          _buildTitleFallback(title, isDesktop: isDesktop),
+      placeholder: (context, url) =>
+          SizedBox(height: logoHeight, width: logoWidth),
+      errorWidget: (context, url, error) => _buildTitleFallback(
+        title,
+        isDesktop: isDesktop,
+        compactLandscape: compactLandscape,
+      ),
     );
   }
 
-  Widget _buildTitleFallback(String title, {bool isDesktop = false}) {
+  Widget _buildTitleFallback(
+    String title, {
+    bool isDesktop = false,
+    bool compactLandscape = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: LayoutConstants.spacingXs),
       child: Text(
         title.toUpperCase(),
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
-        maxLines: isDesktop ? 2 : 3,
+        maxLines: compactLandscape ? 2 : (isDesktop ? 2 : 3),
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: Colors.white,
-          fontSize: isDesktop ? 34 : 30,
+          fontSize: compactLandscape ? 22 : (isDesktop ? 34 : 30),
           fontFamily: 'RobotoCondensed',
           fontWeight: FontWeight.w900,
           letterSpacing: 1.0,

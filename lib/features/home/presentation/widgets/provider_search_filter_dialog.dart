@@ -96,7 +96,11 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final height = MediaQuery.sizeOf(context).height * 0.82;
+    final viewport = MediaQuery.sizeOf(context);
+    final availableHeight = (viewport.height - 56).clamp(180.0, 720.0).toDouble();
+    final dialogHeight = (viewport.height * 0.82)
+        .clamp(180.0, availableHeight)
+        .toDouble();
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -107,7 +111,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
         constraints: const BoxConstraints(maxWidth: 560),
         child: SizedBox(
           width: double.infinity,
-          height: height.clamp(520.0, 720.0).toDouble(),
+          height: dialogHeight,
           child: AppleLiquidGlassSurface(
             borderRadius: BorderRadius.circular(28),
             style: 'regular',
