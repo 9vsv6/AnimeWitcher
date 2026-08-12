@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/extensions/extension_manager.dart';
+import '../../../core/extensions/base_provider.dart';
+import '../../home/presentation/view_all_screen.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/account/animewitcher_comment_models.dart';
@@ -1902,6 +1905,29 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return genres;
   }
 
+  void _openGenreResults(BuildContext context, String genre) {
+    final provider = ref.read(activeProviderProvider);
+    if (provider == null) return;
+
+    final filters = ProviderSearchFilters(genres: <String>{genre});
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ViewAllScreen(
+          title: genre,
+          initialMediaList: const <MultimediaItem>[],
+          category: ViewAllCategory.providerContent,
+          forcePortrait: true,
+          loadPage: (offset) => provider.searchPage(
+            '',
+            filters,
+            offset: offset,
+            limit: provider.searchPageSize,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSynopsisAndGenres(
     BuildContext context,
     MultimediaItem item,
@@ -1947,22 +1973,24 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 runSpacing: 7,
                 children: [
                   for (final genre in genres)
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        child: Text(
-                          genre,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: colors.onPrimary,
-                            fontWeight: FontWeight.w600,
-                            height: 1,
+                    Material(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(999),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _openGenreResults(context, genre),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          child: Text(
+                            genre,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colors.onPrimary,
+                              fontWeight: FontWeight.w600,
+                              height: 1,
+                            ),
                           ),
                         ),
                       ),
