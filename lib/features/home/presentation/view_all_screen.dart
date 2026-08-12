@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
-import 'package:skystream/core/navigation/taskbar_destination.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
@@ -62,12 +61,19 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
   bool _providerLoading = false;
   bool _providerHasMore = true;
   int _providerOffset = 0;
+  late final int? _persistentHeaderBranchIndex;
 
   bool get _isProvider => widget.category == ViewAllCategory.providerContent;
 
   @override
   void initState() {
     super.initState();
+    // Bind this pushed page to the branch it originated from. Using a fixed
+    // Home branch lets the retained Home/Search/Library route publish its
+    // native Liquid Glass controls above this page when opened from another
+    // branch. Capturing the active branch keeps the current route authoritative.
+    _persistentHeaderBranchIndex =
+        applePersistentGlassHeaderController.activeBranchIndex;
     if (_isProvider) {
       _scrollController.addListener(_onScroll);
     }
@@ -207,7 +213,7 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
             titleSpacing: 16,
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
-              branchIndex: TaskbarDestination.home.branchIndex,
+              branchIndex: _persistentHeaderBranchIndex,
               onBack: () => Navigator.of(context).maybePop(),
               child: Align(
                 alignment:

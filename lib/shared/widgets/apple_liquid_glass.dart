@@ -171,6 +171,8 @@ class ApplePersistentGlassHeaderController
     listener(animation.status);
   }
 
+  int? get activeBranchIndex => _activeBranchIndex;
+
   void setActiveBranch(int index) {
     if (_activeBranchIndex == index) return;
     _activeBranchIndex = index;
