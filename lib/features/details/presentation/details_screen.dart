@@ -753,7 +753,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final titleHeight = sdp(28).clamp(28.0, 44.0).toDouble();
     final titleStyle = TextStyle(
       color: Colors.white,
-      fontSize: sdp(10.5).clamp(9.0, 12.0).toDouble(),
+      fontSize: 14.0,
       fontWeight: FontWeight.bold,
       height: 1.1,
     );
