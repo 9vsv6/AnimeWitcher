@@ -3,7 +3,7 @@ import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
-import '../../../core/router/app_router.dart';
+import 'package:skystream/features/details/presentation/details_screen.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/multimedia_card.dart';
@@ -230,7 +230,9 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
             ),
             leading: appleUsesPersistentLiquidGlassHeader
                 ? null
-                : AppleLiquidGlassBackButton(
+                : IconButton(
+                    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
             elevation: 0,
@@ -282,9 +284,11 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
                 if (widget.onTap != null) {
                   widget.onTap!(item);
                 } else {
-                  DetailsRoute(
-                    $extra: DetailsRouteExtra(item: item),
-                  ).push<void>(context);
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => DetailsScreen(item: item),
+                    ),
+                  );
                 }
               },
             );

@@ -1109,7 +1109,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             ApplePersistentGlassHeaderConfig(
               owner: this,
               route: ModalRoute.of(context),
-              onBack: () => context.pop(),
+              onBack: () => Navigator.of(context).maybePop(),
               backForegroundColor: Theme.of(context).colorScheme.primary,
               backFallbackColor: Colors.black45,
               trailingButtons: const <AppleLiquidGlassToolbarButton>[],
@@ -1129,7 +1129,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 leading: AppleLiquidGlassBackButton(
                   foregroundColor: Theme.of(context).colorScheme.primary,
                   fallbackColor: Colors.black45,
-                  onPressed: () => context.pop(),
+                  onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),
         body: Center(
@@ -1160,7 +1160,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           ApplePersistentGlassHeaderConfig(
             owner: this,
             route: ModalRoute.of(context),
-            onBack: () => context.pop(),
+            onBack: () => Navigator.of(context).maybePop(),
             backForegroundColor: headerForeground,
             backFallbackColor: headerFallback,
             trailingButtons: trailingButtons,
@@ -1258,7 +1258,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                               size: 46,
                               foregroundColor: Colors.white,
                               fallbackColor: Colors.black45,
-                              onPressed: () => context.pop(),
+                              onPressed: () => Navigator.of(context).maybePop(),
                             ),
                           ),
                         ),
@@ -1698,7 +1698,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       size: 46,
                       foregroundColor: textColor,
                       fallbackColor: isDark ? Colors.black45 : Colors.white54,
-                      onPressed: () => context.pop(),
+                      onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ),
             actions: appleUsesPersistentLiquidGlassHeader
