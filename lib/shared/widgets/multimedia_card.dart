@@ -13,6 +13,7 @@ class MultimediaCard extends StatelessWidget {
   final String heroTag;
   final bool isPortrait;
   final FocusNode? focusNode;
+  final bool compact;
 
   /// Shows a stable card surface while the poster is still loading.
   /// Search results disable the shimmer so the card is visible immediately.
@@ -32,6 +33,7 @@ class MultimediaCard extends StatelessWidget {
     required this.heroTag,
     this.isPortrait = true,
     this.focusNode,
+    this.compact = false,
     this.episodeBadge,
     this.showImageLoadingShimmer = true,
   });
@@ -79,7 +81,7 @@ class MultimediaCard extends StatelessWidget {
 
     final titleTextStyle = TextStyle(
       color: Colors.white,
-      fontSize: isDesktop ? 22 : 14,
+      fontSize: compact ? 14 : (isDesktop ? 22 : 14),
       fontWeight: FontWeight.w500,
       shadows: const [
         Shadow(

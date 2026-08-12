@@ -91,6 +91,47 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
       );
     }
 
+    final isLandscape = MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
+    if (isLandscape) {
+      const desktopColumns = 8;
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: desktopColumns,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 14,
+          childAspectRatio: 0.56,
+        ),
+        itemCount:
+            widget.results.length + (widget.isLoadingMore ? desktopColumns : 0),
+        itemBuilder: (context, rIndex) {
+          if (rIndex >= widget.results.length) {
+            return ShimmerPlaceholder(borderRadius: 12);
+          }
+
+          final item = widget.results[rIndex];
+          final uniqueTag =
+              'search_${widget.providerId}_${item.url}_$rIndex';
+          return MultimediaCard(
+            key: ValueKey(item.url),
+            imageUrl: AppImageFallbacks.poster(
+              item.posterUrl,
+              label: item.title,
+            ),
+            title: item.title,
+            heroTag: uniqueTag,
+            compact: true,
+            focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
+            onTap: () => DetailsRoute(
+              $extra: DetailsRouteExtra(item: item),
+            ).push<void>(context),
+          );
+        },
+      );
+    }
+
     const listHeight = 350.0;
     const cardWidth = 200.0;
     const spacing = 24.0;
@@ -119,23 +160,22 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
             return Padding(
               padding: const EdgeInsets.only(right: spacing),
               child: MultimediaCard(
-                  key: ValueKey(item.url),
-                  imageUrl: AppImageFallbacks.poster(
-                    item.posterUrl,
-                    label: item.title,
-                  ),
-                  title: item.title,
-                  heroTag: uniqueTag,
-                  focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
-                  onTap: () => DetailsRoute(
-                    $extra: DetailsRouteExtra(item: item),
-                  ).push<void>(context),
+                key: ValueKey(item.url),
+                imageUrl: AppImageFallbacks.poster(
+                  item.posterUrl,
+                  label: item.title,
                 ),
+                title: item.title,
+                heroTag: uniqueTag,
+                focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
+                onTap: () => DetailsRoute(
+                  $extra: DetailsRouteExtra(item: item),
+                ).push<void>(context),
+              ),
             );
           },
         ),
       ),
-    );
-  }
+    );  }
 
 }
