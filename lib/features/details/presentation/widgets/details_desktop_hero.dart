@@ -175,58 +175,90 @@ class DetailsDesktopHero extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Hero content (constrained to left 55%) ──
+                // ── Hero content: poster + metadata ──
                 Directionality(
                   textDirection: TextDirection.ltr,
                   child: SizedBox(
-                    width: MediaQuery.sizeOf(context).width * 0.55,
-                    child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Logo or Title
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onLongPress: () => _copyAnimeTitle(context),
-                        child: displayItem.logoUrl != null
-                            ? CachedNetworkImage(
-                                imageUrl: displayItem.logoUrl!,
-                                height: 200,
-                                alignment: Alignment.centerLeft,
-                                fit: BoxFit.contain,
-                                placeholder: (_, _) => _buildTitle(textColor),
+                    width: MediaQuery.sizeOf(context).width * 0.68,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (posterUrl != null && posterUrl.isNotEmpty) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: SizedBox(
+                              width: 180,
+                              height: 270,
+                              child: CachedNetworkImage(
+                                imageUrl: posterUrl,
+                                fit: BoxFit.cover,
+                                memCacheWidth:
+                                    (180 *
+                                            MediaQuery.devicePixelRatioOf(
+                                              context,
+                                            ))
+                                        .round(),
+                                placeholder: (_, _) => ColoredBox(
+                                  color: theme.colorScheme.surfaceContainerHighest,
+                                ),
                                 errorWidget: (_, _, _) =>
-                                    _buildTitle(textColor),
-                              )
-                            : _buildTitle(textColor),
-                      ),
+                                    ThumbnailErrorPlaceholder(
+                                      label: displayItem.title,
+                                    ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 28),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Logo or Title
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onLongPress: () => _copyAnimeTitle(context),
+                                child: displayItem.logoUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: displayItem.logoUrl!,
+                                        height: 200,
+                                        alignment: Alignment.centerLeft,
+                                        fit: BoxFit.contain,
+                                        placeholder: (_, _) =>
+                                            _buildTitle(textColor),
+                                        errorWidget: (_, _, _) =>
+                                            _buildTitle(textColor),
+                                      )
+                                    : _buildTitle(textColor),
+                              ),
 
-                      const SizedBox(height: 16),
+                              const SizedBox(height: 16),
 
-                      // Metadata bar (provider badge, type, year, rating, etc.)
-                      MetadataBar(
-                        item: displayItem,
-                        isLoading: detailsState is AsyncLoading,
-                      ),
+                              MetadataBar(
+                                item: displayItem,
+                                isLoading: detailsState is AsyncLoading,
+                              ),
 
-                      // Next airing (for currently-airing shows)
-                      if (displayItem.nextAiring != null) ...[
-                        const SizedBox(height: 20),
-                        NextAiringWidget(nextAiring: displayItem.nextAiring!),
-                      ],
+                              if (displayItem.nextAiring != null) ...[
+                                const SizedBox(height: 20),
+                                NextAiringWidget(
+                                  nextAiring: displayItem.nextAiring!,
+                                ),
+                              ],
 
-                      const SizedBox(height: 32),
+                              const SizedBox(height: 32),
 
-                      // Action buttons (Play / Download)
-                      // Constrained width so they don't stretch across
-                      // the full hero area — looks better on wide screens.
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 400),
-                        child: DetailsActionButtons(
-                          item: baseItem,
-                          details: details,
-                          itemUrl: itemUrl,
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 400),
+                                child: DetailsActionButtons(
+                                  item: baseItem,
+                                  details: details,
+                                  itemUrl: itemUrl,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
                       ],
                     ),
                   ),

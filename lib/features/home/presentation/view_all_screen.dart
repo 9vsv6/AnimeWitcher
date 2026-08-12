@@ -195,7 +195,9 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
         ? (_isPortrait ? 240.0 : 340.0)
         : (_isPortrait ? 150.0 : 220.0);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final crossAxisCount = context.isHandsetLandscape
+    final crossAxisCount = context.isDesktopLandscape
+        ? ResponsiveBreakpoints.desktopLandscapeAnimeColumns
+        : context.isHandsetLandscape
         ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
         : (screenWidth / maxExtent).ceil().clamp(1, 20);
     final childAspectRatio = _isPortrait ? 0.55 : 1.35;

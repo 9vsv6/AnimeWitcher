@@ -41,9 +41,13 @@ class MultimediaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isHandsetLandscape = context.isHandsetLandscape;
+    final isDesktopLandscape = context.isDesktopLandscape;
     final isDesktop = context.isDesktop;
+    final effectiveCompact = compact || isDesktopLandscape;
     final cardWidth = isHandsetLandscape
         ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(context)
+        : isDesktopLandscape
+        ? ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(context)
         : isDesktop
         ? (isPortrait ? 200.0 : 300.0)
         : (isPortrait ? 130.0 : 200.0);
@@ -81,7 +85,7 @@ class MultimediaCard extends StatelessWidget {
 
     final titleTextStyle = TextStyle(
       color: Colors.white,
-      fontSize: compact ? 14 : (isDesktop ? 22 : 14),
+      fontSize: effectiveCompact ? 14 : (isDesktop ? 22 : 14),
       fontWeight: FontWeight.w500,
       shadows: const [
         Shadow(

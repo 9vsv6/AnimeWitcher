@@ -31,6 +31,7 @@ class _HomeSectionState extends ConsumerState<HomeSection> {
     if (widget.items.isEmpty) return const SizedBox.shrink();
 
     final isHandsetLandscape = context.isHandsetLandscape;
+    final isDesktopLandscape = context.isDesktopLandscape;
     final isLarge = context.isTabletOrLarger;
     final double landscapeCardWidth = isHandsetLandscape
         ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
@@ -38,8 +39,14 @@ class _HomeSectionState extends ConsumerState<HomeSection> {
             horizontalPadding: LayoutConstants.spacingMd,
             spacing: LayoutConstants.spacingSm,
           )
+        : isDesktopLandscape
+        ? ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(
+            context,
+            horizontalPadding: LayoutConstants.spacingMd,
+            spacing: LayoutConstants.spacingLg,
+          )
         : 0;
-    final double totalHeight = isHandsetLandscape
+    final double totalHeight = isHandsetLandscape || isDesktopLandscape
         ? (landscapeCardWidth / (2 / 3)) + 16
         : (isLarge ? 350.0 : 230.0);
 
@@ -69,7 +76,8 @@ class _HomeSectionState extends ConsumerState<HomeSection> {
                 final double spacing = isLarge
                     ? LayoutConstants.spacingLg
                     : LayoutConstants.spacingSm;
-                final double cardWidth = isHandsetLandscape
+                final double cardWidth =
+                    isHandsetLandscape || isDesktopLandscape
                     ? landscapeCardWidth
                     : (isLarge ? 200.0 : 130.0);
 

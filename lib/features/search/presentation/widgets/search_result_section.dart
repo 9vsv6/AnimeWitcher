@@ -93,7 +93,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
 
     final isLandscape = MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
     if (isLandscape) {
-      const desktopColumns = 8;
+      const desktopColumns = ResponsiveBreakpoints.desktopLandscapeAnimeColumns;
       return GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),

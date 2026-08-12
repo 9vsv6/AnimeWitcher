@@ -10,6 +10,7 @@ class ResponsiveBreakpoints {
   static const double desktopBreakpoint = 900;
 
   static const int handsetLandscapeAnimeColumns = 5;
+  static const int desktopLandscapeAnimeColumns = 8;
 
   static bool isHandset(BuildContext context) {
     if (kIsWeb) return false;
@@ -25,6 +26,18 @@ class ResponsiveBreakpoints {
     return isHandset(context) && size.width > size.height;
   }
 
+  static bool isDesktopPlatform() {
+    return kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
+  static bool isDesktopLandscape(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return isDesktopPlatform() && size.width > size.height;
+  }
+
   static double handsetLandscapeAnimeCardWidth(
     BuildContext context, {
     double horizontalPadding = 16,
@@ -37,6 +50,18 @@ class ResponsiveBreakpoints {
         .toDouble();
   }
 
+  static double desktopLandscapeAnimeCardWidth(
+    BuildContext context, {
+    double horizontalPadding = 16,
+    double spacing = 16,
+  }) {
+    final innerWidth =
+        MediaQuery.sizeOf(context).width - (horizontalPadding * 2);
+    return ((innerWidth / desktopLandscapeAnimeColumns) - spacing)
+        .clamp(72.0, double.infinity)
+        .toDouble();
+  }
+
   static SliverGridDelegate animeGridDelegate(
     BuildContext context, {
     required double maxCrossAxisExtent,
@@ -45,7 +70,9 @@ class ResponsiveBreakpoints {
     double mainAxisSpacing = 16,
     int? handsetPortraitCrossAxisCount,
   }) {
-    final fixedCount = isHandsetLandscape(context)
+    final fixedCount = isDesktopLandscape(context)
+        ? desktopLandscapeAnimeColumns
+        : isHandsetLandscape(context)
         ? handsetLandscapeAnimeColumns
         : (isHandset(context) ? handsetPortraitCrossAxisCount : null);
     if (fixedCount != null) {
@@ -99,6 +126,7 @@ extension ResponsiveContext on BuildContext {
   bool get isTabletOrLarger => ResponsiveBreakpoints.isTabletOrLarger(this);
   bool get isHandset => ResponsiveBreakpoints.isHandset(this);
   bool get isHandsetLandscape => ResponsiveBreakpoints.isHandsetLandscape(this);
+  bool get isDesktopLandscape => ResponsiveBreakpoints.isDesktopLandscape(this);
   bool get isTv =>
       MediaQuery.maybeNavigationModeOf(this) == NavigationMode.directional ||
       (Platform.isAndroid &&

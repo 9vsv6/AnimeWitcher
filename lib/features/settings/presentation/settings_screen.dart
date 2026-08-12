@@ -32,6 +32,7 @@ class SettingsScreen extends ConsumerWidget {
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;
+    final canPop = Navigator.of(context).canPop();
 
     if (isWidescreen) {
       return Scaffold(
@@ -47,11 +48,21 @@ class SettingsScreen extends ConsumerWidget {
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  AppLocalizations.of(context)!.settings,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                child: Row(
+                  children: [
+                    if (canPop) ...[
+                      BackButton(
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(
+                      AppLocalizations.of(context)!.settings,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -67,14 +78,14 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: ApplePersistentGlassHeaderScope(
-          enabled: Navigator.of(context).canPop(),
+          enabled: canPop,
           onBack: () => Navigator.of(context).maybePop(),
           child: Text(l10n.settings),
         ),
         actions: appleUsesPersistentLiquidGlassHeader
             ? const <Widget>[]
             : [
-                if (Navigator.of(context).canPop())
+                if (canPop)
                   const Padding(
                     padding: EdgeInsets.only(left: 8),
                     child: AppleLiquidGlassBackButton(),

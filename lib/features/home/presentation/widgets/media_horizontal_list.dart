@@ -145,6 +145,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
         : localeDirection;
 
     final isHandsetLandscape = context.isHandsetLandscape;
+    final isDesktopLandscape = context.isDesktopLandscape;
     final isDesktop = context.isDesktop;
     final isPortrait = widget.forcePortrait || _isPortrait;
     final double spacing = isDesktop
@@ -154,6 +155,12 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
         ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
             context,
             horizontalPadding: LayoutConstants.spacingMd,
+            spacing: spacing,
+          )
+        : isDesktopLandscape
+        ? ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(
+            context,
+            horizontalPadding: LayoutConstants.dashboardContentPadding,
             spacing: spacing,
           )
         : isDesktop
