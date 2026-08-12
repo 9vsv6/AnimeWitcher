@@ -38,8 +38,11 @@ class MultimediaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isHandsetLandscape = context.isHandsetLandscape;
     final isDesktop = context.isDesktop;
-    final cardWidth = isDesktop
+    final cardWidth = isHandsetLandscape
+        ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(context)
+        : isDesktop
         ? (isPortrait ? 200.0 : 300.0)
         : (isPortrait ? 130.0 : 200.0);
 

@@ -5,6 +5,7 @@ import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/providers/animewitcher_native_provider.dart';
+import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../details/presentation/details_screen.dart';
 
@@ -160,7 +161,7 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
       );
     }
 
-    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+    final isDesktop = context.isDesktop;
     final extra = _loading || (_error != null && _hasMore) ? 1 : 0;
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -168,7 +169,8 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
         controller: _controller,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
+          context,
           maxCrossAxisExtent: isDesktop ? 240 : 150,
           childAspectRatio: isDesktop ? 0.58 : 0.55,
           crossAxisSpacing: 16,

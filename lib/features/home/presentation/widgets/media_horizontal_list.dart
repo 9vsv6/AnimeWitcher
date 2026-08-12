@@ -144,10 +144,19 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
         ? TextDirection.ltr
         : localeDirection;
 
+    final isHandsetLandscape = context.isHandsetLandscape;
     final isDesktop = context.isDesktop;
     final isPortrait = widget.forcePortrait || _isPortrait;
-
-    final double cardWidth = isDesktop
+    final double spacing = isDesktop
+        ? LayoutConstants.spacingLg
+        : LayoutConstants.spacingSm;
+    final double cardWidth = isHandsetLandscape
+        ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
+            context,
+            horizontalPadding: LayoutConstants.spacingMd,
+            spacing: spacing,
+          )
+        : isDesktop
         ? (isPortrait ? 200.0 : 300.0)
         : (isPortrait ? 130.0 : 200.0);
 
@@ -288,10 +297,6 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
           height: listHeight, // Adjusted for 2:3 ratio within list
           child: Builder(
             builder: (context) {
-              final double spacing = isDesktop
-                  ? LayoutConstants.spacingLg
-                  : LayoutConstants.spacingSm;
-
               return ListView.builder(
                 controller: _scrollController,
                 clipBehavior: Clip.none,

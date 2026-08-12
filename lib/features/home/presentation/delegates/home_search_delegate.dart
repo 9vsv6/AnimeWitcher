@@ -658,14 +658,15 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       );
     }
 
-    final isLarge = MediaQuery.sizeOf(context).width > 600;
+    final isLarge = context.isTabletOrLarger;
     final maxExtent = isLarge ? 200.0 : 130.0;
     final footerCount = _isLoadingMore ? 1 : 0;
 
     return GridView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+      gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
+        context,
         maxCrossAxisExtent: maxExtent,
         childAspectRatio: 2 / 3.2,
         crossAxisSpacing: 12,

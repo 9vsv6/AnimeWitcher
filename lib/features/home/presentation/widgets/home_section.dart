@@ -30,9 +30,18 @@ class _HomeSectionState extends ConsumerState<HomeSection> {
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
 
+    final isHandsetLandscape = context.isHandsetLandscape;
     final isLarge = context.isTabletOrLarger;
-
-    final double totalHeight = isLarge ? 350.0 : 230.0;
+    final double landscapeCardWidth = isHandsetLandscape
+        ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
+            context,
+            horizontalPadding: LayoutConstants.spacingMd,
+            spacing: LayoutConstants.spacingSm,
+          )
+        : 0;
+    final double totalHeight = isHandsetLandscape
+        ? (landscapeCardWidth / (2 / 3)) + 16
+        : (isLarge ? 350.0 : 230.0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,10 +66,12 @@ class _HomeSectionState extends ConsumerState<HomeSection> {
             showButtons: isLarge, // Show nav buttons on both desktop and TV
             child: Builder(
               builder: (context) {
-                final double cardWidth = isLarge ? 200.0 : 130.0;
                 final double spacing = isLarge
                     ? LayoutConstants.spacingLg
                     : LayoutConstants.spacingSm;
+                final double cardWidth = isHandsetLandscape
+                    ? landscapeCardWidth
+                    : (isLarge ? 200.0 : 130.0);
 
                 return ListView.builder(
                   controller: _scrollController,

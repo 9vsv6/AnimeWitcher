@@ -41,7 +41,8 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
           LayoutConstants.spacingMd,
           100,
         ),
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
+          context,
           maxCrossAxisExtent: totalHeight,
           childAspectRatio: 2 / 3.4,
           crossAxisSpacing: LayoutConstants.spacingMd,

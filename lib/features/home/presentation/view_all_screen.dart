@@ -189,7 +189,9 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
         ? (_isPortrait ? 240.0 : 340.0)
         : (_isPortrait ? 150.0 : 220.0);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final crossAxisCount = (screenWidth / maxExtent).ceil().clamp(1, 20);
+    final crossAxisCount = context.isHandsetLandscape
+        ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
+        : (screenWidth / maxExtent).ceil().clamp(1, 20);
     final childAspectRatio = _isPortrait ? 0.55 : 1.35;
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
@@ -245,7 +247,8 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
+            context,
             maxCrossAxisExtent: maxExtent,
             childAspectRatio: childAspectRatio,
             crossAxisSpacing: 16,

@@ -45,17 +45,21 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
 
     final isLarge = context.isTabletOrLarger;
     if (!isLarge) {
+      final mobileColumns = context.isHandsetLandscape
+          ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
+          : 3;
       return GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: mobileColumns,
           crossAxisSpacing: 10,
           mainAxisSpacing: 14,
           childAspectRatio: 0.56,
         ),
-        itemCount: widget.results.length + (widget.isLoadingMore ? 3 : 0),
+        itemCount:
+            widget.results.length + (widget.isLoadingMore ? mobileColumns : 0),
         itemBuilder: (context, rIndex) {
           if (rIndex >= widget.results.length) {
             return ShimmerPlaceholder(borderRadius: 12);

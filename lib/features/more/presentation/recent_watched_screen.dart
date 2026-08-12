@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/services/notification_service.dart';
+import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../details/presentation/details_screen.dart';
 import '../../library/presentation/history_provider.dart';
@@ -135,10 +136,11 @@ class _RecentWatchedGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+    final isDesktop = context.isDesktop;
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+      gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
+        context,
         maxCrossAxisExtent: isDesktop ? 240 : 150,
         childAspectRatio: isDesktop ? 0.58 : 0.55,
         crossAxisSpacing: 16,
