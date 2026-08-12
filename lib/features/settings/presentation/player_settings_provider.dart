@@ -6,10 +6,6 @@ part 'player_settings_provider.g.dart';
 enum PlayerGesture { brightness, volume, none }
 
 class PlayerSettings {
-  final PlayerGesture leftGesture;
-  final PlayerGesture rightGesture;
-  final bool doubleTapEnabled;
-  final bool swipeSeekEnabled;
   final int seekDuration;
   final String defaultResizeMode;
   final double subtitleSize;
@@ -62,10 +58,6 @@ class PlayerSettings {
   final bool showEpisodes;
 
   const PlayerSettings({
-    this.leftGesture = PlayerGesture.brightness,
-    this.rightGesture = PlayerGesture.volume,
-    this.doubleTapEnabled = true,
-    this.swipeSeekEnabled = true,
     this.seekDuration = 10,
     this.defaultResizeMode = 'Fit',
     this.subtitleSize = 22.0,
@@ -103,10 +95,6 @@ class PlayerSettings {
   });
 
   PlayerSettings copyWith({
-    PlayerGesture? leftGesture,
-    PlayerGesture? rightGesture,
-    bool? doubleTapEnabled,
-    bool? swipeSeekEnabled,
     int? seekDuration,
     String? defaultResizeMode,
     double? subtitleSize,
@@ -144,10 +132,6 @@ class PlayerSettings {
     bool? showEpisodes,
   }) {
     return PlayerSettings(
-      leftGesture: leftGesture ?? this.leftGesture,
-      rightGesture: rightGesture ?? this.rightGesture,
-      doubleTapEnabled: doubleTapEnabled ?? this.doubleTapEnabled,
-      swipeSeekEnabled: swipeSeekEnabled ?? this.swipeSeekEnabled,
       seekDuration: seekDuration ?? this.seekDuration,
       defaultResizeMode: defaultResizeMode ?? this.defaultResizeMode,
       subtitleSize: subtitleSize ?? this.subtitleSize,
@@ -203,24 +187,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   @override
   Future<PlayerSettings> build() async {
     final storage = _repository;
-    final l =
-        storage.getPlayerSetting<String>(
-          'player_gesture_left',
-          defaultValue: 'brightness',
-        ) ??
-        'brightness';
-    final r =
-        storage.getPlayerSetting<String>(
-          'player_gesture_right',
-          defaultValue: 'volume',
-        ) ??
-        'volume';
-    final dt =
-        storage.getPlayerSetting<bool>(
-          'player_double_tap',
-          defaultValue: true,
-        ) ??
-        true;
     final dur =
         storage.getPlayerSetting<int>(
           'player_seek_duration',
@@ -250,12 +216,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
             ?.toDouble() ??
         0.5;
     final prefPlayer = storage.getPlayerSetting<String>('player_preferred');
-    final swipeSeek =
-        storage.getPlayerSetting<bool>(
-          'player_swipe_seek',
-          defaultValue: true,
-        ) ??
-        true;
     final hwDec =
         storage.getPlayerSetting<bool>('player_hw_dec', defaultValue: true) ??
         true;
@@ -383,10 +343,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
         true;
 
     return PlayerSettings(
-      leftGesture: _parse(l),
-      rightGesture: _parse(r),
-      doubleTapEnabled: dt,
-      swipeSeekEnabled: swipeSeek,
       seekDuration: dur,
       defaultResizeMode: resize,
       subtitleSize: subSize,
@@ -522,26 +478,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     state = AsyncData(syncedSettings);
   }
 
-  Future<void> setLeftGesture(PlayerGesture g) async {
-    await _repository.setPlayerSetting('player_gesture_left', g.name);
-    state = AsyncData(state.requireValue.copyWith(leftGesture: g));
-  }
-
-  Future<void> setRightGesture(PlayerGesture g) async {
-    await _repository.setPlayerSetting('player_gesture_right', g.name);
-    state = AsyncData(state.requireValue.copyWith(rightGesture: g));
-  }
-
-  Future<void> setDoubleTapEnabled(bool val) async {
-    await _repository.setPlayerSetting('player_double_tap', val);
-    state = AsyncData(state.requireValue.copyWith(doubleTapEnabled: val));
-  }
-
-  Future<void> setSwipeSeekEnabled(bool val) async {
-    await _repository.setPlayerSetting('player_swipe_seek', val);
-    state = AsyncData(state.requireValue.copyWith(swipeSeekEnabled: val));
-  }
-
   Future<void> setSeekDuration(int seconds) async {
     await _repository.setPlayerSetting('player_seek_duration', seconds);
     state = AsyncData(state.requireValue.copyWith(seekDuration: seconds));
@@ -630,13 +566,6 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setDefaultPlaybackSpeed(double speed) async {
     await _repository.setPlayerSetting('player_default_speed', speed);
     state = AsyncData(state.requireValue.copyWith(defaultPlaybackSpeed: speed));
-  }
-
-  PlayerGesture _parse(String s) {
-    return PlayerGesture.values.firstWhere(
-      (e) => e.name == s,
-      orElse: () => PlayerGesture.none,
-    );
   }
 
 

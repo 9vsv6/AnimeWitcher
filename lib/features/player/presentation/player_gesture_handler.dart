@@ -98,7 +98,6 @@ class PlayerGestureHandler extends _$PlayerGestureHandler {
 
   double _boostLevel = 1.0;
   Timer? _osdTimer;
-  PlayerSettings? _cachedSettings;
 
   bool get supportsVolumeBoost =>
       getMaxVolumeLevel?.call() != null && getMaxVolumeLevel!() > 1.0;
@@ -195,25 +194,13 @@ class PlayerGestureHandler extends _$PlayerGestureHandler {
       return;
     }
 
-    if (getSettings == null) return;
-    final cachedSettings = _cachedSettings;
-    final settings = cachedSettings ?? await getSettings!();
-    _cachedSettings = settings;
-    if (cachedSettings != null) {
-      unawaited(getSettings!().then((s) => _cachedSettings = s));
-    }
-
-    PlayerGesture type = PlayerGesture.none;
-    Alignment alignment = state.osdAlignment;
-    if (x < screenWidth / 2) {
-      type = settings.leftGesture;
-      alignment = Alignment.centerRight; // Opposite side
-    } else {
-      type = settings.rightGesture;
-      alignment = Alignment.centerLeft; // Opposite side
-    }
-
-    if (type == PlayerGesture.none) return;
+    final isLeftHalf = x < screenWidth / 2;
+    final type = isLeftHalf
+        ? PlayerGesture.brightness
+        : PlayerGesture.volume;
+    final alignment = isLeftHalf
+        ? Alignment.centerRight
+        : Alignment.centerLeft; // Opposite side
 
     double startVal = 0.5;
     if (type == PlayerGesture.brightness) {
@@ -314,9 +301,6 @@ class PlayerGestureHandler extends _$PlayerGestureHandler {
       return;
     }
 
-    final settings = await getSettings!();
-    if (!settings.swipeSeekEnabled) return;
-
     if ((isTv ?? false) || (isDesktop ?? false)) return;
 
     final x = details.globalPosition.dx;
@@ -375,8 +359,6 @@ class PlayerGestureHandler extends _$PlayerGestureHandler {
     if (getDuration?.call() == Duration.zero || getSettings == null) return;
 
     final settings = await getSettings!();
-    if (!settings.doubleTapEnabled) return;
-
     final isLeft = tapPosition.dx < screenWidth / 2;
     final seconds = settings.seekDuration;
 

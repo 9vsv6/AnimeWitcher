@@ -16,18 +16,6 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
-/// Returns a localized label for a player gesture.
-String getGestureLabel(PlayerGesture gesture, AppLocalizations l10n) {
-  switch (gesture) {
-    case PlayerGesture.volume:
-      return l10n.volume;
-    case PlayerGesture.brightness:
-      return l10n.brightness;
-    case PlayerGesture.none:
-      return l10n.none;
-  }
-}
-
 /// Returns a localized label for a resize mode string.
 String getResizeModeLabel(String mode, AppLocalizations l10n) {
   switch (mode.toLowerCase()) {
@@ -128,57 +116,6 @@ String getPlayerDisplayName(String? playerId, AppLocalizations l10n) {
   if (playerId == null) return l10n.internalPlayer;
   final player = ExternalPlayerService.instance.getPlayerById(playerId);
   return player?.displayName ?? playerId;
-}
-
-/// Shows a dialog to pick the left/right swipe gesture.
-void showGestureDialog(
-  BuildContext context,
-  WidgetRef ref,
-  bool isLeft,
-  PlayerGesture current,
-) {
-  final l10n = AppLocalizations.of(context)!;
-  showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(l10n.selectGesture(isLeft ? l10n.left : l10n.right)),
-      content: RadioGroup<PlayerGesture>(
-        groupValue: current,
-        onChanged: (val) {
-          if (val == null) return;
-          if (isLeft) {
-            ref.read(playerSettingsProvider.notifier).setLeftGesture(val);
-          } else {
-            ref.read(playerSettingsProvider.notifier).setRightGesture(val);
-          }
-          Navigator.pop<void>(context);
-        },
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: PlayerGesture.values.map((g) {
-              final String label = getGestureLabel(g, l10n);
-              return ListTile(
-                title: Text(label),
-                leading: Radio<PlayerGesture>(value: g),
-                onTap: () {
-                  if (isLeft) {
-                    ref.read(playerSettingsProvider.notifier).setLeftGesture(g);
-                  } else {
-                    ref
-                        .read(playerSettingsProvider.notifier)
-                        .setRightGesture(g);
-                  }
-                  Navigator.pop<void>(context);
-                },
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 /// Shows a dialog to pick the seek duration.
