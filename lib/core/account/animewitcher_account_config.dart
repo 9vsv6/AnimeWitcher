@@ -24,9 +24,23 @@ class AnimeWitcherAccountConfig {
     'ANIMEWITCHER_FIREBASE_API_KEY',
   );
 
+  /// Firebase Android app id recovered from the original AnimeWitcher client.
+  /// This must never be passed to the Apple Firebase SDK.
   static const String appId = String.fromEnvironment(
     'ANIMEWITCHER_FIREBASE_APP_ID',
     defaultValue: '1:861470152250:android:bd3e0dd41508f61b094703',
+  );
+
+  /// A real Apple Firebase app id, if the AnimeWitcher project ever registers
+  /// SkyStream's Apple bundle. Keep empty by default: inventing/reusing the
+  /// Android app id can terminate FirebaseInstallations during iOS startup.
+  static const String iosAppId = String.fromEnvironment(
+    'ANIMEWITCHER_FIREBASE_IOS_APP_ID',
+  );
+
+  static const String iosBundleId = String.fromEnvironment(
+    'ANIMEWITCHER_FIREBASE_IOS_BUNDLE_ID',
+    defaultValue: 'dev.akash.skystream',
   );
 
   static const String messagingSenderId = String.fromEnvironment(
@@ -50,11 +64,32 @@ class AnimeWitcherAccountConfig {
     'ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID',
   );
 
+  /// Credentials sufficient for the proven Firebase REST endpoints.
   static bool get firebaseConfigured =>
-      projectId.trim().isNotEmpty &&
-      apiKey.trim().isNotEmpty &&
-      appId.trim().isNotEmpty &&
-      messagingSenderId.trim().isNotEmpty;
+      projectId.trim().isNotEmpty && apiKey.trim().isNotEmpty;
+
+  /// Native Firebase must use an app id that belongs to the running platform.
+  /// The original source only supplied an Android Firebase app registration,
+  /// so Apple deliberately falls back to REST unless an iOS app id is supplied.
+  static bool get nativeFirebaseConfigured {
+    if (!firebaseConfigured || messagingSenderId.trim().isEmpty) return false;
+    if (kIsWeb) return appId.trim().isNotEmpty;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.iOS || TargetPlatform.macOS =>
+        iosAppId.trim().isNotEmpty && iosAppId.contains(':ios:'),
+      TargetPlatform.android || TargetPlatform.windows => appId.trim().isNotEmpty,
+      TargetPlatform.linux || TargetPlatform.fuchsia => false,
+    };
+  }
+
+  static String get nativeAppId {
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS)) {
+      return iosAppId.trim();
+    }
+    return appId.trim();
+  }
 
   /// The official AnimeWitcher registration screen accepts these three mail
   /// providers. Sign-in itself remains open to existing legacy accounts.

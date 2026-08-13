@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'animewitcher_account_config.dart';
 import 'animewitcher_account_models.dart';
+import '../firebase/animewitcher_firebase.dart';
 
 class FirestoreReference {
   const FirestoreReference(this.path);
@@ -330,25 +331,27 @@ class FirestoreRestClient {
     required FirestoreDocument? startAfter,
     required int limit,
   }) async {
-    try {
-      cf.Query<Map<String, dynamic>> query = _sdkCollection(collectionPath);
-      if (publishedOnly) {
-        query = query.where('published', isEqualTo: true);
+    if (AnimeWitcherFirebase.isInitialized) {
+      try {
+        cf.Query<Map<String, dynamic>> query = _sdkCollection(collectionPath);
+        if (publishedOnly) {
+          query = query.where('published', isEqualTo: true);
+        }
+        query = query
+            .orderBy(orderField, descending: descending)
+            .orderBy(cf.FieldPath.documentId, descending: descending);
+        if (startAfter != null) {
+          query = query.startAfter(<Object?>[
+            _encodeSdkValue(startAfter.fields[orderField]),
+            _sdk.doc(startAfter.path),
+          ]);
+        }
+        final snapshot = await query.limit(limit.clamp(1, 100)).get();
+        return snapshot.docs.map(_fromSdkDocument).toList(growable: false);
+      } on cf.FirebaseException {
+        // REST public-query fallback below keeps comments usable if SDK setup
+        // is unavailable or the native query fails.
       }
-      query = query
-          .orderBy(orderField, descending: descending)
-          .orderBy(cf.FieldPath.documentId, descending: descending);
-      if (startAfter != null) {
-        query = query.startAfter(<Object?>[
-          _encodeSdkValue(startAfter.fields[orderField]),
-          _sdk.doc(startAfter.path),
-        ]);
-      }
-      final snapshot = await query.limit(limit.clamp(1, 100)).get();
-      return snapshot.docs.map(_fromSdkDocument).toList(growable: false);
-    } on cf.FirebaseException {
-      // REST public-query fallback below keeps comments usable if SDK setup is
-      // temporarily unavailable.
     }
 
     final normalized = collectionPath.replaceFirst(RegExp(r'/+$'), '');
@@ -891,7 +894,9 @@ class FirestoreRestClient {
     }
   }
 
-  bool get _hasNativeUser => FirebaseAuth.instance.currentUser != null;
+  bool get _hasNativeUser =>
+      AnimeWitcherFirebase.isInitialized &&
+      FirebaseAuth.instance.currentUser != null;
 
   cf.FirebaseFirestore get _sdk => cf.FirebaseFirestore.instance;
 

@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:html_unescape/html_unescape.dart';
 
 import '../../domain/entity/multimedia_item.dart';
+import '../../firebase/animewitcher_firebase.dart';
 import '../../storage/settings_repository.dart';
 import '../base_provider.dart';
 import 'mediafire_utils.dart';
@@ -93,6 +94,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   final HtmlUnescape _unescape = HtmlUnescape();
 
   static const String _baseUrl = 'https://animewitcher.com';
+  static const String _firestoreProjectId = 'animewitcher-1c66d';
   static const String _defaultAlgoliaAppId = '5UIU27G8CZ';
   static const String _defaultAlgoliaApiKey = 'ef06c5ee4a0d213c011694f18861805c';
   static const String _aniZipUrl = 'https://api.ani.zip/mappings';
@@ -278,7 +280,102 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     }
   }
 
+  bool get _useFirestoreSdk => AnimeWitcherFirebase.isInitialized;
+
   cf.FirebaseFirestore get _firestore => cf.FirebaseFirestore.instance;
+
+  String _firestoreUrl(String path) {
+    return 'https://firestore.googleapis.com/v1/projects/'
+        '${Uri.encodeComponent(_firestoreProjectId)}'
+        '/databases/(default)/documents/$path';
+  }
+
+  String _firestoreRunQueryUrl([String parent = '']) {
+    final base = 'https://firestore.googleapis.com/v1/projects/'
+        '${Uri.encodeComponent(_firestoreProjectId)}'
+        '/databases/(default)/documents';
+    final cleanParent = parent.trim();
+    return cleanParent.isEmpty ? '$base:runQuery' : '$base/$cleanParent:runQuery';
+  }
+
+  dynamic _firestoreValue(dynamic raw) {
+    final value = _map(raw);
+    if (value.isEmpty) return null;
+    if (value.containsKey('stringValue')) {
+      return value['stringValue']?.toString() ?? '';
+    }
+    if (value.containsKey('integerValue')) {
+      return int.tryParse(value['integerValue']?.toString() ?? '') ?? 0;
+    }
+    if (value.containsKey('doubleValue')) {
+      final rawDouble = value['doubleValue'];
+      if (rawDouble is num) return rawDouble.toDouble();
+      return double.tryParse(rawDouble?.toString() ?? '') ?? 0.0;
+    }
+    if (value.containsKey('booleanValue')) return value['booleanValue'] == true;
+    if (value.containsKey('timestampValue')) {
+      return value['timestampValue']?.toString() ?? '';
+    }
+    if (value.containsKey('nullValue')) return null;
+    if (value.containsKey('referenceValue')) {
+      return value['referenceValue']?.toString() ?? '';
+    }
+    if (value.containsKey('bytesValue')) return value['bytesValue']?.toString() ?? '';
+    if (value.containsKey('geoPointValue')) return _map(value['geoPointValue']);
+
+    final arrayValue = _map(value['arrayValue']);
+    if (arrayValue.isNotEmpty) {
+      return _list(arrayValue['values'])
+          .map<dynamic>(_firestoreValue)
+          .toList(growable: false);
+    }
+    final mapValue = _map(value['mapValue']);
+    if (mapValue.isNotEmpty) return _firestoreFields(mapValue['fields']);
+    return null;
+  }
+
+  Map<String, dynamic> _firestoreFields(dynamic raw) {
+    final fields = _map(raw);
+    final output = <String, dynamic>{};
+    for (final entry in fields.entries) {
+      output[entry.key] = _firestoreValue(entry.value);
+    }
+    return output;
+  }
+
+  Map<String, dynamic> _firestoreDocumentHit(dynamic raw) {
+    final document = _map(raw);
+    if (document.isEmpty) return <String, dynamic>{};
+    final hit = _firestoreFields(document['fields']);
+    final name = _text(document['name']);
+    final id = name.isEmpty ? '' : name.split('/').last;
+    if (id.isNotEmpty) {
+      hit.putIfAbsent('objectID', () => id);
+      hit.putIfAbsent('anime_id', () => id);
+      hit.putIfAbsent('path', () => id);
+    }
+    return hit;
+  }
+
+  Future<List<dynamic>> _firestoreRestRunQuery(
+    Map<String, dynamic> structuredQuery, {
+    String parent = '',
+    Duration timeout = _httpTimeout,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        _firestoreRunQueryUrl(parent),
+        data: <String, dynamic>{'structuredQuery': structuredQuery},
+        options: _jsonOptions(timeout: timeout),
+      );
+      if ((response.statusCode ?? 0) < 200 || (response.statusCode ?? 0) >= 300) {
+        return const <dynamic>[];
+      }
+      return _list(response.data);
+    } on DioException {
+      return const <dynamic>[];
+    }
+  }
 
   dynamic _normalizeFirestoreSdkValue(dynamic value) {
     if (value is cf.Timestamp) return value.toDate().toUtc().toIso8601String();
@@ -329,15 +426,22 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     String path, {
     Duration timeout = _httpTimeout,
   }) async {
-    try {
-      final snapshot = await _firestore.doc(path).get().timeout(timeout);
-      if (!snapshot.exists) return <String, dynamic>{};
-      return _normalizeFirestoreSdkMap(
-        snapshot.data() ?? const <String, dynamic>{},
-      );
-    } on Object {
-      return <String, dynamic>{};
+    if (_useFirestoreSdk) {
+      try {
+        final snapshot = await _firestore.doc(path).get().timeout(timeout);
+        if (snapshot.exists) {
+          return _normalizeFirestoreSdkMap(
+            snapshot.data() ?? const <String, dynamic>{},
+          );
+        }
+      } on Object {
+        // Use the original AnimeWitcher Firestore REST path below.
+      }
     }
+
+    final payload = await _getJson(_firestoreUrl(path), timeout: timeout);
+    if (payload == null) return <String, dynamic>{};
+    return _firestoreFields(payload['fields']);
   }
 
   Future<Response<String>?> _getText(
@@ -1037,19 +1141,61 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         day: <Map<String, dynamic>>[],
     };
 
-    // AnimeWitcher ShowsTimeFragment uses exactly this Firestore SDK query.
-    try {
-      final snapshot = await _firestore
-          .collection('anime_list')
-          .where('show_time', whereIn: animeWitcherBroadcastDays)
-          .get();
-      for (final document in snapshot.docs) {
-        final hit = _firestoreSdkHit(document);
-        final day = _text(hit['show_time']);
-        grouped[day]?.add(hit);
+    var foundScheduleHits = false;
+    if (_useFirestoreSdk) {
+      try {
+        final snapshot = await _firestore
+            .collection('anime_list')
+            .where('show_time', whereIn: animeWitcherBroadcastDays)
+            .get();
+        for (final document in snapshot.docs) {
+          final hit = _firestoreSdkHit(document);
+          final day = _text(hit['show_time']);
+          final bucket = grouped[day];
+          if (bucket == null) continue;
+          bucket.add(hit);
+          foundScheduleHits = true;
+        }
+      } on Object {
+        // Fall through to the same REST query used before the SDK migration.
       }
-    } on cf.FirebaseException {
-      // Keep search-index fallback only for transient backend/index failures.
+    }
+
+    if (!foundScheduleHits) {
+      final values = animeWitcherBroadcastDays
+          .map<Map<String, dynamic>>(
+            (day) => <String, dynamic>{'stringValue': day},
+          )
+          .toList(growable: false);
+      final raw = await _firestoreRestRunQuery(<String, dynamic>{
+        'from': const <Map<String, dynamic>>[
+          <String, dynamic>{'collectionId': 'anime_list'},
+        ],
+        'where': <String, dynamic>{
+          'fieldFilter': <String, dynamic>{
+            'field': const <String, dynamic>{'fieldPath': 'show_time'},
+            'op': 'IN',
+            'value': <String, dynamic>{
+              'arrayValue': <String, dynamic>{'values': values},
+            },
+          },
+        },
+        'limit': 500,
+      });
+      for (final rowRaw in raw) {
+        final document = _map(_map(rowRaw)['document']);
+        if (document.isEmpty) continue;
+        final hit = _firestoreDocumentHit(document);
+        if (hit.isEmpty) continue;
+        final day = _text(hit['show_time']);
+        final bucket = grouped[day];
+        if (bucket == null) continue;
+        bucket.add(hit);
+        foundScheduleHits = true;
+      }
+    }
+
+    if (!foundScheduleHits) {
       final algolia = await _algoliaQuery(
         'series',
         query: '',
@@ -1377,36 +1523,66 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final filterField = ranking.filterField;
     final filterValue = ranking.filterValue;
 
-    // Matches AnimeWitcher AnimeListFragment: optional state/type filter,
-    // followed by MAL rank ascending.
-    try {
-      cf.Query<Map<String, dynamic>> query = _firestore.collection('anime_list');
-      if (filterField != null && filterValue != null) {
-        query = query.where(filterField, isEqualTo: filterValue);
+    if (_useFirestoreSdk) {
+      try {
+        cf.Query<Map<String, dynamic>> query = _firestore.collection('anime_list');
+        if (filterField != null && filterValue != null) {
+          query = query.where(filterField, isEqualTo: filterValue);
+        }
+        final snapshot = await query
+            .orderBy('details.mal_rank')
+            .limit(safeLimit)
+            .get();
+        final hits = snapshot.docs.map(_firestoreSdkHit).toList(growable: false);
+        if (hits.isNotEmpty) return _dedupeHits(hits);
+      } on Object {
+        // Fall through to public Firestore REST.
       }
-      final snapshot = await query
-          .orderBy('details.mal_rank')
-          .limit(safeLimit)
-          .get();
-      return _dedupeHits(
-        snapshot.docs.map(_firestoreSdkHit).toList(growable: false),
-      );
-    } on cf.FirebaseException {
-      final filters = filterField != null && filterValue != null
-          ? _filterGroup(filterField, <String>[filterValue], 'OR')
-          : '';
-      final algolia = await _algoliaQuery(
-        'series_ranking_mal',
-        query: '',
-        page: 0,
-        hitsPerPage: safeLimit,
-        filters: filters,
-        attributes: _searchAttributes,
-      );
-      return _dedupeHits(_list(algolia['hits']));
     }
-  }
 
+    final structuredQuery = <String, dynamic>{
+      'from': const <Map<String, dynamic>>[
+        <String, dynamic>{'collectionId': 'anime_list'},
+      ],
+      if (filterField != null && filterValue != null)
+        'where': <String, dynamic>{
+          'fieldFilter': <String, dynamic>{
+            'field': <String, dynamic>{'fieldPath': filterField},
+            'op': 'EQUAL',
+            'value': <String, dynamic>{'stringValue': filterValue},
+          },
+        },
+      'orderBy': const <Map<String, dynamic>>[
+        <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': 'details.mal_rank'},
+          'direction': 'ASCENDING',
+        },
+      ],
+      'limit': safeLimit,
+    };
+    final raw = await _firestoreRestRunQuery(structuredQuery);
+    final firestoreHits = <Map<String, dynamic>>[];
+    for (final rowRaw in raw) {
+      final document = _map(_map(rowRaw)['document']);
+      if (document.isEmpty) continue;
+      final hit = _firestoreDocumentHit(document);
+      if (hit.isNotEmpty) firestoreHits.add(hit);
+    }
+    if (firestoreHits.isNotEmpty) return _dedupeHits(firestoreHits);
+
+    final filters = filterField != null && filterValue != null
+        ? _filterGroup(filterField, <String>[filterValue], 'OR')
+        : '';
+    final algolia = await _algoliaQuery(
+      'series_ranking_mal',
+      query: '',
+      page: 0,
+      hitsPerPage: safeLimit,
+      filters: filters,
+      attributes: _searchAttributes,
+    );
+    return _dedupeHits(_list(algolia['hits']));
+  }
 
   Future<ProviderNewsPage> _loadNewsPage({
     int offset = 0,
@@ -1733,18 +1909,49 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
   Future<List<_AnimeWitcherCharacterRef>>
       _animeWitcherCharacterRefsForRole(String animeId, String role) async {
-    try {
-      final snapshot = await _firestore
-          .collection('anime_list/$animeId/characters')
-          .where('role', isEqualTo: role)
-          .limit(10)
-          .get();
-      return snapshot.docs
-          .map((document) => _AnimeWitcherCharacterRef(document.id, role))
-          .toList(growable: false);
-    } on cf.FirebaseException {
-      return const <_AnimeWitcherCharacterRef>[];
+    if (_useFirestoreSdk) {
+      try {
+        final snapshot = await _firestore
+            .collection('anime_list/$animeId/characters')
+            .where('role', isEqualTo: role)
+            .limit(10)
+            .get();
+        return snapshot.docs
+            .map((document) => _AnimeWitcherCharacterRef(document.id, role))
+            .toList(growable: false);
+      } on Object {
+        // Use the original Firestore REST query below.
+      }
     }
+
+    final raw = await _firestoreRestRunQuery(
+      <String, dynamic>{
+        'from': const <Map<String, dynamic>>[
+          <String, dynamic>{'collectionId': 'characters'},
+        ],
+        'where': <String, dynamic>{
+          'fieldFilter': <String, dynamic>{
+            'field': const <String, dynamic>{'fieldPath': 'role'},
+            'op': 'EQUAL',
+            'value': <String, dynamic>{'stringValue': role},
+          },
+        },
+        'limit': 10,
+      },
+      parent: 'anime_list/${Uri.encodeComponent(animeId)}',
+    );
+    final output = <_AnimeWitcherCharacterRef>[];
+    for (final rowRaw in raw) {
+      final document = _map(_map(rowRaw)['document']);
+      var characterId = _text(document['name']);
+      if (characterId.isNotEmpty) characterId = characterId.split('/').last;
+      try {
+        characterId = Uri.decodeComponent(characterId);
+      } catch (_) {}
+      if (characterId.isEmpty) continue;
+      output.add(_AnimeWitcherCharacterRef(characterId, role));
+    }
+    return output;
   }
 
   Future<List<_AnimeWitcherCharacterRef>> _animeWitcherCharacterRefs(
@@ -1863,17 +2070,47 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     List<int> ids,
   ) async {
     if (ids.isEmpty) return const <Map<String, dynamic>>[];
-    try {
-      final values = ids.map<String>((id) => '$id').toList(growable: false);
-      final snapshot = await _firestore
-          .collection('anime_list')
-          .where('mal_id', whereIn: values)
-          .limit(ids.length)
-          .get();
-      return snapshot.docs.map(_firestoreSdkHit).toList(growable: false);
-    } on cf.FirebaseException {
-      return const <Map<String, dynamic>>[];
+    if (_useFirestoreSdk) {
+      try {
+        final values = ids.map<String>((id) => '$id').toList(growable: false);
+        final snapshot = await _firestore
+            .collection('anime_list')
+            .where('mal_id', whereIn: values)
+            .limit(ids.length)
+            .get();
+        final hits = snapshot.docs.map(_firestoreSdkHit).toList(growable: false);
+        if (hits.isNotEmpty) return hits;
+      } on Object {
+        // Fall through to public Firestore REST.
+      }
     }
+
+    final values = ids
+        .map<Map<String, dynamic>>(
+          (id) => <String, dynamic>{'stringValue': '$id'},
+        )
+        .toList(growable: false);
+    final raw = await _firestoreRestRunQuery(<String, dynamic>{
+      'from': const <Map<String, dynamic>>[
+        <String, dynamic>{'collectionId': 'anime_list'},
+      ],
+      'where': <String, dynamic>{
+        'fieldFilter': <String, dynamic>{
+          'field': const <String, dynamic>{'fieldPath': 'mal_id'},
+          'op': 'IN',
+          'value': <String, dynamic>{
+            'arrayValue': <String, dynamic>{'values': values},
+          },
+        },
+      },
+      'limit': ids.length,
+    });
+    final output = <Map<String, dynamic>>[];
+    for (final rowRaw in raw) {
+      final hit = _firestoreDocumentHit(_map(rowRaw)['document']);
+      if (hit.isNotEmpty) output.add(hit);
+    }
+    return output;
   }
 
   Future<void> _loadMalIdBatch(List<int> ids) async {
@@ -2310,13 +2547,53 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<List<_EpisodeRecord>> _fetchEpisodeCollection(String animeId) async {
-    try {
-      final snapshot = await _firestore.collection('anime_list/$animeId/episodes').get();
-      final output = <_EpisodeRecord>[];
-      for (final document in snapshot.docs) {
-        final fields = _normalizeFirestoreSdkMap(document.data());
+    if (_useFirestoreSdk) {
+      try {
+        final snapshot = await _firestore.collection('anime_list/$animeId/episodes').get();
+        final output = <_EpisodeRecord>[];
+        for (final document in snapshot.docs) {
+          final fields = _normalizeFirestoreSdkMap(document.data());
+          var id = _text(fields['doc_id']);
+          if (id.isEmpty) id = document.id;
+          output.add(
+            _episodeRecord(
+              fields,
+              fallbackId: id.isEmpty
+                  ? '${output.length + 1}'.padLeft(3, '0')
+                  : id,
+              fallbackNumber: output.length + 1,
+            ),
+          );
+        }
+        if (output.isNotEmpty) return output;
+      } on Object {
+        // Use the original paged Firestore REST collection below.
+      }
+    }
+
+    final output = <_EpisodeRecord>[];
+    final encoded = Uri.encodeComponent(animeId);
+    String nextToken = '';
+    final seenTokens = <String>{};
+    for (var page = 0; page < 20; page++) {
+      var url = '${_firestoreUrl('anime_list/$encoded/episodes')}?pageSize=1000';
+      if (nextToken.isNotEmpty) {
+        url += '&pageToken=${Uri.encodeQueryComponent(nextToken)}';
+      }
+      final payload = await _getJson(url);
+      if (payload == null) break;
+      final documents = _list(payload['documents']);
+      for (final rawDocument in documents) {
+        final document = _map(rawDocument);
+        final fields = _firestoreFields(document['fields']);
         var id = _text(fields['doc_id']);
-        if (id.isEmpty) id = document.id;
+        if (id.isEmpty) {
+          final name = _text(document['name']);
+          if (name.isNotEmpty) id = name.split('/').last;
+        }
+        try {
+          id = Uri.decodeComponent(id);
+        } catch (_) {}
         output.add(
           _episodeRecord(
             fields,
@@ -2327,10 +2604,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
           ),
         );
       }
-      return output;
-    } on cf.FirebaseException {
-      return const <_EpisodeRecord>[];
+      final token = _text(payload['nextPageToken']);
+      if (token.isEmpty || !seenTokens.add(token)) break;
+      nextToken = token;
     }
+    return output;
   }
 
   Future<List<_EpisodeRecord>> _episodeRecords(String animeId) async {
@@ -2577,25 +2855,70 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     String animeId,
     String episodeId,
   ) async {
-    try {
-      // Same query as AnimeWitcher ServersActivity.getServersCol().
-      final snapshot = await _firestore
-          .collection('anime_list/$animeId/episodes/$episodeId/servers')
-          .where('name', isNotEqualTo: '')
-          .where('visible', isEqualTo: true)
-          .limit(20)
-          .get()
-          .timeout(_serverTimeout);
-      return snapshot.docs
-          .map((document) => _serverRecord(
-                _normalizeFirestoreSdkMap(document.data()),
-              ))
-          .where((server) =>
-              server.visible && server.name.isNotEmpty && server.link.isNotEmpty)
-          .toList(growable: false);
-    } on Object {
-      return const <_ServerRecord>[];
+    if (_useFirestoreSdk) {
+      try {
+        final snapshot = await _firestore
+            .collection('anime_list/$animeId/episodes/$episodeId/servers')
+            .where('name', isNotEqualTo: '')
+            .where('visible', isEqualTo: true)
+            .limit(20)
+            .get()
+            .timeout(_serverTimeout);
+        final output = snapshot.docs
+            .map((document) => _serverRecord(
+                  _normalizeFirestoreSdkMap(document.data()),
+                ))
+            .where((server) =>
+                server.visible && server.name.isNotEmpty && server.link.isNotEmpty)
+            .toList(growable: false);
+        if (output.isNotEmpty) return output;
+      } on Object {
+        // Use the original Firestore REST query below.
+      }
     }
+
+    final parent = 'anime_list/${Uri.encodeComponent(animeId)}/episodes/'
+        '${Uri.encodeComponent(episodeId)}';
+    final raw = await _firestoreRestRunQuery(
+      <String, dynamic>{
+        'from': const <Map<String, dynamic>>[
+          <String, dynamic>{'collectionId': 'servers'},
+        ],
+        'where': <String, dynamic>{
+          'compositeFilter': <String, dynamic>{
+            'op': 'AND',
+            'filters': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'fieldFilter': <String, dynamic>{
+                  'field': const <String, dynamic>{'fieldPath': 'name'},
+                  'op': 'NOT_EQUAL',
+                  'value': const <String, dynamic>{'stringValue': ''},
+                },
+              },
+              <String, dynamic>{
+                'fieldFilter': <String, dynamic>{
+                  'field': const <String, dynamic>{'fieldPath': 'visible'},
+                  'op': 'EQUAL',
+                  'value': const <String, dynamic>{'booleanValue': true},
+                },
+              },
+            ],
+          },
+        },
+        'limit': 20,
+      },
+      parent: parent,
+      timeout: _serverTimeout,
+    );
+    final output = <_ServerRecord>[];
+    for (final rowRaw in raw) {
+      final document = _map(_map(rowRaw)['document']);
+      final server = _serverRecord(_firestoreFields(document['fields']));
+      if (server.visible && server.name.isNotEmpty && server.link.isNotEmpty) {
+        output.add(server);
+      }
+    }
+    return output;
   }
 
   Future<List<_ServerRecord>> _fetchServers(String animeId, String episodeId) async {
