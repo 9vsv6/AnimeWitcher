@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fa;
 
 import 'animewitcher_account_config.dart';
 import 'animewitcher_account_models.dart';
@@ -28,69 +29,112 @@ class FirebaseAuthRestClient {
     required String password,
     bool requireVerified = true,
   }) async {
-    final payload = await _identityPost(
-      '/accounts:signInWithPassword',
-      <String, dynamic>{
-        'email': email.trim(),
-        'password': password,
-        'returnSecureToken': true,
-      },
-    );
-    final session = _sessionFromIdentityPayload(
-      payload,
-      AnimeWitcherSignInMethod.email,
-    );
-    final user = await lookup(session.idToken);
-    if (requireVerified && user['emailVerified'] != true) {
+    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
       throw const AnimeWitcherAccountException(
-        'email-not-verified',
-        'Email address has not been verified yet.',
+        'not-configured',
+        'AnimeWitcher account services are not configured.',
       );
     }
-    return _mergeUser(session, user);
+    try {
+      final credential = await _sdk.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final user = credential.user;
+      if (user == null) {
+        throw const AnimeWitcherAccountException(
+          'account-not-found',
+          'The account could not be found.',
+        );
+      }
+      await user.reload();
+      final refreshed = _sdk.currentUser ?? user;
+      if (requireVerified && !refreshed.emailVerified) {
+        throw const AnimeWitcherAccountException(
+          'email-not-verified',
+          'Email address has not been verified yet.',
+        );
+      }
+      return _sessionFromSdkUser(
+        refreshed,
+        AnimeWitcherSignInMethod.email,
+        forceRefresh: true,
+      );
+    } on fa.FirebaseAuthException catch (error) {
+      throw _authException(error);
+    }
   }
 
   Future<AnimeWitcherSession> createEmailAccount({
     required String email,
     required String password,
   }) async {
-    final payload = await _identityPost(
-      '/accounts:signUp',
-      <String, dynamic>{
-        'email': email.trim(),
-        'password': password,
-        'returnSecureToken': true,
-      },
-    );
-    return _sessionFromIdentityPayload(
-      payload,
-      AnimeWitcherSignInMethod.email,
-    );
+    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+      throw const AnimeWitcherAccountException(
+        'not-configured',
+        'AnimeWitcher account services are not configured.',
+      );
+    }
+    try {
+      final credential = await _sdk.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final user = credential.user;
+      if (user == null) {
+        throw const AnimeWitcherAccountException(
+          'account-not-found',
+          'Firebase did not create a user account.',
+        );
+      }
+      return _sessionFromSdkUser(
+        user,
+        AnimeWitcherSignInMethod.email,
+        forceRefresh: true,
+      );
+    } on fa.FirebaseAuthException catch (error) {
+      throw _authException(error);
+    }
   }
 
   Future<AnimeWitcherSession> signInWithGoogleIdToken(String idToken) async {
-    final postBody = Uri(
-      queryParameters: <String, String>{
-        'id_token': idToken,
-        'providerId': 'google.com',
-      },
-    ).query;
-    final payload = await _identityPost(
-      '/accounts:signInWithIdp',
-      <String, dynamic>{
-        'postBody': postBody,
-        'requestUri': 'http://localhost',
-        'returnIdpCredential': true,
-        'returnSecureToken': true,
-      },
-    );
-    return _sessionFromIdentityPayload(
-      payload,
-      AnimeWitcherSignInMethod.google,
-    );
+    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+      throw const AnimeWitcherAccountException(
+        'not-configured',
+        'AnimeWitcher account services are not configured.',
+      );
+    }
+    try {
+      final credential = fa.GoogleAuthProvider.credential(idToken: idToken);
+      final result = await _sdk.signInWithCredential(credential);
+      final user = result.user;
+      if (user == null) {
+        throw const AnimeWitcherAccountException(
+          'account-not-found',
+          'Firebase did not return a Google account.',
+        );
+      }
+      return _sessionFromSdkUser(
+        user,
+        AnimeWitcherSignInMethod.google,
+        forceRefresh: true,
+      );
+    } on fa.FirebaseAuthException catch (error) {
+      throw _authException(error);
+    }
   }
 
   Future<void> sendEmailVerification(String idToken) async {
+    final user = _sdk.currentUser;
+    if (user != null) {
+      try {
+        await user.sendEmailVerification();
+        return;
+      } on fa.FirebaseAuthException catch (error) {
+        throw _authException(error);
+      }
+    }
+
     await _identityPost('/accounts:sendOobCode', <String, dynamic>{
       'requestType': 'VERIFY_EMAIL',
       'idToken': idToken,
@@ -98,19 +142,47 @@ class FirebaseAuthRestClient {
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
-    await _identityPost('/accounts:sendOobCode', <String, dynamic>{
-      'requestType': 'PASSWORD_RESET',
-      'email': email.trim(),
-    });
+    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+      throw const AnimeWitcherAccountException(
+        'not-configured',
+        'AnimeWitcher account services are not configured.',
+      );
+    }
+    try {
+      await _sdk.sendPasswordResetEmail(email: email.trim());
+    } on fa.FirebaseAuthException catch (error) {
+      throw _authException(error);
+    }
   }
 
   Future<void> deleteAccount(String idToken) async {
+    final user = _sdk.currentUser;
+    if (user != null) {
+      try {
+        await user.delete();
+        return;
+      } on fa.FirebaseAuthException catch (error) {
+        throw _authException(error);
+      }
+    }
+
     await _identityPost('/accounts:delete', <String, dynamic>{
       'idToken': idToken,
     });
   }
 
   Future<Map<String, dynamic>> lookup(String idToken) async {
+    final user = _sdk.currentUser;
+    if (user != null) {
+      try {
+        await user.reload();
+        final refreshed = _sdk.currentUser ?? user;
+        return _sdkUserMap(refreshed);
+      } on fa.FirebaseAuthException catch (error) {
+        throw _authException(error);
+      }
+    }
+
     final payload = await _identityPost(
       '/accounts:lookup',
       <String, dynamic>{'idToken': idToken},
@@ -128,6 +200,23 @@ class FirebaseAuthRestClient {
   Future<AnimeWitcherSession> refresh(
     AnimeWitcherSession previous,
   ) async {
+    final user = _sdk.currentUser;
+    if (user != null && user.uid == previous.uid) {
+      try {
+        return _sessionFromSdkUser(
+          user,
+          previous.signInMethod,
+          forceRefresh: true,
+          fallbackRefreshToken: previous.refreshToken,
+        );
+      } on fa.FirebaseAuthException catch (error) {
+        throw _authException(error);
+      }
+    }
+    // No native FirebaseAuth session means this user signed in before the SDK
+    // migration. Keep the existing secure-token REST refresh below until they
+    // next sign in, after which FirebaseAuth persistence owns the session.
+
     if (!AnimeWitcherAccountConfig.firebaseConfigured) {
       throw const AnimeWitcherAccountException(
         'not-configured',
@@ -166,6 +255,65 @@ class FirebaseAuthRestClient {
     } on DioException catch (error) {
       throw _firebaseException(error);
     }
+  }
+
+  Future<void> signOut() => _sdk.signOut();
+
+  fa.FirebaseAuth get _sdk => fa.FirebaseAuth.instance;
+
+  Future<AnimeWitcherSession> _sessionFromSdkUser(
+    fa.User user,
+    AnimeWitcherSignInMethod method, {
+    bool forceRefresh = false,
+    String? fallbackRefreshToken,
+  }) async {
+    final tokenResult = await user.getIdTokenResult(forceRefresh);
+    final token = tokenResult.token ?? await user.getIdToken(forceRefresh) ?? '';
+    if (token.isEmpty) {
+      throw const AnimeWitcherAccountException(
+        'invalid-session',
+        'Firebase did not return a usable ID token.',
+      );
+    }
+    return AnimeWitcherSession(
+      uid: user.uid,
+      idToken: token,
+      refreshToken: user.refreshToken ?? fallbackRefreshToken ?? '',
+      expiresAt: tokenResult.expirationTime ??
+          DateTime.now().add(const Duration(minutes: 55)),
+      signInMethod: method,
+      email: user.email,
+      displayName: user.displayName,
+      photoUrl: user.photoURL,
+    );
+  }
+
+  Map<String, dynamic> _sdkUserMap(fa.User user) => <String, dynamic>{
+        'localId': user.uid,
+        'email': user.email,
+        'emailVerified': user.emailVerified,
+        'displayName': user.displayName,
+        'photoUrl': user.photoURL,
+      };
+
+  AnimeWitcherAccountException _authException(fa.FirebaseAuthException error) {
+    final code = switch (error.code) {
+      'user-not-found' => 'account-not-found',
+      'invalid-credential' || 'wrong-password' || 'invalid-email' =>
+        'invalid-credentials',
+      'email-already-in-use' || 'account-exists-with-different-credential' =>
+        'email-already-in-use',
+      'weak-password' => 'weak-password',
+      'requires-recent-login' => 'requires-recent-login',
+      'user-disabled' => 'account-disabled',
+      'too-many-requests' => 'too-many-requests',
+      'network-request-failed' => 'network-error',
+      _ => error.code,
+    };
+    return AnimeWitcherAccountException(
+      code,
+      error.message ?? 'Firebase Authentication request failed.',
+    );
   }
 
   Future<Map<String, dynamic>> _identityPost(

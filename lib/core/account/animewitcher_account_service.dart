@@ -1036,6 +1036,9 @@ class AnimeWitcherAccountService {
     _watchedWriteQueues.clear();
     _progressWriteQueues.clear();
     _libraryWriteQueues.clear();
+    try {
+      await _auth.signOut();
+    } catch (_) {}
     await _secureStorage.delete(_sessionKey);
     await _secureStorage.delete(_profileKey);
     await _storage.remove(_legacyLastSyncKey);

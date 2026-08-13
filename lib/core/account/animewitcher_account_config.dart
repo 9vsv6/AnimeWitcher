@@ -17,10 +17,26 @@ class AnimeWitcherAccountConfig {
 
   static const String projectId = String.fromEnvironment(
     'ANIMEWITCHER_FIREBASE_PROJECT_ID',
+    defaultValue: 'animewitcher-1c66d',
   );
 
   static const String apiKey = String.fromEnvironment(
     'ANIMEWITCHER_FIREBASE_API_KEY',
+  );
+
+  static const String appId = String.fromEnvironment(
+    'ANIMEWITCHER_FIREBASE_APP_ID',
+    defaultValue: '1:861470152250:android:bd3e0dd41508f61b094703',
+  );
+
+  static const String messagingSenderId = String.fromEnvironment(
+    'ANIMEWITCHER_FIREBASE_MESSAGING_SENDER_ID',
+    defaultValue: '861470152250',
+  );
+
+  static const String storageBucket = String.fromEnvironment(
+    'ANIMEWITCHER_FIREBASE_STORAGE_BUCKET',
+    defaultValue: 'animewitcher-1c66d.appspot.com',
   );
 
   /// OAuth web/server client used to request a Google ID token which Firebase
@@ -35,7 +51,10 @@ class AnimeWitcherAccountConfig {
   );
 
   static bool get firebaseConfigured =>
-      projectId.trim().isNotEmpty && apiKey.trim().isNotEmpty;
+      projectId.trim().isNotEmpty &&
+      apiKey.trim().isNotEmpty &&
+      appId.trim().isNotEmpty &&
+      messagingSenderId.trim().isNotEmpty;
 
   /// The official AnimeWitcher registration screen accepts these three mail
   /// providers. Sign-in itself remains open to existing legacy accounts.

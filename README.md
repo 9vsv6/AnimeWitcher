@@ -82,7 +82,6 @@ SkyStream is a modern, media streaming client. It draws inspiration from the ver
 | **iOS**        | ✅ (Sideloading required) |
 | **Windows**    |            ✅             |
 | **macOS**      |            ✅             |
-| **Linux**      |            ✅             |
 
 ## ✨ Features
 
@@ -126,7 +125,7 @@ SkyStream is a modern, media streaming client. It draws inspiration from the ver
 
 ### 📺 Cross-Platform Support
 - 📱 Android & iOS  
-- 💻 macOS, Windows & Linux  
+- 💻 macOS & Windows  
 - 📺 Android TV + tvOS (Apple TV) support
 
 ### ⚡ Performance & Reliability
@@ -179,16 +178,11 @@ SkyStream is not on the App Store. You must **sideload** it using a computer.
 8. On your device, go to **Settings > General > VPN & Device Management**, tap your email, and select **Trust**.
 9. Set up Wi-Fi sync to automatically refresh your apps in the background
 
-### 💻 Windows / macOS / Linux
-1. Download the appropriate file for your OS (`skystream-windows.exe`, `skystream-macos.dmg`, `skystream-linux.deb`, etc.).
+### 💻 Windows / macOS
+1. Download the appropriate file for your OS (`skystream-windows.exe`, `skystream-macos.dmg`, etc.).
 2. Install the app.
 3. Run the application from your app launcher or terminal.
    - *macOS Note: If you see an “Unidentified Developer” warning, go to Settings → Privacy & Security and click Open Anyway to allow the app (one-time step).*
-   - *Linux Note: You may need to install the following packages:*
-     ```bash
-     sudo apt-get update
-     sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev libasound2-dev
-     ```
 
 ## 🛠️ Build from Source
 

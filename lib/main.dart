@@ -7,6 +7,8 @@ import 'package:flutter/services.dart'; // LogicalKeyboardKey, KeyDownEvent
 import 'package:flutter/foundation.dart'; // For kReleaseMode
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+
+import 'core/firebase/animewitcher_firebase.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/router/app_router.dart';
@@ -31,6 +33,7 @@ import 'core/account/account_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AnimeWitcherFirebase.initialize();
   MediaKit.ensureInitialized();
 
   // Cap Flutter's image cache. Default is 1000 entries / 100 MB which is too
@@ -46,7 +49,7 @@ void main() async {
   }
 
   // Native window init (Desktop) - Run once
-  if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+  if (Platform.isMacOS || Platform.isWindows) {
     await windowManager.ensureInitialized();
 
     final windowOptions = WindowOptions(
@@ -103,7 +106,7 @@ class _AppRootState extends State<AppRoot> {
           }),
       ]);
 
-      if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      if (Platform.isMacOS || Platform.isWindows) {
         final alwaysOnTop = _storageService.isAlwaysOnTop();
         await windowManager.setAlwaysOnTop(alwaysOnTop);
       }
@@ -180,7 +183,7 @@ class _MyAppState extends ConsumerState<MyApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     FocusManager.instance.addEarlyKeyEventHandler(_handleEarlyKeyEvent);
-    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+    if (Platform.isMacOS || Platform.isWindows) {
       windowManager.addListener(this);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -193,7 +196,7 @@ class _MyAppState extends ConsumerState<MyApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     FocusManager.instance.removeEarlyKeyEventHandler(_handleEarlyKeyEvent);
-    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+    if (Platform.isMacOS || Platform.isWindows) {
       windowManager.removeListener(this);
     }
     super.dispose();
@@ -296,7 +299,7 @@ class _MyAppState extends ConsumerState<MyApp>
 
 
   Future<void> _toggleFullscreen() async {
-    if (!(Platform.isMacOS || Platform.isWindows || Platform.isLinux)) return;
+    if (!(Platform.isMacOS || Platform.isWindows)) return;
     try {
       final isFull = await windowManager.isFullScreen();
       await windowManager.setFullScreen(!isFull);
@@ -383,7 +386,7 @@ class _MyAppState extends ConsumerState<MyApp>
             }
 
             if (!kIsWeb &&
-                (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+                (Platform.isWindows || Platform.isMacOS)) {
               final isMac = Platform.isMacOS;
               if (!isMac) {
                 result = Stack(

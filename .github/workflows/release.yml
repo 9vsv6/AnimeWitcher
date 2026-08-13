@@ -23,11 +23,6 @@ on:
         required: true
         default: true
         type: boolean
-      build_linux:
-        description: 'Build Linux'
-        required: true
-        default: true
-        type: boolean
 
 permissions:
   contents: write
@@ -409,87 +404,6 @@ jobs:
           artifacts: |
             windows/packaging/exe/Output/*.exe
             skystream-windows-${{ matrix.arch }}-${{ needs.version.outputs.version }}.zip
-          omitBodyDuringUpdate: true
-          omitNameDuringUpdate: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  linux:
-    name: Linux Build
-    needs: [version, create_release]
-    if: ${{ github.event.inputs.build_linux == 'true' }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            arch: x64
-          - os: ubuntu-22.04-arm
-            arch: arm64
-    steps:
-      - uses: actions/checkout@v5
-      - uses: subosito/flutter-action@v2
-        if: ${{ matrix.arch != 'arm64' }}
-        with:
-          channel: 'stable'
-      - name: Setup Flutter (ARM64 Linux)
-        if: ${{ matrix.arch == 'arm64' }}
-        run: |
-          git clone https://github.com/flutter/flutter.git -b stable $RUNNER_TOOL_CACHE/flutter
-          echo "$RUNNER_TOOL_CACHE/flutter/bin" >> $GITHUB_PATH
-      - name: Install Linux Dependencies
-        run: |
-          # 1. Switch ports.ubuntu.com from HTTP (port 80 origin) to HTTPS (port 443 CDN) to prevent TCP resets
-          sudo sed -i 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
-          
-          # 2. Update package index and ensure failures halt execution instead of silently ignoring stale index errors
-          sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30
-          
-          # 3. Install required libraries with --no-install-recommends to avoid fetching 190+ bloated recommended packages (tilix, pocketsphinx, etc.)
-          sudo apt-get install -y --no-install-recommends \
-            clang cmake ninja-build pkg-config \
-            libgtk-3-dev liblzma-dev libmpv-dev libasound2-dev libsecret-1-dev
-      - name: Generate dart-defines file
-        shell: bash
-        run: |
-          cat > dart-defines.json << 'JSON_EOF'
-          {
-            "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
-            "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
-            "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
-            "ANIMESKIP_CLIENT_ID": "${{ secrets.ANIMESKIP_CLIENT_ID }}",
-            "ANIMEWITCHER_FIREBASE_PROJECT_ID": "${{ secrets.ANIMEWITCHER_FIREBASE_PROJECT_ID }}",
-            "ANIMEWITCHER_FIREBASE_API_KEY": "${{ secrets.ANIMEWITCHER_FIREBASE_API_KEY }}",
-            "ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID }}",
-            "ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID": "${{ secrets.ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID || '296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com' }}"
-          }
-          JSON_EOF
-
-      - name: Build Linux Packages
-        run: |
-          VERSION="${{ needs.version.outputs.version }}"
-          export PATH="$PATH:$HOME/.pub-cache/bin"
-          dart pub global activate fastforge
-
-          # Build .deb (AppImage is currently disabled due to tool-level file collision bugs)
-          fastforge package --platform linux --targets deb --flutter-build-args=dart-define-from-file=dart-defines.json
-
-          # Rename .deb file to match tar.gz convention
-          mv dist/*/*.deb "skystream-linux-${{ matrix.arch }}-${VERSION}.deb"
-
-          # Generate the standard .tar.gz bundle as well
-          flutter build linux --release --dart-define-from-file=dart-defines.json
-          cd build/linux/${{ matrix.arch }}/release/bundle
-          tar -czvf "../../../../../skystream-linux-${{ matrix.arch }}-${VERSION}.tar.gz" .
-
-      - name: Upload Release Assets
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ needs.version.outputs.version }}
-          allowUpdates: true
-          replacesArtifacts: true
-          artifacts: |
-            skystream-linux-${{ matrix.arch }}-${{ needs.version.outputs.version }}.tar.gz
-            skystream-linux-${{ matrix.arch }}-${{ needs.version.outputs.version }}.deb
           omitBodyDuringUpdate: true
           omitNameDuringUpdate: true
           token: ${{ secrets.GITHUB_TOKEN }}
