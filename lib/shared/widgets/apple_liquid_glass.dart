@@ -410,6 +410,7 @@ class _ApplePersistentGlassHeaderOverlayState
         <String, Object?>{
           'systemName': button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
           'title': button.title,
+          'titleOnly': button.titleOnly,
           'width': button.width,
           'enabled': button.onPressed != null ||
               (button.menuItems.isNotEmpty && button.onMenuSelected != null),
@@ -724,6 +725,9 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
   final Color? color;
   final String? tooltip;
   final String? title;
+  /// Render this toolbar action as a labeled control without its icon.
+  /// Useful for persistent menu buttons whose current value is the primary UI.
+  final bool titleOnly;
   final double width;
   final List<AppleNativeMenuItem> menuItems;
   final String? selectedMenuValue;
@@ -738,6 +742,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
     this.color,
     this.tooltip,
     this.title,
+    this.titleOnly = false,
     this.width = 46,
     this.menuItems = const <AppleNativeMenuItem>[],
     this.selectedMenuValue,
@@ -805,6 +810,7 @@ bool _sameToolbarButtons(
         left.color != right.color ||
         left.tooltip != right.tooltip ||
         left.title != right.title ||
+        left.titleOnly != right.titleOnly ||
         left.width != right.width ||
         left.selectedMenuValue != right.selectedMenuValue ||
         left.menuTintColor != right.menuTintColor ||
