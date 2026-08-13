@@ -3081,7 +3081,7 @@ class PlayerController extends Notifier<PlayerState> {
             'Unknown';
         final itemToSave = _item.copyWith(provider: pId);
         ref
-            .read(watchHistoryProvider.notifier)
+            .read(continueWatchingProvider.notifier)
             .saveProgress(
               itemToSave,
               0,
@@ -3165,18 +3165,18 @@ class PlayerController extends Notifier<PlayerState> {
             'Unknown';
         final itemToSave = _item.copyWith(provider: pId);
         ref
-            .read(watchHistoryProvider.notifier)
+            .read(continueWatchingProvider.notifier)
             .saveProgress(
-                itemToSave,
-                pos,
-                dur,
-                lastStreamUrl: state.currentStream?.url,
-                lastEpisodeUrl: currentEpisode?.url ?? _videoUrl,
-                season: currentEpisode?.season,
-                episode: currentEpisode?.episode,
-                episodeTitle: currentEpisode?.name,
-                episodePosterUrl: _episodeArtwork(currentEpisode),
-              );
+              itemToSave,
+              pos,
+              dur,
+              lastStreamUrl: state.currentStream?.url,
+              lastEpisodeUrl: currentEpisode?.url ?? _videoUrl,
+              season: currentEpisode?.season,
+              episode: currentEpisode?.episode,
+              episodeTitle: currentEpisode?.name,
+              episodePosterUrl: _episodeArtwork(currentEpisode),
+            );
       }
     } catch (e) {
       if (kDebugMode) debugPrint("History save failed: $e");

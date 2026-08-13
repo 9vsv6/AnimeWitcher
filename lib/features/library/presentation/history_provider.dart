@@ -91,8 +91,11 @@ class WatchHistory extends _$WatchHistory {
     final finalPosition = isLivestream ? 0 : position;
     final finalDuration = isLivestream ? 0 : duration;
 
+    // Playback progress belongs exclusively to Continue Watching. Recently
+    // Watched is updated by recordOpened(), so progress ticks cannot reorder or
+    // recreate items in that independent history list.
     final repository = ref.read(historyRepositoryProvider);
-    await repository.saveProgress(
+    await repository.saveContinueWatchingProgress(
       item,
       finalPosition,
       finalDuration,
@@ -103,7 +106,6 @@ class WatchHistory extends _$WatchHistory {
       episodeTitle: episodeTitle,
       episodePosterUrl: episodePosterUrl,
     );
-    refresh();
     ref.read(continueWatchingProvider.notifier).refresh();
   }
 }

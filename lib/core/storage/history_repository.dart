@@ -80,6 +80,10 @@ class HistoryRepository {
 
   HistoryRepository(this._storageService, this._accountService);
 
+  /// Saves playback progress only. Recently Watched is intentionally separate:
+  /// it is updated by [recordOpened] when an episode is opened, not while the
+  /// playback clock advances. This mirrors AnimeWitcher's split between
+  /// `last_watched` and `continue_watching`.
   Future<void> saveProgress(
     MultimediaItem item,
     int position,
@@ -90,8 +94,8 @@ class HistoryRepository {
     int? episode,
     String? episodeTitle,
     String? episodePosterUrl,
-  }) async {
-    await _storageService.saveProgress(
+  }) {
+    return saveContinueWatchingProgress(
       item,
       position,
       duration,
@@ -101,29 +105,6 @@ class HistoryRepository {
       episode: episode,
       episodeTitle: episodeTitle,
       episodePosterUrl: episodePosterUrl,
-    );
-    await _storageService.saveContinueWatchingProgress(
-      item,
-      position,
-      duration,
-      lastStreamUrl: lastStreamUrl,
-      lastEpisodeUrl: lastEpisodeUrl,
-      season: season,
-      episode: episode,
-      episodeTitle: episodeTitle,
-      episodePosterUrl: episodePosterUrl,
-    );
-    _syncInBackground(
-      _accountService.saveProgress(
-        item: item,
-        position: position,
-        duration: duration,
-        episodeUrl: lastEpisodeUrl,
-        episodeNumber: episode,
-        episodeTitle: episodeTitle,
-        episodePosterUrl: episodePosterUrl,
-      ),
-      'save playback progress',
     );
   }
 
