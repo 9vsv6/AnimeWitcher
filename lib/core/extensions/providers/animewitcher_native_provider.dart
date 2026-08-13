@@ -486,6 +486,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     'dubbed',
     'poster',
     'cover_uri',
+    'show_time',
   ];
 
   static const List<String> _similarAttributes = <String>[
@@ -1044,43 +1045,78 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<Map<String, List<MultimediaItem>>> getBroadcastSchedule() async {
-    final values = animeWitcherBroadcastDays
-        .map<Map<String, dynamic>>(
-          (day) => <String, dynamic>{'stringValue': day},
-        )
-        .toList(growable: false);
-    final raw = await _postAny(
-      _firestoreRunQueryUrl(),
-      <String, dynamic>{
-        'structuredQuery': <String, dynamic>{
-          'from': const <Map<String, dynamic>>[
-            <String, dynamic>{'collectionId': 'anime_list'},
-          ],
-          'where': <String, dynamic>{
-            'fieldFilter': <String, dynamic>{
-              'field': const <String, dynamic>{'fieldPath': 'show_time'},
-              'op': 'IN',
-              'value': <String, dynamic>{
-                'arrayValue': <String, dynamic>{'values': values},
-              },
-            },
-          },
-          'limit': 500,
-        },
-      },
-    );
-
     final grouped = <String, List<Map<String, dynamic>>>{
       for (final day in animeWitcherBroadcastDays)
         day: <Map<String, dynamic>>[],
     };
-    for (final rowRaw in _list(raw)) {
-      final document = _map(_map(rowRaw)['document']);
-      if (document.isEmpty) continue;
-      final hit = _firestoreDocumentHit(document);
+
+    var foundScheduleHits = false;
+    final algolia = await _algoliaQuery(
+      'series',
+      query: '',
+      page: 0,
+      hitsPerPage: 100,
+      filters: _filterGroup(
+        'details.state',
+        const <String>['مستمر'],
+        'OR',
+      ),
+      attributes: _searchAttributes,
+    );
+    for (final rawHit in _list(algolia['hits'])) {
+      final hit = _map(rawHit);
       if (hit.isEmpty) continue;
-      final day = _text(hit['show_time']);
-      grouped[day]?.add(hit);
+      final details = _map(hit['details']);
+      final day = _text(
+        hit['show_time'] ??
+            hit['showTime'] ??
+            details['show_time'] ??
+            details['showTime'],
+      );
+      final bucket = grouped[day];
+      if (bucket == null) continue;
+      bucket.add(hit);
+      foundScheduleHits = true;
+    }
+
+    // Firestore's runQuery endpoint can intermittently reject anonymous
+    // structured queries while normal document reads and Algolia keep working.
+    // Keep the original query only as a compatibility fallback so the schedule
+    // does not disappear when that endpoint is unavailable.
+    if (!foundScheduleHits) {
+      final values = animeWitcherBroadcastDays
+          .map<Map<String, dynamic>>(
+            (day) => <String, dynamic>{'stringValue': day},
+          )
+          .toList(growable: false);
+      final raw = await _postAny(
+        _firestoreRunQueryUrl(),
+        <String, dynamic>{
+          'structuredQuery': <String, dynamic>{
+            'from': const <Map<String, dynamic>>[
+              <String, dynamic>{'collectionId': 'anime_list'},
+            ],
+            'where': <String, dynamic>{
+              'fieldFilter': <String, dynamic>{
+                'field': const <String, dynamic>{'fieldPath': 'show_time'},
+                'op': 'IN',
+                'value': <String, dynamic>{
+                  'arrayValue': <String, dynamic>{'values': values},
+                },
+              },
+            },
+            'limit': 500,
+          },
+        },
+      );
+      for (final rowRaw in _list(raw)) {
+        final document = _map(_map(rowRaw)['document']);
+        if (document.isEmpty) continue;
+        final hit = _firestoreDocumentHit(document);
+        if (hit.isEmpty) continue;
+        final day = _text(hit['show_time']);
+        grouped[day]?.add(hit);
+      }
     }
 
     final lists = await Future.wait(
@@ -1383,13 +1419,31 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     AnimeWitcherGlobalRanking ranking, {
     int limit = 100,
   }) async {
-    // AnimeWitcher v1.4.6 AnimeRankingActivity creates one AnimeListFragment
-    // per ranking query type. AnimeListFragment.getQuery reads anime_list,
-    // applies the category filter below, and orders every ranking by MAL rank
-    // ascending (rank 1 first). Keep that request shape here instead of using
-    // Settings/statistics, which contains unrelated global counters.
+    final safeLimit = limit.clamp(1, 100).toInt();
     final filterField = ranking.filterField;
     final filterValue = ranking.filterValue;
+    final filters = filterField != null && filterValue != null
+        ? _filterGroup(filterField, <String>[filterValue], 'OR')
+        : '';
+
+    // The same MAL-ranking replica index is already used by AnimeWitcher's
+    // search sort. Prefer it here as well: it avoids coupling the whole
+    // rankings page to Firestore runQuery while preserving MAL-rank order.
+    final algolia = await _algoliaQuery(
+      'series_ranking_mal',
+      query: '',
+      page: 0,
+      hitsPerPage: safeLimit,
+      filters: filters,
+      attributes: _searchAttributes,
+    );
+    final algoliaHits = _list(algolia['hits']);
+    if (algoliaHits.isNotEmpty) {
+      return _dedupeHits(algoliaHits);
+    }
+
+    // Compatibility fallback for installations where the ranking replica is
+    // temporarily unavailable but Firestore structured queries still work.
     final structuredQuery = <String, dynamic>{
       'from': const <Map<String, dynamic>>[
         <String, dynamic>{'collectionId': 'anime_list'},
@@ -1408,7 +1462,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
           'direction': 'ASCENDING',
         },
       ],
-      'limit': limit.clamp(1, 100),
+      'limit': safeLimit,
     };
 
     final raw = await _postAny(
