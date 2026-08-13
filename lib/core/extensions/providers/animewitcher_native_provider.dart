@@ -1050,71 +1050,72 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         day: <Map<String, dynamic>>[],
     };
 
-    var foundScheduleHits = false;
-    final algolia = await _algoliaQuery(
-      'series',
-      query: '',
-      page: 0,
-      hitsPerPage: 100,
-      filters: _filterGroup(
-        'details.state',
-        const <String>['مستمر'],
-        'OR',
-      ),
-      attributes: _searchAttributes,
+    // Match AnimeWitcher ShowsTimeFragment: read anime_list directly from
+    // Firestore with one whereIn("show_time", weekdays) query. This remains
+    // the source of truth; Algolia is only a resilience fallback for clients
+    // where an anonymous Firestore runQuery request is temporarily unavailable.
+    final values = animeWitcherBroadcastDays
+        .map<Map<String, dynamic>>(
+          (day) => <String, dynamic>{'stringValue': day},
+        )
+        .toList(growable: false);
+    final raw = await _postAny(
+      _firestoreRunQueryUrl(),
+      <String, dynamic>{
+        'structuredQuery': <String, dynamic>{
+          'from': const <Map<String, dynamic>>[
+            <String, dynamic>{'collectionId': 'anime_list'},
+          ],
+          'where': <String, dynamic>{
+            'fieldFilter': <String, dynamic>{
+              'field': const <String, dynamic>{'fieldPath': 'show_time'},
+              'op': 'IN',
+              'value': <String, dynamic>{
+                'arrayValue': <String, dynamic>{'values': values},
+              },
+            },
+          },
+          'limit': 500,
+        },
+      },
     );
-    for (final rawHit in _list(algolia['hits'])) {
-      final hit = _map(rawHit);
+
+    var foundScheduleHits = false;
+    for (final rowRaw in _list(raw)) {
+      final document = _map(_map(rowRaw)['document']);
+      if (document.isEmpty) continue;
+      final hit = _firestoreDocumentHit(document);
       if (hit.isEmpty) continue;
-      final details = _map(hit['details']);
-      final day = _text(
-        hit['show_time'] ??
-            hit['showTime'] ??
-            details['show_time'] ??
-            details['showTime'],
-      );
+      final day = _text(hit['show_time']);
       final bucket = grouped[day];
       if (bucket == null) continue;
       bucket.add(hit);
       foundScheduleHits = true;
     }
 
-    // Firestore's runQuery endpoint can intermittently reject anonymous
-    // structured queries while normal document reads and Algolia keep working.
-    // Keep the original query only as a compatibility fallback so the schedule
-    // does not disappear when that endpoint is unavailable.
     if (!foundScheduleHits) {
-      final values = animeWitcherBroadcastDays
-          .map<Map<String, dynamic>>(
-            (day) => <String, dynamic>{'stringValue': day},
-          )
-          .toList(growable: false);
-      final raw = await _postAny(
-        _firestoreRunQueryUrl(),
-        <String, dynamic>{
-          'structuredQuery': <String, dynamic>{
-            'from': const <Map<String, dynamic>>[
-              <String, dynamic>{'collectionId': 'anime_list'},
-            ],
-            'where': <String, dynamic>{
-              'fieldFilter': <String, dynamic>{
-                'field': const <String, dynamic>{'fieldPath': 'show_time'},
-                'op': 'IN',
-                'value': <String, dynamic>{
-                  'arrayValue': <String, dynamic>{'values': values},
-                },
-              },
-            },
-            'limit': 500,
-          },
-        },
+      final algolia = await _algoliaQuery(
+        'series',
+        query: '',
+        page: 0,
+        hitsPerPage: 100,
+        filters: _filterGroup(
+          'details.state',
+          const <String>['مستمر'],
+          'OR',
+        ),
+        attributes: _searchAttributes,
       );
-      for (final rowRaw in _list(raw)) {
-        final document = _map(_map(rowRaw)['document']);
-        if (document.isEmpty) continue;
-        final hit = _firestoreDocumentHit(document);
+      for (final rawHit in _list(algolia['hits'])) {
+        final hit = _map(rawHit);
         if (hit.isEmpty) continue;
-        final day = _text(hit['show_time']);
+        final details = _map(hit['details']);
+        final day = _text(
+          hit['show_time'] ??
+              hit['showTime'] ??
+              details['show_time'] ??
+              details['showTime'],
+        );
         grouped[day]?.add(hit);
       }
     }
@@ -1422,28 +1423,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final safeLimit = limit.clamp(1, 100).toInt();
     final filterField = ranking.filterField;
     final filterValue = ranking.filterValue;
-    final filters = filterField != null && filterValue != null
-        ? _filterGroup(filterField, <String>[filterValue], 'OR')
-        : '';
 
-    // The same MAL-ranking replica index is already used by AnimeWitcher's
-    // search sort. Prefer it here as well: it avoids coupling the whole
-    // rankings page to Firestore runQuery while preserving MAL-rank order.
-    final algolia = await _algoliaQuery(
-      'series_ranking_mal',
-      query: '',
-      page: 0,
-      hitsPerPage: safeLimit,
-      filters: filters,
-      attributes: _searchAttributes,
-    );
-    final algoliaHits = _list(algolia['hits']);
-    if (algoliaHits.isNotEmpty) {
-      return _dedupeHits(algoliaHits);
-    }
-
-    // Compatibility fallback for installations where the ranking replica is
-    // temporarily unavailable but Firestore structured queries still work.
+    // Match AnimeWitcher AnimeListFragment ranking queries: anime_list is
+    // filtered by state/type when needed and ordered by details.mal_rank ASC.
+    // Keep Firestore as the source of truth and use the existing Algolia MAL
+    // replica only if the public structured query is unavailable.
     final structuredQuery = <String, dynamic>{
       'from': const <Map<String, dynamic>>[
         <String, dynamic>{'collectionId': 'anime_list'},
@@ -1469,14 +1453,29 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       _firestoreRunQueryUrl(),
       <String, dynamic>{'structuredQuery': structuredQuery},
     );
-    final hits = <Map<String, dynamic>>[];
+    final firestoreHits = <Map<String, dynamic>>[];
     for (final rowRaw in _list(raw)) {
       final document = _map(_map(rowRaw)['document']);
       if (document.isEmpty) continue;
       final hit = _firestoreDocumentHit(document);
-      if (hit.isNotEmpty) hits.add(hit);
+      if (hit.isNotEmpty) firestoreHits.add(hit);
     }
-    return _dedupeHits(hits);
+    if (firestoreHits.isNotEmpty) {
+      return _dedupeHits(firestoreHits);
+    }
+
+    final filters = filterField != null && filterValue != null
+        ? _filterGroup(filterField, <String>[filterValue], 'OR')
+        : '';
+    final algolia = await _algoliaQuery(
+      'series_ranking_mal',
+      query: '',
+      page: 0,
+      hitsPerPage: safeLimit,
+      filters: filters,
+      attributes: _searchAttributes,
+    );
+    return _dedupeHits(_list(algolia['hits']));
   }
 
 
