@@ -1926,7 +1926,7 @@ private struct AppleSearchSortOverlay: View {
           Image(systemName: "arrow.up.arrow.down")
             .font(.system(size: 20, weight: .semibold))
             .foregroundStyle(.tint)
-          Text(isArabic ? "Ø§ÙØªØ±ØªÙØ¨ Ø­Ø³Ø¨" : "Sort by")
+          Text(isArabic ? "الترتيب حسب" : "Sort by")
             .font(.title2.weight(.bold))
           Spacer()
           Button(action: onCancel) {
@@ -1970,10 +1970,10 @@ private struct AppleSearchSortOverlay: View {
         Divider()
 
         HStack(spacing: 12) {
-          Button(isArabic ? "Ø¥ÙØºØ§Ø¡" : "Cancel", action: onCancel)
+          Button(isArabic ? "إلغاء" : "Cancel", action: onCancel)
             .buttonStyle(.plain)
           Spacer()
-          Button(isArabic ? "ØªØ·Ø¨ÙÙ" : "Apply") {
+          Button(isArabic ? "تطبيق" : "Apply") {
             onApply(selected)
           }
           .buttonStyle(.borderedProminent)
@@ -2060,11 +2060,11 @@ private struct AppleSearchFilterOverlay: View {
 
   private func tabLabel(_ value: AppleSearchFilterTab) -> String {
     switch value {
-    case .genres: return isArabic ? "Ø§ÙØªØµÙÙÙØ§Øª" : "Genres"
-    case .year: return isArabic ? "Ø§ÙØ³ÙØ©" : "Year"
-    case .age: return isArabic ? "Ø§ÙØ¹ÙØ±" : "Age"
-    case .type: return isArabic ? "Ø§ÙÙÙØ¹" : "Type"
-    case .status: return isArabic ? "Ø§ÙØ­Ø§ÙØ©" : "Status"
+    case .genres: return isArabic ? "التصنيفات" : "Genres"
+    case .year: return isArabic ? "السنة" : "Year"
+    case .age: return isArabic ? "العمر" : "Age"
+    case .type: return isArabic ? "النوع" : "Type"
+    case .status: return isArabic ? "الحالة" : "Status"
     }
   }
 
@@ -2192,7 +2192,7 @@ private struct AppleSearchFilterOverlay: View {
             Image(systemName: "slider.horizontal.3")
               .font(.system(size: 21, weight: .semibold))
               .foregroundStyle(.tint)
-            Text(isArabic ? "ÙÙØ§ØªØ± Ø§ÙØ¨Ø­Ø«" : "Search filters")
+            Text(isArabic ? "فلاتر البحث" : "Search filters")
               .font(.title2.weight(.bold))
             if selectedCount > 0 {
               Text("\(selectedCount)")
@@ -2251,7 +2251,7 @@ private struct AppleSearchFilterOverlay: View {
           VStack(spacing: 10) {
             if seasonRequiresYear {
               Label(
-                isArabic ? "Ø§Ø®ØªØ± Ø³ÙØ© ÙØ¹ Ø§ÙÙÙØ³Ù" : "Choose a year with the season",
+                isArabic ? "اختر سنة مع الموسم" : "Choose a year with the season",
                 systemImage: "info.circle"
               )
               .font(.footnote.weight(.semibold))
@@ -2262,14 +2262,14 @@ private struct AppleSearchFilterOverlay: View {
               Button {
                 clearAll()
               } label: {
-                Label(isArabic ? "ÙØ³Ø­ Ø§ÙÙÙ" : "Clear all", systemImage: "arrow.counterclockwise")
+                Label(isArabic ? "مسح الكل" : "Clear all", systemImage: "arrow.counterclockwise")
               }
               .buttonStyle(.plain)
               .disabled(selectedCount == 0)
 
               Spacer()
 
-              Button(isArabic ? "ØªØ·Ø¨ÙÙ" : "Apply") {
+              Button(isArabic ? "تطبيق" : "Apply") {
                 onApply(payload())
               }
               .buttonStyle(.borderedProminent)

@@ -18,15 +18,15 @@ class LibraryScreen extends ConsumerWidget {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     return switch (category) {
-      LibraryCategory.favorite => isArabic ? 'Ø§ÙÙÙØ¶ÙØ©' : 'Favorites',
-      LibraryCategory.watching => isArabic ? 'Ø£Ø´Ø§ÙØ¯Ù Ø­Ø§ÙÙÙØ§' : 'Watching',
+      LibraryCategory.favorite => isArabic ? 'المفضلة' : 'Favorites',
+      LibraryCategory.watching => isArabic ? 'أشاهده حاليًا' : 'Watching',
       LibraryCategory.continueLater =>
-        isArabic ? 'Ø£ÙÙÙÙØ§ ÙØ§Ø­ÙÙØ§' : 'Continue Later',
+        isArabic ? 'أكملها لاحقًا' : 'Continue Later',
       LibraryCategory.planToWatch =>
-        isArabic ? 'Ø£Ø±ØºØ¨ Ø¨ÙØ´Ø§ÙØ¯ØªÙ' : 'Plan to Watch',
-      LibraryCategory.completed => isArabic ? 'ØªÙØª ÙØ´Ø§ÙØ¯ØªÙ' : 'Completed',
+        isArabic ? 'أرغب بمشاهدته' : 'Plan to Watch',
+      LibraryCategory.completed => isArabic ? 'تمت مشاهدته' : 'Completed',
       LibraryCategory.notInterested =>
-        isArabic ? 'ÙØ§ Ø£Ø±ØºØ¨ Ø¨ÙØ´Ø§ÙØ¯ØªÙ' : 'Not Interested',
+        isArabic ? 'لا أرغب بمشاهدته' : 'Not Interested',
     };
   }
 
@@ -72,7 +72,7 @@ class LibraryScreen extends ConsumerWidget {
     final label = _categoryLabelWithCount(context, selected, counts);
 
     return AppleNativeMenuButton(
-      accessibilityLabel: isArabic ? 'Ø§Ø®ØªØ± ÙØ§Ø¦ÙØ©' : 'Choose list',
+      accessibilityLabel: isArabic ? 'اختر قائمة' : 'Choose list',
       systemImage: _categorySystemImage(selected),
       fallbackIcon: _categoryIcon(selected),
       title: label,
@@ -115,7 +115,7 @@ class LibraryScreen extends ConsumerWidget {
       title: _categoryLabelWithCount(context, selected, counts),
       titleOnly: true,
       width: isArabic ? 240 : 224,
-      tooltip: isArabic ? 'Ø§Ø®ØªØ± ÙØ§Ø¦ÙØ©' : 'Choose list',
+      tooltip: isArabic ? 'اختر قائمة' : 'Choose list',
       color: primary,
       menuTintColor: primary,
       onPressed: null,
