@@ -40,7 +40,7 @@ class AnimeWitcherAccountConfig {
 
   static const String iosBundleId = String.fromEnvironment(
     'ANIMEWITCHER_FIREBASE_IOS_BUNDLE_ID',
-    defaultValue: 'dev.akash.skystream',
+    defaultValue: 'com.animewitcher.app',
   );
 
   static const String messagingSenderId = String.fromEnvironment(
