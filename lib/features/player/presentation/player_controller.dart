@@ -589,6 +589,7 @@ class PlayerController extends Notifier<PlayerState> {
     required MultimediaItem item,
     required String videoUrl,
     Episode? episode,
+    StreamResult? selectedSource,
     VideoController? videoViewController,
   }) async {
     state = const PlayerState(); // Resets all fields including errorMessage
@@ -674,7 +675,23 @@ class PlayerController extends Notifier<PlayerState> {
     _isInitialized = true;
     unawaited(_fetchAndLogSkipSegments());
 
-    await _initStream();
+    if (selectedSource != null && !selectedSource.requiresResolution) {
+      final sourceSessionId = _beginSourceSession(resetAttempts: true);
+      state = state.copyWith(
+        streams: <StreamResult>[selectedSource],
+        currentStreamIndex: 0,
+      );
+      _setSourceAttemptsFromStreams(<StreamResult>[selectedSource]);
+      await loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
+    } else {
+      // Some picker entries are intermediate provider URLs. Preserve the
+      // user's exact selection and let the provider resolve that one entry
+      // inside the player, matching the existing episode-switch behavior.
+      if (selectedSource?.requiresResolution ?? false) {
+        _videoUrl = selectedSource!.url;
+      }
+      await _initStream();
+    }
     if (_isDisposed) return;
     await applySubtitleSettings();
 

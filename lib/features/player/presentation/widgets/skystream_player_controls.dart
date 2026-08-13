@@ -17,6 +17,7 @@ import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
+import '../../../../core/utils/episode_label.dart';
 import 'player_stream_widgets.dart';
 import 'player_control_components.dart';
 import 'next_episode_overlay.dart';
@@ -819,48 +820,14 @@ class SkyStreamPlayerControlsState
     return "$minutes:${twoDigits(seconds)}";
   }
 
-  String _normalizeEpisodeDigits(String value) {
-    const arabic = 'Ù Ù¡Ù¢Ù£Ù¤Ù¥Ù¦Ù§Ù¨Ù©';
-    const eastern = 'Û°Û±Û²Û³Û´ÛµÛ¶Û·Û¸Û¹';
-    return value
-        .replaceAllMapped(
-          RegExp(r'[Ù -Ù©]'),
-          (match) => '${arabic.indexOf(match.group(0)!)}',
-        )
-        .replaceAllMapped(
-          RegExp(r'[Û°-Û¹]'),
-          (match) => '${eastern.indexOf(match.group(0)!)}',
-        );
-  }
-
-  bool _isGenericEpisodeTitle(String title, int episodeNumber) {
-    final compact = _normalizeEpisodeDigits(title)
-        .replaceAll('\u00A0', ' ')
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[\s:ï¼._#\-ââ]+'), '');
-    final number = episodeNumber.toString();
-
-    return compact.isEmpty ||
-        compact == number ||
-        compact == 'episode$number' ||
-        compact == 'ep$number' ||
-        compact == 'e$number' ||
-        compact == 'Ø§ÙØ­ÙÙØ©$number' ||
-        compact == 'Ø­ÙÙØ©$number';
-  }
-
   String? _buildEpisodeLine(BuildContext context, Episode? episode) {
     if (episode == null || episode.episode <= 0) return null;
-
-    final number = episode.episode;
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final prefix = isArabic ? 'Ø­ÙÙØ© $number' : 'Episode $number';
-    final title = episode.name.trim();
-
-    if (_isGenericEpisodeTitle(title, number)) return prefix;
-    return '$prefix: $title';
+    return formatEpisodeLabel(
+      episode: episode.episode,
+      isArabic:
+          Localizations.localeOf(context).languageCode.toLowerCase() == 'ar',
+      title: episode.name,
+    );
   }
 
   Widget _buildKickAnimation() {

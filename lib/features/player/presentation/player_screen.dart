@@ -43,12 +43,14 @@ class PlayerScreen extends ConsumerStatefulWidget {
   final MultimediaItem item;
   final String videoUrl;
   final Episode? episode;
+  final StreamResult? selectedSource;
 
   const PlayerScreen({
     super.key,
     required this.item,
     required this.videoUrl,
     this.episode,
+    this.selectedSource,
   });
 
   @override
@@ -165,6 +167,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         item: widget.item,
         videoUrl: widget.videoUrl,
         episode: widget.episode,
+        selectedSource: widget.selectedSource,
         videoViewController: _videoViewController,
       );
     });
@@ -550,14 +553,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (route?.isCurrent == false) return;
 
     // Keep the player registered as the top persistent header owner even when
-    // its chrome is hidden. Removing the owner would expose the Details header
-    // underneath the player. Only toggle the physical back control itself so
-    // it follows the player's controls visibility exactly.
+    // its chrome is hidden. During blocking startup/error screens the Flutter
+    // top bar reserves space for the native iOS control, so the native back
+    // button must stay visible even before normal player controls appear.
+    final playerState = ref.read(playerControllerProvider);
+    final showBack =
+        controlsVisible ||
+        playerState.uiPhase.fullscreenBlocking ||
+        playerState.errorMessage != null;
     applePersistentGlassHeaderController.show(
       ApplePersistentGlassHeaderConfig(
         owner: this,
         route: route,
-        onBack: controlsVisible ? () => unawaited(_handleBack()) : null,
+        onBack: showBack ? () => unawaited(_handleBack()) : null,
         backTooltip: AppLocalizations.of(context)!.goBack,
         backForegroundColor: Theme.of(context).colorScheme.primary,
         backFallbackColor: Colors.black54,

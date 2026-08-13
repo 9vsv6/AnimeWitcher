@@ -127,7 +127,7 @@ class PlaybackLauncher {
           .read(notificationServiceProvider)
           .showError(
             Localizations.localeOf(context).languageCode == 'ar'
-                ? 'ÙÙ ÙØªÙ Ø§ÙØ¹Ø«ÙØ± Ø¹ÙÙ ÙØ²ÙØ¯ Ø§ÙØªØ´ØºÙÙ.'
+                ? 'لم يتم العثور على مزود التشغيل.'
                 : 'No playback provider found.',
           );
       return null;
@@ -255,14 +255,18 @@ class PlaybackLauncher {
           .read(notificationServiceProvider)
           .showError(
             Localizations.localeOf(context).languageCode == 'ar'
-                ? 'ÙÙ ÙØªÙ Ø§ÙØ¹Ø«ÙØ± Ø¹ÙÙ ÙØ²ÙØ¯ Ø§ÙØªØ´ØºÙÙ.'
+                ? 'لم يتم العثور على مزود التشغيل.'
                 : 'No playback provider found.',
           );
       return;
     }
 
-    // Internal playback enters the player immediately. The player controller
-    // owns source discovery/extraction so there is no pre-player loading page.
+    // Use the same quality/server picker for internal playback and downloads.
+    // The selected source is carried into the player so it is not silently
+    // replaced by saved-source or automatic quality preferences.
+    final selected = await _chooseSource(context, provider, localOrEpisodeUrl);
+    if (selected == null || !context.mounted) return;
+
     if (settings.preferredPlayer == null) {
       await _recordEpisodeOpened(item, resolvedEpisode);
       if (!context.mounted) return;
@@ -271,15 +275,13 @@ class PlaybackLauncher {
           item: item,
           videoUrl: localOrEpisodeUrl,
           episode: resolvedEpisode,
+          selectedSource: selected,
         ),
       ).push<void>(context);
       return;
     }
 
     // External players still need a concrete resolved stream before launch.
-    final selected = await _chooseSource(context, provider, localOrEpisodeUrl);
-    if (selected == null || !context.mounted) return;
-
     if (settings.preferredPlayer != null) {
       if (baseItem.url.isNotEmpty) {
         _ref
