@@ -1732,7 +1732,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<List<_AnimeWitcherCharacterRef>>
-      Future<List<_AnimeWitcherCharacterRef>>
       _animeWitcherCharacterRefsForRole(String animeId, String role) async {
     try {
       final snapshot = await _firestore
