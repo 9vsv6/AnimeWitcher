@@ -8,7 +8,6 @@ import 'hotstar_player_style.dart';
 /// chrome no longer needs a separate fixed-height Positioned gradient.
 class PlayerTopBar extends StatelessWidget {
   final String title;
-  final String? subtitle;
   final String? episodeLabel;
   final VoidCallback? onBack;
   final bool isTv;
@@ -17,7 +16,6 @@ class PlayerTopBar extends StatelessWidget {
   const PlayerTopBar({
     super.key,
     required this.title,
-    this.subtitle,
     this.episodeLabel,
     this.onBack,
     this.isTv = false,
@@ -43,7 +41,7 @@ class PlayerTopBar extends StatelessWidget {
         right: false,
         bottom: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(leftPadding, 14, rightPadding, 24),
+          padding: EdgeInsets.fromLTRB(leftPadding, 4, rightPadding, 14),
           child: Row(
             children: [
               if (appleUsesPersistentLiquidGlassHeader)
@@ -71,17 +69,6 @@ class PlayerTopBar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (subtitle != null && subtitle!.isNotEmpty)
-                      Text(
-                        subtitle!,
-                        style: const TextStyle(
-                          color: HotstarPlayerStyle.secondaryText,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                     Text(
                       title,
                       style: TextStyle(
@@ -117,7 +104,7 @@ class PlayerTopBar extends StatelessWidget {
   }
 }
 
-/// Bottom zone shell: scrubber row on top, then a single flat controls row —
+/// Bottom zone shell: scrubber row on top, then a single flat controls row â
 /// [leading] (playback) pinned left, a [Spacer], then [actions] (everything
 /// else) on the right. All buttons are direct siblings of one [Row].
 ///
@@ -200,7 +187,7 @@ class PlayerBottomBar extends StatelessWidget {
                 onKeyEvent: isTv ? _handleRowKey : null,
                 child: Row(
                   children: [
-                    // Left group: play/pause, lock, next — always visible.
+                    // Left group: play/pause, lock, next â always visible.
                     ...leading,
                     if (isTouch)
                       // Touch: right-anchored finger-scroll strip so a long
@@ -302,10 +289,10 @@ class _PlayerIconButtonState extends State<PlayerIconButton> {
   }
 }
 
-/// Labelled icon button for the controls row (Sources, Subtitles, Speed, …).
+/// Labelled icon button for the controls row (Sources, Subtitles, Speed, â¦).
 /// Activates on tap and on D-pad/keyboard select/enter/space when focused;
 /// directional navigation between buttons is handled natively by the
-/// enclosing traversal group — this widget never moves focus itself.
+/// enclosing traversal group â this widget never moves focus itself.
 class PlayerActionButton extends StatefulWidget {
   final IconData icon;
   final String label;

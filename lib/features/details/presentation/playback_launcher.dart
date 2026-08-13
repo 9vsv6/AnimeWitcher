@@ -78,7 +78,7 @@ class PlaybackLauncher {
             .read(notificationServiceProvider)
             .showError(
               Localizations.localeOf(context).languageCode == 'ar'
-                  ? 'لم يتم العثور على مصادر تشغيل.'
+                  ? 'ÙÙ ÙØªÙ Ø§ÙØ¹Ø«ÙØ± Ø¹ÙÙ ÙØµØ§Ø¯Ø± ØªØ´ØºÙÙ.'
                   : 'No playback sources found.',
             );
         return null;
@@ -127,7 +127,7 @@ class PlaybackLauncher {
           .read(notificationServiceProvider)
           .showError(
             Localizations.localeOf(context).languageCode == 'ar'
-                ? 'لم يتم العثور على مزود التشغيل.'
+                ? 'ÙÙ ÙØªÙ Ø§ÙØ¹Ø«ÙØ± Ø¹ÙÙ ÙØ²ÙØ¯ Ø§ÙØªØ´ØºÙÙ.'
                 : 'No playback provider found.',
           );
       return null;
@@ -167,7 +167,7 @@ class PlaybackLauncher {
             .read(notificationServiceProvider)
             .showError(
               Localizations.localeOf(context).languageCode == 'ar'
-                  ? 'تعذر استخراج رابط صالح من هذا المصدر.'
+                  ? 'ØªØ¹Ø°Ø± Ø§Ø³ØªØ®Ø±Ø§Ø¬ Ø±Ø§Ø¨Ø· ØµØ§ÙØ­ ÙÙ ÙØ°Ø§ Ø§ÙÙØµØ¯Ø±.'
                   : 'Could not extract a playable URL from this source.',
             );
         return null;
@@ -255,14 +255,28 @@ class PlaybackLauncher {
           .read(notificationServiceProvider)
           .showError(
             Localizations.localeOf(context).languageCode == 'ar'
-                ? 'لم يتم العثور على مزود التشغيل.'
+                ? 'ÙÙ ÙØªÙ Ø§ÙØ¹Ø«ÙØ± Ø¹ÙÙ ÙØ²ÙØ¯ Ø§ÙØªØ´ØºÙÙ.'
                 : 'No playback provider found.',
           );
       return;
     }
 
-    // AnimeWitcher source discovery is intentionally separate from extraction:
-    // show PD/MF2/ST/etc. first, then resolve only the server the user chose.
+    // Internal playback enters the player immediately. The player controller
+    // owns source discovery/extraction so there is no pre-player loading page.
+    if (settings.preferredPlayer == null) {
+      await _recordEpisodeOpened(item, resolvedEpisode);
+      if (!context.mounted) return;
+      await PlayerRoute(
+        $extra: PlayerRouteExtra(
+          item: item,
+          videoUrl: localOrEpisodeUrl,
+          episode: resolvedEpisode,
+        ),
+      ).push<void>(context);
+      return;
+    }
+
+    // External players still need a concrete resolved stream before launch.
     final selected = await _chooseSource(context, provider, localOrEpisodeUrl);
     if (selected == null || !context.mounted) return;
 
@@ -293,19 +307,6 @@ class PlaybackLauncher {
       return;
     }
 
-    // For deferred sources, the opaque selected URL tells the provider to
-    // extract exactly that one server inside the player loading screen.
-    final selectedUrl = selected.requiresResolution
-        ? selected.url
-        : localOrEpisodeUrl;
-    await _recordEpisodeOpened(item, resolvedEpisode);
-    await PlayerRoute(
-      $extra: PlayerRouteExtra(
-        item: item,
-        videoUrl: selectedUrl,
-        episode: resolvedEpisode,
-      ),
-    ).push<void>(context);
   }
 
   Future<void> _launchStream(

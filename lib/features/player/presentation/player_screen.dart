@@ -76,12 +76,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   // The persistent root key handler. It always stays focusable (it is the
   // parent of the ExcludeFocus'd chrome), so when the controls hide we route
   // focus back here and the next remote/keyboard press is guaranteed to be
-  // seen — the single mechanism that keeps D-pad alive after auto-hide.
+  // seen â the single mechanism that keeps D-pad alive after auto-hide.
   final FocusNode _rootFocusNode = FocusNode(debugLabel: 'player_root');
 
   // Some TVs deliver a single Back press through two channels (a goBack
   // KeyEvent *and* a route pop). This timestamp de-dupes them so one physical
-  // press performs exactly one back action — see [_consumeBack].
+  // press performs exactly one back action â see [_consumeBack].
   DateTime? _lastBackAt;
 
   bool _isTv = false;
@@ -90,6 +90,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   bool _spaceHeldForSpeed = false;
   double? _speedBeforeSpaceHold;
   Timer? _spaceHoldTimer;
+  Timer? _startupTimeoutTimer;
 
   late final PlayerController _playerController;
   ProviderSubscription<AsyncValue<PlayerSettings>>? _settingsSub;
@@ -167,6 +168,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         videoViewController: _videoViewController,
       );
     });
+
+    // Do not leave the user trapped on a source that never becomes playable.
+    // Source discovery now happens inside the player, so the timeout starts as
+    // soon as the player route opens and exits only if playback is still not ready.
+    _startupTimeoutTimer = Timer(const Duration(seconds: 30), () {
+      if (!mounted) return;
+      final current = ref.read(playerControllerProvider);
+      if (current.isLoading || current.errorMessage != null) {
+        unawaited(_handleBack());
+      }
+    });
   }
 
   @override
@@ -181,8 +193,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       _playerController.pause();
 
       // Tear down any in-flight space-hold speed boost. If the user is
-      // holding space (2× speed) and the OS backgrounds the app, the
-      // KeyUp event is lost — leaving the state machine stuck with
+      // holding space (2Ã speed) and the OS backgrounds the app, the
+      // KeyUp event is lost â leaving the state machine stuck with
       // _spaceHeldForSpeed=true forever. Subsequent space taps would
       // see the wrong branch. Reset speed back to whatever the user had
       // before the hold so we resume at the right rate.
@@ -196,7 +208,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       }
     } else if (state == AppLifecycleState.resumed) {
       // Wakelock: re-acquire whenever the engine is currently playing on
-      // resume — not just when WE auto-paused on background. External
+      // resume â not just when WE auto-paused on background. External
       // play sources (media-session play from a notification, Bluetooth
       // headphones, Android Auto) can flip playing=true while the app
       // is backgrounded; the user then foregrounds the app to a playing
@@ -211,7 +223,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         WakelockPlus.enable();
       }
 
-      // Only auto-play if we paused for backgrounding — don't override the
+      // Only auto-play if we paused for backgrounding â don't override the
       // user's explicit pause-before-background intent.
       if (_wasPlayingBeforeBackground) {
         _wasPlayingBeforeBackground = false;
@@ -238,7 +250,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // Use manual + all overlays rather than edgeToEdge: leaving immersiveSticky
     // for edgeToEdge does NOT reliably re-show the status/navigation bars on
     // Android, so the user returns to a normal screen with the status bar
-    // still hidden. manual + SystemUiOverlay.values forces both bars back —
+    // still hidden. manual + SystemUiOverlay.values forces both bars back â
     // the expected default behaviour off the player.
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(
@@ -282,6 +294,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         if (kDebugMode) debugPrint('PlayerScreen.dispose: $e');
       }
     }
+    _startupTimeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -295,13 +308,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   /// own activation run; it only acts when *no* control is focused (controls
   /// hidden / video-only) or for global media shortcuts on desktop.
   ///
-  /// `primaryFocus == node` means the root node itself holds focus — i.e. no
+  /// `primaryFocus == node` means the root node itself holds focus â i.e. no
   /// chrome control is focused. This is how we tell "hidden / video-only" from
   /// "a button is focused" without any manual focus bookkeeping.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     final rootHasFocus = FocusManager.instance.primaryFocus == node;
 
-    // Escape (desktop/keyboard) → dismiss via the single guarded handler.
+    // Escape (desktop/keyboard) â dismiss via the single guarded handler.
     // Hardware/remote Back is intentionally NOT handled here: on Android/TV it
     // is delivered reliably to PopScope (the navigation channel), and the
     // redundant goBack KeyEvent must stay unhandled so the two deliveries can't
@@ -312,7 +325,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       return _consumeBack() ? KeyEventResult.handled : KeyEventResult.ignored;
     }
 
-    // Space-hold → 2× speed (non-TV). Only when no control is focused, so
+    // Space-hold â 2Ã speed (non-TV). Only when no control is focused, so
     // Space still activates a focused button normally.
     if (!_isTv &&
         rootHasFocus &&
@@ -382,7 +395,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     // A chrome control is focused: let it activate (select/enter/space via
     // Shortcuts + Material) and let arrows drive directional traversal. On
-    // desktop we still honor the media convention of ←/→/↑/↓ seeking/volume.
+    // desktop we still honor the media convention of â/â/â/â seeking/volume.
     if (!rootHasFocus) {
       if (!_isTv) {
         if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
@@ -405,7 +418,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       return KeyEventResult.ignored;
     }
 
-    // From here the root has focus — no control is focused (controls hidden
+    // From here the root has focus â no control is focused (controls hidden
     // or video-only). On TV, if controls are visible, we recover focus.
     if (_isTv && _controlsVisible.value) {
       if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
@@ -424,7 +437,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         return KeyEventResult.ignored;
       }
       // First press just wakes the chrome (focus lands on play/pause). It does
-      // NOT toggle playback — pressing OK again, now that play/pause is focused,
+      // NOT toggle playback â pressing OK again, now that play/pause is focused,
       // is what pauses/plays. (Avoids the jarring "OK pauses then shows chrome".)
       _controlsKeyFinal.currentState?.showControls();
       return KeyEventResult.handled;
@@ -452,7 +465,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       return KeyEventResult.handled;
     }
 
-    // TV with controls already visible but focus on root (rare/transient) —
+    // TV with controls already visible but focus on root (rare/transient) â
     // leave arrows for traversal.
     if (_isTv) return KeyEventResult.ignored;
 
@@ -477,15 +490,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   /// The single Back-handling decision, shared by the root key handler and
-  /// PopScope. Performs at most one dismissal — close the sources panel, else
-  /// (on TV, while playing) hide the controls — and de-dupes the duplicate Back
+  /// PopScope. Performs at most one dismissal â close the sources panel, else
+  /// (on TV, while playing) hide the controls â and de-dupes the duplicate Back
   /// delivery within a short window. Returns true when the press was consumed
   /// (the caller must NOT exit); false when there's nothing left to dismiss.
   bool _consumeBack() {
     final now = DateTime.now();
     if (_lastBackAt != null &&
         now.difference(_lastBackAt!) < const Duration(milliseconds: 200)) {
-      // Near-instant duplicate delivery of the same physical press — swallow
+      // Near-instant duplicate delivery of the same physical press â swallow
       // it. Short enough not to eat an intentional fast double-press.
       return true;
     }
@@ -763,9 +776,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           player: _player,
                           videoViewController: _videoViewController,
                           title: widget.item.title,
-                          subtitle: ref
-                              .read(playerControllerProvider)
-                              .streamSubtitle,
                           backdropUrl: widget.item.backdropImageUrl,
                           logoUrl: widget.item.logoUrl,
                           onResize: _updateResizeMode,

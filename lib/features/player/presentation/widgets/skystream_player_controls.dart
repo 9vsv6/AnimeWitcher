@@ -22,7 +22,6 @@ import 'player_control_components.dart';
 import 'next_episode_overlay.dart';
 import 'player_side_panel.dart';
 import 'player_bottom_sheets.dart';
-import 'player_loading_overlay.dart';
 import 'player_osd_overlay.dart';
 import 'skip_segment_overlay.dart';
 import 'hotstar_player_style.dart';
@@ -34,7 +33,6 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   final Player player;
   final vv.VideoController? videoViewController;
   final String? title;
-  final String? subtitle;
   final VoidCallback? onBackPointer;
   final List<StreamResult>? streams;
   final StreamResult? currentStream;
@@ -47,7 +45,7 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   /// Called when the chrome hides so the parent can return focus to its
   /// persistent root handler node (which lives outside the ExcludeFocus
   /// subtree). This is the single mechanism that keeps D-pad alive after the
-  /// controls auto-hide — replacing the old `primaryFocus.unfocus()` dance.
+  /// controls auto-hide â replacing the old `primaryFocus.unfocus()` dance.
   final VoidCallback? onRequestRootFocus;
   final String? backdropUrl;
   final String? logoUrl;
@@ -57,7 +55,6 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
     required this.player,
     this.videoViewController,
     this.title,
-    this.subtitle,
     this.onBackPointer,
     this.streams,
     this.currentStream,
@@ -115,7 +112,7 @@ class SkyStreamPlayerControlsState
   bool get isFullscreen => _isFullscreen;
   // The single focus anchor: when the chrome (re)appears on TV we move focus
   // here (the bottom-row play/pause). Directional traversal handles every
-  // other movement between controls — no other requestFocus calls exist.
+  // other movement between controls â no other requestFocus calls exist.
   late final FocusNode _playFocusNode;
   late final FocusNode _backFocusNode;
   late final FocusNode _scrubFocusNode;
@@ -210,11 +207,11 @@ class SkyStreamPlayerControlsState
         }
         if (val) {
           _startHideTimer();
-          // Playing → tell scrim to re-evaluate (will hide immediately).
+          // Playing â tell scrim to re-evaluate (will hide immediately).
           _metadataScrimKey.currentState?.resetSchedule();
         } else {
           _cancelHideTimer();
-          // Paused → tell scrim to re-evaluate (will schedule 8s show).
+          // Paused â tell scrim to re-evaluate (will schedule 8s show).
           _metadataScrimKey.currentState?.resetSchedule();
         }
 
@@ -257,7 +254,7 @@ class SkyStreamPlayerControlsState
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    // No addListener needed — AnimatedBuilder wraps the seek widget directly
+    // No addListener needed â AnimatedBuilder wraps the seek widget directly
 
     // Bridge video_view state into local cache so seek calculations and
     // the loading guard stay correct when ExoPlayer is active.
@@ -267,7 +264,7 @@ class SkyStreamPlayerControlsState
     widget.videoViewController?.videoSize.addListener(_updateOrientation);
     widget.videoViewController?.orientation.addListener(_updateOrientation);
 
-    // PiP is phone/tablet-only — never register the handler on TV.
+    // PiP is phone/tablet-only â never register the handler on TV.
     if (Platform.isAndroid && !_isTv) {
       const MethodChannel(
         'dev.akash.skystream.player/pip',
@@ -300,8 +297,8 @@ class SkyStreamPlayerControlsState
       _isVisible = true;
     }
     // On TV, controls should be visible + focused on the play button as
-    // soon as the player opens. Otherwise the user has to nudge ↑/↓ on
-    // the remote first before the center button responds to select —
+    // soon as the player opens. Otherwise the user has to nudge â/â on
+    // the remote first before the center button responds to select â
     // which is jarring on launch and breaks "press OK to start playing"
     // expectations (B-DPAD-1).
     if (_isTv) {
@@ -317,7 +314,7 @@ class SkyStreamPlayerControlsState
     FocusManager.instance.addListener(_onFocusChange);
 
     // Surface revert-failure messages as a SnackBar whenever the controller
-    // sets one (e.g., source switch failed → reverted to previous stream).
+    // sets one (e.g., source switch failed â reverted to previous stream).
     _revertMessageSub = ref.listenManual(playerControllerProvider, (_, _) {
       final msg = ref
           .read(playerControllerProvider.notifier)
@@ -554,7 +551,7 @@ class SkyStreamPlayerControlsState
       widget.onVisibilityChanged?.call(true);
       _startHideTimer();
       // On TV, always restore focus to the play/pause button when controls
-      // become visible — autofocus only fires once when the widget first mounts,
+      // become visible â autofocus only fires once when the widget first mounts,
       // so after hide/show cycles we must request focus explicitly.
       if (_isTv) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -596,7 +593,7 @@ class SkyStreamPlayerControlsState
 
   /// Close the content panel and bring the chrome back with a fresh auto-hide.
 
-  /// Close the active episodes panel — the shared Back/dismiss entry point.
+  /// Close the active episodes panel â the shared Back/dismiss entry point.
   void closeActivePanel() {
     closeEpisodesPanel();
   }
@@ -609,7 +606,7 @@ class SkyStreamPlayerControlsState
 
   void _startHideTimer() {
     _hideTimer?.cancel();
-    // No point arming the timer if controls are already hidden — the timer's
+    // No point arming the timer if controls are already hidden â the timer's
     // body would no-op the setState anyway. Also never arm while the side
     // panel is open: it must stay until the user dismisses it.
     if (!_isVisible || _panelOpen) return;
@@ -631,7 +628,7 @@ class SkyStreamPlayerControlsState
         setState(() => _isVisible = true);
         widget.onVisibilityChanged?.call(true);
         // Controls were hidden and an action (OK / mute / resize) brought
-        // them back — restore focus to the play button so the user has a
+        // them back â restore focus to the play button so the user has a
         // live anchor to navigate from. Without this, OK-while-hidden
         // showed the controls but left nothing focused, stranding D-pad.
         if (_isTv) {
@@ -650,7 +647,7 @@ class SkyStreamPlayerControlsState
   /// they were hidden, which caused them to pop back up unexpectedly on every
   /// pause / buffer / stall / network blip (anywhere the playing-state flips
   /// to false). Cancelling the hide-timer and showing the controls are two
-  /// separate concerns — keep them separate.
+  /// separate concerns â keep them separate.
   void _cancelHideTimer() {
     _hideTimer?.cancel();
   }
@@ -823,15 +820,15 @@ class SkyStreamPlayerControlsState
   }
 
   String _normalizeEpisodeDigits(String value) {
-    const arabic = '٠١٢٣٤٥٦٧٨٩';
-    const eastern = '۰۱۲۳۴۵۶۷۸۹';
+    const arabic = 'Ù Ù¡Ù¢Ù£Ù¤Ù¥Ù¦Ù§Ù¨Ù©';
+    const eastern = 'Û°Û±Û²Û³Û´ÛµÛ¶Û·Û¸Û¹';
     return value
         .replaceAllMapped(
-          RegExp(r'[٠-٩]'),
+          RegExp(r'[Ù -Ù©]'),
           (match) => '${arabic.indexOf(match.group(0)!)}',
         )
         .replaceAllMapped(
-          RegExp(r'[۰-۹]'),
+          RegExp(r'[Û°-Û¹]'),
           (match) => '${eastern.indexOf(match.group(0)!)}',
         );
   }
@@ -841,7 +838,7 @@ class SkyStreamPlayerControlsState
         .replaceAll('\u00A0', ' ')
         .trim()
         .toLowerCase()
-        .replaceAll(RegExp(r'[\s:：._#\-–—]+'), '');
+        .replaceAll(RegExp(r'[\s:ï¼._#\-ââ]+'), '');
     final number = episodeNumber.toString();
 
     return compact.isEmpty ||
@@ -849,8 +846,8 @@ class SkyStreamPlayerControlsState
         compact == 'episode$number' ||
         compact == 'ep$number' ||
         compact == 'e$number' ||
-        compact == 'الحلقة$number' ||
-        compact == 'حلقة$number';
+        compact == 'Ø§ÙØ­ÙÙØ©$number' ||
+        compact == 'Ø­ÙÙØ©$number';
   }
 
   String? _buildEpisodeLine(BuildContext context, Episode? episode) {
@@ -859,7 +856,7 @@ class SkyStreamPlayerControlsState
     final number = episode.episode;
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final prefix = isArabic ? 'حلقة $number' : 'Episode $number';
+    final prefix = isArabic ? 'Ø­ÙÙØ© $number' : 'Episode $number';
     final title = episode.name.trim();
 
     if (_isGenericEpisodeTitle(title, number)) return prefix;
@@ -922,10 +919,6 @@ class SkyStreamPlayerControlsState
         playerNotifier.multimediaItem?.title ??
         (controllerTitle.isEmpty ? (widget.title ?? "") : controllerTitle);
 
-    final controllerSubtitle = ref.watch(
-      playerControllerProvider.select((s) => s.streamSubtitle),
-    );
-    final subtitle = controllerSubtitle ?? widget.subtitle;
     final streams = ref.watch(
       playerControllerProvider.select((s) => s.streams),
     );
@@ -981,9 +974,6 @@ class SkyStreamPlayerControlsState
     final uiPhase = ref.watch(
       playerControllerProvider.select((s) => s.uiPhase),
     );
-    final sourceAttempts = ref.watch(
-      playerControllerProvider.select((s) => s.sourceAttempts),
-    );
     // Guard against PiP or small window size
     final size = MediaQuery.sizeOf(context);
     final isSmallWindow = size.width < 300 || size.height < 200;
@@ -991,11 +981,11 @@ class SkyStreamPlayerControlsState
     if (_isInPip || isSmallWindow) return const SizedBox.shrink();
 
     if (uiPhase.fullscreenBlocking) {
-      return _buildLoadingUI(phase: uiPhase, sourceAttempts: sourceAttempts);
+      return _buildLoadingUI(title: title, episodeLabel: episodeLabel);
     }
 
     return MouseRegion(
-      // Keep the cursor visible while the side panel owns the screen — the
+      // Keep the cursor visible while the side panel owns the screen â the
       // chrome is hidden then, but the panel still needs a pointer.
       cursor: (_isVisible || _panelOpen)
           ? SystemMouseCursors.basic
@@ -1062,7 +1052,6 @@ class SkyStreamPlayerControlsState
                 else
                   _buildUnlockedUI(
                     title: title,
-                    subtitle: subtitle,
                     episodeLabel: episodeLabel,
                     streams: streams,
                     currentStream: currentStream,
@@ -1074,7 +1063,7 @@ class SkyStreamPlayerControlsState
                     maxPlaybackSpeed: maxPlaybackSpeed,
                   ),
 
-                // Touch play/pause — a screen-centered overlay (not inside the
+                // Touch play/pause â a screen-centered overlay (not inside the
                 // chrome's shorter middle band) so it lines up vertically with
                 // the OSD and seek animations. Fades with the chrome.
                 if (!_isTv &&
@@ -1111,7 +1100,7 @@ class SkyStreamPlayerControlsState
                   isTouch: !_isTv && (Platform.isAndroid || Platform.isIOS),
                 ),
 
-                // Seek kick animation — a single Align (no nested Stack):
+                // Seek kick animation â a single Align (no nested Stack):
                 // ~8% in from the seeking edge, ~45% down from the top.
                 AnimatedBuilder(
                   animation: _seekAnimController,
@@ -1126,7 +1115,7 @@ class SkyStreamPlayerControlsState
                   },
                 ),
 
-                // OSD and volume overlay — only this subtree rebuilds on handler changes
+                // OSD and volume overlay â only this subtree rebuilds on handler changes
                 PlayerOSDVolumeOverlay(
                   getDuration: () => _duration,
                   formatDuration: _formatDuration,
@@ -1179,7 +1168,7 @@ class SkyStreamPlayerControlsState
                     },
                   ),
 
-                // Episodes side drawer (series only) — same shell as the
+                // Episodes side drawer (series only) â same shell as the
                 // sources panel, right-anchored. Topmost so it sits above the
                 // chrome. Pure Row layout inside (no nested Stack).
                 if (isSeries &&
@@ -1272,7 +1261,6 @@ class SkyStreamPlayerControlsState
 
   Widget _buildUnlockedUI({
     required String title,
-    String? subtitle,
     String? episodeLabel,
     List<StreamResult>? streams,
     StreamResult? currentStream,
@@ -1299,7 +1287,7 @@ class SkyStreamPlayerControlsState
       size: 52,
       focusNode: _playFocusNode,
       onPressed: _togglePlay,
-      // Corner button (desktop/TV) — let the centered indicator show buffering.
+      // Corner button (desktop/TV) â let the centered indicator show buffering.
       showBufferingSpinner: false,
     );
 
@@ -1388,7 +1376,7 @@ class SkyStreamPlayerControlsState
     ];
 
     // One overlay layer: a Column with top bar / center / bottom bar. No
-    // Positioned, no magic offsets — each zone sizes to content and paints its
+    // Positioned, no magic offsets â each zone sizes to content and paints its
     // own scrim. ExcludeFocus + IgnorePointer gate interaction while hidden;
     // ReadingOrderTraversalPolicy gives geometric D-pad navigation so focus
     // can always reach a neighbouring control. The chrome is also fully gated
@@ -1408,7 +1396,6 @@ class SkyStreamPlayerControlsState
                 _absorbGestures(
                   PlayerTopBar(
                     title: title,
-                    subtitle: subtitle,
                     episodeLabel: episodeLabel,
                     onBack: widget.onBackPointer ?? () => context.pop(),
                     isTv: _isTv,
@@ -1478,27 +1465,37 @@ class SkyStreamPlayerControlsState
   }
 
   Widget _buildLoadingUI({
-    required PlaybackUiPhase phase,
-    required List<SourceAttemptEntry> sourceAttempts,
+    required String title,
+    String? episodeLabel,
   }) {
-    final canSkip =
-        phase.kind != PlaybackUiPhaseKind.bootstrapping &&
-        phase.kind != PlaybackUiPhaseKind.fetchingSources &&
-        phase.kind != PlaybackUiPhaseKind.error;
-
-    return PlayerLoadingOverlay(
+    return GestureDetector(
       onDoubleTap: _handleDoubleTap,
-      onBack: widget.onBackPointer ?? () => context.pop(),
-      phase: phase,
-      sourceAttempts: sourceAttempts,
-      backdropUrl: widget.backdropUrl,
-      logoUrl: widget.logoUrl,
-      isTv: _isTv,
-      onSkip: canSkip
-          ? () =>
-                ref.read(playerControllerProvider.notifier).skipLoadingOverlay()
-          : null,
-      onGoLive: () => ref.read(playerControllerProvider.notifier).goLive(),
+      behavior: HitTestBehavior.translucent,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Center(
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: PlayerTopBar(
+              title: title,
+              episodeLabel: episodeLabel,
+              onBack: widget.onBackPointer ?? () => context.pop(),
+              isTv: _isTv,
+              backFocusNode: _backFocusNode,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

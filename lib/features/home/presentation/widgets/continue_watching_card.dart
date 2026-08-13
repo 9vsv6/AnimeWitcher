@@ -272,7 +272,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                   ),
                 ),
 
-                // Dark overlay (full card) — 40% at rest, 60% on hover
+                // Dark overlay (full card) â 40% at rest, 60% on hover
                 Positioned.fill(
                   child: IgnorePointer(
                     child: AnimatedContainer(
@@ -329,7 +329,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                   left: 0,
                   right: 0,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 28),
+                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -360,7 +360,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                               ),
                             ),
                             child: Text(
-                              appText(context, english: 'LIVE', arabic: 'مباشر'),
+                              appText(context, english: 'LIVE', arabic: 'ÙØ¨Ø§Ø´Ø±'),
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 10,
