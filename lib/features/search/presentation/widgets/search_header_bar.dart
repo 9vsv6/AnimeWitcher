@@ -70,9 +70,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
             // Static Search Field (tap anywhere to toggle keyboard focus)
             GestureDetector(
               onTap: () {
-                if (widget.searchFocusNode.hasFocus) {
-                  widget.searchFocusNode.unfocus();
-                } else {
+                if (!widget.searchFocusNode.hasFocus) {
                   widget.searchFocusNode.requestFocus();
                 }
               },
@@ -172,6 +170,13 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                       textAlign: TextAlign.start,
                       textAlignVertical: TextAlignVertical.center,
                       textInputAction: TextInputAction.search,
+                      enableInteractiveSelection: true,
+                      contextMenuBuilder: (context, editableTextState) {
+                        return AdaptiveTextSelectionToolbar.buttonItems(
+                          anchors: editableTextState.contextMenuAnchors,
+                          buttonItems: editableTextState.contextMenuButtonItems,
+                        );
+                      },
                       onChanged: widget.onChanged,
                       onSubmitted: widget.onSubmitted,
                       decoration: InputDecoration(

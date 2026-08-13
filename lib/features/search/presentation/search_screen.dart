@@ -667,9 +667,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               )
             : GestureDetector(
           onTap: () {
-            if (_focusNode.hasFocus) {
-              _focusNode.unfocus();
-            } else {
+            if (!_focusNode.hasFocus) {
               _focusNode.requestFocus();
             }
           },
@@ -723,6 +721,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   textAlign: TextAlign.start,
                   textAlignVertical: TextAlignVertical.center,
                   textInputAction: TextInputAction.search,
+                  enableInteractiveSelection: true,
+                  contextMenuBuilder: (context, editableTextState) {
+                    return AdaptiveTextSelectionToolbar.buttonItems(
+                      anchors: editableTextState.contextMenuAnchors,
+                      buttonItems: editableTextState.contextMenuButtonItems,
+                    );
+                  },
                   onChanged: (val) {
                     ref
                         .read(searchSuggestionControllerProvider.notifier)
