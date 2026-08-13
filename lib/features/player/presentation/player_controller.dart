@@ -192,8 +192,6 @@ class PlayerState {
   final int? currentAttemptIndex;
   final int sourceSessionId;
 
-  /// Non-null when a saved position was found; shows resume prompt instead of seeking silently.
-  final int? resumePromptPosition;
   final bool userSkippedOverlay;
   final List<SkipSegment> skipSegments;
 
@@ -230,7 +228,6 @@ class PlayerState {
     this.sourceAttempts = const [],
     this.currentAttemptIndex,
     this.sourceSessionId = 0,
-    this.resumePromptPosition,
     this.userSkippedOverlay = false,
     this.skipSegments = const [],
   });
@@ -285,7 +282,6 @@ class PlayerState {
     List<SourceAttemptEntry>? sourceAttempts,
     Object? currentAttemptIndex = _keep,
     int? sourceSessionId,
-    Object? resumePromptPosition = _keep,
     bool? userSkippedOverlay,
     List<SkipSegment>? skipSegments,
   }) {
@@ -324,9 +320,6 @@ class PlayerState {
           ? this.currentAttemptIndex
           : currentAttemptIndex as int?,
       sourceSessionId: sourceSessionId ?? this.sourceSessionId,
-      resumePromptPosition: resumePromptPosition == _keep
-          ? this.resumePromptPosition
-          : resumePromptPosition as int?,
       userSkippedOverlay: userSkippedOverlay ?? this.userSkippedOverlay,
       skipSegments: skipSegments ?? this.skipSegments,
     );
@@ -2231,10 +2224,6 @@ class PlayerController extends Notifier<PlayerState> {
 
     _isNextEpisodeOverlayForced = false;
 
-    if (!_isApplyingPendingResumeSeek) {
-      state = state.copyWith(resumePromptPosition: null);
-    }
-
     final clamped = position < Duration.zero ? Duration.zero : position;
 
     if (state.useExoPlayer && _videoViewController != null) {
@@ -2603,7 +2592,10 @@ class PlayerController extends Notifier<PlayerState> {
       }
 
       if (savedPos > 0) {
-        state = state.copyWith(resumePromptPosition: savedPos);
+        // Resume automatically at the exact saved stop time. The pending path
+        // safely waits for the active engine to become seekable.
+        _pendingResumeSeekPosition = savedPos;
+        await _flushPendingResumeSeek();
       }
     } catch (e) {
       if (sourceSessionId != null &&
@@ -2622,22 +2614,6 @@ class PlayerController extends Notifier<PlayerState> {
       }
       unawaited(retryNextStream(sourceSessionId: sourceSessionId));
     }
-  }
-
-  /// Called when the user taps "Resume" in the resume prompt overlay.
-  Future<void> confirmResume() async {
-    final pos = state.resumePromptPosition;
-    state = state.copyWith(resumePromptPosition: null);
-    if (pos != null && pos > 0) {
-      _pendingResumeSeekPosition = pos;
-      await _flushPendingResumeSeek();
-    }
-  }
-
-  /// Called when the user taps "Start Over" or the prompt auto-dismisses.
-  void dismissResumePrompt() {
-    _pendingResumeSeekPosition = null;
-    state = state.copyWith(resumePromptPosition: null);
   }
 
   /// Jumps back to the live edge. For DVR streams, seeks to the end of the

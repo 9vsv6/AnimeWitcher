@@ -20,7 +20,6 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 import 'player_stream_widgets.dart';
 import 'player_control_components.dart';
 import 'next_episode_overlay.dart';
-import 'resume_prompt_overlay.dart';
 import 'player_side_panel.dart';
 import 'player_bottom_sheets.dart';
 import 'player_loading_overlay.dart';
@@ -120,7 +119,6 @@ class SkyStreamPlayerControlsState
   late final FocusNode _playFocusNode;
   late final FocusNode _backFocusNode;
   late final FocusNode _scrubFocusNode;
-  late final FocusNode _resumeFocusNode;
   late final FocusNode _nextEpFocusNode;
   late final FocusNode _skipFocusNode;
   bool _isSkipActive = false;
@@ -187,7 +185,6 @@ class SkyStreamPlayerControlsState
     _playFocusNode = FocusNode();
     _backFocusNode = FocusNode(debugLabel: 'back_button');
     _scrubFocusNode = FocusNode(debugLabel: 'controls_scrubber');
-    _resumeFocusNode = FocusNode(debugLabel: 'resume_prompt');
     _nextEpFocusNode = FocusNode(debugLabel: 'next_episode_prompt');
     _skipFocusNode = FocusNode(debugLabel: 'skip_segment_prompt');
     try {
@@ -358,7 +355,6 @@ class SkyStreamPlayerControlsState
     _playFocusNode.dispose();
     _backFocusNode.dispose();
     _scrubFocusNode.dispose();
-    _resumeFocusNode.dispose();
     _nextEpFocusNode.dispose();
     _skipFocusNode.dispose();
     _hideTimer?.cancel();
@@ -963,9 +959,6 @@ class SkyStreamPlayerControlsState
     final nextEpDescription = ref.watch(
       playerControllerProvider.select((s) => s.nextEpisodeDescription),
     );
-    final resumePromptPosition = ref.watch(
-      playerControllerProvider.select((s) => s.resumePromptPosition),
-    );
     final showEpisodeList = ref.watch(
       playerControllerProvider.select((s) => s.showEpisodeList),
     );
@@ -1139,27 +1132,8 @@ class SkyStreamPlayerControlsState
                   formatDuration: _formatDuration,
                 ),
 
-                // Resume Prompt Button
-                if (!widget.isLoading &&
-                    _duration != Duration.zero &&
-                    !_isLocked &&
-                    resumePromptPosition != null)
-                  ResumePromptOverlay(
-                    focusNode: _resumeFocusNode,
-                    positionMs: resumePromptPosition,
-                    onResume: () => ref
-                        .read(playerControllerProvider.notifier)
-                        .confirmResume(),
-                    onStartOver: () => ref
-                        .read(playerControllerProvider.notifier)
-                        .dismissResumePrompt(),
-                    isTv: _isTv,
-                  ),
-
                 // Next Episode Card (Persistent when triggered)
-                if (resumePromptPosition == null &&
-                    showNextEpOverlay &&
-                    nextEpTitle != null)
+                if (showNextEpOverlay && nextEpTitle != null)
                   NextEpisodeOverlay(
                     focusNode: _nextEpFocusNode,
                     nextEpisodeTitle: nextEpTitle,
@@ -1180,11 +1154,8 @@ class SkyStreamPlayerControlsState
                   ),
 
                 // Skip Segment Overlay (Skip Intro / Skip Recap / Skip Outro)
-                // Suppressed when Resume or Next Episode prompts are active
-                // to avoid UI collisions and decision fatigue.
-                if (resumePromptPosition == null &&
-                    !showNextEpOverlay &&
-                    skipSegments.isNotEmpty)
+                // Suppressed while the next-episode prompt is active.
+                if (!showNextEpOverlay && skipSegments.isNotEmpty)
                   SkipSegmentOverlay(
                     focusNode: _skipFocusNode,
                     onActiveSegmentChanged: (active) {
@@ -1460,11 +1431,6 @@ class SkyStreamPlayerControlsState
                       isTv: _isTv,
                       focusNode: _scrubFocusNode,
                       onArrowUp: () {
-                        final resumePromptPosition = ref.read(
-                          playerControllerProvider.select(
-                            (s) => s.resumePromptPosition,
-                          ),
-                        );
                         final showNextEpOverlay = ref.read(
                           playerControllerProvider.select(
                             (s) => s.showNextEpisodeOverlay,
@@ -1476,9 +1442,7 @@ class SkyStreamPlayerControlsState
                           ),
                         );
 
-                        if (resumePromptPosition != null) {
-                          _resumeFocusNode.requestFocus();
-                        } else if (showNextEpOverlay && nextEpTitle != null) {
+                        if (showNextEpOverlay && nextEpTitle != null) {
                           _nextEpFocusNode.requestFocus();
                         } else if (_isSkipActive) {
                           _skipFocusNode.requestFocus();
