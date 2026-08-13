@@ -4,6 +4,7 @@ import 'package:skystream/core/navigation/taskbar_destination.dart';
 
 import '../../../core/providers/device_info_provider.dart';
 import '../../../core/storage/library_category.dart';
+import '../../../core/storage/library_repository.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
@@ -27,6 +28,14 @@ class LibraryScreen extends ConsumerWidget {
       LibraryCategory.notInterested =>
         isArabic ? 'لا أرغب بمشاهدته' : 'Not Interested',
     };
+  }
+
+  String _categoryLabelWithCount(
+    BuildContext context,
+    LibraryCategory category,
+    Map<LibraryCategory, int> counts,
+  ) {
+    return '${_categoryLabel(context, category)} (${counts[category] ?? 0})';
   }
 
   IconData _categoryIcon(LibraryCategory category) {
@@ -56,17 +65,18 @@ class LibraryScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     LibraryCategory selected,
+    Map<LibraryCategory, int> counts,
   ) {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final label = _categoryLabel(context, selected);
+    final label = _categoryLabelWithCount(context, selected, counts);
 
     return AppleNativeMenuButton(
       accessibilityLabel: isArabic ? 'اختر قائمة' : 'Choose list',
       systemImage: _categorySystemImage(selected),
       fallbackIcon: _categoryIcon(selected),
       title: label,
-      width: isArabic ? 218 : 210,
+      width: isArabic ? 240 : 224,
       size: 44,
       tintColor: Theme.of(context).colorScheme.primary,
       selectedValue: selected.storageKey,
@@ -74,7 +84,7 @@ class LibraryScreen extends ConsumerWidget {
         for (final category in LibraryCategory.values)
           AppleNativeMenuItem(
             value: category.storageKey,
-            label: _categoryLabel(context, category),
+            label: _categoryLabelWithCount(context, category, counts),
             systemImage: _categorySystemImage(category),
           ),
       ],
@@ -94,6 +104,7 @@ class LibraryScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     LibraryCategory selected,
+    Map<LibraryCategory, int> counts,
   ) {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
@@ -101,8 +112,8 @@ class LibraryScreen extends ConsumerWidget {
 
     return AppleLiquidGlassToolbarButton(
       icon: _categoryIcon(selected),
-      title: _categoryLabel(context, selected),
-      width: isArabic ? 218 : 210,
+      title: _categoryLabelWithCount(context, selected, counts),
+      width: isArabic ? 240 : 224,
       tooltip: isArabic ? 'اختر قائمة' : 'Choose list',
       color: primary,
       menuTintColor: primary,
@@ -112,7 +123,7 @@ class LibraryScreen extends ConsumerWidget {
         for (final category in LibraryCategory.values)
           AppleNativeMenuItem(
             value: category.storageKey,
-            label: _categoryLabel(context, category),
+            label: _categoryLabelWithCount(context, category, counts),
             systemImage: _categorySystemImage(category),
           ),
       ],
@@ -133,7 +144,13 @@ class LibraryScreen extends ConsumerWidget {
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;
-    final selectedCategory = ref.watch(libraryProvider).category;
+    final libraryState = ref.watch(libraryProvider);
+    final selectedCategory = libraryState.category;
+    final repository = ref.read(libraryRepositoryProvider);
+    final categoryCounts = <LibraryCategory, int>{
+      for (final category in LibraryCategory.values)
+        category: repository.getLibraryItems(category: category).length,
+    };
 
     if (isWidescreen) {
       return Scaffold(
@@ -148,7 +165,7 @@ class LibraryScreen extends ConsumerWidget {
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
                 alignment: Alignment.centerLeft,
-                child: _categorySelector(context, ref, selectedCategory),
+                child: _categorySelector(context, ref, selectedCategory, categoryCounts),
               ),
             ),
             const Expanded(child: BookmarksTab()),
@@ -162,9 +179,9 @@ class LibraryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: usePersistentGlass
             ? const SizedBox.shrink()
-            : _categorySelector(context, ref, selectedCategory),
+            : _categorySelector(context, ref, selectedCategory, categoryCounts),
         actions: usePersistentGlass
-            ? const <Widget>[SizedBox(width: 230)]
+            ? const <Widget>[SizedBox(width: 250)]
             : null,
       ),
       body: const BookmarksTab(),
@@ -174,7 +191,7 @@ class LibraryScreen extends ConsumerWidget {
     return ApplePersistentGlassHeaderScope(
       branchIndex: TaskbarDestination.library.branchIndex,
       trailingButtons: <AppleLiquidGlassToolbarButton>[
-        _persistentCategoryButton(context, ref, selectedCategory),
+        _persistentCategoryButton(context, ref, selectedCategory, categoryCounts),
       ],
       child: mobileScaffold,
     );
