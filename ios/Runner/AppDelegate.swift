@@ -687,8 +687,14 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     return title.isEmpty ? nil : title
   }
 
+  private func actionTitleOnly(_ action: [String: Any]) -> Bool {
+    action["titleOnly"] as? Bool == true && actionTitle(action) != nil
+  }
+
   private func actionKind(_ action: [String: Any]) -> Int {
-    (actionHasMenu(action) ? 1 : 0) | (actionTitle(action) != nil ? 2 : 0)
+    (actionHasMenu(action) ? 1 : 0)
+      | (actionTitle(action) != nil ? 2 : 0)
+      | (actionTitleOnly(action) ? 4 : 0)
   }
 
   private func makeMenu(actionIndex: Int, action: [String: Any]) -> UIMenu? {
@@ -733,7 +739,9 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
   ) {
     let systemName = action["systemName"] as? String ?? "circle"
     let actionTint = skyStreamUIColor(action["color"], fallback: .label)
-    item.image = skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
+    item.image = actionTitleOnly(action)
+      ? nil
+      : skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
     item.title = actionTitle(action)
     item.tag = actionIndex
     item.isEnabled = action["enabled"] as? Bool ?? true
@@ -789,7 +797,9 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     let actionItems: [UIBarButtonItem] = actions.enumerated().map { index, action in
       let systemName = action["systemName"] as? String ?? "circle"
       let actionTint = skyStreamUIColor(action["color"], fallback: .label)
-      let image = skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
+      let image = actionTitleOnly(action)
+        ? nil
+        : skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
       let item: UIBarButtonItem
       if #available(iOS 14.0, *), let menu = makeMenu(actionIndex: index, action: action) {
         item = UIBarButtonItem(
@@ -1916,7 +1926,7 @@ private struct AppleSearchSortOverlay: View {
           Image(systemName: "arrow.up.arrow.down")
             .font(.system(size: 20, weight: .semibold))
             .foregroundStyle(.tint)
-          Text(isArabic ? "الترتيب حسب" : "Sort by")
+          Text(isArabic ? "Ø§ÙØªØ±ØªÙØ¨ Ø­Ø³Ø¨" : "Sort by")
             .font(.title2.weight(.bold))
           Spacer()
           Button(action: onCancel) {
@@ -1960,10 +1970,10 @@ private struct AppleSearchSortOverlay: View {
         Divider()
 
         HStack(spacing: 12) {
-          Button(isArabic ? "إلغاء" : "Cancel", action: onCancel)
+          Button(isArabic ? "Ø¥ÙØºØ§Ø¡" : "Cancel", action: onCancel)
             .buttonStyle(.plain)
           Spacer()
-          Button(isArabic ? "تطبيق" : "Apply") {
+          Button(isArabic ? "ØªØ·Ø¨ÙÙ" : "Apply") {
             onApply(selected)
           }
           .buttonStyle(.borderedProminent)
@@ -2050,11 +2060,11 @@ private struct AppleSearchFilterOverlay: View {
 
   private func tabLabel(_ value: AppleSearchFilterTab) -> String {
     switch value {
-    case .genres: return isArabic ? "التصنيفات" : "Genres"
-    case .year: return isArabic ? "السنة" : "Year"
-    case .age: return isArabic ? "العمر" : "Age"
-    case .type: return isArabic ? "النوع" : "Type"
-    case .status: return isArabic ? "الحالة" : "Status"
+    case .genres: return isArabic ? "Ø§ÙØªØµÙÙÙØ§Øª" : "Genres"
+    case .year: return isArabic ? "Ø§ÙØ³ÙØ©" : "Year"
+    case .age: return isArabic ? "Ø§ÙØ¹ÙØ±" : "Age"
+    case .type: return isArabic ? "Ø§ÙÙÙØ¹" : "Type"
+    case .status: return isArabic ? "Ø§ÙØ­Ø§ÙØ©" : "Status"
     }
   }
 
@@ -2182,7 +2192,7 @@ private struct AppleSearchFilterOverlay: View {
             Image(systemName: "slider.horizontal.3")
               .font(.system(size: 21, weight: .semibold))
               .foregroundStyle(.tint)
-            Text(isArabic ? "فلاتر البحث" : "Search filters")
+            Text(isArabic ? "ÙÙØ§ØªØ± Ø§ÙØ¨Ø­Ø«" : "Search filters")
               .font(.title2.weight(.bold))
             if selectedCount > 0 {
               Text("\(selectedCount)")
@@ -2241,7 +2251,7 @@ private struct AppleSearchFilterOverlay: View {
           VStack(spacing: 10) {
             if seasonRequiresYear {
               Label(
-                isArabic ? "اختر سنة مع الموسم" : "Choose a year with the season",
+                isArabic ? "Ø§Ø®ØªØ± Ø³ÙØ© ÙØ¹ Ø§ÙÙÙØ³Ù" : "Choose a year with the season",
                 systemImage: "info.circle"
               )
               .font(.footnote.weight(.semibold))
@@ -2252,14 +2262,14 @@ private struct AppleSearchFilterOverlay: View {
               Button {
                 clearAll()
               } label: {
-                Label(isArabic ? "مسح الكل" : "Clear all", systemImage: "arrow.counterclockwise")
+                Label(isArabic ? "ÙØ³Ø­ Ø§ÙÙÙ" : "Clear all", systemImage: "arrow.counterclockwise")
               }
               .buttonStyle(.plain)
               .disabled(selectedCount == 0)
 
               Spacer()
 
-              Button(isArabic ? "تطبيق" : "Apply") {
+              Button(isArabic ? "ØªØ·Ø¨ÙÙ" : "Apply") {
                 onApply(payload())
               }
               .buttonStyle(.borderedProminent)
