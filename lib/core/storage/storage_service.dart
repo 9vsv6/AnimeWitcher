@@ -810,6 +810,7 @@ class StorageService {
     int? episode,
     String? episodeTitle,
     String? episodePosterUrl,
+    int? progressPercent,
     int? timestamp,
     String? syncedAccountUid,
     int? syncedAt,
@@ -830,6 +831,11 @@ class StorageService {
       'imdbId': item.imdbId,
       'position': positionMillis,
       'duration': durationMillis,
+      'progress': (progressPercent ??
+              (durationMillis > 0
+                  ? ((positionMillis / durationMillis) * 100).round()
+                  : 0))
+          .clamp(0, 100),
       'lastStreamUrl': lastStreamUrl,
       'lastEpisodeUrl': lastEpisodeUrl,
       'season': season,

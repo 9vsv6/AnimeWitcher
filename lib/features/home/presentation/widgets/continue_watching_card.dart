@@ -97,28 +97,10 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     return null;
   }
 
-  String _formatDuration(int milliseconds) {
-    if (milliseconds <= 0) return '00:00';
-    final d = Duration(milliseconds: milliseconds);
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    final s = d.inSeconds.remainder(60);
-    if (h > 0) {
-      if (m > 0) return '${h}h ${m}m';
-      return '${h}h';
-    }
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final item = widget.historyItem.item;
-    final double progress = (widget.historyItem.duration > 0)
-        ? (widget.historyItem.position / widget.historyItem.duration).clamp(
-            0.0,
-            1.0,
-          )
-        : 0.0;
+    final double progress = widget.historyItem.progress;
 
     final isLivestream = item.contentType == MultimediaContentType.livestream;
     final isSeries = item.contentType == MultimediaContentType.series;
@@ -324,32 +306,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
 
                 // Duration badge (bottom-right)
                 if (!isLivestream)
-                  Positioned(
-                    bottom: 10,
-                    right: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.70),
-                        borderRadius: BorderRadius.circular(
-                          LayoutConstants.radiusMd,
-                        ),
-                      ),
-                      child: Text(
-                        '${_formatDuration(widget.historyItem.position)} / ${_formatDuration(widget.historyItem.duration)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Progress bar (bottom edge)
+                  // Progress bar (bottom edge)
                 Positioned(
                   bottom: 0,
                   left: 0,

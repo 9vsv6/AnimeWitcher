@@ -2220,6 +2220,7 @@ class AnimeWitcherAccountService {
       episode: _cloudEpisodeNumber(fields),
       episodeTitle: _optionalString(fields['episode_name']),
       episodePosterUrl: _optionalString(fields['poster']),
+      progressPercent: remoteProgress,
       timestamp: syncedAt,
       syncedAccountUid: profile.uid,
       syncedAt: syncedAt,

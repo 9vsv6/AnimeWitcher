@@ -32,9 +32,16 @@ class HistoryItem {
     this.episodeTitle,
     this.episodePosterUrl,
     required this.timestamp,
+    this.progressPercentage,
   });
 
-  double get progress => duration > 0 ? position / duration : 0;
+  final int? progressPercentage;
+
+  double get progress {
+    final saved = progressPercentage;
+    if (saved != null) return saved.clamp(0, 100) / 100;
+    return duration > 0 ? (position / duration).clamp(0.0, 1.0) : 0;
+  }
 
   factory HistoryItem.fromMap(Map<String, dynamic> map) {
     return HistoryItem(
@@ -55,6 +62,7 @@ class HistoryItem {
       ),
       position: (map['position'] as int?) ?? 0,
       duration: (map['duration'] as int?) ?? 0,
+      progressPercentage: (map['progress'] as num?)?.round(),
       lastStreamUrl: map['lastStreamUrl'] as String?,
       lastEpisodeUrl: map['lastEpisodeUrl'] as String?,
       season: map['season'] as int?,
