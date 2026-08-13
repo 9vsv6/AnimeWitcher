@@ -51,7 +51,6 @@ enum PlaybackUiPhaseKind {
   switchingSource,
   reconnectingLive,
   loadingNextEpisode,
-  manualSourcePick,
   error,
 }
 
@@ -59,109 +58,38 @@ enum SourceAttemptStatus { pending, trying, failed, selected, playing }
 
 class SourceAttemptEntry {
   final int index;
-  final String label;
   final SourceAttemptStatus status;
-  final bool isCurrent;
 
   const SourceAttemptEntry({
     required this.index,
-    required this.label,
     this.status = SourceAttemptStatus.pending,
-    this.isCurrent = false,
   });
 
-  SourceAttemptEntry copyWith({
-    int? index,
-    String? label,
-    SourceAttemptStatus? status,
-    bool? isCurrent,
-  }) {
+  SourceAttemptEntry copyWith({SourceAttemptStatus? status}) {
     return SourceAttemptEntry(
-      index: index ?? this.index,
-      label: label ?? this.label,
+      index: index,
       status: status ?? this.status,
-      isCurrent: isCurrent ?? this.isCurrent,
     );
   }
 }
 
 class PlaybackUiPhase {
   final PlaybackUiPhaseKind kind;
-  final String title;
-  final String? subtitle;
-  final String? detail;
   final bool fullscreenBlocking;
-  final bool preserveCurrentFrame;
-  final bool showGoLive;
-  final int? attemptIndex;
-  final int? attemptTotal;
 
   const PlaybackUiPhase({
     required this.kind,
-    this.title = '',
-    this.subtitle,
-    this.detail,
     this.fullscreenBlocking = false,
-    this.preserveCurrentFrame = false,
-    this.showGoLive = false,
-    this.attemptIndex,
-    this.attemptTotal,
   });
 
   const PlaybackUiPhase.idle() : this(kind: PlaybackUiPhaseKind.idle);
 
-  bool get showsInlineSourcePanel =>
-      fullscreenBlocking &&
-      const {
-        PlaybackUiPhaseKind.checkingSources,
-        PlaybackUiPhaseKind.openingSource,
-        PlaybackUiPhaseKind.bufferingInitial,
-        PlaybackUiPhaseKind.error,
-      }.contains(kind);
-
-  bool get allowsInlineSourceSelection => const {
-    PlaybackUiPhaseKind.checkingSources,
-    PlaybackUiPhaseKind.openingSource,
-    PlaybackUiPhaseKind.bufferingInitial,
-    PlaybackUiPhaseKind.manualSourcePick,
-    PlaybackUiPhaseKind.error,
-  }.contains(kind);
-
   bool get isIdle => kind == PlaybackUiPhaseKind.idle;
-
-  PlaybackUiPhase copyWith({
-    PlaybackUiPhaseKind? kind,
-    Object? title = _keep,
-    Object? subtitle = _keep,
-    Object? detail = _keep,
-    bool? fullscreenBlocking,
-    bool? preserveCurrentFrame,
-    bool? showGoLive,
-    Object? attemptIndex = _keep,
-    Object? attemptTotal = _keep,
-  }) {
-    return PlaybackUiPhase(
-      kind: kind ?? this.kind,
-      title: title == _keep ? this.title : title as String,
-      subtitle: subtitle == _keep ? this.subtitle : subtitle as String?,
-      detail: detail == _keep ? this.detail : detail as String?,
-      fullscreenBlocking: fullscreenBlocking ?? this.fullscreenBlocking,
-      preserveCurrentFrame: preserveCurrentFrame ?? this.preserveCurrentFrame,
-      showGoLive: showGoLive ?? this.showGoLive,
-      attemptIndex: attemptIndex == _keep
-          ? this.attemptIndex
-          : attemptIndex as int?,
-      attemptTotal: attemptTotal == _keep
-          ? this.attemptTotal
-          : attemptTotal as int?,
-    );
-  }
 }
 
 class PlayerState {
   final String? errorMessage;
   final String playerTitle;
-  final String? streamSubtitle;
   final List<StreamResult> streams;
   final int currentStreamIndex;
   final StreamResult? currentStream;
@@ -189,16 +117,13 @@ class PlayerState {
   final bool isSeekable;
   final PlaybackUiPhase uiPhase;
   final List<SourceAttemptEntry> sourceAttempts;
-  final int? currentAttemptIndex;
   final int sourceSessionId;
 
-  final bool userSkippedOverlay;
   final List<SkipSegment> skipSegments;
 
   const PlayerState({
     this.errorMessage,
     this.playerTitle = '',
-    this.streamSubtitle,
     this.streams = const [],
     this.currentStreamIndex = 0,
     this.currentStream,
@@ -226,9 +151,7 @@ class PlayerState {
       fullscreenBlocking: true,
     ),
     this.sourceAttempts = const [],
-    this.currentAttemptIndex,
     this.sourceSessionId = 0,
-    this.userSkippedOverlay = false,
     this.skipSegments = const [],
   });
 
@@ -255,7 +178,6 @@ class PlayerState {
   PlayerState copyWith({
     String? errorMessage,
     String? playerTitle,
-    String? streamSubtitle,
     List<StreamResult>? streams,
     int? currentStreamIndex,
     StreamResult? currentStream,
@@ -280,15 +202,12 @@ class PlayerState {
     bool? useExoPlayer,
     PlaybackUiPhase? uiPhase,
     List<SourceAttemptEntry>? sourceAttempts,
-    Object? currentAttemptIndex = _keep,
     int? sourceSessionId,
-    bool? userSkippedOverlay,
     List<SkipSegment>? skipSegments,
   }) {
     return PlayerState(
       errorMessage: errorMessage ?? this.errorMessage,
       playerTitle: playerTitle ?? this.playerTitle,
-      streamSubtitle: streamSubtitle ?? this.streamSubtitle,
       streams: streams ?? this.streams,
       currentStreamIndex: currentStreamIndex ?? this.currentStreamIndex,
       currentStream: currentStream ?? this.currentStream,
@@ -316,11 +235,7 @@ class PlayerState {
       useExoPlayer: useExoPlayer ?? this.useExoPlayer,
       uiPhase: uiPhase ?? this.uiPhase,
       sourceAttempts: sourceAttempts ?? this.sourceAttempts,
-      currentAttemptIndex: currentAttemptIndex == _keep
-          ? this.currentAttemptIndex
-          : currentAttemptIndex as int?,
       sourceSessionId: sourceSessionId ?? this.sourceSessionId,
-      userSkippedOverlay: userSkippedOverlay ?? this.userSkippedOverlay,
       skipSegments: skipSegments ?? this.skipSegments,
     );
   }
@@ -522,51 +437,18 @@ class PlayerController extends Notifier<PlayerState> {
   String? _lastKnownAudioTrackId;
   DateTime? _audioFailoverLastTime;
 
-  String _phaseTitle([String? fallback]) {
-    if (state.playerTitle.isNotEmpty) return state.playerTitle;
-    if (_isInitialized) return _item.title;
-    return fallback ?? '';
-  }
-
-  String? _phaseSubtitle([String? fallback]) {
-    return fallback ?? state.streamSubtitle;
-  }
-
   PlaybackUiPhase _composeUiPhase({
     required PlaybackUiPhaseKind kind,
-    String? title,
-    String? subtitle,
-    String? detail,
     bool? fullscreenBlocking,
-    bool? preserveCurrentFrame,
-    bool? showGoLive,
-    int? attemptIndex,
-    int? attemptTotal,
   }) {
-    // Error phase always blocks — even after a frame was confirmed — so the
-    // user sees a clear "all sources failed" screen and can navigate back.
-    // All other phases never block once a frame has been confirmed.
-    final bool effectiveFullscreenBlocking;
-    if (kind == PlaybackUiPhaseKind.error) {
-      effectiveFullscreenBlocking = fullscreenBlocking ?? true;
-    } else if (_hasConfirmedPlaybackFrame) {
-      effectiveFullscreenBlocking = false;
-    } else if (state.userSkippedOverlay && kind != PlaybackUiPhaseKind.idle) {
-      effectiveFullscreenBlocking = false;
-    } else {
-      effectiveFullscreenBlocking = fullscreenBlocking ?? true;
-    }
-
+    final effectiveFullscreenBlocking = kind == PlaybackUiPhaseKind.error
+        ? true
+        : _hasConfirmedPlaybackFrame
+        ? false
+        : (fullscreenBlocking ?? true);
     return PlaybackUiPhase(
       kind: kind,
-      title: title ?? _phaseTitle(),
-      subtitle: subtitle ?? _phaseSubtitle(),
-      detail: detail,
       fullscreenBlocking: effectiveFullscreenBlocking,
-      preserveCurrentFrame: preserveCurrentFrame ?? _hasConfirmedPlaybackFrame,
-      showGoLive: showGoLive ?? false,
-      attemptIndex: attemptIndex,
-      attemptTotal: attemptTotal,
     );
   }
 
@@ -580,66 +462,19 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  void _enterStartupPhase({
-    required PlaybackUiPhaseKind kind,
-    String? title,
-    String? subtitle,
-    String? detail,
-    int? attemptIndex,
-    int? attemptTotal,
-  }) {
-    _setUiPhase(
-      _composeUiPhase(
-        kind: kind,
-        title: title,
-        subtitle: subtitle,
-        detail: detail,
-        fullscreenBlocking: true,
-        preserveCurrentFrame: false,
-        attemptIndex: attemptIndex,
-        attemptTotal: attemptTotal,
-      ),
-    );
+  void _enterStartupPhase({required PlaybackUiPhaseKind kind}) {
+    _setUiPhase(_composeUiPhase(kind: kind, fullscreenBlocking: true));
   }
 
-  void _enterRuntimePhase({
-    required PlaybackUiPhaseKind kind,
-    String? title,
-    String? subtitle,
-    String? detail,
-  }) {
-    _setUiPhase(
-      _composeUiPhase(
-        kind: kind,
-        title: title,
-        subtitle: subtitle,
-        detail: detail,
-        fullscreenBlocking: false,
-        preserveCurrentFrame: true,
-      ),
-    );
+  void _enterRuntimePhase({required PlaybackUiPhaseKind kind}) {
+    _setUiPhase(_composeUiPhase(kind: kind, fullscreenBlocking: false));
   }
 
-  void _enterAllSourcesFailedPhase({String? detail}) {
+  void _enterAllSourcesFailedPhase() {
     _setUiPhase(
       _composeUiPhase(
         kind: PlaybackUiPhaseKind.error,
-        title: _playerText(english: 'Playback Error', arabic: 'خطأ في التشغيل'),
-        subtitle: detail ??
-            _playerText(
-              english: 'All sources failed.',
-              arabic: 'فشلت جميع المصادر.',
-            ),
-        detail: _playerText(
-          english:
-              'None of the available sources could be played. Try again later',
-          arabic:
-              'تعذر تشغيل أي من المصادر المتاحة. حاول مرة أخرى لاحقًا',
-        ),
         fullscreenBlocking: true,
-        preserveCurrentFrame: true,
-        attemptIndex: null,
-        attemptTotal: null,
       ),
     );
   }
@@ -649,9 +484,7 @@ class PlayerController extends Notifier<PlayerState> {
     _userDismissedOverlay = false;
     state = state.copyWith(
       sourceSessionId: nextSessionId,
-      currentAttemptIndex: null,
       sourceAttempts: resetAttempts ? const [] : state.sourceAttempts,
-      userSkippedOverlay: false,
     );
     return nextSessionId;
   }
@@ -668,44 +501,23 @@ class PlayerController extends Notifier<PlayerState> {
       for (int i = 0; i < streams.length; i++)
         SourceAttemptEntry(
           index: i,
-          label: streams[i].source,
           status: i == activeIndex
               ? (activeStatus ?? SourceAttemptStatus.pending)
               : SourceAttemptStatus.pending,
-          isCurrent: i == activeIndex,
         ),
     ];
     state = state.copyWith(
       sourceAttempts: attempts,
-      currentAttemptIndex: activeIndex,
     );
   }
 
-  void _markSourceAttempt(
-    int index,
-    SourceAttemptStatus status, {
-    bool isCurrent = true,
-  }) {
+  void _markSourceAttempt(int index, SourceAttemptStatus status) {
     if (index < 0 || index >= state.sourceAttempts.length) return;
-
     final updated = [
       for (final entry in state.sourceAttempts)
-        if (entry.index == index)
-          entry.copyWith(status: status, isCurrent: isCurrent)
-        else if (isCurrent)
-          entry.copyWith(isCurrent: false)
-        else
-          entry,
+        if (entry.index == index) entry.copyWith(status: status) else entry,
     ];
-
-    state = state.copyWith(
-      sourceAttempts: updated,
-      currentAttemptIndex: isCurrent
-          ? index
-          : (state.currentAttemptIndex == index
-                ? null
-                : state.currentAttemptIndex),
-    );
+    state = state.copyWith(sourceAttempts: updated);
   }
 
   void _confirmPlaybackStarted() {
@@ -722,10 +534,7 @@ class PlayerController extends Notifier<PlayerState> {
     // cause the next-episode detection to see remaining ≈ 0 and show the
     // overlay for the newly loaded episode. It is reset in _setupDurationListener
     // once a valid non-zero duration for the new episode arrives.
-    final currentAttemptIndex = state.currentAttemptIndex;
-    if (currentAttemptIndex != null) {
-      _markSourceAttempt(currentAttemptIndex, SourceAttemptStatus.playing);
-    }
+    _markSourceAttempt(state.currentStreamIndex, SourceAttemptStatus.playing);
     state = state.copyWith(uiPhase: const PlaybackUiPhase.idle());
   }
 
@@ -844,17 +653,10 @@ class PlayerController extends Notifier<PlayerState> {
 
     state = state.copyWith(
       playerTitle: initialTitle,
-      streamSubtitle: _playerText(
-        english: 'Searching for sources...',
-        arabic: 'جارٍ البحث عن المصادر...',
-      ),
       imdbId: imdbId,
       tmdbId: tmdbId,
     );
-    _enterStartupPhase(
-      kind: PlaybackUiPhaseKind.bootstrapping,
-      detail: _playerText(english: 'Preparing playback...', arabic: 'جارٍ تجهيز التشغيل...'),
-    );
+    _enterStartupPhase(kind: PlaybackUiPhaseKind.bootstrapping);
 
     _setupEventDrivenProgressSaving();
     _setupErrorListener();
@@ -1051,18 +853,7 @@ class PlayerController extends Notifier<PlayerState> {
         if (!_hasConfirmedPlaybackFrame &&
             (info.duration > 0 || info.isLive) &&
             state.uiPhase.kind == PlaybackUiPhaseKind.openingSource) {
-          _enterStartupPhase(
-            kind: PlaybackUiPhaseKind.bufferingInitial,
-            detail: detectedIsLive
-                ? _playerText(english: 'Connecting to live stream...', arabic: 'جارٍ الاتصال بالبث المباشر...')
-                : _playerText(english: 'Buffering selected source...', arabic: 'جارٍ تخزين المصدر المحدد مؤقتًا...'),
-            attemptIndex: state.currentAttemptIndex == null
-                ? null
-                : state.currentAttemptIndex! + 1,
-            attemptTotal: state.sourceAttempts.isEmpty
-                ? null
-                : state.sourceAttempts.length,
-          );
+          _enterStartupPhase(kind: PlaybackUiPhaseKind.bufferingInitial);
         }
 
         // Re-enable next-episode detection once ExoPlayer reports a confirmed
@@ -1103,25 +894,9 @@ class PlayerController extends Notifier<PlayerState> {
         _stallTimer?.cancel();
         _stallTimer = Timer(const Duration(milliseconds: 400), () {
           if (_hasConfirmedPlaybackFrame) {
-            _enterRuntimePhase(
-              kind: PlaybackUiPhaseKind.bufferingRuntime,
-              detail: state.isLive
-                  ? _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...')
-                  : _playerText(english: 'Buffering playback...', arabic: 'جارٍ التخزين المؤقت للتشغيل...'),
-            );
+            _enterRuntimePhase(kind: PlaybackUiPhaseKind.bufferingRuntime);
           } else {
-            _enterStartupPhase(
-              kind: PlaybackUiPhaseKind.bufferingInitial,
-              detail: state.isLive
-                  ? _playerText(english: 'Connecting to live stream...', arabic: 'جارٍ الاتصال بالبث المباشر...')
-                  : _playerText(english: 'Buffering selected source...', arabic: 'جارٍ تخزين المصدر المحدد مؤقتًا...'),
-              attemptIndex: state.currentAttemptIndex == null
-                  ? null
-                  : state.currentAttemptIndex! + 1,
-              attemptTotal: state.sourceAttempts.isEmpty
-                  ? null
-                  : state.sourceAttempts.length,
-            );
+            _enterStartupPhase(kind: PlaybackUiPhaseKind.bufferingInitial);
           }
         });
       } else {
@@ -1154,7 +929,6 @@ class PlayerController extends Notifier<PlayerState> {
           _markSourceAttempt(
             state.currentStreamIndex,
             SourceAttemptStatus.failed,
-            isCurrent: false,
           );
           if (_manualSelectionPending) {
             _manualSelectionPending = false;
@@ -1173,10 +947,7 @@ class PlayerController extends Notifier<PlayerState> {
                 "VideoView live stream error. Triggering reconnect...",
               );
             }
-            _enterRuntimePhase(
-              kind: PlaybackUiPhaseKind.reconnectingLive,
-              detail: _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...'),
-            );
+            _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
             _beginStallRecovery(
               perform: changeStream(state.currentStream!, resetPosition: true),
             );
@@ -1185,7 +956,6 @@ class PlayerController extends Notifier<PlayerState> {
           _markSourceAttempt(
             state.currentStreamIndex,
             SourceAttemptStatus.failed,
-            isCurrent: false,
           );
           _revertMessage =
               _playerText(
@@ -1225,10 +995,7 @@ class PlayerController extends Notifier<PlayerState> {
             _item.contentType == MultimediaContentType.livestream ||
             _isLiveStream(_videoUrl);
         if (isLive && state.currentStream != null) {
-          _enterRuntimePhase(
-            kind: PlaybackUiPhaseKind.reconnectingLive,
-            detail: _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...'),
-          );
+          _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
           unawaited(changeStream(state.currentStream!, resetPosition: true));
         }
       }
@@ -1386,25 +1153,9 @@ class PlayerController extends Notifier<PlayerState> {
         _stallTimer?.cancel();
         _stallTimer = Timer(const Duration(milliseconds: 400), () {
           if (_hasConfirmedPlaybackFrame) {
-            _enterRuntimePhase(
-              kind: PlaybackUiPhaseKind.bufferingRuntime,
-              detail: state.isLive
-                  ? _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...')
-                  : _playerText(english: 'Buffering playback...', arabic: 'جارٍ التخزين المؤقت للتشغيل...'),
-            );
+            _enterRuntimePhase(kind: PlaybackUiPhaseKind.bufferingRuntime);
           } else {
-            _enterStartupPhase(
-              kind: PlaybackUiPhaseKind.bufferingInitial,
-              detail: state.isLive
-                  ? _playerText(english: 'Connecting to live stream...', arabic: 'جارٍ الاتصال بالبث المباشر...')
-                  : _playerText(english: 'Buffering selected source...', arabic: 'جارٍ تخزين المصدر المحدد مؤقتًا...'),
-              attemptIndex: state.currentAttemptIndex == null
-                  ? null
-                  : state.currentAttemptIndex! + 1,
-              attemptTotal: state.sourceAttempts.isEmpty
-                  ? null
-                  : state.sourceAttempts.length,
-            );
+            _enterStartupPhase(kind: PlaybackUiPhaseKind.bufferingInitial);
           }
         });
       } else {
@@ -1601,7 +1352,6 @@ class PlayerController extends Notifier<PlayerState> {
         _markSourceAttempt(
           state.currentStreamIndex,
           SourceAttemptStatus.failed,
-          isCurrent: false,
         );
         if (_manualSelectionPending) {
           _manualSelectionPending = false;
@@ -1616,10 +1366,7 @@ class PlayerController extends Notifier<PlayerState> {
           if (kDebugMode) {
             debugPrint("Live stream error. Triggering reconnect...");
           }
-          _enterRuntimePhase(
-            kind: PlaybackUiPhaseKind.reconnectingLive,
-            detail: _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...'),
-          );
+          _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
           _beginStallRecovery(
             perform: changeStream(state.currentStream!, resetPosition: true),
           );
@@ -1640,10 +1387,7 @@ class PlayerController extends Notifier<PlayerState> {
               '(likely expired stream URL).',
             );
           }
-          _enterRuntimePhase(
-            kind: PlaybackUiPhaseKind.switchingSource,
-            detail: _playerText(english: 'Refreshing stream...', arabic: 'جارٍ تحديث البث...'),
-          );
+          _enterRuntimePhase(kind: PlaybackUiPhaseKind.switchingSource);
           unawaited(changeStream(state.currentStream!, resetPosition: false));
           return;
         }
@@ -1651,7 +1395,6 @@ class PlayerController extends Notifier<PlayerState> {
         _markSourceAttempt(
           state.currentStreamIndex,
           SourceAttemptStatus.failed,
-          isCurrent: false,
         );
         _revertMessage =
             _playerText(
@@ -1661,13 +1404,6 @@ class PlayerController extends Notifier<PlayerState> {
         retryNextStream(sourceSessionId: state.sourceSessionId);
       }
     });
-  }
-
-  void skipLoadingOverlay() {
-    state = state.copyWith(userSkippedOverlay: true);
-    _setUiPhase(
-      _composeUiPhase(kind: state.uiPhase.kind, fullscreenBlocking: false),
-    );
   }
 
   void _setupEventDrivenProgressSaving() {
@@ -1704,10 +1440,7 @@ class PlayerController extends Notifier<PlayerState> {
           if (kDebugMode) {
             debugPrint("Live stream reached EOF. Forcing auto-reconnect...");
           }
-          _enterRuntimePhase(
-            kind: PlaybackUiPhaseKind.reconnectingLive,
-            detail: _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...'),
-          );
+          _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
           unawaited(changeStream(state.currentStream!, resetPosition: true));
         }
       }
@@ -1850,39 +1583,23 @@ class PlayerController extends Notifier<PlayerState> {
         ? _beginSourceSession(resetAttempts: true)
         : state.sourceSessionId;
 
-    String detail = _playerText(
-      english: 'Fetching sources...',
-      arabic: 'جارٍ جلب المصادر...',
-    );
     switch (requestedPhaseKind) {
       case PlaybackUiPhaseKind.loadingNextEpisode:
         // Enhancement: Use startup (blocking) phase so the screen goes dark
         // instead of showing controls over the previous episode's frame.
-        _enterStartupPhase(
-          kind: PlaybackUiPhaseKind.loadingNextEpisode,
-          detail: _playerText(english: 'Loading next episode...', arabic: 'جارٍ تحميل الحلقة التالية...'),
-        );
+        _enterStartupPhase(kind: PlaybackUiPhaseKind.loadingNextEpisode);
         break;
       case PlaybackUiPhaseKind.switchingSource:
-        _enterRuntimePhase(
-          kind: PlaybackUiPhaseKind.switchingSource,
-          detail: _playerText(english: 'Switching source...', arabic: 'جارٍ تبديل المصدر...'),
-        );
+        _enterRuntimePhase(kind: PlaybackUiPhaseKind.switchingSource);
         break;
       case PlaybackUiPhaseKind.reconnectingLive:
-        _enterRuntimePhase(
-          kind: PlaybackUiPhaseKind.reconnectingLive,
-          detail: _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...'),
-        );
+        _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
         break;
       default:
-        if (_item.provider == 'Local' || AppUtils.isLocalFile(_videoUrl)) {
-          detail = _playerText(english: 'Opening local file...', arabic: 'جارٍ فتح الملف المحلي...');
-        }
-        _enterStartupPhase(kind: requestedPhaseKind, detail: detail);
+        _enterStartupPhase(kind: requestedPhaseKind);
     }
 
-    state = state.copyWith(currentAttemptIndex: null);
+    state = state.copyWith();
 
     if (await _handleSpecialProviders()) return;
 
@@ -1897,10 +1614,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     try {
       if (_videoUrl.isNotEmpty) {
-        state = state.copyWith(streamSubtitle: _playerText(
-          english: 'Fetching sources...',
-          arabic: 'جارٍ جلب المصادر...',
-        ));
+        state = state.copyWith();
         final rawStreams = await activeProvider.loadStreams(_videoUrl);
         if (!_isCurrentSourceSession(sourceSessionId)) return;
         if (rawStreams.isNotEmpty) {
@@ -1933,30 +1647,18 @@ class PlayerController extends Notifier<PlayerState> {
                   (e) => batchIndices.contains(e.index)
                       ? e.copyWith(
                           status: SourceAttemptStatus.trying,
-                          isCurrent: e.index == initialIndex,
                         )
                       : e,
                 )
                 .toList();
             state = state.copyWith(
               sourceAttempts: updated,
-              currentAttemptIndex: initialIndex,
             );
           } else {
             _markSourceAttempt(initialIndex, SourceAttemptStatus.trying);
           }
 
-          // Issue 2: No attemptIndex/attemptTotal during batch check —
-          // "Source X of N" is meaningless when checking 3 at once.
-          _enterStartupPhase(
-            kind: PlaybackUiPhaseKind.checkingSources,
-            detail: checkCount > 1
-                ? _playerText(
-                    english: 'Checking $checkCount sources...',
-                    arabic: 'جارٍ فحص $checkCount مصادر...',
-                  )
-                : _playerText(english: 'Preparing selected source...', arabic: 'جارٍ تجهيز المصدر المحدد...'),
-          );
+          _enterStartupPhase(kind: PlaybackUiPhaseKind.checkingSources);
 
           // PERFORMANCE: Parallel check the first few streams (health check)
           // This avoids waiting for a timeout on a dead stream if a working one is available
@@ -2442,13 +2144,7 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     final stream = state.streams[index];
-    final rawProviderName =
-        _item.provider ?? ref.read(activeProviderProvider)?.name ?? "Unknown";
-    final providerName = _getProviderDisplayName(rawProviderName);
     final subtitles = _effectiveExternalSubtitles(stream.subtitles);
-    final attemptTotal = state.sourceAttempts.isEmpty
-        ? state.streams.length
-        : state.sourceAttempts.length;
     _markSourceAttempt(
       index,
       manualSelection
@@ -2461,7 +2157,6 @@ class PlayerController extends Notifier<PlayerState> {
     state = state.copyWith(
       currentStreamIndex: index,
       currentStream: stream,
-      streamSubtitle: "$providerName - ${stream.source}",
       externalSubtitles: subtitles,
       isLive:
           _item.contentType == MultimediaContentType.livestream ||
@@ -2472,17 +2167,9 @@ class PlayerController extends Notifier<PlayerState> {
     // block the screen — use a non-blocking runtime phase so the current frame
     // stays visible while the new source opens.
     if (manualSelection && _hasConfirmedPlaybackFrame) {
-      _enterRuntimePhase(
-        kind: PlaybackUiPhaseKind.switchingSource,
-        detail: _playerText(english: 'Switching to ${stream.source}...', arabic: 'جارٍ التبديل إلى ${stream.source}...'),
-      );
+      _enterRuntimePhase(kind: PlaybackUiPhaseKind.switchingSource);
     } else {
-      _enterStartupPhase(
-        kind: PlaybackUiPhaseKind.openingSource,
-        detail: "Opening ${stream.source}...",
-        attemptIndex: index + 1,
-        attemptTotal: attemptTotal,
-      );
+      _enterStartupPhase(kind: PlaybackUiPhaseKind.openingSource);
     }
 
     try {
@@ -2504,15 +2191,11 @@ class PlayerController extends Notifier<PlayerState> {
         return;
       }
       state = state.copyWith(
-        streamSubtitle: "$providerName - ${stream.source}",
         isLive: resolvedIsLive,
         isSeekable: !useVideoView,
       );
       if (state.useExoPlayer != useVideoView && _hasConfirmedPlaybackFrame) {
-        _enterRuntimePhase(
-          kind: PlaybackUiPhaseKind.switchingEngine,
-          detail: _playerText(english: 'Optimizing playback...', arabic: 'جارٍ تحسين التشغيل...'),
-        );
+        _enterRuntimePhase(kind: PlaybackUiPhaseKind.switchingEngine);
       }
 
       final headers = _buildPlaybackHeaders(stream);
@@ -2535,14 +2218,7 @@ class PlayerController extends Notifier<PlayerState> {
           !_isCurrentSourceSession(sourceSessionId)) {
         return;
       }
-      _enterStartupPhase(
-        kind: PlaybackUiPhaseKind.bufferingInitial,
-        detail: resolvedIsLive
-            ? _playerText(english: 'Connecting to live stream...', arabic: 'جارٍ الاتصال بالبث المباشر...')
-            : _playerText(english: 'Buffering selected source...', arabic: 'جارٍ تخزين المصدر المحدد مؤقتًا...'),
-        attemptIndex: index + 1,
-        attemptTotal: attemptTotal,
-      );
+      _enterStartupPhase(kind: PlaybackUiPhaseKind.bufferingInitial);
 
       final historyRepo = ref.read(historyRepositoryProvider);
       final isSeries =
@@ -2603,7 +2279,7 @@ class PlayerController extends Notifier<PlayerState> {
         return;
       }
       if (kDebugMode) debugPrint("Stream $index failed: $e");
-      _markSourceAttempt(index, SourceAttemptStatus.failed, isCurrent: false);
+      _markSourceAttempt(index, SourceAttemptStatus.failed);
       if (manualSelection) {
         // Issue 2: Don't show "all sources failed" for a manual pick — revert
         // silently to the previously playing source instead.
@@ -2628,10 +2304,7 @@ class PlayerController extends Notifier<PlayerState> {
     if (dur > Duration.zero) {
       await seekTo(dur);
     } else {
-      _enterRuntimePhase(
-        kind: PlaybackUiPhaseKind.reconnectingLive,
-        detail: _playerText(english: 'Reconnecting to live stream...', arabic: 'جارٍ إعادة الاتصال بالبث المباشر...'),
-      );
+      _enterRuntimePhase(kind: PlaybackUiPhaseKind.reconnectingLive);
       unawaited(changeStream(state.currentStream!, resetPosition: true));
     }
   }
@@ -2661,9 +2334,6 @@ class PlayerController extends Notifier<PlayerState> {
       _manualSelectionPending = true;
     }
 
-    final rawPName =
-        _item.provider ?? ref.read(activeProviderProvider)?.name ?? 'Unknown';
-    final pName = _getProviderDisplayName(rawPName);
 
     // Capture current position before we switch engines/streams.
     // Read from whichever engine is currently active.
@@ -2671,10 +2341,7 @@ class PlayerController extends Notifier<PlayerState> {
         ? Duration(milliseconds: _videoViewController?.position.value ?? 0)
         : _player.state.position;
 
-    _enterRuntimePhase(
-      kind: PlaybackUiPhaseKind.switchingSource,
-      detail: _playerText(english: 'Switching to ${stream.source}...', arabic: 'جارٍ التبديل إلى ${stream.source}...'),
-    );
+    _enterRuntimePhase(kind: PlaybackUiPhaseKind.switchingSource);
 
     try {
       final playUrl = await _resolveStreamUrl(stream);
@@ -2688,17 +2355,13 @@ class PlayerController extends Notifier<PlayerState> {
         isLive: resolvedIsLive,
       );
       if (state.useExoPlayer != useVideoView && _hasConfirmedPlaybackFrame) {
-        _enterRuntimePhase(
-          kind: PlaybackUiPhaseKind.switchingEngine,
-          detail: _playerText(english: 'Optimizing playback...', arabic: 'جارٍ تحسين التشغيل...'),
-        );
+        _enterRuntimePhase(kind: PlaybackUiPhaseKind.switchingEngine);
       }
       state = state.copyWith(
         currentStream: stream,
         externalSubtitles: subtitles,
         isLive: resolvedIsLive,
         isSeekable: !useVideoView,
-        streamSubtitle: "$pName - ${stream.source}",
       );
 
       final headers = _buildPlaybackHeaders(stream);
@@ -2767,17 +2430,7 @@ class PlayerController extends Notifier<PlayerState> {
 
       if (alreadyHealthChecked) {
         // Fast path: nextIndex was already confirmed healthy in the previous batch.
-        // Show a counter (single source), no re-check needed.
-        // Fix Q1: explicit empty subtitle so the old source name isn't shown.
-        _enterStartupPhase(
-          kind: PlaybackUiPhaseKind.checkingSources,
-          subtitle: '',
-          detail: _playerText(english: 'Source failed. Trying next source...', arabic: 'فشل المصدر. جارٍ تجربة المصدر التالي...'),
-          attemptIndex: nextIndex + 1,
-          attemptTotal: state.sourceAttempts.isEmpty
-              ? state.streams.length
-              : state.sourceAttempts.length,
-        );
+        _enterStartupPhase(kind: PlaybackUiPhaseKind.checkingSources);
       } else if (!hasNextChecked && state.streams.length > nextIndex + 1) {
         // Batch path: entering a new, unchecked window — run parallel health check.
         final checkCount = (state.streams.length - nextIndex) > 3
@@ -2796,26 +2449,14 @@ class PlayerController extends Notifier<PlayerState> {
               (e) => batchIndices.contains(e.index)
                   ? e.copyWith(
                       status: SourceAttemptStatus.trying,
-                      isCurrent: e.index == nextIndex,
                     )
                   : e,
             )
             .toList();
         state = state.copyWith(
           sourceAttempts: updatedAttempts,
-          currentAttemptIndex: nextIndex,
-          // Fix Q1: clear old source name so the subtitle doesn't show
-          // the failed source during the parallel check.
-          streamSubtitle: _playerText(english: 'Checking sources...', arabic: 'جارٍ فحص المصادر...'),
         );
-        _enterStartupPhase(
-          kind: PlaybackUiPhaseKind.checkingSources,
-          // No attemptIndex/attemptTotal: counter is meaningless for a batch.
-          detail: _playerText(
-                    english: 'Checking $checkCount sources...',
-                    arabic: 'جارٍ فحص $checkCount مصادر...',
-                  ),
-        );
+        _enterStartupPhase(kind: PlaybackUiPhaseKind.checkingSources);
 
         targetIndex = await _findFirstWorkingStream(
           state.streams,
@@ -2825,15 +2466,7 @@ class PlayerController extends Notifier<PlayerState> {
         );
       } else {
         // Single next source (last in list, or all others already checked).
-        _enterStartupPhase(
-          kind: PlaybackUiPhaseKind.checkingSources,
-          subtitle: '',
-          detail: _playerText(english: 'Source failed. Trying next source...', arabic: 'فشل المصدر. جارٍ تجربة المصدر التالي...'),
-          attemptIndex: nextIndex + 1,
-          attemptTotal: state.sourceAttempts.isEmpty
-              ? state.streams.length
-              : state.sourceAttempts.length,
-        );
+        _enterStartupPhase(kind: PlaybackUiPhaseKind.checkingSources);
       }
 
       _markSourceAttempt(targetIndex, SourceAttemptStatus.trying);
@@ -2930,15 +2563,6 @@ class PlayerController extends Notifier<PlayerState> {
     state = state.copyWith(
       playerTitle: "${_item.title} - ${nextEpisode.name}",
       showNextEpisodeOverlay: false,
-      streamSubtitle: isLocal
-          ? _playerText(
-              english: 'Local - Downloaded',
-              arabic: 'محلي - تم تنزيله',
-            )
-          : _playerText(
-              english: 'Preparing selected source...',
-              arabic: 'جارٍ تجهيز المصدر المحدد...',
-            ),
     );
 
     if (useDirectSelectedSource) {
@@ -3007,15 +2631,6 @@ class PlayerController extends Notifier<PlayerState> {
 
     state = state.copyWith(
       playerTitle: "${_item.title} - ${episode.name}",
-      streamSubtitle: isLocal
-          ? _playerText(
-              english: 'Local - Downloaded',
-              arabic: 'محلي - تم تنزيله',
-            )
-          : _playerText(
-              english: 'Preparing selected source...',
-              arabic: 'جارٍ تجهيز المصدر المحدد...',
-            ),
     );
 
     if (useDirectSelectedSource) {
@@ -3265,7 +2880,6 @@ class PlayerController extends Notifier<PlayerState> {
                   _markSourceAttempt(
                     idx,
                     SourceAttemptStatus.failed,
-                    isCurrent: false,
                   );
                 }
                 results[idx] = isHealthy;
@@ -3296,7 +2910,6 @@ class PlayerController extends Notifier<PlayerState> {
                 _markSourceAttempt(
                   idx,
                   SourceAttemptStatus.failed,
-                  isCurrent: false,
                 );
                 if (results.length == candidates.length) {
                   completer.complete(start);
@@ -3317,23 +2930,6 @@ class PlayerController extends Notifier<PlayerState> {
 
     return start; // Fallback to initial
   }
-
-  String _getProviderDisplayName(String providerName) {
-    try {
-      final manager = ref.read(extensionManagerProvider.notifier);
-      final p = manager.getAllProviders().firstWhere(
-        (p) => p.packageName == providerName || p.name == providerName,
-      );
-      if (p.isDebug) return "${p.name} [DEBUG]";
-      return p.name;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('PlayerController._getProviderDisplayName: $e');
-      }
-    }
-    return providerName;
-  }
-
 
   Future<String?> _resolveStreamUrl(StreamResult stream) async =>
       AppUtils.normalizeUrl(stream.url);

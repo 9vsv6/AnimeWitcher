@@ -557,15 +557,12 @@ class PlayerBufferingIndicator extends StatelessWidget {
         final isLoading = ref.watch(
           playerControllerProvider.select((s) => s.isLoading),
         );
-        final userSkippedOverlay = ref.watch(
-          playerControllerProvider.select((s) => s.userSkippedOverlay),
-        );
 
         if (!isBuffering && !isLoading) return const SizedBox.shrink();
         // Touch + controls visible → the centered play/pause spinner covers it.
         if (isVisible && isTouch) return const SizedBox.shrink();
-        // While the primary (blocking) loading overlay is up, defer to it.
-        if (isLoading && !userSkippedOverlay) return const SizedBox.shrink();
+        // While the blocking loading UI is up, defer to it.
+        if (isLoading) return const SizedBox.shrink();
 
         return const IgnorePointer(child: Center(child: _PlayerSpinner()));
       },

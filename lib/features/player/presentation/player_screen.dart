@@ -175,7 +175,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     _startupTimeoutTimer = Timer(const Duration(seconds: 30), () {
       if (!mounted) return;
       final current = ref.read(playerControllerProvider);
-      if (current.isLoading || current.errorMessage != null) {
+      if (current.uiPhase.kind != PlaybackUiPhaseKind.idle ||
+          current.errorMessage != null) {
         unawaited(_handleBack());
       }
     });
