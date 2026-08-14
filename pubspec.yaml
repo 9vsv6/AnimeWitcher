@@ -34,7 +34,6 @@ dependencies:
     sdk: flutter
 
   expressive_loading_indicator: ^0.0.1
-  material_new_shapes: ^1.0.0-wip.6
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -44,8 +43,6 @@ dependencies:
   collection: ^1.18.0
   go_router: ^17.0.1
   dio: ^5.9.0
-  dio_cookie_manager: ^3.2.0
-  cookie_jar: ^4.0.0
   flutter_inappwebview: ^6.0.0
   google_fonts: ^8.0.2
   cached_network_image: ^3.4.1
@@ -62,11 +59,9 @@ dependencies:
   dynamic_color: ^1.8.1
   window_manager: ^0.5.1
   device_info_plus: any
-  app_restarter: ^0.2.0
   crypto: ^3.0.7
   file_picker: ^12.0.0-beta.7
   archive: ^4.0.7
-  filesystem_picker: ^4.1.0
   permission_handler: ^13.0.0
   url_launcher: ^6.3.2
   version: ^3.0.2
@@ -78,21 +73,14 @@ dependencies:
   shimmer: ^3.0.0
   video_view:
     path: packages/video_view
-  encrypt: ^5.0.3
   flutter_cache_manager: ^3.4.1
   path: ^1.9.1
   http: ^1.6.0
-  connectivity_plus: ^7.1.1
   html_unescape: ^2.0.0
-  html: ^0.15.6
   background_downloader: ^9.5.4
   flutter_hooks: ^0.21.3+1
-  pointycastle: any
-  talker: ^5.1.16
   talker_flutter: ^5.1.16
-  talker_riverpod_logger: ^5.1.16
   visibility_detector: ^0.4.0+2
-  qr_flutter: ^4.1.0
   # Platform keychain/keystore for OAuth tokens (MAL/AniList).
   # Falls back to encrypted Hive on Linux/Windows where libsecret is missing.
   flutter_secure_storage: ^10.3.1
