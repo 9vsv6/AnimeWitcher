@@ -96,6 +96,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   late final PlayerController _playerController;
   ProviderSubscription<AsyncValue<PlayerSettings>>? _settingsSub;
+  ProviderSubscription<PlayerState>? _playerStateSub;
 
   @override
   void initState() {
@@ -160,6 +161,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
 
     _playerController = ref.read(playerControllerProvider.notifier);
+    _playerStateSub = ref.listenManual<PlayerState>(
+      playerControllerProvider,
+      (_, __) {
+        // The startup timeout is only for the period before the first real
+        // playback frame. Once position advances, runtime buffering/source
+        // switching must never be allowed to eject the user from the player.
+        if (_playerController.hasConfirmedPlaybackFrame) {
+          _startupTimeoutTimer?.cancel();
+          _startupTimeoutTimer = null;
+        }
+      },
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _playerController.init(
@@ -173,13 +186,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     });
 
     // Do not leave the user trapped on a source that never becomes playable.
-    // Source discovery now happens inside the player, so the timeout starts as
-    // soon as the player route opens and exits only if playback is still not ready.
+    // This timer is strictly a FIRST-FRAME timeout. It is cancelled as soon as
+    // real playback is confirmed, so later buffering/retries cannot pop the route.
     _startupTimeoutTimer = Timer(const Duration(seconds: 30), () {
       if (!mounted) return;
-      final current = ref.read(playerControllerProvider);
-      if (current.uiPhase.kind != PlaybackUiPhaseKind.idle ||
-          current.errorMessage != null) {
+      _startupTimeoutTimer = null;
+      if (!_playerController.hasConfirmedPlaybackFrame) {
         unawaited(_handleBack());
       }
     });
@@ -271,6 +283,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
 
     _settingsSub?.close();
+    _playerStateSub?.close();
     _playerController.disposeController();
 
     _player.dispose();

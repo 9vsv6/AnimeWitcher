@@ -256,6 +256,7 @@ class PlayerController extends Notifier<PlayerState> {
   Player get player => _player;
   VideoController? get videoViewController => _videoViewController;
   bool get isDisposed => _isDisposed;
+  bool get hasConfirmedPlaybackFrame => _hasConfirmedPlaybackFrame;
   PlayerState get currentState => state;
   List<SubtitleFile> get userAddedExternalSubtitles =>
       _userAddedExternalSubtitles;
