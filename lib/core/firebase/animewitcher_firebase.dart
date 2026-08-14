@@ -6,17 +6,23 @@ import '../account/animewitcher_account_config.dart';
 /// Initializes the Firebase project used by the original AnimeWitcher app.
 ///
 /// The recovered AnimeWitcher Firebase app registration is Android-specific.
-/// Apple platforms therefore do not call the native Firebase SDK unless a real
-/// iOS Firebase app id is explicitly supplied. REST fallbacks remain available
-/// for AnimeWitcher data/account traffic when the native SDK is unavailable.
+/// iOS is intentionally REST-only: it never initializes or uses the native
+/// Firebase SDK. Other supported platforms may still use the native SDK when
+/// their platform configuration is valid, with REST remaining as fallback.
 class AnimeWitcherFirebase {
   const AnimeWitcherFirebase._();
 
   static bool _initialized = false;
 
-  static bool get isInitialized => _initialized || Firebase.apps.isNotEmpty;
+  static bool get isInitialized {
+    // iOS is deliberately REST-only. Keep this false even if another Firebase
+    // integration initializes a default app elsewhere in the process.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) return false;
+    return _initialized || Firebase.apps.isNotEmpty;
+  }
 
   static Future<bool> initialize() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) return false;
     if (isInitialized) {
       _initialized = true;
       return true;
@@ -25,8 +31,7 @@ class AnimeWitcherFirebase {
 
     final nativeAppId = AnimeWitcherAccountConfig.nativeAppId;
     if (!kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.macOS) &&
+        defaultTargetPlatform == TargetPlatform.macOS &&
         !nativeAppId.contains(':ios:')) {
       // Never hand an Android GOOGLE_APP_ID to FirebaseCore on Apple. Native
       // Firebase exceptions can terminate the process before Flutter's first
@@ -43,14 +48,11 @@ class AnimeWitcherFirebase {
           projectId: AnimeWitcherAccountConfig.projectId,
           storageBucket: AnimeWitcherAccountConfig.storageBucket,
           authDomain: '${AnimeWitcherAccountConfig.projectId}.firebaseapp.com',
-          iosBundleId: !kIsWeb &&
-                  (defaultTargetPlatform == TargetPlatform.iOS ||
-                      defaultTargetPlatform == TargetPlatform.macOS)
+          iosBundleId: !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
               ? AnimeWitcherAccountConfig.iosBundleId
               : null,
           iosClientId: !kIsWeb &&
-                  (defaultTargetPlatform == TargetPlatform.iOS ||
-                      defaultTargetPlatform == TargetPlatform.macOS) &&
+                  defaultTargetPlatform == TargetPlatform.macOS &&
                   AnimeWitcherAccountConfig.googleIosClientId.trim().isNotEmpty
               ? AnimeWitcherAccountConfig.googleIosClientId
               : null,

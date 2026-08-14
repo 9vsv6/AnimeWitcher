@@ -75,7 +75,10 @@ class AnimeWitcherAccountConfig {
     if (!firebaseConfigured || messagingSenderId.trim().isEmpty) return false;
     if (kIsWeb) return appId.trim().isNotEmpty;
     return switch (defaultTargetPlatform) {
-      TargetPlatform.iOS || TargetPlatform.macOS =>
+      // iOS intentionally uses the REST clients only. Do not enable the
+      // native Firebase SDK even when an Apple app id is supplied.
+      TargetPlatform.iOS => false,
+      TargetPlatform.macOS =>
         iosAppId.trim().isNotEmpty && iosAppId.contains(':ios:'),
       TargetPlatform.android || TargetPlatform.windows => appId.trim().isNotEmpty,
       TargetPlatform.linux || TargetPlatform.fuchsia => false,
@@ -83,9 +86,8 @@ class AnimeWitcherAccountConfig {
   }
 
   static String get nativeAppId {
-    if (!kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.macOS)) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) return '';
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
       return iosAppId.trim();
     }
     return appId.trim();

@@ -33,7 +33,11 @@ import 'core/account/account_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AnimeWitcherFirebase.initialize();
+  // AnimeWitcher on iOS is REST-only. Skipping FirebaseCore here also keeps
+  // native Firebase initialization off the critical startup path.
+  if (!Platform.isIOS) {
+    await AnimeWitcherFirebase.initialize();
+  }
   MediaKit.ensureInitialized();
 
   // Cap Flutter's image cache. Default is 1000 entries / 100 MB which is too
