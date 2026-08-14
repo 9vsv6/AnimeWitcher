@@ -113,10 +113,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
     WakelockPlus.enable();
 
-    // Initialize player with larger buffer for stream streaming
+    // Keep the renderer buffer bounded; mpv has its own adaptive demuxer cache.
     _player = Player(
       configuration: const PlayerConfiguration(
-        bufferSize: 128 * 1024 * 1024, // 128MB
+        bufferSize: 64 * 1024 * 1024, // 64 MB
       ),
     );
 

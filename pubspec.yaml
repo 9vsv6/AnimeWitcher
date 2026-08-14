@@ -96,11 +96,8 @@ dependencies:
   # Platform keychain/keystore for OAuth tokens (MAL/AniList).
   # Falls back to encrypted Hive on Linux/Windows where libsecret is missing.
   flutter_secure_storage: ^10.3.1
-  # AnimeWitcher uses the official Firebase SDK for authentication and
-  # Firestore data. Google identity remains handled by google_sign_in.
-  firebase_core: ^4.12.1
-  firebase_auth: ^6.5.6
-  cloud_firestore: ^6.7.1
+  # AnimeWitcher authentication and Firestore data use REST only.
+  # Google identity remains handled by google_sign_in before token exchange.
   google_sign_in: ^7.2.0
 
 

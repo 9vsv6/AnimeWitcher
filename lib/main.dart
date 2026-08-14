@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart'; // For kReleaseMode
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
-import 'core/firebase/animewitcher_firebase.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/router/app_router.dart';
@@ -24,7 +23,6 @@ import 'core/services/notification_service.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
-import 'core/network/cloudflare_bypass.dart';
 import 'package:dpad/dpad.dart';
 import 'core/providers/device_info_provider.dart';
 import 'shared/widgets/loading_indicator.dart';
@@ -33,11 +31,6 @@ import 'core/account/account_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // AnimeWitcher on iOS is REST-only. Skipping FirebaseCore here also keeps
-  // native Firebase initialization off the critical startup path.
-  if (!Platform.isIOS) {
-    await AnimeWitcherFirebase.initialize();
-  }
   MediaKit.ensureInitialized();
 
   // Cap Flutter's image cache. Default is 1000 entries / 100 MB which is too
@@ -119,15 +112,6 @@ class _AppRootState extends State<AppRoot> {
         setState(() {
           _initialized = true;
         });
-        // Pre-warm the system WebView after the first frame so the initial
-        // render isn't delayed. This eliminates the frame jank that occurs
-        // when the CF bypass spawns its HeadlessInAppWebView cold during search.
-        if (Platform.isAndroid || Platform.isIOS) {
-          Future.delayed(
-            const Duration(seconds: 3),
-            CloudflareBypass.instance.prewarm,
-          );
-        }
       }
     } catch (e, stack) {
       if (mounted) {

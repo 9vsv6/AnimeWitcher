@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/extensions/extension_manager.dart';
 import '../../../../core/storage/storage_service.dart';
@@ -29,20 +28,6 @@ class HomeData extends _$HomeData {
     final activeProvider = ref.read(activeProviderProvider);
     if (activeProvider == null) {
       state = const HomeNoProvider();
-      return;
-    }
-
-    // Fast connectivity check
-    try {
-      final result = await InternetAddress.lookup(
-        'dns.google',
-      ).timeout(const Duration(seconds: 2));
-      if (result.isEmpty || result[0].rawAddress.isEmpty) {
-        state = const HomeOffline();
-        return;
-      }
-    } catch (_) {
-      state = const HomeOffline();
       return;
     }
 

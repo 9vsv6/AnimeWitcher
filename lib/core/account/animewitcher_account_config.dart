@@ -24,35 +24,6 @@ class AnimeWitcherAccountConfig {
     'ANIMEWITCHER_FIREBASE_API_KEY',
   );
 
-  /// Firebase Android app id recovered from the original AnimeWitcher client.
-  /// This must never be passed to the Apple Firebase SDK.
-  static const String appId = String.fromEnvironment(
-    'ANIMEWITCHER_FIREBASE_APP_ID',
-    defaultValue: '1:861470152250:android:bd3e0dd41508f61b094703',
-  );
-
-  /// A real Apple Firebase app id, if the AnimeWitcher project ever registers
-  /// SkyStream's Apple bundle. Keep empty by default: inventing/reusing the
-  /// Android app id can terminate FirebaseInstallations during iOS startup.
-  static const String iosAppId = String.fromEnvironment(
-    'ANIMEWITCHER_FIREBASE_IOS_APP_ID',
-  );
-
-  static const String iosBundleId = String.fromEnvironment(
-    'ANIMEWITCHER_FIREBASE_IOS_BUNDLE_ID',
-    defaultValue: 'com.animewitcher.app',
-  );
-
-  static const String messagingSenderId = String.fromEnvironment(
-    'ANIMEWITCHER_FIREBASE_MESSAGING_SENDER_ID',
-    defaultValue: '861470152250',
-  );
-
-  static const String storageBucket = String.fromEnvironment(
-    'ANIMEWITCHER_FIREBASE_STORAGE_BUCKET',
-    defaultValue: 'animewitcher-1c66d.appspot.com',
-  );
-
   /// OAuth web/server client used to request a Google ID token which Firebase
   /// can exchange for an AnimeWitcher session.
   static const String googleServerClientId = String.fromEnvironment(
@@ -67,31 +38,6 @@ class AnimeWitcherAccountConfig {
   /// Credentials sufficient for the proven Firebase REST endpoints.
   static bool get firebaseConfigured =>
       projectId.trim().isNotEmpty && apiKey.trim().isNotEmpty;
-
-  /// Native Firebase must use an app id that belongs to the running platform.
-  /// The original source only supplied an Android Firebase app registration,
-  /// so Apple deliberately falls back to REST unless an iOS app id is supplied.
-  static bool get nativeFirebaseConfigured {
-    if (!firebaseConfigured || messagingSenderId.trim().isEmpty) return false;
-    if (kIsWeb) return appId.trim().isNotEmpty;
-    return switch (defaultTargetPlatform) {
-      // iOS intentionally uses the REST clients only. Do not enable the
-      // native Firebase SDK even when an Apple app id is supplied.
-      TargetPlatform.iOS => false,
-      TargetPlatform.macOS =>
-        iosAppId.trim().isNotEmpty && iosAppId.contains(':ios:'),
-      TargetPlatform.android || TargetPlatform.windows => appId.trim().isNotEmpty,
-      TargetPlatform.linux || TargetPlatform.fuchsia => false,
-    };
-  }
-
-  static String get nativeAppId {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) return '';
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
-      return iosAppId.trim();
-    }
-    return appId.trim();
-  }
 
   /// The official AnimeWitcher registration screen accepts these three mail
   /// providers. Sign-in itself remains open to existing legacy accounts.

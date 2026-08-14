@@ -1,12 +1,9 @@
 import 'dart:math';
 
-import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import 'animewitcher_account_config.dart';
 import 'animewitcher_account_models.dart';
-import '../firebase/animewitcher_firebase.dart';
 
 class FirestoreReference {
   const FirestoreReference(this.path);
@@ -151,18 +148,6 @@ class FirestoreRestClient {
     String path,
     String idToken,
   ) async {
-    if (_hasNativeUser) {
-      try {
-        final snapshot = await _sdk.doc(path).get();
-        if (!snapshot.exists) return null;
-        return _hydrateContinueWatchingDocument(
-          _fromSdkDocument(snapshot),
-          idToken,
-        );
-      } on cf.FirebaseException {
-        // Keep the proven REST path below for a pre-migration/legacy session.
-      }
-    }
 
     try {
       final response = await _dio.get<dynamic>(
@@ -184,23 +169,6 @@ class FirestoreRestClient {
     String idToken, {
     int pageSize = 100,
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final snapshot = await _sdkCollection(collectionPath).get();
-        final output = <FirestoreDocument>[];
-        for (final document in snapshot.docs) {
-          output.add(
-            await _hydrateContinueWatchingDocument(
-              _fromSdkDocument(document),
-              idToken,
-            ),
-          );
-        }
-        return output;
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     final output = <FirestoreDocument>[];
     String? pageToken;
@@ -242,18 +210,6 @@ class FirestoreRestClient {
     required String idToken,
     int limit = 20,
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final snapshot = await _sdk
-            .collection(collectionId)
-            .where(field, isEqualTo: _encodeSdkValue(value))
-            .limit(limit)
-            .get();
-        return snapshot.docs.map(_fromSdkDocument).toList(growable: false);
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     try {
       final response = await _dio.post<dynamic>(
@@ -331,28 +287,6 @@ class FirestoreRestClient {
     required FirestoreDocument? startAfter,
     required int limit,
   }) async {
-    if (AnimeWitcherFirebase.isInitialized) {
-      try {
-        cf.Query<Map<String, dynamic>> query = _sdkCollection(collectionPath);
-        if (publishedOnly) {
-          query = query.where('published', isEqualTo: true);
-        }
-        query = query
-            .orderBy(orderField, descending: descending)
-            .orderBy(cf.FieldPath.documentId, descending: descending);
-        if (startAfter != null) {
-          query = query.startAfter(<Object?>[
-            _encodeSdkValue(startAfter.fields[orderField]),
-            _sdk.doc(startAfter.path),
-          ]);
-        }
-        final snapshot = await query.limit(limit.clamp(1, 100)).get();
-        return snapshot.docs.map(_fromSdkDocument).toList(growable: false);
-      } on cf.FirebaseException {
-        // REST public-query fallback below keeps comments usable if SDK setup
-        // is unavailable or the native query fails.
-      }
-    }
 
     final normalized = collectionPath.replaceFirst(RegExp(r'/+$'), '');
     final segments = normalized
@@ -417,17 +351,6 @@ class FirestoreRestClient {
     required String idToken,
     int limit = 20,
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final snapshot = await _sdkCollection(collectionPath)
-            .where('user_id', isEqualTo: userId)
-            .limit(limit.clamp(1, 100))
-            .get();
-        return snapshot.docs.map(_fromSdkDocument).toList(growable: false);
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     final normalized = collectionPath.replaceFirst(RegExp(r'/+$'), '');
     final segments = normalized.split('/').where((segment) => segment.isNotEmpty).toList();
@@ -467,21 +390,6 @@ class FirestoreRestClient {
     required String userId,
     required String idToken,
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final snapshot = await _sdk
-            .collectionGroup('comments')
-            .where('user_id', isEqualTo: userId)
-            .orderBy('date', descending: true)
-            .limit(1)
-            .get();
-        return snapshot.docs.isEmpty
-            ? null
-            : _fromSdkDocument(snapshot.docs.first);
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     try {
       final response = await _dio.post<dynamic>(
@@ -523,21 +431,6 @@ class FirestoreRestClient {
     required String userId,
     required String idToken,
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final snapshot = await _sdk
-            .collectionGroup('replies')
-            .where('user_id', isEqualTo: userId)
-            .orderBy('date', descending: true)
-            .limit(1)
-            .get();
-        return snapshot.docs.isEmpty
-            ? null
-            : _fromSdkDocument(snapshot.docs.first);
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     try {
       final response = await _dio.post<dynamic>(
@@ -596,25 +489,6 @@ class FirestoreRestClient {
     String idToken, {
     bool merge = true,
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final reference = _sdk.doc(path);
-        await reference.set(
-          _encodeSdkMap(fields),
-          cf.SetOptions(merge: merge),
-        );
-        final snapshot = await reference.get();
-        if (!snapshot.exists) {
-          throw const AnimeWitcherAccountException(
-            'invalid-firestore-response',
-            'The sync server did not return the written document.',
-          );
-        }
-        return _fromSdkDocument(snapshot);
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     try {
       final response = await _dio.patch<dynamic>(
@@ -653,18 +527,6 @@ class FirestoreRestClient {
     required Set<String> serverTimestampFields,
     bool merge = true,
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final payload = _encodeSdkMap(fields);
-        for (final field in serverTimestampFields) {
-          payload[field] = cf.FieldValue.serverTimestamp();
-        }
-        await _sdk.doc(path).set(payload, cf.SetOptions(merge: merge));
-        return;
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     if (serverTimestampFields.isEmpty) {
       await setDocument(path, fields, idToken, merge: merge);
@@ -717,17 +579,6 @@ class FirestoreRestClient {
     Map<String, dynamic> fields,
     String idToken,
   ) async {
-    if (_hasNativeUser) {
-      try {
-        final reference = await _sdkCollection(collectionPath).add(
-          _encodeSdkMap(fields),
-        );
-        final snapshot = await reference.get();
-        return _fromSdkDocument(snapshot);
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     try {
       final response = await _dio.post<dynamic>(
@@ -760,22 +611,6 @@ class FirestoreRestClient {
     required Set<String> serverTimestampFields,
     String? documentId,
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final reference = documentId == null
-            ? _sdkCollection(collectionPath).doc()
-            : _sdkCollection(collectionPath).doc(documentId);
-        final payload = _encodeSdkMap(fields);
-        for (final field in serverTimestampFields) {
-          payload[field] = cf.FieldValue.serverTimestamp();
-        }
-        await reference.set(payload);
-        final snapshot = await reference.get();
-        return _fromSdkDocument(snapshot);
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     final id = documentId ?? _randomFirestoreDocumentId();
     final path = '${collectionPath.replaceFirst(RegExp(r'/+$'), '')}/$id';
@@ -808,22 +643,6 @@ class FirestoreRestClient {
     required bool append,
     Map<String, dynamic> baseFields = const <String, dynamic>{},
   }) async {
-    if (_hasNativeUser) {
-      try {
-        final payload = _encodeSdkMap(baseFields);
-        payload[field] = append
-            ? cf.FieldValue.arrayUnion(<dynamic>[_encodeSdkValue(value)])
-            : cf.FieldValue.arrayRemove(<dynamic>[_encodeSdkValue(value)]);
-        if (baseFields.isEmpty) {
-          await _sdk.doc(path).update(payload);
-        } else {
-          await _sdk.doc(path).set(payload, cf.SetOptions(merge: true));
-        }
-        return;
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     final transform = <String, dynamic>{
       'fieldPath': field,
@@ -874,14 +693,6 @@ class FirestoreRestClient {
   }
 
   Future<void> deleteDocument(String path, String idToken) async {
-    if (_hasNativeUser) {
-      try {
-        await _sdk.doc(path).delete();
-        return;
-      } on cf.FirebaseException {
-        // Legacy REST fallback below.
-      }
-    }
 
     try {
       await _dio.delete<dynamic>(
@@ -892,71 +703,6 @@ class FirestoreRestClient {
       if (error.response?.statusCode == 404) return;
       throw _firestoreException(error);
     }
-  }
-
-  bool get _hasNativeUser =>
-      AnimeWitcherFirebase.isInitialized &&
-      FirebaseAuth.instance.currentUser != null;
-
-  cf.FirebaseFirestore get _sdk => cf.FirebaseFirestore.instance;
-
-  cf.CollectionReference<Map<String, dynamic>> _sdkCollection(String path) {
-    return _sdk.collection(path.replaceFirst(RegExp(r'/+$'), ''));
-  }
-
-  FirestoreDocument _fromSdkDocument(
-    cf.DocumentSnapshot<Map<String, dynamic>> snapshot,
-  ) {
-    return FirestoreDocument(
-      id: snapshot.id,
-      path: snapshot.reference.path,
-      fields: _normalizeSdkMap(snapshot.data() ?? const <String, dynamic>{}),
-    );
-  }
-
-  Map<String, dynamic> _normalizeSdkMap(Map<String, dynamic> source) {
-    return source.map<String, dynamic>(
-      (key, value) => MapEntry(key, _normalizeSdkValue(value)),
-    );
-  }
-
-  dynamic _normalizeSdkValue(dynamic value) {
-    if (value is cf.Timestamp) return value.toDate();
-    if (value is cf.DocumentReference) return value.path;
-    if (value is cf.GeoPoint) {
-      return <String, dynamic>{
-        'latitude': value.latitude,
-        'longitude': value.longitude,
-      };
-    }
-    if (value is Map) {
-      return value.map<String, dynamic>(
-        (key, nested) => MapEntry(key.toString(), _normalizeSdkValue(nested)),
-      );
-    }
-    if (value is Iterable) {
-      return value.map<dynamic>(_normalizeSdkValue).toList(growable: false);
-    }
-    return value;
-  }
-
-  Map<String, dynamic> _encodeSdkMap(Map<String, dynamic> source) {
-    return source.map<String, dynamic>(
-      (key, value) => MapEntry(key, _encodeSdkValue(value)),
-    );
-  }
-
-  dynamic _encodeSdkValue(dynamic value) {
-    if (value is FirestoreReference) return _sdk.doc(value.path);
-    if (value is Map) {
-      return value.map<String, dynamic>(
-        (key, nested) => MapEntry(key.toString(), _encodeSdkValue(nested)),
-      );
-    }
-    if (value is Iterable) {
-      return value.map<dynamic>(_encodeSdkValue).toList(growable: false);
-    }
-    return value;
   }
 
   Options _publicOptions() {

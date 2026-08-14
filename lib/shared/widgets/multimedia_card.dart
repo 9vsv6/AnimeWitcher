@@ -51,6 +51,11 @@ class MultimediaCard extends StatelessWidget {
         : isDesktop
         ? (isPortrait ? 200.0 : 300.0)
         : (isPortrait ? 130.0 : 200.0);
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final memoryCacheWidth = (cardWidth * devicePixelRatio)
+        .ceil()
+        .clamp(160, 1024)
+        .toInt();
 
     final normalizedEpisodeBadge = episodeBadge?.trim();
     final badgeText =
@@ -70,6 +75,7 @@ class MultimediaCard extends StatelessWidget {
                 imageUrl: normalizedImageUrl!,
                 fit: BoxFit.cover,
                 width: double.infinity,
+                memCacheWidth: memoryCacheWidth,
                 placeholder: (context, url) => showImageLoadingShimmer
                     ? ShimmerPlaceholder(borderRadius: 12)
                     : _buildImageLoadingCard(context),

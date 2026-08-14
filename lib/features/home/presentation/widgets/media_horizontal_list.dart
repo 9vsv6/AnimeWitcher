@@ -69,12 +69,17 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     }
   }
 
+  bool get _shouldProbeAspectRatio =>
+      !widget.forcePortrait &&
+      widget.mediaList.isNotEmpty &&
+      widget.mediaList.first.contentType == MultimediaContentType.livestream;
+
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
 
-    if (!widget.forcePortrait && widget.mediaList.isNotEmpty) {
+    if (_shouldProbeAspectRatio) {
       final url = widget.mediaList.first.posterImageUrl;
       final cached = _lookupCached(url);
       if (cached != null) {
@@ -88,9 +93,11 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
   @override
   void didUpdateWidget(MediaHorizontalList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.forcePortrait &&
-        widget.mediaList.isNotEmpty &&
-        (oldWidget.mediaList != widget.mediaList || oldWidget.forcePortrait)) {
+    if (!_shouldProbeAspectRatio) {
+      if (!_isPortrait) setState(() => _isPortrait = true);
+      return;
+    }
+    if (oldWidget.mediaList != widget.mediaList || oldWidget.forcePortrait) {
       final url = widget.mediaList.first.posterImageUrl;
       final cached = _lookupCached(url);
       if (cached != null) {
@@ -104,7 +111,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
   }
 
   Future<void> _checkAspectRatio() async {
-    if (widget.forcePortrait || widget.mediaList.isEmpty) return;
+    if (!_shouldProbeAspectRatio) return;
     final url = widget.mediaList.first.posterImageUrl;
     if (url.isEmpty) return;
     final isPortrait = await ImageUtils.isImagePortrait(url);

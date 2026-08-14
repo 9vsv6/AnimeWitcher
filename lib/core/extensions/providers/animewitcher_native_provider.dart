@@ -1,11 +1,9 @@
 import 'dart:convert';
 
-import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:dio/dio.dart';
 import 'package:html_unescape/html_unescape.dart';
 
 import '../../domain/entity/multimedia_item.dart';
-import '../../firebase/animewitcher_firebase.dart';
 import '../../storage/settings_repository.dart';
 import '../base_provider.dart';
 import 'mediafire_utils.dart';
@@ -280,10 +278,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     }
   }
 
-  bool get _useFirestoreSdk => AnimeWitcherFirebase.isInitialized;
-
-  cf.FirebaseFirestore get _firestore => cf.FirebaseFirestore.instance;
-
   String _firestoreUrl(String path) {
     return 'https://firestore.googleapis.com/v1/projects/'
         '${Uri.encodeComponent(_firestoreProjectId)}'
@@ -377,67 +371,10 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     }
   }
 
-  dynamic _normalizeFirestoreSdkValue(dynamic value) {
-    if (value is cf.Timestamp) return value.toDate().toUtc().toIso8601String();
-    if (value is cf.DocumentReference) return value.path;
-    if (value is cf.GeoPoint) {
-      return <String, dynamic>{
-        'latitude': value.latitude,
-        'longitude': value.longitude,
-      };
-    }
-    if (value is Map) {
-      return value.map<String, dynamic>(
-        (key, nested) => MapEntry(
-          key.toString(),
-          _normalizeFirestoreSdkValue(nested),
-        ),
-      );
-    }
-    if (value is Iterable) {
-      return value
-          .map<dynamic>(_normalizeFirestoreSdkValue)
-          .toList(growable: false);
-    }
-    return value;
-  }
-
-  Map<String, dynamic> _normalizeFirestoreSdkMap(
-    Map<String, dynamic> source,
-  ) {
-    return source.map<String, dynamic>(
-      (key, value) => MapEntry(key, _normalizeFirestoreSdkValue(value)),
-    );
-  }
-
-  Map<String, dynamic> _firestoreSdkHit(
-    cf.DocumentSnapshot<Map<String, dynamic>> document,
-  ) {
-    final hit = _normalizeFirestoreSdkMap(
-      document.data() ?? const <String, dynamic>{},
-    );
-    hit.putIfAbsent('objectID', () => document.id);
-    hit.putIfAbsent('anime_id', () => document.id);
-    hit.putIfAbsent('path', () => document.id);
-    return hit;
-  }
-
   Future<Map<String, dynamic>> _firestoreDocumentFields(
     String path, {
     Duration timeout = _httpTimeout,
   }) async {
-    if (_useFirestoreSdk) {
-      try {
-        final snapshot = await _firestore.doc(path).get().timeout(timeout);
-        if (snapshot.exists) {
-          return _normalizeFirestoreSdkMap(
-            snapshot.data() ?? const <String, dynamic>{},
-          );
-        }
-      } on Object {
-        // Use the original AnimeWitcher Firestore REST path below.
-      }
-    }
 
     final payload = await _getJson(_firestoreUrl(path), timeout: timeout);
     if (payload == null) return <String, dynamic>{};
@@ -1144,24 +1081,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     };
 
     var foundScheduleHits = false;
-    if (_useFirestoreSdk) {
-      try {
-        final snapshot = await _firestore
-            .collection('anime_list')
-            .where('show_time', whereIn: animeWitcherBroadcastDays)
-            .get();
-        for (final document in snapshot.docs) {
-          final hit = _firestoreSdkHit(document);
-          final day = _text(hit['show_time']);
-          final bucket = grouped[day];
-          if (bucket == null) continue;
-          bucket.add(hit);
-          foundScheduleHits = true;
-        }
-      } on Object {
-        // Fall through to the same REST query used before the SDK migration.
-      }
-    }
 
     if (!foundScheduleHits) {
       final values = animeWitcherBroadcastDays
@@ -1525,22 +1444,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final filterField = ranking.filterField;
     final filterValue = ranking.filterValue;
 
-    if (_useFirestoreSdk) {
-      try {
-        cf.Query<Map<String, dynamic>> query = _firestore.collection('anime_list');
-        if (filterField != null && filterValue != null) {
-          query = query.where(filterField, isEqualTo: filterValue);
-        }
-        final snapshot = await query
-            .orderBy('details.mal_rank')
-            .limit(safeLimit)
-            .get();
-        final hits = snapshot.docs.map(_firestoreSdkHit).toList(growable: false);
-        if (hits.isNotEmpty) return _dedupeHits(hits);
-      } on Object {
-        // Fall through to public Firestore REST.
-      }
-    }
 
     final structuredQuery = <String, dynamic>{
       'from': const <Map<String, dynamic>>[
@@ -1911,20 +1814,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
   Future<List<_AnimeWitcherCharacterRef>>
       _animeWitcherCharacterRefsForRole(String animeId, String role) async {
-    if (_useFirestoreSdk) {
-      try {
-        final snapshot = await _firestore
-            .collection('anime_list/$animeId/characters')
-            .where('role', isEqualTo: role)
-            .limit(10)
-            .get();
-        return snapshot.docs
-            .map((document) => _AnimeWitcherCharacterRef(document.id, role))
-            .toList(growable: false);
-      } on Object {
-        // Use the original Firestore REST query below.
-      }
-    }
 
     final raw = await _firestoreRestRunQuery(
       <String, dynamic>{
@@ -2072,20 +1961,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     List<int> ids,
   ) async {
     if (ids.isEmpty) return const <Map<String, dynamic>>[];
-    if (_useFirestoreSdk) {
-      try {
-        final values = ids.map<String>((id) => '$id').toList(growable: false);
-        final snapshot = await _firestore
-            .collection('anime_list')
-            .where('mal_id', whereIn: values)
-            .limit(ids.length)
-            .get();
-        final hits = snapshot.docs.map(_firestoreSdkHit).toList(growable: false);
-        if (hits.isNotEmpty) return hits;
-      } on Object {
-        // Fall through to public Firestore REST.
-      }
-    }
 
     final values = ids
         .map<Map<String, dynamic>>(
@@ -2549,29 +2424,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<List<_EpisodeRecord>> _fetchEpisodeCollection(String animeId) async {
-    if (_useFirestoreSdk) {
-      try {
-        final snapshot = await _firestore.collection('anime_list/$animeId/episodes').get();
-        final output = <_EpisodeRecord>[];
-        for (final document in snapshot.docs) {
-          final fields = _normalizeFirestoreSdkMap(document.data());
-          var id = _text(fields['doc_id']);
-          if (id.isEmpty) id = document.id;
-          output.add(
-            _episodeRecord(
-              fields,
-              fallbackId: id.isEmpty
-                  ? '${output.length + 1}'.padLeft(3, '0')
-                  : id,
-              fallbackNumber: output.length + 1,
-            ),
-          );
-        }
-        if (output.isNotEmpty) return output;
-      } on Object {
-        // Use the original paged Firestore REST collection below.
-      }
-    }
 
     final output = <_EpisodeRecord>[];
     final encoded = Uri.encodeComponent(animeId);
@@ -2857,27 +2709,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     String animeId,
     String episodeId,
   ) async {
-    if (_useFirestoreSdk) {
-      try {
-        final snapshot = await _firestore
-            .collection('anime_list/$animeId/episodes/$episodeId/servers')
-            .where('name', isNotEqualTo: '')
-            .where('visible', isEqualTo: true)
-            .limit(20)
-            .get()
-            .timeout(_serverTimeout);
-        final output = snapshot.docs
-            .map((document) => _serverRecord(
-                  _normalizeFirestoreSdkMap(document.data()),
-                ))
-            .where((server) =>
-                server.visible && server.name.isNotEmpty && server.link.isNotEmpty)
-            .toList(growable: false);
-        if (output.isNotEmpty) return output;
-      } on Object {
-        // Use the original Firestore REST query below.
-      }
-    }
 
     final parent = 'anime_list/${Uri.encodeComponent(animeId)}/episodes/'
         '${Uri.encodeComponent(episodeId)}';

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
@@ -492,6 +495,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
   int _offset = 0;
   int _generation = 0;
   String? _providerId;
+  Timer? _searchDebounce;
+  CancelToken? _pageCancelToken;
 
   @override
   void initState() {
@@ -513,6 +518,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
   @override
   void dispose() {
     _generation += 1;
+    _searchDebounce?.cancel();
+    _pageCancelToken?.cancel('Search screen disposed');
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
@@ -529,6 +536,9 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
 
   void _resetAndLoad() {
     _generation += 1;
+    _searchDebounce?.cancel();
+    _pageCancelToken?.cancel('Search query changed');
+    _pageCancelToken = null;
     setState(() {
       _items.clear();
       _seen.clear();
@@ -538,7 +548,9 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       _isLoadingMore = false;
       _providerId = null;
     });
-    _loadNextPage();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _loadNextPage();
+    });
   }
 
   String _itemKey(MultimediaItem item) {
@@ -563,6 +575,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
 
     final generation = _generation;
     final requestedOffset = _offset;
+    final requestToken = CancelToken();
+    _pageCancelToken = requestToken;
 
     setState(() {
       _isLoadingMore = true;
@@ -575,9 +589,11 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
         widget.filters,
         offset: requestedOffset,
         limit: provider.searchPageSize,
+        cancelToken: requestToken,
       );
 
-      if (!mounted || generation != _generation) return;
+      if (!mounted || generation != _generation || requestToken.isCancelled) return;
+      if (identical(_pageCancelToken, requestToken)) _pageCancelToken = null;
 
       for (final item in page.items) {
         if (_seen.add(_itemKey(item))) {
@@ -600,7 +616,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
 
       WidgetsBinding.instance.addPostFrameCallback((_) => _ensureFilled());
     } catch (_) {
-      if (!mounted || generation != _generation) return;
+      if (!mounted || generation != _generation || requestToken.isCancelled) return;
+      if (identical(_pageCancelToken, requestToken)) _pageCancelToken = null;
       setState(() {
         _isInitialLoading = false;
         _isLoadingMore = false;

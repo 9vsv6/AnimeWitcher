@@ -3183,22 +3183,30 @@ class PlayerController extends Notifier<PlayerState> {
       // segment pre-fetch combined with high-bitrate representations.
       final profile = ref.read(deviceProfileProvider).asData?.value;
       final isDashStream = _isDashStreamUrl(stream.url);
-      String cacheSize = "512MiB"; // Default
+      // Bound mpv memory aggressively enough for iOS/phones while preserving
+      // a larger desktop cache. High-bitrate streams are still protected by
+      // mpv's adaptive read-ahead; this only caps the maximum resident cache.
+      String cacheSize = "192MiB"; // phones
       if (profile != null) {
         if (profile.isTv) {
-          cacheSize = "128MiB"; // Less RAM on TVs
-        } else if (profile.isDesktopOS || profile.isTablet) {
-          cacheSize = isDashStream ? "256MiB" : "1GiB";
+          cacheSize = "128MiB";
+        } else if (profile.isDesktopOS) {
+          cacheSize = isDashStream ? "256MiB" : "512MiB";
+        } else if (profile.isTablet) {
+          cacheSize = "256MiB";
         }
       }
 
       await native.setProperty('demuxer-max-bytes', cacheSize);
-      // Allow seeking back without re-fetching — proportional to device RAM
+      // Keep backward-seek cache useful without allowing it to rival the
+      // forward cache in memory usage.
       final backCacheSize = profile?.isTv == true
           ? '64MiB'
-          : (profile?.isDesktopOS == true || profile?.isTablet == true)
-          ? '256MiB'
-          : '128MiB';
+          : profile?.isDesktopOS == true
+          ? '128MiB'
+          : profile?.isTablet == true
+          ? '96MiB'
+          : '64MiB';
       await native.setProperty('demuxer-max-back-bytes', backCacheSize);
 
       // 2. Resolve ClearKey Hex Keys
