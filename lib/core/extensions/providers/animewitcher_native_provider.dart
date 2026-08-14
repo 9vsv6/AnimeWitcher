@@ -610,6 +610,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     'episode_name',
     'title',
     'poster_uri',
+    'poster',
+    'cover_uri',
     'mal_id',
     'malId',
     'type',
