@@ -42,6 +42,7 @@ TextStyle _getSubtitleTextStyle(String? fontFamily, TextStyle baseStyle) {
 class PlayerScreen extends ConsumerStatefulWidget {
   final MultimediaItem item;
   final String videoUrl;
+  final String? progressUrl;
   final Episode? episode;
   final StreamResult? selectedSource;
 
@@ -49,6 +50,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
     super.key,
     required this.item,
     required this.videoUrl,
+    this.progressUrl,
     this.episode,
     this.selectedSource,
   });
@@ -179,6 +181,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         player: _player,
         item: widget.item,
         videoUrl: widget.videoUrl,
+        progressUrl: widget.progressUrl,
         episode: widget.episode,
         selectedSource: widget.selectedSource,
         videoViewController: _videoViewController,

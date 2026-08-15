@@ -568,12 +568,16 @@ class _DownloadItemTile extends ConsumerWidget {
     }
 
     if (context.mounted) {
+      final episodeUrl = item.episode?.url.trim() ?? '';
+      final playbackIdentityUrl = episodeUrl.isNotEmpty
+          ? episodeUrl
+          : item.item.url;
       unawaited(
         ref
             .read(playbackLauncherProvider)
             .play(
               context,
-              file.path,
+              playbackIdentityUrl,
               baseItem: item.item,
               episode: item.episode,
             ),

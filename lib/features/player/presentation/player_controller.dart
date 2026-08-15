@@ -246,6 +246,7 @@ class PlayerController extends Notifier<PlayerState> {
   VideoController? _videoViewController;
   late MultimediaItem _item;
   late String _videoUrl;
+  late String _progressUrl;
   Episode? _episode;
   bool _isInitialized = false;
   bool _isDisposed = false;
@@ -349,9 +350,15 @@ class PlayerController extends Notifier<PlayerState> {
 
   bool get _videoViewSupportsMergedExternalSubtitles => Platform.isAndroid;
 
-  // Track last saved position for threshold-based saving
+  // Track last saved position for threshold-based saving.
   Duration _lastSavedPosition = Duration.zero;
   static const double _saveThresholdPercent = 0.05; // 5% of video
+
+  // Keep the last valid local/native engine timeline. Some engines clear
+  // position/duration just before a file is closed; using these values prevents
+  // the final save from being dropped when teardown briefly reports 0/0.
+  int _lastKnownPlaybackPositionMs = 0;
+  int _lastKnownPlaybackDurationMs = 0;
 
   // Subscriptions to prevent leaks
   StreamSubscription<dynamic>? _errorSub;
@@ -589,6 +596,7 @@ class PlayerController extends Notifier<PlayerState> {
     required Player player,
     required MultimediaItem item,
     required String videoUrl,
+    String? progressUrl,
     Episode? episode,
     StreamResult? selectedSource,
     VideoController? videoViewController,
@@ -607,6 +615,14 @@ class PlayerController extends Notifier<PlayerState> {
     _videoViewController = videoViewController;
     _videoUrl = videoUrl;
     _episode = episode;
+    final requestedProgressUrl = progressUrl?.trim() ?? '';
+    final episodeProgressUrl = episode?.url.trim() ?? '';
+    _progressUrl = requestedProgressUrl.isNotEmpty
+        ? requestedProgressUrl
+        : (episodeProgressUrl.isNotEmpty ? episodeProgressUrl : videoUrl);
+    _lastKnownPlaybackPositionMs = 0;
+    _lastKnownPlaybackDurationMs = 0;
+    _lastSavedPosition = Duration.zero;
     _pendingResumeSeekPosition = null;
     _isApplyingPendingResumeSeek = false;
     _userAddedExternalSubtitles.clear();
@@ -1024,6 +1040,8 @@ class PlayerController extends Notifier<PlayerState> {
 
       final posMs = _videoViewController!.position.value;
       final durationMs = _videoViewController!.mediaInfo.value?.duration ?? 0;
+      if (posMs > 0) _lastKnownPlaybackPositionMs = posMs;
+      if (durationMs >= 30000) _lastKnownPlaybackDurationMs = durationMs;
 
       if (posMs > 0 && !_hasConfirmedPlaybackFrame) {
         _confirmPlaybackStarted();
@@ -1147,6 +1165,9 @@ class PlayerController extends Notifier<PlayerState> {
   void _setupDurationListener() {
     _durationSub?.cancel();
     _durationSub = _player.stream.duration.listen((duration) {
+      if (duration.inMilliseconds >= 30000) {
+        _lastKnownPlaybackDurationMs = duration.inMilliseconds;
+      }
       if (duration > Duration.zero) {
         if (_pendingResumeSeekPosition != null) {
           unawaited(_flushPendingResumeSeek());
@@ -1512,7 +1533,13 @@ class PlayerController extends Notifier<PlayerState> {
       }
       // -----------------------------
 
+      if (pos.inMilliseconds > 0) {
+        _lastKnownPlaybackPositionMs = pos.inMilliseconds;
+      }
       final duration = _player.state.duration;
+      if (duration.inMilliseconds >= 30000) {
+        _lastKnownPlaybackDurationMs = duration.inMilliseconds;
+      }
       if (duration == Duration.zero) return;
 
       final currentPct = pos.inMilliseconds / duration.inMilliseconds;
@@ -1778,6 +1805,13 @@ class PlayerController extends Notifier<PlayerState> {
     if (_episode != null) return _episode;
     if (!isSeries) return null;
     return _item.episodes?.firstWhereOrNull((e) => e.url == _videoUrl);
+  }
+
+  String get _currentProgressUrl {
+    final episodeUrl = _episode?.url.trim() ?? '';
+    if (episodeUrl.isNotEmpty) return episodeUrl;
+    final canonical = _progressUrl.trim();
+    return canonical.isNotEmpty ? canonical : _videoUrl;
   }
 
   List<SubtitleFile> _effectiveExternalSubtitles(
@@ -2259,7 +2293,7 @@ class PlayerController extends Notifier<PlayerState> {
       int savedPos = 0;
       if (isSeries) {
         final ep = _resolveCurrentEpisode();
-        final historyEpisodeUrl = ep?.url ?? _videoUrl;
+        final historyEpisodeUrl = _currentProgressUrl;
         savedPos = historyRepo.getEpisodePosition(
           historyEpisodeUrl,
           mainUrl: _item.url,
@@ -2522,6 +2556,9 @@ class PlayerController extends Notifier<PlayerState> {
   /// from leaking into the newly selected episode.
   void _resetPerEpisodeState() {
     _hasMarkedWatched = false;
+    _lastKnownPlaybackPositionMs = 0;
+    _lastKnownPlaybackDurationMs = 0;
+    _lastSavedPosition = Duration.zero;
     _pendingResumeSeekPosition = null;
     _isApplyingPendingResumeSeek = false;
     if (state.skipSegments.isNotEmpty) {
@@ -2573,6 +2610,7 @@ class PlayerController extends Notifier<PlayerState> {
     _hasConfirmedPlaybackFrame = false;
     _videoUrl = finalUrl;
     _episode = nextEpisode;
+    _progressUrl = nextEpisode.url;
     await _recordEpisodeOpened(nextEpisode);
     _userAddedExternalSubtitles.clear();
     _resetPerEpisodeState();
@@ -2640,6 +2678,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     _episode = episode;
     _videoUrl = finalUrl;
+    _progressUrl = episode.url;
     await _recordEpisodeOpened(episode);
     _hasConfirmedPlaybackFrame = false;
     _suppressNextEpisodeDetection = true;
@@ -2670,8 +2709,8 @@ class PlayerController extends Notifier<PlayerState> {
   void saveProgress() {
     try {
       // Read position/duration from whichever engine is currently active.
-      final int pos;
-      final int dur;
+      int pos;
+      int dur;
       if (state.useExoPlayer && _videoViewController != null) {
         pos = _videoViewController!.position.value;
         dur = _videoViewController!.mediaInfo.value?.duration ?? 0;
@@ -2679,6 +2718,18 @@ class PlayerController extends Notifier<PlayerState> {
         pos = _player.state.position.inMilliseconds;
         dur = _player.state.duration.inMilliseconds;
       }
+
+      // Closing a downloaded/local file can clear the engine timeline before
+      // the final pause/dispose callback. Fall back only when the current
+      // duration is invalid, so an intentional seek to 0 is still respected.
+      if (dur < 30000 && _lastKnownPlaybackDurationMs >= 30000) {
+        dur = _lastKnownPlaybackDurationMs;
+        if (pos <= 0 && _lastKnownPlaybackPositionMs > 0) {
+          pos = _lastKnownPlaybackPositionMs;
+        }
+      }
+      if (pos > 0) _lastKnownPlaybackPositionMs = pos;
+      if (dur >= 30000) _lastKnownPlaybackDurationMs = dur;
       final isLivestream =
           _item.contentType == MultimediaContentType.livestream;
 
@@ -2780,7 +2831,7 @@ class PlayerController extends Notifier<PlayerState> {
               pos,
               dur,
               lastStreamUrl: state.currentStream?.url,
-              lastEpisodeUrl: currentEpisode?.url ?? _videoUrl,
+              lastEpisodeUrl: currentEpisode?.url ?? _currentProgressUrl,
               season: currentEpisode?.season,
               episode: currentEpisode?.episode,
               episodeTitle: currentEpisode?.name,

@@ -216,6 +216,9 @@ class PlaybackLauncher {
     final item = detailedItem ?? baseItem;
     final resolvedEpisode =
         episode ?? item.episodes?.firstWhereOrNull((e) => e.url == url);
+    final resolvedEpisodeUrl = resolvedEpisode?.url.trim() ?? '';
+    final canonicalProgressUrl =
+        resolvedEpisodeUrl.isNotEmpty ? resolvedEpisodeUrl : url;
     final downloadService = _ref.read(downloadServiceProvider);
     final localFile = await downloadService.getDownloadedFile(
       item,
@@ -236,12 +239,15 @@ class PlaybackLauncher {
           item,
           localOrEpisodeUrl,
           settings.preferredPlayer!,
+          episode: resolvedEpisode,
+          progressUrl: canonicalProgressUrl,
         );
       } else {
         await PlayerRoute(
           $extra: PlayerRouteExtra(
             item: item,
             videoUrl: localOrEpisodeUrl,
+            progressUrl: canonicalProgressUrl,
             episode: resolvedEpisode,
           ),
         ).push<void>(context);
@@ -274,6 +280,7 @@ class PlaybackLauncher {
         $extra: PlayerRouteExtra(
           item: item,
           videoUrl: localOrEpisodeUrl,
+          progressUrl: canonicalProgressUrl,
           episode: resolvedEpisode,
           selectedSource: selected,
         ),
@@ -298,6 +305,8 @@ class PlaybackLauncher {
           item,
           selected.url,
           settings.preferredPlayer!,
+          episode: resolvedEpisode,
+          progressUrl: canonicalProgressUrl,
         );
       } finally {
         if (baseItem.url.isNotEmpty) {
@@ -316,8 +325,10 @@ class PlaybackLauncher {
     StreamResult stream,
     MultimediaItem item,
     String fallbackVideoUrl,
-    String playerId,
-  ) async {
+    String playerId, {
+    Episode? episode,
+    String? progressUrl,
+  }) async {
     final success = await ExternalPlayerService.instance.launch(
       stream.url,
       headers: stream.headers,
@@ -336,7 +347,12 @@ class PlaybackLauncher {
           );
       unawaited(
         PlayerRoute(
-          $extra: PlayerRouteExtra(item: item, videoUrl: fallbackVideoUrl),
+          $extra: PlayerRouteExtra(
+            item: item,
+            videoUrl: fallbackVideoUrl,
+            progressUrl: progressUrl,
+            episode: episode,
+          ),
         ).push<void>(context),
       );
     }

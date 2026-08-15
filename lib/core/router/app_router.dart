@@ -135,11 +135,13 @@ class PlayerRouteExtra {
   const PlayerRouteExtra({
     required this.item,
     required this.videoUrl,
+    this.progressUrl,
     this.episode,
     this.selectedSource,
   });
   final MultimediaItem item;
   final String videoUrl;
+  final String? progressUrl;
   final Episode? episode;
   final StreamResult? selectedSource;
 }
@@ -205,6 +207,7 @@ class PlayerRoute extends GoRouteData with $PlayerRoute {
     return PlayerScreen(
       item: $extra.item,
       videoUrl: $extra.videoUrl,
+      progressUrl: $extra.progressUrl,
       episode: $extra.episode,
       selectedSource: $extra.selectedSource,
     );
