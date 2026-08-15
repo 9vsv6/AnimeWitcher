@@ -1253,7 +1253,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final rawHits = source['hits_per_page'] ?? source['hitsPerPage'] ?? source['limit'];
     final hits = rawHits is num ? rawHits.toInt() : int.tryParse(_text(rawHits)) ?? _previewSize;
     final rawOrder = source['order'];
-    final order = rawOrder is num ? rawOrder.toInt() : int.tryParse(_text(rawOrder)) ?? 1 << 30;
+    final order = rawOrder is num ? rawOrder.toInt() : int.tryParse(_text(rawOrder)) ?? (1 << 30);
     return _OfficialHomeSection(
       title: _text(source['title']),
       type: _text(source['type']).toLowerCase(),
@@ -1475,18 +1475,64 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     }
     if (firestoreHits.isNotEmpty) return _dedupeHits(firestoreHits);
 
+    // The original app exposes a dedicated MAL-sorted Algolia replica for
+    // every ranking category. This is the important REST-only fallback when
+    // Firestore runQuery is unavailable (for example when the public rules do
+    // not allow structured queries). The mapping already lives on [ranking]
+    // and must not be collapsed to series_ranking_mal for every tab.
+    final rankingPayload = await _algoliaQuery(
+      ranking.queryType,
+      query: '',
+      page: 0,
+      hitsPerPage: safeLimit,
+      attributes: _searchAttributes,
+    );
+    final rankingHits = _list(rankingPayload['hits']);
+    if (rankingHits.isNotEmpty) return _dedupeHits(rankingHits);
+
+    // Backwards-compatible fallback for deployments that only expose the old
+    // shared MAL replica. Category filtering is required on this shared index.
     final filters = filterField != null && filterValue != null
         ? _filterGroup(filterField, <String>[filterValue], 'OR')
         : '';
-    final algolia = await _algoliaQuery(
-      'series_ranking_mal',
+    if (ranking.queryType != 'series_ranking_mal' || filters.isNotEmpty) {
+      final legacyPayload = await _algoliaQuery(
+        'series_ranking_mal',
+        query: '',
+        page: 0,
+        hitsPerPage: safeLimit,
+        filters: filters,
+        attributes: _searchAttributes,
+      );
+      final legacyHits = _list(legacyPayload['hits']);
+      if (legacyHits.isNotEmpty) return _dedupeHits(legacyHits);
+    }
+
+    // Last-resort REST path: the normal series index is used elsewhere in the
+    // app and is therefore more likely to remain available than a ranking
+    // replica. Sort the returned window by MAL rank so the page still behaves
+    // like a ranking instead of showing an empty state.
+    final fallbackPayload = await _algoliaQuery(
+      'series',
       query: '',
       page: 0,
       hitsPerPage: safeLimit,
       filters: filters,
       attributes: _searchAttributes,
     );
-    return _dedupeHits(_list(algolia['hits']));
+    final fallbackHits = _list(fallbackPayload['hits'])
+        .map<Map<String, dynamic>>(_map)
+        .where((hit) => hit.isNotEmpty)
+        .toList(growable: false)
+      ..sort((a, b) {
+        int rank(Map<String, dynamic> hit) {
+          final details = _map(hit['details']);
+          final value = int.tryParse(_text(details['mal_rank'])) ?? (1 << 30);
+          return value > 0 ? value : (1 << 30);
+        }
+        return rank(a).compareTo(rank(b));
+      });
+    return _dedupeHits(fallbackHits);
   }
 
   Future<ProviderNewsPage> _loadNewsPage({
