@@ -146,6 +146,7 @@ jobs:
         with:
           tag: ${{ needs.version.outputs.version }}
           allowUpdates: true
+          draft: true
           replacesArtifacts: true
           artifacts: "*.apk"
           omitBodyDuringUpdate: true
@@ -207,6 +208,7 @@ jobs:
         with:
           tag: ${{ needs.version.outputs.version }}
           allowUpdates: true
+          draft: true
           replacesArtifacts: true
           artifacts: "skystream-ios-unsigned-${{ needs.version.outputs.version }}.ipa"
           omitBodyDuringUpdate: true
@@ -325,6 +327,7 @@ jobs:
         with:
           tag: ${{ needs.version.outputs.version }}
           allowUpdates: true
+          draft: true
           replacesArtifacts: true
           artifacts: |
             skystream-macos-${{ matrix.arch }}-${{ needs.version.outputs.version }}.dmg
@@ -423,6 +426,7 @@ jobs:
         with:
           tag: ${{ needs.version.outputs.version }}
           allowUpdates: true
+          draft: true
           replacesArtifacts: true
           artifacts: |
             windows/packaging/exe/Output/*.exe
