@@ -5,10 +5,16 @@ import UIKit
 
 @available(iOS 26.0, *)
 private enum DownloadContinuedProcessingError: LocalizedError {
+  case missingBundleIdentifier
+  case identifierNotPermitted(String)
   case registrationRejected(String)
 
   var errorDescription: String? {
     switch self {
+    case .missingBundleIdentifier:
+      return "Unable to resolve the app bundle identifier for continued processing."
+    case .identifierNotPermitted(let identifier):
+      return "The continued-processing identifier is not permitted: \(identifier)."
     case .registrationRejected(let identifier):
       return "BGTaskScheduler rejected registration for \(identifier)."
     }
@@ -47,12 +53,10 @@ final class DownloadContinuedProcessingManager {
     progress: Double,
     totalBytes: Int64
   ) throws -> String? {
-    // Apple requires submission to originate from an explicit foreground
-    // action. A restored automatic download therefore keeps using the normal
-    // URLSession path without creating unexpected system UI.
-    guard UIApplication.shared.applicationState == .active else {
-      return nil
-    }
+    // BGContinuedProcessingTaskRequest itself validates that submission is
+    // associated with the foreground app. Avoid an additional UIApplication
+    // state check here: transient `.inactive` states during UI transitions can
+    // otherwise make a user-initiated download silently skip system UI.
 
     let normalized = min(max(progress, 0.0), 1.0)
     let snapshot = Snapshot(
@@ -67,8 +71,17 @@ final class DownloadContinuedProcessingManager {
       return identifiers[taskId]
     }
 
-    let identifier = identifiers[taskId] ?? taskIdentifier(for: taskId)
-    identifiers[taskId] = identifier
+    let identifier: String
+    if let existingIdentifier = identifiers[taskId] {
+      identifier = existingIdentifier
+    } else {
+      identifier = try taskIdentifier(for: taskId)
+      identifiers[taskId] = identifier
+    }
+
+    guard isPermittedTaskIdentifier(identifier) else {
+      throw DownloadContinuedProcessingError.identifierNotPermitted(identifier)
+    }
 
     if !registeredIdentifiers.contains(identifier) {
       let accepted = scheduler.register(
@@ -213,8 +226,10 @@ final class DownloadContinuedProcessingManager {
     scheduler.cancel(taskRequestWithIdentifier: identifier)
   }
 
-  private func taskIdentifier(for taskId: String) -> String {
-    let bundleId = Bundle.main.bundleIdentifier ?? "dev.akash.skystream"
+  private func taskIdentifier(for taskId: String) throws -> String {
+    guard let bundleId = Bundle.main.bundleIdentifier, !bundleId.isEmpty else {
+      throw DownloadContinuedProcessingError.missingBundleIdentifier
+    }
     let safeSuffix = taskId.replacingOccurrences(
       of: "[^A-Za-z0-9_-]",
       with: "-",
@@ -224,6 +239,19 @@ final class DownloadContinuedProcessingManager {
       ? UUID().uuidString
       : String(safeSuffix.prefix(80))
     return "\(bundleId).download.\(suffix)"
+  }
+
+  private func isPermittedTaskIdentifier(_ identifier: String) -> Bool {
+    let permitted = Bundle.main.object(
+      forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers"
+    ) as? [String] ?? []
+
+    return permitted.contains { pattern in
+      if pattern == identifier { return true }
+      guard pattern.hasSuffix(".*") else { return false }
+      let prefix = String(pattern.dropLast())
+      return identifier.hasPrefix(prefix)
+    }
   }
 
   private func title(for displayName: String) -> String {

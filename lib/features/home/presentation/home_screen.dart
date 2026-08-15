@@ -322,6 +322,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         normalized.contains('recently added');
   }
 
+  bool _isMostWatchedAnimationSectionTitle(String title) {
+    final normalized = title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[ً-ٰٟ]'), '')
+        .replaceAll(RegExp(r'[أإآ]'), 'ا')
+        .replaceAll('ة', 'ه')
+        .replaceAll(RegExp(r' +'), ' ')
+        .trim();
+
+    final isAnimation = normalized.contains('انميشن') ||
+        normalized.contains('انيميشن') ||
+        normalized.contains('animation');
+    final isMostWatched = normalized.contains('الاكثر مشاهده') ||
+        normalized.contains('most watched') ||
+        normalized.contains('most viewed');
+    return isAnimation && isMostWatched;
+  }
+
   List<Widget> _buildProviderSectionsWithNews(
     BuildContext context,
     Map<String, List<MultimediaItem>> data,
@@ -332,8 +350,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         .where((entry) => entry.key != 'Trending')
         .toList(growable: false);
     var newsAfterIndex = entries.indexWhere(
-      (entry) => _isLatestAddedSectionTitle(entry.key),
+      (entry) => _isMostWatchedAnimationSectionTitle(entry.key),
     );
+    if (newsAfterIndex < 0) {
+      newsAfterIndex = entries.indexWhere(
+        (entry) => _isLatestAddedSectionTitle(entry.key),
+      );
+    }
     if (newsAfterIndex < 0 && entries.isNotEmpty) {
       newsAfterIndex = entries.length - 1;
     }

@@ -165,7 +165,7 @@ import UserNotifications
     liquidGlassPresenterChannel = glassPresenter
 
     let channel = FlutterMethodChannel(
-      name: "dev.akash.skystream/download_continued_processing",
+      name: "com.animewitcher.app/download_continued_processing",
       binaryMessenger: messenger
     )
 

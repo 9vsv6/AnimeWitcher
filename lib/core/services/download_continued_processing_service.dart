@@ -10,7 +10,7 @@ typedef SystemDownloadCancellation = Future<void> Function(String taskId);
 /// and background_downloader continues to work normally.
 class DownloadContinuedProcessingService {
   static const MethodChannel _channel = MethodChannel(
-    'dev.akash.skystream/download_continued_processing',
+    'com.animewitcher.app/download_continued_processing',
   );
 
   final SystemDownloadCancellation onSystemCancel;

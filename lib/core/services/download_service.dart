@@ -451,13 +451,13 @@ class DownloadService {
         (candidate) => candidate.task.taskId == taskId,
       );
 
-      await FileDownloader().resume(task);
       await _continuedProcessing.start(
         taskId: taskId,
         displayName: task.displayName,
         progress: record?.progress ?? 0.0,
         totalBytes: record?.expectedFileSize ?? -1,
       );
+      await FileDownloader().resume(task);
     }
   }
 
@@ -575,6 +575,15 @@ class DownloadService {
         );
       }
 
+      // Attach iOS 26 continued processing to the explicit user action before
+      // any resume call can yield back to the run loop.
+      await _continuedProcessing.start(
+        taskId: existingRecord.task.taskId,
+        displayName: filename,
+        progress: existingRecord.progress,
+        totalBytes: existingRecord.expectedFileSize,
+      );
+
       // If it was paused, resume it!
       if (existingRecord.status == TaskStatus.paused) {
         if (kDebugMode) {
@@ -586,12 +595,6 @@ class DownloadService {
       }
 
       _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
-      await _continuedProcessing.start(
-        taskId: existingRecord.task.taskId,
-        displayName: filename,
-        progress: existingRecord.progress,
-        totalBytes: existingRecord.expectedFileSize,
-      );
       return true;
     }
 
@@ -629,6 +632,15 @@ class DownloadService {
       metaData: trackingUrl ?? url,
     );
 
+    // Submit the iOS 26 continued-processing request immediately after the
+    // download task exists. This keeps the request as close as possible to the
+    // user's tap and before directory I/O or URLSession enqueueing can yield.
+    await _continuedProcessing.start(
+      taskId: task.taskId,
+      displayName: filename,
+      totalBytes: totalBytes,
+    );
+
     if (kDebugMode) debugPrint('[DownloadService] Enqueuing task...');
 
     // Create the directory if it doesn't exist
@@ -645,16 +657,6 @@ class DownloadService {
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
-
-    // iOS 26 requires BGContinuedProcessingTask submission to originate from
-    // the user's explicit foreground action. Start the system task before the
-    // URLSession transfer is enqueued so the Lock Screen / Dynamic Island task
-    // is reliably created even if enqueueing or metadata persistence takes time.
-    await _continuedProcessing.start(
-      taskId: task.taskId,
-      displayName: filename,
-      totalBytes: totalBytes,
-    );
 
     final success = await FileDownloader().enqueue(task);
     if (kDebugMode) debugPrint('[DownloadService] Enqueue result: $success');
