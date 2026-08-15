@@ -1440,10 +1440,23 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     AnimeWitcherGlobalRanking ranking, {
     int limit = 100,
   }) async {
+    final page = await getGlobalRankingPage(
+      ranking,
+      offset: 0,
+      limit: limit,
+    );
+    return page.items;
+  }
+
+  Future<ProviderMediaPage> getGlobalRankingPage(
+    AnimeWitcherGlobalRanking ranking, {
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    final safeOffset = offset < 0 ? 0 : offset;
     final safeLimit = limit.clamp(1, 100).toInt();
     final filterField = ranking.filterField;
     final filterValue = ranking.filterValue;
-
 
     final structuredQuery = <String, dynamic>{
       'from': const <Map<String, dynamic>>[
@@ -1463,6 +1476,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
           'direction': 'ASCENDING',
         },
       ],
+      if (safeOffset > 0) 'offset': safeOffset,
       'limit': safeLimit,
     };
     final raw = await _firestoreRestRunQuery(structuredQuery);
@@ -1473,25 +1487,44 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       final hit = _firestoreDocumentHit(document);
       if (hit.isNotEmpty) firestoreHits.add(hit);
     }
-    if (firestoreHits.isNotEmpty) return _dedupeHits(firestoreHits);
+    if (firestoreHits.isNotEmpty) {
+      return ProviderMediaPage(
+        items: await _dedupeHits(firestoreHits),
+        nextOffset: safeOffset + firestoreHits.length,
+        hasMore: firestoreHits.length >= safeLimit,
+      );
+    }
 
-    // The original app exposes a dedicated MAL-sorted Algolia replica for
-    // every ranking category. This is the important REST-only fallback when
-    // Firestore runQuery is unavailable (for example when the public rules do
-    // not allow structured queries). The mapping already lives on [ranking]
-    // and must not be collapsed to series_ranking_mal for every tab.
+    final pageNumber = safeOffset ~/ safeLimit;
+    ProviderMediaPage pageFromAlgolia(Map<String, dynamic> payload) {
+      final rawHits = _list(payload['hits']);
+      final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: (pageNumber + 1) * safeLimit,
+        hasMore: nbPages > 0
+            ? pageNumber + 1 < nbPages
+            : rawHits.length >= safeLimit,
+      );
+    }
+
     final rankingPayload = await _algoliaQuery(
       ranking.queryType,
       query: '',
-      page: 0,
+      page: pageNumber,
       hitsPerPage: safeLimit,
       attributes: _searchAttributes,
     );
     final rankingHits = _list(rankingPayload['hits']);
-    if (rankingHits.isNotEmpty) return _dedupeHits(rankingHits);
+    if (rankingHits.isNotEmpty) {
+      final pagination = pageFromAlgolia(rankingPayload);
+      return ProviderMediaPage(
+        items: await _dedupeHits(rankingHits),
+        nextOffset: pagination.nextOffset,
+        hasMore: pagination.hasMore,
+      );
+    }
 
-    // Backwards-compatible fallback for deployments that only expose the old
-    // shared MAL replica. Category filtering is required on this shared index.
     final filters = filterField != null && filterValue != null
         ? _filterGroup(filterField, <String>[filterValue], 'OR')
         : '';
@@ -1499,23 +1532,26 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       final legacyPayload = await _algoliaQuery(
         'series_ranking_mal',
         query: '',
-        page: 0,
+        page: pageNumber,
         hitsPerPage: safeLimit,
         filters: filters,
         attributes: _searchAttributes,
       );
       final legacyHits = _list(legacyPayload['hits']);
-      if (legacyHits.isNotEmpty) return _dedupeHits(legacyHits);
+      if (legacyHits.isNotEmpty) {
+        final pagination = pageFromAlgolia(legacyPayload);
+        return ProviderMediaPage(
+          items: await _dedupeHits(legacyHits),
+          nextOffset: pagination.nextOffset,
+          hasMore: pagination.hasMore,
+        );
+      }
     }
 
-    // Last-resort REST path: the normal series index is used elsewhere in the
-    // app and is therefore more likely to remain available than a ranking
-    // replica. Sort the returned window by MAL rank so the page still behaves
-    // like a ranking instead of showing an empty state.
     final fallbackPayload = await _algoliaQuery(
       'series',
       query: '',
-      page: 0,
+      page: pageNumber,
       hitsPerPage: safeLimit,
       filters: filters,
       attributes: _searchAttributes,
@@ -1532,7 +1568,12 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         }
         return rank(a).compareTo(rank(b));
       });
-    return _dedupeHits(fallbackHits);
+    final pagination = pageFromAlgolia(fallbackPayload);
+    return ProviderMediaPage(
+      items: await _dedupeHits(fallbackHits),
+      nextOffset: pagination.nextOffset,
+      hasMore: pagination.hasMore,
+    );
   }
 
   Future<ProviderNewsPage> _loadNewsPage({
