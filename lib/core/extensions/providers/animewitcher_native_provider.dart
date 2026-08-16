@@ -3231,6 +3231,42 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         .trim();
   }
 
+  /// Matches AnimeWitcher's original generic `loadServer` extraction.
+  /// GF uses this path: keep the first marker in the slice, cut at the second
+  /// marker, then remove the marker text itself. A normalized retry covers
+  /// pages that serialize the same markers through escaped HTML/JavaScript.
+  String _extractAnimeWitcherGenericServer(
+    String input,
+    String start,
+    String end,
+  ) {
+    String extract(String source, String startWord, String endWord) {
+      if (source.isEmpty || startWord.isEmpty || endWord.isEmpty) return '';
+      final startIndex = source.indexOf(startWord);
+      if (startIndex < 0) return '';
+      final fromStart = source.substring(startIndex);
+      final endIndex = fromStart.indexOf(endWord);
+      if (endIndex < 0) return '';
+      final beforeEnd = fromStart.substring(0, endIndex);
+      return _cleanServerExtract(
+        beforeEnd.replaceAll(startWord, '').replaceAll(endWord, ''),
+      );
+    }
+
+    final direct = extract(input, start, end);
+    if (direct.isNotEmpty) return direct;
+
+    final normalizedInput = _normalizePageEscapes(input);
+    final normalizedStart = _normalizePageEscapes(start);
+    final normalizedEnd = _normalizePageEscapes(end);
+    if (normalizedInput == input &&
+        normalizedStart == start &&
+        normalizedEnd == end) {
+      return '';
+    }
+    return extract(normalizedInput, normalizedStart, normalizedEnd);
+  }
+
   StreamResult _serverStream(
     _ServerRecord server,
     String url, {
@@ -3284,9 +3320,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         return const <StreamResult>[];
       }
 
-      var finalUrl = _cleanServerExtract(
-        _betweenWords(body, words.word1, words.word2),
-      );
+      var finalUrl = rawName == 'GF'
+          ? _extractAnimeWitcherGenericServer(body, words.word1, words.word2)
+          : _cleanServerExtract(
+              _betweenWords(body, words.word1, words.word2),
+            );
       if (finalUrl.isEmpty) return const <StreamResult>[];
 
       if (rawName == 'ST') {
@@ -3333,6 +3371,14 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
           );
         }
         return const <StreamResult>[];
+      }
+
+      // AnimeWitcher's original generic GF path hands the extracted URL to
+      // the player directly. Do not attach the GF page as Referer: SkyStream
+      // forwards provider headers to both playback and downloads, and that
+      // extra Referer can make otherwise valid GF links reject the request.
+      if (rawName == 'GF') {
+        return <StreamResult>[_serverStream(server, finalUrl)];
       }
 
       return <StreamResult>[
