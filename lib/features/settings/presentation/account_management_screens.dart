@@ -359,7 +359,7 @@ class _AnimeWitcherProfileEditScreenState
   Future<void> _pickImage(AnimeWitcherProfileImageKind kind) async {
     setState(() => _preparingImage = true);
     try {
-      final selection = await FilePicker.platform.pickFiles(
+      final selection = await FilePicker.pickFiles(
         type: FileType.image,
         allowMultiple: false,
         withData: true,
@@ -548,7 +548,7 @@ class _AnimeWitcherChangeEmailScreenState
                 )
               : Icon(
                   _usesPassword
-                      ? Icons.outgoing_mail_rounded
+                      ? Icons.send_rounded
                       : Icons.account_circle_rounded,
                 ),
           label: Text(
