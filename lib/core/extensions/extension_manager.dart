@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../account/account_providers.dart';
 import '../network/dio_client_provider.dart';
 import '../storage/settings_repository.dart';
 import 'base_provider.dart';
@@ -16,6 +17,9 @@ class ExtensionManager extends _$ExtensionManager {
       AnimeWitcherNativeProvider(
         ref.watch(dioClientProvider),
         ref.watch(settingsRepositoryProvider),
+        resolveAnimeByMalIds: ref
+            .watch(animeWitcherAccountServiceProvider)
+            .resolveAnimeByMalIds,
       ),
     ];
   }

@@ -245,6 +245,53 @@ class FirestoreRestClient {
     }
   }
 
+  /// Mirrors Firestore's `whereIn` query used by AnimeWitcher's Related tab.
+  ///
+  /// AnimeWitcher stores `anime_list.mal_id` as a string even though the
+  /// relation objects contain numeric IDs. Keep the values encoded as strings
+  /// and cap the batch at the same ten items shown by the official app.
+  Future<List<FirestoreDocument>> queryByStringValues({
+    required String collectionId,
+    required String field,
+    required Iterable<String> values,
+    required String idToken,
+  }) async {
+    final normalizedValues = values
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .take(10)
+        .toList(growable: false);
+    if (normalizedValues.isEmpty) {
+      return const <FirestoreDocument>[];
+    }
+
+    try {
+      final response = await _dio.post<dynamic>(
+        '$_documentsBase:runQuery',
+        data: <String, dynamic>{
+          'structuredQuery': <String, dynamic>{
+            'from': <Map<String, dynamic>>[
+              <String, dynamic>{'collectionId': collectionId},
+            ],
+            'where': <String, dynamic>{
+              'fieldFilter': <String, dynamic>{
+                'field': <String, dynamic>{'fieldPath': field},
+                'op': 'IN',
+                'value': FirestoreValueCodec.encode(normalizedValues),
+              },
+            },
+            'limit': normalizedValues.length,
+          },
+        },
+        options: _options(idToken),
+      );
+      return _decodeRunQueryDocuments(response.data);
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
   Future<List<FirestoreDocument>> queryPublishedComments(
     String collectionPath, {
     String orderField = 'date',

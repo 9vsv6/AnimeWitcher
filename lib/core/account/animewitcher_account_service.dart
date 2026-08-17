@@ -663,6 +663,38 @@ class AnimeWitcherAccountService {
     return snapshot;
   }
 
+  /// Resolves AnimeWitcher's numeric relation IDs with the same single
+  /// authenticated Firestore `whereIn("mal_id", ...)` request used by the
+  /// official app. Firestore rules reject this root collection query for an
+  /// unauthenticated REST client, so it intentionally goes through the active
+  /// AnimeWitcher session.
+  Future<List<Map<String, dynamic>>> resolveAnimeByMalIds(
+    Iterable<int> malIds,
+  ) async {
+    final ids = malIds
+        .where((id) => id > 0)
+        .toSet()
+        .take(10)
+        .toList(growable: false);
+    if (ids.isEmpty) return const <Map<String, dynamic>>[];
+
+    final documents = await _authenticated(
+      (token) => _firestore.queryByStringValues(
+        collectionId: 'anime_list',
+        field: 'mal_id',
+        values: ids.map((id) => '$id'),
+        idToken: token,
+      ),
+    );
+    return documents.map((document) {
+      final hit = Map<String, dynamic>.from(document.fields);
+      hit.putIfAbsent('objectID', () => document.id);
+      hit.putIfAbsent('anime_id', () => document.id);
+      hit.putIfAbsent('path', () => document.id);
+      return hit;
+    }).toList(growable: false);
+  }
+
   Future<AnimeWitcherCommentPage> loadComments(
     AnimeWitcherCommentTarget target, {
     AnimeWitcherCommentSort sort = AnimeWitcherCommentSort.newest,

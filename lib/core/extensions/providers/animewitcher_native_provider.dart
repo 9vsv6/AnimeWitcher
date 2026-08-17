@@ -79,16 +79,24 @@ extension AnimeWitcherGlobalRankingInfo on AnimeWitcherGlobalRanking {
       };
 }
 
+typedef AnimeWitcherMalIdResolver =
+    Future<List<Map<String, dynamic>>> Function(Iterable<int> malIds);
+
 /// Native AnimeWitcher implementation used during the JS-to-native migration.
 ///
 /// It mirrors the current plugin's Firestore/Algolia metadata, independent
 /// detail sections, optional AniZip episode artwork, and MF/ST/PD playback
 /// paths while the JavaScript provider remains installed for verification.
 class AnimeWitcherNativeProvider extends SkyStreamProvider {
-  AnimeWitcherNativeProvider(this._dio, this._settings);
+  AnimeWitcherNativeProvider(
+    this._dio,
+    this._settings, {
+    AnimeWitcherMalIdResolver? resolveAnimeByMalIds,
+  }) : _resolveAnimeByMalIds = resolveAnimeByMalIds;
 
   final Dio _dio;
   final SettingsRepository _settings;
+  final AnimeWitcherMalIdResolver? _resolveAnimeByMalIds;
   final HtmlUnescape _unescape = HtmlUnescape();
 
   static const String _baseUrl = 'https://animewitcher.com';
@@ -148,8 +156,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   static const int _previewSize = 10;
   static const int _maxRelatedItems = 10;
   static const int _maxRecommendations = 10;
-  static const int _relatedBrowsePageSize = 1000;
-  static const int _maxRelatedBrowsePages = 25;
 
 
   bool get _useAniZipEpisodeImages =>
@@ -497,33 +503,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         'hits': const <dynamic>[],
         'page': 0,
         'nbPages': 0,
-      };
-    }
-    return payload;
-  }
-
-  Future<Map<String, dynamic>> _algoliaBrowsePage(
-    String index, {
-    String cursor = '',
-    List<String>? attributes,
-  }) async {
-    await _refreshRemoteConstants();
-    final parameters = cursor.isNotEmpty
-        ? <String, String>{'cursor': cursor}
-        : <String, String>{
-            'query': '',
-            'hitsPerPage': '$_relatedBrowsePageSize',
-            if (attributes != null && attributes.isNotEmpty)
-              'attributesToRetrieve': jsonEncode(attributes),
-          };
-    final url = Uri.parse(
-      _algoliaUrl(index).replaceFirst(RegExp(r'/query$'), '/browse'),
-    ).replace(queryParameters: parameters).toString();
-    final payload = await _getJson(url, headers: _algoliaHeaders);
-    if (payload == null || payload['hits'] is! List) {
-      return <String, dynamic>{
-        'hits': const <dynamic>[],
-        'cursor': '',
       };
     }
     return payload;
@@ -2074,56 +2053,27 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<void> _loadMalIdBatch(List<int> ids) async {
-    final pending = ids.where((id) => id > 0).toSet();
-    if (pending.isEmpty) return;
+    final requestedIds = ids.where((id) => id > 0).toSet();
+    final resolver = _resolveAnimeByMalIds;
+    if (requestedIds.isEmpty || resolver == null) return;
 
-    // The official Firebase SDK resolves related_anime_ids with a Firestore
-    // whereIn(mal_id) query. The public REST rules reject that collection
-    // query, so use AnimeWitcher's own Algolia browse endpoint only to map the
-    // MAL ids to AnimeWitcher document ids, then hydrate the actual Firestore
-    // documents below. This keeps Related separate from series_similar.
-    final indexHits = <int, Map<String, dynamic>>{};
-    final seenCursors = <String>{};
-    var cursor = '';
-    for (var page = 0;
-        page < _maxRelatedBrowsePages && pending.isNotEmpty;
-        page++) {
-      final payload = await _algoliaBrowsePage(
-        'series_name_asc',
-        cursor: cursor,
-        attributes: _similarAttributes,
-      );
-      final hits = _list(payload['hits']);
-      if (hits.isEmpty) break;
-      for (final raw in hits) {
-        final hit = _map(raw);
-        final id = _malId(hit);
-        if (id <= 0 || !pending.remove(id)) continue;
-        indexHits[id] = hit;
-      }
-      if (pending.isEmpty) break;
-      final nextCursor = _text(payload['cursor']);
-      if (nextCursor.isEmpty || !seenCursors.add(nextCursor)) break;
-      cursor = nextCursor;
+    // This is one authenticated Firestore IN request for all ten related MAL
+    // IDs, matching AnimeWitcher's RelatedAnimeFragment. Do not replace it
+    // with an Algolia browse loop: mal_id is neither searchable nor facetable
+    // in AnimeWitcher's index, so browsing turns one lookup into many pages.
+    final List<Map<String, dynamic>> hits;
+    try {
+      hits = await resolver(requestedIds);
+    } catch (_) {
+      return;
     }
 
-    final hydrated = await Future.wait(
-      indexHits.entries.map((entry) async {
-        final animeId = _animeIdFromHit(entry.value);
-        if (animeId.isEmpty) return entry;
-        final document = await _fetchAnimeDocument(animeId);
-        if (document.isEmpty) return entry;
-        return MapEntry<int, Map<String, dynamic>>(
-          entry.key,
-          _mergeMaps(entry.value, document),
-        );
-      }),
-    );
-
     final expiresAt = DateTime.now().add(_relatedDataTtl);
-    for (final entry in hydrated) {
-      _animeByMalIdCache[entry.key] = entry.value;
-      _animeByMalIdExpiresAt[entry.key] = expiresAt;
+    for (final hit in hits) {
+      final id = _malId(hit);
+      if (id <= 0 || !requestedIds.contains(id)) continue;
+      _animeByMalIdCache[id] = hit;
+      _animeByMalIdExpiresAt[id] = expiresAt;
     }
   }
 
