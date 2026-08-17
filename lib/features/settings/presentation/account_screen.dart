@@ -79,7 +79,7 @@ class _AnimeWitcherAccountScreenState
             children: [
               const SizedBox(height: LayoutConstants.spacingMd),
               if (profile != null)
-                _buildSignedIn(profile, snapshot!, busy)
+                _buildSignedIn(profile, busy)
               else
                 _buildSignedOut(busy, asyncError),
             ],
@@ -372,7 +372,6 @@ class _AnimeWitcherAccountScreenState
 
   Widget _buildSignedIn(
     AnimeWitcherProfile profile,
-    AnimeWitcherAccountSnapshot snapshot,
     bool busy,
   ) {
     final colors = Theme.of(context).colorScheme;
@@ -567,59 +566,7 @@ class _AnimeWitcherAccountScreenState
                     ? 'أكد كلمة المرور الحالية أولًا'
                     : 'استخدم الدخول بالبريد بعد تأكيد Google',
               ),
-              isLast: true,
               onTap: busy ? null : () => _openPasswordEditor(profile),
-            ),
-          ],
-        ),
-        const SizedBox(height: LayoutConstants.spacingLg),
-        SettingsGroup(
-          title: appText(
-            context,
-            english: 'Account sync',
-            arabic: 'مزامنة الحساب',
-          ),
-          children: [
-            SettingsTile(
-              icon: Icons.check_circle_rounded,
-              title: appText(
-                context,
-                english: 'Signed in',
-                arabic: 'تم تسجيل الدخول',
-              ),
-              subtitle: profile.hasGoogleProvider && hasPassword
-                  ? appText(
-                      context,
-                      english: 'Google and email password',
-                      arabic: 'Google والبريد وكلمة المرور',
-                    )
-                  : profile.signInMethod == AnimeWitcherSignInMethod.google
-                  ? 'Google'
-                  : appText(
-                      context,
-                      english: 'Email and password',
-                      arabic: 'البريد وكلمة المرور',
-                    ),
-              trailing: Icon(
-                Icons.cloud_done_rounded,
-                color: colors.primary,
-              ),
-            ),
-            SettingsTile(
-              icon: Icons.sync_rounded,
-              title: appText(
-                context,
-                english: 'Sync now',
-                arabic: 'مزامنة الآن',
-              ),
-              subtitle: _lastSyncLabel(snapshot.lastSyncAt),
-              trailing: busy
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : null,
-              onTap: busy ? null : _syncNow,
             ),
             SettingsTile(
               icon: Icons.logout_rounded,
@@ -635,44 +582,6 @@ class _AnimeWitcherAccountScreenState
               ),
               isLast: true,
               onTap: busy ? null : _signOut,
-            ),
-          ],
-        ),
-        const SizedBox(height: LayoutConstants.spacingLg),
-        SettingsGroup(
-          title: appText(
-            context,
-            english: 'Synchronized data',
-            arabic: 'البيانات التي تتم مزامنتها',
-          ),
-          children: [
-            SettingsTile(
-              icon: Icons.play_circle_outline_rounded,
-              title: appText(
-                context,
-                english: 'Continue watching',
-                arabic: 'إكمال المشاهدة',
-              ),
-              trailing: const Icon(Icons.check_rounded),
-            ),
-            SettingsTile(
-              icon: Icons.task_alt_rounded,
-              title: appText(
-                context,
-                english: 'Watched episodes',
-                arabic: 'الحلقات التي تمت مشاهدتها',
-              ),
-              trailing: const Icon(Icons.check_rounded),
-            ),
-            SettingsTile(
-              icon: Icons.video_library_rounded,
-              title: appText(
-                context,
-                english: 'Anime lists and favorites',
-                arabic: 'قوائم الأنمي والمفضلة',
-              ),
-              trailing: const Icon(Icons.check_rounded),
-              isLast: true,
             ),
           ],
         ),
@@ -960,28 +869,6 @@ class _AnimeWitcherAccountScreenState
     }
   }
 
-  Future<void> _syncNow() async {
-    setState(() => _submitting = true);
-    try {
-      await ref
-          .read(animeWitcherAccountControllerProvider.notifier)
-          .syncNow();
-      if (mounted) {
-        _showMessage(
-          appText(
-            context,
-            english: 'Synchronization completed.',
-            arabic: 'اكتملت المزامنة.',
-          ),
-        );
-      }
-    } catch (error) {
-      if (mounted) _showMessage(_localizedError(error), isError: true);
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
   Future<void> _signOut() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1127,28 +1014,6 @@ class _AnimeWitcherAccountScreenState
           },
         ),
       ),
-    );
-  }
-
-  String _lastSyncLabel(DateTime? date) {
-    if (date == null) {
-      return appText(
-        context,
-        english: 'Not synchronized yet',
-        arabic: 'لم تتم المزامنة بعد',
-      );
-    }
-    final local = date.toLocal();
-    final value =
-        '${local.year.toString().padLeft(4, '0')}-'
-        '${local.month.toString().padLeft(2, '0')}-'
-        '${local.day.toString().padLeft(2, '0')} '
-        '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
-    return appText(
-      context,
-      english: 'Last sync: $value',
-      arabic: 'آخر مزامنة: $value',
     );
   }
 
