@@ -65,6 +65,7 @@ class _AnimeWitcherProfileEditScreenState
     final busy = _saving || _preparingImage;
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         leading: !appleUsesPersistentLiquidGlassHeader
             ? const AppleLiquidGlassBackButton()
             : null,
@@ -797,6 +798,7 @@ class _AccountFormScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         leading: !appleUsesPersistentLiquidGlassHeader
             ? const AppleLiquidGlassBackButton()
             : null,

@@ -362,6 +362,7 @@ class _AnimeWitcherMyCommentsScreenState
     ref.watch(animeWitcherAccountControllerProvider);
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         leading: !appleUsesPersistentLiquidGlassHeader &&
                 Navigator.of(context).canPop()
             ? const AppleLiquidGlassBackButton()

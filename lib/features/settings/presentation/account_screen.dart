@@ -56,6 +56,7 @@ class _AnimeWitcherAccountScreenState
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         leading: !appleUsesPersistentLiquidGlassHeader &&
                 Navigator.of(context).canPop()
             ? const AppleLiquidGlassBackButton()
