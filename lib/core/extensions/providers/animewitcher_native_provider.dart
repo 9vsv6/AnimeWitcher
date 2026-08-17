@@ -2045,13 +2045,16 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<List<Map<String, dynamic>>> _runMalIdQuery(
-    List<int> ids,
-  ) async {
+    List<int> ids, {
+    required bool integerValues,
+  }) async {
     if (ids.isEmpty) return const <Map<String, dynamic>>[];
 
     final values = ids
         .map<Map<String, dynamic>>(
-          (id) => <String, dynamic>{'stringValue': '$id'},
+          (id) => <String, dynamic>{
+            integerValues ? 'integerValue' : 'stringValue': '$id',
+          },
         )
         .toList(growable: false);
     final raw = await _firestoreRestRunQuery(<String, dynamic>{
@@ -2078,12 +2081,26 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   Future<void> _loadMalIdBatch(List<int> ids) async {
-    for (final hit in await _runMalIdQuery(ids)) {
+    final resolved = <int, Map<String, dynamic>>{};
+    for (final hit in await _runMalIdQuery(ids, integerValues: false)) {
       final id = _malId(hit);
-      if (id > 0) {
-        _animeByMalIdCache[id] = hit;
-        _animeByMalIdExpiresAt[id] = DateTime.now().add(_relatedDataTtl);
-      }
+      if (id > 0) resolved[id] = hit;
+    }
+
+    // Some AnimeWitcher documents store mal_id as a Firestore integer while
+    // older documents store it as a string. Firestore queries are type-strict.
+    final missing = ids
+        .where((id) => !resolved.containsKey(id))
+        .toList(growable: false);
+    for (final hit in await _runMalIdQuery(missing, integerValues: true)) {
+      final id = _malId(hit);
+      if (id > 0) resolved[id] = hit;
+    }
+
+    final expiresAt = DateTime.now().add(_relatedDataTtl);
+    for (final entry in resolved.entries) {
+      _animeByMalIdCache[entry.key] = entry.value;
+      _animeByMalIdExpiresAt[entry.key] = expiresAt;
     }
   }
 
