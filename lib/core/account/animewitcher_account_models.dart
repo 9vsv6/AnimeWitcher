@@ -1,5 +1,7 @@
 enum AnimeWitcherSignInMethod { email, google }
 
+enum AnimeWitcherProfileImageKind { avatar, cover }
+
 class AnimeWitcherSession {
   const AnimeWitcherSession({
     required this.uid,
@@ -10,6 +12,7 @@ class AnimeWitcherSession {
     this.email,
     this.displayName,
     this.photoUrl,
+    this.providerIds = const <String>[],
   });
 
   final String uid;
@@ -20,6 +23,7 @@ class AnimeWitcherSession {
   final String? email;
   final String? displayName;
   final String? photoUrl;
+  final List<String> providerIds;
 
   bool get needsRefresh =>
       DateTime.now().add(const Duration(minutes: 2)).isAfter(expiresAt);
@@ -33,6 +37,7 @@ class AnimeWitcherSession {
     String? email,
     String? displayName,
     String? photoUrl,
+    List<String>? providerIds,
   }) {
     return AnimeWitcherSession(
       uid: uid ?? this.uid,
@@ -43,6 +48,7 @@ class AnimeWitcherSession {
       email: email ?? this.email,
       displayName: displayName ?? this.displayName,
       photoUrl: photoUrl ?? this.photoUrl,
+      providerIds: providerIds ?? this.providerIds,
     );
   }
 
@@ -55,6 +61,7 @@ class AnimeWitcherSession {
     'email': email,
     'displayName': displayName,
     'photoUrl': photoUrl,
+    'providerIds': providerIds,
   };
 
   factory AnimeWitcherSession.fromJson(Map<String, dynamic> json) {
@@ -72,6 +79,7 @@ class AnimeWitcherSession {
       email: _optionalString(json['email']),
       displayName: _optionalString(json['displayName']),
       photoUrl: _optionalString(json['photoUrl']),
+      providerIds: _stringList(json['providerIds']),
     );
   }
 }
@@ -84,6 +92,11 @@ class AnimeWitcherProfile {
     this.email,
     this.userName,
     this.photoUrl,
+    this.coverUrl,
+    this.bio,
+    this.country,
+    this.birthYear,
+    this.providerIds = const <String>[],
   });
 
   final String documentId;
@@ -92,6 +105,47 @@ class AnimeWitcherProfile {
   final String? email;
   final String? userName;
   final String? photoUrl;
+  final String? coverUrl;
+  final String? bio;
+  final String? country;
+  final String? birthYear;
+  final List<String> providerIds;
+
+  bool get hasPasswordProvider => providerIds.contains('password');
+  bool get hasGoogleProvider => providerIds.contains('google.com');
+
+  AnimeWitcherProfile copyWith({
+    String? documentId,
+    String? uid,
+    AnimeWitcherSignInMethod? signInMethod,
+    String? email,
+    String? userName,
+    String? photoUrl,
+    String? coverUrl,
+    String? bio,
+    String? country,
+    String? birthYear,
+    List<String>? providerIds,
+    bool clearPhotoUrl = false,
+    bool clearCoverUrl = false,
+    bool clearBio = false,
+    bool clearCountry = false,
+    bool clearBirthYear = false,
+  }) {
+    return AnimeWitcherProfile(
+      documentId: documentId ?? this.documentId,
+      uid: uid ?? this.uid,
+      signInMethod: signInMethod ?? this.signInMethod,
+      email: email ?? this.email,
+      userName: userName ?? this.userName,
+      photoUrl: clearPhotoUrl ? null : (photoUrl ?? this.photoUrl),
+      coverUrl: clearCoverUrl ? null : (coverUrl ?? this.coverUrl),
+      bio: clearBio ? null : (bio ?? this.bio),
+      country: clearCountry ? null : (country ?? this.country),
+      birthYear: clearBirthYear ? null : (birthYear ?? this.birthYear),
+      providerIds: providerIds ?? this.providerIds,
+    );
+  }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'documentId': documentId,
@@ -100,6 +154,11 @@ class AnimeWitcherProfile {
     'email': email,
     'userName': userName,
     'photoUrl': photoUrl,
+    'coverUrl': coverUrl,
+    'bio': bio,
+    'country': country,
+    'birthYear': birthYear,
+    'providerIds': providerIds,
   };
 
   factory AnimeWitcherProfile.fromJson(Map<String, dynamic> json) {
@@ -113,6 +172,11 @@ class AnimeWitcherProfile {
       email: _optionalString(json['email']),
       userName: _optionalString(json['userName']),
       photoUrl: _optionalString(json['photoUrl']),
+      coverUrl: _optionalString(json['coverUrl']),
+      bio: _optionalString(json['bio']),
+      country: _optionalString(json['country']),
+      birthYear: _optionalString(json['birthYear']),
+      providerIds: _stringList(json['providerIds']),
     );
   }
 }
@@ -153,4 +217,13 @@ class AnimeWitcherAccountException implements Exception {
 String? _optionalString(dynamic raw) {
   final value = raw?.toString().trim() ?? '';
   return value.isEmpty ? null : value;
+}
+
+List<String> _stringList(dynamic raw) {
+  if (raw is! Iterable) return const <String>[];
+  return raw
+      .map((value) => value?.toString().trim() ?? '')
+      .where((value) => value.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
 }

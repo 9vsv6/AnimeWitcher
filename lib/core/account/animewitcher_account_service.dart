@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -14,6 +15,8 @@ import 'animewitcher_comment_models.dart';
 import 'animewitcher_sync_conflict.dart';
 import 'animewitcher_sync_ids.dart';
 import 'firebase_auth_rest_client.dart';
+import 'firebase_functions_rest_client.dart';
+import 'firebase_storage_rest_client.dart';
 import 'firestore_rest_client.dart';
 
 class AnimeWitcherAccountService {
@@ -22,10 +25,14 @@ class AnimeWitcherAccountService {
     required SecureTokenStorage secureStorage,
     FirebaseAuthRestClient? auth,
     FirestoreRestClient? firestore,
+    FirebaseStorageRestClient? cloudStorage,
+    FirebaseFunctionsRestClient? functions,
   }) : _storage = storage,
        _secureStorage = secureStorage,
        _auth = auth ?? FirebaseAuthRestClient(),
-       _firestore = firestore ?? FirestoreRestClient();
+       _firestore = firestore ?? FirestoreRestClient(),
+       _cloudStorage = cloudStorage ?? FirebaseStorageRestClient(),
+       _functions = functions ?? FirebaseFunctionsRestClient();
 
   static const String _sessionKey = 'animewitcher_account_session_v1';
   static const String _profileKey = 'animewitcher_account_profile_v1';
@@ -46,6 +53,8 @@ class AnimeWitcherAccountService {
   final SecureTokenStorage _secureStorage;
   final FirebaseAuthRestClient _auth;
   final FirestoreRestClient _firestore;
+  final FirebaseStorageRestClient _cloudStorage;
+  final FirebaseFunctionsRestClient _functions;
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   AnimeWitcherSession? _session;
@@ -115,6 +124,7 @@ class AnimeWitcherAccountService {
         email: _optionalString(user['email']),
         displayName: _optionalString(user['displayName']),
         photoUrl: _optionalString(user['photoUrl']),
+        providerIds: _providerIdsFromUser(user['providerUserInfo']),
       );
       _profile = await _resolveProfile(
         _session!,
@@ -122,6 +132,7 @@ class AnimeWitcherAccountService {
             _session!.signInMethod == AnimeWitcherSignInMethod.google,
       );
       await _persistSession();
+      _syncNewAuthEmailBestEffort(_session!);
       await syncAll();
     } on AnimeWitcherAccountException catch (error) {
       if (error.code == 'invalid-session' ||
@@ -154,21 +165,7 @@ class AnimeWitcherAccountService {
   }
 
   Future<AnimeWitcherAccountSnapshot> signInWithGoogle() async {
-    if (!AnimeWitcherAccountConfig.googleConfigured) {
-      throw const AnimeWitcherAccountException(
-        'google-not-configured',
-        'Google sign-in is not configured for this platform.',
-      );
-    }
-    if (!_googleInitialized) {
-      await _googleSignIn.initialize(
-        clientId: AnimeWitcherAccountConfig.googleIosClientId.trim().isEmpty
-            ? null
-            : AnimeWitcherAccountConfig.googleIosClientId,
-        serverClientId: AnimeWitcherAccountConfig.googleServerClientId,
-      );
-      _googleInitialized = true;
-    }
+    await _initializeGoogleSignIn();
     final googleAccount = await _googleSignIn.authenticate();
     final googleToken = googleAccount.authentication.idToken;
     if (googleToken == null || googleToken.isEmpty) {
@@ -263,6 +260,370 @@ class AnimeWitcherAccountService {
     return _auth.sendPasswordResetEmail(email);
   }
 
+  Future<AnimeWitcherAccountSnapshot> updateProfile({
+    required String userName,
+    required String bio,
+    required String country,
+    required String birthYear,
+    Uint8List? avatarBytes,
+    Uint8List? coverBytes,
+  }) async {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in before editing the account profile.',
+      );
+    }
+    final normalizedName = userName.trim();
+    final normalizedBio = bio.trim();
+    final normalizedCountry = country.trim();
+    final normalizedBirthYear = birthYear.trim();
+    if (normalizedName.length < 5 || normalizedName.length > 25) {
+      throw const AnimeWitcherAccountException(
+        'invalid-user-name',
+        'The user name must contain 5 to 25 characters.',
+      );
+    }
+    if (normalizedBio.length > 200) {
+      throw const AnimeWitcherAccountException(
+        'bio-too-long',
+        'The profile bio must contain no more than 200 characters.',
+      );
+    }
+    if (normalizedCountry.length > 30) {
+      throw const AnimeWitcherAccountException(
+        'country-too-long',
+        'The country must contain no more than 30 characters.',
+      );
+    }
+    if (normalizedBirthYear.isNotEmpty) {
+      final parsed = int.tryParse(normalizedBirthYear);
+      if (parsed == null || parsed < 1970 || parsed > 2020) {
+        throw const AnimeWitcherAccountException(
+          'invalid-birth-year',
+          'The birth year must be between 1970 and 2020.',
+        );
+      }
+    }
+    final existingBirthYear = profile.birthYear?.trim() ?? '';
+    if (existingBirthYear.isNotEmpty &&
+        normalizedBirthYear != existingBirthYear) {
+      throw const AnimeWitcherAccountException(
+        'birth-year-locked',
+        'The birth year can only be set once.',
+      );
+    }
+    const maximumImageBytes = 10 * 1024 * 1024;
+    if ((avatarBytes?.length ?? 0) > maximumImageBytes ||
+        (coverBytes?.length ?? 0) > maximumImageBytes) {
+      throw const AnimeWitcherAccountException(
+        'image-too-large',
+        'The selected image is too large.',
+      );
+    }
+
+    var avatarUrl = profile.photoUrl;
+    var coverUrl = profile.coverUrl;
+    await _authenticated((token) async {
+      if (avatarBytes != null) {
+        avatarUrl = await _cloudStorage.uploadAccountImage(
+          idToken: token,
+          documentId: profile.documentId,
+          kind: AnimeWitcherProfileImageKind.avatar,
+          bytes: avatarBytes,
+        );
+      }
+      if (coverBytes != null) {
+        coverUrl = await _cloudStorage.uploadAccountImage(
+          idToken: token,
+          documentId: profile.documentId,
+          kind: AnimeWitcherProfileImageKind.cover,
+          bytes: coverBytes,
+        );
+      }
+
+      final fields = <String, dynamic>{'user_name': normalizedName};
+      final deleteFields = <String>{};
+      void setOptional(String field, String value) {
+        if (value.isEmpty) {
+          deleteFields.add(field);
+        } else {
+          fields[field] = value;
+        }
+      }
+
+      setOptional('bio', normalizedBio);
+      setOptional('country', normalizedCountry);
+      setOptional('birth_date', normalizedBirthYear);
+      if (avatarUrl != null) fields['pic_uri'] = avatarUrl;
+      if (coverUrl != null) fields['cover_uri'] = coverUrl;
+      await _firestore.patchDocument(
+        'users/${profile.documentId}',
+        fields,
+        token,
+        deleteFields: deleteFields,
+      );
+      if (normalizedName != (profile.userName?.trim() ?? '')) {
+        await _firestore.setDocumentWithServerTimestamps(
+          'users/${profile.documentId}/settings/user_data_update',
+          <String, dynamic>{'name': normalizedName},
+          token,
+          serverTimestampFields: const <String>{'date'},
+        );
+      }
+    });
+
+    if (!_isCurrentProfile(profile)) {
+      throw const AnimeWitcherAccountException(
+        'session-changed',
+        'The active account changed while updating the profile.',
+      );
+    }
+    _profile = profile.copyWith(
+      userName: normalizedName,
+      photoUrl: avatarUrl,
+      coverUrl: coverUrl,
+      bio: normalizedBio.isEmpty ? null : normalizedBio,
+      country: normalizedCountry.isEmpty ? null : normalizedCountry,
+      birthYear: normalizedBirthYear.isEmpty ? null : normalizedBirthYear,
+      clearBio: normalizedBio.isEmpty,
+      clearCountry: normalizedCountry.isEmpty,
+      clearBirthYear: normalizedBirthYear.isEmpty,
+    );
+    await _persistSession();
+    return snapshot;
+  }
+
+  Future<AnimeWitcherAccountSnapshot> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final profile = _profile;
+    final activeSession = _session;
+    if (profile == null || activeSession == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in before changing the password.',
+      );
+    }
+    if (newPassword.length < 6) {
+      throw const AnimeWitcherAccountException(
+        'weak-password',
+        'The password must contain at least six characters.',
+      );
+    }
+
+    final usesPassword = profile.hasPasswordProvider ||
+        (profile.providerIds.isEmpty &&
+            profile.signInMethod == AnimeWitcherSignInMethod.email);
+    AnimeWitcherSession reauthenticated;
+    if (usesPassword) {
+      final email = profile.email ?? activeSession.email;
+      if (email == null || currentPassword.length < 6) {
+        throw const AnimeWitcherAccountException(
+          'invalid-credentials',
+          'Enter the current password.',
+        );
+      }
+      reauthenticated = await _auth.signInWithEmail(
+        email: email,
+        password: currentPassword,
+        requireVerified: false,
+      );
+    } else if (profile.hasGoogleProvider ||
+        profile.signInMethod == AnimeWitcherSignInMethod.google) {
+      reauthenticated = await _reauthenticateWithGoogle(profile);
+    } else {
+      throw const AnimeWitcherAccountException(
+        'unsupported-sign-in-provider',
+        'The current sign-in method cannot change the password.',
+      );
+    }
+    _ensureSameAccount(profile, reauthenticated);
+    reauthenticated = reauthenticated.copyWith(
+      signInMethod: activeSession.signInMethod,
+    );
+    final AnimeWitcherSession updated;
+    if (usesPassword) {
+      updated = await _auth.updatePassword(
+        previous: reauthenticated,
+        newPassword: newPassword,
+      );
+    } else {
+      final email = reauthenticated.email ?? profile.email;
+      if (email == null || email.trim().isEmpty) {
+        throw const AnimeWitcherAccountException(
+          'account-email-missing',
+          'The account email address could not be read.',
+        );
+      }
+      updated = await _auth.linkEmailPassword(
+        previous: reauthenticated,
+        email: email,
+        newPassword: newPassword,
+      );
+    }
+    _session = updated.copyWith(signInMethod: activeSession.signInMethod);
+    _profile = profile.copyWith(providerIds: _session!.providerIds);
+    await _persistSession();
+    return snapshot;
+  }
+
+  Future<AnimeWitcherAccountSnapshot> requestEmailChange({
+    required String newEmail,
+    required String currentPassword,
+  }) async {
+    final profile = _profile;
+    final activeSession = _session;
+    if (profile == null || activeSession == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in before changing the email address.',
+      );
+    }
+    final normalizedEmail = newEmail.trim();
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(normalizedEmail)) {
+      throw const AnimeWitcherAccountException(
+        'invalid-email',
+        'Enter a valid email address.',
+      );
+    }
+    if (normalizedEmail.toLowerCase() ==
+        (profile.email ?? activeSession.email ?? '').toLowerCase()) {
+      throw const AnimeWitcherAccountException(
+        'same-email',
+        'This is already the current email address.',
+      );
+    }
+
+    final usesPassword = profile.hasPasswordProvider ||
+        (profile.providerIds.isEmpty &&
+            profile.signInMethod == AnimeWitcherSignInMethod.email);
+    AnimeWitcherSession reauthenticated;
+    if (usesPassword) {
+      final currentEmail = profile.email ?? activeSession.email;
+      if (currentEmail == null || currentPassword.length < 6) {
+        throw const AnimeWitcherAccountException(
+          'invalid-credentials',
+          'Enter the current password.',
+        );
+      }
+      reauthenticated = await _auth.signInWithEmail(
+        email: currentEmail,
+        password: currentPassword,
+        requireVerified: false,
+      );
+    } else if (profile.hasGoogleProvider ||
+        profile.signInMethod == AnimeWitcherSignInMethod.google) {
+      reauthenticated = await _reauthenticateWithGoogle(profile);
+    } else {
+      throw const AnimeWitcherAccountException(
+        'unsupported-sign-in-provider',
+        'The current sign-in method cannot change the email address.',
+      );
+    }
+    _ensureSameAccount(profile, reauthenticated);
+    await _auth.sendEmailChangeVerification(
+      idToken: reauthenticated.idToken,
+      newEmail: normalizedEmail,
+    );
+    await signOut();
+    return snapshot;
+  }
+
+  Future<AnimeWitcherAccountSnapshot> deleteAccount() async {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in before deleting the account.',
+      );
+    }
+    await _authenticated(
+      (token) => _firestore.patchDocument(
+        'users/${profile.documentId}',
+        const <String, dynamic>{'delete_account': true},
+        token,
+      ),
+    );
+    await signOut();
+    return snapshot;
+  }
+
+  Future<void> _initializeGoogleSignIn() async {
+    if (!AnimeWitcherAccountConfig.googleConfigured) {
+      throw const AnimeWitcherAccountException(
+        'google-not-configured',
+        'Google sign-in is not configured for this platform.',
+      );
+    }
+    if (_googleInitialized) return;
+    await _googleSignIn.initialize(
+      clientId: AnimeWitcherAccountConfig.googleIosClientId.trim().isEmpty
+          ? null
+          : AnimeWitcherAccountConfig.googleIosClientId,
+      serverClientId: AnimeWitcherAccountConfig.googleServerClientId,
+    );
+    _googleInitialized = true;
+  }
+
+  Future<AnimeWitcherSession> _reauthenticateWithGoogle(
+    AnimeWitcherProfile profile,
+  ) async {
+    await _initializeGoogleSignIn();
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+    final googleAccount = await _googleSignIn.authenticate();
+    final googleToken = googleAccount.authentication.idToken;
+    if (googleToken == null || googleToken.isEmpty) {
+      throw const AnimeWitcherAccountException(
+        'google-token-missing',
+        'Google did not return a usable sign-in token.',
+      );
+    }
+    final AnimeWitcherSession session;
+    try {
+      session = await _auth.reauthenticateWithGoogleIdToken(googleToken);
+    } on AnimeWitcherAccountException catch (error) {
+      if (error.code == 'invalid-session' || error.code == 'account-not-found') {
+        throw const AnimeWitcherAccountException(
+          'wrong-google-account',
+          'Choose the same Google account to confirm your identity.',
+        );
+      }
+      rethrow;
+    }
+    _ensureSameAccount(profile, session);
+    return session;
+  }
+
+  void _ensureSameAccount(
+    AnimeWitcherProfile profile,
+    AnimeWitcherSession session,
+  ) {
+    if (session.uid != profile.uid) {
+      throw const AnimeWitcherAccountException(
+        'wrong-google-account',
+        'Choose the same Google account to confirm your identity.',
+      );
+    }
+  }
+
+  void _syncNewAuthEmailBestEffort(AnimeWitcherSession session) {
+    if (session.email == null || session.email!.trim().isEmpty) return;
+    unawaited(() async {
+      try {
+        await _functions.syncNewAuthEmailToFirestore(session.idToken);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('[AnimeWitcherAccount] Email sync deferred: $error');
+        }
+      }
+    }());
+  }
+
   Future<void> signOut() async {
     if (_googleInitialized) {
       try {
@@ -284,6 +645,7 @@ class AnimeWitcherAccountService {
             session.signInMethod == AnimeWitcherSignInMethod.google,
       );
       await _persistSession();
+      _syncNewAuthEmailBestEffort(session);
     } catch (_) {
       await _clearLocalSession();
       rethrow;
@@ -349,6 +711,139 @@ class AnimeWitcherAccountService {
       cursor: documents.isEmpty ? cursor : documents.last,
       hasMore: documents.length >= limit,
     );
+  }
+
+  Future<AnimeWitcherCommentPage> loadMyComments({
+    AnimeWitcherCommentSort sort = AnimeWitcherCommentSort.newest,
+    FirestoreDocument? cursor,
+    int limit = 20,
+  }) async {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher to manage your comments.',
+      );
+    }
+    final documents = await _authenticated(
+      (token) => _firestore.queryUserComments(
+        userId: profile.documentId,
+        idToken: token,
+        orderField: sort.orderField,
+        descending: sort.descending,
+        startAfter: cursor,
+        limit: limit,
+      ),
+    );
+    final comments = documents
+        .map(
+          (document) => AnimeWitcherComment.fromDocument(
+            document,
+            fallbackUserName: profile.userName,
+            fallbackUserPhotoUrl: profile.photoUrl,
+          ),
+        )
+        .where((comment) => comment.text.isNotEmpty)
+        .toList(growable: false);
+    return AnimeWitcherCommentPage(
+      items: comments,
+      cursor: documents.isEmpty ? cursor : documents.last,
+      hasMore: documents.length >= limit,
+    );
+  }
+
+  Future<AnimeWitcherComment> updateOwnComment(
+    AnimeWitcherComment comment,
+    String rawText, {
+    required bool spoiler,
+  }) async {
+    final text = rawText.trim();
+    if (text.isEmpty) {
+      throw const AnimeWitcherAccountException(
+        'comment-empty',
+        'Enter a comment before saving.',
+      );
+    }
+    if (text.length > 500) {
+      throw const AnimeWitcherAccountException(
+        'comment-too-long',
+        'Comments can contain at most 500 characters.',
+      );
+    }
+    final profile = _ownedCommentProfile(comment);
+    await _authenticated((token) async {
+      final userDocument = await _firestore.getDocument(
+        'users/${profile.documentId}',
+        token,
+      );
+      if (userDocument?.fields['banned'] == true) {
+        throw const AnimeWitcherAccountException(
+          'comment-banned',
+          'This account is blocked from commenting.',
+        );
+      }
+      final registrationDate = _dateValue(
+        userDocument?.fields['registration_date'],
+      );
+      if (registrationDate != null &&
+          DateTime.now().toUtc().difference(registrationDate.toUtc()) <
+              const Duration(days: 7)) {
+        throw const AnimeWitcherAccountException(
+          'comment-account-too-new',
+          'The account must be at least seven days old before editing comments.',
+        );
+      }
+      await _firestore.patchDocument(
+        comment.path,
+        <String, dynamic>{'comment': text, 'spoiler': spoiler},
+        token,
+      );
+    });
+    return comment.copyWith(text: text, spoiler: spoiler);
+  }
+
+  Future<void> deleteOwnComment(AnimeWitcherComment comment) async {
+    _ownedCommentProfile(comment);
+    await _authenticated(
+      (token) => _firestore.deleteDocument(comment.path, token),
+    );
+  }
+
+  Future<AnimeWitcherComment> closeOwnCommentReplies(
+    AnimeWitcherComment comment,
+  ) async {
+    _ownedCommentProfile(comment);
+    if (comment.repliesClosed) return comment;
+    await _authenticated(
+      (token) => _firestore.patchDocument(
+        comment.path,
+        const <String, dynamic>{'replies_closed': true},
+        token,
+      ),
+    );
+    return comment.copyWith(repliesClosed: true);
+  }
+
+  AnimeWitcherProfile _ownedCommentProfile(AnimeWitcherComment comment) {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher to manage your comments.',
+      );
+    }
+    final pathSegments = comment.path
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+    if (comment.userId != profile.documentId ||
+        !pathSegments.contains('comments')) {
+      throw const AnimeWitcherAccountException(
+        'permission-denied',
+        'Only the comment author can modify this comment.',
+      );
+    }
+    return profile;
   }
 
   Future<List<AnimeWitcherComment>> _hydrateCommentLikes(
@@ -875,13 +1370,26 @@ class AnimeWitcherAccountService {
       documentId: document.id,
       uid: (fields['uid'] ?? session.uid).toString(),
       signInMethod: session.signInMethod,
-      email: _optionalString(fields['email']) ?? session.email,
+      // Firebase Auth is authoritative after a verified email change. The
+      // official client asynchronously copies it back to Firestore.
+      email: session.email ?? _optionalString(fields['email']),
       userName:
           _optionalString(fields['user_name']) ??
           requestedUserName ??
           session.displayName ??
           _emailName(session.email),
       photoUrl: _optionalString(fields['pic_uri']) ?? session.photoUrl,
+      coverUrl: _optionalString(fields['cover_uri']),
+      bio: _optionalString(fields['bio']),
+      country: _optionalString(fields['country']),
+      birthYear: _optionalString(fields['birth_date']),
+      providerIds: session.providerIds.isEmpty
+          ? <String>[
+              session.signInMethod == AnimeWitcherSignInMethod.google
+                  ? 'google.com'
+                  : 'password',
+            ]
+          : session.providerIds,
     );
   }
 
@@ -2409,6 +2917,17 @@ Map<String, dynamic> _map(dynamic raw) {
 String? _optionalString(dynamic raw) {
   final value = raw?.toString().trim() ?? '';
   return value.isEmpty ? null : value;
+}
+
+List<String> _providerIdsFromUser(dynamic raw) {
+  if (raw is! Iterable) return const <String>[];
+  final providers = <String>{};
+  for (final entry in raw) {
+    if (entry is! Map) continue;
+    final provider = _optionalString(entry['providerId']);
+    if (provider != null) providers.add(provider);
+  }
+  return providers.toList(growable: false);
 }
 
 String _firstString(Iterable<dynamic> values) {

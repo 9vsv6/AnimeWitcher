@@ -65,6 +65,12 @@ class AnimeWitcherComment {
     required this.spoiler,
     this.userPhotoUrl,
     this.date,
+    this.animeId,
+    this.episodeId,
+    this.episodeName,
+    this.characterId,
+    this.characterName,
+    this.newsId,
     this.repliesClosed = false,
     this.likedByMe = false,
   });
@@ -79,28 +85,42 @@ class AnimeWitcherComment {
   final int replies;
   final bool spoiler;
   final DateTime? date;
+  final String? animeId;
+  final String? episodeId;
+  final String? episodeName;
+  final String? characterId;
+  final String? characterName;
+  final String? newsId;
   final bool repliesClosed;
   final bool likedByMe;
 
   String get repliesCollectionPath => '$path/replies';
 
   AnimeWitcherComment copyWith({
+    String? text,
     int? likes,
     int? replies,
+    bool? spoiler,
     bool? likedByMe,
     bool? repliesClosed,
   }) {
     return AnimeWitcherComment(
       id: id,
       path: path,
-      text: text,
+      text: text ?? this.text,
       userId: userId,
       userName: userName,
       likes: likes ?? this.likes,
       replies: replies ?? this.replies,
-      spoiler: spoiler,
+      spoiler: spoiler ?? this.spoiler,
       userPhotoUrl: userPhotoUrl,
       date: date,
+      animeId: animeId,
+      episodeId: episodeId,
+      episodeName: episodeName,
+      characterId: characterId,
+      characterName: characterName,
+      newsId: newsId,
       repliesClosed: repliesClosed ?? this.repliesClosed,
       likedByMe: likedByMe ?? this.likedByMe,
     );
@@ -109,6 +129,8 @@ class AnimeWitcherComment {
   factory AnimeWitcherComment.fromDocument(
     FirestoreDocument document, {
     bool likedByMe = false,
+    String? fallbackUserName,
+    String? fallbackUserPhotoUrl,
   }) {
     final fields = document.fields;
     final user = _stringMap(fields['user']);
@@ -120,13 +142,22 @@ class AnimeWitcherComment {
       userName: _firstNonEmpty(<dynamic>[
         user['name'],
         user['user_name'],
+        fallbackUserName,
         'AnimeWitcher User',
       ]),
-      userPhotoUrl: _optionalText(user['pic'] ?? user['pic_uri']),
+      userPhotoUrl:
+          _optionalText(user['pic'] ?? user['pic_uri']) ??
+          _optionalText(fallbackUserPhotoUrl),
       likes: _intValue(fields['likes']),
       replies: _intValue(fields['replies']),
       spoiler: fields['spoiler'] == true,
       date: _dateValue(fields['date']),
+      animeId: _optionalText(fields['anime_id']),
+      episodeId: _optionalText(fields['episode_id']),
+      episodeName: _optionalText(fields['episode_name']),
+      characterId: _optionalText(fields['character_id']),
+      characterName: _optionalText(fields['character_name']),
+      newsId: _optionalText(fields['new_id']),
       repliesClosed: fields['replies_closed'] == true,
       likedByMe: likedByMe,
     );

@@ -93,6 +93,7 @@ class PlayerState {
   final List<StreamResult> streams;
   final int currentStreamIndex;
   final StreamResult? currentStream;
+  final String? activeEpisodeUrl;
   final StreamResult? previousStream;
   final List<SubtitleFile> externalSubtitles;
   final bool showNextEpisodeOverlay;
@@ -127,6 +128,7 @@ class PlayerState {
     this.streams = const [],
     this.currentStreamIndex = 0,
     this.currentStream,
+    this.activeEpisodeUrl,
     this.previousStream,
     this.externalSubtitles = const [],
     this.showNextEpisodeOverlay = false,
@@ -181,6 +183,7 @@ class PlayerState {
     List<StreamResult>? streams,
     int? currentStreamIndex,
     StreamResult? currentStream,
+    String? activeEpisodeUrl,
     StreamResult? previousStream,
     List<SubtitleFile>? externalSubtitles,
     bool? showNextEpisodeOverlay,
@@ -211,6 +214,7 @@ class PlayerState {
       streams: streams ?? this.streams,
       currentStreamIndex: currentStreamIndex ?? this.currentStreamIndex,
       currentStream: currentStream ?? this.currentStream,
+      activeEpisodeUrl: activeEpisodeUrl ?? this.activeEpisodeUrl,
       previousStream: previousStream ?? this.previousStream,
       externalSubtitles: externalSubtitles ?? this.externalSubtitles,
       showNextEpisodeOverlay:
@@ -671,6 +675,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     state = state.copyWith(
       playerTitle: initialTitle,
+      activeEpisodeUrl: _progressUrl,
       imdbId: imdbId,
       tmdbId: tmdbId,
     );
@@ -2618,6 +2623,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     state = state.copyWith(
       playerTitle: "${_item.title} - ${nextEpisode.name}",
+      activeEpisodeUrl: nextEpisode.url,
       showNextEpisodeOverlay: false,
     );
 
@@ -2688,6 +2694,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     state = state.copyWith(
       playerTitle: "${_item.title} - ${episode.name}",
+      activeEpisodeUrl: episode.url,
     );
 
     if (useDirectSelectedSource) {

@@ -314,9 +314,12 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
     });
 
     final l10n = AppLocalizations.of(context)!;
+    // A stream URL belongs to the selected server and normally differs from
+    // the canonical episode URL. Use the episode identity stored by the
+    // controller so the active-row highlight follows the episode being played.
     final currentUrl =
         ref.watch(
-          playerControllerProvider.select((s) => s.currentStream?.url),
+          playerControllerProvider.select((s) => s.activeEpisodeUrl),
         ) ??
         ref.read(playerControllerProvider.notifier).currentEpisodeUrl;
     var episodes = widget.item.episodes ?? const <Episode>[];
@@ -394,23 +397,6 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
         );
       }
     }
-    // If nothing is currently playing from this list, anchor the first row.
-    if (!anchorAssigned && rows.isNotEmpty) {
-      final firstEpIndex = rows.indexWhere((w) => w is _EpisodeRow);
-      if (firstEpIndex != -1) {
-        final r = rows[firstEpIndex] as _EpisodeRow;
-        rows[firstEpIndex] = _EpisodeRow(
-          episode: r.episode,
-          isCurrent: r.isCurrent,
-          isWatched: r.isWatched,
-          progress: r.progress,
-          isTv: r.isTv,
-          focusNode: _anchorNode,
-          onTap: r.onTap,
-        );
-      }
-    }
-
     return SafeArea(
       left: false,
       child: Column(
