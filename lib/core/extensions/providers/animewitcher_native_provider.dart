@@ -286,10 +286,26 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     }
   }
 
+  String _encodeFirestorePath(String path) {
+    return path.split('/').map((segment) {
+      if (segment.isEmpty) return segment;
+
+      // Some call sites already encode document IDs while others pass the raw
+      // AnimeWitcher ID. Decode once before encoding so reserved characters
+      // such as `?` and `#` cannot be interpreted as URL query/fragment
+      // delimiters, without double-encoding existing `%xx` segments.
+      try {
+        return Uri.encodeComponent(Uri.decodeComponent(segment));
+      } on FormatException {
+        return Uri.encodeComponent(segment);
+      }
+    }).join('/');
+  }
+
   String _firestoreUrl(String path) {
     return 'https://firestore.googleapis.com/v1/projects/'
         '${Uri.encodeComponent(_firestoreProjectId)}'
-        '/databases/(default)/documents/$path';
+        '/databases/(default)/documents/${_encodeFirestorePath(path)}';
   }
 
   String _firestoreRunQueryUrl([String parent = '']) {
@@ -297,7 +313,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         '${Uri.encodeComponent(_firestoreProjectId)}'
         '/databases/(default)/documents';
     final cleanParent = parent.trim();
-    return cleanParent.isEmpty ? '$base:runQuery' : '$base/$cleanParent:runQuery';
+    return cleanParent.isEmpty
+        ? '$base:runQuery'
+        : '$base/${_encodeFirestorePath(cleanParent)}:runQuery';
   }
 
   dynamic _firestoreValue(dynamic raw) {
