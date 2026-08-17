@@ -82,8 +82,8 @@ extension AnimeWitcherGlobalRankingInfo on AnimeWitcherGlobalRanking {
 /// Native AnimeWitcher implementation used during the JS-to-native migration.
 ///
 /// It mirrors the current plugin's Firestore/Algolia metadata, independent
-/// detail sections, AniZip episode metadata, and MF/ST/PD playback paths while
-/// the JavaScript provider remains installed for side-by-side verification.
+/// detail sections, optional AniZip episode artwork, and MF/ST/PD playback
+/// paths while the JavaScript provider remains installed for verification.
 class AnimeWitcherNativeProvider extends SkyStreamProvider {
   AnimeWitcherNativeProvider(this._dio, this._settings);
 

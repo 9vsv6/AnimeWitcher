@@ -784,16 +784,16 @@ class DetailsController extends _$DetailsController {
     return Episode(
       name: source.name,
       url: source.url,
-      season: metadata.season > 0 ? metadata.season : source.season,
-      // AnimeWitcher owns episode numbering. Background metadata may enrich
-      // season/images, but must never renumber or reorder the source episode.
+      // AnimeWitcher owns every episode field. Optional background enrichment
+      // is allowed to replace artwork only (currently from AniZip).
+      season: source.season,
       episode: source.episode,
       description: source.description,
       posterUrl: metadataPoster != null && metadataPoster.isNotEmpty
           ? metadataPoster
           : source.posterUrl,
       headers: source.headers,
-      isFiller: source.isFiller || metadata.isFiller,
+      isFiller: source.isFiller,
       rating: source.rating,
       runtime: source.runtime,
       airDate: source.airDate,
@@ -824,9 +824,8 @@ class DetailsController extends _$DetailsController {
           const <Episode>[];
       if (currentEpisodes.isEmpty) return;
 
-      // Match enrichment by AnimeWitcher's canonical episode URL only.
-      // Number-based matching is unsafe for long/multi-season shows because
-      // AniZip local episode numbers can repeat (for example, episode 1).
+      // Match artwork by AnimeWitcher's canonical episode URL only. AniZip is
+      // never trusted for episode identity or any non-image field.
       final byUrl = <String, Episode>{};
       for (final item in metadata) {
         if (item.url.isNotEmpty) byUrl[item.url] = item;
@@ -837,9 +836,7 @@ class DetailsController extends _$DetailsController {
         final match = byUrl[episode.url];
         if (match == null) return episode;
         final merged = _mergeEpisodeMetadata(episode, match);
-        if (merged.season != episode.season ||
-            merged.episode != episode.episode ||
-            merged.posterUrl != episode.posterUrl) {
+        if (merged.posterUrl != episode.posterUrl) {
           changed = true;
         }
         return merged;
