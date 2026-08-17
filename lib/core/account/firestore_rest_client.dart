@@ -516,6 +516,42 @@ class FirestoreRestClient {
     }
   }
 
+  /// Updates selected fields and can delete others in the same Firestore PATCH.
+  /// A field present in updateMask but omitted from the document is deleted,
+  /// which is the REST equivalent of FieldValue.delete().
+  Future<void> patchDocument(
+    String path,
+    Map<String, dynamic> fields,
+    String idToken, {
+    Set<String> deleteFields = const <String>{},
+  }) async {
+    final overlap = fields.keys.toSet().intersection(deleteFields);
+    if (overlap.isNotEmpty) {
+      throw ArgumentError.value(
+        overlap,
+        'deleteFields',
+        'A field cannot be updated and deleted in the same request.',
+      );
+    }
+    final fieldPaths = <String>{...fields.keys, ...deleteFields}.toList()
+      ..sort();
+    if (fieldPaths.isEmpty) return;
+    try {
+      await _dio.patch<dynamic>(
+        '$_documentsBase/${_encodedPath(path)}',
+        queryParameters: <String, dynamic>{
+          'updateMask.fieldPaths': fieldPaths,
+        },
+        data: <String, dynamic>{
+          'fields': FirestoreValueCodec.encodeFields(fields),
+        },
+        options: _options(idToken),
+      );
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
   /// Writes ordinary fields and lets Firestore assign authoritative server
   /// timestamps in the same atomic commit. AnimeWitcher relies on
   /// FieldValue.serverTimestamp() for ordering lists and resolving progress

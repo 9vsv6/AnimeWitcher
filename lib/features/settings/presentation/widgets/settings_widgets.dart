@@ -44,6 +44,7 @@ class SettingsGroup extends StatelessWidget {
 
 class SettingsTile extends StatefulWidget {
   final IconData icon;
+  final Widget? leading;
   final String title;
   final String? subtitle;
   final Widget? trailing;
@@ -55,6 +56,7 @@ class SettingsTile extends StatefulWidget {
   const SettingsTile({
     super.key,
     required this.icon,
+    this.leading,
     required this.title,
     this.subtitle,
     this.trailing,
@@ -119,14 +121,18 @@ class _SettingsTileState extends State<SettingsTile> {
               child: ListTile(
                 focusColor: Colors.transparent,
                 hoverColor: primary.withValues(alpha: 0.10),
-                leading: Container(
-                  padding: const EdgeInsets.all(LayoutConstants.spacingXs),
-                  decoration: BoxDecoration(
-                    color: primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(widget.icon, color: primary, size: 20),
-                ),
+                leading:
+                    widget.leading ??
+                    Container(
+                      padding: const EdgeInsets.all(
+                        LayoutConstants.spacingXs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(widget.icon, color: primary, size: 20),
+                    ),
                 title: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

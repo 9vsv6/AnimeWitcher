@@ -103,6 +103,7 @@ class SettingsScreen extends ConsumerWidget {
     final animeDataSettings = ref.watch(animeDataSourceSettingsProvider);
     final accountState = ref.watch(animeWitcherAccountControllerProvider);
     final accountProfile = accountState.asData?.value.profile;
+    final accountPhotoUrl = accountProfile?.photoUrl?.trim() ?? '';
 
     final playerSettings =
         ref.watch(playerSettingsProvider).asData?.value ??
@@ -130,6 +131,22 @@ class SettingsScreen extends ConsumerWidget {
                   icon: accountProfile == null
                       ? Icons.account_circle_rounded
                       : Icons.cloud_done_rounded,
+                  leading: accountPhotoUrl.isEmpty
+                      ? null
+                      : CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primaryContainer,
+                          foregroundImage: NetworkImage(accountPhotoUrl),
+                          onForegroundImageError: (_, _) {},
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onPrimaryContainer,
+                          ),
+                        ),
                   title: accountProfile == null
                       ? appText(
                           context,

@@ -12,6 +12,7 @@ void main() {
       email: 'user@example.com',
       displayName: 'Test User',
       photoUrl: 'https://example.com/photo.jpg',
+      providerIds: const <String>['google.com', 'password'],
     );
 
     final restored = AnimeWitcherSession.fromJson(original.toJson());
@@ -24,5 +25,35 @@ void main() {
     expect(restored.email, original.email);
     expect(restored.displayName, original.displayName);
     expect(restored.photoUrl, original.photoUrl);
+    expect(restored.providerIds, original.providerIds);
+  });
+
+  test('account profile preserves AnimeWitcher editable fields', () {
+    const original = AnimeWitcherProfile(
+      documentId: 'profile-1',
+      uid: 'uid-1',
+      signInMethod: AnimeWitcherSignInMethod.google,
+      email: 'user@example.com',
+      userName: 'Sky User',
+      photoUrl: 'https://example.com/avatar.jpg',
+      coverUrl: 'https://example.com/cover.jpg',
+      bio: 'Anime fan',
+      country: 'Palestine',
+      birthYear: '1999',
+      providerIds: <String>['google.com', 'password'],
+    );
+
+    final restored = AnimeWitcherProfile.fromJson(original.toJson());
+
+    expect(restored.documentId, original.documentId);
+    expect(restored.userName, original.userName);
+    expect(restored.photoUrl, original.photoUrl);
+    expect(restored.coverUrl, original.coverUrl);
+    expect(restored.bio, original.bio);
+    expect(restored.country, original.country);
+    expect(restored.birthYear, original.birthYear);
+    expect(restored.providerIds, original.providerIds);
+    expect(restored.hasGoogleProvider, isTrue);
+    expect(restored.hasPasswordProvider, isTrue);
   });
 }

@@ -24,6 +24,19 @@ class AnimeWitcherAccountConfig {
     'ANIMEWITCHER_FIREBASE_API_KEY',
   );
 
+  /// AnimeWitcher's bucket is a public Firebase client identifier. Keeping a
+  /// build-time override makes previews and tests usable with another project
+  /// without adding the native Firebase SDK to iOS.
+  static const String storageBucket = String.fromEnvironment(
+    'ANIMEWITCHER_FIREBASE_STORAGE_BUCKET',
+    defaultValue: 'animewitcher-1c66d.appspot.com',
+  );
+
+  static const String functionsRegion = String.fromEnvironment(
+    'ANIMEWITCHER_FIREBASE_FUNCTIONS_REGION',
+    defaultValue: 'us-central1',
+  );
+
   /// OAuth web/server client used to request a Google ID token which Firebase
   /// can exchange for an AnimeWitcher session.
   static const String googleServerClientId = String.fromEnvironment(
@@ -38,6 +51,9 @@ class AnimeWitcherAccountConfig {
   /// Credentials sufficient for the proven Firebase REST endpoints.
   static bool get firebaseConfigured =>
       projectId.trim().isNotEmpty && apiKey.trim().isNotEmpty;
+
+  static bool get storageConfigured =>
+      firebaseConfigured && storageBucket.trim().isNotEmpty;
 
   /// The official AnimeWitcher registration screen accepts these three mail
   /// providers. Sign-in itself remains open to existing legacy accounts.

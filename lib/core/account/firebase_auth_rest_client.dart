@@ -4,8 +4,9 @@ import 'animewitcher_account_config.dart';
 import 'animewitcher_account_models.dart';
 
 class FirebaseAuthRestClient {
-  FirebaseAuthRestClient({Dio? dio})
-    : _dio = dio ??
+  FirebaseAuthRestClient({Dio? dio, String? apiKey})
+    : _apiKey = apiKey ?? AnimeWitcherAccountConfig.apiKey,
+      _dio = dio ??
           Dio(
             BaseOptions(
               connectTimeout: const Duration(seconds: 15),
@@ -18,6 +19,11 @@ class FirebaseAuthRestClient {
           );
 
   final Dio _dio;
+  final String _apiKey;
+
+  bool get _configured =>
+      AnimeWitcherAccountConfig.projectId.trim().isNotEmpty &&
+      _apiKey.trim().isNotEmpty;
 
   String get _identityBase =>
       'https://identitytoolkit.googleapis.com/v1';
@@ -28,7 +34,7 @@ class FirebaseAuthRestClient {
     required String password,
     bool requireVerified = true,
   }) async {
-    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+    if (!_configured) {
       throw const AnimeWitcherAccountException(
         'not-configured',
         'AnimeWitcher account services are not configured.',
@@ -46,7 +52,7 @@ class FirebaseAuthRestClient {
     required String email,
     required String password,
   }) async {
-    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+    if (!_configured) {
       throw const AnimeWitcherAccountException(
         'not-configured',
         'AnimeWitcher account services are not configured.',
@@ -57,13 +63,33 @@ class FirebaseAuthRestClient {
 
 
   Future<AnimeWitcherSession> signInWithGoogleIdToken(String idToken) async {
-    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+    if (!_configured) {
       throw const AnimeWitcherAccountException(
         'not-configured',
         'AnimeWitcher account services are not configured.',
       );
     }
-    return _signInWithGoogleIdTokenRest(idToken);
+    final session = await _signInWithGoogleIdTokenRest(idToken);
+    return _mergeUser(session, await lookup(session.idToken));
+  }
+
+  /// Reauthenticates an existing Google account without allowing Identity
+  /// Platform to create an accidental account when the wrong Google identity
+  /// is selected.
+  Future<AnimeWitcherSession> reauthenticateWithGoogleIdToken(
+    String idToken,
+  ) async {
+    if (!_configured) {
+      throw const AnimeWitcherAccountException(
+        'not-configured',
+        'AnimeWitcher account services are not configured.',
+      );
+    }
+    final session = await _signInWithGoogleIdTokenRest(
+      idToken,
+      autoCreate: false,
+    );
+    return _mergeUser(session, await lookup(session.idToken));
   }
 
 
@@ -76,7 +102,7 @@ class FirebaseAuthRestClient {
 
 
   Future<void> sendPasswordResetEmail(String email) async {
-    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+    if (!_configured) {
       throw const AnimeWitcherAccountException(
         'not-configured',
         'AnimeWitcher account services are not configured.',
@@ -86,6 +112,79 @@ class FirebaseAuthRestClient {
       'requestType': 'PASSWORD_RESET',
       'email': email.trim(),
     });
+  }
+
+  /// Mirrors FirebaseAuth.verifyBeforeUpdateEmail without requiring the native
+  /// Firebase SDK. The account email changes only after the user opens the
+  /// verification link sent to [newEmail].
+  Future<void> sendEmailChangeVerification({
+    required String idToken,
+    required String newEmail,
+  }) async {
+    await _identityPost('/accounts:sendOobCode', <String, dynamic>{
+      'requestType': 'VERIFY_AND_CHANGE_EMAIL',
+      'idToken': idToken,
+      'newEmail': newEmail.trim(),
+    });
+  }
+
+  /// Changes or adds an email/password credential and returns the rotated
+  /// Firebase session. Google-only AnimeWitcher accounts use this same REST
+  /// endpoint after Google reauthentication to add their first password.
+  Future<AnimeWitcherSession> updatePassword({
+    required AnimeWitcherSession previous,
+    required String newPassword,
+  }) async {
+    final payload = await _identityPost(
+      '/accounts:update',
+      <String, dynamic>{
+        'idToken': previous.idToken,
+        'password': newPassword,
+        'returnSecureToken': true,
+      },
+    );
+    var updated = previous.copyWith(
+      idToken: _optionalString(payload['idToken']) ?? previous.idToken,
+      refreshToken:
+          _optionalString(payload['refreshToken']) ?? previous.refreshToken,
+      expiresAt: _optionalString(payload['idToken']) == null
+          ? previous.expiresAt
+          : DateTime.now().add(
+              Duration(seconds: _intValue(payload['expiresIn'], 3600)),
+            ),
+      email: _optionalString(payload['email']) ?? previous.email,
+      displayName:
+          _optionalString(payload['displayName']) ?? previous.displayName,
+      photoUrl: _optionalString(payload['photoUrl']) ?? previous.photoUrl,
+      providerIds: _providerIds(payload['providerUserInfo']),
+    );
+    updated = _mergeUser(updated, await lookup(updated.idToken));
+    return updated;
+  }
+
+  /// Mirrors linkWithCredential(EmailAuthProvider.credential(...)) for a
+  /// Google-only account. Firebase uses accounts:signUp with the current ID
+  /// token to attach the email/password provider to that same user.
+  Future<AnimeWitcherSession> linkEmailPassword({
+    required AnimeWitcherSession previous,
+    required String email,
+    required String newPassword,
+  }) async {
+    final payload = await _identityPost(
+      '/accounts:signUp',
+      <String, dynamic>{
+        'idToken': previous.idToken,
+        'email': email.trim(),
+        'password': newPassword,
+        'returnSecureToken': true,
+      },
+    );
+    var linked = _sessionFromIdentityPayload(
+      payload,
+      previous.signInMethod,
+    );
+    linked = _mergeUser(linked, await lookup(linked.idToken));
+    return linked;
   }
 
 
@@ -115,7 +214,7 @@ class FirebaseAuthRestClient {
   Future<AnimeWitcherSession> refresh(
     AnimeWitcherSession previous,
   ) async {
-    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+    if (!_configured) {
       throw const AnimeWitcherAccountException(
         'not-configured',
         'AnimeWitcher account services are not configured.',
@@ -125,7 +224,7 @@ class FirebaseAuthRestClient {
       final response = await _dio.post<dynamic>(
         '$_tokenBase/token',
         queryParameters: <String, dynamic>{
-          'key': AnimeWitcherAccountConfig.apiKey,
+          'key': _apiKey,
         },
         data: <String, dynamic>{
           'grant_type': 'refresh_token',
@@ -204,7 +303,10 @@ class FirebaseAuthRestClient {
     );
   }
 
-  Future<AnimeWitcherSession> _signInWithGoogleIdTokenRest(String idToken) async {
+  Future<AnimeWitcherSession> _signInWithGoogleIdTokenRest(
+    String idToken, {
+    bool autoCreate = true,
+  }) async {
     final postBody = Uri(
       queryParameters: <String, String>{
         'id_token': idToken,
@@ -216,6 +318,7 @@ class FirebaseAuthRestClient {
       <String, dynamic>{
         'postBody': postBody,
         'requestUri': 'http://localhost',
+        'autoCreate': autoCreate,
         'returnIdpCredential': true,
         'returnSecureToken': true,
       },
@@ -231,7 +334,7 @@ class FirebaseAuthRestClient {
     String path,
     Map<String, dynamic> data,
   ) async {
-    if (!AnimeWitcherAccountConfig.firebaseConfigured) {
+    if (!_configured) {
       throw const AnimeWitcherAccountException(
         'not-configured',
         'AnimeWitcher account services are not configured.',
@@ -241,7 +344,7 @@ class FirebaseAuthRestClient {
       final response = await _dio.post<dynamic>(
         '$_identityBase$path',
         queryParameters: <String, dynamic>{
-          'key': AnimeWitcherAccountConfig.apiKey,
+          'key': _apiKey,
         },
         data: data,
         options: Options(contentType: Headers.jsonContentType),
@@ -256,6 +359,7 @@ class FirebaseAuthRestClient {
     Map<String, dynamic> payload,
     AnimeWitcherSignInMethod method,
   ) {
+    final providerIds = _providerIds(payload['providerUserInfo']);
     final session = AnimeWitcherSession(
       uid: (payload['localId'] ?? '').toString(),
       idToken: (payload['idToken'] ?? '').toString(),
@@ -267,6 +371,13 @@ class FirebaseAuthRestClient {
       email: _optionalString(payload['email']),
       displayName: _optionalString(payload['displayName']),
       photoUrl: _optionalString(payload['photoUrl']),
+      providerIds: providerIds.isEmpty
+          ? <String>[
+              method == AnimeWitcherSignInMethod.google
+                  ? 'google.com'
+                  : 'password',
+            ]
+          : providerIds,
     );
     if (session.uid.isEmpty ||
         session.idToken.isEmpty ||
@@ -287,6 +398,9 @@ class FirebaseAuthRestClient {
       email: _optionalString(user['email']),
       displayName: _optionalString(user['displayName']),
       photoUrl: _optionalString(user['photoUrl']),
+      providerIds: _providerIds(user['providerUserInfo']).isEmpty
+          ? session.providerIds
+          : _providerIds(user['providerUserInfo']),
     );
   }
 }
@@ -305,6 +419,17 @@ String? _optionalString(dynamic raw) {
 int _intValue(dynamic raw, int fallback) {
   if (raw is num) return raw.toInt();
   return int.tryParse(raw?.toString() ?? '') ?? fallback;
+}
+
+List<String> _providerIds(dynamic raw) {
+  if (raw is! Iterable) return const <String>[];
+  final providers = <String>{};
+  for (final entry in raw) {
+    if (entry is! Map) continue;
+    final provider = _optionalString(entry['providerId']);
+    if (provider != null) providers.add(provider);
+  }
+  return providers.toList(growable: false);
 }
 
 AnimeWitcherAccountException _firebaseException(DioException error) {
@@ -339,6 +464,16 @@ AnimeWitcherAccountException _firebaseException(DioException error) {
     'TOO_MANY_ATTEMPTS_TRY_LATER' => const AnimeWitcherAccountException(
       'too-many-attempts',
       'Too many attempts. Please try again later.',
+    ),
+    'CREDENTIAL_TOO_OLD_LOGIN_AGAIN' ||
+    'REQUIRES_RECENT_LOGIN' => const AnimeWitcherAccountException(
+      'recent-login-required',
+      'Confirm your identity and try again.',
+    ),
+    'FEDERATED_USER_ID_ALREADY_LINKED' ||
+    'PROVIDER_ALREADY_LINKED' => const AnimeWitcherAccountException(
+      'provider-already-linked',
+      'This sign-in method is already linked to another account.',
     ),
     'TOKEN_EXPIRED' ||
     'INVALID_ID_TOKEN' ||

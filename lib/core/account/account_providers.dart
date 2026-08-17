@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -92,6 +93,55 @@ class AnimeWitcherAccountController
       await _service.sendPasswordResetEmail(email);
       return _service.snapshot;
     }, bumpData: false);
+  }
+
+  Future<void> updateProfile({
+    required String userName,
+    required String bio,
+    required String country,
+    required String birthYear,
+    Uint8List? avatarBytes,
+    Uint8List? coverBytes,
+  }) async {
+    await _run(
+      () => _service.updateProfile(
+        userName: userName,
+        bio: bio,
+        country: country,
+        birthYear: birthYear,
+        avatarBytes: avatarBytes,
+        coverBytes: coverBytes,
+      ),
+    );
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _run(
+      () => _service.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      ),
+      bumpData: false,
+    );
+  }
+
+  Future<void> requestEmailChange({
+    required String newEmail,
+    required String currentPassword,
+  }) async {
+    await _run(
+      () => _service.requestEmailChange(
+        newEmail: newEmail,
+        currentPassword: currentPassword,
+      ),
+    );
+  }
+
+  Future<void> deleteAccount() async {
+    await _run(_service.deleteAccount);
   }
 
   Future<void> syncNow() async {

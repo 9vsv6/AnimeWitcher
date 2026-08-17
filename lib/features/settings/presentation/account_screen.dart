@@ -8,6 +8,8 @@ import '../../../core/account/animewitcher_account_models.dart';
 import '../../../core/utils/localized_text.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../shared/widgets/custom_widgets.dart';
+import 'account_management_screens.dart';
+import 'account_ui_helpers.dart';
 import 'widgets/settings_widgets.dart';
 
 enum _AccountFormMode { signIn, createAccount }
@@ -28,9 +30,6 @@ class _AnimeWitcherAccountScreenState
   final _confirmController = TextEditingController();
   _AccountFormMode _mode = _AccountFormMode.signIn;
   bool _submitting = false;
-
-  bool get _isArabic =>
-      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
   @override
   void dispose() {
@@ -378,30 +377,97 @@ class _AnimeWitcherAccountScreenState
   ) {
     final colors = Theme.of(context).colorScheme;
     final photoUrl = profile.photoUrl?.trim() ?? '';
+    final coverUrl = profile.coverUrl?.trim() ?? '';
+    final bio = profile.bio?.trim() ?? '';
+    final country = profile.country?.trim() ?? '';
+    final birthYear = profile.birthYear?.trim() ?? '';
+    final hasPassword =
+        profile.hasPasswordProvider ||
+        (profile.providerIds.isEmpty &&
+            profile.signInMethod == AnimeWitcherSignInMethod.email);
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: LayoutConstants.spacingLg,
-            vertical: LayoutConstants.spacingMd,
+          padding: const EdgeInsets.fromLTRB(
+            LayoutConstants.spacingLg,
+            LayoutConstants.spacingMd,
+            LayoutConstants.spacingLg,
+            LayoutConstants.spacingLg,
           ),
           child: Column(
             children: [
-              CircleAvatar(
-                radius: 42,
-                backgroundColor: colors.primaryContainer,
-                foregroundImage: photoUrl.isEmpty
-                    ? null
-                    : NetworkImage(photoUrl),
-                child: photoUrl.isEmpty
-                    ? Icon(
-                        Icons.person_rounded,
-                        size: 42,
-                        color: colors.onPrimaryContainer,
-                      )
-                    : null,
+              SizedBox(
+                height: 214,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      bottom: 46,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: coverUrl.isEmpty
+                            ? DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      colors.primaryContainer,
+                                      colors.secondaryContainer,
+                                    ],
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.landscape_rounded,
+                                  size: 56,
+                                  color: colors.onPrimaryContainer.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                              )
+                            : Image.network(
+                                coverUrl,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                errorBuilder: (_, _, _) => DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: colors.primaryContainer,
+                                  ),
+                                  child: Icon(
+                                    Icons.landscape_rounded,
+                                    size: 56,
+                                    color: colors.onPrimaryContainer,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: CircleAvatar(
+                          radius: 55,
+                          backgroundColor: colors.primaryContainer,
+                          foregroundImage: photoUrl.isEmpty
+                              ? null
+                              : NetworkImage(photoUrl),
+                          onForegroundImageError: photoUrl.isEmpty
+                              ? null
+                              : (_, _) {},
+                          child: Icon(
+                            Icons.person_rounded,
+                            size: 52,
+                            color: colors.onPrimaryContainer,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: LayoutConstants.spacingMd),
+              const SizedBox(height: LayoutConstants.spacingSm),
               Text(
                 profile.userName ?? profile.email ?? 'AnimeWitcher',
                 textAlign: TextAlign.center,
@@ -417,9 +483,96 @@ class _AnimeWitcherAccountScreenState
                   style: TextStyle(color: colors.onSurfaceVariant),
                 ),
               ],
+              if (bio.isNotEmpty) ...[
+                const SizedBox(height: LayoutConstants.spacingSm),
+                Text(
+                  bio,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+              if (country.isNotEmpty || birthYear.isNotEmpty) ...[
+                const SizedBox(height: LayoutConstants.spacingMd),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: LayoutConstants.spacingSm,
+                  runSpacing: LayoutConstants.spacingSm,
+                  children: [
+                    if (country.isNotEmpty)
+                      Chip(
+                        avatar: const Icon(Icons.public_rounded, size: 18),
+                        label: Text(country),
+                      ),
+                    if (birthYear.isNotEmpty)
+                      Chip(
+                        avatar: const Icon(Icons.cake_rounded, size: 18),
+                        label: Text(birthYear),
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
+        SettingsGroup(
+          title: appText(
+            context,
+            english: 'Manage account',
+            arabic: 'إدارة الحساب',
+          ),
+          children: [
+            SettingsTile(
+              icon: Icons.manage_accounts_rounded,
+              title: appText(
+                context,
+                english: 'Edit profile',
+                arabic: 'تعديل الملف الشخصي',
+              ),
+              subtitle: appText(
+                context,
+                english: 'Picture, cover, name, bio, country, and birth year',
+                arabic: 'الصورة والغلاف والاسم والنبذة والدولة وسنة الميلاد',
+              ),
+              onTap: busy ? null : () => _openProfileEditor(profile),
+            ),
+            SettingsTile(
+              icon: Icons.alternate_email_rounded,
+              title: appText(
+                context,
+                english: 'Change email',
+                arabic: 'تغيير البريد الإلكتروني',
+              ),
+              subtitle: appText(
+                context,
+                english: 'The new address must be verified',
+                arabic: 'يجب التحقق من البريد الجديد',
+              ),
+              onTap: busy ? null : () => _openEmailEditor(profile),
+            ),
+            SettingsTile(
+              icon: Icons.password_rounded,
+              title: appText(
+                context,
+                english: hasPassword ? 'Change password' : 'Add password',
+                arabic: hasPassword
+                    ? 'تغيير كلمة المرور'
+                    : 'إضافة كلمة مرور',
+              ),
+              subtitle: appText(
+                context,
+                english: hasPassword
+                    ? 'Confirm your current password first'
+                    : 'Also sign in with email after Google verification',
+                arabic: hasPassword
+                    ? 'أكد كلمة المرور الحالية أولًا'
+                    : 'استخدم الدخول بالبريد بعد تأكيد Google',
+              ),
+              isLast: true,
+              onTap: busy ? null : () => _openPasswordEditor(profile),
+            ),
+          ],
+        ),
+        const SizedBox(height: LayoutConstants.spacingLg),
         SettingsGroup(
           title: appText(
             context,
@@ -434,8 +587,13 @@ class _AnimeWitcherAccountScreenState
                 english: 'Signed in',
                 arabic: 'تم تسجيل الدخول',
               ),
-              subtitle: profile.signInMethod ==
-                      AnimeWitcherSignInMethod.google
+              subtitle: profile.hasGoogleProvider && hasPassword
+                  ? appText(
+                      context,
+                      english: 'Google and email password',
+                      arabic: 'Google والبريد وكلمة المرور',
+                    )
+                  : profile.signInMethod == AnimeWitcherSignInMethod.google
                   ? 'Google'
                   : appText(
                       context,
@@ -518,8 +676,162 @@ class _AnimeWitcherAccountScreenState
             ),
           ],
         ),
+        const SizedBox(height: LayoutConstants.spacingLg),
+        SettingsGroup(
+          title: appText(
+            context,
+            english: 'Danger zone',
+            arabic: 'منطقة حساسة',
+          ),
+          children: [
+            SettingsTile(
+              icon: Icons.delete_forever_rounded,
+              title: appText(
+                context,
+                english: 'Delete account',
+                arabic: 'حذف الحساب',
+              ),
+              subtitle: appText(
+                context,
+                english: 'Request permanent deletion from AnimeWitcher',
+                arabic: 'طلب حذف الحساب نهائيًا من AnimeWitcher',
+              ),
+              isLast: true,
+              onTap: busy ? null : () => _deleteAccount(profile),
+            ),
+          ],
+        ),
       ],
     );
+  }
+
+  Future<void> _openProfileEditor(AnimeWitcherProfile profile) async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => AnimeWitcherProfileEditScreen(profile: profile),
+      ),
+    );
+    if (updated == true && mounted) {
+      _showMessage(
+        appText(
+          context,
+          english: 'Your account profile was updated.',
+          arabic: 'تم تحديث الملف الشخصي للحساب.',
+        ),
+      );
+    }
+  }
+
+  Future<void> _openEmailEditor(AnimeWitcherProfile profile) async {
+    final sent = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => AnimeWitcherChangeEmailScreen(profile: profile),
+      ),
+    );
+    if (sent == true && mounted) {
+      _showMessage(
+        appText(
+          context,
+          english:
+              'Verification link sent to the new email. Confirm it, then sign in again.',
+          arabic:
+              'أُرسل رابط التحقق إلى البريد الجديد. أكده ثم سجل الدخول مرة ثانية.',
+        ),
+      );
+    }
+  }
+
+  Future<void> _openPasswordEditor(AnimeWitcherProfile profile) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => AnimeWitcherChangePasswordScreen(profile: profile),
+      ),
+    );
+    if (changed == true && mounted) {
+      _showMessage(
+        appText(
+          context,
+          english: profile.hasPasswordProvider
+              ? 'Your password was changed.'
+              : 'A password was added to your account.',
+          arabic: profile.hasPasswordProvider
+              ? 'تم تغيير كلمة المرور.'
+              : 'تمت إضافة كلمة مرور إلى حسابك.',
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteAccount(AnimeWitcherProfile profile) async {
+    final displayName = profile.userName ?? profile.email ?? 'AnimeWitcher';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: Icon(
+          Icons.warning_amber_rounded,
+          color: Theme.of(dialogContext).colorScheme.error,
+        ),
+        title: Text(
+          appText(
+            dialogContext,
+            english: 'Delete $displayName?',
+            arabic: 'حذف حساب $displayName؟',
+          ),
+        ),
+        content: Text(
+          appText(
+            dialogContext,
+            english:
+                'AnimeWitcher will receive a permanent deletion request. You will be signed out immediately.',
+            arabic:
+                'سيتلقى AnimeWitcher طلب حذف نهائي للحساب، وسيتم تسجيل خروجك فورًا.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              appText(dialogContext, english: 'Cancel', arabic: 'إلغاء'),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              appText(
+                dialogContext,
+                english: 'Delete account',
+                arabic: 'حذف الحساب',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _submitting = true);
+    try {
+      await ref
+          .read(animeWitcherAccountControllerProvider.notifier)
+          .deleteAccount();
+      if (mounted) {
+        _showMessage(
+          appText(
+            context,
+            english: 'The account deletion request was sent.',
+            arabic: 'تم إرسال طلب حذف الحساب.',
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) _showMessage(_localizedError(error), isError: true);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   Future<void> _submitEmail() async {
@@ -841,53 +1153,11 @@ class _AnimeWitcherAccountScreenState
   }
 
   String _localizedError(Object error) {
-    if (error is! AnimeWitcherAccountException) {
-      return appText(
-        context,
-        english: 'The operation could not be completed. Try again.',
-        arabic: 'تعذر إكمال العملية. حاول مرة ثانية.',
-      );
-    }
-    final arabic = switch (error.code) {
-      'email-already-in-use' => 'يوجد حساب مسجل بهذا البريد.',
-      'invalid-credentials' => 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
-      'email-not-verified' => 'لم يتم التحقق من البريد الإلكتروني بعد.',
-      'verification-cooldown' =>
-        'يمكنك طلب رسالة تفعيل جديدة بعد مرور 60 ثانية.',
-      'weak-password' => 'يجب أن تحتوي كلمة المرور على 6 أحرف على الأقل.',
-      'untrusted-email-domain' =>
-        'استخدم بريد Gmail أو Outlook أو Yahoo.',
-      'invalid-email' => 'أدخل بريدًا إلكترونيًا صحيحًا.',
-      'user-disabled' => 'تم تعطيل هذا الحساب.',
-      'too-many-attempts' => 'محاولات كثيرة. حاول لاحقًا.',
-      'google-not-configured' => 'دخول Google غير مهيأ لهذه النسخة.',
-      'not-configured' => 'مزامنة AnimeWitcher غير مهيأة لهذه النسخة.',
-      'account-banned' => 'تم إيقاف حساب AnimeWitcher هذا.',
-      'duplicate-user-documents' =>
-        'يوجد تكرار قديم في بيانات الحساب. تواصل مع دعم AnimeWitcher.',
-      'permission-denied' => 'رفض خادم AnimeWitcher عملية المزامنة.',
-      'invalid-session' => 'انتهت جلسة الحساب. سجل الدخول من جديد.',
-      'invalid-user-name' => 'يجب أن يتكون اسم المستخدم من 5 إلى 25 حرفًا.',
-      'profile-not-found' => 'لم يتم العثور على ملف حساب AnimeWitcher.',
-      'account-not-found' => 'لم يتم العثور على الحساب.',
-      'sync-failed' || 'network-or-server-error' =>
-        'تعذّر الاتصال بخادم AnimeWitcher. حاول مرة ثانية.',
-      _ => error.message,
-    };
-    return _isArabic ? arabic : error.message;
+    return localizedAnimeWitcherAccountError(context, error);
   }
 
   void _showMessage(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: isError
-              ? Theme.of(context).colorScheme.error
-              : null,
-        ),
-      );
+    showAnimeWitcherAccountMessage(context, message, isError: isError);
   }
 }
 
