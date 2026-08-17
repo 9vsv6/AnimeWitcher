@@ -386,6 +386,64 @@ class FirestoreRestClient {
     }
   }
 
+  /// Mirrors AnimeWitcher's collectionGroup("comments") account query.
+  /// Unlike public comment lists, this intentionally does not filter by the
+  /// `published` field so the author can also see comments under review.
+  Future<List<FirestoreDocument>> queryUserComments({
+    required String userId,
+    required String idToken,
+    String orderField = 'date',
+    bool descending = true,
+    FirestoreDocument? startAfter,
+    int limit = 20,
+  }) async {
+    final direction = descending ? 'DESCENDING' : 'ASCENDING';
+    final structuredQuery = <String, dynamic>{
+      'from': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'collectionId': 'comments',
+          'allDescendants': true,
+        },
+      ],
+      'where': <String, dynamic>{
+        'fieldFilter': <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': 'user_id'},
+          'op': 'EQUAL',
+          'value': FirestoreValueCodec.encode(userId),
+        },
+      },
+      'orderBy': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': orderField},
+          'direction': direction,
+        },
+        <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': '__name__'},
+          'direction': direction,
+        },
+      ],
+      if (startAfter != null)
+        'startAt': <String, dynamic>{
+          'values': <Map<String, dynamic>>[
+            FirestoreValueCodec.encode(startAfter.fields[orderField]),
+            FirestoreValueCodec.encode(FirestoreReference(startAfter.path)),
+          ],
+          'before': false,
+        },
+      'limit': limit.clamp(1, 100),
+    };
+    try {
+      final response = await _dio.post<dynamic>(
+        '$_documentsBase:runQuery',
+        data: <String, dynamic>{'structuredQuery': structuredQuery},
+        options: _options(idToken),
+      );
+      return _decodeRunQueryDocuments(response.data);
+    } on DioException catch (error) {
+      throw _firestoreException(error);
+    }
+  }
+
   Future<FirestoreDocument?> latestCommentByUser({
     required String userId,
     required String idToken,

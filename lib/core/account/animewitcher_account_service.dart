@@ -713,6 +713,139 @@ class AnimeWitcherAccountService {
     );
   }
 
+  Future<AnimeWitcherCommentPage> loadMyComments({
+    AnimeWitcherCommentSort sort = AnimeWitcherCommentSort.newest,
+    FirestoreDocument? cursor,
+    int limit = 20,
+  }) async {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher to manage your comments.',
+      );
+    }
+    final documents = await _authenticated(
+      (token) => _firestore.queryUserComments(
+        userId: profile.documentId,
+        idToken: token,
+        orderField: sort.orderField,
+        descending: sort.descending,
+        startAfter: cursor,
+        limit: limit,
+      ),
+    );
+    final comments = documents
+        .map(
+          (document) => AnimeWitcherComment.fromDocument(
+            document,
+            fallbackUserName: profile.userName,
+            fallbackUserPhotoUrl: profile.photoUrl,
+          ),
+        )
+        .where((comment) => comment.text.isNotEmpty)
+        .toList(growable: false);
+    return AnimeWitcherCommentPage(
+      items: comments,
+      cursor: documents.isEmpty ? cursor : documents.last,
+      hasMore: documents.length >= limit,
+    );
+  }
+
+  Future<AnimeWitcherComment> updateOwnComment(
+    AnimeWitcherComment comment,
+    String rawText, {
+    required bool spoiler,
+  }) async {
+    final text = rawText.trim();
+    if (text.isEmpty) {
+      throw const AnimeWitcherAccountException(
+        'comment-empty',
+        'Enter a comment before saving.',
+      );
+    }
+    if (text.length > 500) {
+      throw const AnimeWitcherAccountException(
+        'comment-too-long',
+        'Comments can contain at most 500 characters.',
+      );
+    }
+    final profile = _ownedCommentProfile(comment);
+    await _authenticated((token) async {
+      final userDocument = await _firestore.getDocument(
+        'users/${profile.documentId}',
+        token,
+      );
+      if (userDocument?.fields['banned'] == true) {
+        throw const AnimeWitcherAccountException(
+          'comment-banned',
+          'This account is blocked from commenting.',
+        );
+      }
+      final registrationDate = _dateValue(
+        userDocument?.fields['registration_date'],
+      );
+      if (registrationDate != null &&
+          DateTime.now().toUtc().difference(registrationDate.toUtc()) <
+              const Duration(days: 7)) {
+        throw const AnimeWitcherAccountException(
+          'comment-account-too-new',
+          'The account must be at least seven days old before editing comments.',
+        );
+      }
+      await _firestore.patchDocument(
+        comment.path,
+        <String, dynamic>{'comment': text, 'spoiler': spoiler},
+        token,
+      );
+    });
+    return comment.copyWith(text: text, spoiler: spoiler);
+  }
+
+  Future<void> deleteOwnComment(AnimeWitcherComment comment) async {
+    _ownedCommentProfile(comment);
+    await _authenticated(
+      (token) => _firestore.deleteDocument(comment.path, token),
+    );
+  }
+
+  Future<AnimeWitcherComment> closeOwnCommentReplies(
+    AnimeWitcherComment comment,
+  ) async {
+    _ownedCommentProfile(comment);
+    if (comment.repliesClosed) return comment;
+    await _authenticated(
+      (token) => _firestore.patchDocument(
+        comment.path,
+        const <String, dynamic>{'replies_closed': true},
+        token,
+      ),
+    );
+    return comment.copyWith(repliesClosed: true);
+  }
+
+  AnimeWitcherProfile _ownedCommentProfile(AnimeWitcherComment comment) {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher to manage your comments.',
+      );
+    }
+    final pathSegments = comment.path
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+    if (comment.userId != profile.documentId ||
+        !pathSegments.contains('comments')) {
+      throw const AnimeWitcherAccountException(
+        'permission-denied',
+        'Only the comment author can modify this comment.',
+      );
+    }
+    return profile;
+  }
+
   Future<List<AnimeWitcherComment>> _hydrateCommentLikes(
     List<AnimeWitcherComment> comments,
   ) async {

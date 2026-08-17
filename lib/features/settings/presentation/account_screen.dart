@@ -8,6 +8,7 @@ import '../../../core/account/animewitcher_account_models.dart';
 import '../../../core/utils/localized_text.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../shared/widgets/custom_widgets.dart';
+import '../../comments/presentation/animewitcher_my_comments_screen.dart';
 import 'account_management_screens.dart';
 import 'account_ui_helpers.dart';
 import 'widgets/settings_widgets.dart';
@@ -535,6 +536,20 @@ class _AnimeWitcherAccountScreenState
               onTap: busy ? null : () => _openProfileEditor(profile),
             ),
             SettingsTile(
+              icon: Icons.forum_rounded,
+              title: appText(
+                context,
+                english: 'My comments',
+                arabic: 'تعليقاتي',
+              ),
+              subtitle: appText(
+                context,
+                english: 'Edit, delete, or disable replies',
+                arabic: 'تعديل التعليقات أو حذفها أو منع الردود',
+              ),
+              onTap: busy ? null : _openMyComments,
+            ),
+            SettingsTile(
               icon: Icons.alternate_email_rounded,
               title: appText(
                 context,
@@ -629,6 +644,14 @@ class _AnimeWitcherAccountScreenState
         ),
       );
     }
+  }
+
+  Future<void> _openMyComments() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const AnimeWitcherMyCommentsScreen(),
+      ),
+    );
   }
 
   Future<void> _openEmailEditor(AnimeWitcherProfile profile) async {
