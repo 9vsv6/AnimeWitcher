@@ -43,6 +43,11 @@ class _NoScrollbarBehavior extends ScrollBehavior {
   const _NoScrollbarBehavior();
 
   @override
+  ScrollViewKeyboardDismissBehavior getKeyboardDismissBehavior(
+    BuildContext context,
+  ) => ScrollViewKeyboardDismissBehavior.onDrag;
+
+  @override
   Widget buildScrollbar(
     BuildContext context,
     Widget child,

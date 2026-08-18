@@ -342,6 +342,9 @@ class _MyAppState extends ConsumerState<MyApp>
               .messengerKey,
           title: 'SkyStream',
           debugShowCheckedModeBanner: false,
+          scrollBehavior: const MaterialScrollBehavior().copyWith(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          ),
           themeMode: themeMode,
           theme: lightDynamic != null
               ? AppTheme.createLightTheme(lightDynamic)
@@ -542,6 +545,9 @@ class LaunchErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      ),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

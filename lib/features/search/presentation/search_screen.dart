@@ -339,8 +339,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
     ref.read(searchSuggestionControllerProvider.notifier).clear();
     ref.read(searchQueryProvider.notifier).set(trimmed);
-    // Dismiss keyboard after submitting, just like YouTube / browser.
-    _focusNode.unfocus();
+    // Keep the field focused after Search/Enter. The app-wide scroll behavior
+    // dismisses the keyboard only when the user starts dragging a scroll view.
   }
 
   void _fillSuggestion(String suggestion) {
