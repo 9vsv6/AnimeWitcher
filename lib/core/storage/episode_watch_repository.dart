@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../account/account_providers.dart';
 import '../account/animewitcher_account_service.dart';
 import '../domain/entity/multimedia_item.dart';
+import '../utils/safe_uri.dart';
 import 'history_repository.dart';
 import 'storage_service.dart';
 
@@ -54,7 +55,7 @@ class EpisodeWatchRepository {
 
   String _canonicalMainUrl(String mainUrl) {
     final value = mainUrl.trim();
-    final uri = Uri.tryParse(value);
+    final uri = safeTryParseUri(value);
     if (uri == null) return value;
 
     // Search/home results can carry the original hit query while the details
@@ -372,7 +373,7 @@ class EpisodeWatchRepository {
     if (parts.length < 2) return null;
     final raw = parts.sublist(1).join('|');
     try {
-      return Uri.decodeComponent(raw);
+      return safeDecodeUriComponent(raw);
     } catch (_) {
       return raw;
     }

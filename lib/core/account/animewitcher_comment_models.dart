@@ -1,4 +1,5 @@
 import '../domain/entity/multimedia_item.dart';
+import '../utils/safe_uri.dart';
 import 'firestore_rest_client.dart';
 
 const String animeWitcherNativeProviderId =
@@ -224,7 +225,7 @@ AnimeWitcherCommentTarget animeWitcherNewsCommentTarget(NewsItem item) {
 }
 
 String _animeIdFromItem(MultimediaItem item) {
-  final uri = Uri.tryParse(item.url.trim());
+  final uri = safeTryParseUri(item.url);
   if (uri != null && uri.pathSegments.isNotEmpty) {
     final value = _decode(uri.pathSegments.last);
     if (value.isNotEmpty) return value;
@@ -244,7 +245,7 @@ String? _normalizeDocumentPath(String? raw) {
 
 String _decode(String value) {
   try {
-    return Uri.decodeComponent(value);
+    return safeDecodeUriComponent(value);
   } catch (_) {
     return value;
   }

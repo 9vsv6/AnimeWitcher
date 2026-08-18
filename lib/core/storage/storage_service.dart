@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'dart:io';
 import '../domain/entity/multimedia_item.dart';
+import '../utils/safe_uri.dart';
 
 part 'storage_service.g.dart';
 
@@ -100,7 +101,7 @@ class StorageService {
 
   String _canonicalMediaUrl(String rawUrl) {
     final value = rawUrl.trim();
-    final uri = Uri.tryParse(value);
+    final uri = safeTryParseUri(value);
     if (uri == null) return value;
     final host = uri.host.toLowerCase();
     if ((host == 'animewitcher.com' || host == 'www.animewitcher.com') &&
@@ -110,7 +111,7 @@ class StorageService {
       if (encodedId.isEmpty) return value;
       String animeId;
       try {
-        animeId = Uri.decodeComponent(encodedId).trim();
+        animeId = safeDecodeUriComponent(encodedId).trim();
       } catch (_) {
         animeId = encodedId;
       }

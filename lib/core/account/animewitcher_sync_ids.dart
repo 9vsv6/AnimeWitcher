@@ -1,8 +1,10 @@
+import '../utils/safe_uri.dart';
+
 class AnimeWitcherSyncIds {
   const AnimeWitcherSyncIds._();
 
   static String? animeIdFromUrl(String rawUrl) {
-    final uri = Uri.tryParse(rawUrl.trim());
+    final uri = safeTryParseUri(rawUrl);
     if (uri == null) return null;
     final host = uri.host.toLowerCase();
     if (host != 'animewitcher.com' && host != 'www.animewitcher.com') {
@@ -15,7 +17,7 @@ class AnimeWitcherSyncIds {
     final encoded = segments[1].trim();
     if (encoded.isEmpty) return null;
     try {
-      final decoded = Uri.decodeComponent(encoded).trim();
+      final decoded = safeDecodeUriComponent(encoded).trim();
       return decoded.isEmpty ? null : decoded;
     } catch (_) {
       return encoded;
@@ -28,7 +30,7 @@ class AnimeWitcherSyncIds {
     final encoded = parts.sublist(1).join('|').trim();
     if (encoded.isEmpty) return null;
     try {
-      final decoded = Uri.decodeComponent(encoded).trim();
+      final decoded = safeDecodeUriComponent(encoded).trim();
       return decoded.isEmpty ? null : decoded;
     } catch (_) {
       return encoded;
@@ -36,8 +38,8 @@ class AnimeWitcherSyncIds {
   }
 
   static String mainUrl(String animeId) =>
-      'https://animewitcher.com/watch/${Uri.encodeComponent(animeId)}';
+      'https://animewitcher.com/watch/${safeEncodeUriComponent(animeId)}';
 
   static String episodeUrl(String animeId, String episodeId) =>
-      '${Uri.encodeComponent(animeId)}|${Uri.encodeComponent(episodeId)}';
+      '${safeEncodeUriComponent(animeId)}|${safeEncodeUriComponent(episodeId)}';
 }
