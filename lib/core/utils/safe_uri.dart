@@ -26,11 +26,6 @@ String safeEncodeUriComponent(String value) {
   return Uri.encodeComponent(value);
 }
 
-String canonicalEncodeUriComponent(String value) {
-  if (value.isEmpty) return value;
-  return Uri.encodeComponent(safeDecodeUriComponent(value));
-}
-
 Uri? safeTryParseUri(String value) {
   final source = value.trim();
   if (source.isEmpty) return null;

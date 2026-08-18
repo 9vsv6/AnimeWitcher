@@ -107,14 +107,7 @@ class StorageService {
     if ((host == 'animewitcher.com' || host == 'www.animewitcher.com') &&
         uri.pathSegments.length >= 2 &&
         uri.pathSegments.first == 'watch') {
-      final encodedId = uri.pathSegments[1].trim();
-      if (encodedId.isEmpty) return value;
-      String animeId;
-      try {
-        animeId = safeDecodeUriComponent(encodedId).trim();
-      } catch (_) {
-        animeId = encodedId;
-      }
+      final animeId = uri.pathSegments[1].trim();
       if (animeId.isEmpty) return value;
       return Uri(
         scheme: 'https',

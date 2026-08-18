@@ -291,10 +291,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return path.split('/').map((segment) {
       if (segment.isEmpty) return segment;
 
-      // Firestore document IDs can arrive raw, already encoded, or with a
-      // literal/malformed percent sign. Canonicalize them at the URL boundary
-      // so Unicode and reserved characters cannot break URI parsing.
-      return canonicalEncodeUriComponent(segment);
+      // Keep provider/document IDs raw inside the app and percent-encode each
+      // Firestore REST path segment exactly once at the network boundary.
+      // This preserves Unicode, literal `%`, and even valid-looking literals
+      // such as `%20` without double-decoding or double-encoding.
+      return safeEncodeUriComponent(segment);
     }).join('/');
   }
 
@@ -774,11 +775,14 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     Map<String, dynamic> hit = <String, dynamic>{};
     final raw = uri?.queryParameters['aw_data'];
     if (raw != null && raw.isNotEmpty) {
+      // Uri.queryParameters already percent-decodes once. Prefer the decoded
+      // value directly and only use the safe decoder as a legacy fallback for
+      // old URLs that embedded an additional encoded payload.
       try {
-        hit = _map(jsonDecode(safeDecodeUriComponent(raw)));
+        hit = _map(jsonDecode(raw));
       } catch (_) {
         try {
-          hit = _map(jsonDecode(raw));
+          hit = _map(jsonDecode(safeDecodeUriComponent(raw)));
         } catch (_) {}
       }
     }
@@ -1938,16 +1942,13 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         },
         'limit': 10,
       },
-      parent: 'anime_list/${safeEncodeUriComponent(animeId)}',
+      parent: 'anime_list/$animeId',
     );
     final output = <_AnimeWitcherCharacterRef>[];
     for (final rowRaw in raw) {
       final document = _map(_map(rowRaw)['document']);
       var characterId = _text(document['name']);
       if (characterId.isNotEmpty) characterId = characterId.split('/').last;
-      try {
-        characterId = safeDecodeUriComponent(characterId);
-      } catch (_) {}
       if (characterId.isEmpty) continue;
       output.add(_AnimeWitcherCharacterRef(characterId, role));
     }
@@ -2512,11 +2513,10 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   Future<List<_EpisodeRecord>> _fetchEpisodeCollection(String animeId) async {
 
     final output = <_EpisodeRecord>[];
-    final encoded = safeEncodeUriComponent(animeId);
     String nextToken = '';
     final seenTokens = <String>{};
     for (var page = 0; page < 20; page++) {
-      var url = '${_firestoreUrl('anime_list/$encoded/episodes')}?pageSize=1000';
+      var url = '${_firestoreUrl('anime_list/$animeId/episodes')}?pageSize=1000';
       if (nextToken.isNotEmpty) {
         url += '&pageToken=${Uri.encodeQueryComponent(nextToken)}';
       }
@@ -2531,9 +2531,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
           final name = _text(document['name']);
           if (name.isNotEmpty) id = name.split('/').last;
         }
-        try {
-          id = safeDecodeUriComponent(id);
-        } catch (_) {}
         output.add(
           _episodeRecord(
             fields,
@@ -2796,8 +2793,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     String episodeId,
   ) async {
 
-    final parent = 'anime_list/${safeEncodeUriComponent(animeId)}/episodes/'
-        '${safeEncodeUriComponent(episodeId)}';
+    final parent = 'anime_list/$animeId/episodes/$episodeId';
     final raw = await _firestoreRestRunQuery(
       <String, dynamic>{
         'from': const <Map<String, dynamic>>[

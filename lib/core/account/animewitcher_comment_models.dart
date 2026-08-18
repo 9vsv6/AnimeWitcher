@@ -227,7 +227,7 @@ AnimeWitcherCommentTarget animeWitcherNewsCommentTarget(NewsItem item) {
 String _animeIdFromItem(MultimediaItem item) {
   final uri = safeTryParseUri(item.url);
   if (uri != null && uri.pathSegments.isNotEmpty) {
-    final value = _decode(uri.pathSegments.last);
+    final value = uri.pathSegments.last.trim();
     if (value.isNotEmpty) return value;
   }
   return '';

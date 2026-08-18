@@ -14,14 +14,10 @@ class AnimeWitcherSyncIds {
     if (segments.length < 2 || segments.first.toLowerCase() != 'watch') {
       return null;
     }
-    final encoded = segments[1].trim();
-    if (encoded.isEmpty) return null;
-    try {
-      final decoded = safeDecodeUriComponent(encoded).trim();
-      return decoded.isEmpty ? null : decoded;
-    } catch (_) {
-      return encoded;
-    }
+    // Uri.pathSegments already returns the decoded segment. Decoding again
+    // would corrupt a literal sequence such as `%20` into a space.
+    final animeId = segments[1].trim();
+    return animeId.isEmpty ? null : animeId;
   }
 
   static String? episodeIdFromUrl(String rawUrl) {

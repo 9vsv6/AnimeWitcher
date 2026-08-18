@@ -21,6 +21,13 @@ void main() {
       expect(uri!.pathSegments.last, '100%zzbad');
     });
 
+    test('preserves a literal valid-looking percent sequence in a path ID', () {
+      final encoded = safeEncodeUriComponent('literal%20name');
+      final uri = safeTryParseUri('https://animewitcher.com/watch/$encoded');
+      expect(uri, isNotNull);
+      expect(uri!.pathSegments.last, 'literal%20name');
+    });
+
     test('encodes arbitrary provider IDs into one safe path segment', () {
       const value = 'أنمي Ω 100% %zz / ? # | 😀';
       final encoded = safeEncodeUriComponent(value);
