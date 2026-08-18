@@ -73,6 +73,81 @@ void main() async {
   runApp(const AppRoot());
 }
 
+
+/// iOS does not expose touches that begin inside the system keyboard window to
+/// Flutter. This lightweight edge gesture mirrors the native "pull keyboard
+/// down" feel from the closest public touch surface: a narrow strip directly
+/// above the visible keyboard. It never participates in the gesture arena, so
+/// normal taps and scrolling continue to work unchanged.
+class _IosKeyboardEdgeSwipeDismiss extends StatefulWidget {
+  const _IosKeyboardEdgeSwipeDismiss({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_IosKeyboardEdgeSwipeDismiss> createState() =>
+      _IosKeyboardEdgeSwipeDismissState();
+}
+
+class _IosKeyboardEdgeSwipeDismissState
+    extends State<_IosKeyboardEdgeSwipeDismiss> {
+  static const double _activationBand = 72;
+  static const double _dismissDistance = 8;
+
+  int? _pointer;
+  Offset? _start;
+  bool _eligible = false;
+
+  void _reset() {
+    _pointer = null;
+    _start = null;
+    _eligible = false;
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    final mediaQuery = MediaQuery.maybeOf(context);
+    if (mediaQuery == null || mediaQuery.viewInsets.bottom <= 0) {
+      _reset();
+      return;
+    }
+
+    final keyboardTop = mediaQuery.size.height - mediaQuery.viewInsets.bottom;
+    final distanceAboveKeyboard = keyboardTop - event.position.dy;
+    final hasEditableFocus = FocusManager.instance.primaryFocus != null;
+
+    _pointer = event.pointer;
+    _start = event.position;
+    _eligible = hasEditableFocus &&
+        distanceAboveKeyboard >= 0 &&
+        distanceAboveKeyboard <= _activationBand;
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (!_eligible || event.pointer != _pointer || _start == null) return;
+
+    final delta = event.position - _start!;
+    final isLightDownwardSwipe = delta.dy >= _dismissDistance &&
+        delta.dy > delta.dx.abs() * 0.65;
+    if (!isLightDownwardSwipe) return;
+
+    _eligible = false;
+    FocusManager.instance.primaryFocus?.unfocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: (_) => _reset(),
+      onPointerCancel: (_) => _reset(),
+      child: widget.child,
+    );
+  }
+}
+
 class AppRoot extends StatefulWidget {
   const AppRoot({super.key});
 
@@ -396,6 +471,9 @@ class _MyAppState extends ConsumerState<MyApp>
             }
 
             result = ApplePersistentGlassHeaderOverlay(child: result);
+            if (!kIsWeb && Platform.isIOS) {
+              result = _IosKeyboardEdgeSwipeDismiss(child: result);
+            }
             return result;
           },
         );
