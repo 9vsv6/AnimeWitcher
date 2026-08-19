@@ -203,6 +203,45 @@ class FirestoreRestClient {
     return output;
   }
 
+  /// Fetches documents in the same order as AnimeWitcher: newest first by `date`.
+  Future<List<FirestoreDocument>> queryOrderedDocuments(
+    String collectionPath,
+    String idToken, {
+    String orderField = 'date',
+    bool descending = true,
+    int pageSize = 100,
+  }) async {
+    final normalized = collectionPath.replaceFirst(RegExp(r'/+$'), '');
+    final segments = normalized.split('/').where((segment) => segment.isNotEmpty).toList();
+    if (segments.isEmpty) return const <FirestoreDocument>[];
+    final collectionId = segments.removeLast();
+    final parentPath = segments.join('/');
+    final endpoint = parentPath.isEmpty
+        ? '$_documentsBase:runQuery'
+        : '$_documentsBase/${_encodedPath(parentPath)}:runQuery';
+    final response = await _dio.post<dynamic>(
+      endpoint,
+      data: <String, dynamic>{
+        'structuredQuery': <String, dynamic>{
+          'from': <Map<String, dynamic>>[<String, dynamic>{'collectionId': collectionId}],
+          'orderBy': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'field': <String, dynamic>{'fieldPath': orderField},
+              'direction': descending ? 'DESCENDING' : 'ASCENDING',
+            },
+            <String, dynamic>{
+              'field': <String, dynamic>{'fieldPath': '__name__'},
+              'direction': descending ? 'DESCENDING' : 'ASCENDING',
+            },
+          ],
+          'limit': pageSize.clamp(1, 100),
+        },
+      },
+      options: _options(idToken),
+    );
+    return _decodeRunQueryDocuments(response.data);
+  }
+
   Future<List<FirestoreDocument>> queryByStringField({
     required String collectionId,
     required String field,
