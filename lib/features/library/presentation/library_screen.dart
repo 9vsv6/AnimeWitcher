@@ -9,6 +9,7 @@ import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import 'library_provider.dart';
+import 'library_state.dart';
 import 'widgets/bookmarks_tab.dart';
 
 class LibraryScreen extends ConsumerWidget {
