@@ -1778,13 +1778,13 @@ class AnimeWitcherAccountService {
     await _flushPendingLibraryDeletes(profile);
     if (!_isCurrentProfile(profile)) return;
     final favoriteDocs = await _authenticated(
-      (token) => _firestore.listDocuments(
+      (token) => _firestore.queryOrderedDocuments(
         'users/${profile.documentId}/fav_anime',
         token,
       ),
     );
     final listDocs = await _authenticated(
-      (token) => _firestore.listDocuments(
+      (token) => _firestore.queryOrderedDocuments(
         'users/${profile.documentId}/user_anime',
         token,
       ),
