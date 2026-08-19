@@ -1,4 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:skystream/core/account/account_providers.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
@@ -9,35 +8,22 @@ import './library_state.dart';
 
 part 'library_provider.g.dart';
 
-/// The ordering modes exposed by the Library sort menu.
-enum LibrarySortOrder {
-  favorite,
-  productionDateAsc,
-  productionDateDesc,
-  titleAsc,
-  titleDesc,
-  latestAdded,
-}
-
-final librarySortOrderProvider =
-    StateProvider<LibrarySortOrder>((ref) => LibrarySortOrder.favorite);
-
 @Riverpod(keepAlive: true)
 class Library extends _$Library {
+  LibrarySortOrder _sortOrder = LibrarySortOrder.favorite;
   @override
   LibraryState build() {
     ref.watch(accountDataRevisionProvider);
     final repository = ref.read(libraryRepositoryProvider);
     final category = repository.getSelectedCategory();
-    final sortOrder = ref.watch(librarySortOrderProvider);
     final items = _sortItems(
       repository.getLibraryItems(category: category),
       repository,
-      sortOrder,
+      _sortOrder,
     );
     return items.isEmpty
-        ? LibraryEmpty(category)
-        : LibrarySuccess(items, category);
+        ? LibraryEmpty(category, _sortOrder)
+        : LibrarySuccess(items, category, _sortOrder);
   }
 
   LibraryCategory get selectedCategory => state.category;
@@ -45,22 +31,22 @@ class Library extends _$Library {
   LibraryState refresh({LibraryCategory? category}) {
     final repository = ref.read(libraryRepositoryProvider);
     final selected = category ?? state.category;
-    final sortOrder = ref.read(librarySortOrderProvider);
     final items = _sortItems(
       repository.getLibraryItems(category: selected),
       repository,
-      sortOrder,
+      _sortOrder,
     );
     state = items.isEmpty
-        ? LibraryEmpty(selected)
-        : LibrarySuccess(items, selected);
+        ? LibraryEmpty(selected, _sortOrder)
+        : LibrarySuccess(items, selected, _sortOrder);
     return state;
   }
 
-  LibrarySortOrder get sortOrder => ref.read(librarySortOrderProvider);
+  LibrarySortOrder get sortOrder => _sortOrder;
 
   Future<void> selectSortOrder(LibrarySortOrder sortOrder) async {
-    ref.read(librarySortOrderProvider.notifier).state = sortOrder;
+    _sortOrder = sortOrder;
+    refresh();
   }
 
   Future<void> selectCategory(LibraryCategory category) async {
@@ -69,7 +55,6 @@ class Library extends _$Library {
     refresh(category: category);
   }
 
-
   List<MultimediaItem> _sortItems(
     List<MultimediaItem> source,
     LibraryRepository repository,
@@ -77,21 +62,16 @@ class Library extends _$Library {
   ) {
     final items = List<MultimediaItem>.from(source);
 
-    int titleCompare(MultimediaItem a, MultimediaItem b) {
-      return a.title.trim().toLowerCase().compareTo(
-        b.title.trim().toLowerCase(),
-      );
-    }
+    int titleCompare(MultimediaItem a, MultimediaItem b) =>
+        a.title.trim().toLowerCase().compareTo(b.title.trim().toLowerCase());
 
-    int yearCompare(MultimediaItem a, MultimediaItem b) {
-      return (a.year ?? 0).compareTo(b.year ?? 0);
-    }
+    int yearCompare(MultimediaItem a, MultimediaItem b) =>
+        (a.year ?? 0).compareTo(b.year ?? 0);
 
-    int addedCompare(MultimediaItem a, MultimediaItem b) {
-      return repository
-          .getLibraryItemUpdatedAt(b.url)
-          .compareTo(repository.getLibraryItemUpdatedAt(a.url));
-    }
+    int addedCompare(MultimediaItem a, MultimediaItem b) =>
+        repository.getLibraryItemUpdatedAt(b.url).compareTo(
+          repository.getLibraryItemUpdatedAt(a.url),
+        );
 
     int favoriteCompare(MultimediaItem a, MultimediaItem b) {
       final aFavorite = repository.isFavorite(a.url) ? 0 : 1;

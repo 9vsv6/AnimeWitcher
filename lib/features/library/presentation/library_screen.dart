@@ -62,40 +62,29 @@ class LibraryScreen extends ConsumerWidget {
   }
 
   String _sortLabel(BuildContext context, LibrarySortOrder order) {
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final isArabic = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     return switch (order) {
       LibrarySortOrder.favorite => isArabic ? 'الأكثر تفضيلًا' : 'Most Favorite',
-      LibrarySortOrder.productionDateAsc =>
-        isArabic ? 'تاريخ الإنتاج (تصاعدي)' : 'Production Date (Ascending)',
-      LibrarySortOrder.productionDateDesc =>
-        isArabic ? 'تاريخ الإنتاج (تنازلي)' : 'Production Date (Descending)',
+      LibrarySortOrder.productionDateAsc => isArabic ? 'تاريخ الإنتاج (تصاعدي)' : 'Production Date (Ascending)',
+      LibrarySortOrder.productionDateDesc => isArabic ? 'تاريخ الإنتاج (تنازلي)' : 'Production Date (Descending)',
       LibrarySortOrder.titleAsc => isArabic ? 'الاسم (تصاعدي)' : 'Name (Ascending)',
       LibrarySortOrder.titleDesc => isArabic ? 'الاسم (تنازلي)' : 'Name (Descending)',
       LibrarySortOrder.latestAdded => isArabic ? 'آخر إضافة' : 'Recently Added',
     };
   }
 
-  String _sortSystemImage(LibrarySortOrder order) {
-    return switch (order) {
-      LibrarySortOrder.favorite => 'star.fill',
-      LibrarySortOrder.productionDateAsc => 'arrow.up',
-      LibrarySortOrder.productionDateDesc => 'arrow.down',
-      LibrarySortOrder.titleAsc => 'textformat.abc',
-      LibrarySortOrder.titleDesc => 'textformat.abc',
-      LibrarySortOrder.latestAdded => 'clock',
-    };
-  }
+  String _sortSystemImage(LibrarySortOrder order) => switch (order) {
+    LibrarySortOrder.favorite => 'star.fill',
+    LibrarySortOrder.productionDateAsc => 'arrow.up',
+    LibrarySortOrder.productionDateDesc => 'arrow.down',
+    LibrarySortOrder.titleAsc => 'textformat.abc',
+    LibrarySortOrder.titleDesc => 'textformat.abc',
+    LibrarySortOrder.latestAdded => 'clock',
+  };
 
-  Widget _sortSelector(
-    BuildContext context,
-    WidgetRef ref,
-    LibrarySortOrder selected,
-  ) {
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+  Widget _sortSelector(BuildContext context, WidgetRef ref, LibrarySortOrder selected) {
+    final isArabic = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final primary = Theme.of(context).colorScheme.primary;
-
     return AppleNativeMenuButton(
       accessibilityLabel: isArabic ? 'ترتيب المكتبة' : 'Sort library',
       systemImage: 'arrow.up.arrow.down',
@@ -117,9 +106,7 @@ class LibraryScreen extends ConsumerWidget {
           (candidate) => candidate.name == value,
           orElse: () => selected,
         );
-        if (order != selected) {
-          ref.read(libraryProvider.notifier).selectSortOrder(order);
-        }
+        if (order != selected) ref.read(libraryProvider.notifier).selectSortOrder(order);
       },
     );
   }
@@ -210,7 +197,7 @@ class LibraryScreen extends ConsumerWidget {
     final isWidescreen = isTv || context.isTabletOrLarger;
     final libraryState = ref.watch(libraryProvider);
     final selectedCategory = libraryState.category;
-    final selectedSort = ref.watch(librarySortOrderProvider);
+    final selectedSort = libraryState.sortOrder;
     final repository = ref.read(libraryRepositoryProvider);
     final categoryCounts = <LibraryCategory, int>{
       for (final category in LibraryCategory.values)
@@ -230,24 +217,19 @@ class LibraryScreen extends ConsumerWidget {
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
                 alignment: Alignment.centerLeft,
-                child: Builder(
-                  builder: (context) {
-                    final isArabic =
-                        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-                    final category = _categorySelector(
-                      context,
-                      ref,
-                      selectedCategory,
-                      categoryCounts,
-                    );
-                    final sort = _sortSelector(context, ref, selectedSort);
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: isArabic
-                          ? <Widget>[category, const SizedBox(width: 8), sort]
-                          : <Widget>[sort, const SizedBox(width: 8), category],
-                    );
-                  },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: Localizations.localeOf(context).languageCode.toLowerCase() == 'ar'
+                      ? <Widget>[
+                          _categorySelector(context, ref, selectedCategory, categoryCounts),
+                          const SizedBox(width: 8),
+                          _sortSelector(context, ref, selectedSort),
+                        ]
+                      : <Widget>[
+                          _sortSelector(context, ref, selectedSort),
+                          const SizedBox(width: 8),
+                          _categorySelector(context, ref, selectedCategory, categoryCounts),
+                        ],
                 ),
               ),
             ),
@@ -258,8 +240,7 @@ class LibraryScreen extends ConsumerWidget {
     }
 
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final isArabic = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final sortButton = _sortSelector(context, ref, selectedSort);
     final mobileScaffold = Scaffold(
       appBar: AppBar(
@@ -268,10 +249,7 @@ class LibraryScreen extends ConsumerWidget {
             ? const SizedBox.shrink()
             : _categorySelector(context, ref, selectedCategory, categoryCounts),
         actions: isArabic
-            ? <Widget>[
-                sortButton,
-                if (usePersistentGlass) const SizedBox(width: 250),
-              ]
+            ? <Widget>[sortButton, if (usePersistentGlass) const SizedBox(width: 250)]
             : usePersistentGlass
             ? const <Widget>[SizedBox(width: 250)]
             : null,

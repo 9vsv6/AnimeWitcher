@@ -136,6 +136,10 @@ class LibraryRepository {
     return _storageService.getLibraryItems(category: category?.storageKey);
   }
 
+  int getLibraryItemUpdatedAt(String url) {
+    return _storageService.getLibraryItemUpdatedAt(url);
+  }
+
   Future<void> setSelectedCategory(LibraryCategory category) async {
     await _storageService.setSelectedLibraryCategory(category.storageKey);
   }
