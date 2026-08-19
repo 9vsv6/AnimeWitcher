@@ -61,6 +61,69 @@ class LibraryScreen extends ConsumerWidget {
     };
   }
 
+  String _sortLabel(BuildContext context, LibrarySortOrder order) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    return switch (order) {
+      LibrarySortOrder.favorite => isArabic ? 'الأكثر تفضيلًا' : 'Most Favorite',
+      LibrarySortOrder.productionDateAsc =>
+        isArabic ? 'تاريخ الإنتاج (تصاعدي)' : 'Production Date (Ascending)',
+      LibrarySortOrder.productionDateDesc =>
+        isArabic ? 'تاريخ الإنتاج (تنازلي)' : 'Production Date (Descending)',
+      LibrarySortOrder.titleAsc => isArabic ? 'الاسم (تصاعدي)' : 'Name (Ascending)',
+      LibrarySortOrder.titleDesc => isArabic ? 'الاسم (تنازلي)' : 'Name (Descending)',
+      LibrarySortOrder.latestAdded => isArabic ? 'آخر إضافة' : 'Recently Added',
+    };
+  }
+
+  String _sortSystemImage(LibrarySortOrder order) {
+    return switch (order) {
+      LibrarySortOrder.favorite => 'star.fill',
+      LibrarySortOrder.productionDateAsc => 'arrow.up',
+      LibrarySortOrder.productionDateDesc => 'arrow.down',
+      LibrarySortOrder.titleAsc => 'textformat.abc',
+      LibrarySortOrder.titleDesc => 'textformat.abc',
+      LibrarySortOrder.latestAdded => 'clock',
+    };
+  }
+
+  Widget _sortSelector(
+    BuildContext context,
+    WidgetRef ref,
+    LibrarySortOrder selected,
+  ) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return AppleNativeMenuButton(
+      accessibilityLabel: isArabic ? 'ترتيب المكتبة' : 'Sort library',
+      systemImage: 'arrow.up.arrow.down',
+      fallbackIcon: Icons.sort_rounded,
+      size: 44,
+      width: 44,
+      tintColor: primary,
+      selectedValue: selected.name,
+      items: <AppleNativeMenuItem>[
+        for (final order in LibrarySortOrder.values)
+          AppleNativeMenuItem(
+            value: order.name,
+            label: _sortLabel(context, order),
+            systemImage: _sortSystemImage(order),
+          ),
+      ],
+      onSelected: (value) {
+        final order = LibrarySortOrder.values.firstWhere(
+          (candidate) => candidate.name == value,
+          orElse: () => selected,
+        );
+        if (order != selected) {
+          ref.read(libraryProvider.notifier).selectSortOrder(order);
+        }
+      },
+    );
+  }
+
   Widget _categorySelector(
     BuildContext context,
     WidgetRef ref,
@@ -147,6 +210,7 @@ class LibraryScreen extends ConsumerWidget {
     final isWidescreen = isTv || context.isTabletOrLarger;
     final libraryState = ref.watch(libraryProvider);
     final selectedCategory = libraryState.category;
+    final selectedSort = ref.watch(librarySortOrderProvider);
     final repository = ref.read(libraryRepositoryProvider);
     final categoryCounts = <LibraryCategory, int>{
       for (final category in LibraryCategory.values)
@@ -166,7 +230,25 @@ class LibraryScreen extends ConsumerWidget {
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
                 alignment: Alignment.centerLeft,
-                child: _categorySelector(context, ref, selectedCategory, categoryCounts),
+                child: Builder(
+                  builder: (context) {
+                    final isArabic =
+                        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+                    final category = _categorySelector(
+                      context,
+                      ref,
+                      selectedCategory,
+                      categoryCounts,
+                    );
+                    final sort = _sortSelector(context, ref, selectedSort);
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: isArabic
+                          ? <Widget>[category, const SizedBox(width: 8), sort]
+                          : <Widget>[sort, const SizedBox(width: 8), category],
+                    );
+                  },
+                ),
               ),
             ),
             const Expanded(child: BookmarksTab()),
@@ -176,12 +258,21 @@ class LibraryScreen extends ConsumerWidget {
     }
 
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final sortButton = _sortSelector(context, ref, selectedSort);
     final mobileScaffold = Scaffold(
       appBar: AppBar(
+        leading: isArabic ? null : sortButton,
         title: usePersistentGlass
             ? const SizedBox.shrink()
             : _categorySelector(context, ref, selectedCategory, categoryCounts),
-        actions: usePersistentGlass
+        actions: isArabic
+            ? <Widget>[
+                sortButton,
+                if (usePersistentGlass) const SizedBox(width: 250),
+              ]
+            : usePersistentGlass
             ? const <Widget>[SizedBox(width: 250)]
             : null,
       ),
