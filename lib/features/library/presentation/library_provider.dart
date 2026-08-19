@@ -15,7 +15,7 @@ class Library extends _$Library {
     ref.watch(accountDataRevisionProvider);
     final repository = ref.read(libraryRepositoryProvider);
     final category = repository.getSelectedCategory();
-    final items = repository.getLibraryItems(category: category);
+    final items = repository.getLibraryItems(category: category).reversed.toList(growable: false);
     return items.isEmpty
         ? LibraryEmpty(category)
         : LibrarySuccess(items, category);
@@ -26,7 +26,7 @@ class Library extends _$Library {
   LibraryState refresh({LibraryCategory? category}) {
     final repository = ref.read(libraryRepositoryProvider);
     final selected = category ?? state.category;
-    final items = repository.getLibraryItems(category: selected);
+    final items = repository.getLibraryItems(category: selected).reversed.toList(growable: false);
     state = items.isEmpty
         ? LibraryEmpty(selected)
         : LibrarySuccess(items, selected);
