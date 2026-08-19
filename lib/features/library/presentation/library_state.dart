@@ -1,35 +1,25 @@
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/library_category.dart';
 
-enum LibrarySortOrder {
-  favorite,
-  productionDateAsc,
-  productionDateDesc,
-  titleAsc,
-  titleDesc,
-  latestAdded,
-}
-
 sealed class LibraryState {
   final LibraryCategory category;
-  final LibrarySortOrder sortOrder;
-  const LibraryState(this.category, this.sortOrder);
+  const LibraryState(this.category);
 }
 
 class LibraryLoading extends LibraryState {
-  const LibraryLoading(super.category, super.sortOrder);
+  const LibraryLoading(super.category);
 }
 
 class LibraryEmpty extends LibraryState {
-  const LibraryEmpty(super.category, super.sortOrder);
+  const LibraryEmpty(super.category);
 }
 
 class LibrarySuccess extends LibraryState {
   final List<MultimediaItem> items;
-  const LibrarySuccess(this.items, super.category, super.sortOrder);
+  const LibrarySuccess(this.items, super.category);
 }
 
 class LibraryError extends LibraryState {
   final String message;
-  const LibraryError(this.message, super.category, super.sortOrder);
+  const LibraryError(this.message, super.category);
 }

@@ -9,7 +9,6 @@ import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import 'library_provider.dart';
-import 'library_state.dart';
 import 'widgets/bookmarks_tab.dart';
 
 class LibraryScreen extends ConsumerWidget {
@@ -50,7 +49,6 @@ class LibraryScreen extends ConsumerWidget {
     };
   }
 
-
   String _categorySystemImage(LibraryCategory category) {
     return switch (category) {
       LibraryCategory.favorite => 'heart.fill',
@@ -60,56 +58,6 @@ class LibraryScreen extends ConsumerWidget {
       LibraryCategory.completed => 'checkmark.circle.fill',
       LibraryCategory.notInterested => 'xmark.circle.fill',
     };
-  }
-
-  String _sortLabel(BuildContext context, LibrarySortOrder order) {
-    final isArabic = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    return switch (order) {
-      LibrarySortOrder.favorite => isArabic ? 'الأكثر تفضيلًا' : 'Most Favorite',
-      LibrarySortOrder.productionDateAsc => isArabic ? 'تاريخ الإنتاج (تصاعدي)' : 'Production Date (Ascending)',
-      LibrarySortOrder.productionDateDesc => isArabic ? 'تاريخ الإنتاج (تنازلي)' : 'Production Date (Descending)',
-      LibrarySortOrder.titleAsc => isArabic ? 'الاسم (تصاعدي)' : 'Name (Ascending)',
-      LibrarySortOrder.titleDesc => isArabic ? 'الاسم (تنازلي)' : 'Name (Descending)',
-      LibrarySortOrder.latestAdded => isArabic ? 'آخر إضافة' : 'Recently Added',
-    };
-  }
-
-  String _sortSystemImage(LibrarySortOrder order) => switch (order) {
-    LibrarySortOrder.favorite => 'star.fill',
-    LibrarySortOrder.productionDateAsc => 'arrow.up',
-    LibrarySortOrder.productionDateDesc => 'arrow.down',
-    LibrarySortOrder.titleAsc => 'textformat.abc',
-    LibrarySortOrder.titleDesc => 'textformat.abc',
-    LibrarySortOrder.latestAdded => 'clock',
-  };
-
-  Widget _sortSelector(BuildContext context, WidgetRef ref, LibrarySortOrder selected) {
-    final isArabic = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final primary = Theme.of(context).colorScheme.primary;
-    return AppleNativeMenuButton(
-      accessibilityLabel: isArabic ? 'ترتيب المكتبة' : 'Sort library',
-      systemImage: 'arrow.up.arrow.down',
-      fallbackIcon: Icons.sort_rounded,
-      size: 44,
-      width: 44,
-      tintColor: primary,
-      selectedValue: selected.name,
-      items: <AppleNativeMenuItem>[
-        for (final order in LibrarySortOrder.values)
-          AppleNativeMenuItem(
-            value: order.name,
-            label: _sortLabel(context, order),
-            systemImage: _sortSystemImage(order),
-          ),
-      ],
-      onSelected: (value) {
-        final order = LibrarySortOrder.values.firstWhere(
-          (candidate) => candidate.name == value,
-          orElse: () => selected,
-        );
-        if (order != selected) ref.read(libraryProvider.notifier).selectSortOrder(order);
-      },
-    );
   }
 
   Widget _categorySelector(
@@ -198,7 +146,6 @@ class LibraryScreen extends ConsumerWidget {
     final isWidescreen = isTv || context.isTabletOrLarger;
     final libraryState = ref.watch(libraryProvider);
     final selectedCategory = libraryState.category;
-    final selectedSort = libraryState.sortOrder;
     final repository = ref.read(libraryRepositoryProvider);
     final categoryCounts = <LibraryCategory, int>{
       for (final category in LibraryCategory.values)
@@ -218,19 +165,11 @@ class LibraryScreen extends ConsumerWidget {
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
                 alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: Localizations.localeOf(context).languageCode.toLowerCase() == 'ar'
-                      ? <Widget>[
-                          _categorySelector(context, ref, selectedCategory, categoryCounts),
-                          const SizedBox(width: 8),
-                          _sortSelector(context, ref, selectedSort),
-                        ]
-                      : <Widget>[
-                          _sortSelector(context, ref, selectedSort),
-                          const SizedBox(width: 8),
-                          _categorySelector(context, ref, selectedCategory, categoryCounts),
-                        ],
+                child: _categorySelector(
+                  context,
+                  ref,
+                  selectedCategory,
+                  categoryCounts,
                 ),
               ),
             ),
@@ -241,17 +180,12 @@ class LibraryScreen extends ConsumerWidget {
     }
 
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
-    final isArabic = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final sortButton = _sortSelector(context, ref, selectedSort);
     final mobileScaffold = Scaffold(
       appBar: AppBar(
-        leading: isArabic ? null : sortButton,
         title: usePersistentGlass
             ? const SizedBox.shrink()
             : _categorySelector(context, ref, selectedCategory, categoryCounts),
-        actions: isArabic
-            ? <Widget>[sortButton, if (usePersistentGlass) const SizedBox(width: 250)]
-            : usePersistentGlass
+        actions: usePersistentGlass
             ? const <Widget>[SizedBox(width: 250)]
             : null,
       ),
