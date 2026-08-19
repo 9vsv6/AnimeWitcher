@@ -15,10 +15,7 @@ class Library extends _$Library {
     ref.watch(accountDataRevisionProvider);
     final repository = ref.read(libraryRepositoryProvider);
     final category = repository.getSelectedCategory();
-    final items = _sortByLatestAdded(
-      repository.getLibraryItems(category: category),
-      repository,
-    );
+    final items = repository.getLibraryItems(category: category);
     return items.isEmpty
         ? LibraryEmpty(category)
         : LibrarySuccess(items, category);
@@ -29,29 +26,11 @@ class Library extends _$Library {
   LibraryState refresh({LibraryCategory? category}) {
     final repository = ref.read(libraryRepositoryProvider);
     final selected = category ?? state.category;
-    final items = _sortByLatestAdded(
-      repository.getLibraryItems(category: selected),
-      repository,
-    );
+    final items = repository.getLibraryItems(category: selected);
     state = items.isEmpty
         ? LibraryEmpty(selected)
         : LibrarySuccess(items, selected);
     return state;
-  }
-
-  List<MultimediaItem> _sortByLatestAdded(
-    List<MultimediaItem> source,
-    LibraryRepository repository,
-  ) {
-    final items = List<MultimediaItem>.from(source);
-    items.sort((a, b) {
-      final added = repository
-          .getLibraryItemUpdatedAt(b.url)
-          .compareTo(repository.getLibraryItemUpdatedAt(a.url));
-      if (added != 0) return added;
-      return 0;
-    });
-    return items;
   }
 
   Future<void> selectCategory(LibraryCategory category) async {
