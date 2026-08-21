@@ -96,6 +96,7 @@ class PlayerSidePanel extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
 }
