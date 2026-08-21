@@ -33,19 +33,22 @@ class AniZipService {
     final ids = _candidateIds(item.syncData);
     if (ids.isEmpty) return null;
 
-    Map<int, List<_AniZipEpisode>>? mappings;
+    _AniZipPayload? payload;
     for (final id in ids) {
       final result = await _fetchMappings(id.type, id.value);
-      if (result != null && result.isNotEmpty) {
-        mappings = result;
+      if (result != null && result.episodes.isNotEmpty) {
+        payload = result;
         break;
       }
     }
-    if (mappings == null || mappings.isEmpty) return null;
+    if (payload == null || payload.episodes.isEmpty) return null;
 
+    final mappings = payload.episodes;
+    final sharedSeason = payload.seasonNumber;
     var changed = false;
+
     final enriched = sourceEpisodes.map((source) {
-      final candidates = mappings![source.episode];
+      final candidates = mappings[source.episode];
       if (candidates == null || candidates.isEmpty) return source;
 
       _AniZipEpisode? match;
@@ -57,9 +60,11 @@ class AniZipService {
       match ??= candidates.first;
 
       final image = match.image?.trim();
-      final nextSeason = match.seasonNumber > 0
-          ? match.seasonNumber
-          : source.season;
+      // seasonNumber is resolved once from this single AniZip response.
+      // Episode images continue to come from the same existing response.
+      final nextSeason = sharedSeason > 0
+          ? sharedSeason
+          : (match.seasonNumber > 0 ? match.seasonNumber : source.season);
       final nextPoster = image != null && image.isNotEmpty
           ? image
           : source.posterUrl;
@@ -89,7 +94,7 @@ class AniZipService {
     return changed ? enriched : null;
   }
 
-  Future<Map<int, List<_AniZipEpisode>>?> _fetchMappings(
+  Future<_AniZipPayload?> _fetchMappings(
     String type,
     int id,
   ) async {
@@ -122,7 +127,23 @@ class AniZipService {
           result.putIfAbsent(episode.episodeNumber, () => []).add(episode);
         }
       }
-      return result;
+
+      final seasons = result.values
+          .expand((items) => items)
+          .map((episode) => episode.seasonNumber)
+          .where((season) => season > 0)
+          .toList(growable: false);
+      final sharedSeason = seasons.isEmpty
+          ? 0
+          : seasons.fold<int>(
+              seasons.first,
+              (current, value) => value == current ? current : 0,
+            );
+
+      return _AniZipPayload(
+        episodes: result,
+        seasonNumber: sharedSeason,
+      );
     } on DioException {
       return null;
     } catch (_) {
@@ -152,6 +173,16 @@ class AniZipService {
     }
     return result;
   }
+}
+
+class _AniZipPayload {
+  final Map<int, List<_AniZipEpisode>> episodes;
+  final int seasonNumber;
+
+  const _AniZipPayload({
+    required this.episodes,
+    required this.seasonNumber,
+  });
 }
 
 class _AniZipId {
