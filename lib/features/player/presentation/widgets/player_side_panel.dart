@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -703,24 +704,27 @@ class _EpisodeThumbnail extends StatelessWidget {
     final hasPoster = posterUrl != null && posterUrl!.isNotEmpty;
     final hasProgress = !isWatched && progress > 0.02 && progress < 0.98;
     final watchedLabel = AppLocalizations.of(context)!.watched.toUpperCase();
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: SizedBox(
-        width: 104,
-        height: 58,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (hasPoster)
-              Image.network(
-                posterUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const _ThumbPlaceholder(),
-                loadingBuilder: (context, child, progress) =>
-                    progress == null ? child : const _ThumbPlaceholder(),
-              )
-            else
-              const _ThumbPlaceholder(),
+    return RepaintBoundary(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 104,
+          height: 58,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (hasPoster)
+                CachedNetworkImage(
+                  imageUrl: posterUrl!,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 208,
+                  fadeInDuration: Duration.zero,
+                  fadeOutDuration: Duration.zero,
+                  placeholder: (_, _) => const _ThumbPlaceholder(),
+                  errorWidget: (_, _, _) => const _ThumbPlaceholder(),
+                )
+              else
+                const _ThumbPlaceholder(),
             if (isWatched)
               DecoratedBox(
                 decoration: BoxDecoration(

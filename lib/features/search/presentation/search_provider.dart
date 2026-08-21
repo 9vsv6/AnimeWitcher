@@ -126,12 +126,14 @@ Stream<SearchAggregateState> searchAllProviders(
     try {
       final cores = io.Platform.numberOfProcessors;
       if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
-        maxSlots = 32;
+        // Keep provider fan-out bounded so large desktop searches don't saturate
+        // CPU/network callbacks and starve Flutter's UI isolate.
+        maxSlots = 16;
       } else {
         // Mobile: eval burst queue serializes HTTP callbacks, but CF bypass
         // WebView GPU init is still expensive — cap at 8 to avoid triggering
         // too many concurrent CF solves while the spawn semaphore queues them.
-        maxSlots = (cores).clamp(4, 8);
+        maxSlots = cores.clamp(3, 6);
       }
     } catch (_) {}
     return maxSlots;
