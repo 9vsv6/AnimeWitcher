@@ -13,6 +13,7 @@ import 'package:skystream/core/storage/storage_service.dart';
 import '../../library/presentation/history_provider.dart';
 import 'playback_launcher.dart';
 import '../../../core/services/download_service.dart';
+import '../../../core/services/anizip_service.dart';
 import 'downloaded_file_provider.dart';
 import 'details_item_merge.dart';
 
@@ -566,6 +567,14 @@ class DetailsController extends _$DetailsController {
         generation,
       ),
     );
+    // AniZip is optional enrichment: it runs independently and never blocks
+    // episode loading, watched-state reconciliation, or other background work.
+    unawaited(
+      _enrichEpisodesWithAniZip(
+        merged,
+        generation,
+      ),
+    );
   }
 
   Future<void> _loadEpisodesInBackground(
@@ -802,6 +811,55 @@ class DetailsController extends _$DetailsController {
       playbackPolicy: source.playbackPolicy,
       streams: source.streams,
     );
+  }
+
+  Future<void> _enrichEpisodesWithAniZip(
+    MultimediaItem contextItem,
+    int generation,
+  ) async {
+    try {
+      final currentEpisodes =
+          state.episodes.asData?.value ??
+          state.item?.episodes ??
+          contextItem.episodes ??
+          const <Episode>[];
+      if (currentEpisodes.isEmpty) return;
+
+      final enriched = await AniZipService().enrichEpisodes(
+        contextItem,
+        currentEpisodes,
+      );
+      if (enriched == null || enriched.isEmpty) return;
+      if (!ref.mounted || generation != _loadGeneration) return;
+
+      final currentItem = state.item;
+      if (currentItem == null || currentItem.url != contextItem.url) return;
+
+      final merged = currentItem.copyWith(episodes: enriched);
+      state = state.copyWith(
+        details: state.details.hasValue ? AsyncData(merged) : null,
+        episodes: AsyncData(enriched),
+        item: merged,
+      );
+      _processEpisodes(enriched, merged, isInitial: false);
+
+      // Keep watch-state reconciliation independent from AniZip's network
+      // request. A failure here must never affect playback or episode loading.
+      unawaited(
+        ref
+            .read(episodeWatchRepositoryProvider)
+            .reconcileWithCloud(contextItem.url, enriched)
+            .catchError((Object error) {
+              if (kDebugMode) {
+                debugPrint('[DetailsController] AniZip watch sync deferred: $error');
+              }
+            }),
+      );
+    } catch (error) {
+      // AniZip is best-effort metadata only. Never surface its failure as a
+      // details/episodes error or interrupt existing background work.
+      if (kDebugMode) debugPrint('[DetailsController] AniZip enrichment skipped: $error');
+    }
   }
 
   Future<void> _loadEpisodeMetadataInBackground(
