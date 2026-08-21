@@ -96,7 +96,6 @@ class PlayerSidePanel extends StatelessWidget {
           ],
         ),
       ),
-      ),
     );
   }
 }
@@ -781,6 +780,7 @@ class _EpisodeThumbnail extends StatelessWidget {
               ),
           ],
         ),
+      ),
       ),
     );
   }
