@@ -446,7 +446,7 @@ class StorageService {
   }
 
   List<MultimediaItem> getLibraryItems({String? category}) {
-    final items = <MultimediaItem>[];
+    final entries = <({MultimediaItem item, int updatedAt})>[];
     final seen = <String>{};
     final normalizedFilter = category == null
         ? null
@@ -464,8 +464,9 @@ class StorageService {
       final canonicalUrl = _canonicalMediaUrl((map['url'] as String?) ?? '');
       if (canonicalUrl.isEmpty || !seen.add(canonicalUrl)) continue;
       final storedStatus = (map['status'] ?? '').toString();
-      items.add(
-        MultimediaItem(
+      final updatedAt = (map['updatedAt'] as num?)?.toInt() ?? 0;
+      entries.add((
+        item: MultimediaItem(
           title: (map['title'] as String?) ?? '',
           url: canonicalUrl,
           posterUrl: (map['posterUrl'] as String?) ?? '',
@@ -481,9 +482,15 @@ class StorageService {
               ? ShowStatus.upcoming
               : ShowStatus.ongoing,
         ),
-      );
+        updatedAt: updatedAt,
+      ));
     }
-    return items;
+    entries.sort((a, b) {
+      final cmp = b.updatedAt.compareTo(a.updatedAt);
+      if (cmp != 0) return cmp;
+      return a.item.title.toLowerCase().compareTo(b.item.title.toLowerCase());
+    });
+    return entries.map((e) => e.item).toList();
   }
 
   Future<void> setSelectedLibraryCategory(String category) async {
