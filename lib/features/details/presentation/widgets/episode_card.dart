@@ -42,16 +42,9 @@ class EpisodeCard extends HookConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final episodeNumberLabel = 'Episode ${episode.episode}';
-    final episodeTitle = episode.name.trim();
-    final genericEpisodeTitle = RegExp(
-      r'^(?:(?:الحلقة|حلقه|حلقة)|(?:episode|ep\.?))\s*[0-9٠-٩۰-۹]+$',
-      caseSensitive: false,
-    );
-    final showEpisodeTitle =
-        episodeTitle.isNotEmpty &&
-        !genericEpisodeTitle.hasMatch(episodeTitle) &&
-        !RegExp(r'^[0-9٠-٩۰-۹]+$').hasMatch(episodeTitle);
+    final episodeTitle = episode.name;
+    final hasServerNumber = episode.episode > 0;
+    final hasServerName = episodeTitle.isNotEmpty;
     final historyRepo = ref.watch(historyRepositoryProvider);
     final historyItem = ref.watch(
       watchHistoryProvider.select(
@@ -323,21 +316,22 @@ class EpisodeCard extends HookConsumerWidget {
                                 ? TextDirection.rtl
                                 : TextDirection.ltr,
                             children: [
-                              Text(
-                                isArabic
-                                    ? 'حلقة ${episode.episode}'
-                                    : 'Episode ${episode.episode}',
-                                style: episodeNumberStyle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              if (hasServerNumber)
+                                Text(
+                                  isArabic
+                                      ? 'حلقة ${episode.episode}'
+                                      : 'Episode ${episode.episode}',
+                                  style: episodeNumberStyle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               if (episode.isFiller) ...[
                                 const SizedBox(width: 8),
                                 _buildFillerBadge(isArabic),
                               ],
                             ],
                           ),
-                          if (showEpisodeTitle) ...[
+                          if (hasServerName) ...[
                             const SizedBox(height: 2),
                             Text(
                               episodeTitle,
