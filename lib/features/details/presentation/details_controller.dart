@@ -130,7 +130,6 @@ class DetailsController extends _$DetailsController {
       final details = state.details.asData?.value;
       if (details == null) return;
 
-      // Detect URLs that were active but are no longer active (completed/failed/canceled)
       final previousSet = prev ?? <String>{};
       final finishingUrls = previousSet.difference(next);
 
@@ -141,12 +140,10 @@ class DetailsController extends _$DetailsController {
           );
         }
 
-        // Re-check specific item if its URL finished
         if (finishingUrls.contains(details.url)) {
           ref.read(downloadedFilesProvider.notifier).checkFile(details);
         }
 
-        // Re-check episodes
         final episodes =
             state.episodes.asData?.value ??
             details.episodes ??
@@ -265,9 +262,6 @@ class DetailsController extends _$DetailsController {
         .read(episodeWatchRepositoryProvider)
         .setManyWatched(mainUrl, selectedEpisodes, watched);
 
-    // A manual watched/unwatched decision supersedes partial playback.
-    // Remove only Continue Watching; Recently Watched is an independent log of
-    // opened episodes and must remain intact.
     await ref
         .read(continueWatchingProvider.notifier)
         .remove(mainUrl);
@@ -384,9 +378,6 @@ class DetailsController extends _$DetailsController {
         state = state.copyWith(nextAiringResolved: true);
       }
 
-      // Initial navigation loads only the details data. Episodes are requested
-      // lazily the first time the Episodes tab is opened. Autoplay routes are
-      // the intentional exception because playback cannot start without them.
       unawaited(_loadBasicDetails(provider, item, generation));
       if (autoPlay || _episodesRequested) {
         unawaited(loadEpisodesOnDemand());
@@ -567,8 +558,6 @@ class DetailsController extends _$DetailsController {
         generation,
       ),
     );
-    // AniZip is optional enrichment: it runs independently and never blocks
-    // episode loading, watched-state reconciliation, or other background work.
     unawaited(
       _enrichEpisodesWithAniZip(
         merged,
@@ -739,9 +728,6 @@ class DetailsController extends _$DetailsController {
       if (!ref.mounted || generation != _loadGeneration || value == null) {
         return;
       }
-      // The next-airing countdown only needs a valid timestamp. Do not make
-      // the card depend on a resolved episode number, because episodes are
-      // intentionally loaded only when the Episodes tab is opened.
       if (value.unixTime <= 0) {
         return;
       }
@@ -843,8 +829,6 @@ class DetailsController extends _$DetailsController {
       );
       _processEpisodes(enriched, merged, isInitial: false);
 
-      // Keep watch-state reconciliation independent from AniZip's network
-      // request. A failure here must never affect playback or episode loading.
       unawaited(
         ref
             .read(episodeWatchRepositoryProvider)
@@ -856,8 +840,6 @@ class DetailsController extends _$DetailsController {
             }),
       );
     } catch (error) {
-      // AniZip is best-effort metadata only. Never surface its failure as a
-      // details/episodes error or interrupt existing background work.
       if (kDebugMode) debugPrint('[DetailsController] AniZip enrichment skipped: $error');
     }
   }
@@ -923,7 +905,6 @@ class DetailsController extends _$DetailsController {
         item: updatedItem,
       );
     } catch (error) {
-      // Optional enrichment must never replace successfully loaded episodes.
       if (kDebugMode) {
         debugPrint('Episode metadata enrichment failed: $error');
       }
@@ -990,21 +971,41 @@ class DetailsController extends _$DetailsController {
       return episodes;
     }
 
-    final Map<int, List<Episode>> seasonMap = {};
-    for (final ep in episodes) {
-      final season = ep.season > 0 ? ep.season : 1;
-      seasonMap.putIfAbsent(season, () => []).add(ep);
-    }
+    // SkyStream intentionally models every anime as a single season. Some
+    // upstream sources (and AniZip) expose real-world season numbers, but
+    // those numbers are not compatible with the episode catalog we receive.
+    // Normalize at the controller boundary so display, playback, downloads,
+    // watch history, and selection all use the same Season 1 identity.
+    var normalizedEpisodesChanged = false;
+    final normalizedEpisodes = episodes.map((episode) {
+      if (episode.season == 1) return episode;
+      normalizedEpisodesChanged = true;
+      return Episode(
+        name: episode.name,
+        url: episode.url,
+        season: 1,
+        episode: episode.episode,
+        description: episode.description,
+        posterUrl: episode.posterUrl,
+        headers: episode.headers,
+        isFiller: episode.isFiller,
+        rating: episode.rating,
+        runtime: episode.runtime,
+        airDate: episode.airDate,
+        dubStatus: episode.dubStatus,
+        playbackPolicy: episode.playbackPolicy,
+        streams: episode.streams,
+      );
+    }).toList(growable: false);
 
-    final sortedSeasons = seasonMap.keys.toList()..sort();
-    int selectedSeason = sortedSeasons.isNotEmpty ? sortedSeasons.first : 1;
+    final Map<int, List<Episode>> seasonMap = {1: normalizedEpisodes};
     Episode? targetEpisode;
 
     final episodeWatchRepo = ref.read(episodeWatchRepositoryProvider);
 
     // Choose the play target from a canonical ascending copy, independently
     // from the user's visible sort order or the last history position.
-    final orderedEpisodes = List<Episode>.from(episodes)
+    final orderedEpisodes = List<Episode>.from(normalizedEpisodes)
       ..sort((left, right) {
         final seasonCompare = left.season.compareTo(right.season);
         if (seasonCompare != 0) return seasonCompare;
@@ -1025,16 +1026,10 @@ class DetailsController extends _$DetailsController {
     );
     targetEpisode ??= orderedEpisodes.first;
 
-    if (isInitial && targetEpisode.season > 0) {
-      selectedSeason = targetEpisode.season;
-    } else {
-      selectedSeason = state.selectedSeason;
-    }
-
     DubStatus selectedDubStatus = state.selectedDubStatus;
     if (isInitial) {
-      final hasSub = episodes.any((e) => e.dubStatus == DubStatus.subbed);
-      final hasDub = episodes.any((e) => e.dubStatus == DubStatus.dubbed);
+      final hasSub = normalizedEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
+      final hasDub = normalizedEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
       if (hasSub && hasDub) {
         selectedDubStatus = DubStatus.subbed;
       }
@@ -1043,11 +1038,11 @@ class DetailsController extends _$DetailsController {
     state = state.copyWith(
       isMovie: false,
       seasonMap: seasonMap,
-      selectedSeason: selectedSeason,
+      selectedSeason: 1,
       targetEpisode: targetEpisode,
       selectedDubStatus: selectedDubStatus,
     );
-    return episodes;
+    return normalizedEpisodesChanged ? normalizedEpisodes : episodes;
   }
 
   Future<void> handlePlayPress(
