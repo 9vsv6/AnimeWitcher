@@ -109,6 +109,7 @@ class EpisodeCard extends HookConsumerWidget {
     final activeDownloads = ref.watch(activeDownloadsProvider);
     final isDownloading = activeDownloads.contains(episode.url);
     final detailsState = ref.watch(detailsControllerProvider(parentItem.url));
+    final details = detailsState.item;
     final selectionKey = episodeSelectionKey(episode);
     final isSelectionMode = detailsState.selectedEpisodeKeys.isNotEmpty;
     final isSelected = detailsState.selectedEpisodeKeys.contains(selectionKey);
