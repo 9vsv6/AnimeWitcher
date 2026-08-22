@@ -12,6 +12,7 @@ import 'player_prompt_placement.dart';
 
 class NextEpisodeOverlay extends StatefulWidget {
   final String nextEpisodeTitle;
+  final String? animeTitle;
   final String? nextEpisodePosterUrl;
   final double? nextEpisodeRating;
   final int? nextEpisodeNumber;
@@ -32,6 +33,7 @@ class NextEpisodeOverlay extends StatefulWidget {
   const NextEpisodeOverlay({
     super.key,
     required this.nextEpisodeTitle,
+    this.animeTitle,
     this.nextEpisodePosterUrl,
     this.nextEpisodeRating,
     this.nextEpisodeNumber,
@@ -387,31 +389,39 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 20),
-            child: Row(
-              children: [
-                if (hasBadge)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      episodeLabel,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: isCompact ? 10 : 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
+          if (widget.animeTitle?.trim().isNotEmpty == true) ...[
+            Text(
+              widget.animeTitle!.trim(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white60,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+          ],
+          Row(
+            children: [
+              if (hasBadge)
+                Expanded(
+                  child: Text(
+                    episodeLabel,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isCompact ? 14 : 14,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                if (hasRating) ...[const Spacer(), _buildRating(isCompact)],
+                ),
+              if (hasRating) ...[
+                if (hasBadge) const SizedBox(width: 8),
+                _buildRating(isCompact),
               ],
-            ),
+            ],
           ),
           if (widget.nextEpisodeDescription != null &&
               widget.nextEpisodeDescription!.isNotEmpty)
