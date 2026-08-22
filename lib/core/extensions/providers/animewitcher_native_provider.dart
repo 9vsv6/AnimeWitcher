@@ -2390,30 +2390,50 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   bool _isGenericEpisodeTitle(String value) {
     final title = _normalizeDigits(value.trim().toLowerCase());
     if (title.isEmpty) return true;
-    return RegExp(r'^(?:الحلقة|حلقه)\s*\d+$').hasMatch(title) ||
-        RegExp(r'^(?:episode|ep\.?)\s*\d+$', caseSensitive: false).hasMatch(title) ||
+    return RegExp(
+          r'^(?:الحلقة|حلقه)\s*\d+(?:\s+(?:والأخيرة|والاخيرة))?$',
+        ).hasMatch(title) ||
+        RegExp(
+          r'^(?:episode|ep\.?)\s*\d+(?:\s+(?:final|last))?$',
+          caseSensitive: false,
+        ).hasMatch(title) ||
         RegExp(r'^\d+$').hasMatch(title);
   }
 
   String _episodeTitle(Map<String, dynamic> source) {
-    // AnimeWitcher is the source of truth. Preserve its episode name verbatim.
-    return _text(source['name']);
+    final serverName = _decodeHtml(
+      source['name'] ?? source['episode_name'] ?? source['episodeName'],
+    );
+    for (final key in const <String>[
+      'title_translated',
+      'titleTranslated',
+      'title_ar',
+      'titleAr',
+      'arabic_title',
+      'arabicTitle',
+      'title_en',
+      'titleEn',
+      'title_english',
+      'titleEnglish',
+      'english_title',
+      'englishTitle',
+      'episode_title',
+      'episodeTitle',
+      'title',
+    ]) {
+      final title = _localizedEpisodeTitle(source[key]);
+      if (title.isNotEmpty && !_isGenericEpisodeTitle(title)) return title;
+    }
+    return serverName;
   }
 
-  int _episodeNumberFromId(String id) {
-    final normalized = _normalizeDigits(id.trim());
-    if (normalized.isEmpty) return 0;
-
-    final explicit = RegExp(
-      r'(?:episode|ep|الحلقة|حلقه)[^0-9]*(\d+)$',
+  int _episodeNumberFromServerName(String name) {
+    final normalized = _normalizeDigits(name.trim());
+    final match = RegExp(
+      r'^(?:الحلقة|حلقه|episode|ep\.?)\s*(\d+)',
       caseSensitive: false,
     ).firstMatch(normalized);
-    if (explicit != null) {
-      return int.tryParse(explicit.group(1)!) ?? 0;
-    }
-
-    final numeric = RegExp(r'^\d+$').firstMatch(normalized);
-    return numeric == null ? 0 : int.tryParse(numeric.group(0)!) ?? 0;
+    return match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
   }
 
   int _episodeFieldNumber(Map<String, dynamic> source) {
@@ -2429,6 +2449,46 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return 0;
   }
 
+  _EpisodeRecord _episodeRecord(
+    Map<String, dynamic> source, {
+    required String fallbackId,
+    required int fallbackNumber,
+  }) {
+    var id = _text(source['doc_id'] ?? source['id'] ?? source['episode_id']);
+    if (id.isEmpty) id = fallbackId;
+    final serverName = _decodeHtml(
+      source['name'] ?? source['episode_name'] ?? source['episodeName'],
+    );
+    final explicitNumber = _episodeFieldNumber(source);
+    final sourceNumber = _positiveInt(source['number']);
+    // Only server metadata may define the episode number. The list index and
+    // document id are never converted into an episode number. If AnimeWitcher
+    // embeds the number in its own episode label, extract it solely to split
+    // that server label from the optional title in the UI.
+    final number = explicitNumber > 0
+        ? explicitNumber
+        : sourceNumber > 0
+            ? sourceNumber
+            : _episodeNumberFromServerName(serverName);
+    final image = _text(
+      source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
+    );
+    final isFiller = _isTruthy(
+      source['filler'] ?? source['is_filler'] ?? source['isFiller'],
+    );
+    return _EpisodeRecord(
+      id: id,
+      number: number,
+      sortOrder: (() {
+        final sourceOrder = _episodeSortOrder(source);
+        return sourceOrder > 0 ? sourceOrder : fallbackNumber;
+      })(),
+      title: _episodeTitle(source),
+      image: image,
+      isFiller: isFiller,
+    );
+  }
+
   int _episodeSortOrder(Map<String, dynamic> source) {
     for (final key in const <String>[
       'sortOrder',
@@ -2441,33 +2501,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return 0;
   }
 
-  _EpisodeRecord _episodeRecord(
-    Map<String, dynamic> source, {
-    required String fallbackId,
-    required int fallbackNumber,
-  }) {
-    var id = _text(source['doc_id'] ?? source['id'] ?? source['episode_id']);
-    if (id.isEmpty) id = fallbackId;
-    // `number` is the only canonical episode number supplied by AnimeWitcher.
-    // Zero means the server intentionally has no episode number (e.g. movie variants).
-    final number = _positiveInt(source['number']);
-    final image = _text(
-      source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
-    );
-    final isFiller = _isTruthy(
-      source['filler'] ?? source['is_filler'] ?? source['isFiller'],
-    );
-    return _EpisodeRecord(
-      id: id,
-      number: number,
-      sortOrder: (() { final sourceOrder = _episodeSortOrder(source); return sourceOrder > 0 ? sourceOrder : fallbackNumber; })(),
-      title: _episodeTitle(source),
-      image: image,
-      isFiller: isFiller,
-    );
-  }
-
-  Future<List<_EpisodeRecord>> _fetchEpisodeSummary(String animeId) async {
+    Future<List<_EpisodeRecord>> _fetchEpisodeSummary(String animeId) async {
     final path = 'anime_list/$animeId/episodes_summery/summery';
     final fields = await _firestoreDocumentFields(path);
     if (fields.isEmpty) return const <_EpisodeRecord>[];
