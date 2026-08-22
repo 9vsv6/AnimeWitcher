@@ -3,38 +3,10 @@ String formatEpisodeLabel({
   required bool isArabic,
   String? title,
 }) {
-  final baseLabel = isArabic ? 'حلقة $episode' : 'Episode $episode';
-  final normalizedTitle = title?.trim().replaceAll(RegExp(r'\s+'), ' ') ?? '';
-
-  if (!_hasMeaningfulEpisodeTitle(normalizedTitle)) return baseLabel;
-  return '$baseLabel: $normalizedTitle';
-}
-
-bool _hasMeaningfulEpisodeTitle(String title) {
-  if (title.isEmpty || title.toLowerCase() == 'null') return false;
-
-  final normalized = _normalizeDigits(title.toLowerCase());
-  if (RegExp(r'^\d+$').hasMatch(normalized)) return false;
-
-  return !RegExp(
-    r'^(?:(?:الحلقة|حلقه|حلقة)|(?:episode|ep\.?))\s*[-:#.]?\s*\d+$',
-    caseSensitive: false,
-  ).hasMatch(normalized);
-}
-
-String _normalizeDigits(String value) {
-  const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
-  const easternArabic = '۰۱۲۳۴۵۶۷۸۹';
-
-  return value
-      .replaceAllMapped(
-        RegExp(r'[٠-٩]'),
-        (match) => '${arabicIndic.indexOf(match.group(0)!)}',
-      )
-      .replaceAllMapped(
-        RegExp(r'[۰-۹]'),
-        (match) => '${easternArabic.indexOf(match.group(0)!)}',
-      );
+  final serverTitle = title ?? '';
+  if (episode <= 0) return serverTitle;
+  final prefix = isArabic ? 'حلقة $episode' : 'Episode $episode';
+  return serverTitle.isEmpty ? prefix : '$prefix: $serverTitle';
 }
 
 String formatEpisodeFileName({
@@ -42,8 +14,10 @@ String formatEpisodeFileName({
   String? title,
   String? quality,
 }) {
-  final label = formatEpisodeLabel(episode: episode, isArabic: true, title: title);
+  final serverTitle = title ?? '';
+  final base = episode > 0
+      ? (serverTitle.isEmpty ? 'حلقة $episode' : 'حلقة $episode: $serverTitle')
+      : serverTitle;
   final normalizedQuality = quality?.trim() ?? '';
-  if (normalizedQuality.isEmpty) return label;
-  return '$label ($normalizedQuality)';
+  return normalizedQuality.isEmpty ? base : '$base ($normalizedQuality)';
 }
