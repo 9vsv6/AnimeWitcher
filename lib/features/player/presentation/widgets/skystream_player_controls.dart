@@ -1092,6 +1092,7 @@ class SkyStreamPlayerControlsState
                 if (showNextEpOverlay && nextEpTitle != null)
                   NextEpisodeOverlay(
                     focusNode: _nextEpFocusNode,
+                    animeTitle: playerNotifier.multimediaItem?.title,
                     nextEpisodeTitle: nextEpTitle,
                     nextEpisodePosterUrl: nextEpPosterUrl,
                     nextEpisodeRating: nextEpRating,
