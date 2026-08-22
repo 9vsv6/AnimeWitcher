@@ -2395,19 +2395,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         RegExp(r'^\d+$').hasMatch(title);
   }
 
-  String _episodeTitle(Map<String, dynamic> source, int number) {
-    final generic = _decodeHtml(
-      source['name'] ?? source['episode_name'] ?? source['episodeName'] ?? 'الحلقة $number',
-    );
-    for (final key in const <String>[
-      'title_translated', 'titleTranslated', 'title_ar', 'titleAr', 'arabic_title', 'arabicTitle',
-      'title_en', 'titleEn', 'title_english', 'titleEnglish', 'english_title', 'englishTitle',
-      'episode_title', 'episodeTitle', 'title',
-    ]) {
-      final title = _localizedEpisodeTitle(source[key]);
-      if (title.isNotEmpty && !_isGenericEpisodeTitle(title)) return title;
-    }
-    return generic.isEmpty ? 'الحلقة $number' : generic;
+  String _episodeTitle(Map<String, dynamic> source) {
+    // AnimeWitcher is the source of truth. Preserve its episode name verbatim.
+    return _text(source['name']);
   }
 
   int _episodeNumberFromId(String id) {
@@ -2458,22 +2448,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }) {
     var id = _text(source['doc_id'] ?? source['id'] ?? source['episode_id']);
     if (id.isEmpty) id = fallbackId;
-    final explicitNumber = _episodeFieldNumber(source);
-    final idNumber = _episodeNumberFromId(id);
-    final sourceNumber = _positiveInt(source['number']);
-
-    // AnimeWitcher episode identity is the episode number, not the generic
-    // number field alone. Some long-running series contain records where
-    // number is reset to 1 while the document id still contains 1159.
-    // Prefer an explicit episode field, then the canonical numeric id, and
-    // only use the generic field as a fallback.
-    final number = explicitNumber > 0
-        ? explicitNumber
-        : idNumber > 0
-            ? idNumber
-            : sourceNumber > 0
-                ? sourceNumber
-                : fallbackNumber;
+    // `number` is the only canonical episode number supplied by AnimeWitcher.
+    // Zero means the server intentionally has no episode number (e.g. movie variants).
+    final number = _positiveInt(source['number']);
     final image = _text(
       source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
     );
@@ -2483,8 +2460,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return _EpisodeRecord(
       id: id,
       number: number,
-      sortOrder: _episodeSortOrder(source),
-      title: _episodeTitle(source, number),
+      sortOrder: (() { final sourceOrder = _episodeSortOrder(source); return sourceOrder > 0 ? sourceOrder : fallbackNumber; })(),
+      title: _episodeTitle(source),
       image: image,
       isFiller: isFiller,
     );
@@ -2570,19 +2547,18 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       // Keep one record per AnimeWitcher identity: anime id + episode number.
       // This prevents a malformed duplicate document from producing two cards
       // for the same episode while preserving the first source record.
-      final unique = <int, _EpisodeRecord>{};
+      final unique = <String, _EpisodeRecord>{};
       for (final record in records) {
-        if (record.number <= 0) continue;
-        unique.putIfAbsent(record.number, () => record);
+        // Identity is the AnimeWitcher document, not the number. This preserves
+        // separate number=0 movie variants such as translated/dubbed entries.
+        unique.putIfAbsent(record.id, () => record);
       }
 
       final normalized = unique.values.toList(growable: false)
         ..sort((a, b) {
-          final aOrder = a.sortOrder > 0 ? a.sortOrder : a.number;
-          final bOrder = b.sortOrder > 0 ? b.sortOrder : b.number;
-          final orderCompare = aOrder.compareTo(bOrder);
-          if (orderCompare != 0) return orderCompare;
-          return a.number.compareTo(b.number);
+          final aOrder = a.sortOrder > 0 ? a.sortOrder : (a.number > 0 ? a.number : 0);
+          final bOrder = b.sortOrder > 0 ? b.sortOrder : (b.number > 0 ? b.number : 0);
+          return aOrder.compareTo(bOrder);
         });
       final cachedRecords = List<_EpisodeRecord>.unmodifiable(normalized);
       _episodeRecordCache[key] = cachedRecords;
