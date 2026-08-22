@@ -490,12 +490,17 @@ class DownloadService {
       // 2. Fallback to GET with Range if size unknown
       if (size == null) {
         try {
+          // Some media hosts reject HEAD but honor a byte-range GET. Use a
+          // streaming response here so a server that ignores Range cannot
+          // buffer an entire movie/episode into memory just to discover its
+          // size. We only need the response headers.
           final getResponse = await _dio
               .get<dynamic>(
                 url,
                 options: Options(
                   headers: {...?headers, 'Range': 'bytes=0-0'},
                   followRedirects: true,
+                  responseType: ResponseType.stream,
                 ),
               )
               .timeout(const Duration(seconds: 10));
@@ -504,8 +509,26 @@ class DownloadService {
           if (rangeContentLength != null) {
             final totalSize = rangeContentLength.split('/').last;
             size = int.tryParse(totalSize);
+          } else {
+            // A compliant 200 response may still expose the full size. Do not
+            // infer it from the streamed body; that would defeat the point of
+            // this metadata-only request.
+            final contentLength =
+                getResponse.headers.value('content-length');
+            final parsedLength = int.tryParse(contentLength ?? '');
+            if (parsedLength != null && parsedLength > 1) {
+              size = parsedLength;
+            }
           }
           mimeType ??= getResponse.headers.value('content-type');
+
+          final body = getResponse.data;
+          if (body is ResponseBody) {
+            // Close the streamed response without reading a potentially huge
+            // body when the server ignored the Range header.
+            final subscription = body.stream.listen(null);
+            await subscription.cancel();
+          }
         } catch (e) {
           // GET fallback failed
         }
@@ -653,24 +676,37 @@ class DownloadService {
       fullDirPath = taskDirectory;
     }
 
-    final dir = Directory(fullDirPath);
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
+    try {
+      final dir = Directory(fullDirPath);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
 
-    final success = await FileDownloader().enqueue(task);
-    if (kDebugMode) debugPrint('[DownloadService] Enqueue result: $success');
+      final success = await FileDownloader().enqueue(task);
+      if (kDebugMode) debugPrint('[DownloadService] Enqueue result: $success');
 
-    if (success) {
-      _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
-      // Save metadata for offline support
-      await _ref
-          .read(storageServiceProvider)
-          .saveDownloadMetadata(task.taskId, item, episode: episode);
-    } else {
+      if (success) {
+        _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
+        // Save metadata for offline support
+        await _ref
+            .read(storageServiceProvider)
+            .saveDownloadMetadata(task.taskId, item, episode: episode);
+      } else {
+        await _continuedProcessing.stop(taskId: task.taskId);
+      }
+      return success;
+    } catch (error) {
+      // The iOS 26 continued-processing task is created before enqueueing so
+      // it is tied as closely as possible to the user's tap. If directory
+      // creation or enqueueing fails, explicitly tear down that system task;
+      // otherwise the Dynamic Island/Lock Screen progress can outlive a
+      // download that never actually started.
       await _continuedProcessing.stop(taskId: task.taskId);
+      if (kDebugMode) {
+        debugPrint('[DownloadService] Failed to enqueue download: $error');
+      }
+      return false;
     }
-    return success;
   }
 
   Future<String> getDownloadPath(
@@ -740,7 +776,7 @@ class DownloadService {
     final extensions = ['.mp4', '.mkv', '.webm', '.avi'];
     for (final ext in extensions) {
       final file = File(p.join(directoryPath, '$baseName$ext'));
-      if (await file.exists()) {
+      if (await file.exists() && await file.length() > 0) {
         return file;
       }
     }
