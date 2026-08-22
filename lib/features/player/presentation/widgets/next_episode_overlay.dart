@@ -420,11 +420,9 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
             ),
           ],
           if (hasRating) ...[
-                if (hasBadge) const SizedBox(width: 8),
-                _buildRating(isCompact),
-              ],
-            ],
-          ),
+            const SizedBox(height: 4),
+            _buildRating(isCompact),
+          ],
           if (widget.nextEpisodeDescription != null &&
               widget.nextEpisodeDescription!.isNotEmpty)
             Padding(
