@@ -12,7 +12,6 @@ import 'package:skystream/core/account/animewitcher_comment_models.dart';
 import 'package:skystream/features/comments/presentation/animewitcher_comments_screen.dart';
 import 'package:skystream/core/storage/history_repository.dart';
 import 'package:skystream/core/storage/episode_watch_repository.dart';
-import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/core/services/download_service.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
@@ -110,16 +109,6 @@ class EpisodeCard extends HookConsumerWidget {
     final activeDownloads = ref.watch(activeDownloadsProvider);
     final isDownloading = activeDownloads.contains(episode.url);
     final detailsState = ref.watch(detailsControllerProvider(parentItem.url));
-    final details = detailsState.item;
-    final episodeList = detailsState.episodes.asData?.value ??
-        details?.episodes ?? parentItem.episodes ?? const <Episode>[];
-    final maxEpisodeNumber = episodeList.isEmpty
-        ? 0
-        : episodeList.map((e) => e.episode).reduce((a, b) => a > b ? a : b);
-    final isFinalEpisode =
-        (details?.status ?? parentItem.status) == ShowStatus.completed &&
-        episode.episode > 0 &&
-        episode.episode == maxEpisodeNumber;
     final selectionKey = episodeSelectionKey(episode);
     final isSelectionMode = detailsState.selectedEpisodeKeys.isNotEmpty;
     final isSelected = detailsState.selectedEpisodeKeys.contains(selectionKey);
@@ -334,15 +323,11 @@ class EpisodeCard extends HookConsumerWidget {
                                 : TextDirection.ltr,
                             children: [
                               Text(
-                                isFinalEpisode
-                                    ? 'الحلقة ${episode.episode} والأخيرة'
-                                    : formatEpisodeLabel(
-                                        episode: episode.episode,
-                                        isArabic: isArabic,
-                                        title: episodeTitle,
-                                      ),
+                                isArabic
+                                    ? 'حلقة ${episode.episode}'
+                                    : 'Episode ${episode.episode}',
                                 style: episodeNumberStyle,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               if (episode.isFiller) ...[
@@ -351,7 +336,7 @@ class EpisodeCard extends HookConsumerWidget {
                               ],
                             ],
                           ),
-                          if (showEpisodeTitle && !isFinalEpisode) ...[
+                          if (showEpisodeTitle) ...[
                             const SizedBox(height: 2),
                             Text(
                               episodeTitle,
