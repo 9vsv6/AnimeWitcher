@@ -45,7 +45,6 @@ class EpisodeCard extends HookConsumerWidget {
     final episodeTitle = episode.name;
     final hasServerNumber = episode.episode > 0;
     final hasServerName = episodeTitle.isNotEmpty;
-    final isServerEpisodeLabel = RegExp(r'^(?:الحلقة|حلقه|episode|ep\.?)\s*\d+(?:\s+(?:والأخيرة|والاخيرة|final|last))?$', caseSensitive: false).hasMatch(episodeTitle.trim());
     final historyRepo = ref.watch(historyRepositoryProvider);
     final historyItem = ref.watch(
       watchHistoryProvider.select(
@@ -317,14 +316,7 @@ class EpisodeCard extends HookConsumerWidget {
                                 ? TextDirection.rtl
                                 : TextDirection.ltr,
                             children: [
-                              if (isServerEpisodeLabel)
-                                Text(
-                                  episodeTitle,
-                                  style: episodeNumberStyle.copyWith(fontSize: 16),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                )
-                              else if (hasServerNumber)
+                              if (hasServerNumber)
                                 Text(
                                   isArabic ? 'حلقة ${episode.episode}' : 'Episode ${episode.episode}',
                                   style: episodeNumberStyle,
@@ -337,7 +329,7 @@ class EpisodeCard extends HookConsumerWidget {
                               ],
                             ],
                           ),
-                          if (hasServerName && !isServerEpisodeLabel) ...[
+                          if (hasServerName) ...[
                             const SizedBox(height: 2),
                             Text(
                               episodeTitle,

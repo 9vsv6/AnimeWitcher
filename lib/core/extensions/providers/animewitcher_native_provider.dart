@@ -2427,26 +2427,16 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return serverName;
   }
 
-  int _episodeNumberFromServerName(String name) {
-    final normalized = _normalizeDigits(name.trim());
-    final match = RegExp(
-      r'^(?:الحلقة|حلقه|episode|ep\.?)\s*(\d+)',
+  int _episodeNumberFromId(String id) {
+    final normalized = _normalizeDigits(id.trim());
+    if (normalized.isEmpty) return 0;
+    final explicit = RegExp(
+      r'(?:episode|ep|الحلقة|حلقه)[^0-9]*(\d+)$',
       caseSensitive: false,
     ).firstMatch(normalized);
-    return match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
-  }
-
-  int _episodeFieldNumber(Map<String, dynamic> source) {
-    for (final key in const <String>[
-      'episode_number',
-      'episodeNumber',
-      'episode',
-      'ep',
-    ]) {
-      final value = _positiveInt(source[key]);
-      if (value > 0) return value;
-    }
-    return 0;
+    if (explicit != null) return int.tryParse(explicit.group(1)!) ?? 0;
+    final numeric = RegExp(r'^\d+$').firstMatch(normalized);
+    return numeric == null ? 0 : int.tryParse(numeric.group(0)!) ?? 0;
   }
 
   _EpisodeRecord _episodeRecord(
@@ -2459,17 +2449,14 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final serverName = _decodeHtml(
       source['name'] ?? source['episode_name'] ?? source['episodeName'],
     );
-    final explicitNumber = _episodeFieldNumber(source);
-    final sourceNumber = _positiveInt(source['number']);
-    // Only server metadata may define the episode number. The list index and
-    // document id are never converted into an episode number. If AnimeWitcher
-    // embeds the number in its own episode label, extract it solely to split
-    // that server label from the optional title in the UI.
-    final number = explicitNumber > 0
-        ? explicitNumber
-        : sourceNumber > 0
-            ? sourceNumber
-            : _episodeNumberFromServerName(serverName);
+    final serverNumber = _serverEpisodeNumber(source);
+    // AnimeWitcher's numeric field is authoritative, including an explicit 0
+    // for movie/variant entries such as translated and dubbed versions. Never
+    // replace an explicit server value with a list index, document id, or a
+    // number parsed from the title. If the numeric field is genuinely absent,
+    // the document id is the same server-side episode identity used by the
+    // original AnimeWitcher implementation; use it only as a last resort.
+    final number = serverNumber ?? _episodeNumberFromId(id);
     final image = _text(
       source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
     );

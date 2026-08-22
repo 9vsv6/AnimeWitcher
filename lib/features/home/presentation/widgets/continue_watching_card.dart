@@ -143,7 +143,6 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     final episodeTitle = widget.historyItem.episodeTitle ?? '';
     final hasServerNumber = episodeNumber != null && episodeNumber > 0;
     final hasServerName = episodeTitle.isNotEmpty;
-    final isServerEpisodeLabel = RegExp(r'^(?:الحلقة|حلقه|episode|ep\.?)\s*\d+(?:\s+(?:والأخيرة|والاخيرة|final|last))?$', caseSensitive: false).hasMatch(episodeTitle.trim());
     return CardsWrapper(
       onTap: () async {
         if (isLivestream) {
@@ -370,11 +369,11 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                           )
                         else
                           Text(
-                            isServerEpisodeLabel
-                                ? episodeTitle
-                                : (hasServerNumber
-                                    ? (hasServerName ? 'حلقة $episodeNumber\n$episodeTitle' : 'حلقة $episodeNumber')
-                                    : (hasServerName ? episodeTitle : item.title)),
+                            hasServerNumber
+                                ? (hasServerName
+                                    ? 'حلقة $episodeNumber\n$episodeTitle'
+                                    : 'حلقة $episodeNumber')
+                                : (hasServerName ? episodeTitle : item.title),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

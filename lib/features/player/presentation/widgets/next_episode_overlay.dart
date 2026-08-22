@@ -370,7 +370,6 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
         widget.nextEpisodeRating != null && widget.nextEpisodeRating! > 0;
     final hasServerNumber = (widget.nextEpisodeNumber ?? 0) > 0;
     final hasServerName = widget.nextEpisodeTitle.isNotEmpty;
-    final isServerEpisodeLabel = RegExp(r'^(?:الحلقة|حلقه|episode|ep\.?)\s*\d+(?:\s+(?:والأخيرة|والاخيرة|final|last))?$', caseSensitive: false).hasMatch(widget.nextEpisodeTitle.trim());
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -396,9 +395,9 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
             ),
             const SizedBox(height: 2),
           ],
-          if (isServerEpisodeLabel)
+          if (hasServerNumber)
             Text(
-              widget.nextEpisodeTitle,
+              'حلقة ${widget.nextEpisodeNumber}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -407,7 +406,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
                 fontWeight: FontWeight.w600,
               ),
             ),
-          if (hasServerName && !isServerEpisodeLabel) ...[
+          if (hasServerName) ...[
             if (hasServerNumber) const SizedBox(height: 2),
             Text(
               widget.nextEpisodeTitle,
