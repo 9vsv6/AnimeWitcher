@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import 'package:skystream/core/utils/episode_label.dart';
 import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/shared/widgets/thumbnail_error_placeholder.dart';
@@ -369,14 +368,8 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
   Widget _buildInfo(bool isCompact) {
     final hasRating =
         widget.nextEpisodeRating != null && widget.nextEpisodeRating! > 0;
-    final hasBadge = widget.nextEpisodeNumber != null;
-    final episodeLabel = widget.nextEpisodeNumber != null
-        ? formatEpisodeLabel(
-            episode: widget.nextEpisodeNumber!,
-            isArabic: Localizations.localeOf(context).languageCode.toLowerCase() == 'ar',
-            title: widget.nextEpisodeTitle,
-          )
-        : '';
+    final hasServerNumber = (widget.nextEpisodeNumber ?? 0) > 0;
+    final hasServerName = widget.nextEpisodeTitle.isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -402,22 +395,31 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
             ),
             const SizedBox(height: 2),
           ],
-          Row(
-            children: [
-              if (hasBadge)
-                Expanded(
-                  child: Text(
-                    episodeLabel,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: isCompact ? 14 : 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              if (hasRating) ...[
+          if (hasServerNumber)
+            Text(
+              'حلقة ${widget.nextEpisodeNumber}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (hasServerName) ...[
+            if (hasServerNumber) const SizedBox(height: 2),
+            Text(
+              widget.nextEpisodeTitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+          if (hasRating) ...[
                 if (hasBadge) const SizedBox(width: 8),
                 _buildRating(isCompact),
               ],
