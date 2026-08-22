@@ -61,21 +61,11 @@ class AniZipService {
         return source;
       }
       changed = true;
-      return Episode(
-        name: source.name,
-        url: source.url,
+      // AniZip may only refresh artwork / season. Never rewrite AnimeWitcher
+      // identity fields such as serverName, isFinal, or the creative title.
+      return source.copyWith(
         season: 1,
-        episode: source.episode,
-        description: source.description,
         posterUrl: nextPoster,
-        headers: source.headers,
-        isFiller: source.isFiller,
-        rating: source.rating,
-        runtime: source.runtime,
-        airDate: source.airDate,
-        dubStatus: source.dubStatus,
-        playbackPolicy: source.playbackPolicy,
-        streams: source.streams,
       );
     }).toList(growable: false);
 
@@ -87,22 +77,7 @@ class AniZipService {
     final result = episodes.map((source) {
       if (source.season == 1) return source;
       changed = true;
-      return Episode(
-        name: source.name,
-        url: source.url,
-        season: 1,
-        episode: source.episode,
-        description: source.description,
-        posterUrl: source.posterUrl,
-        headers: source.headers,
-        isFiller: source.isFiller,
-        rating: source.rating,
-        runtime: source.runtime,
-        airDate: source.airDate,
-        dubStatus: source.dubStatus,
-        playbackPolicy: source.playbackPolicy,
-        streams: source.streams,
-      );
+      return source.copyWith(season: 1);
     }).toList(growable: false);
     return changed ? result : episodes;
   }

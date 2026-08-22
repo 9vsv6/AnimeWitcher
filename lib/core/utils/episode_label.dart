@@ -43,10 +43,24 @@ bool hasFinalEpisodeSuffix(String? value) {
       ).hasMatch(title);
 }
 
-/// Real creative title only; empty when missing or generic.
+/// Movie/OVA catalog labels that AnimeWitcher shows instead of "حلقة N".
+bool isStandaloneEpisodeLabel(String? value) {
+  final title = _normalizeEpisodeLabel(value ?? '');
+  if (title.isEmpty || isGenericEpisodeTitle(title)) return false;
+  return RegExp(
+    r'^(مترجم|مدبلج|مترجمة|مدبلجة|sub(?:bed)?|dub(?:bed)?)$',
+    caseSensitive: false,
+  ).hasMatch(title);
+}
+
+/// Real creative title only; empty when missing or generic/standalone labels.
 String realEpisodeTitle(String? title) {
   final value = (title ?? '').trim();
-  if (value.isEmpty || isGenericEpisodeTitle(value)) return '';
+  if (value.isEmpty ||
+      isGenericEpisodeTitle(value) ||
+      isStandaloneEpisodeLabel(value)) {
+    return '';
+  }
   return value;
 }
 
@@ -57,12 +71,37 @@ String formatEpisodeNumberLabel({
   bool isFinal = false,
   String? rawName,
 }) {
-  final finalEpisode =
-      isFinal || hasFinalEpisodeSuffix(rawName);
+  final finalEpisode = isFinal || hasFinalEpisodeSuffix(rawName);
   if (isArabic) {
     return finalEpisode ? 'حلقة $episode والأخيرة' : 'حلقة $episode';
   }
   return finalEpisode ? 'Episode $episode (Final)' : 'Episode $episode';
+}
+
+/// Primary label matching AnimeWitcher: prefer the server `name` as-is for
+/// standalone labels (مترجم/مدبلج), otherwise build "حلقة X" / "حلقة X والأخيرة".
+///
+/// [serverName] must stay the original AnimeWitcher `name` field and must not
+/// be overwritten by optional AniZip artwork enrichment.
+String formatEpisodePrimaryLabel({
+  required int episode,
+  required bool isArabic,
+  bool isFinal = false,
+  String? serverName,
+}) {
+  final raw = (serverName ?? '').trim();
+  if (raw.isNotEmpty && !isGenericEpisodeTitle(raw)) {
+    return raw;
+  }
+  if (episode > 0) {
+    return formatEpisodeNumberLabel(
+      episode: episode,
+      isArabic: isArabic,
+      isFinal: isFinal,
+      rawName: raw,
+    );
+  }
+  return raw;
 }
 
 String formatEpisodeLabel({
@@ -70,15 +109,17 @@ String formatEpisodeLabel({
   required bool isArabic,
   String? title,
   bool isFinal = false,
+  String? serverName,
 }) {
   final serverTitle = realEpisodeTitle(title);
-  if (episode <= 0) return serverTitle;
-  final prefix = formatEpisodeNumberLabel(
+  final prefix = formatEpisodePrimaryLabel(
     episode: episode,
     isArabic: isArabic,
     isFinal: isFinal,
-    rawName: title,
+    serverName: serverName,
   );
+  if (episode <= 0 && prefix.isEmpty) return serverTitle;
+  if (prefix.isEmpty) return serverTitle;
   return serverTitle.isEmpty ? prefix : '$prefix: $serverTitle';
 }
 
@@ -87,16 +128,15 @@ String formatEpisodeFileName({
   String? title,
   String? quality,
   bool isFinal = false,
+  String? serverName,
 }) {
-  final serverTitle = realEpisodeTitle(title);
-  final base = episode > 0
-      ? formatEpisodeLabel(
-          episode: episode,
-          isArabic: true,
-          title: serverTitle,
-          isFinal: isFinal,
-        )
-      : serverTitle;
+  final base = formatEpisodeLabel(
+    episode: episode,
+    isArabic: true,
+    title: title,
+    isFinal: isFinal,
+    serverName: serverName,
+  );
   final normalizedQuality = quality?.trim() ?? '';
   return normalizedQuality.isEmpty ? base : '$base ($normalizedQuality)';
 }
@@ -107,15 +147,18 @@ String episodeTitleForStorage({
   required int episode,
   String? title,
   bool isFinal = false,
+  String? serverName,
 }) {
   final real = realEpisodeTitle(title);
   if (real.isNotEmpty) return real;
-  if ((isFinal || hasFinalEpisodeSuffix(title)) && episode > 0) {
-    return formatEpisodeNumberLabel(
-      episode: episode,
-      isArabic: true,
-      isFinal: true,
-    );
+  final primary = formatEpisodePrimaryLabel(
+    episode: episode,
+    isArabic: true,
+    isFinal: isFinal,
+    serverName: serverName,
+  );
+  if (isStandaloneEpisodeLabel(primary) || hasFinalEpisodeSuffix(primary)) {
+    return primary;
   }
   return '';
 }

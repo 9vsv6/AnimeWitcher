@@ -2393,9 +2393,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   bool _hasFinalEpisodeSuffix(String value) => hasFinalEpisodeSuffix(value);
 
   String _episodeTitle(Map<String, dynamic> source) {
-    final serverName = _decodeHtml(
-      source['name'] ?? source['episode_name'] ?? source['episodeName'],
-    );
     for (final key in const <String>[
       'title_translated',
       'titleTranslated',
@@ -2416,13 +2413,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       final title = _localizedEpisodeTitle(source[key]);
       if (title.isNotEmpty && !_isGenericEpisodeTitle(title)) return title;
     }
-    // Keep only a real creative title in Episode.name. Generic placeholders
-    // like "الحلقة 12" / "الحلقة 12 والأخيرة" are not titles — the UI builds
-    // the primary "حلقة X" / "حلقة X والأخيرة" label from the episode number
-    // and isFinal instead.
-    if (serverName.isNotEmpty && !_isGenericEpisodeTitle(serverName)) {
-      return serverName;
-    }
+    // Never fall back to the AnimeWitcher `name` field here. That value is the
+    // primary list label (الحلقة X / مترجم / مدبلج) and is stored on
+    // Episode.serverName so AniZip artwork enrichment cannot rewrite it.
     return '';
   }
 
@@ -2436,6 +2429,13 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     if (explicit != null) return int.tryParse(explicit.group(1)!) ?? 0;
     final numeric = RegExp(r'^\d+$').firstMatch(normalized);
     return numeric == null ? 0 : int.tryParse(numeric.group(0)!) ?? 0;
+  }
+
+  DubStatus _episodeDubStatus(String serverName) {
+    final label = serverName.trim();
+    if (label == 'مدبلج' || label == 'مدبلجة') return DubStatus.dubbed;
+    if (label == 'مترجم' || label == 'مترجمة') return DubStatus.subbed;
+    return DubStatus.none;
   }
 
   _EpisodeRecord _episodeRecord(
@@ -2470,9 +2470,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         return sourceOrder > 0 ? sourceOrder : fallbackNumber;
       })(),
       title: _episodeTitle(source),
+      serverName: serverName,
       image: image,
       isFiller: isFiller,
       isFinal: _hasFinalEpisodeSuffix(serverName),
+      dubStatus: _episodeDubStatus(serverName),
     );
   }
 
@@ -2629,6 +2631,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
             posterUrl: record.image.isEmpty ? null : record.image,
             isFiller: record.isFiller,
             isFinal: record.isFinal,
+            serverName: record.serverName,
+            dubStatus: record.dubStatus,
           ),
         )
         .toList(growable: false);
@@ -2669,6 +2673,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
             posterUrl: record.image.isEmpty ? null : record.image,
             isFiller: record.isFiller,
             isFinal: record.isFinal,
+            serverName: record.serverName,
+            dubStatus: record.dubStatus,
           ),
         )
         .toList(growable: false);
@@ -2721,6 +2727,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
               : (record.image.isEmpty ? null : record.image),
           isFiller: record.isFiller,
           isFinal: record.isFinal,
+          serverName: record.serverName,
+          dubStatus: record.dubStatus,
         ));
       }
       return output;
@@ -3539,17 +3547,21 @@ class _EpisodeRecord {
     required this.number,
     required this.sortOrder,
     required this.title,
+    required this.serverName,
     required this.image,
     required this.isFiller,
     this.isFinal = false,
+    this.dubStatus = DubStatus.none,
   });
   final String id;
   final int number;
   final int sortOrder;
   final String title;
+  final String serverName;
   final String image;
   final bool isFiller;
   final bool isFinal;
+  final DubStatus dubStatus;
 }
 
 class _AnimeWitcherCharacterRef {

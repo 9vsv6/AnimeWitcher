@@ -145,13 +145,14 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     final episodeTitle = realEpisodeTitle(episodeTitleRaw);
     final hasServerNumber = episodeNumber != null && episodeNumber > 0;
     final hasServerName = episodeTitle.isNotEmpty;
-    final episodeNumberLabel = hasServerNumber
-        ? formatEpisodeNumberLabel(
-            episode: episodeNumber!,
-            isArabic: true,
-            rawName: episodeTitleRaw,
-          )
-        : '';
+    final episodeNumberLabel = formatEpisodePrimaryLabel(
+      episode: episodeNumber ?? 0,
+      isArabic: true,
+      serverName: episodeTitleRaw,
+    );
+    final primaryLabel = episodeNumberLabel.isNotEmpty
+        ? episodeNumberLabel
+        : (hasServerNumber ? 'حلقة $episodeNumber' : '');
     return CardsWrapper(
       onTap: () async {
         if (isLivestream) {
@@ -378,10 +379,10 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                           )
                         else
                           Text(
-                            hasServerNumber
+                            primaryLabel.isNotEmpty
                                 ? (hasServerName
-                                    ? '$episodeNumberLabel\n$episodeTitle'
-                                    : episodeNumberLabel)
+                                    ? '$primaryLabel\n$episodeTitle'
+                                    : primaryLabel)
                                 : (hasServerName ? episodeTitle : item.title),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,

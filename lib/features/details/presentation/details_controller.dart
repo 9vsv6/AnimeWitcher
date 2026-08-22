@@ -777,26 +777,12 @@ class DetailsController extends _$DetailsController {
 
   Episode _mergeEpisodeMetadata(Episode source, Episode metadata) {
     final metadataPoster = metadata.posterUrl?.trim();
-    return Episode(
-      name: source.name,
-      url: source.url,
-      // AnimeWitcher owns every episode field. Optional background enrichment
-      // is allowed to replace artwork only (currently from AniZip).
-      season: source.season,
-      episode: source.episode,
-      description: source.description,
+    // AnimeWitcher owns every episode field. Optional background enrichment
+    // is allowed to replace artwork only (currently from AniZip).
+    return source.copyWith(
       posterUrl: metadataPoster != null && metadataPoster.isNotEmpty
           ? metadataPoster
           : source.posterUrl,
-      headers: source.headers,
-      isFiller: source.isFiller,
-      isFinal: source.isFinal,
-      rating: source.rating,
-      runtime: source.runtime,
-      airDate: source.airDate,
-      dubStatus: source.dubStatus,
-      playbackPolicy: source.playbackPolicy,
-      streams: source.streams,
     );
   }
 
@@ -981,23 +967,7 @@ class DetailsController extends _$DetailsController {
     final normalizedEpisodes = episodes.map((episode) {
       if (episode.season == 1) return episode;
       normalizedEpisodesChanged = true;
-      return Episode(
-        name: episode.name,
-        url: episode.url,
-        season: 1,
-        episode: episode.episode,
-        description: episode.description,
-        posterUrl: episode.posterUrl,
-        headers: episode.headers,
-        isFiller: episode.isFiller,
-        isFinal: episode.isFinal,
-        rating: episode.rating,
-        runtime: episode.runtime,
-        airDate: episode.airDate,
-        dubStatus: episode.dubStatus,
-        playbackPolicy: episode.playbackPolicy,
-        streams: episode.streams,
-      );
+      return episode.copyWith(season: 1);
     }).toList(growable: false);
 
     final Map<int, List<Episode>> seasonMap = {1: normalizedEpisodes};

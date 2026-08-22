@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skystream/core/domain/entity/multimedia_item.dart';
+import 'package:skystream/core/services/anizip_service.dart';
 import 'package:skystream/core/utils/episode_label.dart';
 
 void main() {
@@ -16,9 +18,20 @@ void main() {
       expect(isGenericEpisodeTitle('Episode 3 Final'), isTrue);
     });
 
-    test('keeps creative titles', () {
+    test('keeps creative titles and standalone labels', () {
       expect(isGenericEpisodeTitle('رفقاء جدد'), isFalse);
-      expect(isGenericEpisodeTitle('بداية جديدة'), isFalse);
+      expect(isGenericEpisodeTitle('مترجم'), isFalse);
+      expect(isGenericEpisodeTitle('مدبلج'), isFalse);
+    });
+  });
+
+  group('isStandaloneEpisodeLabel', () {
+    test('detects AnimeWitcher movie variant labels', () {
+      expect(isStandaloneEpisodeLabel('مترجم'), isTrue);
+      expect(isStandaloneEpisodeLabel('مدبلج'), isTrue);
+      expect(isStandaloneEpisodeLabel('Dubbed'), isTrue);
+      expect(isStandaloneEpisodeLabel('رفقاء جدد'), isFalse);
+      expect(isStandaloneEpisodeLabel('الحلقة 1'), isFalse);
     });
   });
 
@@ -33,11 +46,13 @@ void main() {
   });
 
   group('realEpisodeTitle', () {
-    test('returns empty for missing or generic titles', () {
+    test('returns empty for missing, generic, or standalone labels', () {
       expect(realEpisodeTitle(null), '');
       expect(realEpisodeTitle(''), '');
       expect(realEpisodeTitle('الحلقة 16'), '');
       expect(realEpisodeTitle('الحلقة 12 والأخيرة'), '');
+      expect(realEpisodeTitle('مترجم'), '');
+      expect(realEpisodeTitle('مدبلج'), '');
     });
 
     test('keeps creative titles', () {
@@ -45,34 +60,50 @@ void main() {
     });
   });
 
-  group('formatEpisodeNumberLabel', () {
-    test('formats Arabic number and final suffix', () {
+  group('formatEpisodePrimaryLabel', () {
+    test('builds Arabic number and final suffix from generic server names', () {
       expect(
-        formatEpisodeNumberLabel(episode: 12, isArabic: true),
-        'حلقة 12',
-      );
-      expect(
-        formatEpisodeNumberLabel(episode: 12, isArabic: true, isFinal: true),
-        'حلقة 12 والأخيرة',
-      );
-      expect(
-        formatEpisodeNumberLabel(
+        formatEpisodePrimaryLabel(
           episode: 12,
           isArabic: true,
-          rawName: 'الحلقة 12 والأخيرة',
+          serverName: 'الحلقة 12 والأخيرة',
+          isFinal: true,
         ),
         'حلقة 12 والأخيرة',
       );
+      expect(
+        formatEpisodePrimaryLabel(
+          episode: 11,
+          isArabic: true,
+          serverName: 'الحلقة 11',
+        ),
+        'حلقة 11',
+      );
     });
 
-    test('formats English number and final suffix', () {
+    test('keeps مترجم/مدبلج exactly like AnimeWitcher', () {
       expect(
-        formatEpisodeNumberLabel(episode: 12, isArabic: false),
-        'Episode 12',
+        formatEpisodePrimaryLabel(
+          episode: 1,
+          isArabic: true,
+          serverName: 'مترجم',
+        ),
+        'مترجم',
       );
       expect(
-        formatEpisodeNumberLabel(episode: 12, isArabic: false, isFinal: true),
-        'Episode 12 (Final)',
+        formatEpisodePrimaryLabel(
+          episode: 2,
+          isArabic: true,
+          serverName: 'مدبلج',
+        ),
+        'مدبلج',
+      );
+    });
+
+    test('keeps والأخيرة from isFinal even without serverName', () {
+      expect(
+        formatEpisodePrimaryLabel(episode: 12, isArabic: true, isFinal: true),
+        'حلقة 12 والأخيرة',
       );
     });
   });
@@ -95,6 +126,7 @@ void main() {
           episode: 12,
           isArabic: true,
           title: 'الحلقة 12 والأخيرة',
+          serverName: 'الحلقة 12 والأخيرة',
         ),
         'حلقة 12 والأخيرة',
       );
@@ -136,18 +168,66 @@ void main() {
       );
     });
 
-    test('stores final marker when title is generic', () {
+    test('stores final and standalone markers when title is generic', () {
       expect(
         episodeTitleForStorage(
           episode: 12,
           title: 'الحلقة 12 والأخيرة',
           isFinal: true,
+          serverName: 'الحلقة 12 والأخيرة',
         ),
         'حلقة 12 والأخيرة',
       );
       expect(
+        episodeTitleForStorage(
+          episode: 1,
+          serverName: 'مترجم',
+        ),
+        'مترجم',
+      );
+      expect(
         episodeTitleForStorage(episode: 11, title: 'الحلقة 11'),
         '',
+      );
+    });
+  });
+
+  group('AniZip enrichment', () {
+    test('preserves serverName and isFinal when only poster changes', () async {
+      final source = [
+        Episode(
+          name: '',
+          url: 'anime|ep12',
+          season: 1,
+          episode: 12,
+          isFinal: true,
+          serverName: 'الحلقة 12 والأخيرة',
+          posterUrl: 'https://example.com/old.jpg',
+        ),
+      ];
+
+      // No sync ids → normalize path, still must keep identity fields.
+      final enriched = await AniZipService().enrichEpisodes(
+        MultimediaItem(
+          title: 'Test',
+          url: 'https://example.com/anime',
+          posterUrl: '',
+          contentType: MultimediaContentType.anime,
+        ),
+        source,
+      );
+
+      expect(enriched, isNotNull);
+      expect(enriched!.single.isFinal, isTrue);
+      expect(enriched.single.serverName, 'الحلقة 12 والأخيرة');
+      expect(
+        formatEpisodePrimaryLabel(
+          episode: enriched.single.episode,
+          isArabic: true,
+          isFinal: enriched.single.isFinal,
+          serverName: enriched.single.serverName,
+        ),
+        'حلقة 12 والأخيرة',
       );
     });
   });

@@ -203,6 +203,7 @@ AnimeWitcherCommentTarget? animeWitcherEpisodeCommentTarget(
     isArabic: true,
     title: episode.name,
     isFinal: episode.isFinal,
+    serverName: episode.serverName,
   );
   return AnimeWitcherCommentTarget(
     collectionPath: '$sourcePath/comments',
