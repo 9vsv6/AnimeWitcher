@@ -768,6 +768,7 @@ class DownloadService {
       baseName = formatEpisodeFileName(
         episode: episode.episode,
         title: episode.name,
+        isFinal: episode.isFinal,
       );
     } else {
       baseName = sanitizedTitle;

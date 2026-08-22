@@ -13,6 +13,7 @@ import 'package:skystream/features/comments/presentation/animewitcher_comments_s
 import 'package:skystream/core/storage/history_repository.dart';
 import 'package:skystream/core/storage/episode_watch_repository.dart';
 import 'package:skystream/core/services/download_service.dart';
+import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
@@ -42,9 +43,15 @@ class EpisodeCard extends HookConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final episodeTitle = episode.name;
+    final episodeTitle = realEpisodeTitle(episode.name);
     final hasServerNumber = episode.episode > 0;
     final hasServerName = episodeTitle.isNotEmpty;
+    final episodeNumberLabel = formatEpisodeNumberLabel(
+      episode: episode.episode,
+      isArabic: isArabic,
+      isFinal: episode.isFinal,
+      rawName: episode.name,
+    );
     final historyRepo = ref.watch(historyRepositoryProvider);
     final historyItem = ref.watch(
       watchHistoryProvider.select(
@@ -318,7 +325,7 @@ class EpisodeCard extends HookConsumerWidget {
                             children: [
                               if (hasServerNumber)
                                 Text(
-                                  isArabic ? 'حلقة ${episode.episode}' : 'Episode ${episode.episode}',
+                                  episodeNumberLabel,
                                   style: episodeNumberStyle,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,

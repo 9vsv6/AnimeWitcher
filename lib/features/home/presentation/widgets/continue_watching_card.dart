@@ -16,6 +16,7 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/core/services/notification_service.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/utils/episode_label.dart';
 class ContinueWatchingCard extends ConsumerStatefulWidget {
   final HistoryItem historyItem;
   final double width;
@@ -140,9 +141,17 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     }
 
     final episodeNumber = widget.historyItem.episode;
-    final episodeTitle = widget.historyItem.episodeTitle ?? '';
+    final episodeTitleRaw = widget.historyItem.episodeTitle ?? '';
+    final episodeTitle = realEpisodeTitle(episodeTitleRaw);
     final hasServerNumber = episodeNumber != null && episodeNumber > 0;
     final hasServerName = episodeTitle.isNotEmpty;
+    final episodeNumberLabel = hasServerNumber
+        ? formatEpisodeNumberLabel(
+            episode: episodeNumber!,
+            isArabic: true,
+            rawName: episodeTitleRaw,
+          )
+        : '';
     return CardsWrapper(
       onTap: () async {
         if (isLivestream) {
@@ -371,8 +380,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                           Text(
                             hasServerNumber
                                 ? (hasServerName
-                                    ? 'حلقة $episodeNumber\n$episodeTitle'
-                                    : 'حلقة $episodeNumber')
+                                    ? '$episodeNumberLabel\n$episodeTitle'
+                                    : episodeNumberLabel)
                                 : (hasServerName ? episodeTitle : item.title),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,

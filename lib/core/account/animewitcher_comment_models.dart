@@ -1,4 +1,5 @@
 import '../domain/entity/multimedia_item.dart';
+import '../utils/episode_label.dart';
 import '../utils/safe_uri.dart';
 import 'firestore_rest_client.dart';
 
@@ -197,9 +198,12 @@ AnimeWitcherCommentTarget? animeWitcherEpisodeCommentTarget(
   }
   if (animeId.isEmpty || episodeId.isEmpty) return null;
   final sourcePath = 'anime_list/$animeId/episodes/$episodeId';
-  final episodeName = episode.name.trim().isEmpty
-      ? 'الحلقة ${episode.episode}'
-      : episode.name.trim();
+  final episodeName = formatEpisodeLabel(
+    episode: episode.episode,
+    isArabic: true,
+    title: episode.name,
+    isFinal: episode.isFinal,
+  );
   return AnimeWitcherCommentTarget(
     collectionPath: '$sourcePath/comments',
     sourceDocumentPath: sourcePath,

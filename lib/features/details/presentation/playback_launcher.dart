@@ -16,6 +16,7 @@ import 'source_picker.dart';
 import '../../../core/services/download_service.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../core/utils/app_utils.dart';
+import '../../../core/utils/episode_label.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../../../core/services/notification_service.dart';
 import '../../library/presentation/history_provider.dart';
@@ -198,7 +199,11 @@ class PlaybackLauncher {
       lastEpisodeUrl: episode.url,
       season: episode.season,
       episode: episode.episode,
-      episodeTitle: episode.name,
+      episodeTitle: episodeTitleForStorage(
+        episode: episode.episode,
+        title: episode.name,
+        isFinal: episode.isFinal,
+      ),
       episodePosterUrl: episode.posterUrl,
     );
   }
