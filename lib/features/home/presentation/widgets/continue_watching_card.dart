@@ -8,7 +8,6 @@ import '../../../../core/domain/entity/multimedia_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/router/app_router.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
-import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import '../../../../core/extensions/extension_manager.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
@@ -141,15 +140,9 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     }
 
     final episodeNumber = widget.historyItem.episode;
-    final episodeLabel =
-        hasEpisodes && episodeNumber != null && episodeNumber > 0
-        ? formatEpisodeLabel(
-            episode: episodeNumber,
-            title: widget.historyItem.episodeTitle,
-            isArabic: isArabic,
-          )
-        : null;
-
+    final episodeTitle = widget.historyItem.episodeTitle ?? '';
+    final hasServerNumber = episodeNumber != null && episodeNumber > 0;
+    final hasServerName = episodeTitle.isNotEmpty;
     return CardsWrapper(
       onTap: () async {
         if (isLivestream) {
@@ -376,7 +369,9 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                           )
                         else
                           Text(
-                            episodeLabel ?? item.title,
+                            hasServerNumber
+                                ? (hasServerName ? 'حلقة $episodeNumber\n$episodeTitle' : 'حلقة $episodeNumber')
+                                : (hasServerName ? episodeTitle : item.title),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
