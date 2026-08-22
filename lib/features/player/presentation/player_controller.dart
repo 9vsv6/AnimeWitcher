@@ -25,6 +25,7 @@ import '../../../../core/storage/episode_watch_repository.dart';
 import '../../library/presentation/history_provider.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../core/utils/app_utils.dart';
+import '../../../../core/utils/episode_label.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/stream_response_validator.dart';
 import '../../settings/presentation/player_settings_provider.dart';
@@ -104,6 +105,7 @@ class PlayerState {
   final int? nextEpisodeSeason;
   final int? nextEpisodeRuntime;
   final String? nextEpisodeDescription;
+  final bool nextEpisodeIsFinal;
   final bool isAdaptiveBufferingActive;
   final bool showEpisodeList;
 
@@ -139,6 +141,7 @@ class PlayerState {
     this.nextEpisodeSeason,
     this.nextEpisodeRuntime,
     this.nextEpisodeDescription,
+    this.nextEpisodeIsFinal = false,
     this.isAdaptiveBufferingActive = false,
     this.showEpisodeList = false,
     this.playbackSpeed = 1.0,
@@ -194,6 +197,7 @@ class PlayerState {
     int? nextEpisodeSeason,
     int? nextEpisodeRuntime,
     String? nextEpisodeDescription,
+    bool? nextEpisodeIsFinal,
     bool? isAdaptiveBufferingActive,
     bool? showEpisodeList,
     double? playbackSpeed,
@@ -227,6 +231,7 @@ class PlayerState {
       nextEpisodeRuntime: nextEpisodeRuntime ?? this.nextEpisodeRuntime,
       nextEpisodeDescription:
           nextEpisodeDescription ?? this.nextEpisodeDescription,
+      nextEpisodeIsFinal: nextEpisodeIsFinal ?? this.nextEpisodeIsFinal,
       isAdaptiveBufferingActive:
           isAdaptiveBufferingActive ?? this.isAdaptiveBufferingActive,
       showEpisodeList: showEpisodeList ?? this.showEpisodeList,
@@ -1101,6 +1106,7 @@ class PlayerController extends Notifier<PlayerState> {
                 nextEpisodeSeason: next.season,
                 nextEpisodeRuntime: next.runtime,
                 nextEpisodeDescription: next.description,
+                nextEpisodeIsFinal: next.isFinal,
               );
             }
             // Ensure it persists if video completes and resets position
@@ -1156,6 +1162,7 @@ class PlayerController extends Notifier<PlayerState> {
         nextEpisodeNumber: next.episode,
         nextEpisodeSeason: next.season,
         nextEpisodeRuntime: next.runtime,
+        nextEpisodeIsFinal: next.isFinal,
       );
     }
   }
@@ -1598,6 +1605,7 @@ class PlayerController extends Notifier<PlayerState> {
                 nextEpisodeSeason: next.season,
                 nextEpisodeRuntime: next.runtime,
                 nextEpisodeDescription: next.description,
+                nextEpisodeIsFinal: next.isFinal,
               );
             }
             // Ensure it persists if video completes and resets position
@@ -2583,7 +2591,11 @@ class PlayerController extends Notifier<PlayerState> {
       lastEpisodeUrl: episode.url,
       season: episode.season,
       episode: episode.episode,
-      episodeTitle: episode.name,
+      episodeTitle: episodeTitleForStorage(
+        episode: episode.episode,
+        title: episode.name,
+        isFinal: episode.isFinal,
+      ),
       episodePosterUrl: _episodeArtwork(episode),
     );
   }

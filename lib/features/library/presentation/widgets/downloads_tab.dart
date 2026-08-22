@@ -319,6 +319,7 @@ class _DownloadItemTile extends ConsumerWidget {
             episode: item.episode!.episode,
             title: item.episode!.name,
             isArabic: isArabic,
+            isFinal: item.episode!.isFinal,
           );
 
     final content = Row(

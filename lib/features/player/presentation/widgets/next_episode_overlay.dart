@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/shared/widgets/thumbnail_error_placeholder.dart';
 import 'hotstar_player_style.dart';
 import 'player_prompt_placement.dart';
@@ -23,6 +24,8 @@ class NextEpisodeOverlay extends StatefulWidget {
   /// Short synopsis / description of the next episode.
   final String? nextEpisodeDescription;
 
+  final bool nextEpisodeIsFinal;
+
   final VoidCallback onPlayNext;
   final VoidCallback onDismiss;
   final bool isTv;
@@ -39,6 +42,7 @@ class NextEpisodeOverlay extends StatefulWidget {
     this.nextEpisodeSeason,
     this.nextEpisodeRuntime,
     this.nextEpisodeDescription,
+    this.nextEpisodeIsFinal = false,
     required this.onPlayNext,
     required this.onDismiss,
     this.isTv = false,
@@ -368,8 +372,18 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
   Widget _buildInfo(bool isCompact) {
     final hasRating =
         widget.nextEpisodeRating != null && widget.nextEpisodeRating! > 0;
-    final hasServerNumber = (widget.nextEpisodeNumber ?? 0) > 0;
-    final hasServerName = widget.nextEpisodeTitle.isNotEmpty;
+    final episodeNumber = widget.nextEpisodeNumber ?? 0;
+    final hasServerNumber = episodeNumber > 0;
+    final episodeTitle = realEpisodeTitle(widget.nextEpisodeTitle);
+    final hasServerName = episodeTitle.isNotEmpty;
+    final episodeNumberLabel = hasServerNumber
+        ? formatEpisodeNumberLabel(
+            episode: episodeNumber,
+            isArabic: true,
+            isFinal: widget.nextEpisodeIsFinal,
+            rawName: widget.nextEpisodeTitle,
+          )
+        : '';
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -397,7 +411,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
           ],
           if (hasServerNumber)
             Text(
-              'حلقة ${widget.nextEpisodeNumber}',
+              episodeNumberLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -409,7 +423,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
           if (hasServerName) ...[
             if (hasServerNumber) const SizedBox(height: 2),
             Text(
-              widget.nextEpisodeTitle,
+              episodeTitle,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

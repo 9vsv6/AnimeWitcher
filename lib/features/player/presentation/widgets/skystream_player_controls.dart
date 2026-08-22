@@ -827,6 +827,7 @@ class SkyStreamPlayerControlsState
       isArabic:
           Localizations.localeOf(context).languageCode.toLowerCase() == 'ar',
       title: episode.name,
+      isFinal: episode.isFinal,
     );
   }
 
@@ -918,6 +919,9 @@ class SkyStreamPlayerControlsState
     );
     final nextEpDescription = ref.watch(
       playerControllerProvider.select((s) => s.nextEpisodeDescription),
+    );
+    final nextEpIsFinal = ref.watch(
+      playerControllerProvider.select((s) => s.nextEpisodeIsFinal),
     );
     final showEpisodeList = ref.watch(
       playerControllerProvider.select((s) => s.showEpisodeList),
@@ -1100,6 +1104,7 @@ class SkyStreamPlayerControlsState
                     nextEpisodeSeason: nextEpSeason,
                     nextEpisodeRuntime: nextEpRuntime,
                     nextEpisodeDescription: nextEpDescription,
+                    nextEpisodeIsFinal: nextEpIsFinal,
                     onPlayNext: () => unawaited(
                       _playNextEpisodeWithSourcePicker(),
                     ),

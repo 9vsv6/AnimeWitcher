@@ -490,6 +490,10 @@ class Episode {
   /// Whether the provider marked this episode as filler.
   final bool isFiller;
 
+  /// Whether the provider marked this as the final episode
+  /// (e.g. server name "الحلقة 12 والأخيرة").
+  final bool isFinal;
+
   // Parity fields
   final double? rating;
   final int? runtime;
@@ -507,6 +511,7 @@ class Episode {
     this.posterUrl,
     this.headers,
     this.isFiller = false,
+    this.isFinal = false,
     this.rating,
     this.runtime,
     this.airDate,
@@ -533,6 +538,9 @@ class Episode {
           : null,
       isFiller: _parseBoolean(
         json['isFiller'] ?? json['is_filler'] ?? json['filler'],
+      ),
+      isFinal: _parseBoolean(
+        json['isFinal'] ?? json['is_final'] ?? json['final'],
       ),
       rating: (json['rating'] as num?)?.toDouble(),
       runtime: (json['runtime'] as int?) ?? (json['duration'] as int?),
@@ -592,6 +600,7 @@ class Episode {
       'posterUrl': posterUrl,
       'headers': headers,
       'isFiller': isFiller,
+      'isFinal': isFinal,
       'rating': rating,
       'runtime': runtime,
       'airDate': airDate,

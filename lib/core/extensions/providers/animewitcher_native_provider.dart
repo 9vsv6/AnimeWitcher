@@ -5,6 +5,7 @@ import 'package:html_unescape/html_unescape.dart';
 
 import '../../domain/entity/multimedia_item.dart';
 import '../../storage/settings_repository.dart';
+import '../../utils/episode_label.dart';
 import '../../utils/safe_uri.dart';
 import '../base_provider.dart';
 import 'mediafire_utils.dart';
@@ -2387,18 +2388,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return '';
   }
 
-  bool _isGenericEpisodeTitle(String value) {
-    final title = _normalizeDigits(value.trim().toLowerCase());
-    if (title.isEmpty) return true;
-    return RegExp(
-          r'^(?:الحلقة|حلقه)\s*\d+(?:\s+(?:والأخيرة|والاخيرة))?$',
-        ).hasMatch(title) ||
-        RegExp(
-          r'^(?:episode|ep\.?)\s*\d+(?:\s+(?:final|last))?$',
-          caseSensitive: false,
-        ).hasMatch(title) ||
-        RegExp(r'^\d+$').hasMatch(title);
-  }
+  bool _isGenericEpisodeTitle(String value) => isGenericEpisodeTitle(value);
+
+  bool _hasFinalEpisodeSuffix(String value) => hasFinalEpisodeSuffix(value);
 
   String _episodeTitle(Map<String, dynamic> source) {
     final serverName = _decodeHtml(
@@ -2424,14 +2416,21 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       final title = _localizedEpisodeTitle(source[key]);
       if (title.isNotEmpty && !_isGenericEpisodeTitle(title)) return title;
     }
-    return serverName;
+    // Keep only a real creative title in Episode.name. Generic placeholders
+    // like "الحلقة 12" / "الحلقة 12 والأخيرة" are not titles — the UI builds
+    // the primary "حلقة X" / "حلقة X والأخيرة" label from the episode number
+    // and isFinal instead.
+    if (serverName.isNotEmpty && !_isGenericEpisodeTitle(serverName)) {
+      return serverName;
+    }
+    return '';
   }
 
   int _episodeNumberFromId(String id) {
     final normalized = _normalizeDigits(id.trim());
     if (normalized.isEmpty) return 0;
     final explicit = RegExp(
-      r'(?:episode|ep|الحلقة|حلقه)[^0-9]*(\d+)$',
+      r'(?:episode|ep|الحلقة|حلقه|حلقة)[^0-9]*(\d+)$',
       caseSensitive: false,
     ).firstMatch(normalized);
     if (explicit != null) return int.tryParse(explicit.group(1)!) ?? 0;
@@ -2473,6 +2472,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       title: _episodeTitle(source),
       image: image,
       isFiller: isFiller,
+      isFinal: _hasFinalEpisodeSuffix(serverName),
     );
   }
 
@@ -2628,6 +2628,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
             episode: record.number,
             posterUrl: record.image.isEmpty ? null : record.image,
             isFiller: record.isFiller,
+            isFinal: record.isFinal,
           ),
         )
         .toList(growable: false);
@@ -2667,6 +2668,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
             episode: record.number,
             posterUrl: record.image.isEmpty ? null : record.image,
             isFiller: record.isFiller,
+            isFinal: record.isFinal,
           ),
         )
         .toList(growable: false);
@@ -2718,6 +2720,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
               ? image
               : (record.image.isEmpty ? null : record.image),
           isFiller: record.isFiller,
+          isFinal: record.isFinal,
         ));
       }
       return output;
@@ -3538,6 +3541,7 @@ class _EpisodeRecord {
     required this.title,
     required this.image,
     required this.isFiller,
+    this.isFinal = false,
   });
   final String id;
   final int number;
@@ -3545,6 +3549,7 @@ class _EpisodeRecord {
   final String title;
   final String image;
   final bool isFiller;
+  final bool isFinal;
 }
 
 class _AnimeWitcherCharacterRef {
