@@ -237,6 +237,35 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
   }
 
+  void _removeSearchFilter(String group, String value) {
+    final current = ref.read(searchProviderFiltersProvider);
+    final updated = switch (group) {
+      'statuses' => current.copyWith(
+          statuses: {...current.statuses}..remove(value),
+        ),
+      'types' => current.copyWith(
+          types: {...current.types}..remove(value),
+        ),
+      'ageRatings' => current.copyWith(
+          ageRatings: {...current.ageRatings}..remove(value),
+        ),
+      'years' => current.copyWith(
+          years: {...current.years}..remove(value),
+        ),
+      'seasons' => current.copyWith(
+          seasons: {...current.seasons}..remove(value),
+        ),
+      'genres' => current.copyWith(
+          genres: {...current.genres}..remove(value),
+        ),
+      _ => current,
+    };
+
+    if (identical(updated, current)) return;
+    ref.read(searchProviderFiltersProvider.notifier).set(updated);
+    ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
+  }
+
   void _applySearchSort(String selected) {
     final current = ref.read(searchProviderFiltersProvider);
     if (selected == current.sort) return;
@@ -529,6 +558,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           .onQueryChanged(val);
                     },
                   ),
+                  _ActiveSearchFilterChips(
+                    filters: ref.watch(searchProviderFiltersProvider),
+                    onRemove: _removeSearchFilter,
+                  ),
                   Expanded(
                     child: Padding(
                       // Fixed top padding below the top search bar (24px)
@@ -785,7 +818,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
         ),
       ),
-      body: _buildBody(context),
+      body: Column(
+        children: [
+          _ActiveSearchFilterChips(
+            filters: ref.watch(searchProviderFiltersProvider),
+            onRemove: _removeSearchFilter,
+          ),
+          Expanded(child: _buildBody(context)),
+        ],
+      ),
     );
 
     if (!usePersistentGlass) return scaffold;
@@ -795,6 +836,102 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: scaffold,
     );
   }
+
+class _ActiveSearchFilterChips extends StatelessWidget {
+  final ProviderSearchFilters filters;
+  final void Function(String group, String value) onRemove;
+
+  const _ActiveSearchFilterChips({
+    required this.filters,
+    required this.onRemove,
+  });
+
+  List<(String, String)> get _items => [
+        ...filters.genres.map((value) => ('genres', value)),
+        ...filters.years.map((value) => ('years', value)),
+        ...filters.seasons.map((value) => ('seasons', value)),
+        ...filters.ageRatings.map((value) => ('ageRatings', value)),
+        ...filters.types.map((value) => ('types', value)),
+        ...filters.statuses.map((value) => ('statuses', value)),
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items;
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final item in items)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 8),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.only(
+                        start: 14,
+                        end: 4,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 180),
+                            child: Text(
+                              item.$2,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.onPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(
+                              minWidth: 30,
+                              minHeight: 30,
+                            ),
+                            padding: EdgeInsets.zero,
+                            splashRadius: 15,
+                            tooltip: appText(
+                              context,
+                              english: 'Remove filter',
+                              arabic: 'إزالة الفلتر',
+                            ),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              size: 18,
+                              color: colors.onPrimary,
+                            ),
+                            onPressed: () => onRemove(item.$1, item.$2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
   Widget _buildBody(BuildContext context) {
     final state = ref.watch(searchPagedResultsProvider);
