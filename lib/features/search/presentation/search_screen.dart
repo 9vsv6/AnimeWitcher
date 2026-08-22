@@ -836,6 +836,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: scaffold,
     );
   }
+}
 
 class _ActiveSearchFilterChips extends StatelessWidget {
   final ProviderSearchFilters filters;
