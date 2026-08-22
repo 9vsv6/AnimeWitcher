@@ -146,6 +146,10 @@ class AniZipService {
           .map((episode) => episode.seasonNumber)
           .firstWhere((season) => season > 0, orElse: () => 1);
 
+      // The source provider uses season 1 for every title. AniZip is the
+      // authoritative source for the single season assigned to this anime.
+      // We intentionally resolve it once from the response and apply it to
+      // every episode; episode-level season values are never used separately.
       return _AniZipPayload(episodes: result, seasonNumber: sharedSeason);
     } on DioException {
       return null;
