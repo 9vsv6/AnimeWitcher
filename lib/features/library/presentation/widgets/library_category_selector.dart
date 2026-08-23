@@ -89,6 +89,7 @@ class _LibraryCategorySelectorState
           value: category.storageKey,
           label: _categoryLabelWithCount(context, category),
           systemImage: _categorySystemImage(category),
+          icon: _categoryIcon(category),
         ),
     ];
   }
