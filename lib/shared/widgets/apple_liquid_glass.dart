@@ -1299,6 +1299,8 @@ class AppleNativeMenuButton extends StatefulWidget {
     /// When true, the native control is fully transparent and only presents
     /// the system UIMenu. Flutter renders the visible chrome above it.
     this.invisibleAnchor = false,
+    this.onMenuOpened,
+    this.onMenuClosed,
   });
 
   final List<AppleNativeMenuItem> items;
@@ -1313,6 +1315,8 @@ class AppleNativeMenuButton extends StatefulWidget {
   final bool enabled;
   final Color? tintColor;
   final bool invisibleAnchor;
+  final VoidCallback? onMenuOpened;
+  final VoidCallback? onMenuClosed;
 
   @override
   State<AppleNativeMenuButton> createState() => _AppleNativeMenuButtonState();
@@ -1348,9 +1352,18 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
       'dev.akash.skystream/native_menu_button/$id',
     );
     channel.setMethodCallHandler((call) async {
-      if (call.method != 'selected') return;
-      final value = call.arguments as String?;
-      if (value != null) widget.onSelected(value);
+      switch (call.method) {
+        case 'selected':
+          final value = call.arguments as String?;
+          if (value != null) widget.onSelected(value);
+          break;
+        case 'menuOpened':
+          widget.onMenuOpened?.call();
+          break;
+        case 'menuClosed':
+          widget.onMenuClosed?.call();
+          break;
+      }
     });
     _channel = channel;
   }
@@ -1385,7 +1398,12 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
       child: PopupMenuButton<String>(
         enabled: widget.enabled,
         tooltip: widget.accessibilityLabel,
-        onSelected: widget.onSelected,
+        onOpened: widget.onMenuOpened,
+        onCanceled: widget.onMenuClosed,
+        onSelected: (value) {
+          widget.onSelected(value);
+          widget.onMenuClosed?.call();
+        },
         itemBuilder: (context) => [
           for (final item in widget.items)
             PopupMenuItem<String>(
