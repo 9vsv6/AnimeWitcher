@@ -1296,6 +1296,9 @@ class AppleNativeMenuButton extends StatefulWidget {
     this.size = 44,
     this.enabled = true,
     this.tintColor,
+    /// When true, the native control is fully transparent and only presents
+    /// the system UIMenu. Flutter renders the visible chrome above it.
+    this.invisibleAnchor = false,
   });
 
   final List<AppleNativeMenuItem> items;
@@ -1309,6 +1312,7 @@ class AppleNativeMenuButton extends StatefulWidget {
   final double size;
   final bool enabled;
   final Color? tintColor;
+  final bool invisibleAnchor;
 
   @override
   State<AppleNativeMenuButton> createState() => _AppleNativeMenuButtonState();
@@ -1324,6 +1328,7 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
     'isRtl': Directionality.of(context) == TextDirection.rtl,
     'accessibilityLabel': widget.accessibilityLabel,
     'enabled': widget.enabled,
+    'invisibleAnchor': widget.invisibleAnchor,
     'tintColor': widget.tintColor?.toARGB32(),
     'items': widget.items
         .map((item) => item.toPlatformValue())
