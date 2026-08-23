@@ -245,6 +245,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           value: option.value,
           label: option.label(context),
           systemImage: _searchSortSystemImage(option),
+          icon: _searchSortFallbackIcon(option),
         ),
     ];
   }
@@ -264,7 +265,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       SearchSortOption.mostFavorited => Icons.star_rounded,
       SearchSortOption.productionDateAscending => Icons.arrow_upward_rounded,
       SearchSortOption.productionDateDescending => Icons.arrow_downward_rounded,
-      SearchSortOption.nameAscending => Icons.sort_by_alpha_rounded,
+      SearchSortOption.nameAscending => Icons.abc_rounded,
       SearchSortOption.nameDescending => Icons.sort_by_alpha_rounded,
     };
   }

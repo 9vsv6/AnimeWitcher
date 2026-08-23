@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 
-/// Sort + filter controls for search — solid Material chrome (no liquid glass).
+/// Sort + filter controls — bare icons (no pill / circle chrome).
 ///
-/// On iPhone the sort icon stays visible while an invisible native menu anchor
-/// presents the system UIMenu with Liquid Glass. Other platforms use a popup
-/// menu like the library category picker.
-class SearchActionButtons extends StatelessWidget {
+/// Layout is always [sort | filter] left-to-right. Opening sort hides the sort
+/// icon with the same fade/scale/slide motion as the library category picker.
+class SearchActionButtons extends StatefulWidget {
   const SearchActionButtons({
     super.key,
     required this.sortValue,
@@ -37,131 +36,145 @@ class SearchActionButtons extends StatelessWidget {
   final double height;
   final Color? tintColor;
 
-  /// Two square action buttons plus the divider between them.
-  static double groupWidthForHeight(double height) => height * 2 + 1;
+  /// Sort + filter tap targets (no divider chrome).
+  static double groupWidthForHeight(double height) => height * 2;
+
+  @override
+  State<SearchActionButtons> createState() => _SearchActionButtonsState();
+}
+
+class _SearchActionButtonsState extends State<SearchActionButtons> {
+  static const _hideDuration = Duration(milliseconds: 160);
+  static const _showDuration = Duration(milliseconds: 200);
+
+  bool _sortMenuOpen = false;
+
+  void _setSortMenuOpen(bool open) {
+    if (!mounted || _sortMenuOpen == open) return;
+    setState(() => _sortMenuOpen = open);
+  }
+
+  void _onSortSelected(String value) {
+    _setSortMenuOpen(false);
+    widget.onSortSelected(value);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final tint = tintColor ?? colors.primary;
-    final radius = BorderRadius.circular(height / 2);
-    final groupWidth = groupWidthForHeight(height);
+    final tint = widget.tintColor ?? Theme.of(context).colorScheme.primary;
+    final height = widget.height;
 
     return SizedBox(
-      width: groupWidth,
-      child: Material(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.92),
-        shape: RoundedRectangleBorder(
-          borderRadius: radius,
-          side: BorderSide(
-            color: colors.outlineVariant.withValues(alpha: 0.35),
-          ),
+      width: SearchActionButtons.groupWidthForHeight(height),
+      height: height,
+      // Keep sort on the left and filter on the right in Arabic and English.
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            Expanded(child: _buildSortControl(tint)),
+            Expanded(
+              child: _ActionIcon(
+                tooltip: widget.filterTooltip,
+                icon: Icons.tune_rounded,
+                color: tint,
+                size: height,
+                onPressed:
+                    widget.isFilterLoading ? null : widget.onFilterPressed,
+                isLoading: widget.isFilterLoading,
+                badgeCount: widget.filterCount,
+              ),
+            ),
+          ],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          height: height,
-          child: Row(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              Expanded(child: _buildSortControl(context, tint)),
-              Container(
-                width: 1,
-                height: height * 0.48,
-                color: colors.outlineVariant.withValues(alpha: 0.45),
-              ),
-              Expanded(
-                child: _ActionIcon(
-                  tooltip: filterTooltip,
-                  icon: Icons.tune_rounded,
-                  color: tint,
-                  size: height,
-                  onPressed: isFilterLoading ? null : onFilterPressed,
-                  isLoading: isFilterLoading,
-                  badgeCount: filterCount,
-                ),
-              ),
-            ],
+      ),
+    );
+  }
+
+  Widget _buildSortIcon(Color tint) {
+    final visible = !_sortMenuOpen;
+    return AnimatedOpacity(
+      opacity: visible ? 1 : 0,
+      duration: visible ? _showDuration : _hideDuration,
+      curve: visible ? Curves.easeOutCubic : Curves.easeInCubic,
+      child: AnimatedScale(
+        scale: visible ? 1 : 0.88,
+        duration: visible ? _showDuration : _hideDuration,
+        curve: visible ? Curves.easeOutBack : Curves.easeInCubic,
+        child: AnimatedSlide(
+          offset: visible ? Offset.zero : const Offset(0, -0.18),
+          duration: visible ? _showDuration : _hideDuration,
+          curve: visible ? Curves.easeOutCubic : Curves.easeInCubic,
+          child: Icon(
+            Icons.swap_vert_rounded,
+            size: 22,
+            color: tint,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSortControl(BuildContext context, Color tint) {
+  Widget _buildSortControl(Color tint) {
+    final height = widget.height;
+    final sortIcon = _buildSortIcon(tint);
+
     if (appleUsesPersistentLiquidGlassHeader) {
       return Semantics(
         button: true,
-        label: sortTooltip,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(sortIcon, size: 20, color: tint),
-            Positioned.fill(
-              child: AppleNativeMenuButton(
-                invisibleAnchor: true,
-                items: sortItems,
-                onSelected: onSortSelected,
-                accessibilityLabel: sortTooltip,
-                systemImage: sortSystemImage,
-                fallbackIcon: sortIcon,
-                selectedValue: sortValue,
-                width: height,
-                size: height,
-                tintColor: tint,
+        label: widget.sortTooltip,
+        child: SizedBox(
+          width: height,
+          height: height,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              sortIcon,
+              Positioned.fill(
+                child: AppleNativeMenuButton(
+                  invisibleAnchor: true,
+                  items: widget.sortItems,
+                  onSelected: _onSortSelected,
+                  onMenuOpened: () => _setSortMenuOpen(true),
+                  onMenuClosed: () => _setSortMenuOpen(false),
+                  accessibilityLabel: widget.sortTooltip,
+                  systemImage: 'arrow.up.arrow.down',
+                  fallbackIcon: Icons.swap_vert_rounded,
+                  selectedValue: widget.sortValue,
+                  width: height,
+                  size: height,
+                  tintColor: tint,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
-    return _SortPopupMenu(
-      sortItems: sortItems,
-      sortValue: sortValue,
-      sortIcon: sortIcon,
-      sortTooltip: sortTooltip,
-      tintColor: tint,
-      height: height,
-      onSortSelected: onSortSelected,
-    );
-  }
-}
-
-class _SortPopupMenu extends StatelessWidget {
-  const _SortPopupMenu({
-    required this.sortItems,
-    required this.sortValue,
-    required this.sortIcon,
-    required this.sortTooltip,
-    required this.tintColor,
-    required this.height,
-    required this.onSortSelected,
-  });
-
-  final List<AppleNativeMenuItem> sortItems;
-  final String sortValue;
-  final IconData sortIcon;
-  final String sortTooltip;
-  final Color tintColor;
-  final double height;
-  final ValueChanged<String> onSortSelected;
-
-  @override
-  Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      tooltip: sortTooltip,
-      onSelected: onSortSelected,
+      tooltip: widget.sortTooltip,
+      padding: EdgeInsets.zero,
+      offset: const Offset(0, 8),
+      onOpened: () => _setSortMenuOpen(true),
+      onCanceled: () => _setSortMenuOpen(false),
+      onSelected: _onSortSelected,
       itemBuilder: (context) => [
-        for (final item in sortItems)
+        for (final item in widget.sortItems)
           PopupMenuItem<String>(
             value: item.value,
             child: Row(
               children: [
                 SizedBox(
                   width: 28,
-                  child: sortValue == item.value
-                      ? Icon(Icons.check_rounded, size: 20, color: tintColor)
-                      : const SizedBox(width: 20, height: 20),
+                  child: widget.sortValue == item.value
+                      ? Icon(Icons.check_rounded, size: 20, color: tint)
+                      : Icon(
+                          item.icon ?? Icons.swap_vert_rounded,
+                          size: 18,
+                          color: tint,
+                        ),
                 ),
                 Expanded(child: Text(item.label)),
               ],
@@ -171,7 +184,7 @@ class _SortPopupMenu extends StatelessWidget {
       child: SizedBox(
         width: height,
         height: height,
-        child: Icon(sortIcon, size: 20, color: tintColor),
+        child: Center(child: sortIcon),
       ),
     );
   }
@@ -227,7 +240,7 @@ class _ActionIcon extends StatelessWidget {
                   clipBehavior: Clip.none,
                   alignment: Alignment.center,
                   children: [
-                    Icon(icon, size: 20, color: color),
+                    Icon(icon, size: 22, color: color),
                     if (showBadge)
                       Positioned(
                         right: -6,
