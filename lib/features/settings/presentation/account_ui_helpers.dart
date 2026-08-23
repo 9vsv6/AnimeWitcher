@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/account/animewitcher_account_models.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/utils/localized_text.dart';
 
 String localizedAnimeWitcherAccountError(
@@ -75,14 +76,10 @@ void showAnimeWitcherAccountMessage(
   String message, {
   bool isError = false,
 }) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError
-            ? Theme.of(context).colorScheme.error
-            : null,
-      ),
-    );
+  final notifications = notificationServiceOf(context);
+  if (isError) {
+    notifications.showError(message);
+  } else {
+    notifications.showSuccess(message);
+  }
 }

@@ -16,6 +16,7 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/services/notification_service.dart';
 /// Returns a localized label for a resize mode string.
 String getResizeModeLabel(String mode, AppLocalizations l10n) {
   switch (mode.toLowerCase()) {
@@ -503,9 +504,9 @@ void showClearCacheDialog(BuildContext context, WidgetRef ref) {
             await ref.read(settingsRepositoryProvider).clearImageVideoCache();
             ref.invalidate(cacheSizeProvider);
             if (callerContext.mounted) {
-              ScaffoldMessenger.of(callerContext).showSnackBar(
-                SnackBar(content: Text(l10n.cacheCleared)),
-              );
+              ref
+                  .read(notificationServiceProvider)
+                  .showSuccess(l10n.cacheCleared);
             }
           },
           style: TextButton.styleFrom(

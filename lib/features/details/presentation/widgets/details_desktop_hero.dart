@@ -10,6 +10,7 @@ import 'premium_details_widgets.dart';
 import 'details_layout_widgets.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/services/notification_service.dart';
 /// Immersive desktop/TV hero for non-TMDB details.
 ///
 /// Layout: full-viewport backdrop fading via gradients, with metadata
@@ -284,16 +285,8 @@ class DetailsDesktopHero extends ConsumerWidget {
       return;
     }
 
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          appText(context, english: 'Title copied', arabic: 'تم نسخ العنوان'),
-        ),
-        duration: Duration(milliseconds: 1200),
-        behavior: SnackBarBehavior.floating,
-      ),
+    notificationServiceOf(context).showSuccess(
+      appText(context, english: 'Title copied', arabic: 'تم نسخ العنوان'),
     );
   }
 

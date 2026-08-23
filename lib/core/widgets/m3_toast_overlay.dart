@@ -7,19 +7,16 @@ import 'package:skystream/core/services/notification_service.dart';
 /// Exact Material 3 Expressive animation curves & timings.
 class ToastCurves {
   /// Main entrance pop-in curve: cubic-bezier(0.38, 1.21, 0.22, 1.00)
-  /// Features an energetic, snappy pop-in with subtle overshoot settling into place.
   static const Curve expressiveDefaultSpatial = Cubic(0.38, 1.21, 0.22, 1.00);
 
   /// Fast snappy bounce for small icons/badges: cubic-bezier(0.42, 1.67, 0.21, 0.90)
   static const Curve expressiveFastSpatial = Cubic(0.42, 1.67, 0.21, 0.90);
 
   /// Exit / Dismiss curve: cubic-bezier(0.05, 0.70, 0.10, 1.00)
-  /// Immediate smooth deceleration without bounce.
   static const Curve emphasizedDecel = Cubic(0.05, 0.70, 0.10, 1.00);
 }
 
-/// A global Material Design 3 Expressive Toast Overlay widget.
-/// Renders stacked floating capsule / card toasts on Desktop, TV, and Mobile.
+/// Global floating pill toasts — same look as “watch history cleared”.
 class M3ToastOverlay extends ConsumerStatefulWidget {
   final Widget child;
 
@@ -133,17 +130,17 @@ class _M3ToastCardState extends State<_M3ToastCard>
 
   bool _isExiting = false;
 
+  static const double _pillRadius = 999;
+
   @override
   void initState() {
     super.initState();
 
-    // Entrance controller (420ms)
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 420),
     );
 
-    // Icon bounce controller (300ms)
     _iconBounceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -186,7 +183,6 @@ class _M3ToastCardState extends State<_M3ToastCard>
     if (_isExiting) return;
     _isExiting = true;
 
-    // Exit animation with emphasizedDecel (220ms)
     _entranceController.duration = const Duration(milliseconds: 220);
     await _entranceController.reverse();
     if (mounted) {
@@ -201,30 +197,58 @@ class _M3ToastCardState extends State<_M3ToastCard>
     super.dispose();
   }
 
-  Color _getPrimaryColor(ThemeData theme) {
+  Color _badgeColor(ThemeData theme) {
     switch (widget.item.type) {
       case ToastType.success:
-        return const Color(0xFF81C784); // M3 Success Mint / Emerald
+        return const Color(0xFF81C784);
       case ToastType.error:
-        return const Color(0xFFFF8A80); // M3 Error Coral / Soft Red
+        return const Color(0xFFEF5350);
       case ToastType.extension:
-        return const Color(0xFFD0BCFF); // M3 Lilac / Extension Accent
+        return const Color(0xFFD0BCFF);
       case ToastType.info:
         return theme.colorScheme.primary;
     }
   }
 
-  IconData _getDefaultIcon() {
+  IconData _badgeIcon() {
+    if (widget.item.icon != null) return widget.item.icon!;
     switch (widget.item.type) {
       case ToastType.success:
-        return Icons.check_circle_rounded;
+        return Icons.check_rounded;
       case ToastType.error:
-        return Icons.error_outline_rounded;
+        return Icons.close_rounded;
       case ToastType.extension:
         return Icons.extension_rounded;
       case ToastType.info:
-        return Icons.info_outline_rounded;
+        return Icons.info_rounded;
     }
+  }
+
+  Widget _buildStatusBadge(ThemeData theme) {
+    if (widget.item.leading != null) return widget.item.leading!;
+
+    final badgeColor = _badgeColor(theme);
+    final onBadge = widget.item.type == ToastType.error
+        ? Colors.white
+        : const Color(0xFF1B1B1F);
+
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: badgeColor,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: badgeColor.withValues(alpha: 0.35),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(_badgeIcon(), size: 17, color: onBadge),
+    );
   }
 
   @override
@@ -232,17 +256,21 @@ class _M3ToastCardState extends State<_M3ToastCard>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final primaryColor = _getPrimaryColor(theme);
-    final iconData = widget.item.icon ?? _getDefaultIcon();
-
-    // M3 dynamic tokens
     final surfaceColor = isDark
-        ? const Color(0xD9211E29) // rgba(33, 30, 41, 0.85)
+        ? const Color(0xE61C1C1E)
         : theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.92);
 
     final borderColor = isDark
-        ? const Color(0x1FFFFFFF) // rgba(255, 255, 255, 0.12)
+        ? const Color(0x33FFFFFF)
         : theme.colorScheme.outlineVariant.withValues(alpha: 0.40);
+
+    final textColor = isDark
+        ? const Color(0xFFF5F5F7)
+        : theme.colorScheme.onSurface;
+
+    final subtitleColor = isDark
+        ? const Color(0xFFCAC4D0)
+        : theme.colorScheme.onSurfaceVariant;
 
     return MouseRegion(
       onEnter: (_) => widget.onHoverStart(),
@@ -257,50 +285,61 @@ class _M3ToastCardState extends State<_M3ToastCard>
               color: Colors.transparent,
               child: InkWell(
                 onTap: _handleDismiss,
-                borderRadius: BorderRadius.circular(22),
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 160,
-                    maxWidth: 360,
-                  ),
+                borderRadius: BorderRadius.circular(_pillRadius),
+                child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: borderColor, width: 1),
+                    borderRadius: BorderRadius.circular(_pillRadius),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(
-                          alpha: isDark ? 0.35 : 0.15,
+                          alpha: isDark ? 0.40 : 0.15,
                         ),
-                        blurRadius: 16,
+                        blurRadius: 18,
                         spreadRadius: 0,
-                        offset: const Offset(0, 6),
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(_pillRadius),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minWidth: 160,
+                          maxWidth: 360,
+                        ),
+                        decoration: BoxDecoration(
+                          color: surfaceColor,
+                          borderRadius: BorderRadius.circular(_pillRadius),
+                          border: Border.all(color: borderColor, width: 1),
+                          gradient: isDark
+                              ? const LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0x22FFFFFF),
+                                    Color(0x00000000),
+                                  ],
+                                  stops: [0.0, 0.35],
+                                )
+                              : null,
+                        ),
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                          10,
+                          10,
+                          16,
+                          10,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Primary Icon / Leading Widget with fast snappy bounce
                             ScaleTransition(
                               scale: _iconScaleAnimation,
-                              child:
-                                  widget.item.leading ??
-                                  Icon(iconData, size: 22, color: primaryColor),
+                              child: _buildStatusBadge(theme),
                             ),
                             const SizedBox(width: 12),
-
-                            // Content (Title + Body / Subtitle)
                             Flexible(
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -313,11 +352,9 @@ class _M3ToastCardState extends State<_M3ToastCard>
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        color: isDark
-                                            ? const Color(0xFFE6E1E5)
-                                            : theme.colorScheme.onSurface,
+                                        color: textColor,
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w500,
+                                        fontWeight: FontWeight.w600,
                                         height: 1.2,
                                       ),
                                     ),
@@ -327,11 +364,7 @@ class _M3ToastCardState extends State<_M3ToastCard>
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        color: isDark
-                                            ? const Color(0xFFCAC4D0)
-                                            : theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
+                                        color: subtitleColor,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w400,
                                         height: 1.2,
@@ -343,11 +376,9 @@ class _M3ToastCardState extends State<_M3ToastCard>
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        color: isDark
-                                            ? const Color(0xFFE6E1E5)
-                                            : theme.colorScheme.onSurface,
+                                        color: textColor,
                                         fontSize: 13.5,
-                                        fontWeight: FontWeight.w500,
+                                        fontWeight: FontWeight.w600,
                                         height: 1.25,
                                       ),
                                     ),
@@ -355,8 +386,6 @@ class _M3ToastCardState extends State<_M3ToastCard>
                                 ],
                               ),
                             ),
-
-                            // Action button if available
                             if (widget.item.actionLabel != null &&
                                 widget.item.onAction != null) ...[
                               const SizedBox(width: 8),
@@ -373,7 +402,7 @@ class _M3ToastCardState extends State<_M3ToastCard>
                                   minimumSize: Size.zero,
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
-                                  foregroundColor: primaryColor,
+                                  foregroundColor: _badgeColor(theme),
                                 ),
                                 child: Text(
                                   widget.item.actionLabel!,

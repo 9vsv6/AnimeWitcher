@@ -18,6 +18,7 @@ import '../../../shared/widgets/loading_indicator.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/services/notification_service.dart';
 import 'source_picker.dart';
 part 'download_launcher.g.dart';
 
@@ -54,9 +55,9 @@ class DownloadLauncher {
     }
     provider ??= _ref.read(activeProviderProvider);
     if (provider == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.errorPrefix('No active provider'))),
-      );
+      _ref
+          .read(notificationServiceProvider)
+          .showError(l10n.errorPrefix('No active provider'));
       return;
     }
 
@@ -129,10 +130,21 @@ class DownloadLauncher {
       if (!isCanceled && !dialogDismissed) {
         Navigator.of(context).pop();
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.errorPrefix(e.toString()))),
-      );
+      _ref
+          .read(notificationServiceProvider)
+          .showError(_friendlyErrorMessage(l10n, e));
     }
+  }
+
+  String _friendlyErrorMessage(AppLocalizations l10n, Object error) {
+    var text = error.toString().trim();
+    if (text.startsWith('Exception: ')) {
+      text = text.substring('Exception: '.length).trim();
+    }
+    if (text.startsWith('Error: ')) {
+      text = text.substring('Error: '.length).trim();
+    }
+    return text.isEmpty ? l10n.errorPrefix(error.toString()) : text;
   }
 
   Future<void> _verifyAndDownload(
@@ -289,17 +301,12 @@ class DownloadLauncher {
                   );
 
                   if (!started && finalContext.mounted) {
-                    ScaffoldMessenger.of(finalContext).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          appText(
-                            finalContext,
-                            english:
-                                'Failed to start download. Check storage permissions.',
-                            arabic:
-                                'فشل بدء التنزيل. تحقق من أذونات التخزين.',
-                          ),
-                        ),
+                    _ref.read(notificationServiceProvider).showError(
+                      appText(
+                        finalContext,
+                        english:
+                            'Failed to start download. Check storage permissions.',
+                        arabic: 'فشل بدء التنزيل. تحقق من أذونات التخزين.',
                       ),
                     );
                   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'notification_service.g.dart';
@@ -119,7 +120,7 @@ class NotificationService extends ChangeNotifier {
       title: title,
       message: message,
       type: ToastType.success,
-      icon: icon ?? Icons.check_circle_rounded,
+      icon: icon ?? Icons.check_rounded,
       duration: duration,
     );
   }
@@ -134,7 +135,7 @@ class NotificationService extends ChangeNotifier {
       title: title,
       message: message,
       type: ToastType.error,
-      icon: icon ?? Icons.error_outline_rounded,
+      icon: icon ?? Icons.close_rounded,
       duration: duration,
     );
   }
@@ -149,7 +150,7 @@ class NotificationService extends ChangeNotifier {
       title: title,
       message: message,
       type: ToastType.info,
-      icon: icon ?? Icons.info_outline_rounded,
+      icon: icon ?? Icons.info_rounded,
       duration: duration,
     );
   }
@@ -176,10 +177,11 @@ class NotificationService extends ChangeNotifier {
     Color? backgroundColor,
     Duration duration = const Duration(seconds: 4),
     SnackBarAction? action,
+    bool isError = false,
   }) {
     showToast(
       message: message,
-      type: ToastType.info,
+      type: isError ? ToastType.error : ToastType.info,
       duration: duration,
       onAction: action?.onPressed,
       actionLabel: action?.label,
@@ -195,4 +197,9 @@ class NotificationService extends ChangeNotifier {
     notifyListeners();
     messengerKey.currentState?.clearSnackBars();
   }
+}
+
+/// Shows the unified pill toast from any [BuildContext] under [ProviderScope].
+NotificationService notificationServiceOf(BuildContext context) {
+  return ProviderScope.containerOf(context).read(notificationServiceProvider);
 }

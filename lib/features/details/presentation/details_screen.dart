@@ -33,6 +33,7 @@ import "../../../shared/widgets/loading_indicator.dart";
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/services/notification_service.dart';
 
 /// Keeps the native pull-to-stretch reaction while making it deliberately
 /// subtle. The whole flexible header remains one moving unit.
@@ -658,16 +659,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       return;
     }
 
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          appText(context, english: 'Title copied', arabic: 'تم نسخ العنوان'),
-        ),
-        duration: Duration(milliseconds: 1200),
-        behavior: SnackBarBehavior.floating,
-      ),
+    ref.read(notificationServiceProvider).showSuccess(
+      appText(context, english: 'Title copied', arabic: 'تم نسخ العنوان'),
     );
   }
 
