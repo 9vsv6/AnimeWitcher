@@ -185,10 +185,8 @@ class DownloadService {
         case TaskProgressUpdate():
           final current = _ref.read(downloadProgressProvider)[trackingUrl];
 
-          // If we already marked it as complete/failed, ignore lingering progress updates
-          if (current != null &&
-              (current.status == TaskStatus.complete ||
-                  current.status == TaskStatus.failed)) {
+          // If we already marked it as complete, ignore lingering progress updates
+          if (current != null && current.status == TaskStatus.complete) {
             return;
           }
 
@@ -234,21 +232,24 @@ class DownloadService {
           // Update status in progress map
           final current = _ref.read(downloadProgressProvider)[trackingUrl];
           if (current != null) {
+            final effectiveStatus = update.status == TaskStatus.failed
+                ? TaskStatus.paused
+                : update.status;
             _ref
                 .read(downloadProgressProvider.notifier)
                 .update(
                   trackingUrl,
                   DownloadProgressData(
                     taskId: current.taskId,
-                    progress: current.progress,
-                    networkSpeed: update.status == TaskStatus.running
+                    progress: current.progress.clamp(0.0, 1.0),
+                    networkSpeed: effectiveStatus == TaskStatus.running
                         ? current.networkSpeed
                         : 0,
-                    timeRemaining: update.status == TaskStatus.running
+                    timeRemaining: effectiveStatus == TaskStatus.running
                         ? current.timeRemaining
                         : Duration.zero,
                     totalSize: current.totalSize,
-                    status: update.status,
+                    status: effectiveStatus,
                   ),
                 );
           }
@@ -263,13 +264,8 @@ class DownloadService {
                 ),
               );
             case TaskStatus.failed:
-              unawaited(
-                _continuedProcessing.finish(
-                  taskId: update.task.taskId,
-                  success: false,
-                  status: 'failed',
-                ),
-              );
+              // Treated as pause below — stop continued-processing like pause.
+              unawaited(_continuedProcessing.stop(taskId: update.task.taskId));
             case TaskStatus.canceled:
               unawaited(
                 _continuedProcessing.finish(
@@ -306,29 +302,43 @@ class DownloadService {
     // 6. Bridge Database Records to Riverpod (Persistence after restart)
     final records = await FileDownloader().database.allRecords();
     for (final record in records) {
-      // Only recover paused tasks here.
-      // Active/Enqueued tasks will be automatically picked up by FileDownloader().updates
-      // if they are still running or re-started by trackTasks().
-      if (record.status == TaskStatus.paused) {
-        final trackingUrl = record.task.metaData.isNotEmpty
-            ? record.task.metaData
-            : record.task.url;
+      // Recover paused downloads, and migrate any leftover failed records to
+      // paused so they remain resumable after a crash/network failure.
+      final isFailed = record.status == TaskStatus.failed;
+      if (record.status != TaskStatus.paused && !isFailed) continue;
 
-        _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
-        _ref
-            .read(downloadProgressProvider.notifier)
-            .update(
-              trackingUrl,
-              DownloadProgressData(
-                taskId: record.task.taskId,
-                progress: record.progress,
-                networkSpeed: 0,
-                timeRemaining: Duration.zero,
-                status: record.status,
-                totalSize: record.expectedFileSize,
-              ),
-            );
+      final trackingUrl = record.task.metaData.isNotEmpty
+          ? record.task.metaData
+          : record.task.url;
+
+      var progress = record.progress;
+      if (progress < 0 || progress > 1) progress = 0.0;
+
+      if (isFailed) {
+        await FileDownloader().database.updateRecord(
+          TaskRecord(
+            record.task,
+            TaskStatus.paused,
+            progress,
+            record.expectedFileSize,
+          ),
+        );
       }
+
+      _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
+      _ref
+          .read(downloadProgressProvider.notifier)
+          .update(
+            trackingUrl,
+            DownloadProgressData(
+              taskId: record.task.taskId,
+              progress: progress,
+              networkSpeed: 0,
+              timeRemaining: Duration.zero,
+              status: TaskStatus.paused,
+              totalSize: record.expectedFileSize,
+            ),
+          );
     }
 
     if (Platform.isIOS) {
@@ -356,18 +366,71 @@ class DownloadService {
     if (update.status == TaskStatus.complete) {
       _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
       _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
-    } else if (update.status == TaskStatus.failed ||
-        update.status == TaskStatus.canceled) {
+    } else if (update.status == TaskStatus.failed) {
+      // Network / transient failures should behave like a user pause so the
+      // partial download stays in the list and can be resumed.
+      unawaited(_convertFailedDownloadToPaused(update, trackingUrl));
+    } else if (update.status == TaskStatus.canceled) {
       _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
       _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
 
-      if (update.status == TaskStatus.canceled) {
-        // Cleanup database and metadata for cancelled tasks
-        FileDownloader().database.deleteRecordWithId(update.task.taskId);
-        _ref
-            .read(storageServiceProvider)
-            .removeDownloadMetadata(update.task.taskId);
-      }
+      // Cleanup database and metadata for cancelled tasks
+      FileDownloader().database.deleteRecordWithId(update.task.taskId);
+      _ref
+          .read(storageServiceProvider)
+          .removeDownloadMetadata(update.task.taskId);
+    }
+  }
+
+  /// Keep a failed download as [TaskStatus.paused] with its last known progress.
+  Future<void> _convertFailedDownloadToPaused(
+    TaskStatusUpdate update,
+    String trackingUrl,
+  ) async {
+    if (update.task is! DownloadTask) return;
+    final task = update.task as DownloadTask;
+
+    final current = _ref.read(downloadProgressProvider)[trackingUrl];
+    final record = await FileDownloader().database.recordForId(task.taskId);
+
+    var progress = current?.progress ?? 0.0;
+    if (progress < 0 || progress > 1) progress = 0.0;
+    if (progress == 0.0 && record != null) {
+      final recorded = record.progress;
+      if (recorded > 0 && recorded <= 1) progress = recorded;
+    }
+
+    final totalSize = current?.totalSize ?? record?.expectedFileSize ?? -1;
+
+    await FileDownloader().database.updateRecord(
+      TaskRecord(task, TaskStatus.paused, progress, totalSize),
+    );
+
+    _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
+    _ref
+        .read(downloadProgressProvider.notifier)
+        .update(
+          trackingUrl,
+          DownloadProgressData(
+            taskId: task.taskId,
+            progress: progress,
+            networkSpeed: 0,
+            timeRemaining: Duration.zero,
+            totalSize: totalSize,
+            status: TaskStatus.paused,
+          ),
+        );
+
+    // Notify UI listeners that this is now paused (not failed/removed).
+    _updatesController.add(
+      TaskStatusUpdate(task, TaskStatus.paused),
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '[DownloadService] Converted failed download to paused '
+        '(${(progress * 100).toStringAsFixed(1)}%): $trackingUrl',
+      );
     }
   }
 
@@ -420,21 +483,35 @@ class DownloadService {
   }
 
   Future<void> resumeDownload(String taskId) async {
-    final task = await FileDownloader().taskForId(taskId);
-    if (task is DownloadTask) {
-      final records = await FileDownloader().database.allRecords();
-      final record = records.firstWhereOrNull(
-        (candidate) => candidate.task.taskId == taskId,
-      );
-
-      await _continuedProcessing.start(
-        taskId: taskId,
-        displayName: task.displayName,
-        progress: record?.progress ?? 0.0,
-        totalBytes: record?.expectedFileSize ?? -1,
-      );
-      await FileDownloader().resume(task);
+    DownloadTask? downloadTask;
+    final liveTask = await FileDownloader().taskForId(taskId);
+    if (liveTask is DownloadTask) {
+      downloadTask = liveTask;
+    } else {
+      final record = await FileDownloader().database.recordForId(taskId);
+      if (record?.task is DownloadTask) {
+        downloadTask = record!.task as DownloadTask;
+      }
     }
+    if (downloadTask == null) return;
+
+    final record = await FileDownloader().database.recordForId(taskId);
+    await _continuedProcessing.start(
+      taskId: taskId,
+      displayName: downloadTask.displayName,
+      progress: (record?.progress ?? 0.0).clamp(0.0, 1.0),
+      totalBytes: record?.expectedFileSize ?? -1,
+    );
+
+    // Prefer true resume when the downloader still has resume data.
+    final canResume = await FileDownloader().taskCanResume(downloadTask);
+    if (canResume && await FileDownloader().resume(downloadTask)) {
+      return;
+    }
+
+    // Otherwise re-enqueue so the user can continue from the downloads list
+    // (same behaviour as restarting a paused item after a failure).
+    await FileDownloader().enqueue(downloadTask);
   }
 
   Future<DownloadMetadata?> getMetadata(

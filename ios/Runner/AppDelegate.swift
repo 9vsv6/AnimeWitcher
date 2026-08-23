@@ -1518,9 +1518,40 @@ private final class AppleNativeMenuButtonViewFactory: NSObject, FlutterPlatformV
   }
 }
 
+private final class SkyStreamMenuAwareButton: UIButton {
+  var onMenuWillShow: (() -> Void)?
+  var onMenuWillHide: (() -> Void)?
+
+  override func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    willDisplayMenuFor configuration: UIContextMenuConfiguration,
+    animator: (any UIContextMenuInteractionAnimating)?
+  ) {
+    onMenuWillShow?()
+    super.contextMenuInteraction(
+      interaction,
+      willDisplayMenuFor: configuration,
+      animator: animator
+    )
+  }
+
+  override func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    willEndFor configuration: UIContextMenuConfiguration,
+    animator: (any UIContextMenuInteractionAnimating)?
+  ) {
+    onMenuWillHide?()
+    super.contextMenuInteraction(
+      interaction,
+      willEndFor: configuration,
+      animator: animator
+    )
+  }
+}
+
 private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatformView {
   private let rootView: UIView
-  private let button = UIButton(type: .system)
+  private let button = SkyStreamMenuAwareButton(type: .system)
   private let channel: FlutterMethodChannel
 
   init(
@@ -1539,6 +1570,12 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
     rootView.backgroundColor = .clear
     rootView.isOpaque = false
     button.translatesAutoresizingMaskIntoConstraints = false
+    button.onMenuWillShow = { [weak self] in
+      self?.channel.invokeMethod("menuOpened", arguments: nil)
+    }
+    button.onMenuWillHide = { [weak self] in
+      self?.channel.invokeMethod("menuClosed", arguments: nil)
+    }
     rootView.addSubview(button)
     NSLayoutConstraint.activate([
       button.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
@@ -1639,7 +1676,12 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
         self?.channel.invokeMethod("selected", arguments: value)
       }
     }
-    button.menu = UIMenu(children: actions)
+    // Deferred element reliably signals presentation; willEnd covers dismiss.
+    let deferred = UIDeferredMenuElement.uncached { [weak self] completion in
+      self?.channel.invokeMethod("menuOpened", arguments: nil)
+      completion(actions)
+    }
+    button.menu = UIMenu(children: [deferred])
     button.showsMenuAsPrimaryAction = !actions.isEmpty
     if #available(iOS 16.0, *) {
       button.preferredMenuElementOrder = .fixed

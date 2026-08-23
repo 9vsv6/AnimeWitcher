@@ -777,6 +777,61 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
       );
     }
 
+    if (menuItems.isNotEmpty && onMenuSelected != null) {
+      final tint = menuTintColor ?? effectiveColor;
+      final colors = Theme.of(context).colorScheme;
+      return SizedBox(
+        width: width,
+        height: double.infinity,
+        child: PopupMenuButton<String>(
+          tooltip: tooltip,
+          padding: EdgeInsets.zero,
+          offset: const Offset(0, 8),
+          onSelected: onMenuSelected,
+          itemBuilder: (context) => [
+            for (final item in menuItems)
+              PopupMenuItem<String>(
+                value: item.value,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 28,
+                      child: selectedMenuValue == item.value
+                          ? Icon(
+                              Icons.check_rounded,
+                              size: 20,
+                              color: item.destructive ? colors.error : tint,
+                            )
+                          : Icon(
+                              item.icon ??
+                                  _materialIconForSystemImage(item.systemImage) ??
+                                  icon,
+                              size: 18,
+                              color: item.destructive
+                                  ? colors.error
+                                  : tint,
+                            ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        item.label,
+                        style: item.destructive
+                            ? TextStyle(
+                                color: colors.error,
+                                fontWeight: FontWeight.w600,
+                              )
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          child: Icon(icon, color: color),
+        ),
+      );
+    }
+
     return SizedBox(
       width: width,
       height: double.infinity,
@@ -792,6 +847,24 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
       ),
     );
   }
+}
+
+IconData? _materialIconForSystemImage(String? name) {
+  return switch (name) {
+    'heart.fill' || 'heart' => Icons.favorite_rounded,
+    'play.circle.fill' => Icons.play_circle_fill_rounded,
+    'pause.circle.fill' => Icons.pause_circle_filled_rounded,
+    'clock' => Icons.schedule_rounded,
+    'checkmark.circle.fill' => Icons.check_circle_rounded,
+    'xmark.circle.fill' => Icons.block_rounded,
+    'trash' => Icons.delete_outline_rounded,
+    'bookmark.fill' || 'bookmark' => Icons.bookmark_rounded,
+    'star.fill' => Icons.star_rounded,
+    'arrow.up' => Icons.arrow_upward_rounded,
+    'arrow.down' => Icons.arrow_downward_rounded,
+    'arrow.up.arrow.down' => Icons.swap_vert_rounded,
+    _ => null,
+  };
 }
 
 
@@ -1260,12 +1333,15 @@ class AppleNativeMenuItem {
     required this.value,
     required this.label,
     this.systemImage,
+    this.icon,
     this.destructive = false,
   });
 
   final String value;
   final String label;
   final String? systemImage;
+  /// Material icon used by Flutter popup-menu fallbacks (Android/desktop).
+  final IconData? icon;
   final bool destructive;
 
   Map<String, Object?> toPlatformValue() => <String, Object?>{
@@ -1299,6 +1375,8 @@ class AppleNativeMenuButton extends StatefulWidget {
     /// When true, the native control is fully transparent and only presents
     /// the system UIMenu. Flutter renders the visible chrome above it.
     this.invisibleAnchor = false,
+    this.onMenuOpened,
+    this.onMenuClosed,
   });
 
   final List<AppleNativeMenuItem> items;
@@ -1313,6 +1391,8 @@ class AppleNativeMenuButton extends StatefulWidget {
   final bool enabled;
   final Color? tintColor;
   final bool invisibleAnchor;
+  final VoidCallback? onMenuOpened;
+  final VoidCallback? onMenuClosed;
 
   @override
   State<AppleNativeMenuButton> createState() => _AppleNativeMenuButtonState();
@@ -1348,9 +1428,18 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
       'dev.akash.skystream/native_menu_button/$id',
     );
     channel.setMethodCallHandler((call) async {
-      if (call.method != 'selected') return;
-      final value = call.arguments as String?;
-      if (value != null) widget.onSelected(value);
+      switch (call.method) {
+        case 'selected':
+          final value = call.arguments as String?;
+          if (value != null) widget.onSelected(value);
+          break;
+        case 'menuOpened':
+          widget.onMenuOpened?.call();
+          break;
+        case 'menuClosed':
+          widget.onMenuClosed?.call();
+          break;
+      }
     });
     _channel = channel;
   }
@@ -1385,7 +1474,12 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
       child: PopupMenuButton<String>(
         enabled: widget.enabled,
         tooltip: widget.accessibilityLabel,
-        onSelected: widget.onSelected,
+        onOpened: widget.onMenuOpened,
+        onCanceled: widget.onMenuClosed,
+        onSelected: (value) {
+          widget.onSelected(value);
+          widget.onMenuClosed?.call();
+        },
         itemBuilder: (context) => [
           for (final item in widget.items)
             PopupMenuItem<String>(
@@ -1398,15 +1492,31 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
                         ? Icon(
                             Icons.check_rounded,
                             size: 20,
-                            color: widget.tintColor,
+                            color: item.destructive
+                                ? Theme.of(context).colorScheme.error
+                                : widget.tintColor,
                           )
                         : Icon(
-                            widget.fallbackIcon,
+                            item.icon ??
+                                _materialIconForSystemImage(item.systemImage) ??
+                                widget.fallbackIcon,
                             size: 18,
-                            color: widget.tintColor,
+                            color: item.destructive
+                                ? Theme.of(context).colorScheme.error
+                                : widget.tintColor,
                           ),
                   ),
-                  Expanded(child: Text(item.label)),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      style: item.destructive
+                          ? TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontWeight: FontWeight.w600,
+                            )
+                          : null,
+                    ),
+                  ),
                 ],
               ),
             ),
