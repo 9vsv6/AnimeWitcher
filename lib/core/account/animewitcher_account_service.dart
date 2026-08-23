@@ -9,6 +9,7 @@ import '../domain/entity/multimedia_item.dart';
 import '../storage/library_category.dart';
 import '../storage/secure_token_storage.dart';
 import '../storage/storage_service.dart';
+import '../utils/episode_label.dart';
 import 'animewitcher_account_config.dart';
 import 'animewitcher_account_models.dart';
 import 'animewitcher_comment_models.dart';
@@ -2566,7 +2567,14 @@ class AnimeWitcherAccountService {
               <String, dynamic>{
                 'episode_id': episodeId ?? '',
                 'episode_name': episodeTitle ??
-                    (episodeNumber == null ? '' : 'حلقة $episodeNumber'),
+                    (episodeNumber == null
+                        ? ''
+                        : formatEpisodeNumberLabel(
+                            episode: episodeNumber,
+                            isArabic: true,
+                            isFinal: hasFinalEpisodeSuffix(episodeTitle),
+                            rawName: episodeTitle,
+                          )),
                 'anime_name': item.title,
                 'anime_type': item.contentType.name,
                 'anime_id': animeId,

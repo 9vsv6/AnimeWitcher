@@ -64,6 +64,24 @@ String realEpisodeTitle(String? title) {
   return value;
 }
 
+/// Catalog / “latest episodes” poster badge.
+///
+/// Prefer AnimeWitcher’s server episode `name` (e.g. `الحلقة 10 والأخيرة`) so
+/// the final-episode suffix is preserved the same way as in the official app.
+String formatCatalogEpisodeBadge({
+  required int episode,
+  String? serverName,
+  bool isFinal = false,
+  bool isArabic = true,
+}) {
+  return formatEpisodePrimaryLabel(
+    episode: episode,
+    isArabic: isArabic,
+    isFinal: isFinal,
+    serverName: serverName,
+  );
+}
+
 /// Primary episode name line: "حلقة 12" or "حلقة 12 والأخيرة".
 String formatEpisodeNumberLabel({
   required int episode,
@@ -93,9 +111,16 @@ String formatEpisodePrimaryLabel({
   if (raw.isNotEmpty && !isGenericEpisodeTitle(raw)) {
     return raw;
   }
-  if (episode > 0) {
+
+  var number = episode;
+  if (number <= 0 && raw.isNotEmpty) {
+    final match = RegExp(r'(\d+)').firstMatch(_normalizeEpisodeDigits(raw));
+    number = match == null ? 0 : (int.tryParse(match.group(1)!) ?? 0);
+  }
+
+  if (number > 0) {
     return formatEpisodeNumberLabel(
-      episode: episode,
+      episode: number,
       isArabic: isArabic,
       isFinal: isFinal,
       rawName: raw,
