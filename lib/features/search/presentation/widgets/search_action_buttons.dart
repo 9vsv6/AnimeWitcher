@@ -1,74 +1,177 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/apple_liquid_glass.dart';
+
 /// Sort + filter controls for search — solid Material chrome (no liquid glass).
 ///
-/// Sort still opens the existing liquid-glass sort menu via [onSortPressed].
-/// Filter shows a small count badge when [filterCount] is greater than zero.
+/// On iPhone the sort icon stays visible while an invisible native menu anchor
+/// presents the system UIMenu with Liquid Glass. Other platforms use a popup
+/// menu like the library category picker.
 class SearchActionButtons extends StatelessWidget {
   const SearchActionButtons({
     super.key,
-    required this.onSortPressed,
+    required this.sortValue,
+    required this.sortItems,
+    required this.onSortSelected,
     required this.onFilterPressed,
     required this.sortTooltip,
     required this.filterTooltip,
+    required this.sortIcon,
+    required this.sortSystemImage,
     this.filterCount = 0,
     this.isFilterLoading = false,
     this.height = 42,
     this.tintColor,
   });
 
-  final VoidCallback onSortPressed;
+  final String sortValue;
+  final List<AppleNativeMenuItem> sortItems;
+  final ValueChanged<String> onSortSelected;
   final VoidCallback onFilterPressed;
   final String sortTooltip;
   final String filterTooltip;
+  final IconData sortIcon;
+  final String sortSystemImage;
   final int filterCount;
   final bool isFilterLoading;
   final double height;
   final Color? tintColor;
+
+  /// Two square action buttons plus the divider between them.
+  static double groupWidthForHeight(double height) => height * 2 + 1;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final tint = tintColor ?? colors.primary;
     final radius = BorderRadius.circular(height / 2);
+    final groupWidth = groupWidthForHeight(height);
 
-    return Material(
-      color: colors.surfaceContainerHighest.withValues(alpha: 0.92),
-      shape: RoundedRectangleBorder(
-        borderRadius: radius,
-        side: BorderSide(
-          color: colors.outlineVariant.withValues(alpha: 0.35),
+    return SizedBox(
+      width: groupWidth,
+      child: Material(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.92),
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(
+            color: colors.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          height: height,
+          child: Row(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Expanded(child: _buildSortControl(context, tint)),
+              Container(
+                width: 1,
+                height: height * 0.48,
+                color: colors.outlineVariant.withValues(alpha: 0.45),
+              ),
+              Expanded(
+                child: _ActionIcon(
+                  tooltip: filterTooltip,
+                  icon: Icons.tune_rounded,
+                  color: tint,
+                  size: height,
+                  onPressed: isFilterLoading ? null : onFilterPressed,
+                  isLoading: isFilterLoading,
+                  badgeCount: filterCount,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        height: height,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+    );
+  }
+
+  Widget _buildSortControl(BuildContext context, Color tint) {
+    if (appleUsesPersistentLiquidGlassHeader) {
+      return Semantics(
+        button: true,
+        label: sortTooltip,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            _ActionIcon(
-              tooltip: sortTooltip,
-              icon: Icons.star_rounded,
-              color: tint,
-              size: height,
-              onPressed: onSortPressed,
-            ),
-            Container(
-              width: 1,
-              height: height * 0.48,
-              color: colors.outlineVariant.withValues(alpha: 0.45),
-            ),
-            _ActionIcon(
-              tooltip: filterTooltip,
-              icon: Icons.tune_rounded,
-              color: tint,
-              size: height,
-              onPressed: isFilterLoading ? null : onFilterPressed,
-              isLoading: isFilterLoading,
-              badgeCount: filterCount,
+            Icon(sortIcon, size: 20, color: tint),
+            Positioned.fill(
+              child: AppleNativeMenuButton(
+                invisibleAnchor: true,
+                items: sortItems,
+                onSelected: onSortSelected,
+                accessibilityLabel: sortTooltip,
+                systemImage: sortSystemImage,
+                fallbackIcon: sortIcon,
+                selectedValue: sortValue,
+                width: height,
+                size: height,
+                tintColor: tint,
+              ),
             ),
           ],
         ),
+      );
+    }
+
+    return _SortPopupMenu(
+      sortItems: sortItems,
+      sortValue: sortValue,
+      sortIcon: sortIcon,
+      sortTooltip: sortTooltip,
+      tintColor: tint,
+      height: height,
+      onSortSelected: onSortSelected,
+    );
+  }
+}
+
+class _SortPopupMenu extends StatelessWidget {
+  const _SortPopupMenu({
+    required this.sortItems,
+    required this.sortValue,
+    required this.sortIcon,
+    required this.sortTooltip,
+    required this.tintColor,
+    required this.height,
+    required this.onSortSelected,
+  });
+
+  final List<AppleNativeMenuItem> sortItems;
+  final String sortValue;
+  final IconData sortIcon;
+  final String sortTooltip;
+  final Color tintColor;
+  final double height;
+  final ValueChanged<String> onSortSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: sortTooltip,
+      onSelected: onSortSelected,
+      itemBuilder: (context) => [
+        for (final item in sortItems)
+          PopupMenuItem<String>(
+            value: item.value,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 28,
+                  child: sortValue == item.value
+                      ? Icon(Icons.check_rounded, size: 20, color: tintColor)
+                      : const SizedBox(width: 20, height: 20),
+                ),
+                Expanded(child: Text(item.label)),
+              ],
+            ),
+          ),
+      ],
+      child: SizedBox(
+        width: height,
+        height: height,
+        child: Icon(sortIcon, size: 20, color: tintColor),
       ),
     );
   }
