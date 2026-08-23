@@ -25,6 +25,7 @@ class NextEpisodeOverlay extends StatefulWidget {
   final String? nextEpisodeDescription;
 
   final bool nextEpisodeIsFinal;
+  final String? nextEpisodeServerName;
 
   final VoidCallback onPlayNext;
   final VoidCallback onDismiss;
@@ -43,6 +44,7 @@ class NextEpisodeOverlay extends StatefulWidget {
     this.nextEpisodeRuntime,
     this.nextEpisodeDescription,
     this.nextEpisodeIsFinal = false,
+    this.nextEpisodeServerName,
     required this.onPlayNext,
     required this.onDismiss,
     this.isTv = false,
@@ -373,17 +375,15 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
     final hasRating =
         widget.nextEpisodeRating != null && widget.nextEpisodeRating! > 0;
     final episodeNumber = widget.nextEpisodeNumber ?? 0;
-    final hasServerNumber = episodeNumber > 0;
     final episodeTitle = realEpisodeTitle(widget.nextEpisodeTitle);
     final hasServerName = episodeTitle.isNotEmpty;
-    final episodeNumberLabel = hasServerNumber
-        ? formatEpisodeNumberLabel(
-            episode: episodeNumber,
-            isArabic: true,
-            isFinal: widget.nextEpisodeIsFinal,
-            rawName: widget.nextEpisodeTitle,
-          )
-        : '';
+    final episodeNumberLabel = formatEpisodePrimaryLabel(
+      episode: episodeNumber,
+      isArabic: true,
+      isFinal: widget.nextEpisodeIsFinal,
+      serverName: widget.nextEpisodeServerName,
+    );
+    final hasPrimaryLabel = episodeNumberLabel.isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -409,7 +409,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
             ),
             const SizedBox(height: 2),
           ],
-          if (hasServerNumber)
+          if (hasPrimaryLabel)
             Text(
               episodeNumberLabel,
               maxLines: 1,
@@ -421,7 +421,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               ),
             ),
           if (hasServerName) ...[
-            if (hasServerNumber) const SizedBox(height: 2),
+            if (hasPrimaryLabel) const SizedBox(height: 2),
             Text(
               episodeTitle,
               maxLines: 2,

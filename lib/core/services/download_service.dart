@@ -769,6 +769,7 @@ class DownloadService {
         episode: episode.episode,
         title: episode.name,
         isFinal: episode.isFinal,
+        serverName: episode.serverName,
       );
     } else {
       baseName = sanitizedTitle;

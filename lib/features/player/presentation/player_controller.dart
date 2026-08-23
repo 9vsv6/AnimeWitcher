@@ -106,6 +106,7 @@ class PlayerState {
   final int? nextEpisodeRuntime;
   final String? nextEpisodeDescription;
   final bool nextEpisodeIsFinal;
+  final String? nextEpisodeServerName;
   final bool isAdaptiveBufferingActive;
   final bool showEpisodeList;
 
@@ -142,6 +143,7 @@ class PlayerState {
     this.nextEpisodeRuntime,
     this.nextEpisodeDescription,
     this.nextEpisodeIsFinal = false,
+    this.nextEpisodeServerName,
     this.isAdaptiveBufferingActive = false,
     this.showEpisodeList = false,
     this.playbackSpeed = 1.0,
@@ -198,6 +200,7 @@ class PlayerState {
     int? nextEpisodeRuntime,
     String? nextEpisodeDescription,
     bool? nextEpisodeIsFinal,
+    String? nextEpisodeServerName,
     bool? isAdaptiveBufferingActive,
     bool? showEpisodeList,
     double? playbackSpeed,
@@ -232,6 +235,8 @@ class PlayerState {
       nextEpisodeDescription:
           nextEpisodeDescription ?? this.nextEpisodeDescription,
       nextEpisodeIsFinal: nextEpisodeIsFinal ?? this.nextEpisodeIsFinal,
+      nextEpisodeServerName:
+          nextEpisodeServerName ?? this.nextEpisodeServerName,
       isAdaptiveBufferingActive:
           isAdaptiveBufferingActive ?? this.isAdaptiveBufferingActive,
       showEpisodeList: showEpisodeList ?? this.showEpisodeList,
@@ -1107,6 +1112,7 @@ class PlayerController extends Notifier<PlayerState> {
                 nextEpisodeRuntime: next.runtime,
                 nextEpisodeDescription: next.description,
                 nextEpisodeIsFinal: next.isFinal,
+                nextEpisodeServerName: next.serverName,
               );
             }
             // Ensure it persists if video completes and resets position
@@ -1163,6 +1169,7 @@ class PlayerController extends Notifier<PlayerState> {
         nextEpisodeSeason: next.season,
         nextEpisodeRuntime: next.runtime,
         nextEpisodeIsFinal: next.isFinal,
+        nextEpisodeServerName: next.serverName,
       );
     }
   }
@@ -1606,6 +1613,7 @@ class PlayerController extends Notifier<PlayerState> {
                 nextEpisodeRuntime: next.runtime,
                 nextEpisodeDescription: next.description,
                 nextEpisodeIsFinal: next.isFinal,
+                nextEpisodeServerName: next.serverName,
               );
             }
             // Ensure it persists if video completes and resets position
@@ -2595,6 +2603,7 @@ class PlayerController extends Notifier<PlayerState> {
         episode: episode.episode,
         title: episode.name,
         isFinal: episode.isFinal,
+        serverName: episode.serverName,
       ),
       episodePosterUrl: _episodeArtwork(episode),
     );

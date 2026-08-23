@@ -494,6 +494,10 @@ class Episode {
   /// (e.g. server name "الحلقة 12 والأخيرة").
   final bool isFinal;
 
+  /// Raw AnimeWitcher `name` field (e.g. "الحلقة 12 والأخيرة", "مترجم").
+  /// Used for the primary list label and must survive AniZip image enrichment.
+  final String serverName;
+
   // Parity fields
   final double? rating;
   final int? runtime;
@@ -512,6 +516,7 @@ class Episode {
     this.headers,
     this.isFiller = false,
     this.isFinal = false,
+    this.serverName = '',
     this.rating,
     this.runtime,
     this.airDate,
@@ -520,9 +525,50 @@ class Episode {
     this.streams,
   });
 
+  Episode copyWith({
+    String? name,
+    String? url,
+    int? season,
+    int? episode,
+    String? description,
+    String? posterUrl,
+    Map<String, String>? headers,
+    bool? isFiller,
+    bool? isFinal,
+    String? serverName,
+    double? rating,
+    int? runtime,
+    String? airDate,
+    DubStatus? dubStatus,
+    String? playbackPolicy,
+    List<StreamResult>? streams,
+  }) {
+    return Episode(
+      name: name ?? this.name,
+      url: url ?? this.url,
+      season: season ?? this.season,
+      episode: episode ?? this.episode,
+      description: description ?? this.description,
+      posterUrl: posterUrl ?? this.posterUrl,
+      headers: headers ?? this.headers,
+      isFiller: isFiller ?? this.isFiller,
+      isFinal: isFinal ?? this.isFinal,
+      serverName: serverName ?? this.serverName,
+      rating: rating ?? this.rating,
+      runtime: runtime ?? this.runtime,
+      airDate: airDate ?? this.airDate,
+      dubStatus: dubStatus ?? this.dubStatus,
+      playbackPolicy: playbackPolicy ?? this.playbackPolicy,
+      streams: streams ?? this.streams,
+    );
+  }
+
   factory Episode.fromJson(Map<String, dynamic> json) {
     final name = json['name'] != null
         ? _unescape.convert(json['name'] as String)
+        : '';
+    final serverName = json['serverName'] != null
+        ? _unescape.convert(json['serverName'] as String)
         : '';
     return Episode(
       name: name,
@@ -542,10 +588,11 @@ class Episode {
       isFinal: _parseBoolean(
         json['isFinal'] ?? json['is_final'] ?? json['final'],
       ),
+      serverName: serverName,
       rating: (json['rating'] as num?)?.toDouble(),
       runtime: (json['runtime'] as int?) ?? (json['duration'] as int?),
       airDate: json['airDate'] as String?,
-      dubStatus: _parseDubStatus(json['dubStatus'], name),
+      dubStatus: _parseDubStatus(json['dubStatus'], name.isNotEmpty ? name : serverName),
       playbackPolicy:
           (json['playbackPolicy'] as String?) ?? (json['vpnStatus'] as String?),
       streams: json['streams'] != null
@@ -575,16 +622,22 @@ class Episode {
   static DubStatus _parseDubStatus(dynamic raw, [String? name]) {
     if (raw != null) {
       final str = raw.toString().toLowerCase();
-      if (str.contains('dub')) return DubStatus.dubbed;
-      if (str.contains('sub')) return DubStatus.subbed;
+      if (str.contains('dub') || str.contains('مدبلج')) return DubStatus.dubbed;
+      if (str.contains('sub') || str.contains('مترجم')) return DubStatus.subbed;
     }
 
     if (name != null) {
-      final lowerName = name.toLowerCase();
-      // Look for common patterns: (Dub), [Dub], - Dub, etc.
-      // Or just "Dub" as a word.
-      if (lowerName.contains('dub')) return DubStatus.dubbed;
-      if (lowerName.contains('sub')) return DubStatus.subbed;
+      final lowerName = name.toLowerCase().trim();
+      if (lowerName.contains('dub') ||
+          lowerName == 'مدبلج' ||
+          lowerName == 'مدبلجة') {
+        return DubStatus.dubbed;
+      }
+      if (lowerName.contains('sub') ||
+          lowerName == 'مترجم' ||
+          lowerName == 'مترجمة') {
+        return DubStatus.subbed;
+      }
     }
 
     return DubStatus.none;
@@ -601,6 +654,7 @@ class Episode {
       'headers': headers,
       'isFiller': isFiller,
       'isFinal': isFinal,
+      'serverName': serverName,
       'rating': rating,
       'runtime': runtime,
       'airDate': airDate,

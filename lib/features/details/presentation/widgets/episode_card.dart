@@ -44,14 +44,14 @@ class EpisodeCard extends HookConsumerWidget {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final episodeTitle = realEpisodeTitle(episode.name);
-    final hasServerNumber = episode.episode > 0;
-    final hasServerName = episodeTitle.isNotEmpty;
-    final episodeNumberLabel = formatEpisodeNumberLabel(
+    final episodeNumberLabel = formatEpisodePrimaryLabel(
       episode: episode.episode,
       isArabic: isArabic,
       isFinal: episode.isFinal,
-      rawName: episode.name,
+      serverName: episode.serverName,
     );
+    final hasPrimaryLabel = episodeNumberLabel.isNotEmpty;
+    final hasServerName = episodeTitle.isNotEmpty;
     final historyRepo = ref.watch(historyRepositoryProvider);
     final historyItem = ref.watch(
       watchHistoryProvider.select(
@@ -323,7 +323,7 @@ class EpisodeCard extends HookConsumerWidget {
                                 ? TextDirection.rtl
                                 : TextDirection.ltr,
                             children: [
-                              if (hasServerNumber)
+                              if (hasPrimaryLabel)
                                 Text(
                                   episodeNumberLabel,
                                   style: episodeNumberStyle,
