@@ -4,10 +4,11 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../search_provider.dart';
 import '../search_text_direction.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
-import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/apple_liquid_glass.dart';
+import 'search_action_buttons.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+
 /// Redesigned static widescreen/desktop search control bar.
 class SearchHeaderBar extends ConsumerStatefulWidget {
   final TextEditingController textController;
@@ -67,7 +68,6 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Static Search Field (tap anywhere to toggle keyboard focus)
             GestureDetector(
               onTap: () {
                 if (!widget.searchFocusNode.hasFocus) {
@@ -80,7 +80,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
                   color: theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.3,
+                    alpha: 0.92,
                   ),
                   border: Border.all(
                     color: isDark
@@ -214,10 +214,7 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // Toggle scope switcher below
             AnimatedOpacity(
               opacity: isCompact ? 0.0 : 1.0,
               duration: const Duration(milliseconds: 300),
@@ -228,23 +225,16 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                     ? const SizedBox.shrink()
                     : Align(
                         alignment: Alignment.centerRight,
-                        child: AppleSearchGlassActions(
+                        child: SearchActionButtons(
                           filterCount: widget.activeFilterCount,
                           isFilterLoading: widget.isFilterLoading,
-                          isArabic: Localizations.localeOf(context)
-                                  .languageCode
-                                  .toLowerCase() ==
-                              'ar',
-                          sortValue: widget.sortValue,
-                          sortItems: widget.sortItems,
-                          sortAccessibilityLabel: widget.sortTooltip,
-                          filterAccessibilityLabel: appText(
+                          sortTooltip: widget.sortTooltip,
+                          filterTooltip: appText(
                             context,
                             english: 'Filters',
                             arabic: 'الفلاتر',
                           ),
                           onSortPressed: widget.onShowSort,
-                          onSortSelected: widget.onSortSelected,
                           onFilterPressed: widget.onShowFilters,
                           tintColor: theme.colorScheme.primary,
                           height: 38,
@@ -253,104 +243,6 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-
-class _SearchControlButton extends StatelessWidget {
-  const _SearchControlButton({
-    required this.tooltip,
-    required this.onTap,
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-    this.isLoading = false,
-    this.count = 0,
-  });
-
-  final String tooltip;
-  final VoidCallback onTap;
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final bool isLoading;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final foreground = isActive ? colors.primary : colors.onSurfaceVariant;
-    final radius = BorderRadius.circular(20);
-
-    return Tooltip(
-      message: tooltip,
-      child: AppleLiquidGlassSurface(
-        borderRadius: radius,
-        style: 'regular',
-        interactive: true,
-        fallbackColor: colors.surfaceContainerHigh.withValues(alpha: 0.92),
-        fallbackBorder: BorderSide(
-          color: colors.outlineVariant.withValues(alpha: 0.30),
-        ),
-        child: CardsWrapper(
-          scaleFactor: 1.0,
-          onTap: () {
-            if (!isLoading) onTap();
-          },
-          borderRadius: radius,
-          child: SizedBox(
-            height: 38,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isLoading)
-                    SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: foreground,
-                      ),
-                    )
-                  else
-                    Icon(icon, size: 18, color: foreground),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: foreground,
-                    ),
-                  ),
-                  if (count > 0) ...[
-                    const SizedBox(width: 7),
-                    Container(
-                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '$count',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: colors.onPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
         ),
       ),
     );

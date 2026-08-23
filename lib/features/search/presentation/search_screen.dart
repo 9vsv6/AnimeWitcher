@@ -11,6 +11,7 @@ import '../../home/presentation/widgets/provider_search_filter_dialog.dart';
 import 'search_provider.dart';
 import 'search_text_direction.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import 'widgets/search_action_buttons.dart';
 import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
 import 'widgets/search_sort_dialog.dart';
@@ -38,7 +39,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   ProviderSubscription<int>? _clearRequestSub;
   ProviderSubscription<int>? _focusRequestSub;
   bool _isLoadingProviderFilters = false;
-  int _nativeFocusGeneration = 0;
 
   @override
   void initState() {
@@ -132,15 +132,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   void _requestSearchFocus() {
-    final profile = ref.read(deviceProfileProvider).asData?.value;
-    final usesNativeMobileSearch = appleUsesPersistentLiquidGlassHeader &&
-        profile?.isTv != true &&
-        !context.isTabletOrLarger;
-    if (usesNativeMobileSearch) {
-      _nativeFocusGeneration++;
-      if (mounted) setState(() {});
-      return;
-    }
     _focusNode.requestFocus();
   }
 
@@ -165,30 +156,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _firstSuggestionFocusNode.dispose();
     _firstResultFocusNode.dispose();
     super.dispose();
-  }
-
-  Set<String> _readNativeFilterSet(Map<String, dynamic> value, String key) {
-    final raw = value[key];
-    if (raw is! List) return <String>{};
-    return raw
-        .map((entry) => entry.toString().trim())
-        .where((entry) => entry.isNotEmpty)
-        .toSet();
-  }
-
-  ProviderSearchFilters _nativeFiltersToModel(
-    Map<String, dynamic> value,
-    String sort,
-  ) {
-    return ProviderSearchFilters(
-      statuses: _readNativeFilterSet(value, 'statuses'),
-      types: _readNativeFilterSet(value, 'types'),
-      ageRatings: _readNativeFilterSet(value, 'ageRatings'),
-      years: _readNativeFilterSet(value, 'years'),
-      seasons: _readNativeFilterSet(value, 'seasons'),
-      genres: _readNativeFilterSet(value, 'genres'),
-      sort: sort,
-    );
   }
 
   Future<void> _showSearchFilters() async {
@@ -289,16 +256,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       SearchSortOption.productionDateDescending => 'arrow.down',
       SearchSortOption.nameAscending => 'skystream.abc',
       SearchSortOption.nameDescending => 'skystream.zyx',
-    };
-  }
-
-  IconData _searchSortFallbackIcon(SearchSortOption option) {
-    return switch (option) {
-      SearchSortOption.mostFavorited => Icons.star_rounded,
-      SearchSortOption.productionDateAscending => Icons.arrow_upward_rounded,
-      SearchSortOption.productionDateDescending => Icons.arrow_downward_rounded,
-      SearchSortOption.nameAscending => Icons.sort_by_alpha_rounded,
-      SearchSortOption.nameDescending => Icons.sort_by_alpha_rounded,
     };
   }
 
@@ -575,57 +532,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return _buildMobileLayout(context);
   }
 
-  List<AppleLiquidGlassToolbarButton> _buildPersistentSearchButtons(
-    BuildContext context,
-  ) {
-    final activeFilters = ref.watch(searchProviderFiltersProvider);
-    final sortOption = SearchSortOption.fromValue(activeFilters.sort);
-    final primary = Theme.of(context).colorScheme.primary;
-
-    return <AppleLiquidGlassToolbarButton>[
-      AppleLiquidGlassToolbarButton(
-        width: 190,
-        icon: _searchSortFallbackIcon(sortOption),
-        systemImage: _searchSortSystemImage(sortOption),
-        title: sortOption.label(context),
-        tooltip:
-            '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
-        color: primary,
-        menuTintColor: primary,
-        onPressed: _showSearchSort,
-        selectedMenuValue: activeFilters.sort,
-        menuItems: _searchSortMenuItems(context),
-        onMenuSelected: _applySearchSort,
-      ),
-      AppleLiquidGlassToolbarButton(
-        width: 42,
-        icon: Icons.tune_rounded,
-        tooltip: appText(
-          context,
-          english: 'Filters',
-          arabic: 'الفلاتر',
-        ),
-        color: primary,
-        onPressed: _isLoadingProviderFilters ? null : _showSearchFilters,
-      ),
-    ];
-  }
-
   Widget _buildMobileSearchActionGroup(BuildContext context) {
     final activeFilters = ref.watch(searchProviderFiltersProvider);
     final sortOption = SearchSortOption.fromValue(activeFilters.sort);
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
-    return AppleSearchGlassActions(
+    return SearchActionButtons(
       filterCount: activeFilters.count,
       isFilterLoading: _isLoadingProviderFilters,
-      isArabic: isArabic,
-      sortValue: activeFilters.sort,
-      sortItems: _searchSortMenuItems(context),
-      sortAccessibilityLabel:
+      sortTooltip:
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
-      filterAccessibilityLabel: appText(
+      filterTooltip: appText(
         context,
         english: 'Filters',
         arabic: 'الفلاتر',
@@ -633,33 +549,151 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       tintColor: Theme.of(context).colorScheme.primary,
       height: 42,
       onSortPressed: _showSearchSort,
-      onSortSelected: _applySearchSort,
       onFilterPressed: _showSearchFilters,
     );
   }
 
-  Widget _buildMobileLayout(BuildContext context) {
-    final searchResultsState = ref.watch(searchPagedResultsProvider);
+  Widget _buildMobileSearchField(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
     final searchPlaceholder = isArabic ? 'Search...' : l10n.searchHint;
-    const persistentSearchActionsWidth = 140.0;
+    final searchResultsState = ref.watch(searchPagedResultsProvider);
+
+    return GestureDetector(
+      onTap: () {
+        if (!_focusNode.hasFocus) {
+          _focusNode.requestFocus();
+        }
+      },
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        height: 42,
+        child: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _controller,
+          builder: (context, value, child) {
+            final isSearching = searchResultsState.isLoading;
+
+            Widget? suffix;
+            if (isSearching) {
+              suffix = Padding(
+                padding: const EdgeInsets.all(12),
+                child: AppLoadingIndicator(
+                  color: theme.colorScheme.primary,
+                  constraints: BoxConstraints.tight(const Size(18, 18)),
+                ),
+              );
+            } else if (value.text.isNotEmpty) {
+              suffix = IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(32, 32),
+                  padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () {
+                  _controller.clear();
+                  ref
+                      .read(searchSuggestionControllerProvider.notifier)
+                      .clear();
+                  ref.read(searchQueryProvider.notifier).set('');
+                },
+              );
+            }
+
+            return TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              autofocus: false,
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.colorScheme.onSurface,
+              ),
+              textDirection: searchTextDirection(
+                _controller.text,
+                fallback: Directionality.of(context),
+              ),
+              textAlign: TextAlign.start,
+              textAlignVertical: TextAlignVertical.center,
+              textInputAction: TextInputAction.search,
+              enableInteractiveSelection: true,
+              contextMenuBuilder: (context, editableTextState) {
+                return AdaptiveTextSelectionToolbar.buttonItems(
+                  anchors: editableTextState.contextMenuAnchors,
+                  buttonItems: editableTextState.contextMenuButtonItems,
+                );
+              },
+              onChanged: (val) {
+                ref
+                    .read(searchSuggestionControllerProvider.notifier)
+                    .onQueryChanged(val);
+              },
+              onSubmitted: _submitSearch,
+              decoration: InputDecoration(
+                hintText: searchPlaceholder,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(
+                    LayoutConstants.radiusPill,
+                  ),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(
+                    LayoutConstants.radiusPill,
+                  ),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(
+                    LayoutConstants.radiusPill,
+                  ),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.92),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                hintStyle: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 44,
+                  minHeight: 42,
+                ),
+                suffixIcon: suffix,
+                suffixIconConstraints: const BoxConstraints(
+                  minWidth: 42,
+                  minHeight: 42,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
 
     final scaffold = Scaffold(
       appBar: AppBar(
         titleSpacing: 12,
-        leadingWidth: isArabic
-            ? (usePersistentGlass ? persistentSearchActionsWidth + 10 : 104)
-            : null,
+        leadingWidth: isArabic ? 104 : null,
         leading: isArabic
             ? Padding(
                 padding: const EdgeInsets.only(right: 10),
-                child: usePersistentGlass
-                    ? const SizedBox(width: persistentSearchActionsWidth)
-                    : _buildMobileSearchActionGroup(context),
+                child: _buildMobileSearchActionGroup(context),
               )
             : null,
         actions: isArabic
@@ -667,150 +701,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             : [
                 Padding(
                   padding: const EdgeInsets.only(right: 10),
-                  child: usePersistentGlass
-                      ? const SizedBox(width: persistentSearchActionsWidth)
-                      : _buildMobileSearchActionGroup(context),
+                  child: _buildMobileSearchActionGroup(context),
                 ),
               ],
-        title: usePersistentGlass
-            ? AppleNativeGlassSearchField(
-                controller: _controller,
-                placeholder: searchPlaceholder,
-                tintColor: theme.colorScheme.primary,
-                textColor: theme.colorScheme.onSurface,
-                placeholderColor: theme.colorScheme.onSurfaceVariant,
-                focusRequest: _nativeFocusGeneration,
-                loading: searchResultsState.isLoading,
-                textDirection: searchTextDirection(
-                  _controller.text,
-                  fallback: Directionality.of(context),
-                ),
-                height: 46,
-                onChanged: (val) {
-                  ref
-                      .read(searchSuggestionControllerProvider.notifier)
-                      .onQueryChanged(val);
-                },
-                onSubmitted: _submitSearch,
-              )
-            : GestureDetector(
-          onTap: () {
-            if (!_focusNode.hasFocus) {
-              _focusNode.requestFocus();
-            }
-          },
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            height: 42,
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _controller,
-              builder: (context, value, child) {
-                final isSearching = searchResultsState.isLoading;
-
-                Widget? suffix;
-                if (isSearching) {
-                  suffix = Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: AppLoadingIndicator(
-                      color: theme.colorScheme.primary,
-                      constraints: BoxConstraints.tight(const Size(18, 18)),
-                    ),
-                  );
-                } else if (value.text.isNotEmpty) {
-                  suffix = IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(32, 32),
-                      padding: EdgeInsets.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: () {
-                      _controller.clear();
-                      ref
-                          .read(searchSuggestionControllerProvider.notifier)
-                          .clear();
-                      ref.read(searchQueryProvider.notifier).set('');
-                    },
-                  );
-                }
-
-                return TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  autofocus: false,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                  textDirection: searchTextDirection(
-                    _controller.text,
-                    fallback: Directionality.of(context),
-                  ),
-                  textAlign: TextAlign.start,
-                  textAlignVertical: TextAlignVertical.center,
-                  textInputAction: TextInputAction.search,
-                  enableInteractiveSelection: true,
-                  contextMenuBuilder: (context, editableTextState) {
-                    return AdaptiveTextSelectionToolbar.buttonItems(
-                      anchors: editableTextState.contextMenuAnchors,
-                      buttonItems: editableTextState.contextMenuButtonItems,
-                    );
-                  },
-                  onChanged: (val) {
-                    ref
-                        .read(searchSuggestionControllerProvider.notifier)
-                        .onQueryChanged(val);
-                  },
-                  onSubmitted: _submitSearch,
-                  decoration: InputDecoration(
-                    hintText: searchPlaceholder,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        LayoutConstants.radiusPill,
-                      ),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        LayoutConstants.radiusPill,
-                      ),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        LayoutConstants.radiusPill,
-                      ),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: theme.colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.5),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                    hintStyle: TextStyle(
-                      fontSize: 13,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search,
-                      size: 18,
-                      color: theme.colorScheme.primary,
-                    ),
-                    prefixIconConstraints: const BoxConstraints(
-                      minWidth: 44,
-                      minHeight: 42,
-                    ),
-                    suffixIcon: suffix,
-                    suffixIconConstraints: const BoxConstraints(
-                      minWidth: 42,
-                      minHeight: 42,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
+        title: _buildMobileSearchField(context),
       ),
       body: Column(
         children: [
@@ -823,10 +717,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
     );
 
+    // Keep the persistent glass chrome for back/system header only — search
+    // field and sort/filter controls stay solid Material (no liquid glass).
     if (!usePersistentGlass) return scaffold;
     return ApplePersistentGlassHeaderScope(
       branchIndex: TaskbarDestination.search.branchIndex,
-      trailingButtons: _buildPersistentSearchButtons(context),
+      trailingButtons: const <AppleLiquidGlassToolbarButton>[],
       child: scaffold,
     );
   }
