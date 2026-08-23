@@ -201,6 +201,43 @@ void main() {
         'حلقة 2: بداية جديدة',
       );
     });
+
+    test('keeps final suffix from serverName / isFinal for download filenames', () {
+      expect(
+        formatEpisodeFileName(
+          episode: 12,
+          title: 'الحلقة 12 والأخيرة',
+          serverName: 'الحلقة 12 والأخيرة',
+          isFinal: true,
+        ),
+        'حلقة 12 والأخيرة',
+      );
+      expect(
+        formatEpisodeFileName(
+          episode: 12,
+          title: 'الحلقة 12 والأخيرة',
+          serverName: 'الحلقة 12 والأخيرة',
+          isFinal: true,
+          quality: '720p',
+        ),
+        'حلقة 12 والأخيرة (720p)',
+      );
+      expect(
+        formatEpisodeFileName(
+          episode: 12,
+          isFinal: true,
+        ),
+        'حلقة 12 والأخيرة',
+      );
+      // Without isFinal/serverName the download used to drop والأخيرة.
+      expect(
+        formatEpisodeFileName(
+          episode: 12,
+          title: 'الحلقة 12 والأخيرة',
+        ),
+        'حلقة 12',
+      );
+    });
   });
 
   group('episodeTitleForStorage', () {

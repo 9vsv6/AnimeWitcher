@@ -741,26 +741,37 @@ class DownloadService {
     final sanitizedTitle = item.title
         .replaceAll(RegExp(r'[^\w\s-]'), '')
         .trim();
-    String baseName;
+    final baseNames = <String>[];
     if (episode != null && item.contentType != MultimediaContentType.movie) {
-      baseName = formatEpisodeFileName(
+      // Canonical name — must match download_launcher (serverName + isFinal).
+      baseNames.add(
+        formatEpisodeFileName(
+          episode: episode.episode,
+          title: episode.name,
+          isFinal: episode.isFinal,
+          serverName: episode.serverName,
+        ),
+      );
+      // Legacy files saved before serverName/isFinal were passed through.
+      final legacyName = formatEpisodeFileName(
         episode: episode.episode,
         title: episode.name,
-        isFinal: episode.isFinal,
-        serverName: episode.serverName,
       );
+      if (legacyName != baseNames.first) {
+        baseNames.add(legacyName);
+      }
     } else {
-      baseName = sanitizedTitle;
+      baseNames.add(sanitizedTitle);
     }
 
     // Check common extensions. Quality is part of the new filename, so an
     // exact-name lookup is followed by a quality-suffixed prefix lookup.
     final extensions = ['.mp4', '.mkv', '.webm', '.avi'];
-    for (final ext in extensions) {
-      final file = File(p.join(directoryPath, '$baseName$ext'));
-      if (await file.exists() && await file.length() > 0) return file;
-    }
-    if (episode != null && item.contentType != MultimediaContentType.movie) {
+    for (final baseName in baseNames) {
+      for (final ext in extensions) {
+        final file = File(p.join(directoryPath, '$baseName$ext'));
+        if (await file.exists() && await file.length() > 0) return file;
+      }
       final prefix = '$baseName (';
       await for (final entity in directory.list()) {
         if (entity is! File) continue;
