@@ -5,12 +5,14 @@
 import FlutterMacOS
 import Foundation
 
+import connectivity_plus
 import device_info_plus
 import dynamic_color
 import file_picker
 import flutter_inappwebview_macos
 import flutter_secure_storage_darwin
 import flutter_volume_controller
+import google_sign_in_ios
 import media_kit_libs_macos_video
 import media_kit_video
 import open_file_mac
@@ -26,12 +28,14 @@ import wakelock_plus
 import window_manager
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
+  ConnectivityPlusPlugin.register(with: registry.registrar(forPlugin: "ConnectivityPlusPlugin"))
   DeviceInfoPlusMacosPlugin.register(with: registry.registrar(forPlugin: "DeviceInfoPlusMacosPlugin"))
   DynamicColorPlugin.register(with: registry.registrar(forPlugin: "DynamicColorPlugin"))
   FilePickerPlugin.register(with: registry.registrar(forPlugin: "FilePickerPlugin"))
   InAppWebViewFlutterPlugin.register(with: registry.registrar(forPlugin: "InAppWebViewFlutterPlugin"))
   FlutterSecureStorageDarwinPlugin.register(with: registry.registrar(forPlugin: "FlutterSecureStorageDarwinPlugin"))
   FlutterVolumeControllerPlugin.register(with: registry.registrar(forPlugin: "FlutterVolumeControllerPlugin"))
+  FLTGoogleSignInPlugin.register(with: registry.registrar(forPlugin: "FLTGoogleSignInPlugin"))
   MediaKitLibsMacosVideoPlugin.register(with: registry.registrar(forPlugin: "MediaKitLibsMacosVideoPlugin"))
   MediaKitVideoPlugin.register(with: registry.registrar(forPlugin: "MediaKitVideoPlugin"))
   OpenFilePlugin.register(with: registry.registrar(forPlugin: "OpenFilePlugin"))
