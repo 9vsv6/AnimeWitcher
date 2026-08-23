@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:collection/collection.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/utils/episode_label.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 
@@ -954,6 +955,7 @@ class DetailsController extends _$DetailsController {
         isMovie: true,
         seasonMap: {1: episodes},
         selectedSeason: 1,
+        selectedDubStatus: DubStatus.none,
       );
       return episodes;
     }
@@ -1000,10 +1002,21 @@ class DetailsController extends _$DetailsController {
 
     DubStatus selectedDubStatus = state.selectedDubStatus;
     if (isInitial) {
-      final hasSub = normalizedEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
-      final hasDub = normalizedEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
-      if (hasSub && hasDub) {
+      final isStandaloneCatalog = normalizedEpisodes.isNotEmpty &&
+          normalizedEpisodes.every(
+            (episode) =>
+                isStandaloneEpisodeLabel(episode.serverName) ||
+                isStandaloneEpisodeLabel(episode.name),
+          );
+      final hasSub =
+          normalizedEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
+      final hasDub =
+          normalizedEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
+      // Keep مترجم/مدبلج movie-style catalogs unfiltered so both rows show.
+      if (hasSub && hasDub && !isStandaloneCatalog) {
         selectedDubStatus = DubStatus.subbed;
+      } else {
+        selectedDubStatus = DubStatus.none;
       }
     }
 

@@ -542,28 +542,36 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              formatEpisodeLabel(
-                                episode: ep.episode,
-                                isArabic: Localizations.localeOf(context)
-                                        .languageCode ==
-                                    'ar',
-                              ),
-                              style: TextStyle(
-                                color: widget.isCurrent
-                                    ? accent
-                                    : HotstarPlayerStyle.mutedText,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8,
-                                shadows: _kGlassTextShadow,
+                            Flexible(
+                              child: Text(
+                                formatEpisodePrimaryLabel(
+                                  episode: ep.episode,
+                                  isArabic: Localizations.localeOf(context)
+                                          .languageCode ==
+                                      'ar',
+                                  isFinal: ep.isFinal,
+                                  serverName: ep.serverName,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: widget.isCurrent
+                                      ? HotstarPlayerStyle.primaryText
+                                      : HotstarPlayerStyle.secondaryText,
+                                  fontSize: 14,
+                                  fontWeight: widget.isCurrent
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  shadows: _kGlassTextShadow,
+                                ),
                               ),
                             ),
                             if (ep.isFiller) ...[
                               const SizedBox(width: 6),
                               const _FillerBadge(),
                             ],
-                            if (ep.dubStatus != DubStatus.none) ...[
+                            if (ep.dubStatus != DubStatus.none &&
+                                !isStandaloneEpisodeLabel(ep.serverName)) ...[
                               const SizedBox(width: 6),
                               _DubBadge(
                                 dubStatus: ep.dubStatus,
@@ -572,22 +580,22 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                             ],
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          ep.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: widget.isCurrent
-                                ? HotstarPlayerStyle.primaryText
-                                : HotstarPlayerStyle.secondaryText,
-                            fontSize: 14,
-                            fontWeight: widget.isCurrent
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                            shadows: _kGlassTextShadow,
+                        if (realEpisodeTitle(ep.name).isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            realEpisodeTitle(ep.name),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: widget.isCurrent
+                                  ? accent
+                                  : HotstarPlayerStyle.mutedText,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              shadows: _kGlassTextShadow,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

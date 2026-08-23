@@ -60,6 +60,7 @@ class WatchHistory extends _$WatchHistory {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodeServerName,
     String? episodePosterUrl,
   }) async {
     final repository = ref.read(historyRepositoryProvider);
@@ -69,6 +70,7 @@ class WatchHistory extends _$WatchHistory {
       season: season,
       episode: episode,
       episodeTitle: episodeTitle,
+      episodeServerName: episodeServerName,
       episodePosterUrl: episodePosterUrl,
     );
     refresh();
@@ -83,6 +85,7 @@ class WatchHistory extends _$WatchHistory {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodeServerName,
     String? episodePosterUrl,
   }) async {
 
@@ -104,6 +107,7 @@ class WatchHistory extends _$WatchHistory {
       season: season,
       episode: episode,
       episodeTitle: episodeTitle,
+      episodeServerName: episodeServerName,
       episodePosterUrl: episodePosterUrl,
     );
     ref.read(continueWatchingProvider.notifier).refresh();
@@ -146,6 +150,7 @@ class ContinueWatchingNotifier extends Notifier<List<HistoryItem>> {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodeServerName,
     String? episodePosterUrl,
   }) async {
     await ref.read(historyRepositoryProvider).saveContinueWatchingProgress(
@@ -157,6 +162,7 @@ class ContinueWatchingNotifier extends Notifier<List<HistoryItem>> {
       season: season,
       episode: episode,
       episodeTitle: episodeTitle,
+      episodeServerName: episodeServerName,
       episodePosterUrl: episodePosterUrl,
     );
     refresh();

@@ -231,4 +231,55 @@ void main() {
       );
     });
   });
+
+  group('continueWatching labels', () {
+    test('does not duplicate creative title as primary and secondary', () {
+      expect(
+        continueWatchingPrimaryLabel(
+          episode: 12,
+          isArabic: true,
+          episodeTitle: 'تتطور الزنزانة',
+        ),
+        'حلقة 12',
+      );
+      expect(
+        continueWatchingSecondaryTitle(episodeTitle: 'تتطور الزنزانة'),
+        'تتطور الزنزانة',
+      );
+    });
+
+    test('keeps والأخيرة from serverName', () {
+      expect(
+        continueWatchingPrimaryLabel(
+          episode: 12,
+          isArabic: true,
+          episodeTitle: 'تتطور الزنزانة',
+          episodeServerName: 'الحلقة 12 والأخيرة',
+        ),
+        'حلقة 12 والأخيرة',
+      );
+      expect(
+        continueWatchingSecondaryTitle(
+          episodeTitle: 'تتطور الزنزانة',
+          episodeServerName: 'الحلقة 12 والأخيرة',
+        ),
+        'تتطور الزنزانة',
+      );
+    });
+
+    test('shows مترجم as primary without secondary', () {
+      expect(
+        continueWatchingPrimaryLabel(
+          episode: 1,
+          isArabic: true,
+          episodeServerName: 'مترجم',
+        ),
+        'مترجم',
+      );
+      expect(
+        continueWatchingSecondaryTitle(episodeServerName: 'مترجم'),
+        '',
+      );
+    });
+  });
 }

@@ -142,17 +142,19 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
 
     final episodeNumber = widget.historyItem.episode;
     final episodeTitleRaw = widget.historyItem.episodeTitle ?? '';
-    final episodeTitle = realEpisodeTitle(episodeTitleRaw);
-    final hasServerNumber = episodeNumber != null && episodeNumber > 0;
-    final hasServerName = episodeTitle.isNotEmpty;
-    final episodeNumberLabel = formatEpisodePrimaryLabel(
-      episode: episodeNumber ?? 0,
+    final episodeServerName = widget.historyItem.episodeServerName ?? '';
+    final primaryLabel = continueWatchingPrimaryLabel(
+      episode: episodeNumber,
       isArabic: true,
-      serverName: episodeTitleRaw,
+      episodeTitle: episodeTitleRaw,
+      episodeServerName: episodeServerName,
     );
-    final primaryLabel = episodeNumberLabel.isNotEmpty
-        ? episodeNumberLabel
-        : (hasServerNumber ? 'حلقة $episodeNumber' : '');
+    final secondaryTitle = continueWatchingSecondaryTitle(
+      episodeTitle: episodeTitleRaw,
+      episodeServerName: episodeServerName,
+    );
+    final hasPrimaryLabel = primaryLabel.isNotEmpty;
+    final hasSecondaryTitle = secondaryTitle.isNotEmpty;
     return CardsWrapper(
       onTap: () async {
         if (isLivestream) {
@@ -337,7 +339,12 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                   left: 0,
                   right: 0,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 10),
+                    padding: EdgeInsets.fromLTRB(
+                      12,
+                      24,
+                      12,
+                      hasSecondaryTitle ? 10 : 12,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -353,7 +360,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: hasSecondaryTitle ? 2 : 4),
                         ],
                         if (isLivestream)
                           Container(
@@ -368,8 +375,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                               ),
                             ),
                             child: Text(
-                              appText(context, english: 'LIVE', arabic: 'ÙØ¨Ø§Ø´Ø±'),
-                              style: TextStyle(
+                              appText(context, english: 'LIVE', arabic: 'مباشر'),
+                              style: const TextStyle(
                                 color: Colors.red,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -377,13 +384,34 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                               ),
                             ),
                           )
-                        else
+                        else if (hasPrimaryLabel || hasSecondaryTitle) ...[
+                          if (hasPrimaryLabel)
+                            Text(
+                              primaryLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          if (hasSecondaryTitle) ...[
+                            if (hasPrimaryLabel) const SizedBox(height: 2),
+                            Text(
+                              secondaryTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.62),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ] else
                           Text(
-                            primaryLabel.isNotEmpty
-                                ? (hasServerName
-                                    ? '$primaryLabel\n$episodeTitle'
-                                    : primaryLabel)
-                                : (hasServerName ? episodeTitle : item.title),
+                            item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

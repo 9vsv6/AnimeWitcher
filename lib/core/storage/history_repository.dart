@@ -18,6 +18,7 @@ class HistoryItem {
   final int? season;
   final int? episode;
   final String? episodeTitle;
+  final String? episodeServerName;
   final String? episodePosterUrl;
   final int timestamp;
 
@@ -30,6 +31,7 @@ class HistoryItem {
     this.season,
     this.episode,
     this.episodeTitle,
+    this.episodeServerName,
     this.episodePosterUrl,
     required this.timestamp,
     this.progressPercentage,
@@ -68,6 +70,7 @@ class HistoryItem {
       season: map['season'] as int?,
       episode: map['episode'] as int?,
       episodeTitle: map['episodeTitle'] as String?,
+      episodeServerName: map['episodeServerName'] as String?,
       episodePosterUrl: map['episodePosterUrl'] as String?,
       timestamp: (map['timestamp'] as int?) ?? 0,
     );
@@ -101,6 +104,7 @@ class HistoryRepository {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodeServerName,
     String? episodePosterUrl,
   }) {
     return saveContinueWatchingProgress(
@@ -112,6 +116,7 @@ class HistoryRepository {
       season: season,
       episode: episode,
       episodeTitle: episodeTitle,
+      episodeServerName: episodeServerName,
       episodePosterUrl: episodePosterUrl,
     );
   }
@@ -162,6 +167,7 @@ class HistoryRepository {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodeServerName,
     String? episodePosterUrl,
   }) async {
     await _storageService.recordHistoryOpen(
@@ -170,6 +176,7 @@ class HistoryRepository {
       season: season,
       episode: episode,
       episodeTitle: episodeTitle,
+      episodeServerName: episodeServerName,
       episodePosterUrl: episodePosterUrl,
     );
     _syncInBackground(
@@ -187,6 +194,7 @@ class HistoryRepository {
     int? season,
     int? episode,
     String? episodeTitle,
+    String? episodeServerName,
     String? episodePosterUrl,
   }) async {
     await _storageService.saveContinueWatchingProgress(
@@ -198,6 +206,7 @@ class HistoryRepository {
       season: season,
       episode: episode,
       episodeTitle: episodeTitle,
+      episodeServerName: episodeServerName,
       episodePosterUrl: episodePosterUrl,
     );
     _syncInBackground(

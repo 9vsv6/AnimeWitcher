@@ -8,6 +8,7 @@ import '../downloaded_file_provider.dart';
 
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
 import 'package:skystream/core/storage/history_repository.dart';
+import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/shared/widgets/custom_widgets.dart';
 import '../details_controller.dart';
@@ -18,6 +19,20 @@ import 'download_progress_dialog.dart';
 import 'download_management_dialog.dart';
 import 'episode_card.dart';
 import 'package:skystream/core/providers/device_info_provider.dart';
+
+bool _shouldFilterEpisodesByDub(DetailsState detailsState, List<Episode> episodes) {
+  if (detailsState.isMovie || detailsState.selectedDubStatus == DubStatus.none) {
+    return false;
+  }
+  final isStandaloneCatalog = episodes.isNotEmpty &&
+      episodes.every(
+        (episode) =>
+            isStandaloneEpisodeLabel(episode.serverName) ||
+            isStandaloneEpisodeLabel(episode.name),
+      );
+  return !isStandaloneCatalog;
+}
+
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
@@ -402,7 +417,7 @@ class SliverDetailsDesktopEpisodeGrid extends ConsumerWidget {
     }
 
     // Apply Language Filter
-    if (detailsState.selectedDubStatus != DubStatus.none) {
+    if (_shouldFilterEpisodesByDub(detailsState, episodes)) {
       episodes = episodes
           .where((e) => e.dubStatus == detailsState.selectedDubStatus)
           .toList();
@@ -538,7 +553,7 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
     }
 
     // Apply Language Filter
-    if (detailsState.selectedDubStatus != DubStatus.none) {
+    if (_shouldFilterEpisodesByDub(detailsState, episodes)) {
       episodes = episodes
           .where((e) => e.dubStatus == detailsState.selectedDubStatus)
           .toList();
@@ -598,14 +613,25 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detailsState = ref.watch(detailsControllerProvider(itemUrl));
     final bool isAscending = detailsState.isAscending;
-    final DubStatus selectedDub = detailsState.selectedDubStatus;
 
     final allEpisodes =
         detailsState.seasonMap[detailsState.selectedSeason] ?? [];
 
+    // Movies (and AnimeWitcher مترجم/مدبلج catalogs) list every variant as its
+    // own row. Do not show a ترجمة/دبلجة filter that would hide half of them.
+    final isStandaloneCatalog = allEpisodes.isNotEmpty &&
+        allEpisodes.every(
+          (episode) =>
+              isStandaloneEpisodeLabel(episode.serverName) ||
+              isStandaloneEpisodeLabel(episode.name),
+        );
     final hasDub = allEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
     final hasSub = allEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
-    final isMixed = hasDub && hasSub;
+    final showLanguageToggle = !detailsState.isMovie &&
+        !isStandaloneCatalog &&
+        hasDub &&
+        hasSub;
+    final selectedDub = detailsState.selectedDubStatus;
 
     return SizedBox(
       height: 40,
@@ -613,7 +639,7 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (isMixed) ...[
+          if (showLanguageToggle) ...[
             _buildLanguageToggle(context, ref, selectedDub),
             const SizedBox(width: 8),
           ],
@@ -910,7 +936,7 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
 
     if (episodes.isEmpty) return const SizedBox.shrink();
 
-    if (detailsState.selectedDubStatus != DubStatus.none) {
+    if (_shouldFilterEpisodesByDub(detailsState, episodes)) {
       episodes = episodes
           .where(
             (episode) => episode.dubStatus == detailsState.selectedDubStatus,

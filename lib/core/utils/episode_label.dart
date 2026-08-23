@@ -162,3 +162,58 @@ String episodeTitleForStorage({
   }
   return '';
 }
+
+/// Primary label for continue-watching / history cards.
+///
+/// Prefer [episodeServerName] from AnimeWitcher. Fall back to markers that were
+/// previously stored in [episodeTitle], otherwise build "حلقة N".
+String continueWatchingPrimaryLabel({
+  required int? episode,
+  required bool isArabic,
+  String? episodeTitle,
+  String? episodeServerName,
+}) {
+  final number = episode ?? 0;
+  final server = (episodeServerName ?? '').trim();
+  if (server.isNotEmpty) {
+    return formatEpisodePrimaryLabel(
+      episode: number,
+      isArabic: isArabic,
+      serverName: server,
+      isFinal: hasFinalEpisodeSuffix(server),
+    );
+  }
+
+  final stored = (episodeTitle ?? '').trim();
+  if (stored.isNotEmpty &&
+      (isGenericEpisodeTitle(stored) ||
+          isStandaloneEpisodeLabel(stored) ||
+          hasFinalEpisodeSuffix(stored))) {
+    return formatEpisodePrimaryLabel(
+      episode: number,
+      isArabic: isArabic,
+      serverName: stored,
+      isFinal: hasFinalEpisodeSuffix(stored),
+    );
+  }
+
+  if (number > 0) {
+    return formatEpisodeNumberLabel(episode: number, isArabic: isArabic);
+  }
+  return '';
+}
+
+/// Secondary creative title for continue-watching / history cards.
+String continueWatchingSecondaryTitle({
+  String? episodeTitle,
+  String? episodeServerName,
+}) {
+  final stored = (episodeTitle ?? '').trim();
+  if (stored.isEmpty) return '';
+  if (isGenericEpisodeTitle(stored) || isStandaloneEpisodeLabel(stored)) {
+    return '';
+  }
+  final server = (episodeServerName ?? '').trim();
+  if (server.isNotEmpty && stored == server) return '';
+  return realEpisodeTitle(stored);
+}
