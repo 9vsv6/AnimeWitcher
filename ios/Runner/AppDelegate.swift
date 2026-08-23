@@ -1568,24 +1568,43 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
 
   private func apply(arguments: Any?) {
     guard let values = arguments as? [String: Any] else { return }
+    let invisibleAnchor = values["invisibleAnchor"] as? Bool ?? false
     let systemName = values["systemImage"] as? String ?? "arrow.up.arrow.down"
     let tintColor = skyStreamUIColor(values["tintColor"], fallback: .label)
-    let image = UIImage(
-      systemName: systemName,
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-    )?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
     let title = (values["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-    skyStreamConfigureGlassButton(button, image: image, foreground: tintColor)
-    button.tintColor = tintColor
-    if #available(iOS 15.0, *), var configuration = button.configuration {
-      configuration.title = (title?.isEmpty == false) ? title : nil
-      configuration.imagePadding = (title?.isEmpty == false) ? 8 : 0
-      configuration.contentInsets = (title?.isEmpty == false)
-        ? NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14)
-        : .zero
-      button.configuration = configuration
+
+    if invisibleAnchor {
+      if #available(iOS 15.0, *) {
+        var configuration = UIButton.Configuration.plain()
+        configuration.baseBackgroundColor = .clear
+        configuration.background.backgroundColor = .clear
+        configuration.contentInsets = .zero
+        configuration.image = nil
+        configuration.title = nil
+        button.configuration = configuration
+      } else {
+        button.setImage(nil, for: .normal)
+        button.setTitle(nil, for: .normal)
+      }
+      button.backgroundColor = .clear
+      button.tintColor = tintColor
     } else {
-      button.setTitle((title?.isEmpty == false) ? title : nil, for: .normal)
+      let image = UIImage(
+        systemName: systemName,
+        withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+      )?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
+      skyStreamConfigureGlassButton(button, image: image, foreground: tintColor)
+      button.tintColor = tintColor
+      if #available(iOS 15.0, *), var configuration = button.configuration {
+        configuration.title = (title?.isEmpty == false) ? title : nil
+        configuration.imagePadding = (title?.isEmpty == false) ? 8 : 0
+        configuration.contentInsets = (title?.isEmpty == false)
+          ? NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14)
+          : .zero
+        button.configuration = configuration
+      } else {
+        button.setTitle((title?.isEmpty == false) ? title : nil, for: .normal)
+      }
     }
     button.semanticContentAttribute = (values["isRtl"] as? Bool == true)
       ? .forceRightToLeft
