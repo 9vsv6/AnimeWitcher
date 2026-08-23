@@ -19,6 +19,9 @@ import 'download_progress_dialog.dart';
 import 'download_management_dialog.dart';
 import 'episode_card.dart';
 import 'package:skystream/core/providers/device_info_provider.dart';
+import 'package:skystream/core/utils/responsive_breakpoints.dart';
+import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:skystream/core/utils/localized_text.dart';
 
 bool _shouldFilterEpisodesByDub(DetailsState detailsState, List<Episode> episodes) {
   if (detailsState.isMovie || detailsState.selectedDubStatus == DubStatus.none) {
@@ -33,10 +36,6 @@ bool _shouldFilterEpisodesByDub(DetailsState detailsState, List<Episode> episode
   return !isStandaloneCatalog;
 }
 
-import 'package:skystream/core/utils/responsive_breakpoints.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
-
-import 'package:skystream/core/utils/localized_text.dart';
 class DetailsSeasonListWrapper extends ConsumerWidget {
   const DetailsSeasonListWrapper({super.key, required this.itemUrl});
   final String itemUrl;

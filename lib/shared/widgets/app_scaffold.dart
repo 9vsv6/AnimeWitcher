@@ -50,6 +50,10 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
     );
     final isAtDefaultHome = widget.navigationShell.currentIndex == defaultIndex;
 
+    final bottomInset = CustomBottomNavBar.bottomInsetFor(context);
+    final navBarTotalHeight = CustomBottomNavBar.height + bottomInset;
+    final mq = MediaQuery.of(context);
+
     return PopScope(
       canPop: isAtDefaultHome,
       onPopInvokedWithResult: (didPop, result) {
@@ -60,7 +64,17 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         extendBody: true,
-        body: widget.navigationShell,
+        body: MediaQuery(
+          data: mq.copyWith(
+            padding: mq.padding.copyWith(
+              bottom: mq.padding.bottom + navBarTotalHeight,
+            ),
+            viewPadding: mq.viewPadding.copyWith(
+              bottom: mq.viewPadding.bottom + navBarTotalHeight,
+            ),
+          ),
+          child: widget.navigationShell,
+        ),
         bottomNavigationBar: CustomBottomNavBar.usesNativeAppleTabBar
             ? CustomBottomNavBar(
                 currentBranchIndex: widget.navigationShell.currentIndex,
@@ -72,7 +86,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                 padding: EdgeInsets.only(
                   left: 24,
                   right: 24,
-                  bottom: CustomBottomNavBar.bottomInsetFor(context),
+                  bottom: bottomInset,
                 ),
                 child: CustomBottomNavBar(
                   currentBranchIndex: widget.navigationShell.currentIndex,
