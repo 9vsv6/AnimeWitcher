@@ -36,9 +36,10 @@ class DownloadLauncher {
     BuildContext context,
     MultimediaItem item, {
     String? episodeUrl,
+    Episode? episode,
   }) async {
     final l10n = AppLocalizations.of(context)!;
-    final resolveUrl = episodeUrl ?? item.url;
+    final resolveUrl = episodeUrl ?? episode?.url ?? item.url;
     if (resolveUrl.isEmpty) return;
 
     final manager = _ref.read(extensionManagerProvider.notifier);
@@ -124,7 +125,13 @@ class DownloadLauncher {
         stream = resolved.first;
       }
 
-      await _verifyAndDownload(context, stream, item, resolveUrl);
+      await _verifyAndDownload(
+        context,
+        stream,
+        item,
+        resolveUrl,
+        episode: episode,
+      );
     } catch (e) {
       if (!context.mounted) return;
       if (!isCanceled && !dialogDismissed) {
@@ -151,8 +158,9 @@ class DownloadLauncher {
     BuildContext context,
     StreamResult stream,
     MultimediaItem item,
-    String resolveUrl,
-  ) async {
+    String resolveUrl, {
+    Episode? episode,
+  }) async {
     final l10n = AppLocalizations.of(context)!;
     final downloadService = _ref.read(downloadServiceProvider);
 
@@ -220,6 +228,7 @@ class DownloadLauncher {
           stream,
           item,
           resolveUrl,
+          episode: episode,
         );
       }
       return;
@@ -254,10 +263,12 @@ class DownloadLauncher {
                 onPressed: () async {
                   Navigator.pop(ctx);
 
-                  // Finalize path and filename
-                  final episodeData = item.episodes?.firstWhereOrNull(
-                    (e) => e.url == resolveUrl,
-                  );
+                  // Prefer the episode from the card (has isFinal/serverName).
+                  // Fall back to item.episodes when launching without one.
+                  final episodeData = episode ??
+                      item.episodes?.firstWhereOrNull(
+                        (e) => e.url == resolveUrl,
+                      );
                   final saveDir = await downloadService.getDownloadPath(
                     item,
                     episode: episodeData,
@@ -269,19 +280,25 @@ class DownloadLauncher {
                   );
                   String filename;
                   if (episodeData != null &&
-                      item.contentType != MultimediaContentType.movie) {
-                    final episodeLabel = formatEpisodeFileName(
-                      episode: episodeData.episode,
-                      title: episodeData.name,
-                      quality: stream.quality,
-                      isFinal: episodeData.isFinal,
-                      serverName: episodeData.serverName,
+                      usesEpisodeDownloadFileName(
+                        episode: episodeData.episode,
+                        title: episodeData.name,
+                        serverName: episodeData.serverName,
+                      )) {
+                    final episodeLabel = sanitizeDownloadFileName(
+                      formatEpisodeFileName(
+                        episode: episodeData.episode,
+                        title: episodeData.name,
+                        quality: stream.quality,
+                        isFinal: episodeData.isFinal,
+                        serverName: episodeData.serverName,
+                      ),
                     );
                     filename = '$episodeLabel$extension';
                   } else {
-                    final sanitizedTitle = item.title
-                        .replaceAll(RegExp(r'[^\w\s-]'), '')
-                        .trim();
+                    final sanitizedTitle = sanitizeDownloadFileName(
+                      item.title.replaceAll(RegExp(r'[^\w\s-]'), '').trim(),
+                    );
                     filename = "$sanitizedTitle$extension";
                   }
 
@@ -327,8 +344,9 @@ class DownloadLauncher {
     String message,
     StreamResult stream,
     MultimediaItem item,
-    String resolveUrl,
-  ) {
+    String resolveUrl, {
+    Episode? episode,
+  }) {
     final l10n = AppLocalizations.of(context)!;
     showDialog<void>(
       context: context,
@@ -347,6 +365,7 @@ class DownloadLauncher {
                 context,
                 item,
                 episodeUrl: resolveUrl,
+                episode: episode,
               ); // Go back to source picker
             },
             child: Text(l10n.selectAnotherSource),
