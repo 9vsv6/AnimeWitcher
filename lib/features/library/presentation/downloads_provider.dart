@@ -62,7 +62,7 @@ class DownloadsNotifier extends _$DownloadsNotifier {
 
       var status = record.status;
       var progress = record.progress;
-      if (status == TaskStatus.failed) {
+      if (status == TaskStatus.failed || status == TaskStatus.notFound) {
         status = TaskStatus.paused;
         if (progress < 0 || progress > 1) progress = 0.0;
         unawaited(
@@ -128,12 +128,14 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       }
 
       if (newStatus == TaskStatus.canceled) {
-        // Remove from list if canceled
+        // Remove from list only on explicit user cancel.
         final newList = List<DownloadItem>.from(currentList)..removeAt(index);
         state = AsyncData(newList);
       } else {
-        // Failures are treated like a user pause so the download stays resumable.
-        if (newStatus == TaskStatus.failed) {
+        // Failures are remapped to paused by DownloadService before broadcast,
+        // but keep this guard so a raw failed event can never wipe the row.
+        if (newStatus == TaskStatus.failed ||
+            newStatus == TaskStatus.notFound) {
           newStatus = TaskStatus.paused;
         }
         final updatedItem = DownloadItem(
@@ -156,9 +158,11 @@ class DownloadsNotifier extends _$DownloadsNotifier {
   }
 
   Future<void> removeDownload(DownloadItem item) async {
+    final trackingUrl =
+        item.task.metaData.isNotEmpty ? item.task.metaData : item.task.url;
     await ref
         .read(downloadServiceProvider)
-        .cancelDownload(item.task.taskId, item.task.url);
+        .cancelDownload(item.task.taskId, trackingUrl);
     await FileDownloader().database.deleteRecordWithId(item.task.taskId);
     await ref
         .read(storageServiceProvider)
@@ -183,9 +187,11 @@ class DownloadsNotifier extends _$DownloadsNotifier {
 
   Future<void> removeDownloads(List<DownloadItem> items) async {
     for (final item in items) {
+      final trackingUrl =
+          item.task.metaData.isNotEmpty ? item.task.metaData : item.task.url;
       await ref
           .read(downloadServiceProvider)
-          .cancelDownload(item.task.taskId, item.task.url);
+          .cancelDownload(item.task.taskId, trackingUrl);
       await FileDownloader().database.deleteRecordWithId(item.task.taskId);
       await ref
           .read(storageServiceProvider)

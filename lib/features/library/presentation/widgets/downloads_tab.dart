@@ -81,7 +81,9 @@ class _DownloadsTabState extends ConsumerState<DownloadsTab>
 
             if (groupItems.length == 1) {
               final download = groupItems.first;
-              final trackingUrl = download.task.metaData;
+              final trackingUrl = download.task.metaData.isNotEmpty
+                  ? download.task.metaData
+                  : download.task.url;
               final progressData = activeProgress[trackingUrl];
               final double displayProgress =
                   progressData?.progress ?? download.progress;
@@ -127,7 +129,9 @@ class _GroupedDownloadTile extends ConsumerWidget {
 
     // Calculate overall progress or status
     final completedCount = items.where((i) {
-      final status = activeProgress[i.task.metaData]?.status ?? i.status;
+      final trackingUrl =
+          i.task.metaData.isNotEmpty ? i.task.metaData : i.task.url;
+      final status = activeProgress[trackingUrl]?.status ?? i.status;
       return status == TaskStatus.complete;
     }).length;
 
@@ -218,7 +222,9 @@ class _GroupedDownloadTile extends ConsumerWidget {
           final download = entry.value;
           final isLast = entry.key == items.length - 1;
 
-          final trackingUrl = download.task.metaData;
+          final trackingUrl = download.task.metaData.isNotEmpty
+              ? download.task.metaData
+              : download.task.url;
           final progressData = activeProgress[trackingUrl];
           final double displayProgress =
               progressData?.progress ?? download.progress;
@@ -310,8 +316,13 @@ class _DownloadItemTile extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final isDone = status == TaskStatus.complete;
     final isWorking =
-        status == TaskStatus.running || status == TaskStatus.enqueued;
-    final isPaused = status == TaskStatus.paused;
+        status == TaskStatus.running ||
+        status == TaskStatus.enqueued ||
+        status == TaskStatus.waitingToRetry;
+    final isPaused =
+        status == TaskStatus.paused ||
+        status == TaskStatus.failed ||
+        status == TaskStatus.notFound;
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final episodeLabel = item.episode == null
@@ -563,12 +574,12 @@ class _DownloadItemTile extends ConsumerWidget {
       case TaskStatus.complete:
         return l10n.statusFinished;
       case TaskStatus.failed:
-        return l10n.statusFailed;
-      case TaskStatus.canceled:
-        return l10n.statusCanceled;
+      case TaskStatus.notFound:
       case TaskStatus.paused:
         return l10n.statusPaused;
-      default:
+      case TaskStatus.canceled:
+        return l10n.statusCanceled;
+      case TaskStatus.waitingToRetry:
         return l10n.statusWaiting;
     }
   }
