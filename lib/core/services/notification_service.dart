@@ -10,7 +10,7 @@ NotificationService notificationService(Ref ref) {
   return NotificationService();
 }
 
-enum ToastType { info, success, error, extension }
+enum ToastType { info, success, error }
 
 class ToastItem {
   final String id;
@@ -38,8 +38,7 @@ class ToastItem {
   }) : createdAt = createdAt ?? DateTime.now();
 }
 
-/// A global service to manage UI notifications (Material 3 Expressive Toasts & SnackBars)
-/// without needing a [BuildContext].
+/// Global toast notifications without needing a [BuildContext] at call sites.
 class NotificationService extends ChangeNotifier {
   final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -155,47 +154,13 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
-  void showExtension(
-    String message, {
-    String? title,
-    IconData? icon,
-    Widget? leading,
-    Duration duration = const Duration(milliseconds: 3200),
-  }) {
-    showToast(
-      title: title,
-      message: message,
-      type: ToastType.extension,
-      icon: icon ?? Icons.extension_rounded,
-      leading: leading,
-      duration: duration,
-    );
-  }
-
-  void showSnackBar(
-    String message, {
-    Color? backgroundColor,
-    Duration duration = const Duration(seconds: 4),
-    SnackBarAction? action,
-    bool isError = false,
-  }) {
-    showToast(
-      message: message,
-      type: isError ? ToastType.error : ToastType.info,
-      duration: duration,
-      onAction: action?.onPressed,
-      actionLabel: action?.label,
-    );
-  }
-
-  void clearSnackBars() {
+  void clearToasts() {
     for (final timer in _dismissTimers.values) {
       timer.cancel();
     }
     _dismissTimers.clear();
     _toasts.clear();
     notifyListeners();
-    messengerKey.currentState?.clearSnackBars();
   }
 }
 

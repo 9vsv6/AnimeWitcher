@@ -203,8 +203,6 @@ class _M3ToastCardState extends State<_M3ToastCard>
         return const Color(0xFF81C784);
       case ToastType.error:
         return const Color(0xFFEF5350);
-      case ToastType.extension:
-        return const Color(0xFFD0BCFF);
       case ToastType.info:
         return theme.colorScheme.primary;
     }
@@ -217,8 +215,6 @@ class _M3ToastCardState extends State<_M3ToastCard>
         return Icons.check_rounded;
       case ToastType.error:
         return Icons.close_rounded;
-      case ToastType.extension:
-        return Icons.extension_rounded;
       case ToastType.info:
         return Icons.info_rounded;
     }

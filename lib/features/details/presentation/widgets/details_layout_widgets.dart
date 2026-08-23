@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:background_downloader/background_downloader.dart';
@@ -27,13 +28,10 @@ bool _shouldFilterEpisodesByDub(DetailsState detailsState, List<Episode> episode
   if (detailsState.isMovie || detailsState.selectedDubStatus == DubStatus.none) {
     return false;
   }
-  final isStandaloneCatalog = episodes.isNotEmpty &&
-      episodes.every(
-        (episode) =>
-            isStandaloneEpisodeLabel(episode.serverName) ||
-            isStandaloneEpisodeLabel(episode.name),
-      );
-  return !isStandaloneCatalog;
+  return !isStandaloneEpisodeCatalog([
+    for (final episode in episodes)
+      (serverName: episode.serverName, name: episode.name),
+  ]);
 }
 
 class DetailsSeasonListWrapper extends ConsumerWidget {
@@ -618,12 +616,10 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
 
     // Movies (and AnimeWitcher مترجم/مدبلج catalogs) list every variant as its
     // own row. Do not show a ترجمة/دبلجة filter that would hide half of them.
-    final isStandaloneCatalog = allEpisodes.isNotEmpty &&
-        allEpisodes.every(
-          (episode) =>
-              isStandaloneEpisodeLabel(episode.serverName) ||
-              isStandaloneEpisodeLabel(episode.name),
-        );
+    final isStandaloneCatalog = isStandaloneEpisodeCatalog([
+      for (final episode in allEpisodes)
+        (serverName: episode.serverName, name: episode.name),
+    ]);
     final hasDub = allEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
     final hasSub = allEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
     final showLanguageToggle = !detailsState.isMovie &&
@@ -863,7 +859,7 @@ class DetailsProviderChip extends ConsumerWidget {
               ),
               child: Text(
                 appText(context, english: 'DEBUG', arabic: 'تصحيح'),
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 8,
                   fontWeight: FontWeight.bold,
@@ -998,7 +994,7 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
                 child: ListView.separated(
                   primary: false,
                   padding: EdgeInsets.zero,
-                  cacheExtent: 700,
+                  scrollCacheExtent: const ScrollCacheExtent.pixels(700),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   itemCount: rowCount,

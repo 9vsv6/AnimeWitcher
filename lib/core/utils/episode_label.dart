@@ -53,6 +53,26 @@ bool isStandaloneEpisodeLabel(String? value) {
   ).hasMatch(title);
 }
 
+/// True when an episode row is a مترجم/مدبلج-style catalog entry.
+bool isStandaloneEpisodeEntry({String? serverName, String? name}) {
+  return isStandaloneEpisodeLabel(serverName) ||
+      isStandaloneEpisodeLabel(name);
+}
+
+/// True when every episode is a مترجم/مدبلج-style row (hide sub/dub filter).
+bool isStandaloneEpisodeCatalog(
+  Iterable<({String? serverName, String? name})> episodes,
+) {
+  final list = episodes.toList(growable: false);
+  if (list.isEmpty) return false;
+  return list.every(
+    (episode) => isStandaloneEpisodeEntry(
+      serverName: episode.serverName,
+      name: episode.name,
+    ),
+  );
+}
+
 /// Real creative title only; empty when missing or generic/standalone labels.
 String realEpisodeTitle(String? title) {
   final value = (title ?? '').trim();
