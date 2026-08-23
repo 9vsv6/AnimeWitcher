@@ -738,16 +738,18 @@ class DownloadService {
     final directory = Directory(directoryPath);
     if (!await directory.exists()) return null;
 
-    final sanitizedTitle = item.title
-        .replaceAll(RegExp(r'[^\w\s-]'), '')
-        .trim();
+    final sanitizedTitle = sanitizeDownloadFileName(
+      item.title.replaceAll(RegExp(r'[^\w\s-]'), '').trim(),
+    );
     final String baseName;
     if (episode != null && item.contentType != MultimediaContentType.movie) {
-      baseName = formatEpisodeFileName(
-        episode: episode.episode,
-        title: episode.name,
-        isFinal: episode.isFinal,
-        serverName: episode.serverName,
+      baseName = sanitizeDownloadFileName(
+        formatEpisodeFileName(
+          episode: episode.episode,
+          title: episode.name,
+          isFinal: episode.isFinal,
+          serverName: episode.serverName,
+        ),
       );
     } else {
       baseName = sanitizedTitle;
@@ -762,13 +764,21 @@ class DownloadService {
     }
     if (episode != null && item.contentType != MultimediaContentType.movie) {
       final prefix = '$baseName (';
+      File? episodeMatch;
       await for (final entity in directory.list()) {
         if (entity is! File) continue;
         final name = p.basename(entity.path);
-        if (!name.startsWith(prefix)) continue;
         if (!extensions.any(name.toLowerCase().endsWith)) continue;
-        if (await entity.length() > 0) return entity;
+        if (await entity.length() <= 0) continue;
+        if (name.startsWith(prefix)) return entity;
+        // Fall back to episode-number match so "حلقة 12" and
+        // "حلقة 12 والأخيرة" (with optional quality) resolve the same file.
+        if (episodeMatch == null &&
+            isDownloadedEpisodeFileName(name, episode.episode)) {
+          episodeMatch = entity;
+        }
       }
+      if (episodeMatch != null) return episodeMatch;
     }
     return null;
   }

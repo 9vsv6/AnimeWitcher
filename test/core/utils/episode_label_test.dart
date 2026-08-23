@@ -229,14 +229,44 @@ void main() {
         ),
         'حلقة 12 والأخيرة',
       );
-      // Without isFinal/serverName the download used to drop والأخيرة.
+      // Generic titles that already include والأخيرة still keep it even when
+      // isFinal/serverName were not passed through.
       expect(
         formatEpisodeFileName(
           episode: 12,
           title: 'الحلقة 12 والأخيرة',
         ),
-        'حلقة 12',
+        'حلقة 12 والأخيرة',
       );
+      expect(
+        sanitizeDownloadFileName(
+          formatEpisodeFileName(
+            episode: 12,
+            title: 'نهاية الرحلة',
+            isFinal: true,
+            quality: '1080p',
+          ),
+        ),
+        'حلقة 12 والأخيرة_ نهاية الرحلة (1080p)',
+      );
+    });
+
+    test('isDownloadedEpisodeFileName matches final and quality variants', () {
+      expect(isDownloadedEpisodeFileName('حلقة 12.mp4', 12), isTrue);
+      expect(
+        isDownloadedEpisodeFileName('حلقة 12 والأخيرة.mp4', 12),
+        isTrue,
+      );
+      expect(
+        isDownloadedEpisodeFileName('حلقة 12 والأخيرة (720p).mkv', 12),
+        isTrue,
+      );
+      expect(
+        isDownloadedEpisodeFileName('حلقة 12 والأخيرة_ نهاية الرحلة.mp4', 12),
+        isTrue,
+      );
+      expect(isDownloadedEpisodeFileName('حلقة 120.mp4', 12), isFalse);
+      expect(isDownloadedEpisodeFileName('حلقة 11 والأخيرة.mp4', 12), isFalse);
     });
   });
 

@@ -281,6 +281,9 @@ class DetailsActionButtons extends HookConsumerWidget {
                           context,
                           details ?? item,
                           episodeUrl: episodeUrl,
+                          episode: details?.episodes?.firstWhereOrNull(
+                            (e) => e.url == episodeUrl,
+                          ),
                         );
                   },
             child: Padding(

@@ -157,15 +157,39 @@ String formatEpisodeLabel({
   String? serverName,
 }) {
   final serverTitle = realEpisodeTitle(title);
+  // Prefer AnimeWitcher serverName; if missing, a generic title like
+  // "الحلقة 12 والأخيرة" still carries the final-episode marker for downloads.
+  final resolvedServerName = () {
+    final server = (serverName ?? '').trim();
+    if (server.isNotEmpty) return server;
+    final rawTitle = (title ?? '').trim();
+    if (rawTitle.isNotEmpty && isGenericEpisodeTitle(rawTitle)) {
+      return rawTitle;
+    }
+    return null;
+  }();
   final prefix = formatEpisodePrimaryLabel(
     episode: episode,
     isArabic: isArabic,
-    isFinal: isFinal,
-    serverName: serverName,
+    isFinal: isFinal ||
+        hasFinalEpisodeSuffix(resolvedServerName) ||
+        hasFinalEpisodeSuffix(title),
+    serverName: resolvedServerName,
   );
   if (episode <= 0 && prefix.isEmpty) return serverTitle;
   if (prefix.isEmpty) return serverTitle;
   return serverTitle.isEmpty ? prefix : '$prefix: $serverTitle';
+}
+
+/// Characters that break or get rewritten on common mobile filesystems.
+final RegExp _illegalDownloadFileChars = RegExp(r'[\\/:*?"<>|]');
+
+/// Sanitize a display label into a stable on-disk filename stem.
+String sanitizeDownloadFileName(String name) {
+  return name
+      .replaceAll(_illegalDownloadFileChars, '_')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 }
 
 String formatEpisodeFileName({
@@ -184,6 +208,27 @@ String formatEpisodeFileName({
   );
   final normalizedQuality = quality?.trim() ?? '';
   return normalizedQuality.isEmpty ? base : '$base ($normalizedQuality)';
+}
+
+/// True when [fileName] is a downloaded episode file for [episode] number.
+///
+/// Accepts both `حلقة 12` and `حلقة 12 والأخيرة`, with optional creative
+/// title and quality suffix, including filenames where `:` became `_`.
+bool isDownloadedEpisodeFileName(String fileName, int episode) {
+  if (episode <= 0) return false;
+  final stem = sanitizeDownloadFileName(
+    fileName.contains('.')
+        ? fileName.substring(0, fileName.lastIndexOf('.'))
+        : fileName,
+  );
+  final prefix = 'حلقة $episode';
+  if (stem == prefix) return true;
+  if (!stem.startsWith(prefix)) return false;
+  final rest = stem.substring(prefix.length);
+  return rest.startsWith(' ') ||
+      rest.startsWith(':') ||
+      rest.startsWith('_') ||
+      rest.startsWith('(');
 }
 
 /// Title persisted in watch history / sync. Keeps a final-episode marker when

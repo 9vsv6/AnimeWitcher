@@ -170,7 +170,12 @@ class EpisodeCard extends HookConsumerWidget {
       } else {
         ref
             .read(downloadLauncherProvider)
-            .launch(context, parentItem, episodeUrl: episode.url);
+            .launch(
+              context,
+              parentItem,
+              episodeUrl: episode.url,
+              episode: episode,
+            );
       }
     }
 
@@ -557,7 +562,12 @@ class EpisodeCard extends HookConsumerWidget {
         onPressed: () {
           ref
               .read(downloadLauncherProvider)
-              .launch(context, parentItem, episodeUrl: episode.url);
+              .launch(
+                context,
+                parentItem,
+                episodeUrl: episode.url,
+                episode: episode,
+              );
         },
       );
     }
