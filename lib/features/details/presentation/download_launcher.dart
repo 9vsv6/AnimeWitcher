@@ -274,6 +274,8 @@ class DownloadLauncher {
                       episode: episodeData.episode,
                       title: episodeData.name,
                       quality: stream.quality,
+                      isFinal: episodeData.isFinal,
+                      serverName: episodeData.serverName,
                     );
                     filename = '$episodeLabel$extension';
                   } else {

@@ -741,7 +741,7 @@ class DownloadService {
     final sanitizedTitle = item.title
         .replaceAll(RegExp(r'[^\w\s-]'), '')
         .trim();
-    String baseName;
+    final String baseName;
     if (episode != null && item.contentType != MultimediaContentType.movie) {
       baseName = formatEpisodeFileName(
         episode: episode.episode,
