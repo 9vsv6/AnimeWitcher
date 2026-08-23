@@ -31,7 +31,7 @@ class ToastItem {
     this.type = ToastType.info,
     this.icon,
     this.leading,
-    this.duration = const Duration(milliseconds: 3000),
+    this.duration = NotificationService.defaultDuration,
     this.onAction,
     this.actionLabel,
     DateTime? createdAt,
@@ -40,6 +40,9 @@ class ToastItem {
 
 /// Global toast notifications without needing a [BuildContext] at call sites.
 class NotificationService extends ChangeNotifier {
+  /// How long pill toasts stay visible before auto-dismiss.
+  static const Duration defaultDuration = Duration(seconds: 1);
+
   final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
@@ -55,7 +58,7 @@ class NotificationService extends ChangeNotifier {
     ToastType type = ToastType.info,
     IconData? icon,
     Widget? leading,
-    Duration duration = const Duration(milliseconds: 3000),
+    Duration duration = defaultDuration,
     VoidCallback? onAction,
     String? actionLabel,
   }) {
@@ -101,7 +104,7 @@ class NotificationService extends ChangeNotifier {
 
   void resumeTimer(
     String id, {
-    Duration remaining = const Duration(milliseconds: 1500),
+    Duration remaining = NotificationService.defaultDuration,
   }) {
     _dismissTimers[id]?.cancel();
     _dismissTimers[id] = Timer(remaining, () {
@@ -113,7 +116,7 @@ class NotificationService extends ChangeNotifier {
     String message, {
     String? title,
     IconData? icon,
-    Duration duration = const Duration(milliseconds: 3000),
+    Duration duration = NotificationService.defaultDuration,
   }) {
     showToast(
       title: title,
@@ -128,7 +131,7 @@ class NotificationService extends ChangeNotifier {
     String message, {
     String? title,
     IconData? icon,
-    Duration duration = const Duration(milliseconds: 4000),
+    Duration duration = NotificationService.defaultDuration,
   }) {
     showToast(
       title: title,
@@ -143,7 +146,7 @@ class NotificationService extends ChangeNotifier {
     String message, {
     String? title,
     IconData? icon,
-    Duration duration = const Duration(milliseconds: 3000),
+    Duration duration = NotificationService.defaultDuration,
   }) {
     showToast(
       title: title,
