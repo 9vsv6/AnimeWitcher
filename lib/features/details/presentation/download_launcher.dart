@@ -280,7 +280,11 @@ class DownloadLauncher {
                   );
                   String filename;
                   if (episodeData != null &&
-                      item.contentType != MultimediaContentType.movie) {
+                      usesEpisodeDownloadFileName(
+                        episode: episodeData.episode,
+                        title: episodeData.name,
+                        serverName: episodeData.serverName,
+                      )) {
                     final episodeLabel = sanitizeDownloadFileName(
                       formatEpisodeFileName(
                         episode: episodeData.episode,

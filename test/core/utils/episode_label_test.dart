@@ -315,6 +315,70 @@ void main() {
       // Bare parentheses without trailing p are not a quality marker.
       expect(isDownloadedEpisodeFileName('حلقة 12 (1080).mp4', 12), isFalse);
     });
+
+    test('matches numberless standalone names like مترجم / مدبلج', () {
+      expect(
+        usesEpisodeDownloadFileName(episode: 0, serverName: 'مترجم'),
+        isTrue,
+      );
+      expect(
+        usesEpisodeDownloadFileName(episode: 0, serverName: 'مدبلج'),
+        isTrue,
+      );
+      expect(usesEpisodeDownloadFileName(episode: 0, title: 'مترجم'), isTrue);
+      expect(usesEpisodeDownloadFileName(episode: 0), isFalse);
+
+      expect(
+        formatEpisodeFileName(episode: 0, serverName: 'مترجم', quality: '1080'),
+        'مترجم (1080p)',
+      );
+      expect(
+        formatEpisodeFileName(episode: 0, serverName: 'مدبلج', quality: '720'),
+        'مدبلج (720p)',
+      );
+
+      expect(
+        isDownloadedEpisodeFileName(
+          'مترجم.mp4',
+          0,
+          serverName: 'مترجم',
+        ),
+        isTrue,
+      );
+      expect(
+        isDownloadedEpisodeFileName(
+          'مترجم (1080p).mp4',
+          0,
+          serverName: 'مترجم',
+        ),
+        isTrue,
+      );
+      expect(
+        isDownloadedEpisodeFileName(
+          'مدبلج (720p).mkv',
+          0,
+          serverName: 'مدبلج',
+        ),
+        isTrue,
+      );
+      // Must not cross-match the other variant.
+      expect(
+        isDownloadedEpisodeFileName(
+          'مدبلج (1080p).mp4',
+          0,
+          serverName: 'مترجم',
+        ),
+        isFalse,
+      );
+      expect(
+        isDownloadedEpisodeFileName(
+          'مترجم (1080p).mp4',
+          0,
+          serverName: 'مدبلج',
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('episodeTitleForStorage', () {

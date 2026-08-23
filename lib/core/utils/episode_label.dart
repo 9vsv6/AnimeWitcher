@@ -158,12 +158,15 @@ String formatEpisodeLabel({
 }) {
   final serverTitle = realEpisodeTitle(title);
   // Prefer AnimeWitcher serverName; if missing, a generic title like
-  // "الحلقة 12 والأخيرة" still carries the final-episode marker for downloads.
+  // "الحلقة 12 والأخيرة" or a standalone catalog label like "مترجم" /
+  // "مدبلج" still carries the identity used for downloads.
   final resolvedServerName = () {
     final server = (serverName ?? '').trim();
     if (server.isNotEmpty) return server;
     final rawTitle = (title ?? '').trim();
-    if (rawTitle.isNotEmpty && isGenericEpisodeTitle(rawTitle)) {
+    if (rawTitle.isNotEmpty &&
+        (isGenericEpisodeTitle(rawTitle) ||
+            isStandaloneEpisodeLabel(rawTitle))) {
       return rawTitle;
     }
     return null;
@@ -242,29 +245,69 @@ String formatEpisodeFileName({
   return qualityLabel == null ? base : '$base ($qualityLabel)';
 }
 
-/// True when [fileName] is a downloaded episode file for [episode] number.
+/// True when this episode should be saved/looked up by its episode label
+/// (number or standalone name like مترجم/مدبلج) instead of the series title.
+bool usesEpisodeDownloadFileName({
+  required int episode,
+  String? title,
+  String? serverName,
+}) {
+  if (episode > 0) return true;
+  return isStandaloneEpisodeEntry(serverName: serverName, name: title);
+}
+
+/// True when [fileName] is a downloaded file for this episode identity.
 ///
-/// Filename shape (after sanitize):
+/// Numbered episodes:
 /// `حلقة {n}[ والأخيرة][_|: title][ ({height}p)].ext`
 ///
-/// Quality is always `(\d{3,4}p)` — the trailing `p` is what separates it from
-/// the episode number, so `(1080p)` can never be read as episode 1080.
-bool isDownloadedEpisodeFileName(String fileName, int episode) {
-  if (episode <= 0) return false;
+/// Numberless standalone rows (movies / مترجم / مدبلج):
+/// `{name}[ ({height}p)].ext`
+///
+/// Quality is always `(\d{3,4}p)` — the trailing `p` separates it from numbers.
+bool isDownloadedEpisodeFileName(
+  String fileName,
+  int episode, {
+  String? title,
+  String? serverName,
+}) {
   final stem = sanitizeDownloadFileName(
     fileName.contains('.')
         ? fileName.substring(0, fileName.lastIndexOf('.'))
         : fileName,
   );
-  final pattern = RegExp(
-    '^حلقة\\s*$episode'
-    r'(?:\s+(?:والأخيرة|والاخيرة))?'
-    r'(?:[:_].*?)?'
-    r'(?:\s*\(\d{3,4}p\))?'
-    r'$',
-    caseSensitive: false,
+  const qualitySuffix = r'(?:\s*\(\d{3,4}p\))?$';
+
+  if (episode > 0) {
+    final pattern = RegExp(
+      '^حلقة\\s*$episode'
+      r'(?:\s+(?:والأخيرة|والاخيرة))?'
+      r'(?:[:_].*?)?'
+      '$qualitySuffix',
+      caseSensitive: false,
+    );
+    return pattern.hasMatch(stem);
+  }
+
+  final label = sanitizeDownloadFileName(
+    formatEpisodePrimaryLabel(
+      episode: 0,
+      isArabic: true,
+      serverName: () {
+        final server = (serverName ?? '').trim();
+        if (server.isNotEmpty) return server;
+        final rawTitle = (title ?? '').trim();
+        if (isStandaloneEpisodeLabel(rawTitle)) return rawTitle;
+        return null;
+      }(),
+    ),
   );
-  return pattern.hasMatch(stem);
+  if (label.isEmpty || !isStandaloneEpisodeLabel(label)) return false;
+
+  return RegExp(
+    '^${RegExp.escape(label)}$qualitySuffix',
+    caseSensitive: false,
+  ).hasMatch(stem);
 }
 
 /// Title persisted in watch history / sync. Keeps a final-episode marker when

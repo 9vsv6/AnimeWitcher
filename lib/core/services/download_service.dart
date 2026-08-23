@@ -741,14 +741,21 @@ class DownloadService {
     final sanitizedTitle = sanitizeDownloadFileName(
       item.title.replaceAll(RegExp(r'[^\w\s-]'), '').trim(),
     );
+    final episodeData = episode;
+    final useEpisodeName = episodeData != null &&
+        usesEpisodeDownloadFileName(
+          episode: episodeData.episode,
+          title: episodeData.name,
+          serverName: episodeData.serverName,
+        );
     final String baseName;
-    if (episode != null && item.contentType != MultimediaContentType.movie) {
+    if (useEpisodeName) {
       baseName = sanitizeDownloadFileName(
         formatEpisodeFileName(
-          episode: episode.episode,
-          title: episode.name,
-          isFinal: episode.isFinal,
-          serverName: episode.serverName,
+          episode: episodeData.episode,
+          title: episodeData.name,
+          isFinal: episodeData.isFinal,
+          serverName: episodeData.serverName,
         ),
       );
     } else {
@@ -762,7 +769,7 @@ class DownloadService {
       final file = File(p.join(directoryPath, '$baseName$ext'));
       if (await file.exists() && await file.length() > 0) return file;
     }
-    if (episode != null && item.contentType != MultimediaContentType.movie) {
+    if (useEpisodeName) {
       final prefix = '$baseName (';
       File? episodeMatch;
       await for (final entity in directory.list()) {
@@ -771,14 +778,19 @@ class DownloadService {
         if (!extensions.any(name.toLowerCase().endsWith)) continue;
         if (await entity.length() <= 0) continue;
         // Quality suffix is always "({height}p)" — trailing p separates it
-        // from the episode number in the base name.
+        // from the episode number / standalone name in the base name.
         if (name.startsWith(prefix) &&
             RegExp(r'\(\d{3,4}p\)\.[^.]+$', caseSensitive: false)
                 .hasMatch(name)) {
           return entity;
         }
         if (episodeMatch == null &&
-            isDownloadedEpisodeFileName(name, episode.episode)) {
+            isDownloadedEpisodeFileName(
+              name,
+              episodeData.episode,
+              title: episodeData.name,
+              serverName: episodeData.serverName,
+            )) {
           episodeMatch = entity;
         }
       }
