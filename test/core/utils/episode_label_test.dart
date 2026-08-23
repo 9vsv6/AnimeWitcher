@@ -60,6 +60,29 @@ void main() {
     });
   });
 
+  group('formatCatalogEpisodeBadge', () {
+    test('keeps والأخيرة on latest-episodes poster badges', () {
+      expect(
+        formatCatalogEpisodeBadge(
+          episode: 10,
+          serverName: 'الحلقة 10 والأخيرة',
+        ),
+        'حلقة 10 والأخيرة',
+      );
+      expect(
+        formatCatalogEpisodeBadge(
+          episode: 10,
+          isFinal: true,
+        ),
+        'حلقة 10 والأخيرة',
+      );
+      expect(
+        formatCatalogEpisodeBadge(episode: 10),
+        'حلقة 10',
+      );
+    });
+  });
+
   group('formatEpisodePrimaryLabel', () {
     test('builds Arabic number and final suffix from generic server names', () {
       expect(
