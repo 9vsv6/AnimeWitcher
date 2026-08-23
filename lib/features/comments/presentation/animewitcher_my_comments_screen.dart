@@ -9,6 +9,7 @@ import '../../../core/account/animewitcher_comment_models.dart';
 import '../../../core/account/animewitcher_sync_ids.dart';
 import '../../../core/account/firestore_rest_client.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/services/notification_service.dart';
 import '../../details/presentation/details_screen.dart';
 import 'animewitcher_replies_screen.dart';
 
@@ -124,7 +125,7 @@ class _AnimeWitcherMyCommentsScreenState
         _loadError = error;
         _loadingMore = false;
       });
-      _showMessage(_errorText(error));
+      _showMessage(_errorText(error), isError: true);
     }
   }
 
@@ -232,7 +233,7 @@ class _AnimeWitcherMyCommentsScreenState
               : 'Comment updated.',
         );
       } catch (error) {
-        if (mounted) _showMessage(_errorText(error));
+        if (mounted) _showMessage(_errorText(error), isError: true);
       } finally {
         if (mounted) _setBusy(comment.path, false);
       }
@@ -280,7 +281,7 @@ class _AnimeWitcherMyCommentsScreenState
       });
       _showMessage(_isArabic ? 'تم حذف التعليق.' : 'Comment deleted.');
     } catch (error) {
-      if (mounted) _showMessage(_errorText(error));
+      if (mounted) _showMessage(_errorText(error), isError: true);
     } finally {
       if (mounted) _setBusy(comment.path, false);
     }
@@ -322,7 +323,7 @@ class _AnimeWitcherMyCommentsScreenState
         _isArabic ? 'تم منع الردود.' : 'Replies disabled.',
       );
     } catch (error) {
-      if (mounted) _showMessage(_errorText(error));
+      if (mounted) _showMessage(_errorText(error), isError: true);
     } finally {
       if (mounted) _setBusy(comment.path, false);
     }
@@ -372,11 +373,20 @@ class _AnimeWitcherMyCommentsScreenState
     });
   }
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message, {
+    bool isError = false,
+    bool isInfo = false,
+  }) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    final notifications = ref.read(notificationServiceProvider);
+    if (isError) {
+      notifications.showError(message);
+    } else if (isInfo) {
+      notifications.showInfo(message);
+    } else {
+      notifications.showSuccess(message);
+    }
   }
 
   @override

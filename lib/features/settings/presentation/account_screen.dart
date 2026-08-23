@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/account/account_providers.dart';
 import '../../../core/account/animewitcher_account_config.dart';
 import '../../../core/account/animewitcher_account_models.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/utils/localized_text.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../shared/widgets/custom_widgets.dart';
@@ -1001,43 +1002,38 @@ class _AnimeWitcherAccountScreenState
   }
 
   void _offerVerificationResend(String email, String password) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          appText(
-            context,
-            english: 'Verify your email before signing in.',
-            arabic: 'تحقق من بريدك الإلكتروني قبل تسجيل الدخول.',
-          ),
-        ),
-        action: SnackBarAction(
-          label: appText(
-            context,
-            english: 'Resend',
-            arabic: 'إعادة الإرسال',
-          ),
-          onPressed: () async {
-            try {
-              await ref
-                  .read(animeWitcherAccountControllerProvider.notifier)
-                  .resendEmailVerification(email: email, password: password);
-              if (mounted) {
-                _showMessage(
-                  appText(
-                    context,
-                    english: 'Verification email sent again.',
-                    arabic: 'تم إرسال رسالة التحقق مرة ثانية.',
-                  ),
-                );
-              }
-            } catch (error) {
-              if (mounted) {
-                _showMessage(_localizedError(error), isError: true);
-              }
-            }
-          },
-        ),
+    ref.read(notificationServiceProvider).showToast(
+      message: appText(
+        context,
+        english: 'Verify your email before signing in.',
+        arabic: 'تحقق من بريدك الإلكتروني قبل تسجيل الدخول.',
       ),
+      type: ToastType.info,
+      actionLabel: appText(
+        context,
+        english: 'Resend',
+        arabic: 'إعادة الإرسال',
+      ),
+      onAction: () async {
+        try {
+          await ref
+              .read(animeWitcherAccountControllerProvider.notifier)
+              .resendEmailVerification(email: email, password: password);
+          if (mounted) {
+            _showMessage(
+              appText(
+                context,
+                english: 'Verification email sent again.',
+                arabic: 'تم إرسال رسالة التحقق مرة ثانية.',
+              ),
+            );
+          }
+        } catch (error) {
+          if (mounted) {
+            _showMessage(_localizedError(error), isError: true);
+          }
+        }
+      },
     );
   }
 
