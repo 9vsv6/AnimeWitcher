@@ -205,6 +205,7 @@ class PlaybackLauncher {
         isFinal: episode.isFinal,
         serverName: episode.serverName,
       ),
+      episodeServerName: episode.serverName,
       episodePosterUrl: episode.posterUrl,
     );
   }

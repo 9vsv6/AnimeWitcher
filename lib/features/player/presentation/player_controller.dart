@@ -2605,6 +2605,7 @@ class PlayerController extends Notifier<PlayerState> {
         isFinal: episode.isFinal,
         serverName: episode.serverName,
       ),
+      episodeServerName: episode.serverName,
       episodePosterUrl: _episodeArtwork(episode),
     );
   }
@@ -2833,7 +2834,13 @@ class PlayerController extends Notifier<PlayerState> {
               lastEpisodeUrl: nextEpisode.url,
               season: nextEpisode.season,
               episode: nextEpisode.episode,
-              episodeTitle: nextEpisode.name,
+              episodeTitle: episodeTitleForStorage(
+                episode: nextEpisode.episode,
+                title: nextEpisode.name,
+                isFinal: nextEpisode.isFinal,
+                serverName: nextEpisode.serverName,
+              ),
+              episodeServerName: nextEpisode.serverName,
               episodePosterUrl: _episodeArtwork(nextEpisode),
             );
             return;
@@ -2862,7 +2869,15 @@ class PlayerController extends Notifier<PlayerState> {
               lastEpisodeUrl: currentEpisode?.url ?? _currentProgressUrl,
               season: currentEpisode?.season,
               episode: currentEpisode?.episode,
-              episodeTitle: currentEpisode?.name,
+              episodeTitle: currentEpisode == null
+                  ? null
+                  : episodeTitleForStorage(
+                      episode: currentEpisode.episode,
+                      title: currentEpisode.name,
+                      isFinal: currentEpisode.isFinal,
+                      serverName: currentEpisode.serverName,
+                    ),
+              episodeServerName: currentEpisode?.serverName,
               episodePosterUrl: _episodeArtwork(currentEpisode),
             );
       }
