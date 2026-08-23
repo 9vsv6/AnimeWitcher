@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
 import '../../../core/account/animewitcher_account_models.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/utils/localized_text.dart';
 
 const double _minimumCropScale = 0.2;
@@ -499,15 +500,11 @@ class _AnimeWitcherAccountImageCropScreenState
     } catch (_) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            appText(
-              context,
-              english: 'The selected part could not be saved. Try again.',
-              arabic: 'تعذّر حفظ الجزء المحدد. حاول مرة أخرى.',
-            ),
-          ),
+      notificationServiceOf(context).showError(
+        appText(
+          context,
+          english: 'The selected part could not be saved. Try again.',
+          arabic: 'تعذّر حفظ الجزء المحدد. حاول مرة أخرى.',
         ),
       );
     }

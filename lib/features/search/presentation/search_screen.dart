@@ -20,6 +20,7 @@ import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/services/notification_service.dart';
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -203,18 +204,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       final options = await providers.first.getSearchFilterOptions();
       if (!mounted) return;
       if (options.isEmpty) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                Localizations.localeOf(context).languageCode == 'ar'
-                    ? 'لا توجد فلاتر متاحة'
-                    : 'No filters available',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        ref.read(notificationServiceProvider).showInfo(
+          Localizations.localeOf(context).languageCode == 'ar'
+              ? 'لا توجد فلاتر متاحة'
+              : 'No filters available',
+        );
         return;
       }
 

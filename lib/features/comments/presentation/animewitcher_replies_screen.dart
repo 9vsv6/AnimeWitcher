@@ -7,6 +7,7 @@ import 'package:skystream/core/account/account_providers.dart';
 import 'package:skystream/core/account/animewitcher_account_models.dart';
 import 'package:skystream/core/account/animewitcher_comment_models.dart';
 import 'package:skystream/core/account/firestore_rest_client.dart';
+import 'package:skystream/core/services/notification_service.dart';
 
 class AnimeWitcherRepliesScreen extends ConsumerStatefulWidget {
   const AnimeWitcherRepliesScreen({
@@ -132,7 +133,7 @@ class _AnimeWitcherRepliesScreenState
     } catch (error) {
       if (!mounted) return;
       setState(() => _loadingMore = false);
-      _showMessage(_replyErrorText(error, _isArabic(context)));
+      _showMessage(_replyErrorText(error, _isArabic(context)), isError: true);
     }
   }
 
@@ -141,7 +142,10 @@ class _AnimeWitcherRepliesScreenState
     final service = ref.read(animeWitcherAccountServiceProvider);
     final isArabic = _isArabic(context);
     if (!service.isSignedIn) {
-      _showMessage(isArabic ? 'يجب تسجيل الدخول' : 'Sign in to like replies.');
+      _showMessage(
+        isArabic ? 'يجب تسجيل الدخول' : 'Sign in to like replies.',
+        isInfo: true,
+      );
       return;
     }
     if (reply.userId == service.snapshot.profile?.documentId) return;
@@ -153,7 +157,9 @@ class _AnimeWitcherRepliesScreenState
       final index = _replies.indexWhere((item) => item.path == reply.path);
       if (index >= 0) setState(() => _replies[index] = updated);
     } catch (error) {
-      if (mounted) _showMessage(_replyErrorText(error, isArabic));
+      if (mounted) {
+        _showMessage(_replyErrorText(error, isArabic), isError: true);
+      }
     } finally {
       if (mounted) setState(() => _pendingLikes.remove(reply.path));
     }
@@ -174,17 +180,28 @@ class _AnimeWitcherRepliesScreenState
       _showMessage(isArabic ? 'تم إرسال الرد.' : 'Reply sent.');
       await _loadInitial();
     } catch (error) {
-      if (mounted) _showMessage(_replyErrorText(error, isArabic));
+      if (mounted) {
+        _showMessage(_replyErrorText(error, isArabic), isError: true);
+      }
     } finally {
       if (mounted) setState(() => _publishing = false);
     }
   }
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message, {
+    bool isError = false,
+    bool isInfo = false,
+  }) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    final notifications = ref.read(notificationServiceProvider);
+    if (isError) {
+      notifications.showError(message);
+    } else if (isInfo) {
+      notifications.showInfo(message);
+    } else {
+      notifications.showSuccess(message);
+    }
   }
 
   @override

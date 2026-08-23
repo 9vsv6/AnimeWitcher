@@ -9,6 +9,7 @@ import 'package:skystream/core/account/account_providers.dart';
 import 'package:skystream/core/account/animewitcher_account_models.dart';
 import 'package:skystream/core/account/animewitcher_comment_models.dart';
 import 'package:skystream/core/account/firestore_rest_client.dart';
+import 'package:skystream/core/services/notification_service.dart';
 
 import 'animewitcher_replies_screen.dart';
 
@@ -139,7 +140,7 @@ class _AnimeWitcherCommentsScreenState
         _loadingMore = false;
         _loadError = error;
       });
-      _showMessage(_commentErrorText(error, _isArabic(context)));
+      _showMessage(_commentErrorText(error, _isArabic(context)), isError: true);
     }
   }
 
@@ -166,7 +167,7 @@ class _AnimeWitcherCommentsScreenState
       await _loadInitial();
     } catch (error) {
       if (!mounted) return;
-      _showMessage(_commentErrorText(error, isArabic));
+      _showMessage(_commentErrorText(error, isArabic), isError: true);
     } finally {
       if (mounted) setState(() => _publishing = false);
     }
@@ -177,7 +178,10 @@ class _AnimeWitcherCommentsScreenState
     final service = ref.read(animeWitcherAccountServiceProvider);
     final isArabic = _isArabic(context);
     if (!service.isSignedIn) {
-      _showMessage(isArabic ? 'يجب تسجيل الدخول' : 'Sign in to like comments.');
+      _showMessage(
+        isArabic ? 'يجب تسجيل الدخول' : 'Sign in to like comments.',
+        isInfo: true,
+      );
       return;
     }
     if (service.ownsComment(comment)) {
@@ -193,7 +197,9 @@ class _AnimeWitcherCommentsScreenState
         setState(() => _comments[index] = updated);
       }
     } catch (error) {
-      if (mounted) _showMessage(_commentErrorText(error, isArabic));
+      if (mounted) {
+        _showMessage(_commentErrorText(error, isArabic), isError: true);
+      }
     } finally {
       if (mounted) setState(() => _pendingLikes.remove(comment.path));
     }
@@ -316,7 +322,9 @@ class _AnimeWitcherCommentsScreenState
         _replaceComment(updated);
         _showMessage(isArabic ? 'تم تعديل التعليق.' : 'Comment updated.');
       } catch (error) {
-        if (mounted) _showMessage(_commentErrorText(error, isArabic));
+        if (mounted) {
+          _showMessage(_commentErrorText(error, isArabic), isError: true);
+        }
       } finally {
         if (mounted) _setCommentActionPending(comment.path, false);
       }
@@ -365,7 +373,9 @@ class _AnimeWitcherCommentsScreenState
       });
       _showMessage(isArabic ? 'تم حذف التعليق.' : 'Comment deleted.');
     } catch (error) {
-      if (mounted) _showMessage(_commentErrorText(error, isArabic));
+      if (mounted) {
+        _showMessage(_commentErrorText(error, isArabic), isError: true);
+      }
     } finally {
       if (mounted) _setCommentActionPending(comment.path, false);
     }
@@ -406,7 +416,9 @@ class _AnimeWitcherCommentsScreenState
       _replaceComment(updated);
       _showMessage(isArabic ? 'تم منع الردود.' : 'Replies disabled.');
     } catch (error) {
-      if (mounted) _showMessage(_commentErrorText(error, isArabic));
+      if (mounted) {
+        _showMessage(_commentErrorText(error, isArabic), isError: true);
+      }
     } finally {
       if (mounted) _setCommentActionPending(comment.path, false);
     }
@@ -471,11 +483,20 @@ class _AnimeWitcherCommentsScreenState
     ];
   }
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message, {
+    bool isError = false,
+    bool isInfo = false,
+  }) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    final notifications = ref.read(notificationServiceProvider);
+    if (isError) {
+      notifications.showError(message);
+    } else if (isInfo) {
+      notifications.showInfo(message);
+    } else {
+      notifications.showSuccess(message);
+    }
   }
 
   bool _isArabic(BuildContext context) =>

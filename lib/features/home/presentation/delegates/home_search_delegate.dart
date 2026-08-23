@@ -19,6 +19,7 @@ import '../../../search/presentation/search_provider.dart';
 import '../widgets/provider_search_filter_dialog.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/services/notification_service.dart';
 String homeSearchFieldLabel(
   BuildContext context,
   ProviderSearchFilters filters,
@@ -142,18 +143,11 @@ class HomeSearchDelegate extends SearchDelegate<void> {
 
     if (!context.mounted) return;
     if (options.isEmpty) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              Localizations.localeOf(context).languageCode == 'ar'
-                  ? 'هذه الإضافة لا توفر فلاتر بحث'
-                  : 'This provider does not expose search filters',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      notificationServiceOf(context).showInfo(
+        Localizations.localeOf(context).languageCode == 'ar'
+            ? 'هذه الإضافة لا توفر فلاتر بحث'
+            : 'This provider does not expose search filters',
+      );
       return;
     }
 
