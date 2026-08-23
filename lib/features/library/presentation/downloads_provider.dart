@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:background_downloader/background_downloader.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:skystream/core/storage/storage_service.dart';
@@ -51,11 +53,31 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     final List<DownloadItem> items = [];
 
     for (final record in records) {
-      // Skip non-download tasks and cancelled/failed ones
+      // Skip non-download tasks and cancelled ones. Failed downloads are kept
+      // and shown as paused so the user can resume instead of starting over.
       if (record.task is! DownloadTask) continue;
-      if (record.status == TaskStatus.canceled ||
-          record.status == TaskStatus.failed) {
+      if (record.status == TaskStatus.canceled) {
         continue;
+      }
+
+      var status = record.status;
+      var progress = record.progress;
+      if (status == TaskStatus.failed) {
+        status = TaskStatus.paused;
+        if (progress < 0 || progress > 1) progress = 0.0;
+        unawaited(
+          FileDownloader().database.updateRecord(
+            TaskRecord(
+              record.task,
+              TaskStatus.paused,
+              progress,
+              record.expectedFileSize,
+            ),
+          ),
+        );
+      } else if (progress < 0 || progress > 1) {
+        // Sentinel progress values from the downloader (failed/paused markers)
+        progress = status == TaskStatus.complete ? 1.0 : 0.0;
       }
 
       final metadata = await storage.getDownloadMetadata(record.task.taskId);
@@ -64,8 +86,8 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       items.add(
         DownloadItem(
           task: record.task,
-          status: record.status,
-          progress: record.progress,
+          status: status,
+          progress: progress,
           item: MultimediaItem.fromJson(
             Map<String, dynamic>.from(metadata['item'] as Map),
           ),
@@ -98,20 +120,26 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       TaskStatus newStatus = existing.status;
 
       if (update is TaskProgressUpdate) {
-        if (update.progress >= 0) newProgress = update.progress;
+        if (update.progress >= 0 && update.progress <= 1) {
+          newProgress = update.progress;
+        }
       } else if (update is TaskStatusUpdate) {
         newStatus = update.status;
       }
 
-      if (newStatus == TaskStatus.canceled || newStatus == TaskStatus.failed) {
-        // Remove from list if canceled or failed
+      if (newStatus == TaskStatus.canceled) {
+        // Remove from list if canceled
         final newList = List<DownloadItem>.from(currentList)..removeAt(index);
         state = AsyncData(newList);
       } else {
+        // Failures are treated like a user pause so the download stays resumable.
+        if (newStatus == TaskStatus.failed) {
+          newStatus = TaskStatus.paused;
+        }
         final updatedItem = DownloadItem(
           task: existing.task,
           status: newStatus,
-          progress: newProgress,
+          progress: newProgress.clamp(0.0, 1.0),
           item: existing.item,
           episode: existing.episode,
           timestamp: existing.timestamp,
