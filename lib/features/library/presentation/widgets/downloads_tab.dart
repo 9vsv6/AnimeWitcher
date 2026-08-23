@@ -14,6 +14,7 @@ import '../downloads_provider.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/utils/file_size_formatter.dart';
+import '../../../../core/utils/download_time_remaining.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 
 class DownloadsTab extends ConsumerStatefulWidget {
@@ -441,14 +442,39 @@ class _DownloadItemTile extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(LayoutConstants.radiusSm),
                 ),
                 const SizedBox(height: 4),
-                if (progressData != null && isWorking)
-                  Text(
-                    progressData!.speedString,
-                    textDirection: TextDirection.ltr,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontSize: 10,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                if (progressData != null && (isWorking || isPaused))
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          progressData!.speedString,
+                          textDirection: TextDirection.ltr,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 10,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: LayoutConstants.spacingSm),
+                      Text(
+                        formatDownloadTimeRemaining(
+                          context,
+                          progressData!,
+                          l10n,
+                        ),
+                        textDirection: isArabic
+                            ? TextDirection.rtl
+                            : TextDirection.ltr,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
               ],
               // Actions Row
