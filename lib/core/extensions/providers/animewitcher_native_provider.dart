@@ -579,6 +579,12 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     'tags',
     'thumb_uri',
     'comments_closed',
+    'is_final',
+    'isFinal',
+    'final',
+    'last',
+    'is_last',
+    'isLast',
   ];
 
   static const List<String> _newsAttributes = <String>[
@@ -888,23 +894,58 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     String description = story;
     String? episodeBadge;
     if (recent) {
-      final rawEpisode = _text(
+      final episodeId = _text(
         source['episode_id'] ??
             source['episodeId'] ??
             source['episode_number'] ??
-            source['episodeNumber'] ??
-            source['episode_name'] ??
-            source['episodeName'],
+            source['episodeNumber'],
       );
-      final number = RegExp(r'[0-9٠-٩۰-۹]+(?:\.[0-9]+)?').firstMatch(rawEpisode);
-      if (number != null) {
-        final normalizedNumber = _normalizeDigits(number.group(0)!)
-            .replaceFirst(RegExp(r'^0+(?=\d)'), '');
-        episodeBadge = 'حلقة $normalizedNumber';
+      final episodeName = _decodeHtml(
+        source['episode_name'] ?? source['episodeName'],
+      );
+      final note = _text(source['note']);
+      final serverName = _recentEpisodeServerName(
+        episodeName: episodeName,
+        episodeId: episodeId,
+        note: note,
+      );
+      final numberSource = episodeId.isNotEmpty ? episodeId : episodeName;
+      final number = RegExp(
+        r'[0-9٠-٩۰-۹]+(?:\.[0-9]+)?',
+      ).firstMatch(numberSource);
+      final episodeNumber = number == null
+          ? 0
+          : int.tryParse(
+                _normalizeDigits(number.group(0)!)
+                    .replaceFirst(RegExp(r'^0+(?=\d)'), ''),
+              ) ??
+              0;
+      final isFinal =
+          _isTruthy(
+            source['is_final'] ??
+                source['isFinal'] ??
+                source['final'] ??
+                source['last'] ??
+                source['is_last'] ??
+                source['isLast'],
+          ) ||
+          hasFinalEpisodeSuffix(serverName) ||
+          hasFinalEpisodeSuffix(episodeName) ||
+          hasFinalEpisodeSuffix(episodeId) ||
+          hasFinalEpisodeSuffix(note);
+
+      if (episodeNumber > 0 || serverName.isNotEmpty) {
+        episodeBadge = formatCatalogEpisodeBadge(
+          episode: episodeNumber,
+          serverName: serverName.isEmpty ? null : serverName,
+          isFinal: isFinal,
+        );
       }
-      final episodeName = _text(source['episode_name'] ?? source['episodeName']);
-      if (episodeName.isNotEmpty) {
-        description = story.isEmpty ? episodeName : '$episodeName • $story';
+
+      final creativeTitle = realEpisodeTitle(episodeName);
+      if (creativeTitle.isNotEmpty) {
+        description =
+            story.isEmpty ? creativeTitle : '$creativeTitle • $story';
       }
     }
 
@@ -922,6 +963,28 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       source: 'AnimeWitcher Native',
       episodeBadge: episodeBadge,
     );
+  }
+
+  /// Pick the AnimeWitcher episode `name`-style label from a recent hit.
+  ///
+  /// Recent index rows often store that value in `episode_name` (e.g.
+  /// `الحلقة 10 والأخيرة`). Creative titles are ignored here — they belong in
+  /// the description, not the poster badge.
+  String _recentEpisodeServerName({
+    required String episodeName,
+    required String episodeId,
+    required String note,
+  }) {
+    for (final candidate in <String>[episodeName, episodeId, note]) {
+      final value = candidate.trim();
+      if (value.isEmpty) continue;
+      if (isGenericEpisodeTitle(value) ||
+          isStandaloneEpisodeLabel(value) ||
+          hasFinalEpisodeSuffix(value)) {
+        return value;
+      }
+    }
+    return '';
   }
 
   Future<List<MultimediaItem>> _dedupeHits(
