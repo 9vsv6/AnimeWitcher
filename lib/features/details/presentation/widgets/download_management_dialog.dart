@@ -163,8 +163,18 @@ class DownloadManagementDialog extends HookConsumerWidget {
     WidgetRef ref,
     MultimediaItem details,
   ) {
-    ref
-        .read(playbackLauncherProvider)
-        .play(context, file.path, baseItem: details, detailedItem: details);
+    // Same identity URL as downloads tab / episode tap so the player gets
+    // episode metadata (حلقة X : title) instead of only the series title.
+    final episodeUrl = episode?.url.trim() ?? '';
+    final playbackIdentityUrl = episodeUrl.isNotEmpty
+        ? episodeUrl
+        : details.url;
+    ref.read(playbackLauncherProvider).play(
+      context,
+      playbackIdentityUrl,
+      baseItem: details,
+      detailedItem: details,
+      episode: episode,
+    );
   }
 }
