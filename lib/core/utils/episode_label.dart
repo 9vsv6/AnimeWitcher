@@ -192,6 +192,38 @@ String sanitizeDownloadFileName(String name) {
       .trim();
 }
 
+/// Normalize stream quality for download filenames as `{height}p`.
+///
+/// Examples: `1080` → `1080p`, `720p` → `720p`, `FHD` → `1080p`.
+/// Returns null when there is no numeric height so the filename never embeds
+/// an ambiguous bare number that could look like an episode.
+String? formatDownloadQualityLabel(String? quality) {
+  final raw = (quality ?? '').trim();
+  if (raw.isEmpty) return null;
+
+  final lower = raw.toLowerCase();
+  final already = RegExp(r'^(\d{3,4})p$').firstMatch(lower);
+  if (already != null) return '${already.group(1)}p';
+
+  final digitsOnly = RegExp(r'^(\d{3,4})$').firstMatch(lower);
+  if (digitsOnly != null) return '${digitsOnly.group(1)}p';
+
+  if (lower.contains('2160') || lower.contains('4k') || lower.contains('uhd')) {
+    return '2160p';
+  }
+  if (lower.contains('1080') || lower.contains('fhd') || lower.contains('fullhd')) {
+    return '1080p';
+  }
+  if (lower.contains('720')) return '720p';
+  if (lower.contains('480')) return '480p';
+  if (RegExp(r'(^|[^a-z])hd([^a-z]|$)').hasMatch(lower)) return '720p';
+  if (RegExp(r'(^|[^a-z])sd([^a-z]|$)').hasMatch(lower)) return '480p';
+
+  final embedded = RegExp(r'(\d{3,4})\s*p?\b').firstMatch(lower);
+  if (embedded != null) return '${embedded.group(1)}p';
+  return null;
+}
+
 String formatEpisodeFileName({
   required int episode,
   String? title,
@@ -206,14 +238,17 @@ String formatEpisodeFileName({
     isFinal: isFinal,
     serverName: serverName,
   );
-  final normalizedQuality = quality?.trim() ?? '';
-  return normalizedQuality.isEmpty ? base : '$base ($normalizedQuality)';
+  final qualityLabel = formatDownloadQualityLabel(quality);
+  return qualityLabel == null ? base : '$base ($qualityLabel)';
 }
 
 /// True when [fileName] is a downloaded episode file for [episode] number.
 ///
-/// Accepts both `حلقة 12` and `حلقة 12 والأخيرة`, with optional creative
-/// title and quality suffix, including filenames where `:` became `_`.
+/// Filename shape (after sanitize):
+/// `حلقة {n}[ والأخيرة][_|: title][ ({height}p)].ext`
+///
+/// Quality is always `(\d{3,4}p)` — the trailing `p` is what separates it from
+/// the episode number, so `(1080p)` can never be read as episode 1080.
 bool isDownloadedEpisodeFileName(String fileName, int episode) {
   if (episode <= 0) return false;
   final stem = sanitizeDownloadFileName(
@@ -221,14 +256,15 @@ bool isDownloadedEpisodeFileName(String fileName, int episode) {
         ? fileName.substring(0, fileName.lastIndexOf('.'))
         : fileName,
   );
-  final prefix = 'حلقة $episode';
-  if (stem == prefix) return true;
-  if (!stem.startsWith(prefix)) return false;
-  final rest = stem.substring(prefix.length);
-  return rest.startsWith(' ') ||
-      rest.startsWith(':') ||
-      rest.startsWith('_') ||
-      rest.startsWith('(');
+  final pattern = RegExp(
+    '^حلقة\\s*$episode'
+    r'(?:\s+(?:والأخيرة|والاخيرة))?'
+    r'(?:[:_].*?)?'
+    r'(?:\s*\(\d{3,4}p\))?'
+    r'$',
+    caseSensitive: false,
+  );
+  return pattern.hasMatch(stem);
 }
 
 /// Title persisted in watch history / sync. Keeps a final-episode marker when

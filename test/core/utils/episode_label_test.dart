@@ -197,9 +197,34 @@ void main() {
         'حلقة 2: بداية جديدة (1080p)',
       );
       expect(
+        formatEpisodeFileName(
+          episode: 2,
+          title: 'بداية جديدة',
+          quality: '1080',
+        ),
+        'حلقة 2: بداية جديدة (1080p)',
+      );
+      expect(
         formatEpisodeFileName(episode: 2, title: 'بداية جديدة'),
         'حلقة 2: بداية جديدة',
       );
+      expect(
+        formatEpisodeFileName(
+          episode: 2,
+          title: 'بداية جديدة',
+          quality: 'متعدد',
+        ),
+        'حلقة 2: بداية جديدة',
+      );
+    });
+
+    test('formatDownloadQualityLabel always ends with p', () {
+      expect(formatDownloadQualityLabel('1080'), '1080p');
+      expect(formatDownloadQualityLabel('720p'), '720p');
+      expect(formatDownloadQualityLabel('FHD'), '1080p');
+      expect(formatDownloadQualityLabel('hd'), '720p');
+      expect(formatDownloadQualityLabel('متعدد'), isNull);
+      expect(formatDownloadQualityLabel(null), isNull);
     });
 
     test('keeps final suffix from serverName / isFinal for download filenames', () {
@@ -218,7 +243,7 @@ void main() {
           title: 'الحلقة 12 والأخيرة',
           serverName: 'الحلقة 12 والأخيرة',
           isFinal: true,
-          quality: '720p',
+          quality: '720',
         ),
         'حلقة 12 والأخيرة (720p)',
       );
@@ -244,7 +269,7 @@ void main() {
             episode: 12,
             title: 'نهاية الرحلة',
             isFinal: true,
-            quality: '1080p',
+            quality: '1080',
           ),
         ),
         'حلقة 12 والأخيرة_ نهاية الرحلة (1080p)',
@@ -262,11 +287,33 @@ void main() {
         isTrue,
       );
       expect(
+        isDownloadedEpisodeFileName('حلقة 12 (1080p).mp4', 12),
+        isTrue,
+      );
+      expect(
         isDownloadedEpisodeFileName('حلقة 12 والأخيرة_ نهاية الرحلة.mp4', 12),
         isTrue,
       );
+      expect(
+        isDownloadedEpisodeFileName(
+          'حلقة 12 والأخيرة_ نهاية الرحلة (720p).mp4',
+          12,
+        ),
+        isTrue,
+      );
+
+      // Episode boundary: 12 must not match 120 / 1 / 2.
       expect(isDownloadedEpisodeFileName('حلقة 120.mp4', 12), isFalse);
+      expect(isDownloadedEpisodeFileName('حلقة 1.mp4', 12), isFalse);
       expect(isDownloadedEpisodeFileName('حلقة 11 والأخيرة.mp4', 12), isFalse);
+
+      // Trailing p marks quality — never treated as the episode number.
+      expect(isDownloadedEpisodeFileName('حلقة 12 (720p).mp4', 720), isFalse);
+      expect(isDownloadedEpisodeFileName('حلقة 12 (1080p).mp4', 1080), isFalse);
+      expect(isDownloadedEpisodeFileName('حلقة 12 (720p).mp4', 7), isFalse);
+      expect(isDownloadedEpisodeFileName('حلقة 12 (720p).mp4', 20), isFalse);
+      // Bare parentheses without trailing p are not a quality marker.
+      expect(isDownloadedEpisodeFileName('حلقة 12 (1080).mp4', 12), isFalse);
     });
   });
 

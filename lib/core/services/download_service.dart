@@ -770,9 +770,13 @@ class DownloadService {
         final name = p.basename(entity.path);
         if (!extensions.any(name.toLowerCase().endsWith)) continue;
         if (await entity.length() <= 0) continue;
-        if (name.startsWith(prefix)) return entity;
-        // Fall back to episode-number match so "حلقة 12" and
-        // "حلقة 12 والأخيرة" (with optional quality) resolve the same file.
+        // Quality suffix is always "({height}p)" — trailing p separates it
+        // from the episode number in the base name.
+        if (name.startsWith(prefix) &&
+            RegExp(r'\(\d{3,4}p\)\.[^.]+$', caseSensitive: false)
+                .hasMatch(name)) {
+          return entity;
+        }
         if (episodeMatch == null &&
             isDownloadedEpisodeFileName(name, episode.episode)) {
           episodeMatch = entity;
