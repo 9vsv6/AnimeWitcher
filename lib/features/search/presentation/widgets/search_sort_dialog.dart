@@ -45,14 +45,14 @@ enum SearchSortOption {
       case SearchSortOption.nameAscending:
         return appText(
           context,
-          english: 'Name (ascending)',
-          arabic: 'الاسم (تصاعدي)',
+          english: 'Name (A → Z)',
+          arabic: 'الاسم (أ → ي)',
         );
       case SearchSortOption.nameDescending:
         return appText(
           context,
-          english: 'Name (descending)',
-          arabic: 'الاسم (تنازلي)',
+          english: 'Name (Z → A)',
+          arabic: 'الاسم (ي → أ)',
         );
     }
   }
