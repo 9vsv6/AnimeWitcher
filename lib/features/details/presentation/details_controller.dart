@@ -1002,12 +1002,10 @@ class DetailsController extends _$DetailsController {
 
     DubStatus selectedDubStatus = state.selectedDubStatus;
     if (isInitial) {
-      final isStandaloneCatalog = normalizedEpisodes.isNotEmpty &&
-          normalizedEpisodes.every(
-            (episode) =>
-                isStandaloneEpisodeLabel(episode.serverName) ||
-                isStandaloneEpisodeLabel(episode.name),
-          );
+      final isStandaloneCatalog = isStandaloneEpisodeCatalog([
+        for (final episode in normalizedEpisodes)
+          (serverName: episode.serverName, name: episode.name),
+      ]);
       final hasSub =
           normalizedEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
       final hasDub =

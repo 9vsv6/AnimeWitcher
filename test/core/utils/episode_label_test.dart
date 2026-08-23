@@ -25,6 +25,26 @@ void main() {
     });
   });
 
+  group('isStandaloneEpisodeCatalog', () {
+    test('detects مترجم/مدبلج-only catalogs', () {
+      expect(
+        isStandaloneEpisodeCatalog(const [
+          (serverName: 'مترجم', name: 'مترجم'),
+          (serverName: 'مدبلج', name: 'مدبلج'),
+        ]),
+        isTrue,
+      );
+      expect(
+        isStandaloneEpisodeCatalog(const [
+          (serverName: 'الحلقة 1', name: ''),
+          (serverName: 'الحلقة 2', name: ''),
+        ]),
+        isFalse,
+      );
+      expect(isStandaloneEpisodeCatalog(const []), isFalse);
+    });
+  });
+
   group('isStandaloneEpisodeLabel', () {
     test('detects AnimeWitcher movie variant labels', () {
       expect(isStandaloneEpisodeLabel('مترجم'), isTrue);

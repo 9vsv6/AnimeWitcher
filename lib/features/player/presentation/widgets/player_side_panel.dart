@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/services.dart';
@@ -14,7 +15,6 @@ import '../player_controller.dart';
 import '../../../details/presentation/playback_launcher.dart';
 import 'hotstar_player_style.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
 import 'package:skystream/core/utils/episode_label.dart';
 const List<Shadow> _kGlassTextShadow = [
   Shadow(color: Colors.black54, offset: Offset(0, 1.5), blurRadius: 3.0),
@@ -829,7 +829,7 @@ class _OptionList extends StatelessWidget {
         // Build a generous off-screen window so the selected (anchor) row is
         // laid out even when it starts below the fold — required for the
         // open/tab-switch ensureVisible() to be able to scroll to it.
-        cacheExtent: 1200,
+        scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
         children: children,
       ),
     );

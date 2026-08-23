@@ -15,7 +15,6 @@ import '../domain/entity/multimedia_item.dart';
 import '../router/app_router.dart';
 import '../storage/storage_service.dart';
 import '../network/dio_client_provider.dart';
-import '../utils/file_size_formatter.dart';
 import '../utils/episode_label.dart';
 import 'download_continued_processing_service.dart';
 
@@ -48,17 +47,6 @@ class DownloadProgressData {
     this.totalSize = -1,
   }) : progress = progress.clamp(0.0, 1.0);
 
-  String get downloadedSizeString {
-    if (totalSize <= 0) return "Calculating...";
-    if (progress <= 0) return "0 MB";
-    return formatFileSize(totalSize * progress);
-  }
-
-  String get totalSizeString {
-    if (totalSize <= 0) return "Unknown";
-    return formatFileSize(totalSize);
-  }
-
   String get speedString {
     if (status == TaskStatus.paused) return "Paused";
     if (progress >= 1.0) return "Done";
@@ -69,19 +57,6 @@ class DownloadProgressData {
       return "${(networkSpeed * 1024).toStringAsFixed(2)} KB/s";
     }
     return "${networkSpeed.toStringAsFixed(2)} MB/s";
-  }
-
-  String get timeRemainingString {
-    if (status == TaskStatus.paused) return "---";
-    if (progress >= 1.0) return "Finished";
-    if (timeRemaining.inSeconds <= 0) return "Calculating...";
-    if (timeRemaining.inHours > 0) {
-      return "${timeRemaining.inHours}h ${timeRemaining.inMinutes % 60}m remaining";
-    }
-    if (timeRemaining.inMinutes > 0) {
-      return "${timeRemaining.inMinutes}m ${timeRemaining.inSeconds % 60}s remaining";
-    }
-    return "${timeRemaining.inSeconds}s remaining";
   }
 }
 
