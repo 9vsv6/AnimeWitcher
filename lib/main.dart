@@ -21,6 +21,7 @@ import 'core/providers/update_provider.dart';
 import 'core/widgets/update_dialog.dart';
 import 'core/services/download_service.dart';
 import 'core/services/notification_service.dart';
+import 'core/widgets/m3_toast_overlay.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
@@ -475,7 +476,7 @@ class _MyAppState extends ConsumerState<MyApp>
             if (!kIsWeb && Platform.isIOS) {
               result = _IosKeyboardEdgeSwipeDismiss(child: result);
             }
-            return result;
+            return M3ToastOverlay(child: result);
           },
         );
 

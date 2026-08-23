@@ -1,0 +1,7 @@
+# Keep `flutter test` hermetic by default. Tests tagged `live` may reach the
+# network and are skipped unless explicitly requested:
+#
+#   flutter test --run-skipped --tags live
+tags:
+  live:
+    skip: "Hits live network hosts; run with --run-skipped --tags live"
