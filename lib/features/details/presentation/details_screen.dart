@@ -925,17 +925,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     onSurfaceVariant: Colors.white70,
                   ),
                 ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) => FittedBox(
-                    alignment: Alignment.topLeft,
-                    fit: BoxFit.scaleDown,
-                    child: SizedBox(
-                      width: constraints.maxWidth,
-                      child: MetadataBar(
-                        item: item,
-                        isLoading: detailsState is AsyncLoading,
-                      ),
-                    ),
+                // Keep metadata at its natural size while the header collapses;
+                // the parent Stack clips overflow instead of shrinking the text.
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: MetadataBar(
+                    item: item,
+                    isLoading: detailsState is AsyncLoading,
                   ),
                 ),
               ),
