@@ -259,50 +259,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     };
   }
 
-  Future<void> _showSearchSort() async {
-    final current = ref.read(searchProviderFiltersProvider);
-    String? selected;
-    var nativeFailed = false;
-    final nativeAvailable = await appleNativeLiquidGlassAvailable();
-
-    if (nativeAvailable && mounted) {
-      try {
-        selected = await showAppleNativeSearchSort(
-          initialValue: current.sort,
-          isArabic:
-              Localizations.localeOf(context).languageCode.toLowerCase() ==
-              'ar',
-          tintColor: Theme.of(context).colorScheme.primary,
-          items: SearchSortOption.values
-              .map(
-                (option) => <String, String>{
-                  'value': option.value,
-                  'label': option.label(context),
-                },
-              )
-              .toList(growable: false),
-        );
-        if (!mounted || selected == null) return;
-      } on PlatformException {
-        nativeFailed = true;
-      } on MissingPluginException {
-        nativeFailed = true;
-      }
-    }
-
-    if (!nativeAvailable || nativeFailed) {
-      selected = await showDialog<String>(
-        context: context,
-        useSafeArea: true,
-        barrierColor: Colors.black.withValues(alpha: 0.22),
-        builder: (_) => SearchSortDialog(initialValue: current.sort),
-      );
-      if (selected == null || !mounted) return;
-    }
-
-    final selectedValue = selected;
-    if (selectedValue == null || !mounted) return;
-    _applySearchSort(selectedValue);
+  IconData _searchSortFallbackIcon(SearchSortOption option) {
+    return switch (option) {
+      SearchSortOption.mostFavorited => Icons.star_rounded,
+      SearchSortOption.productionDateAscending => Icons.arrow_upward_rounded,
+      SearchSortOption.productionDateDescending => Icons.arrow_downward_rounded,
+      SearchSortOption.nameAscending => Icons.sort_by_alpha_rounded,
+      SearchSortOption.nameDescending => Icons.sort_by_alpha_rounded,
+    };
   }
 
   void _resetResultsScrollPosition() {
@@ -493,10 +457,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     clearButtonFocusNode: _clearButtonFocusNode,
                     isCompact: false,
                     onShowFilters: _showSearchFilters,
-                    onShowSort: _showSearchSort,
                     onSortSelected: _applySearchSort,
                     sortValue: ref.watch(searchProviderFiltersProvider).sort,
                     sortItems: _searchSortMenuItems(context),
+                    sortIcon: _searchSortFallbackIcon(
+                      SearchSortOption.fromValue(
+                        ref.watch(searchProviderFiltersProvider).sort,
+                      ),
+                    ),
+                    sortSystemImage: _searchSortSystemImage(
+                      SearchSortOption.fromValue(
+                        ref.watch(searchProviderFiltersProvider).sort,
+                      ),
+                    ),
                     sortTooltip:
                         '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: '
                         '${SearchSortOption.fromValue(ref.watch(searchProviderFiltersProvider).sort).label(context)}',
@@ -539,6 +512,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return SearchActionButtons(
       filterCount: activeFilters.count,
       isFilterLoading: _isLoadingProviderFilters,
+      sortValue: activeFilters.sort,
+      sortItems: _searchSortMenuItems(context),
+      onSortSelected: _applySearchSort,
+      sortIcon: _searchSortFallbackIcon(sortOption),
+      sortSystemImage: _searchSortSystemImage(sortOption),
       sortTooltip:
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
       filterTooltip: appText(
@@ -548,7 +526,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
       tintColor: Theme.of(context).colorScheme.primary,
       height: 42,
-      onSortPressed: _showSearchSort,
       onFilterPressed: _showSearchFilters,
     );
   }
@@ -685,11 +662,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
+    const actionHeight = 42.0;
+    final actionsSlotWidth =
+        SearchActionButtons.groupWidthForHeight(actionHeight) + 10;
 
     final scaffold = Scaffold(
       appBar: AppBar(
         titleSpacing: 12,
-        leadingWidth: isArabic ? 104 : null,
+        leadingWidth: isArabic ? actionsSlotWidth : null,
         leading: isArabic
             ? Padding(
                 padding: const EdgeInsets.only(right: 10),
@@ -699,9 +679,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         actions: isArabic
             ? null
             : [
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: _buildMobileSearchActionGroup(context),
+                SizedBox(
+                  width: actionsSlotWidth,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: _buildMobileSearchActionGroup(context),
+                  ),
                 ),
               ],
         title: _buildMobileSearchField(context),

@@ -2185,7 +2185,7 @@ private struct AppleSearchFilterOverlay: View {
             .frame(maxWidth: .infinity, minHeight: 46)
             .padding(.horizontal, 8)
             .background(
-              isSelected ? tintColor : Color.primary.opacity(0.07),
+              isSelected ? tintColor : Color.white.opacity(0.10),
               in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
         }
@@ -2247,7 +2247,7 @@ private struct AppleSearchFilterOverlay: View {
   var body: some View {
     GeometryReader { geometry in
       ZStack {
-        Color.black.opacity(0.16).ignoresSafeArea()
+        Color.black.opacity(0.46).ignoresSafeArea()
         VStack(spacing: 0) {
           HStack(spacing: 12) {
             Image(systemName: "slider.horizontal.3")
@@ -2343,6 +2343,10 @@ private struct AppleSearchFilterOverlay: View {
         .frame(
           width: min(geometry.size.width - 32, 560),
           height: min(geometry.size.height * 0.82, 720)
+        )
+        .background(
+          Color.black.opacity(0.34),
+          in: RoundedRectangle(cornerRadius: 30, style: .continuous)
         )
         .glassEffect(.regular, in: .rect(cornerRadius: 30))
         .frame(maxWidth: .infinity, maxHeight: .infinity)

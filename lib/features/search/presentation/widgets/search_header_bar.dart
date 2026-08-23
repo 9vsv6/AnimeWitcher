@@ -17,10 +17,11 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
   final ValueChanged<String> onSubmitted;
   final ValueChanged<String> onChanged;
   final VoidCallback onShowFilters;
-  final VoidCallback onShowSort;
   final ValueChanged<String> onSortSelected;
   final String sortValue;
   final List<AppleNativeMenuItem> sortItems;
+  final IconData sortIcon;
+  final String sortSystemImage;
   final String sortTooltip;
   final int activeFilterCount;
   final bool isFilterLoading;
@@ -34,10 +35,11 @@ class SearchHeaderBar extends ConsumerStatefulWidget {
     required this.onSubmitted,
     required this.onChanged,
     required this.onShowFilters,
-    required this.onShowSort,
     required this.onSortSelected,
     required this.sortValue,
     required this.sortItems,
+    required this.sortIcon,
+    required this.sortSystemImage,
     required this.sortTooltip,
     required this.activeFilterCount,
     required this.isFilterLoading,
@@ -228,13 +230,17 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                         child: SearchActionButtons(
                           filterCount: widget.activeFilterCount,
                           isFilterLoading: widget.isFilterLoading,
+                          sortValue: widget.sortValue,
+                          sortItems: widget.sortItems,
+                          onSortSelected: widget.onSortSelected,
+                          sortIcon: widget.sortIcon,
+                          sortSystemImage: widget.sortSystemImage,
                           sortTooltip: widget.sortTooltip,
                           filterTooltip: appText(
                             context,
                             english: 'Filters',
                             arabic: 'الفلاتر',
                           ),
-                          onSortPressed: widget.onShowSort,
                           onFilterPressed: widget.onShowFilters,
                           tintColor: theme.colorScheme.primary,
                           height: 38,
