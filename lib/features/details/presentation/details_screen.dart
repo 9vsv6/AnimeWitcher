@@ -219,7 +219,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     const favoriteRed = Color(0xFFFF3B30);
     final colors = Theme.of(context).colorScheme;
     final commentTarget = animeWitcherAnimeCommentTarget(item);
-    final LibraryCategory? currentCategory = libraryNotifier.itemCategory(item.url);
+    final LibraryCategory? currentCategory =
+        libraryNotifier.itemCategory(item.url) as LibraryCategory?;
 
     return <AppleLiquidGlassToolbarButton>[
       if (commentTarget != null)
@@ -265,7 +266,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             : _libraryCategorySystemImage(currentCategory),
         color: currentCategory != null ? colors.primary : foregroundColor,
         menuTintColor: colors.primary,
-        onPressed: () => _showLibraryCategoryPicker(context, item),
+        onPressed: null,
         selectedMenuValue: currentCategory?.storageKey,
         menuItems: _libraryCategoryMenuItems(
           context,
@@ -364,6 +365,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           value: category.storageKey,
           label: _libraryCategoryLabel(context, category),
           systemImage: _libraryCategorySystemImage(category),
+          icon: _libraryCategoryIcon(category),
         ),
     ];
     if (currentCategory != null) {
@@ -374,6 +376,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               ? 'إزالة من القائمة'
               : 'Remove from list',
           systemImage: 'trash',
+          icon: Icons.delete_outline_rounded,
           destructive: true,
         ),
       );
@@ -401,173 +404,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       await notifier.addItem(item, category: category);
     }
   }
-
-  Future<void> _showLibraryCategoryPicker(
-    BuildContext context,
-    MultimediaItem item,
-  ) async {
-    final notifier = ref.read(libraryProvider.notifier);
-    final currentCategory = notifier.itemCategory(item.url);
-    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-
-    final result = await showModalBottomSheet<Object>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.56),
-      builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        final colors = theme.colorScheme;
-        return Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
-          ),
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(
-              color: colors.outlineVariant.withValues(alpha: 0.36),
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: colors.onSurfaceVariant.withValues(alpha: 0.34),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 16, 8, 10),
-                    child: Text(
-                      isArabic ? 'حفظ في قائمة' : 'Save to list',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  for (final category in LibraryCategory.primaryValues.where(
-                    (category) =>
-                        category != LibraryCategory.completed ||
-                        item.status == ShowStatus.completed,
-                  ))
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Material(
-                        color: currentCategory == category
-                            ? colors.primaryContainer.withValues(alpha: 0.70)
-                            : colors.surfaceContainerHighest.withValues(alpha: 0.46),
-                        borderRadius: BorderRadius.circular(15),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(15),
-                          onTap: () => Navigator.of(sheetContext).pop(category),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 11,
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: currentCategory == category
-                                        ? colors.primary.withValues(alpha: 0.14)
-                                        : colors.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(11),
-                                  ),
-                                  child: Icon(
-                                    _libraryCategoryIcon(category),
-                                    size: 21,
-                                    color: currentCategory == category
-                                        ? colors.primary
-                                        : colors.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _libraryCategoryLabel(sheetContext, category),
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                if (currentCategory == category)
-                                  Icon(
-                                    Icons.check_rounded,
-                                    color: colors.primary,
-                                    size: 22,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (currentCategory != null) ...[
-                    const SizedBox(height: 8),
-                    Divider(color: colors.outlineVariant.withValues(alpha: 0.5)),
-                    const SizedBox(height: 4),
-                    Material(
-                      color: colors.errorContainer.withValues(alpha: 0.36),
-                      borderRadius: BorderRadius.circular(15),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(15),
-                        onTap: () => Navigator.of(sheetContext).pop(
-                          _removeLibraryAction,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete_outline_rounded, color: colors.error),
-                              const SizedBox(width: 12),
-                              Text(
-                                isArabic ? 'إزالة من القائمة' : 'Remove from list',
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: colors.error,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    if (!mounted || result == null) return;
-    if (result is LibraryCategory) {
-      await notifier.addItem(item, category: result);
-    } else if (result == _removeLibraryAction) {
-      await notifier.clearItemCategory(item.url);
-    }
-  }
-
 
   void _switchDetailsTab(int targetTab) {
     if (targetTab == _selectedDetailsTab) return;
