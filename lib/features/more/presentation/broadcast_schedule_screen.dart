@@ -22,38 +22,39 @@ class BroadcastScheduleScreen extends ConsumerStatefulWidget {
 }
 
 class _BroadcastScheduleScreenState
-    extends ConsumerState<BroadcastScheduleScreen> {
+    extends ConsumerState<BroadcastScheduleScreen>
+    with SingleTickerProviderStateMixin {
   late Future<Map<String, List<MultimediaItem>>> _scheduleFuture;
-  late final PageController _pageController;
+  late final TabController _tabController;
   late int _selectedDay;
 
   @override
   void initState() {
     super.initState();
     _selectedDay = _todayIndex();
-    _pageController = PageController(initialPage: _selectedDay);
+    _tabController = TabController(
+      length: animeWitcherBroadcastDays.length,
+      vsync: this,
+      initialIndex: _selectedDay,
+    )..addListener(_handleTabTick);
     _scheduleFuture = _loadSchedule();
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _tabController
+      ..removeListener(_handleTabTick)
+      ..dispose();
     super.dispose();
   }
 
-  void _selectDay(int value) {
-    if (value < 0 ||
-        value >= animeWitcherBroadcastDays.length ||
-        value == _selectedDay) {
-      return;
+  void _handleTabTick() {
+    final value = _tabController.index;
+    if (value != _selectedDay) {
+      setState(() => _selectedDay = value);
     }
-    setState(() => _selectedDay = value);
-    _pageController.animateToPage(
-      value,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-    );
   }
+
   int _todayIndex() {
     return switch (DateTime.now().weekday) {
       DateTime.saturday => 0,
@@ -168,41 +169,47 @@ class _BroadcastScheduleScreenState
           return Column(
             children: [
               _DayTabs(
-                selectedIndex: _selectedDay,
+                controller: _tabController,
                 isArabic: isArabic,
-                onSelected: _selectDay,
               ),
               Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: animeWitcherBroadcastDays.length,
-                  onPageChanged: (value) {
-                    if (value != _selectedDay) {
-                      setState(() => _selectedDay = value);
-                    }
-                  },
-                  itemBuilder: (context, index) {
-                    final day = animeWitcherBroadcastDays[index];
-                    final items =
-                        schedule[day] ?? const <MultimediaItem>[];
-                    return RefreshIndicator(
-                      onRefresh: _refreshSchedule,
-                      child: items.isEmpty
-                          ? ListView(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              padding: const EdgeInsets.fromLTRB(24, 120, 24, 110),
-                              children: [
-                                Text(
-                                  isArabic
-                                      ? 'لا يوجد بث مجدول لهذا اليوم'
-                                      : 'No broadcasts scheduled for this day',
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            )
-                          : _ScheduleGrid(items: items, day: day),
-                    );
-                  },
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    for (var index = 0;
+                        index < animeWitcherBroadcastDays.length;
+                        index++)
+                      Builder(
+                        builder: (context) {
+                          final day = animeWitcherBroadcastDays[index];
+                          final items =
+                              schedule[day] ?? const <MultimediaItem>[];
+                          return RefreshIndicator(
+                            onRefresh: _refreshSchedule,
+                            child: items.isEmpty
+                                ? ListView(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      24,
+                                      120,
+                                      24,
+                                      110,
+                                    ),
+                                    children: [
+                                      Text(
+                                        isArabic
+                                            ? 'لا يوجد بث مجدول لهذا اليوم'
+                                            : 'No broadcasts scheduled for this day',
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  )
+                                : _ScheduleGrid(items: items, day: day),
+                          );
+                        },
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -214,14 +221,12 @@ class _BroadcastScheduleScreenState
 }
 
 class _DayTabs extends StatelessWidget {
-  final int selectedIndex;
+  final TabController controller;
   final bool isArabic;
-  final ValueChanged<int> onSelected;
 
   const _DayTabs({
-    required this.selectedIndex,
+    required this.controller,
     required this.isArabic,
-    required this.onSelected,
   });
 
   @override
@@ -235,12 +240,11 @@ class _DayTabs extends StatelessWidget {
       'Thursday',
       'Friday',
     ];
-    return UnderlineSegmentTabs(
-      selectedIndex: selectedIndex,
-      onSelected: onSelected,
+    return FilterStyleTabBar(
+      controller: controller,
       tabs: [
         for (var i = 0; i < animeWitcherBroadcastDays.length; i++)
-          UnderlineSegmentTab(
+          FilterStyleTab(
             label: isArabic ? animeWitcherBroadcastDays[i] : english[i],
           ),
       ],

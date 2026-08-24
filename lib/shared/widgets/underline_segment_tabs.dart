@@ -1,212 +1,143 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
-/// One segment for [UnderlineSegmentTabs].
-class UnderlineSegmentTab {
-  const UnderlineSegmentTab({
+/// One tab for [FilterStyleTabBar], matching search-filter icon+label tabs.
+class FilterStyleTab extends StatelessWidget {
+  const FilterStyleTab({
+    super.key,
     required this.label,
     this.icon,
     this.leading,
+    this.showDot = false,
   });
 
   final String label;
   final IconData? icon;
-
-  /// Optional custom leading widget (e.g. a loading spinner).
-  /// Takes priority over [icon] when non-null.
   final Widget? leading;
-}
-
-/// Search-filter style tabs: gold label + underline when selected,
-/// muted text when idle. Replaces the yellow pill chips.
-class UnderlineSegmentTabs extends StatefulWidget {
-  const UnderlineSegmentTabs({
-    super.key,
-    required this.selectedIndex,
-    required this.tabs,
-    required this.onSelected,
-    this.isScrollable = true,
-    this.padding = const EdgeInsets.symmetric(horizontal: 8),
-  });
-
-  final int selectedIndex;
-  final List<UnderlineSegmentTab> tabs;
-  final ValueChanged<int> onSelected;
-  final bool isScrollable;
-  final EdgeInsetsGeometry padding;
+  final bool showDot;
 
   @override
-  State<UnderlineSegmentTabs> createState() => _UnderlineSegmentTabsState();
-}
-
-class _UnderlineSegmentTabsState extends State<UnderlineSegmentTabs> {
-  final GlobalKey _viewportKey = GlobalKey();
-  late List<GlobalKey> _itemKeys;
-  bool _visibilityCheckScheduled = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _itemKeys = List<GlobalKey>.generate(
-      widget.tabs.length,
-      (_) => GlobalKey(),
-    );
-    _scheduleSelectedVisibility();
-  }
-
-  @override
-  void didUpdateWidget(covariant UnderlineSegmentTabs oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.tabs.length != widget.tabs.length) {
-      _itemKeys = List<GlobalKey>.generate(
-        widget.tabs.length,
-        (_) => GlobalKey(),
-      );
-    }
-    if (oldWidget.selectedIndex != widget.selectedIndex ||
-        oldWidget.tabs.length != widget.tabs.length) {
-      _scheduleSelectedVisibility();
-    }
-  }
-
-  void _scheduleSelectedVisibility() {
-    if (!widget.isScrollable || _visibilityCheckScheduled) return;
-    _visibilityCheckScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _visibilityCheckScheduled = false;
-      if (!mounted) return;
-      _revealSelectedIfNeeded();
-    });
-  }
-
-  void _revealSelectedIfNeeded() {
-    final index = widget.selectedIndex;
-    if (index < 0 || index >= _itemKeys.length) return;
-
-    final viewportContext = _viewportKey.currentContext;
-    final itemContext = _itemKeys[index].currentContext;
-    final viewportBox = viewportContext?.findRenderObject();
-    final itemBox = itemContext?.findRenderObject();
-    if (viewportBox is! RenderBox ||
-        itemBox is! RenderBox ||
-        !viewportBox.hasSize ||
-        !itemBox.hasSize ||
-        itemContext == null) {
-      return;
-    }
-
-    final viewportOrigin = viewportBox.localToGlobal(Offset.zero);
-    final itemOrigin = itemBox.localToGlobal(Offset.zero);
-    final viewportLeft = viewportOrigin.dx + 4;
-    final viewportRight = viewportOrigin.dx + viewportBox.size.width - 4;
-    final itemLeft = itemOrigin.dx;
-    final itemRight = itemOrigin.dx + itemBox.size.width;
-    if (itemLeft >= viewportLeft && itemRight <= viewportRight) return;
-
-    unawaited(
-      Scrollable.ensureVisible(
-        itemContext,
-        alignment: 0.5,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
+  Widget build(BuildContext context) {
+    return Tab(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (leading != null || icon != null)
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                leading ?? Icon(icon, size: 20),
+                if (showDot)
+                  const Positioned(
+                    right: -3,
+                    top: -3,
+                    child: CircleAvatar(
+                      radius: 4,
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  ),
+              ],
+            ),
+          if (leading != null || icon != null) const SizedBox(width: 7),
+          Text(label),
+        ],
       ),
     );
   }
+}
+
+/// Exact same chrome as the search-filter [TabBar]: gold label/underline
+/// that slides smoothly with [TabController] / [TabBarView].
+class FilterStyleTabBar extends StatelessWidget implements PreferredSizeWidget {
+  const FilterStyleTabBar({
+    super.key,
+    required this.controller,
+    required this.tabs,
+    this.isScrollable = true,
+    this.onTap,
+  });
+
+  final TabController controller;
+  final List<Widget> tabs;
+  final bool isScrollable;
+  final ValueChanged<int>? onTap;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(46);
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final dividerColor = Theme.of(context).dividerColor;
-
-    final row = Row(
-      children: [
-        for (var i = 0; i < widget.tabs.length; i++)
-          widget.isScrollable
-              ? _buildTab(context, i, colors)
-              : Expanded(child: _buildTab(context, i, colors)),
-      ],
-    );
-
-    final content = widget.isScrollable
-        ? SingleChildScrollView(
-            key: _viewportKey,
-            scrollDirection: Axis.horizontal,
-            padding: widget.padding,
-            child: row,
-          )
-        : Padding(
-            key: _viewportKey,
-            padding: widget.padding,
-            child: row,
-          );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: dividerColor.withValues(alpha: 0.55)),
-        ),
-      ),
-      child: content,
+    return TabBar(
+      controller: controller,
+      isScrollable: isScrollable,
+      tabAlignment: isScrollable ? TabAlignment.start : TabAlignment.fill,
+      indicatorColor: colors.primary,
+      labelColor: colors.primary,
+      unselectedLabelColor: colors.onSurfaceVariant,
+      onTap: onTap,
+      tabs: tabs,
     );
   }
+}
 
-  Widget _buildTab(BuildContext context, int index, ColorScheme colors) {
-    final tab = widget.tabs[index];
-    final selected = widget.selectedIndex == index;
-    final foreground =
-        selected ? colors.primary : colors.onSurfaceVariant;
+/// Keeps a [TabBar] indicator sliding in sync with a lazy [PageView.builder],
+/// matching filter-dialog motion without mounting every page eagerly.
+mixin FilterStyleTabPageSync<T extends StatefulWidget> on State<T> {
+  TabController get filterTabController;
+  PageController get filterPageController;
 
-    Widget? leading = tab.leading;
-    if (leading == null && tab.icon != null) {
-      leading = Icon(tab.icon, size: 20, color: foreground);
-    } else if (leading != null) {
-      leading = IconTheme(
-        data: IconThemeData(color: foreground, size: 20),
-        child: leading,
-      );
+  bool _syncingFromTab = false;
+  bool _syncingFromPage = false;
+
+  void attachFilterStyleTabPageSync() {
+    filterTabController.addListener(_handleFilterTabTick);
+    filterPageController.addListener(_handleFilterPageTick);
+  }
+
+  void detachFilterStyleTabPageSync() {
+    filterTabController.removeListener(_handleFilterTabTick);
+    filterPageController.removeListener(_handleFilterPageTick);
+  }
+
+  void _handleFilterTabTick() {
+    if (_syncingFromPage || !filterTabController.indexIsChanging) return;
+    final target = filterTabController.index;
+    if (!filterPageController.hasClients) return;
+    final current = filterPageController.page?.round() ??
+        filterPageController.initialPage;
+    if (current == target) return;
+    _syncingFromTab = true;
+    filterPageController
+        .animateToPage(
+          target,
+          duration: kTabScrollDuration,
+          curve: Curves.ease,
+        )
+        .whenComplete(() {
+      _syncingFromTab = false;
+    });
+  }
+
+  void _handleFilterPageTick() {
+    if (_syncingFromTab ||
+        !filterPageController.hasClients ||
+        filterTabController.indexIsChanging) {
+      return;
     }
+    final page = filterPageController.page;
+    if (page == null) return;
+    final offset = (page - filterTabController.index).clamp(-1.0, 1.0);
+    if ((filterTabController.offset - offset).abs() > 0.0001) {
+      _syncingFromPage = true;
+      filterTabController.offset = offset.toDouble();
+      _syncingFromPage = false;
+    }
+  }
 
-    return KeyedSubtree(
-      key: _itemKeys[index],
-      child: InkWell(
-        onTap: () => widget.onSelected(index),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? colors.primary : Colors.transparent,
-                width: 3,
-              ),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (leading != null) ...[
-                  leading,
-                  const SizedBox(width: 7),
-                ],
-                Flexible(
-                  child: Text(
-                    tab.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: foreground,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  void onFilterPageChanged(int index) {
+    if (filterTabController.index == index) return;
+    _syncingFromPage = true;
+    filterTabController.index = index;
+    _syncingFromPage = false;
   }
 }

@@ -29,20 +29,44 @@ class GlobalStatisticsScreen extends ConsumerStatefulWidget {
 }
 
 class _GlobalStatisticsScreenState
-    extends ConsumerState<GlobalStatisticsScreen> {
+    extends ConsumerState<GlobalStatisticsScreen>
+    with SingleTickerProviderStateMixin, FilterStyleTabPageSync {
+  late final TabController _tabController;
   late final PageController _pageController;
   int _selectedRanking = 0;
 
   @override
+  TabController get filterTabController => _tabController;
+
+  @override
+  PageController get filterPageController => _pageController;
+
+  @override
   void initState() {
     super.initState();
+    _tabController = TabController(
+      length: AnimeWitcherGlobalRanking.values.length,
+      vsync: this,
+    );
     _pageController = PageController();
+    attachFilterStyleTabPageSync();
+    _tabController.addListener(_handleSelectedRankingTick);
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleSelectedRankingTick);
+    detachFilterStyleTabPageSync();
+    _tabController.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _handleSelectedRankingTick() {
+    final value = _tabController.index;
+    if (value != _selectedRanking) {
+      setState(() => _selectedRanking = value);
+    }
   }
 
   AnimeWitcherNativeProvider? _provider() {
@@ -69,20 +93,6 @@ class _GlobalStatisticsScreenState
       ranking,
       offset: offset,
       limit: limit,
-    );
-  }
-
-  void _selectRanking(int value) {
-    if (value < 0 ||
-        value >= AnimeWitcherGlobalRanking.values.length ||
-        value == _selectedRanking) {
-      return;
-    }
-    setState(() => _selectedRanking = value);
-    _pageController.animateToPage(
-      value,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
     );
   }
 
@@ -128,15 +138,15 @@ class _GlobalStatisticsScreenState
       body: Column(
         children: [
           _RankingTabs(
-            selectedIndex: _selectedRanking,
+            controller: _tabController,
             isArabic: isArabic,
-            onSelected: _selectRanking,
           ),
           Expanded(
             child: PageView.builder(
               controller: _pageController,
               itemCount: AnimeWitcherGlobalRanking.values.length,
               onPageChanged: (value) {
+                onFilterPageChanged(value);
                 if (value != _selectedRanking) {
                   setState(() => _selectedRanking = value);
                 }
@@ -361,24 +371,21 @@ class _RankingPageState extends State<_RankingPage>
 
 class _RankingTabs extends StatelessWidget {
   const _RankingTabs({
-    required this.selectedIndex,
+    required this.controller,
     required this.isArabic,
-    required this.onSelected,
   });
 
-  final int selectedIndex;
+  final TabController controller;
   final bool isArabic;
-  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
     const rankings = AnimeWitcherGlobalRanking.values;
-    return UnderlineSegmentTabs(
-      selectedIndex: selectedIndex,
-      onSelected: onSelected,
+    return FilterStyleTabBar(
+      controller: controller,
       tabs: [
         for (final ranking in rankings)
-          UnderlineSegmentTab(
+          FilterStyleTab(
             label: isArabic ? ranking.arabicTitle : ranking.englishTitle,
           ),
       ],

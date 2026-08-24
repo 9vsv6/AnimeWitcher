@@ -189,7 +189,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Offset _tabSlideFrom = Offset.zero;
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
-  late final PageController _detailsPageController;
+  late final TabController _detailsTabController;
 
   static const String _removeLibraryAction = '__remove_from_library__';
 
@@ -396,25 +396,22 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         .loadEpisodesOnDemand();
   }
 
-  void _switchDetailsTab(int targetTab) {
-    if (targetTab == _selectedDetailsTab) return;
-
-    _loadEpisodesIfNeeded(targetTab);
+  void _handleDetailsTabControllerTick() {
+    final index = _detailsTabController.index;
+    _loadEpisodesIfNeeded(index);
+    if (index == _selectedDetailsTab) return;
 
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-    final entersFromLeft = isRtl ? targetTab == 1 : targetTab == 0;
+    final entersFromLeft = isRtl ? index == 1 : index == 0;
     _tabSlideFrom = Offset(entersFromLeft ? -0.16 : 0.16, 0);
-
-    setState(() => _selectedDetailsTab = targetTab);
-    if (_detailsPageController.hasClients) {
-      _detailsPageController.animateToPage(
-        targetTab,
-        duration: _tabTransitionDuration,
-        curve: Curves.easeOutCubic,
-      );
-      return;
-    }
+    setState(() => _selectedDetailsTab = index);
     _tabTransitionController.forward(from: 0);
+  }
+
+  void _switchDetailsTab(int targetTab) {
+    if (targetTab == _detailsTabController.index) return;
+    _loadEpisodesIfNeeded(targetTab);
+    _detailsTabController.animateTo(targetTab);
   }
 
   Widget _buildTabTransition({required Widget child}) {
@@ -810,7 +807,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       parent: _tabTransitionController,
       curve: Curves.easeOutCubic,
     );
-    _detailsPageController = PageController(initialPage: _selectedDetailsTab);
+    _detailsTabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: _selectedDetailsTab,
+    )..addListener(_handleDetailsTabControllerTick);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(detailsControllerProvider(widget.item.url).notifier)
@@ -821,7 +822,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void dispose() {
     applePersistentGlassHeaderController.hide(this);
-    _detailsPageController.dispose();
+    _detailsTabController
+      ..removeListener(_handleDetailsTabControllerTick)
+      ..dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -1028,14 +1031,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         children: [
           _buildDetailsPageTabs(context, episodesAsync),
           Expanded(
-            child: PageView(
-              controller: _detailsPageController,
-              onPageChanged: (value) {
-                _loadEpisodesIfNeeded(value);
-                if (value != _selectedDetailsTab) {
-                  setState(() => _selectedDetailsTab = value);
-                }
-              },
+            child: TabBarView(
+              controller: _detailsTabController,
               children: [
                 _KeepAliveDetailsTab(
                   child: CustomScrollView(
@@ -1480,8 +1477,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     required bool isFavorite,
     required dynamic libraryNotifier,
   }) {
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final colors = Theme.of(context).colorScheme;
 
     return PreferredSize(
@@ -1490,7 +1485,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         textDirection: TextDirection.ltr,
         child: AppBar(
           automaticallyImplyLeading: false,
-          centerTitle: true,
           titleSpacing: 8,
           leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
           leading: appleUsesPersistentLiquidGlassHeader
@@ -1502,23 +1496,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
                 ),
-          title: Padding(
-            padding: EdgeInsets.only(
-              left: appleUsesPersistentLiquidGlassHeader ? 56 : 8,
-              right: appleUsesPersistentLiquidGlassHeader ? 148 : 8,
-            ),
-            child: Directionality(
-              textDirection:
-                  isArabic ? TextDirection.rtl : TextDirection.ltr,
-              child: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
           actions: appleUsesPersistentLiquidGlassHeader
               ? const <Widget>[]
               : [
@@ -1652,36 +1629,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         : isArabic
         ? 'الحلقات'
         : 'Episodes';
-    final colors = Theme.of(context).colorScheme;
 
-    return UnderlineSegmentTabs(
-      selectedIndex: _selectedDetailsTab,
-      isScrollable: false,
-      onSelected: (index) {
-        if (index == _selectedDetailsTab) return;
-        _switchDetailsTab(index);
-      },
+    return FilterStyleTabBar(
+      controller: _detailsTabController,
+      isScrollable: true,
       tabs: [
-        UnderlineSegmentTab(
+        FilterStyleTab(
           icon: Icons.info_outline_rounded,
           label: isArabic ? 'التفاصيل' : 'Details',
         ),
-        UnderlineSegmentTab(
+        FilterStyleTab(
+          icon: Icons.play_circle_outline_rounded,
           label: episodeLabel,
-          icon: episodesState.isLoading
-              ? null
-              : Icons.play_circle_outline_rounded,
-          leading: episodesState.isLoading
-              ? SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: _selectedDetailsTab == 1
-                        ? colors.primary
-                        : colors.onSurfaceVariant,
-                  ),
-                )
-              : null,
         ),
       ],
     );
@@ -1695,58 +1654,48 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     if (episodesState.isLoading) {
-      // Episode UI v2: keep the loading state centered horizontally.
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 36),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const AppLoadingIndicator(),
-              const SizedBox(height: 12),
-              Text(
-                isArabic
-                    ? 'يتم تحميل الحلقات…'
-                    : 'Episodes are loading…',
-                textAlign: TextAlign.center,
-              ),
-            ],
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const AppLoadingIndicator(),
+          const SizedBox(height: 12),
+          Text(
+            isArabic ? 'يتم تحميل الحلقات…' : 'Episodes are loading…',
+            textAlign: TextAlign.center,
           ),
-        ),
+        ],
       );
     }
 
     if (episodesState.hasError) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              isArabic ? 'تعذر تحميل الحلقات' : 'Could not load episodes',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: () {
-                ref
-                    .read(detailsControllerProvider(widget.item.url).notifier)
-                    .retryEpisodes();
-              },
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text(isArabic ? 'إعادة المحاولة' : 'Retry'),
-            ),
-          ],
-        ),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            isArabic ? 'تعذر تحميل الحلقات' : 'Could not load episodes',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: () {
+              ref
+                  .read(detailsControllerProvider(widget.item.url).notifier)
+                  .retryEpisodes();
+            },
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(isArabic ? 'إعادة المحاولة' : 'Retry'),
+          ),
+        ],
       );
     }
 
     final episodes = episodesState.asData?.value ?? const <Episode>[];
     if (episodes.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28),
-        child: Text(isArabic ? 'لا توجد حلقات متاحة' : 'No episodes available'),
+      return Text(
+        isArabic ? 'لا توجد حلقات متاحة' : 'No episodes available',
+        textAlign: TextAlign.center,
       );
     }
 
@@ -1805,67 +1754,70 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final colors = theme.colorScheme;
     final genres = _normalizedGenres(item);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.38),
+    return SizedBox(
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: colors.outlineVariant.withValues(alpha: 0.38),
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ExpandableText(
-              text: item.description ?? l10n.noDescription,
-              maxLines: 4,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: colors.onSurfaceVariant,
-                height: 1.55,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ExpandableText(
+                text: item.description ?? l10n.noDescription,
+                maxLines: 4,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  height: 1.55,
+                ),
               ),
-            ),
-            if (detailsState.hasError) ...[
-              const SizedBox(height: 12),
-              Text(
-                l10n.errorPrefix(detailsState.error.toString()),
-                style: TextStyle(color: colors.error),
-              ),
-            ],
-            if (genres.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
-                children: [
-                  for (final genre in genres)
-                    Material(
-                      color: colors.primary,
-                      borderRadius: BorderRadius.circular(999),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => _openGenreResults(context, genre),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            genre,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: colors.onPrimary,
-                              fontWeight: FontWeight.w600,
-                              height: 1,
+              if (detailsState.hasError) ...[
+                const SizedBox(height: 12),
+                Text(
+                  l10n.errorPrefix(detailsState.error.toString()),
+                  style: TextStyle(color: colors.error),
+                ),
+              ],
+              if (genres.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    for (final genre in genres)
+                      Material(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(999),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => _openGenreResults(context, genre),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              genre,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: colors.onPrimary,
+                                fontWeight: FontWeight.w600,
+                                height: 1,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1960,25 +1912,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DetailsActionButtons(
-                item: widget.item,
-                details: item,
-                itemUrl: widget.item.url,
-              ),
               if (item.nextAiring != null) ...[
-                const SizedBox(height: 16),
                 NextAiringWidget(nextAiring: item.nextAiring!),
+                const SizedBox(height: 8),
               ],
-            ],
-          ),
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
               _buildSynopsisAndGenres(context, item, detailsState, l10n),
               const SizedBox(height: 28),
               AnimeInformationSection(item: item),
@@ -2007,6 +1944,20 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final episodeReady =
         episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
 
+    if (!episodeReady) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _episodeLoadStatus(context, episodesState),
+            ),
+          ),
+        ),
+      ];
+    }
+
     return [
       SliverToBoxAdapter(
         child: Padding(
@@ -2014,23 +1965,20 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _episodeLoadStatus(context, episodesState),
-              if (episodeReady)
-                DetailsSeasonListWrapper(itemUrl: widget.item.url),
-              if (episodeReady) const SizedBox(height: 12),
+              DetailsSeasonListWrapper(itemUrl: widget.item.url),
+              const SizedBox(height: 12),
             ],
           ),
         ),
       ),
-      if (episodeReady)
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          sliver: SliverDetailsEpisodeList(
-            parentItem: item,
-            itemUrl: widget.item.url,
-            isMovie: false,
-          ),
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        sliver: SliverDetailsEpisodeList(
+          parentItem: item,
+          itemUrl: widget.item.url,
+          isMovie: false,
         ),
+      ),
       const SliverToBoxAdapter(child: SizedBox(height: 50)),
     ];
   }
