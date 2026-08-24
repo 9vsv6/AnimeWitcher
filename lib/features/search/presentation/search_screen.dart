@@ -731,22 +731,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
 
     return RepaintBoundary(
-      child: ListView.builder(
+      child: CustomScrollView(
         controller: _resultsScrollController,
-        padding: const EdgeInsets.only(bottom: 100),
-        itemCount: state.results.length,
-        itemBuilder: (context, index) {
-          final pResult = state.results[index];
-          return SearchResultSection(
-            key: ValueKey(pResult.providerId),
-            providerName: pResult.providerName,
-            providerId: pResult.providerId,
-            results: pResult.results,
-            isLoadingMore:
-                state.isLoadingMore && index == state.results.length - 1,
-            firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
-          );
-        },
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          for (var index = 0; index < state.results.length; index++)
+            SearchResultSection(
+              key: ValueKey(state.results[index].providerId),
+              providerName: state.results[index].providerName,
+              providerId: state.results[index].providerId,
+              results: state.results[index].results,
+              isLoadingMore:
+                  state.isLoadingMore && index == state.results.length - 1,
+              firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        ],
       ),
     );
   }

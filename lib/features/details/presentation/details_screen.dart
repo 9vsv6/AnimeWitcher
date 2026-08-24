@@ -54,6 +54,30 @@ class _GentleTopOverscrollPhysics extends BouncingScrollPhysics {
   }
 }
 
+/// Keeps a details tab's scrollable (and its poster Image states) alive
+/// while the other tab is showing. This matches View All, which stays
+/// mounted under the details route instead of rebuilding every thumbnail.
+class _KeepAliveDetailsTab extends StatefulWidget {
+  const _KeepAliveDetailsTab({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveDetailsTab> createState() => _KeepAliveDetailsTabState();
+}
+
+class _KeepAliveDetailsTabState extends State<_KeepAliveDetailsTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+
 class _DeferredDetailSection extends StatefulWidget {
   const _DeferredDetailSection({
     required this.enabled,
@@ -152,7 +176,7 @@ class DetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _DetailsScreenState extends ConsumerState<DetailsScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const double _tabSwipeDistanceThreshold = 72;
   static const double _tabSwipeVelocityThreshold = 650;
   static const Duration _tabTransitionDuration = Duration(milliseconds: 260);
@@ -167,6 +191,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   );
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
+  late final TabController _detailsTabController;
 
   static const String _removeLibraryAction = '__remove_from_library__';
 
@@ -419,6 +444,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     _tabSlideFrom = Offset(entersFromLeft ? -0.16 : 0.16, 0);
 
     setState(() => _selectedDetailsTab = targetTab);
+    _detailsTabController.animateTo(targetTab);
     _tabTransitionController.forward(from: 0);
   }
 
@@ -815,6 +841,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       parent: _tabTransitionController,
       curve: Curves.easeOutCubic,
     );
+    _detailsTabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(detailsControllerProvider(widget.item.url).notifier)
@@ -826,6 +853,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   void dispose() {
     applePersistentGlassHeaderController.hide(this);
     _detailsScrollController.dispose();
+    _detailsTabController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -1037,91 +1065,120 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       body: _buildDetailsTabSwipeRegion(
         enabled: true,
-        child: CustomScrollView(
+        // NestedScrollView + TabBarView keeps the episode ListView mounted
+        // while the info tab is showing, the same way View All keeps its
+        // lazy grid mounted under the details route.
+        child: NestedScrollView(
           controller: _detailsScrollController,
           physics: const _GentleTopOverscrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
           ),
-          slivers: [
-            Directionality(
-              textDirection: TextDirection.ltr,
-              child: SliverAppBar(
-                pinned: true,
-                expandedHeight: mobileExpandedHeight,
-                stretch: true,
-                // Keep an opaque black fallback under the artwork. FlexibleSpaceBar
-                // applies its own automatic background fade during route/sliver
-                // layout changes; that exposed a neutral gray frame while short
-                // movie / one-episode pages were still settling. Render the header
-                // directly so only our explicit collapse fade can affect it.
-                backgroundColor: Colors.black,
-                surfaceTintColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                forceMaterialTransparency: false,
-                flexibleSpace: _withDetailsHeaderCollapseFade(
-                  _withDetailsHeaderPullReaction(
-                    _buildAnimeWitcherMobileHeader(
-                      context,
-                      item,
-                      detailsAsync,
-                    ),
-                  ),
-                  mobileCollapseExtent,
-                ),
-                automaticallyImplyLeading: false,
-                leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
-                leading: appleUsesPersistentLiquidGlassHeader
-                    ? null
-                    : _withDetailsHeaderPullReaction(
-                        Focus(
-                          descendantsAreTraversable: false,
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: AppleLiquidGlassBackButton(
-                              size: 46,
-                              foregroundColor: Colors.white,
-                              fallbackColor: Colors.black45,
-                              onPressed: () => Navigator.of(context).maybePop(),
-                            ),
-                          ),
-                        ),
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: SliverAppBar(
+                  pinned: true,
+                  expandedHeight: mobileExpandedHeight,
+                  stretch: true,
+                  // Keep an opaque black fallback under the artwork. FlexibleSpaceBar
+                  // applies its own automatic background fade during route/sliver
+                  // layout changes; that exposed a neutral gray frame while short
+                  // movie / one-episode pages were still settling. Render the header
+                  // directly so only our explicit collapse fade can affect it.
+                  backgroundColor: Colors.black,
+                  surfaceTintColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  elevation: 0,
+                  scrolledUnderElevation: 0,
+                  forceMaterialTransparency: false,
+                  flexibleSpace: _withDetailsHeaderCollapseFade(
+                    _withDetailsHeaderPullReaction(
+                      _buildAnimeWitcherMobileHeader(
+                        context,
+                        item,
+                        detailsAsync,
                       ),
-                actions: appleUsesPersistentLiquidGlassHeader
-                    ? const <Widget>[]
-                    : [
-                        _withDetailsHeaderPullReaction(
+                    ),
+                    mobileCollapseExtent,
+                  ),
+                  automaticallyImplyLeading: false,
+                  leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
+                  leading: appleUsesPersistentLiquidGlassHeader
+                      ? null
+                      : _withDetailsHeaderPullReaction(
                           Focus(
                             descendantsAreTraversable: false,
                             child: Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _buildDetailsHeaderActions(
-                                context,
-                                item,
-                                isFavorite: isFavorite,
-                                libraryNotifier: libraryNotifier,
+                              padding: const EdgeInsets.only(left: 8),
+                              child: AppleLiquidGlassBackButton(
+                                size: 46,
                                 foregroundColor: Colors.white,
                                 fallbackColor: Colors.black45,
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
                               ),
                             ),
                           ),
                         ),
-                      ],
+                  actions: appleUsesPersistentLiquidGlassHeader
+                      ? const <Widget>[]
+                      : [
+                          _withDetailsHeaderPullReaction(
+                            Focus(
+                              descendantsAreTraversable: false,
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _buildDetailsHeaderActions(
+                                  context,
+                                  item,
+                                  isFavorite: isFavorite,
+                                  libraryNotifier: libraryNotifier,
+                                  foregroundColor: Colors.white,
+                                  fallbackColor: Colors.black45,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                ),
               ),
-            ),
-            ..._buildMobileSlivers(
-              context,
-              item,
-              detailsAsync,
-              episodesAsync,
-              castAsync,
-              trailersAsync,
-              relatedAsync,
-              recommendationsAsync,
-              l10n,
-            ),
-          ],
+              _buildMobileActionAndTabsSliver(
+                context,
+                item,
+                episodesAsync,
+              ),
+            ];
+          },
+          body: TabBarView(
+            controller: _detailsTabController,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _KeepAliveDetailsTab(
+                child: CustomScrollView(
+                  slivers: _buildMobileDetailsTabSlivers(
+                    context,
+                    item,
+                    detailsAsync,
+                    castAsync,
+                    trailersAsync,
+                    relatedAsync,
+                    recommendationsAsync,
+                    l10n,
+                  ),
+                ),
+              ),
+              _KeepAliveDetailsTab(
+                child: CustomScrollView(
+                  slivers: _buildMobileEpisodesTabSlivers(
+                    context,
+                    item,
+                    episodesAsync,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1937,121 +1994,104 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
-  List<Widget> _buildMobileSlivers(
+  Widget _buildMobileActionAndTabsSliver(
+    BuildContext context,
+    MultimediaItem item,
+    AsyncValue<List<Episode>> episodesState,
+  ) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DetailsActionButtons(
+              item: widget.item,
+              details: item,
+              itemUrl: widget.item.url,
+            ),
+            if (item.nextAiring != null) ...[
+              const SizedBox(height: 16),
+              NextAiringWidget(nextAiring: item.nextAiring!),
+            ],
+            const SizedBox(height: 24),
+            _buildDetailsPageTabs(context, episodesState),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildMobileDetailsTabSlivers(
     BuildContext context,
     MultimediaItem item,
     AsyncValue<MultimediaItem?> detailsState,
-    AsyncValue<List<Episode>> episodesState,
     AsyncValue<List<Actor>> castState,
     AsyncValue<List<Trailer>> trailersState,
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     AppLocalizations l10n,
   ) {
-    final showDetailsPage = _selectedDetailsTab == 0;
-    final episodeReady =
-        episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
-
-    final slivers = <Widget>[
+    return [
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DetailsActionButtons(
-                item: widget.item,
-                details: item,
-                itemUrl: widget.item.url,
+              _buildSynopsisAndGenres(context, item, detailsState, l10n),
+              const SizedBox(height: 28),
+              AnimeInformationSection(item: item),
+              ..._buildIndependentDetailSections(
+                context,
+                item,
+                l10n,
+                castState,
+                trailersState,
+                relatedState,
+                recommendationsState,
               ),
-              if (item.nextAiring != null) ...[
-                const SizedBox(height: 16),
-                NextAiringWidget(nextAiring: item.nextAiring!),
-              ],
-              const SizedBox(height: 24),
-              _buildDetailsPageTabs(context, episodesState),
+              const SizedBox(height: 40),
             ],
           ),
         ),
       ),
     ];
+  }
 
-    // Keep both tab bodies mounted. Switching tabs used to dispose every
-    // episode thumbnail, which then flashed the anime banner while AniZip
-    // stills decoded again.
-    slivers.add(
-      SliverVisibility(
-        visible: showDetailsPage,
-        maintainState: true,
-        sliver: SliverToBoxAdapter(
-          child: _buildTabTransition(
-            child: Padding(
-              key: const ValueKey<int>(0),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSynopsisAndGenres(context, item, detailsState, l10n),
-                  const SizedBox(height: 28),
-                  AnimeInformationSection(item: item),
-                  ..._buildIndependentDetailSections(
-                    context,
-                    item,
-                    l10n,
-                    castState,
-                    trailersState,
-                    relatedState,
-                    recommendationsState,
-                  ),
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
+  List<Widget> _buildMobileEpisodesTabSlivers(
+    BuildContext context,
+    MultimediaItem item,
+    AsyncValue<List<Episode>> episodesState,
+  ) {
+    final episodeReady =
+        episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false);
+
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _episodeLoadStatus(context, episodesState),
+              if (episodeReady)
+                DetailsSeasonListWrapper(itemUrl: widget.item.url),
+              if (episodeReady) const SizedBox(height: 12),
+            ],
           ),
         ),
       ),
-    );
-
-    slivers.add(
-      SliverVisibility(
-        visible: !showDetailsPage,
-        maintainState: true,
-        sliver: SliverMainAxisGroup(
-          slivers: [
-            SliverToBoxAdapter(
-              child: _buildTabTransition(
-                child: Padding(
-                  key: const ValueKey<int>(1),
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _episodeLoadStatus(context, episodesState),
-                      if (episodeReady)
-                        DetailsSeasonListWrapper(itemUrl: widget.item.url),
-                      if (episodeReady) const SizedBox(height: 12),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            if (episodeReady)
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                sliver: SliverDetailsEpisodeList(
-                  parentItem: item,
-                  itemUrl: widget.item.url,
-                  isMovie: false,
-                  transition: _tabTransitionAnimation,
-                  transitionOffset: _tabSlideFrom,
-                ),
-              ),
-            const SliverToBoxAdapter(child: SizedBox(height: 50)),
-          ],
+      if (episodeReady)
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          sliver: SliverDetailsEpisodeList(
+            parentItem: item,
+            itemUrl: widget.item.url,
+            isMovie: false,
+          ),
         ),
-      ),
-    );
-
-    return slivers;
+      const SliverToBoxAdapter(child: SizedBox(height: 50)),
+    ];
   }
 }
