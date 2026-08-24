@@ -316,6 +316,82 @@ void main() {
       expect(isDownloadedEpisodeFileName('حلقة 12 (1080).mp4', 12), isFalse);
     });
 
+    test('names numberless specials after their own label', () {
+      expect(
+        usesEpisodeDownloadFileName(episode: 0, serverName: 'الحلقة الخاصة'),
+        isTrue,
+      );
+      expect(
+        usesEpisodeDownloadFileName(episode: 0, serverName: 'OVA'),
+        isTrue,
+      );
+      expect(
+        usesEpisodeDownloadFileName(episode: 0, title: 'الحلقة الخاصة'),
+        isTrue,
+      );
+
+      expect(
+        formatEpisodeFileName(
+          episode: 0,
+          serverName: 'الحلقة الخاصة',
+          quality: '1080',
+        ),
+        'الحلقة الخاصة (1080p)',
+      );
+      expect(
+        formatEpisodeFileName(
+          episode: 0,
+          serverName: 'الحلقة الخاصة',
+          title: 'مذكرات نامي',
+        ),
+        'الحلقة الخاصة: مذكرات نامي',
+      );
+
+      expect(
+        isDownloadedEpisodeFileName(
+          'الحلقة الخاصة.mp4',
+          0,
+          serverName: 'الحلقة الخاصة',
+        ),
+        isTrue,
+      );
+      expect(
+        isDownloadedEpisodeFileName(
+          'الحلقة الخاصة (1080p).mp4',
+          0,
+          serverName: 'الحلقة الخاصة',
+        ),
+        isTrue,
+      );
+      expect(
+        isDownloadedEpisodeFileName(
+          'الحلقة الخاصة_ مذكرات نامي (720p).mkv',
+          0,
+          serverName: 'الحلقة الخاصة',
+          title: 'مذكرات نامي',
+        ),
+        isTrue,
+      );
+      // The series-title filename is not this episode's file.
+      expect(
+        isDownloadedEpisodeFileName(
+          'One Piece.mp4',
+          0,
+          serverName: 'الحلقة الخاصة',
+        ),
+        isFalse,
+      );
+      // Different specials must not cross-match.
+      expect(
+        isDownloadedEpisodeFileName(
+          'الحلقة الخاصة 2.mp4',
+          0,
+          serverName: 'الحلقة الخاصة',
+        ),
+        isFalse,
+      );
+    });
+
     test('matches numberless standalone names like مترجم / مدبلج', () {
       expect(
         usesEpisodeDownloadFileName(episode: 0, serverName: 'مترجم'),
@@ -401,6 +477,64 @@ void main() {
     });
   });
 
+  group('episodeIdentityLabel', () {
+    test('keeps numberless names instead of falling back to nothing', () {
+      expect(
+        episodeIdentityLabel(
+          episode: 0,
+          isArabic: true,
+          serverName: 'الحلقة الخاصة',
+        ),
+        'الحلقة الخاصة',
+      );
+      expect(
+        episodeIdentityLabel(episode: 0, isArabic: true, serverName: 'مترجم'),
+        'مترجم',
+      );
+      expect(
+        episodeIdentityLabel(
+          episode: 0,
+          isArabic: true,
+          title: 'مذكرات نامي',
+        ),
+        'مذكرات نامي',
+      );
+    });
+
+    test('builds numbered labels like the episode list', () {
+      expect(
+        episodeIdentityLabel(
+          episode: 12,
+          isArabic: true,
+          serverName: 'الحلقة 12 والأخيرة',
+          isFinal: true,
+        ),
+        'حلقة 12 والأخيرة',
+      );
+      expect(
+        episodeIdentityLabel(
+          episode: 5,
+          isArabic: true,
+          title: 'رفقاء جدد',
+        ),
+        'حلقة 5: رفقاء جدد',
+      );
+    });
+
+    test('is empty only when the episode has no name at all', () {
+      expect(episodeIdentityLabel(episode: 0, isArabic: true), '');
+      expect(
+        episodeIdentityLabel(
+          episode: 0,
+          isArabic: true,
+          serverName: '',
+          title: '',
+        ),
+        '',
+      );
+    });
+  });
+
   group('episodeTitleForStorage', () {
     test('stores creative titles as-is', () {
       expect(
@@ -430,6 +564,14 @@ void main() {
         episodeTitleForStorage(episode: 11, title: 'الحلقة 11'),
         '',
       );
+    });
+
+    test('keeps the label of numberless episodes', () {
+      expect(
+        episodeTitleForStorage(episode: 0, serverName: 'الحلقة الخاصة'),
+        'الحلقة الخاصة',
+      );
+      expect(episodeTitleForStorage(episode: 0), '');
     });
   });
 
@@ -484,8 +626,29 @@ void main() {
         'حلقة 12',
       );
       expect(
-        continueWatchingSecondaryTitle(episodeTitle: 'تتطور الزنزانة'),
+        continueWatchingSecondaryTitle(
+          episode: 12,
+          episodeTitle: 'تتطور الزنزانة',
+        ),
         'تتطور الزنزانة',
+      );
+    });
+
+    test('numberless rows show their stored label once', () {
+      expect(
+        continueWatchingPrimaryLabel(
+          episode: 0,
+          isArabic: true,
+          episodeTitle: 'الحلقة الخاصة',
+        ),
+        'الحلقة الخاصة',
+      );
+      expect(
+        continueWatchingSecondaryTitle(
+          episode: 0,
+          episodeTitle: 'الحلقة الخاصة',
+        ),
+        '',
       );
     });
 

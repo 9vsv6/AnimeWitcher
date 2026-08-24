@@ -26,6 +26,19 @@ import 'download_progress_dialog.dart';
 import 'download_management_dialog.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 
+/// `{series} - {episode}` for download dialogs, keeping the name of numberless
+/// rows (specials, OVAs, مترجم/مدبلج) instead of an empty trailing dash.
+String _downloadDialogTitle(MultimediaItem parentItem, Episode episode) {
+  final label = episodeIdentityLabel(
+    episode: episode.episode,
+    isArabic: true,
+    title: episode.name,
+    isFinal: episode.isFinal,
+    serverName: episode.serverName,
+  );
+  return label.isEmpty ? parentItem.title : '${parentItem.title} - $label';
+}
+
 class EpisodeCard extends HookConsumerWidget {
   final Episode episode;
   final MultimediaItem parentItem;
@@ -164,7 +177,7 @@ class EpisodeCard extends HookConsumerWidget {
       } else if (isDownloading) {
         DownloadProgressDialog.show(
           context,
-          '${parentItem.title} - ${episode.name}',
+          _downloadDialogTitle(parentItem, episode),
           episode.url,
         );
       } else {
@@ -519,7 +532,7 @@ class EpisodeCard extends HookConsumerWidget {
         child: InkWell(
           onTap: () => DownloadProgressDialog.show(
             context,
-            '${parentItem.title} - ${episode.name}',
+            _downloadDialogTitle(parentItem, episode),
             episode.url,
           ),
           borderRadius: BorderRadius.circular(12),

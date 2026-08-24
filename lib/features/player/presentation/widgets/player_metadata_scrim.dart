@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/utils/episode_label.dart';
 import 'hotstar_player_style.dart';
 
 /// Netflix-style left-anchored metadata scrim overlay.
@@ -377,10 +378,22 @@ class PlayerMetadataScrimState extends State<PlayerMetadataScrim>
       parts.add(item.year.toString());
     }
 
-    // Season/Episode (series only).
-    if (widget.isSeries && widget.episode != null) {
-      final ep = widget.episode!;
-      parts.add('S${ep.season}:E${ep.episode}');
+    // Season/Episode for series. Numberless rows (specials, OVAs, مترجم /
+    // مدبلج) have no S/E pair, so show their name instead of "E0".
+    final ep = widget.episode;
+    if (ep != null) {
+      if (widget.isSeries && ep.episode > 0) {
+        parts.add('S${ep.season}:E${ep.episode}');
+      } else {
+        final label = episodeIdentityLabel(
+          episode: ep.episode,
+          isArabic: true,
+          title: ep.name,
+          isFinal: ep.isFinal,
+          serverName: ep.serverName,
+        );
+        if (label.isNotEmpty) parts.add(label);
+      }
     }
 
     // Score / Rating.

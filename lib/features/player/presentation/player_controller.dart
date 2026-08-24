@@ -608,6 +608,12 @@ class PlayerController extends Notifier<PlayerState> {
       _isInitialized &&
       (_item.contentType == MultimediaContentType.series ||
           _item.contentType == MultimediaContentType.anime);
+
+  /// True when the episode picker has something to offer: a series, or a movie
+  /// or special with several rows to switch between (مترجم / مدبلج). Those are
+  /// not series, but their variants still belong in the picker.
+  bool get hasEpisodePicker =>
+      isSeries || (_isInitialized && (_item.episodes?.length ?? 0) > 1);
   MultimediaItem? get multimediaItem => _isInitialized ? _item : null;
   String? get currentEpisodeUrl => _episode?.url ?? _videoUrl;
   Episode? get currentEpisode => _episode ?? _resolveCurrentEpisode();
@@ -628,6 +634,19 @@ class PlayerController extends Notifier<PlayerState> {
         : episodes.indexWhere((e) => e.url == _videoUrl);
     if (currentIndex < 0 || currentIndex >= episodes.length - 1) return null;
     return episodes[currentIndex + 1];
+  }
+
+  /// `{series} - {episode}`, where the episode part is its number label or, for
+  /// numberless rows (specials, OVAs, مترجم/مدبلج), the name the server gave.
+  String _titleWithEpisode(Episode episode) {
+    final label = episodeIdentityLabel(
+      episode: episode.episode,
+      isArabic: true,
+      title: episode.name,
+      isFinal: episode.isFinal,
+      serverName: episode.serverName,
+    );
+    return label.isEmpty ? _item.title : '${_item.title} - $label';
   }
 
   Future<void> init({
@@ -681,35 +700,10 @@ class PlayerController extends Notifier<PlayerState> {
 
     String initialTitle = item.title;
     // Resolve Episode Title if Series
-    if (item.episodes != null && item.episodes!.isNotEmpty) {
-      if (item.episodes!.length > 1) {
-        try {
-          final ep = item.episodes!.firstWhere(
-            (e) => e.url == videoUrl,
-            orElse: () => item.episodes!.first,
-          );
-
-          if (ep.url == videoUrl) {
-            String epTitle = "";
-            if (ep.season > 0 && ep.episode > 0) {
-              epTitle = "S${ep.season}:E${ep.episode}";
-            } else if (ep.episode > 0) {
-              epTitle = "E${ep.episode}";
-            }
-
-            if (ep.name.isNotEmpty && ep.name != "Episode ${ep.episode}") {
-              epTitle = "$epTitle - ${ep.name}";
-            }
-
-            if (epTitle.isNotEmpty) {
-              if (epTitle.startsWith(" - ")) epTitle = epTitle.substring(3);
-              initialTitle = "${item.title} $epTitle";
-            }
-          }
-        } catch (e) {
-          if (kDebugMode) debugPrint('PlayerController.init: $e');
-        }
-      }
+    if ((item.episodes?.length ?? 0) > 1) {
+      final ep =
+          episode ?? item.episodes!.firstWhereOrNull((e) => e.url == videoUrl);
+      if (ep != null) initialTitle = _titleWithEpisode(ep);
     }
 
     final imdbId =
@@ -2098,7 +2092,9 @@ class PlayerController extends Notifier<PlayerState> {
 
   Episode? _resolveCurrentEpisode() {
     if (_episode != null) return _episode;
-    if (!isSeries) return null;
+    // Movies with مترجم / مدبلج variants are not series but still play one of
+    // several rows, so resolve those too.
+    if (!hasEpisodePicker) return null;
     return _item.episodes?.firstWhereOrNull((e) => e.url == _videoUrl);
   }
 
@@ -2918,7 +2914,7 @@ class PlayerController extends Notifier<PlayerState> {
     unawaited(_fetchAndLogSkipSegments());
 
     state = state.copyWith(
-      playerTitle: "${_item.title} - ${nextEpisode.name}",
+      playerTitle: _titleWithEpisode(nextEpisode),
       activeEpisodeUrl: nextEpisode.url,
       showNextEpisodeOverlay: false,
     );
@@ -2989,7 +2985,7 @@ class PlayerController extends Notifier<PlayerState> {
     unawaited(_fetchAndLogSkipSegments());
 
     state = state.copyWith(
-      playerTitle: "${_item.title} - ${episode.name}",
+      playerTitle: _titleWithEpisode(episode),
       activeEpisodeUrl: episode.url,
     );
 

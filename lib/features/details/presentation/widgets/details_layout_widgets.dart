@@ -7,6 +7,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
 import 'package:skystream/core/storage/history_repository.dart';
 import 'package:skystream/core/utils/episode_label.dart';
+import 'package:skystream/core/utils/episode_order.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/shared/widgets/custom_widgets.dart';
 import '../details_controller.dart';
@@ -283,12 +284,10 @@ class SliverDetailsDesktopEpisodeGrid extends ConsumerWidget {
     }
 
     // Episode list UI v2: show every filtered episode without range batching.
-    List<Episode> displayedEpisodes = List<Episode>.from(episodes);
-
-    // Apply sorting to the complete filtered list.
-    if (!detailsState.isAscending) {
-      displayedEpisodes = displayedEpisodes.reversed.toList();
-    }
+    final displayedEpisodes = episodesInDisplayOrder(
+      episodes,
+      ascending: detailsState.isAscending,
+    );
 
     return SliverMainAxisGroup(
       slivers: [
@@ -419,12 +418,10 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
     }
 
     // Episode list UI v2: show every filtered episode without range batching.
-    List<Episode> displayedEpisodes = List<Episode>.from(episodes);
-
-    // Apply sorting to the complete filtered list.
-    if (!detailsState.isAscending) {
-      displayedEpisodes = displayedEpisodes.reversed.toList();
-    }
+    final displayedEpisodes = episodesInDisplayOrder(
+      episodes,
+      ascending: detailsState.isAscending,
+    );
 
     return SliverMainAxisGroup(
       slivers: [
@@ -801,9 +798,10 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
           .toList(growable: false);
     }
 
-    final displayedEpisodes = detailsState.isAscending
-        ? List<Episode>.from(episodes, growable: false)
-        : episodes.reversed.toList(growable: false);
+    final displayedEpisodes = episodesInDisplayOrder(
+      episodes,
+      ascending: detailsState.isAscending,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

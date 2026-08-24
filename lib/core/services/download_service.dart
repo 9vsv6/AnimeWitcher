@@ -862,6 +862,8 @@ class DownloadService {
     // Prefer directory listing with normalized stems. Exact File(path) checks
     // fail when the OS stored Arabic as NFD (common on iOS) while we look up
     // NFC, even though the names look identical.
+    final qualitySuffix = RegExp(r'\(\d{3,4}p\)$', caseSensitive: false);
+
     final extensions = ['.mp4', '.mkv', '.webm', '.avi'];
     File? qualityMatch;
     File? episodeMatch;
@@ -874,8 +876,7 @@ class DownloadService {
 
       final stem = sanitizeDownloadFileName(p.basenameWithoutExtension(name));
       if (stem == baseName) return entity;
-      if (stem.startsWith('$baseName (') &&
-          RegExp(r'\(\d{3,4}p\)$', caseSensitive: false).hasMatch(stem)) {
+      if (stem.startsWith('$baseName (') && qualitySuffix.hasMatch(stem)) {
         qualityMatch ??= entity;
         continue;
       }
