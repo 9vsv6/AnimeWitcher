@@ -36,7 +36,7 @@ import 'package:skystream/core/utils/localized_text.dart';
 import 'package:skystream/core/services/notification_service.dart';
 
 /// Keeps the native pull-to-stretch reaction while making it deliberately
-/// subtle. The whole flexible header remains one moving unit.
+/// subtle on the details artwork.
 class _GentleTopOverscrollPhysics extends BouncingScrollPhysics {
   const _GentleTopOverscrollPhysics({super.parent});
 
@@ -51,6 +51,60 @@ class _GentleTopOverscrollPhysics extends BouncingScrollPhysics {
     final isPullingPastTop =
         position.pixels <= position.minScrollExtent && offset > 0;
     return isPullingPastTop ? appliedOffset * 0.16 : appliedOffset;
+  }
+}
+
+class _DetailsTabButton extends StatelessWidget {
+  const _DetailsTabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.leading,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final foreground = selected ? colors.onPrimary : colors.onSurface;
+    return Material(
+      color: selected ? colors.primary : colors.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(28),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (leading != null) ...[
+                IconTheme(
+                  data: IconThemeData(color: foreground, size: 20),
+                  child: leading!,
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -186,53 +240,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
   Offset _tabSlideFrom = Offset.zero;
-  final ScrollController _detailsScrollController = ScrollController(
-    keepScrollOffset: false,
-  );
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
-  late final TabController _detailsTabController;
+  late final PageController _detailsPageController;
 
   static const String _removeLibraryAction = '__remove_from_library__';
-
-  double get _detailsHeaderPullTranslation {
-    if (!_detailsScrollController.hasClients) return 0;
-
-    final pullDistance = (-_detailsScrollController.offset)
-        .clamp(0.0, 24.0)
-        .toDouble();
-    return pullDistance * 0.20;
-  }
-
-  Widget _withDetailsHeaderPullReaction(Widget child) {
-    return AnimatedBuilder(
-      animation: _detailsScrollController,
-      child: child,
-      builder: (context, child) => Transform.translate(
-        offset: Offset(0, _detailsHeaderPullTranslation),
-        child: child,
-      ),
-    );
-  }
-
-  Widget _withDetailsHeaderCollapseFade(
-    Widget child,
-    double collapseExtent,
-  ) {
-    return AnimatedBuilder(
-      animation: _detailsScrollController,
-      child: child,
-      builder: (context, child) {
-        final offset = _detailsScrollController.hasClients
-            ? _detailsScrollController.offset
-            : 0.0;
-        final opacity = (1.0 - (offset / collapseExtent))
-            .clamp(0.0, 1.0)
-            .toDouble();
-        return Opacity(opacity: opacity, child: child);
-      },
-    );
-  }
 
   List<AppleLiquidGlassToolbarButton> _buildDetailsHeaderButtons(
     BuildContext context,
@@ -430,21 +442,31 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     }
   }
 
+  void _loadEpisodesIfNeeded(int tab) {
+    if (tab != 1) return;
+    ref
+        .read(detailsControllerProvider(widget.item.url).notifier)
+        .loadEpisodesOnDemand();
+  }
+
   void _switchDetailsTab(int targetTab) {
     if (targetTab == _selectedDetailsTab) return;
 
-    if (targetTab == 1) {
-      ref
-          .read(detailsControllerProvider(widget.item.url).notifier)
-          .loadEpisodesOnDemand();
-    }
+    _loadEpisodesIfNeeded(targetTab);
 
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     final entersFromLeft = isRtl ? targetTab == 1 : targetTab == 0;
     _tabSlideFrom = Offset(entersFromLeft ? -0.16 : 0.16, 0);
 
     setState(() => _selectedDetailsTab = targetTab);
-    _detailsTabController.animateTo(targetTab);
+    if (_detailsPageController.hasClients) {
+      _detailsPageController.animateToPage(
+        targetTab,
+        duration: _tabTransitionDuration,
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
     _tabTransitionController.forward(from: 0);
   }
 
@@ -841,7 +863,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       parent: _tabTransitionController,
       curve: Curves.easeOutCubic,
     );
-    _detailsTabController = TabController(length: 2, vsync: this);
+    _detailsPageController = PageController(initialPage: _selectedDetailsTab);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(detailsControllerProvider(widget.item.url).notifier)
@@ -852,10 +874,41 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void dispose() {
     applePersistentGlassHeaderController.hide(this);
-    _detailsScrollController.dispose();
-    _detailsTabController.dispose();
+    _detailsPageController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
+  }
+
+  void _syncPersistentGlassHeader({
+    required BuildContext context,
+    required MultimediaItem item,
+    required bool isFavorite,
+    required dynamic libraryNotifier,
+    required Color foregroundColor,
+    required Color fallbackColor,
+  }) {
+    if (!appleUsesPersistentLiquidGlassHeader) return;
+    final trailingButtons = _buildDetailsHeaderButtons(
+      context,
+      item,
+      isFavorite: isFavorite,
+      libraryNotifier: libraryNotifier,
+      foregroundColor: foregroundColor,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+      applePersistentGlassHeaderController.show(
+        ApplePersistentGlassHeaderConfig(
+          owner: this,
+          route: ModalRoute.of(context),
+          onBack: () => Navigator.of(context).maybePop(),
+          backForegroundColor: foregroundColor,
+          backFallbackColor: fallbackColor,
+          trailingButtons: trailingButtons,
+          instantRouteBoundary: true,
+        ),
+      );
+    });
   }
 
   @override
@@ -955,72 +1008,27 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final l10n = AppLocalizations.of(context)!;
 
     if (!initialPageReady) {
-      if (appleUsesPersistentLiquidGlassHeader) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
-          applePersistentGlassHeaderController.show(
-            ApplePersistentGlassHeaderConfig(
-              owner: this,
-              route: ModalRoute.of(context),
-              onBack: () => Navigator.of(context).maybePop(),
-              backForegroundColor: Theme.of(context).colorScheme.primary,
-              backFallbackColor: Colors.black45,
-              trailingButtons: const <AppleLiquidGlassToolbarButton>[],
-              instantRouteBoundary: true,
-            ),
-          );
-        });
-      }
+      _syncPersistentGlassHeader(
+        context: context,
+        item: item,
+        isFavorite: isFavorite,
+        libraryNotifier: libraryNotifier,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        fallbackColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+      );
       return Scaffold(
-        backgroundColor: Colors.black,
-        appBar: appleUsesPersistentLiquidGlassHeader
-            ? null
-            : AppBar(
-                backgroundColor: Colors.black,
-                elevation: 0,
-                automaticallyImplyLeading: false,
-                leading: AppleLiquidGlassBackButton(
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                  fallbackColor: Colors.black45,
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
-              ),
+        appBar: _buildPinnedDetailsAppBar(
+          context,
+          item: item,
+          isFavorite: isFavorite,
+          libraryNotifier: libraryNotifier,
+        ),
         body: Center(
           child: AppLoadingIndicator(
             color: Theme.of(context).colorScheme.primary,
           ),
         ),
       );
-    }
-
-    if (appleUsesPersistentLiquidGlassHeader) {
-      final headerForeground = isLarge
-          ? Theme.of(context).colorScheme.onSurface
-          : Colors.white;
-      final headerFallback = isLarge
-          ? Theme.of(context).colorScheme.surfaceContainerHigh
-          : Colors.black45;
-      final trailingButtons = _buildDetailsHeaderButtons(
-        context,
-        item,
-        isFavorite: isFavorite,
-        libraryNotifier: libraryNotifier,
-        foregroundColor: headerForeground,
-      );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
-        applePersistentGlassHeaderController.show(
-          ApplePersistentGlassHeaderConfig(
-            owner: this,
-            route: ModalRoute.of(context),
-            onBack: () => Navigator.of(context).maybePop(),
-            backForegroundColor: headerForeground,
-            backFallbackColor: headerFallback,
-            trailingButtons: trailingButtons,
-            instantRouteBoundary: true,
-          ),
-        );
-      });
     }
 
     // ── Desktop / TV: Immersive hero layout ──
@@ -1047,139 +1055,78 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         LayoutConstants.detailsSdpReferenceWidth;
     final mobileHeaderHeight =
         LayoutConstants.detailsExpandedHeightMobile * mobileHeaderScale;
-    // SliverAppBar adds the status-bar inset to expandedHeight. Subtract it
-    // so the complete visible header remains AnimeWitcher's 230sdp tall.
-    final mobileExpandedHeight =
-        (mobileHeaderHeight - MediaQuery.paddingOf(context).top)
-            .clamp(kToolbarHeight, mobileHeaderHeight)
-            .toDouble();
-    final mobileCollapseExtent = (mobileExpandedHeight - kToolbarHeight)
-        .clamp(1.0, double.infinity)
-        .toDouble();
 
-    // ── Mobile: AnimeWitcher-sized overlapping details header ──
+    _syncPersistentGlassHeader(
+      context: context,
+      item: item,
+      isFavorite: isFavorite,
+      libraryNotifier: libraryNotifier,
+      foregroundColor: Theme.of(context).colorScheme.onSurface,
+      fallbackColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+    );
+
+    // ── Mobile: pinned chrome + Seasons-style Details/Episodes pages ──
     return Scaffold(
       bottomNavigationBar:
           selectedEpisodeCount == 0 || _selectedDetailsTab != 1
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
-      body: _buildDetailsTabSwipeRegion(
-        enabled: true,
-        // NestedScrollView + TabBarView keeps the episode ListView mounted
-        // while the info tab is showing, the same way View All keeps its
-        // lazy grid mounted under the details route.
-        child: NestedScrollView(
-          controller: _detailsScrollController,
-          physics: const _GentleTopOverscrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
+      appBar: _buildPinnedDetailsAppBar(
+        context,
+        item: item,
+        isFavorite: isFavorite,
+        libraryNotifier: libraryNotifier,
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: _buildDetailsPageTabs(context, episodesAsync),
           ),
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return [
-              Directionality(
-                textDirection: TextDirection.ltr,
-                child: SliverAppBar(
-                  pinned: true,
-                  expandedHeight: mobileExpandedHeight,
-                  stretch: true,
-                  // Keep an opaque black fallback under the artwork. FlexibleSpaceBar
-                  // applies its own automatic background fade during route/sliver
-                  // layout changes; that exposed a neutral gray frame while short
-                  // movie / one-episode pages were still settling. Render the header
-                  // directly so only our explicit collapse fade can affect it.
-                  backgroundColor: Colors.black,
-                  surfaceTintColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  forceMaterialTransparency: false,
-                  flexibleSpace: _withDetailsHeaderCollapseFade(
-                    _withDetailsHeaderPullReaction(
-                      _buildAnimeWitcherMobileHeader(
-                        context,
-                        item,
-                        detailsAsync,
-                      ),
+          Divider(height: 1, color: Theme.of(context).dividerColor),
+          Expanded(
+            child: PageView(
+              controller: _detailsPageController,
+              onPageChanged: (value) {
+                _loadEpisodesIfNeeded(value);
+                if (value != _selectedDetailsTab) {
+                  setState(() => _selectedDetailsTab = value);
+                }
+              },
+              children: [
+                _KeepAliveDetailsTab(
+                  child: CustomScrollView(
+                    key: const PageStorageKey<String>('details-info-tab'),
+                    physics: const _GentleTopOverscrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
                     ),
-                    mobileCollapseExtent,
-                  ),
-                  automaticallyImplyLeading: false,
-                  leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
-                  leading: appleUsesPersistentLiquidGlassHeader
-                      ? null
-                      : _withDetailsHeaderPullReaction(
-                          Focus(
-                            descendantsAreTraversable: false,
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 8),
-                              child: AppleLiquidGlassBackButton(
-                                size: 46,
-                                foregroundColor: Colors.white,
-                                fallbackColor: Colors.black45,
-                                onPressed: () =>
-                                    Navigator.of(context).maybePop(),
-                              ),
-                            ),
-                          ),
-                        ),
-                  actions: appleUsesPersistentLiquidGlassHeader
-                      ? const <Widget>[]
-                      : [
-                          _withDetailsHeaderPullReaction(
-                            Focus(
-                              descendantsAreTraversable: false,
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: _buildDetailsHeaderActions(
-                                  context,
-                                  item,
-                                  isFavorite: isFavorite,
-                                  libraryNotifier: libraryNotifier,
-                                  foregroundColor: Colors.white,
-                                  fallbackColor: Colors.black45,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                ),
-              ),
-              _buildMobileActionAndTabsSliver(
-                context,
-                item,
-                episodesAsync,
-              ),
-            ];
-          },
-          body: TabBarView(
-            controller: _detailsTabController,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _KeepAliveDetailsTab(
-                child: CustomScrollView(
-                  slivers: _buildMobileDetailsTabSlivers(
-                    context,
-                    item,
-                    detailsAsync,
-                    castAsync,
-                    trailersAsync,
-                    relatedAsync,
-                    recommendationsAsync,
-                    l10n,
+                    slivers: _buildMobileDetailsTabSlivers(
+                      context,
+                      item,
+                      detailsAsync,
+                      castAsync,
+                      trailersAsync,
+                      relatedAsync,
+                      recommendationsAsync,
+                      l10n,
+                      mobileHeaderHeight,
+                    ),
                   ),
                 ),
-              ),
-              _KeepAliveDetailsTab(
-                child: CustomScrollView(
-                  slivers: _buildMobileEpisodesTabSlivers(
-                    context,
-                    item,
-                    episodesAsync,
+                _KeepAliveDetailsTab(
+                  child: CustomScrollView(
+                    key: const PageStorageKey<String>('details-episodes-tab'),
+                    slivers: _buildMobileEpisodesTabSlivers(
+                      context,
+                      item,
+                      episodesAsync,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1584,6 +1531,73 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return widgets;
   }
 
+  PreferredSizeWidget _buildPinnedDetailsAppBar(
+    BuildContext context, {
+    required MultimediaItem item,
+    required bool isFavorite,
+    required dynamic libraryNotifier,
+  }) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final colors = Theme.of(context).colorScheme;
+
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight),
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          centerTitle: true,
+          titleSpacing: 8,
+          leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
+          leading: appleUsesPersistentLiquidGlassHeader
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: AppleLiquidGlassBackButton(
+                    size: 46,
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                ),
+          title: Padding(
+            padding: EdgeInsets.only(
+              left: appleUsesPersistentLiquidGlassHeader ? 56 : 8,
+              right: appleUsesPersistentLiquidGlassHeader ? 148 : 8,
+            ),
+            child: Directionality(
+              textDirection:
+                  isArabic ? TextDirection.rtl : TextDirection.ltr,
+              child: Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          actions: appleUsesPersistentLiquidGlassHeader
+              ? const <Widget>[]
+              : [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _buildDetailsHeaderActions(
+                      context,
+                      item,
+                      isFavorite: isFavorite,
+                      libraryNotifier: libraryNotifier,
+                      foregroundColor: colors.onSurface,
+                      fallbackColor: colors.surfaceContainerHigh,
+                    ),
+                  ),
+                ],
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+      ),
+    );
+  }
+
   Widget _buildDesktopLayout(
     BuildContext context,
     MultimediaItem item,
@@ -1602,6 +1616,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = Theme.of(context).colorScheme.onSurface;
 
+    _syncPersistentGlassHeader(
+      context: context,
+      item: item,
+      isFavorite: isFavorite,
+      libraryNotifier: libraryNotifier,
+      foregroundColor: textColor,
+      fallbackColor: isDark
+          ? Colors.black45
+          : Theme.of(context).colorScheme.surfaceContainerHigh,
+    );
+
     return Scaffold(
       bottomNavigationBar:
           selectedEpisodeCount == 0 || _selectedDetailsTab != 1
@@ -1615,6 +1640,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
+            scrolledUnderElevation: 0,
             automaticallyImplyLeading: false,
             leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
             leading: appleUsesPersistentLiquidGlassHeader
@@ -1684,46 +1710,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ? 'الحلقات'
         : 'Episodes';
 
-    // Episode UI v2: equal-width tabs without selected checkmarks.
-    Widget tab({
-      required bool selected,
-      required Widget leading,
-      required String label,
-      required VoidCallback onTap,
-    }) {
-      return ChoiceChip(
-        selected: selected,
-        showCheckmark: false,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        label: SizedBox(
-          width: double.infinity,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              leading,
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
-          ),
-        ),
-        onSelected: (_) => onTap(),
-      );
-    }
-
     return Row(
       children: [
         Expanded(
-          child: tab(
+          child: _DetailsTabButton(
             selected: _selectedDetailsTab == 0,
-            leading: const Icon(Icons.info_outline_rounded, size: 21),
+            leading: const Icon(Icons.info_outline_rounded),
             label: isArabic ? 'التفاصيل' : 'Details',
             onTap: () {
               if (_selectedDetailsTab == 0) return;
@@ -1731,16 +1723,21 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             },
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
-          child: tab(
+          child: _DetailsTabButton(
             selected: _selectedDetailsTab == 1,
             leading: episodesState.isLoading
-                ? const SizedBox.square(
-                    dimension: 19,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                ? SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _selectedDetailsTab == 1
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : Theme.of(context).colorScheme.primary,
+                    ),
                   )
-                : const Icon(Icons.video_library_outlined, size: 21),
+                : const Icon(Icons.play_circle_outline_rounded),
             label: episodeLabel,
             onTap: () {
               if (_selectedDetailsTab == 1) return;
@@ -1994,34 +1991,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
-  Widget _buildMobileActionAndTabsSliver(
-    BuildContext context,
-    MultimediaItem item,
-    AsyncValue<List<Episode>> episodesState,
-  ) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DetailsActionButtons(
-              item: widget.item,
-              details: item,
-              itemUrl: widget.item.url,
-            ),
-            if (item.nextAiring != null) ...[
-              const SizedBox(height: 16),
-              NextAiringWidget(nextAiring: item.nextAiring!),
-            ],
-            const SizedBox(height: 24),
-            _buildDetailsPageTabs(context, episodesState),
-          ],
-        ),
-      ),
-    );
-  }
-
   List<Widget> _buildMobileDetailsTabSlivers(
     BuildContext context,
     MultimediaItem item,
@@ -2031,11 +2000,44 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     AppLocalizations l10n,
+    double headerHeight,
   ) {
     return [
       SliverToBoxAdapter(
+        child: SizedBox(
+          height: headerHeight,
+          width: double.infinity,
+          child: ClipRect(
+            child: _buildAnimeWitcherMobileHeader(
+              context,
+              item,
+              detailsState,
+            ),
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DetailsActionButtons(
+                item: widget.item,
+                details: item,
+                itemUrl: widget.item.url,
+              ),
+              if (item.nextAiring != null) ...[
+                const SizedBox(height: 16),
+                NextAiringWidget(nextAiring: item.nextAiring!),
+              ],
+            ],
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2070,7 +2072,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return [
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
