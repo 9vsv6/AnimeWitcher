@@ -119,6 +119,7 @@ class DetailsController extends _$DetailsController {
   SkyStreamProvider? _lastEpisodesProvider;
   String? _lastEpisodesUrl;
   bool _episodesRequested = false;
+  bool _episodesFetched = false;
   bool _loadStarted = false;
   bool _castLoadStarted = false;
   bool _relatedLoadStarted = false;
@@ -576,6 +577,7 @@ class DetailsController extends _$DetailsController {
     try {
       final fetchedEpisodes = await provider.getEpisodes(url);
       if (!ref.mounted || generation != _loadGeneration) return;
+      _episodesFetched = true;
       _applyEpisodes(
         provider,
         url,
@@ -905,10 +907,10 @@ class DetailsController extends _$DetailsController {
       if (state.episodes.isLoading) await _episodesLoadFuture;
       return;
     }
-    // Never refetch an already loaded list. Re-running the fetch republished
-    // the provider's pre-AniZip episodes, which made the cards flash the anime
-    // banner before the episode stills came back.
-    if (!forceReload && state.episodes.hasValue) return;
+    // Never refetch a list that already came back. Re-running the fetch
+    // republished the provider's pre-AniZip episodes, which made the cards
+    // flash the anime banner before the episode stills came back.
+    if (!forceReload && _episodesFetched) return;
 
     final provider = _lastEpisodesProvider;
     final url = _lastEpisodesUrl;
