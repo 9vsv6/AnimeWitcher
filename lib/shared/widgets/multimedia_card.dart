@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../core/utils/image_quality.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import 'cards_wrapper.dart';
 import 'shimmer_placeholder.dart';
@@ -52,8 +51,6 @@ class MultimediaCard extends StatelessWidget {
         : isDesktop
         ? (isPortrait ? 200.0 : 300.0)
         : (isPortrait ? 130.0 : 200.0);
-    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-
     final normalizedEpisodeBadge = episodeBadge?.trim();
     final badgeText =
         normalizedEpisodeBadge == null || normalizedEpisodeBadge.isEmpty
@@ -105,19 +102,9 @@ class MultimediaCard extends StatelessWidget {
     );
   }
 
-  /// Poster loader that asks for the largest artwork and, if that variant is
-  /// missing on the CDN, retries the smaller one before giving up.
-  ///
-  /// The bitmap is decoded at source resolution — no decode budget — and drawn
-  /// with mipmapped filtering so it stays sharp at any card size.
-  Widget _buildPoster(
-    BuildContext context,
-    String imageUrl, {
-    bool allowFallback = true,
-  }) {
-    final fallbackUrl = allowFallback
-        ? fallbackQualityImageUrl(imageUrl)
-        : null;
+  /// Decoded at source resolution — no decode budget — and drawn with
+  /// mipmapped filtering so the poster stays sharp at any card size.
+  Widget _buildPoster(BuildContext context, String imageUrl) {
     return CachedNetworkImage(
       imageUrl: imageUrl,
       fit: BoxFit.cover,
@@ -126,9 +113,7 @@ class MultimediaCard extends StatelessWidget {
       placeholder: (context, url) => showImageLoadingShimmer
           ? ShimmerPlaceholder(borderRadius: 12)
           : _buildImageLoadingCard(context),
-      errorWidget: (context, url, error) => fallbackUrl == null
-          ? ThumbnailErrorPlaceholder(label: title)
-          : _buildPoster(context, fallbackUrl, allowFallback: false),
+      errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(label: title),
       fadeOutDuration: Duration.zero,
       fadeInDuration: const Duration(milliseconds: 120),
       useOldImageOnUrlChange: true,

@@ -6,7 +6,6 @@ import 'package:html_unescape/html_unescape.dart';
 import '../../domain/entity/multimedia_item.dart';
 import '../../storage/settings_repository.dart';
 import '../../utils/episode_label.dart';
-import '../../utils/image_quality.dart';
 import '../../utils/safe_uri.dart';
 import '../base_provider.dart';
 import 'mediafire_utils.dart';
@@ -116,9 +115,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   final Map<String, DateTime> _animeDocumentExpiresAt = <String, DateTime>{};
   final Map<String, Future<Map<String, dynamic>>> _animeDocumentRequests =
       <String, Future<Map<String, dynamic>>>{};
-  final Map<String, Map<String, dynamic>> _posterFieldsCache =
-      <String, Map<String, dynamic>>{};
-  final Map<String, DateTime> _posterFieldsExpiresAt = <String, DateTime>{};
   final Map<String, Map<String, dynamic>> _detailSourceCache =
       <String, Map<String, dynamic>>{};
   final Map<String, DateTime> _detailSourceExpiresAt = <String, DateTime>{};
@@ -159,8 +155,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   static const Duration _detailDataTtl = Duration(minutes: 2);
   static const Duration _episodeDataTtl = Duration(minutes: 1);
   static const Duration _relatedDataTtl = Duration(minutes: 5);
-  static const Duration _posterFieldsTtl = Duration(hours: 6);
-  static const int _posterBatchSize = 30;
   static const int _previewSize = 10;
   static const int _maxRelatedItems = 10;
   static const int _maxRecommendations = 10;
@@ -310,18 +304,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return 'https://firestore.googleapis.com/v1/projects/'
         '${Uri.encodeComponent(_firestoreProjectId)}'
         '/databases/(default)/documents/${_encodeFirestorePath(path)}';
-  }
-
-  String _firestoreBatchGetUrl() {
-    return 'https://firestore.googleapis.com/v1/projects/'
-        '${Uri.encodeComponent(_firestoreProjectId)}'
-        '/databases/(default)/documents:batchGet';
-  }
-
-  /// Resource name for a request body, where Firestore expects raw ids rather
-  /// than the percent-encoded segments used in URLs.
-  String _firestoreDocumentName(String path) {
-    return 'projects/$_firestoreProjectId/databases/(default)/documents/$path';
   }
 
   String _firestoreRunQueryUrl([String parent = '']) {
@@ -672,17 +654,15 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         'name',
       ]),
     );
-    final imageUrl = highestQualityImageUrl(
-      _firstText(source, const <String>[
-        'thumb_link',
-        'thumb_uri',
-        'thumb_url',
-        'image_url',
-        'image',
-        'poster_uri',
-        'cover_uri',
-      ]),
-    );
+    final imageUrl = _firstText(source, const <String>[
+      'thumb_link',
+      'thumb_uri',
+      'thumb_url',
+      'image_url',
+      'image',
+      'poster_uri',
+      'cover_uri',
+    ]);
     final newsUrl = _firstText(source, const <String>[
       'news_link',
       'newsLink',
@@ -816,28 +796,18 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return _AnimeRoute(animeId: animeId, hit: hit);
   }
 
-  /// Biggest poster AnimeWitcher offers for a record.
-  ///
-  /// Documents carry several sizes and only some of them reach search/home
-  /// hits, so walk from the largest field down and never stop at a thumbnail
-  /// while a bigger asset is listed.
   String _posterFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
+    // AnimeWitcher exposes a dedicated large poster for cards and details.
+    // Prefer it everywhere so normal cards do not upscale the smaller asset.
     for (final candidate in <dynamic>[
-      poster['original'],
-      poster['full'],
-      poster['extraLarge'],
-      poster['extra_large'],
-      poster['extralarge'],
-      poster['xlarge'],
       poster['large'],
       source['poster_uri'],
       poster['medium'],
       source['cover_uri'],
-      source['thumb_uri'],
     ]) {
       final value = _text(candidate);
-      if (value.isNotEmpty) return highestQualityImageUrl(value);
+      if (value.isNotEmpty) return value;
     }
     return '';
   }
@@ -846,17 +816,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final poster = _map(source['poster']);
     for (final candidate in <dynamic>[
       source['cover_uri'],
-      poster['original'],
-      poster['full'],
-      poster['extraLarge'],
-      poster['extra_large'],
-      poster['extralarge'],
-      poster['xlarge'],
       poster['large'],
       source['poster_uri'],
     ]) {
       final value = _text(candidate);
-      if (value.isNotEmpty) return highestQualityImageUrl(value);
+      if (value.isNotEmpty) return value;
     }
     return '';
   }
@@ -1023,146 +987,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return '';
   }
 
-  static const List<String> _largePosterKeys = <String>[
-    'original',
-    'full',
-    'extraLarge',
-    'extra_large',
-    'extralarge',
-    'xlarge',
-    'large',
-  ];
-
-  static const List<String> _posterFieldPaths = <String>[
-    'poster',
-    'poster_uri',
-    'cover_uri',
-  ];
-
-  bool _hasLargePoster(Map<String, dynamic> hit) {
-    final poster = _map(hit['poster']);
-    for (final key in _largePosterKeys) {
-      if (_text(poster[key]).isNotEmpty) return true;
-    }
-    return false;
-  }
-
-  Map<String, dynamic>? _cachedPosterFields(String animeId) {
-    final document = _animeDocumentCache[animeId];
-    if (document != null && _hasLargePoster(document)) return document;
-    final cached = _posterFieldsCache[animeId];
-    if (cached == null) return null;
-    if (_posterFieldsExpiresAt[animeId]?.isAfter(DateTime.now()) != true) {
-      _posterFieldsCache.remove(animeId);
-      _posterFieldsExpiresAt.remove(animeId);
-      return null;
-    }
-    return cached;
-  }
-
-  void _applyPosterFields(
-    Map<String, dynamic> hit,
-    Map<String, dynamic> fields,
-  ) {
-    final poster = _map(fields['poster']);
-    if (poster.isNotEmpty) {
-      hit['poster'] = <String, dynamic>{..._map(hit['poster']), ...poster};
-    }
-    for (final key in const <String>['poster_uri', 'cover_uri']) {
-      final value = _text(fields[key]);
-      if (value.isNotEmpty && _text(hit[key]).isEmpty) hit[key] = value;
-    }
-  }
-
-  /// Reads the poster fields of several `anime_list` documents in one call.
-  ///
-  /// The field mask keeps the response tiny, so this stays cheap enough to run
-  /// for a whole page of cards.
-  Future<Map<String, Map<String, dynamic>>> _fetchPosterFields(
-    List<String> animeIds,
-  ) async {
-    if (animeIds.isEmpty) return const <String, Map<String, dynamic>>{};
-    try {
-      final response = await _dio.post<dynamic>(
-        _firestoreBatchGetUrl(),
-        data: <String, dynamic>{
-          'documents': <String>[
-            for (final id in animeIds) _firestoreDocumentName('anime_list/$id'),
-          ],
-          'mask': const <String, dynamic>{'fieldPaths': _posterFieldPaths},
-        },
-        options: _jsonOptions(timeout: _serverTimeout),
-      );
-      final output = <String, Map<String, dynamic>>{};
-      for (final rowRaw in _list(response.data)) {
-        final found = _map(_map(rowRaw)['found']);
-        if (found.isEmpty) continue;
-        final id = _lastPathSegment(_text(found['name']));
-        if (id.isEmpty) continue;
-        output[id] = _firestoreFields(found['fields']);
-      }
-      return output;
-    } on DioException {
-      return const <String, Map<String, dynamic>>{};
-    }
-  }
-
-  /// Gives every hit the poster the details page would show.
-  ///
-  /// Some Algolia indexes only store the small `poster_uri`, so cards stayed
-  /// soft until the anime page fetched the full document. One masked batch read
-  /// per page — cached per title, and skipped entirely when the hits already
-  /// carry a large poster — lets search, home and the rest open at full quality.
-  Future<void> _fillLargePosters(List<Map<String, dynamic>> hits) async {
-    final pending = <String, List<Map<String, dynamic>>>{};
-    for (final hit in hits) {
-      if (_hasLargePoster(hit)) continue;
-      final animeId = _animeIdFromHit(hit);
-      if (animeId.isEmpty) continue;
-      final cached = _cachedPosterFields(animeId);
-      if (cached != null) {
-        _applyPosterFields(hit, cached);
-        continue;
-      }
-      pending.putIfAbsent(animeId, () => <Map<String, dynamic>>[]).add(hit);
-    }
-    if (pending.isEmpty) return;
-
-    final ids = pending.keys.toList(growable: false);
-    final chunks = <List<String>>[
-      for (var start = 0; start < ids.length; start += _posterBatchSize)
-        ids.sublist(
-          start,
-          start + _posterBatchSize > ids.length
-              ? ids.length
-              : start + _posterBatchSize,
-        ),
-    ];
-    final results = await Future.wait(chunks.map(_fetchPosterFields));
-
-    final expiresAt = DateTime.now().add(_posterFieldsTtl);
-    for (var index = 0; index < chunks.length; index++) {
-      final fetched = results[index];
-      for (final id in chunks[index]) {
-        final fields = fetched[id] ?? const <String, dynamic>{};
-        // Cache misses too: a title without a stored large poster should not be
-        // requested again on every page.
-        _posterFieldsCache[id] = fields;
-        _posterFieldsExpiresAt[id] = expiresAt;
-        if (fields.isEmpty) continue;
-        for (final hit in pending[id] ?? const <Map<String, dynamic>>[]) {
-          _applyPosterFields(hit, fields);
-        }
-      }
-    }
-  }
-
   Future<List<MultimediaItem>> _dedupeHits(
     Iterable<dynamic> hits, {
     bool recent = false,
   }) async {
     final maps = hits.map(_map).where((hit) => hit.isNotEmpty).toList();
-    await _fillLargePosters(maps);
     final seen = <String>{};
     final output = <MultimediaItem>[];
     for (final hit in maps) {
@@ -2690,10 +2519,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     // the document id is the same server-side episode identity used by the
     // original AnimeWitcher implementation; use it only as a last resort.
     final number = serverNumber ?? _episodeNumberFromId(id);
-    final image = highestQualityImageUrl(
-      _text(
-        source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
-      ),
+    final image = _text(
+      source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
     );
     final isFiller = _isTruthy(
       source['filler'] ?? source['is_filler'] ?? source['isFiller'],

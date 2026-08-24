@@ -556,7 +556,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<MultimediaItem?> detailsState,
   ) {
     final screenSize = MediaQuery.sizeOf(context);
-    final screenWidth = screenSize.width;
     // Scale the handset header from the physical phone width in portrait terms.
     // Using the landscape width makes every SDP position grow ~2x and pushes
     // the poster/title below the visible header on rotated phones.
