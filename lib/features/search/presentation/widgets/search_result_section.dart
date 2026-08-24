@@ -31,8 +31,12 @@ class SearchResultSection extends ConsumerStatefulWidget {
       _SearchResultSectionState();
 }
 
-class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
+class _SearchResultSectionState extends ConsumerState<SearchResultSection>
+    with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void dispose() {
@@ -40,8 +44,30 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
     super.dispose();
   }
 
+  /// Keep poster [CachedNetworkImage] state alive while Details covers the
+  /// search route, and skip shimmer so a rare remount does not flash the grid.
+  Widget _resultCard(MultimediaItem item, int rIndex, {bool compact = false}) {
+    return MultimediaCard(
+      key: ValueKey(item.url),
+      imageUrl: AppImageFallbacks.poster(
+        item.posterUrl,
+        label: item.title,
+      ),
+      title: item.title,
+      heroTag: 'search_${widget.providerId}_${item.url}_$rIndex',
+      compact: compact,
+      showImageLoadingShimmer: false,
+      useHero: false,
+      focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
+      onTap: () => DetailsRoute(
+        $extra: DetailsRouteExtra(item: item),
+      ).push<void>(context),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (widget.results.isEmpty) return const SizedBox.shrink();
 
     final isDesktopPlatform =
@@ -70,28 +96,16 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           if (rIndex >= widget.results.length) {
             return ShimmerPlaceholder(borderRadius: 12);
           }
-
-          final item = widget.results[rIndex];
-          final uniqueTag =
-              'search_${widget.providerId}_${item.url}_$rIndex';
-          return MultimediaCard(
-              key: ValueKey(item.url),
-              imageUrl: AppImageFallbacks.poster(
-                item.posterUrl,
-                label: item.title,
-              ),
-              title: item.title,
-              heroTag: uniqueTag,
-              focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
-              onTap: () => DetailsRoute(
-                $extra: DetailsRouteExtra(item: item),
-              ).push<void>(context),
-            );
+          return KeepAlive(
+            keepAlive: true,
+            child: _resultCard(widget.results[rIndex], rIndex),
+          );
         },
       );
     }
 
-    final isLandscape = MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
+    final isLandscape =
+        MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
     if (isLandscape) {
       const desktopColumns = ResponsiveBreakpoints.desktopLandscapeAnimeColumns;
       return GridView.builder(
@@ -110,23 +124,9 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           if (rIndex >= widget.results.length) {
             return ShimmerPlaceholder(borderRadius: 12);
           }
-
-          final item = widget.results[rIndex];
-          final uniqueTag =
-              'search_${widget.providerId}_${item.url}_$rIndex';
-          return MultimediaCard(
-            key: ValueKey(item.url),
-            imageUrl: AppImageFallbacks.poster(
-              item.posterUrl,
-              label: item.title,
-            ),
-            title: item.title,
-            heroTag: uniqueTag,
-            compact: true,
-            focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
-            onTap: () => DetailsRoute(
-              $extra: DetailsRouteExtra(item: item),
-            ).push<void>(context),
+          return KeepAlive(
+            keepAlive: true,
+            child: _resultCard(widget.results[rIndex], rIndex, compact: true),
           );
         },
       );
@@ -154,28 +154,17 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
               );
             }
 
-            final item = widget.results[rIndex];
-            final uniqueTag =
-                'search_${widget.providerId}_${item.url}_$rIndex';
-            return Padding(
-              padding: const EdgeInsets.only(right: spacing),
-              child: MultimediaCard(
-                key: ValueKey(item.url),
-                imageUrl: AppImageFallbacks.poster(
-                  item.posterUrl,
-                  label: item.title,
-                ),
-                title: item.title,
-                heroTag: uniqueTag,
-                focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
-                onTap: () => DetailsRoute(
-                  $extra: DetailsRouteExtra(item: item),
-                ).push<void>(context),
+            // KeepAlive must be the direct ListView child (ParentDataWidget).
+            return KeepAlive(
+              keepAlive: true,
+              child: Padding(
+                padding: const EdgeInsets.only(right: spacing),
+                child: _resultCard(widget.results[rIndex], rIndex),
               ),
             );
           },
         ),
       ),
-    );  }
-
+    );
+  }
 }
