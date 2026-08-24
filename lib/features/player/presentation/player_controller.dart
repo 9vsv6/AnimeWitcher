@@ -608,6 +608,12 @@ class PlayerController extends Notifier<PlayerState> {
       _isInitialized &&
       (_item.contentType == MultimediaContentType.series ||
           _item.contentType == MultimediaContentType.anime);
+
+  /// True when the episode picker has something to offer: a series, or a movie
+  /// or special with several rows to switch between (مترجم / مدبلج). Those are
+  /// not series, but their variants still belong in the picker.
+  bool get hasEpisodePicker =>
+      isSeries || (_isInitialized && (_item.episodes?.length ?? 0) > 1);
   MultimediaItem? get multimediaItem => _isInitialized ? _item : null;
   String? get currentEpisodeUrl => _episode?.url ?? _videoUrl;
   Episode? get currentEpisode => _episode ?? _resolveCurrentEpisode();
@@ -2086,7 +2092,9 @@ class PlayerController extends Notifier<PlayerState> {
 
   Episode? _resolveCurrentEpisode() {
     if (_episode != null) return _episode;
-    if (!isSeries) return null;
+    // Movies with مترجم / مدبلج variants are not series but still play one of
+    // several rows, so resolve those too.
+    if (!hasEpisodePicker) return null;
     return _item.episodes?.firstWhereOrNull((e) => e.url == _videoUrl);
   }
 

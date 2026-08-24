@@ -378,11 +378,11 @@ class PlayerMetadataScrimState extends State<PlayerMetadataScrim>
       parts.add(item.year.toString());
     }
 
-    // Season/Episode (series only). Numberless rows (specials, OVAs, مترجم /
+    // Season/Episode for series. Numberless rows (specials, OVAs, مترجم /
     // مدبلج) have no S/E pair, so show their name instead of "E0".
-    if (widget.isSeries && widget.episode != null) {
-      final ep = widget.episode!;
-      if (ep.episode > 0) {
+    final ep = widget.episode;
+    if (ep != null) {
+      if (widget.isSeries && ep.episode > 0) {
         parts.add('S${ep.season}:E${ep.episode}');
       } else {
         final label = episodeIdentityLabel(

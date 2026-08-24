@@ -942,9 +942,12 @@ class SkyStreamPlayerControlsState
       playerControllerProvider.select((s) => s.maxPlaybackSpeed),
     );
     final isSeries = playerNotifier.isSeries;
-    final episodeLabel = isSeries
-        ? _buildEpisodeLine(context, playerNotifier.currentEpisode)
-        : null;
+    final hasEpisodePicker = playerNotifier.hasEpisodePicker;
+    // Movie variants (مترجم / مدبلج) and specials also have a name to show.
+    final episodeLabel = _buildEpisodeLine(
+      context,
+      playerNotifier.currentEpisode,
+    );
     final skipSegments = ref.watch(
       playerControllerProvider.select((s) => s.skipSegments),
     );
@@ -1035,6 +1038,7 @@ class SkyStreamPlayerControlsState
                     externalSubtitles: externalSubtitles,
                     showEpisodeList: showEpisodeList,
                     isSeries: isSeries,
+                    hasEpisodePicker: hasEpisodePicker,
                     supportsPlaybackSpeed: supportsPlaybackSpeed,
                     playbackSpeed: playbackSpeed,
                     maxPlaybackSpeed: maxPlaybackSpeed,
@@ -1151,7 +1155,7 @@ class SkyStreamPlayerControlsState
                 // Episodes side drawer (series only) â same shell as the
                 // sources panel, right-anchored. Topmost so it sits above the
                 // chrome. Pure Row layout inside (no nested Stack).
-                if (isSeries &&
+                if (hasEpisodePicker &&
                     ref
                             .read(playerControllerProvider.notifier)
                             .multimediaItem !=
@@ -1247,6 +1251,7 @@ class SkyStreamPlayerControlsState
     List<SubtitleFile>? externalSubtitles,
     required bool showEpisodeList,
     required bool isSeries,
+    required bool hasEpisodePicker,
     required bool supportsPlaybackSpeed,
     required double playbackSpeed,
     required double maxPlaybackSpeed,
@@ -1323,7 +1328,7 @@ class SkyStreamPlayerControlsState
           onPressed: _toggleOrientation,
           isTv: _isTv,
         ),
-      if (isSeries && playerSettings.showEpisodes)
+      if (hasEpisodePicker && playerSettings.showEpisodes)
         PlayerIconButton(
           icon: Icons.playlist_play_rounded,
           tooltip: l10n.episodes,
