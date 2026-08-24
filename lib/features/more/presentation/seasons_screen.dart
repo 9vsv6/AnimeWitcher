@@ -18,34 +18,39 @@ class SeasonsScreen extends ConsumerStatefulWidget {
   ConsumerState<SeasonsScreen> createState() => _SeasonsScreenState();
 }
 
-class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
+class _SeasonsScreenState extends ConsumerState<SeasonsScreen>
+    with SingleTickerProviderStateMixin {
   late Future<_SeasonsBootstrap> _bootstrapFuture;
-  late final PageController _pageController;
+  late final TabController _tabController;
   int _selectedTab = 1;
   int _reloadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: _selectedTab);
+    _tabController = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: _selectedTab,
+    )..addListener(_handleTabTick);
     _bootstrapFuture = _loadBootstrap();
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _tabController
+      ..removeListener(_handleTabTick)
+      ..dispose();
     super.dispose();
   }
 
-  void _selectTab(int value) {
-    if (value < 0 || value > 3 || value == _selectedTab) return;
-    setState(() => _selectedTab = value);
-    _pageController.animateToPage(
-      value,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-    );
+  void _handleTabTick() {
+    final value = _tabController.index;
+    if (value != _selectedTab) {
+      setState(() => _selectedTab = value);
+    }
   }
+
   AnimeWitcherNativeProvider? _provider() {
     final active = ref.read(activeProviderProvider);
     if (active is AnimeWitcherNativeProvider) return active;
@@ -136,23 +141,19 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
           return Column(
             children: [
               _SeasonTabs(
-                selectedIndex: _selectedTab,
+                controller: _tabController,
                 isArabic: isArabic,
-                onSelected: _selectTab,
               ),
               Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: 4,
-                  onPageChanged: (value) {
-                    if (value != _selectedTab) {
-                      setState(() => _selectedTab = value);
-                    }
-                  },
-                  itemBuilder: (context, index) => RefreshIndicator(
-                    onRefresh: _refreshSeasons,
-                    child: _tabBody(data, isArabic, index),
-                  ),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    for (var index = 0; index < 4; index++)
+                      RefreshIndicator(
+                        onRefresh: _refreshSeasons,
+                        child: _tabBody(data, isArabic, index),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -215,14 +216,12 @@ class _SeasonsBootstrap {
 }
 
 class _SeasonTabs extends StatelessWidget {
-  final int selectedIndex;
+  final TabController controller;
   final bool isArabic;
-  final ValueChanged<int> onSelected;
 
   const _SeasonTabs({
-    required this.selectedIndex,
+    required this.controller,
     required this.isArabic,
-    required this.onSelected,
   });
 
   @override
@@ -236,12 +235,11 @@ class _SeasonTabs extends StatelessWidget {
       Icons.upcoming_outlined,
       Icons.calendar_month_outlined,
     ];
-    return UnderlineSegmentTabs(
-      selectedIndex: selectedIndex,
-      onSelected: onSelected,
+    return FilterStyleTabBar(
+      controller: controller,
       tabs: [
         for (var i = 0; i < labels.length; i++)
-          UnderlineSegmentTab(label: labels[i], icon: icons[i]),
+          FilterStyleTab(label: labels[i], icon: icons[i]),
       ],
     );
   }

@@ -189,7 +189,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Offset _tabSlideFrom = Offset.zero;
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
-  late final PageController _detailsPageController;
+  late final TabController _detailsTabController;
 
   static const String _removeLibraryAction = '__remove_from_library__';
 
@@ -396,25 +396,22 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         .loadEpisodesOnDemand();
   }
 
-  void _switchDetailsTab(int targetTab) {
-    if (targetTab == _selectedDetailsTab) return;
-
-    _loadEpisodesIfNeeded(targetTab);
+  void _handleDetailsTabControllerTick() {
+    final index = _detailsTabController.index;
+    _loadEpisodesIfNeeded(index);
+    if (index == _selectedDetailsTab) return;
 
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-    final entersFromLeft = isRtl ? targetTab == 1 : targetTab == 0;
+    final entersFromLeft = isRtl ? index == 1 : index == 0;
     _tabSlideFrom = Offset(entersFromLeft ? -0.16 : 0.16, 0);
-
-    setState(() => _selectedDetailsTab = targetTab);
-    if (_detailsPageController.hasClients) {
-      _detailsPageController.animateToPage(
-        targetTab,
-        duration: _tabTransitionDuration,
-        curve: Curves.easeOutCubic,
-      );
-      return;
-    }
+    setState(() => _selectedDetailsTab = index);
     _tabTransitionController.forward(from: 0);
+  }
+
+  void _switchDetailsTab(int targetTab) {
+    if (targetTab == _detailsTabController.index) return;
+    _loadEpisodesIfNeeded(targetTab);
+    _detailsTabController.animateTo(targetTab);
   }
 
   Widget _buildTabTransition({required Widget child}) {
@@ -810,7 +807,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       parent: _tabTransitionController,
       curve: Curves.easeOutCubic,
     );
-    _detailsPageController = PageController(initialPage: _selectedDetailsTab);
+    _detailsTabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: _selectedDetailsTab,
+    )..addListener(_handleDetailsTabControllerTick);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(detailsControllerProvider(widget.item.url).notifier)
@@ -821,7 +822,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   @override
   void dispose() {
     applePersistentGlassHeaderController.hide(this);
-    _detailsPageController.dispose();
+    _detailsTabController
+      ..removeListener(_handleDetailsTabControllerTick)
+      ..dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -1028,14 +1031,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         children: [
           _buildDetailsPageTabs(context, episodesAsync),
           Expanded(
-            child: PageView(
-              controller: _detailsPageController,
-              onPageChanged: (value) {
-                _loadEpisodesIfNeeded(value);
-                if (value != _selectedDetailsTab) {
-                  setState(() => _selectedDetailsTab = value);
-                }
-              },
+            child: TabBarView(
+              controller: _detailsTabController,
               children: [
                 _KeepAliveDetailsTab(
                   child: CustomScrollView(
@@ -1652,34 +1649,24 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         : isArabic
         ? 'الحلقات'
         : 'Episodes';
-    final colors = Theme.of(context).colorScheme;
 
-    return UnderlineSegmentTabs(
-      selectedIndex: _selectedDetailsTab,
-      isScrollable: false,
-      onSelected: (index) {
-        if (index == _selectedDetailsTab) return;
-        _switchDetailsTab(index);
-      },
+    return FilterStyleTabBar(
+      controller: _detailsTabController,
+      isScrollable: true,
       tabs: [
-        UnderlineSegmentTab(
+        FilterStyleTab(
           icon: Icons.info_outline_rounded,
           label: isArabic ? 'التفاصيل' : 'Details',
         ),
-        UnderlineSegmentTab(
+        FilterStyleTab(
           label: episodeLabel,
           icon: episodesState.isLoading
               ? null
               : Icons.play_circle_outline_rounded,
           leading: episodesState.isLoading
-              ? SizedBox.square(
+              ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: _selectedDetailsTab == 1
-                        ? colors.primary
-                        : colors.onSurfaceVariant,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : null,
         ),
@@ -1960,25 +1947,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DetailsActionButtons(
-                item: widget.item,
-                details: item,
-                itemUrl: widget.item.url,
-              ),
               if (item.nextAiring != null) ...[
-                const SizedBox(height: 16),
                 NextAiringWidget(nextAiring: item.nextAiring!),
+                const SizedBox(height: 8),
               ],
-            ],
-          ),
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
               _buildSynopsisAndGenres(context, item, detailsState, l10n),
               const SizedBox(height: 28),
               AnimeInformationSection(item: item),
