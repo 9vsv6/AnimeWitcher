@@ -1976,9 +1976,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       ),
     ];
 
-    if (showDetailsPage) {
-      slivers.add(
-        SliverToBoxAdapter(
+    // Keep both tab bodies mounted. Switching tabs used to dispose every
+    // episode thumbnail, which then flashed the anime banner while AniZip
+    // stills decoded again.
+    slivers.add(
+      SliverVisibility(
+        visible: showDetailsPage,
+        maintainState: true,
+        sliver: SliverToBoxAdapter(
           child: _buildTabTransition(
             child: Padding(
               key: const ValueKey<int>(0),
@@ -2004,46 +2009,48 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             ),
           ),
         ),
-      );
+      ),
+    );
 
-    } else {
-      slivers.add(
-        SliverToBoxAdapter(
-          child: _buildTabTransition(
-            child: Padding(
-              key: const ValueKey<int>(1),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _episodeLoadStatus(context, episodesState),
-                  if (episodeReady)
-                    DetailsSeasonListWrapper(itemUrl: widget.item.url),
-                  if (episodeReady) const SizedBox(height: 12),
-                ],
+    slivers.add(
+      SliverVisibility(
+        visible: !showDetailsPage,
+        maintainState: true,
+        sliver: SliverMainAxisGroup(
+          slivers: [
+            SliverToBoxAdapter(
+              child: _buildTabTransition(
+                child: Padding(
+                  key: const ValueKey<int>(1),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _episodeLoadStatus(context, episodesState),
+                      if (episodeReady)
+                        DetailsSeasonListWrapper(itemUrl: widget.item.url),
+                      if (episodeReady) const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+            if (episodeReady)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                sliver: SliverDetailsEpisodeList(
+                  parentItem: item,
+                  itemUrl: widget.item.url,
+                  isMovie: false,
+                  transition: _tabTransitionAnimation,
+                  transitionOffset: _tabSlideFrom,
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 50)),
+          ],
         ),
-      );
-
-      if (episodeReady) {
-        slivers.add(
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            sliver: SliverDetailsEpisodeList(
-              parentItem: item,
-              itemUrl: widget.item.url,
-              isMovie: false,
-              transition: _tabTransitionAnimation,
-              transitionOffset: _tabSlideFrom,
-            ),
-          ),
-        );
-      }
-
-      slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 50)));
-    }
+      ),
+    );
 
     return slivers;
   }

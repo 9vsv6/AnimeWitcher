@@ -600,35 +600,40 @@ class EpisodeCard extends HookConsumerWidget {
     required bool isSelected,
   }) {
     final episodePosterUrl = AppImageFallbacks.optional(episode.posterUrl);
-    final animeBannerUrl = AppImageFallbacks.optional(parentItem.bannerUrl);
-    final animePosterUrl = AppImageFallbacks.poster(
-      parentItem.posterUrl,
-      label: parentItem.title,
-    );
-    final imageCandidates = <String>{
-      if (episodePosterUrl != null) episodePosterUrl,
-      if (animeBannerUrl != null) animeBannerUrl,
-      if (animePosterUrl != null) animePosterUrl,
-    }.toList(growable: false);
+    // Prefer the episode still (AniZip). Falling back through CachedNetworkImage
+    // errorWidget to the anime banner caused a visible flash: after leaving
+    // the episodes tab the still is evicted, remount treats it as an error,
+    // and the in-memory banner paints for a frame before AniZip returns.
+    final imageUrl =
+        episodePosterUrl ??
+        AppImageFallbacks.episode(
+          bannerUrl: parentItem.bannerUrl,
+          posterUrl: parentItem.posterUrl,
+          label: parentItem.title,
+        );
+    final memCacheWidth = (140 * MediaQuery.devicePixelRatioOf(context))
+        .ceil()
+        .clamp(160, 640);
+    final placeholderColor = Theme.of(
+      context,
+    ).colorScheme.surfaceContainerHighest;
 
-    Widget buildImageCandidate(int index) {
-      if (index >= imageCandidates.length) {
+    Widget buildThumbnailImage() {
+      if (imageUrl == null || imageUrl.isEmpty) {
         return const ThumbnailErrorPlaceholder();
       }
       return CachedNetworkImage(
-        imageUrl: imageCandidates[index],
+        key: ValueKey<String>(imageUrl),
+        imageUrl: imageUrl,
         fit: BoxFit.cover,
-        errorWidget: (_, _, _) => buildImageCandidate(index + 1),
-        placeholder: (context, url) => Container(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        ),
+        memCacheWidth: memCacheWidth,
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+        useOldImageOnUrlChange: true,
+        placeholder: (_, _) => ColoredBox(color: placeholderColor),
+        errorWidget: (_, _, _) => episodePosterUrl != null
+            ? ColoredBox(color: placeholderColor)
+            : const ThumbnailErrorPlaceholder(),
       );
     }
 
@@ -640,7 +645,7 @@ class EpisodeCard extends HookConsumerWidget {
             width: 140,
             child: AspectRatio(
               aspectRatio: 16 / 9,
-              child: buildImageCandidate(0),
+              child: buildThumbnailImage(),
             ),
           ),
         ),

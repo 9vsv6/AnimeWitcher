@@ -486,10 +486,10 @@ class SliverDetailsDesktopEpisodeGrid extends ConsumerWidget {
                             ),
                             child: i < rowEpisodes.length
                                 ? EpisodeCard(
-                                        episode: rowEpisodes[i],
-                                        parentItem: parentItem,
-                                      )
-                                      as Widget
+                                    key: ValueKey(rowEpisodes[i].url),
+                                    episode: rowEpisodes[i],
+                                    parentItem: parentItem,
+                                  )
                                 : const SizedBox.shrink(),
                           ),
                         ),
@@ -590,8 +590,15 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final ep = displayedEpisodes[index];
-            return _withTransition(
-              EpisodeCard(episode: ep, parentItem: parentItem) as Widget,
+            return KeepAlive(
+              keepAlive: true,
+              child: _withTransition(
+                EpisodeCard(
+                  key: ValueKey(ep.url),
+                  episode: ep,
+                  parentItem: parentItem,
+                ),
+              ),
             );
           },
         ),
@@ -909,10 +916,10 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
                 ),
                 child: index < rowEpisodes.length
                     ? EpisodeCard(
-                            episode: rowEpisodes[index],
-                            parentItem: parentItem,
-                          )
-                          as Widget
+                        key: ValueKey(rowEpisodes[index].url),
+                        episode: rowEpisodes[index],
+                        parentItem: parentItem,
+                      )
                     : const SizedBox.shrink(),
               ),
             ),
