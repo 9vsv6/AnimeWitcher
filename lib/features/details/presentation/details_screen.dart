@@ -30,6 +30,7 @@ import "widgets/premium_details_widgets.dart";
 import "widgets/anime_information_section.dart";
 import "../../../shared/widgets/expandable_text.dart";
 import "../../../shared/widgets/loading_indicator.dart";
+import "../../../shared/widgets/underline_segment_tabs.dart";
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
@@ -51,60 +52,6 @@ class _GentleTopOverscrollPhysics extends BouncingScrollPhysics {
     final isPullingPastTop =
         position.pixels <= position.minScrollExtent && offset > 0;
     return isPullingPastTop ? appliedOffset * 0.16 : appliedOffset;
-  }
-}
-
-class _DetailsTabButton extends StatelessWidget {
-  const _DetailsTabButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.leading,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final Widget? leading;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final foreground = selected ? colors.onPrimary : colors.onSurface;
-    return Material(
-      color: selected ? colors.primary : colors.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(28),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (leading != null) ...[
-                IconTheme(
-                  data: IconThemeData(color: foreground, size: 20),
-                  child: leading!,
-                ),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -1079,11 +1026,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: _buildDetailsPageTabs(context, episodesAsync),
-          ),
-          Divider(height: 1, color: Theme.of(context).dividerColor),
+          _buildDetailsPageTabs(context, episodesAsync),
           Expanded(
             child: PageView(
               controller: _detailsPageController,
@@ -1709,41 +1652,36 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         : isArabic
         ? 'الحلقات'
         : 'Episodes';
+    final colors = Theme.of(context).colorScheme;
 
-    return Row(
-      children: [
-        Expanded(
-          child: _DetailsTabButton(
-            selected: _selectedDetailsTab == 0,
-            leading: const Icon(Icons.info_outline_rounded),
-            label: isArabic ? 'التفاصيل' : 'Details',
-            onTap: () {
-              if (_selectedDetailsTab == 0) return;
-              _switchDetailsTab(0);
-            },
-          ),
+    return UnderlineSegmentTabs(
+      selectedIndex: _selectedDetailsTab,
+      isScrollable: false,
+      onSelected: (index) {
+        if (index == _selectedDetailsTab) return;
+        _switchDetailsTab(index);
+      },
+      tabs: [
+        UnderlineSegmentTab(
+          icon: Icons.info_outline_rounded,
+          label: isArabic ? 'التفاصيل' : 'Details',
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _DetailsTabButton(
-            selected: _selectedDetailsTab == 1,
-            leading: episodesState.isLoading
-                ? SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _selectedDetailsTab == 1
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : Theme.of(context).colorScheme.primary,
-                    ),
-                  )
-                : const Icon(Icons.play_circle_outline_rounded),
-            label: episodeLabel,
-            onTap: () {
-              if (_selectedDetailsTab == 1) return;
-              _switchDetailsTab(1);
-            },
-          ),
+        UnderlineSegmentTab(
+          label: episodeLabel,
+          icon: episodesState.isLoading
+              ? null
+              : Icons.play_circle_outline_rounded,
+          leading: episodesState.isLoading
+              ? SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _selectedDetailsTab == 1
+                        ? colors.primary
+                        : colors.onSurfaceVariant,
+                  ),
+                )
+              : null,
         ),
       ],
     );
@@ -1978,7 +1916,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildDetailsPageTabs(context, episodesState),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         _buildTabTransition(
           child: Column(
             key: ValueKey<int>(_selectedDetailsTab),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:skystream/shared/widgets/underline_segment_tabs.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
@@ -131,7 +132,6 @@ class _GlobalStatisticsScreenState
             isArabic: isArabic,
             onSelected: _selectRanking,
           ),
-          Divider(height: 1, color: Theme.of(context).dividerColor),
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -359,7 +359,7 @@ class _RankingPageState extends State<_RankingPage>
   }
 }
 
-class _RankingTabs extends StatefulWidget {
+class _RankingTabs extends StatelessWidget {
   const _RankingTabs({
     required this.selectedIndex,
     required this.isArabic,
@@ -371,121 +371,17 @@ class _RankingTabs extends StatefulWidget {
   final ValueChanged<int> onSelected;
 
   @override
-  State<_RankingTabs> createState() => _RankingTabsState();
-}
-
-class _RankingTabsState extends State<_RankingTabs> {
-  final GlobalKey _viewportKey = GlobalKey();
-  late final List<GlobalKey> _rankingKeys = List<GlobalKey>.generate(
-    AnimeWitcherGlobalRanking.values.length,
-    (_) => GlobalKey(),
-  );
-  bool _visibilityCheckScheduled = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _scheduleSelectedRankingVisibility();
-  }
-
-  @override
-  void didUpdateWidget(covariant _RankingTabs oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedIndex != widget.selectedIndex ||
-        oldWidget.isArabic != widget.isArabic) {
-      _scheduleSelectedRankingVisibility();
-    }
-  }
-
-  void _scheduleSelectedRankingVisibility() {
-    if (_visibilityCheckScheduled) return;
-    _visibilityCheckScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _visibilityCheckScheduled = false;
-      if (!mounted) return;
-      _revealSelectedRankingIfNeeded();
-    });
-  }
-
-  void _revealSelectedRankingIfNeeded() {
-    final index = widget.selectedIndex;
-    if (index < 0 || index >= _rankingKeys.length) return;
-
-    final viewportContext = _viewportKey.currentContext;
-    final rankingContext = _rankingKeys[index].currentContext;
-    final viewportBox = viewportContext?.findRenderObject();
-    final rankingBox = rankingContext?.findRenderObject();
-    if (viewportBox is! RenderBox ||
-        rankingBox is! RenderBox ||
-        !viewportBox.hasSize ||
-        !rankingBox.hasSize ||
-        rankingContext == null) {
-      return;
-    }
-
-    final viewportOrigin = viewportBox.localToGlobal(Offset.zero);
-    final rankingOrigin = rankingBox.localToGlobal(Offset.zero);
-    final viewportLeft = viewportOrigin.dx + 4;
-    final viewportRight = viewportOrigin.dx + viewportBox.size.width - 4;
-    final rankingLeft = rankingOrigin.dx;
-    final rankingRight = rankingOrigin.dx + rankingBox.size.width;
-    if (rankingLeft >= viewportLeft && rankingRight <= viewportRight) return;
-
-    unawaited(
-      Scrollable.ensureVisible(
-        rankingContext,
-        alignment: 0.5,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final rankings = AnimeWitcherGlobalRanking.values;
-    return SingleChildScrollView(
-      key: _viewportKey,
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Row(
-        children: [
-          for (var i = 0; i < rankings.length; i++) ...[
-            Material(
-              key: _rankingKeys[i],
-              color: widget.selectedIndex == i
-                  ? colors.primary
-                  : colors.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(24),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => widget.onSelected(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 11,
-                  ),
-                  child: Text(
-                    widget.isArabic
-                        ? rankings[i].arabicTitle
-                        : rankings[i].englishTitle,
-                    style: TextStyle(
-                      color: widget.selectedIndex == i
-                          ? colors.onPrimary
-                          : colors.onSurface,
-                      fontWeight: widget.selectedIndex == i
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (i != rankings.length - 1) const SizedBox(width: 8),
-          ],
-        ],
-      ),
+    const rankings = AnimeWitcherGlobalRanking.values;
+    return UnderlineSegmentTabs(
+      selectedIndex: selectedIndex,
+      onSelected: onSelected,
+      tabs: [
+        for (final ranking in rankings)
+          UnderlineSegmentTab(
+            label: isArabic ? ranking.arabicTitle : ranking.englishTitle,
+          ),
+      ],
     );
   }
 }

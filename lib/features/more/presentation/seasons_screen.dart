@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:skystream/shared/widgets/underline_segment_tabs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
@@ -139,7 +140,6 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen> {
                 isArabic: isArabic,
                 onSelected: _selectTab,
               ),
-              Divider(height: 1, color: Theme.of(context).dividerColor),
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
@@ -230,56 +230,19 @@ class _SeasonTabs extends StatelessWidget {
     final labels = isArabic
         ? const <String>['السابق', 'الحالي', 'القادم', 'المواسم الأخرى']
         : const <String>['Previous', 'Current', 'Next', 'Other seasons'];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++) ...[
-            _SeasonTabButton(
-              label: labels[i],
-              selected: selectedIndex == i,
-              onTap: () => onSelected(i),
-            ),
-            if (i != labels.length - 1) const SizedBox(width: 8),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SeasonTabButton extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _SeasonTabButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: selected ? colors.primary : colors.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(28),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? colors.onPrimary : colors.onSurface,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ),
-      ),
+    const icons = <IconData>[
+      Icons.history_rounded,
+      Icons.play_circle_outline_rounded,
+      Icons.upcoming_outlined,
+      Icons.calendar_month_outlined,
+    ];
+    return UnderlineSegmentTabs(
+      selectedIndex: selectedIndex,
+      onSelected: onSelected,
+      tabs: [
+        for (var i = 0; i < labels.length; i++)
+          UnderlineSegmentTab(label: labels[i], icon: icons[i]),
+      ],
     );
   }
 }
