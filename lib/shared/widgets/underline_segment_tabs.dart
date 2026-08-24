@@ -80,64 +80,59 @@ class FilterStyleTabBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// Keeps a [TabBar] indicator sliding in sync with a lazy [PageView.builder],
-/// matching filter-dialog motion without mounting every page eagerly.
-mixin FilterStyleTabPageSync<T extends StatefulWidget> on State<T> {
-  TabController get filterTabController;
-  PageController get filterPageController;
+/// Defers a [TabBarView] child until its tab is first reached, so pages that
+/// fetch on mount keep [TabBarView]'s native indicator motion without every
+/// tab requesting data as soon as the screen opens.
+class LazyTabChild extends StatefulWidget {
+  const LazyTabChild({
+    super.key,
+    required this.controller,
+    required this.index,
+    required this.builder,
+    this.placeholder = const SizedBox.shrink(),
+  });
 
-  bool _syncingFromTab = false;
-  bool _syncingFromPage = false;
+  final TabController controller;
+  final int index;
+  final WidgetBuilder builder;
+  final Widget placeholder;
 
-  void attachFilterStyleTabPageSync() {
-    filterTabController.addListener(_handleFilterTabTick);
-    filterPageController.addListener(_handleFilterPageTick);
+  @override
+  State<LazyTabChild> createState() => _LazyTabChildState();
+}
+
+class _LazyTabChildState extends State<LazyTabChild> {
+  bool _visited = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _visited = _isReached;
+    widget.controller.animation?.addListener(_handleAnimationTick);
   }
 
-  void detachFilterStyleTabPageSync() {
-    filterTabController.removeListener(_handleFilterTabTick);
-    filterPageController.removeListener(_handleFilterPageTick);
+  @override
+  void dispose() {
+    widget.controller.animation?.removeListener(_handleAnimationTick);
+    super.dispose();
   }
 
-  void _handleFilterTabTick() {
-    if (_syncingFromPage || !filterTabController.indexIsChanging) return;
-    final target = filterTabController.index;
-    if (!filterPageController.hasClients) return;
-    final current = filterPageController.page?.round() ??
-        filterPageController.initialPage;
-    if (current == target) return;
-    _syncingFromTab = true;
-    filterPageController
-        .animateToPage(
-          target,
-          duration: kTabScrollDuration,
-          curve: Curves.ease,
-        )
-        .whenComplete(() {
-      _syncingFromTab = false;
-    });
+  // Build as soon as the view starts sliding toward this tab, so the incoming
+  // page is not blank while the indicator animates.
+  bool get _isReached {
+    final value =
+        widget.controller.animation?.value ?? widget.controller.index.toDouble();
+    return (value - widget.index).abs() < 0.999;
   }
 
-  void _handleFilterPageTick() {
-    if (_syncingFromTab ||
-        !filterPageController.hasClients ||
-        filterTabController.indexIsChanging) {
-      return;
-    }
-    final page = filterPageController.page;
-    if (page == null) return;
-    final offset = (page - filterTabController.index).clamp(-1.0, 1.0);
-    if ((filterTabController.offset - offset).abs() > 0.0001) {
-      _syncingFromPage = true;
-      filterTabController.offset = offset.toDouble();
-      _syncingFromPage = false;
-    }
+  void _handleAnimationTick() {
+    if (_visited || !_isReached) return;
+    setState(() => _visited = true);
   }
 
-  void onFilterPageChanged(int index) {
-    if (filterTabController.index == index) return;
-    _syncingFromPage = true;
-    filterTabController.index = index;
-    _syncingFromPage = false;
+  @override
+  Widget build(BuildContext context) {
+    if (!_visited) return widget.placeholder;
+    return widget.builder(context);
   }
 }
