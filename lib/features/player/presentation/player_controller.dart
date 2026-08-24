@@ -630,6 +630,19 @@ class PlayerController extends Notifier<PlayerState> {
     return episodes[currentIndex + 1];
   }
 
+  /// `{series} - {episode}`, where the episode part is its number label or, for
+  /// numberless rows (specials, OVAs, مترجم/مدبلج), the name the server gave.
+  String _titleWithEpisode(Episode episode) {
+    final label = episodeIdentityLabel(
+      episode: episode.episode,
+      isArabic: true,
+      title: episode.name,
+      isFinal: episode.isFinal,
+      serverName: episode.serverName,
+    );
+    return label.isEmpty ? _item.title : '${_item.title} - $label';
+  }
+
   Future<void> init({
     required Player player,
     required MultimediaItem item,
@@ -681,35 +694,10 @@ class PlayerController extends Notifier<PlayerState> {
 
     String initialTitle = item.title;
     // Resolve Episode Title if Series
-    if (item.episodes != null && item.episodes!.isNotEmpty) {
-      if (item.episodes!.length > 1) {
-        try {
-          final ep = item.episodes!.firstWhere(
-            (e) => e.url == videoUrl,
-            orElse: () => item.episodes!.first,
-          );
-
-          if (ep.url == videoUrl) {
-            String epTitle = "";
-            if (ep.season > 0 && ep.episode > 0) {
-              epTitle = "S${ep.season}:E${ep.episode}";
-            } else if (ep.episode > 0) {
-              epTitle = "E${ep.episode}";
-            }
-
-            if (ep.name.isNotEmpty && ep.name != "Episode ${ep.episode}") {
-              epTitle = "$epTitle - ${ep.name}";
-            }
-
-            if (epTitle.isNotEmpty) {
-              if (epTitle.startsWith(" - ")) epTitle = epTitle.substring(3);
-              initialTitle = "${item.title} $epTitle";
-            }
-          }
-        } catch (e) {
-          if (kDebugMode) debugPrint('PlayerController.init: $e');
-        }
-      }
+    if ((item.episodes?.length ?? 0) > 1) {
+      final ep =
+          episode ?? item.episodes!.firstWhereOrNull((e) => e.url == videoUrl);
+      if (ep != null) initialTitle = _titleWithEpisode(ep);
     }
 
     final imdbId =
@@ -2918,7 +2906,7 @@ class PlayerController extends Notifier<PlayerState> {
     unawaited(_fetchAndLogSkipSegments());
 
     state = state.copyWith(
-      playerTitle: "${_item.title} - ${nextEpisode.name}",
+      playerTitle: _titleWithEpisode(nextEpisode),
       activeEpisodeUrl: nextEpisode.url,
       showNextEpisodeOverlay: false,
     );
@@ -2989,7 +2977,7 @@ class PlayerController extends Notifier<PlayerState> {
     unawaited(_fetchAndLogSkipSegments());
 
     state = state.copyWith(
-      playerTitle: "${_item.title} - ${episode.name}",
+      playerTitle: _titleWithEpisode(episode),
       activeEpisodeUrl: episode.url,
     );
 

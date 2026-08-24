@@ -184,6 +184,32 @@ String formatEpisodeLabel({
   return serverTitle.isEmpty ? prefix : '$prefix: $serverTitle';
 }
 
+/// Display identity of an episode, with or without a number.
+///
+/// Numbered rows become `حلقة 5` / `حلقة 5: العنوان`. Numberless rows keep
+/// whatever name the server gave them (`الحلقة الخاصة`, `OVA`, `مترجم`,
+/// `مدبلج`, …) or their creative title. Empty only when the episode carries no
+/// usable name at all, which is the single case where callers should fall back
+/// to the series title.
+String episodeIdentityLabel({
+  required int episode,
+  required bool isArabic,
+  String? title,
+  bool isFinal = false,
+  String? serverName,
+}) {
+  final label = formatEpisodeLabel(
+    episode: episode,
+    isArabic: isArabic,
+    title: title,
+    isFinal: isFinal,
+    serverName: serverName,
+  );
+  if (label.isNotEmpty) return label;
+  final server = (serverName ?? '').trim();
+  return server.isNotEmpty ? server : (title ?? '').trim();
+}
+
 /// Characters that break or get rewritten on common mobile filesystems.
 final RegExp _illegalDownloadFileChars = RegExp(r'[\\/:*?"<>|]');
 
@@ -255,15 +281,24 @@ String formatEpisodeFileName({
   return qualityLabel == null ? base : '$base ($qualityLabel)';
 }
 
-/// True when this episode should be saved/looked up by its episode label
-/// (number or standalone name like مترجم/مدبلج) instead of the series title.
+/// True when this episode should be saved/looked up by its own label instead
+/// of the series title.
+///
+/// Any episode with a usable name qualifies, numbered or not, so specials like
+/// `الحلقة الخاصة` are saved under their own name instead of collapsing into
+/// `One Piece.mp4` next to the rest of the series.
 bool usesEpisodeDownloadFileName({
   required int episode,
   String? title,
   String? serverName,
 }) {
   if (episode > 0) return true;
-  return isStandaloneEpisodeEntry(serverName: serverName, name: title);
+  return episodeIdentityLabel(
+    episode: 0,
+    isArabic: true,
+    title: title,
+    serverName: serverName,
+  ).isNotEmpty;
 }
 
 /// True when [fileName] is a downloaded file for this episode identity.
@@ -271,8 +306,8 @@ bool usesEpisodeDownloadFileName({
 /// Numbered episodes:
 /// `حلقة {n}[ والأخيرة][_|: title][ ({height}p)].ext`
 ///
-/// Numberless standalone rows (movies / مترجم / مدبلج):
-/// `{name}[ ({height}p)].ext`
+/// Numberless rows (specials / movies / مترجم / مدبلج):
+/// `{name}[_ title][ ({height}p)].ext`
 ///
 /// Quality is always `(\d{3,4}p)` — the trailing `p` separates it from numbers.
 bool isDownloadedEpisodeFileName(
@@ -301,19 +336,14 @@ bool isDownloadedEpisodeFileName(
   }
 
   final label = sanitizeDownloadFileName(
-    formatEpisodePrimaryLabel(
+    episodeIdentityLabel(
       episode: 0,
       isArabic: true,
-      serverName: () {
-        final server = (serverName ?? '').trim();
-        if (server.isNotEmpty) return server;
-        final rawTitle = (title ?? '').trim();
-        if (isStandaloneEpisodeLabel(rawTitle)) return rawTitle;
-        return null;
-      }(),
+      title: title,
+      serverName: serverName,
     ),
   );
-  if (label.isEmpty || !isStandaloneEpisodeLabel(label)) return false;
+  if (label.isEmpty) return false;
 
   return RegExp(
     '^${RegExp.escape(label)}$qualitySuffix',
@@ -337,7 +367,11 @@ String episodeTitleForStorage({
     isFinal: isFinal,
     serverName: serverName,
   );
-  if (isStandaloneEpisodeLabel(primary) || hasFinalEpisodeSuffix(primary)) {
+  // Numberless episodes have nothing else to identify them, so keep their
+  // label (الحلقة الخاصة, OVA, مترجم, …) in history.
+  if (episode <= 0 ||
+      isStandaloneEpisodeLabel(primary) ||
+      hasFinalEpisodeSuffix(primary)) {
     return primary;
   }
   return '';
@@ -365,8 +399,11 @@ String continueWatchingPrimaryLabel({
   }
 
   final stored = (episodeTitle ?? '').trim();
+  // With no number there is no "حلقة N" to build, so the stored label is the
+  // only identity a special/OVA row has.
   if (stored.isNotEmpty &&
-      (isGenericEpisodeTitle(stored) ||
+      (number <= 0 ||
+          isGenericEpisodeTitle(stored) ||
           isStandaloneEpisodeLabel(stored) ||
           hasFinalEpisodeSuffix(stored))) {
     return formatEpisodePrimaryLabel(
@@ -387,6 +424,7 @@ String continueWatchingPrimaryLabel({
 String continueWatchingSecondaryTitle({
   String? episodeTitle,
   String? episodeServerName,
+  int? episode,
 }) {
   final stored = (episodeTitle ?? '').trim();
   if (stored.isEmpty) return '';
@@ -395,5 +433,8 @@ String continueWatchingSecondaryTitle({
   }
   final server = (episodeServerName ?? '').trim();
   if (server.isNotEmpty && stored == server) return '';
+  // Without a number and without a server label, the stored text is already
+  // the primary line; showing it twice reads like a duplicate.
+  if (server.isEmpty && (episode ?? 0) <= 0) return '';
   return realEpisodeTitle(stored);
 }

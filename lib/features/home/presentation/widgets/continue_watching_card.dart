@@ -152,6 +152,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     final secondaryTitle = continueWatchingSecondaryTitle(
       episodeTitle: episodeTitleRaw,
       episodeServerName: episodeServerName,
+      episode: episodeNumber,
     );
     final hasPrimaryLabel = primaryLabel.isNotEmpty;
     final hasSecondaryTitle = secondaryTitle.isNotEmpty;

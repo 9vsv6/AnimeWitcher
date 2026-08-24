@@ -862,9 +862,16 @@ class DownloadService {
     // Prefer directory listing with normalized stems. Exact File(path) checks
     // fail when the OS stored Arabic as NFD (common on iOS) while we look up
     // NFC, even though the names look identical.
+    // Numberless episodes used to be saved under the series title; keep those
+    // older files discoverable now that they get their own label.
+    final acceptsLegacyTitleName =
+        useEpisodeName && episodeData.episode <= 0 && baseName != sanitizedTitle;
+    final qualitySuffix = RegExp(r'\(\d{3,4}p\)$', caseSensitive: false);
+
     final extensions = ['.mp4', '.mkv', '.webm', '.avi'];
     File? qualityMatch;
     File? episodeMatch;
+    File? legacyTitleMatch;
     await for (final entity in directory.list()) {
       if (entity is! File) continue;
       final name = p.basename(entity.path);
@@ -874,8 +881,7 @@ class DownloadService {
 
       final stem = sanitizeDownloadFileName(p.basenameWithoutExtension(name));
       if (stem == baseName) return entity;
-      if (stem.startsWith('$baseName (') &&
-          RegExp(r'\(\d{3,4}p\)$', caseSensitive: false).hasMatch(stem)) {
+      if (stem.startsWith('$baseName (') && qualitySuffix.hasMatch(stem)) {
         qualityMatch ??= entity;
         continue;
       }
@@ -888,9 +894,17 @@ class DownloadService {
             serverName: episodeData.serverName,
           )) {
         episodeMatch = entity;
+        continue;
+      }
+      if (acceptsLegacyTitleName &&
+          legacyTitleMatch == null &&
+          (stem == sanitizedTitle ||
+              (stem.startsWith('$sanitizedTitle (') &&
+                  qualitySuffix.hasMatch(stem)))) {
+        legacyTitleMatch = entity;
       }
     }
-    return qualityMatch ?? episodeMatch;
+    return qualityMatch ?? episodeMatch ?? legacyTitleMatch;
   }
 
   /// Resolve the on-disk file for a completed download task.

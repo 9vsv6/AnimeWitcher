@@ -12,10 +12,12 @@ import '../../../../core/storage/episode_watch_repository.dart';
 import '../../../../core/account/account_providers.dart';
 
 import '../player_controller.dart';
+import '../../../details/presentation/details_controller.dart';
 import '../../../details/presentation/playback_launcher.dart';
 import 'hotstar_player_style.dart';
 
 import 'package:skystream/core/utils/episode_label.dart';
+import 'package:skystream/core/utils/episode_order.dart';
 const List<Shadow> _kGlassTextShadow = [
   Shadow(color: Colors.black54, offset: Offset(0, 1.5), blurRadius: 3.0),
 ];
@@ -337,6 +339,15 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
           .where((e) => e.dubStatus == currentEpisode.dubStatus)
           .toList();
     }
+    // Same server order (and same sort toggle) as the Episodes tab.
+    episodes = episodesInDisplayOrder(
+      episodes,
+      ascending: ref.watch(
+        detailsControllerProvider(
+          widget.item.url,
+        ).select((state) => state.isAscending),
+      ),
+    );
     final historyRepo = ref.read(historyRepositoryProvider);
     ref.watch(episodeWatchRevisionProvider);
     ref.watch(accountDataRevisionProvider);

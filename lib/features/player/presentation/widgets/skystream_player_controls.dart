@@ -821,8 +821,9 @@ class SkyStreamPlayerControlsState
   }
 
   String? _buildEpisodeLine(BuildContext context, Episode? episode) {
-    if (episode == null || episode.episode <= 0) return null;
-    return formatEpisodeLabel(
+    if (episode == null) return null;
+    // Specials, OVAs and مترجم/مدبلج rows have no number but still have a name.
+    final label = episodeIdentityLabel(
       episode: episode.episode,
       isArabic:
           Localizations.localeOf(context).languageCode.toLowerCase() == 'ar',
@@ -830,6 +831,7 @@ class SkyStreamPlayerControlsState
       isFinal: episode.isFinal,
       serverName: episode.serverName,
     );
+    return label.isEmpty ? null : label;
   }
 
   Widget _buildKickAnimation() {
