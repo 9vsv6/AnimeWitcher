@@ -779,7 +779,6 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
 
     if (menuItems.isNotEmpty && onMenuSelected != null) {
       final tint = menuTintColor ?? effectiveColor;
-      final colors = Theme.of(context).colorScheme;
       return SizedBox(
         width: width,
         height: double.infinity,
@@ -792,38 +791,15 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
             for (final item in menuItems)
               PopupMenuItem<String>(
                 value: item.value,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 28,
-                      child: selectedMenuValue == item.value
-                          ? Icon(
-                              Icons.check_rounded,
-                              size: 20,
-                              color: item.destructive ? colors.error : tint,
-                            )
-                          : Icon(
-                              item.icon ??
-                                  _materialIconForSystemImage(item.systemImage) ??
-                                  icon,
-                              size: 18,
-                              color: item.destructive
-                                  ? colors.error
-                                  : tint,
-                            ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        item.label,
-                        style: item.destructive
-                            ? TextStyle(
-                                color: colors.error,
-                                fontWeight: FontWeight.w600,
-                              )
-                            : null,
-                      ),
-                    ),
-                  ],
+                child: _appleMenuItemRow(
+                  context: context,
+                  label: item.label,
+                  selected: selectedMenuValue == item.value,
+                  destructive: item.destructive,
+                  tint: tint,
+                  icon: item.icon ??
+                      _materialIconForSystemImage(item.systemImage) ??
+                      icon,
                 ),
               ),
           ],
@@ -847,6 +823,42 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _appleMenuItemRow({
+  required BuildContext context,
+  required String label,
+  required bool selected,
+  required bool destructive,
+  required Color tint,
+  required IconData icon,
+}) {
+  final isRtl = Directionality.of(context) == TextDirection.rtl;
+  final color = destructive ? Theme.of(context).colorScheme.error : tint;
+  return Directionality(
+    textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+    child: Row(
+      children: [
+        SizedBox(
+          width: 28,
+          child: Icon(
+            selected ? Icons.check_rounded : icon,
+            size: selected ? 20 : 18,
+            color: color,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            label,
+            textAlign: TextAlign.start,
+            style: destructive
+                ? TextStyle(color: color, fontWeight: FontWeight.w600)
+                : null,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 IconData? _materialIconForSystemImage(String? name) {
@@ -1484,40 +1496,15 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
           for (final item in widget.items)
             PopupMenuItem<String>(
               value: item.value,
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 28,
-                    child: widget.selectedValue == item.value
-                        ? Icon(
-                            Icons.check_rounded,
-                            size: 20,
-                            color: item.destructive
-                                ? Theme.of(context).colorScheme.error
-                                : widget.tintColor,
-                          )
-                        : Icon(
-                            item.icon ??
-                                _materialIconForSystemImage(item.systemImage) ??
-                                widget.fallbackIcon,
-                            size: 18,
-                            color: item.destructive
-                                ? Theme.of(context).colorScheme.error
-                                : widget.tintColor,
-                          ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      item.label,
-                      style: item.destructive
-                          ? TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                              fontWeight: FontWeight.w600,
-                            )
-                          : null,
-                    ),
-                  ),
-                ],
+              child: _appleMenuItemRow(
+                context: context,
+                label: item.label,
+                selected: widget.selectedValue == item.value,
+                destructive: item.destructive,
+                tint: widget.tintColor ?? Theme.of(context).colorScheme.primary,
+                icon: item.icon ??
+                    _materialIconForSystemImage(item.systemImage) ??
+                    widget.fallbackIcon,
               ),
             ),
         ],
