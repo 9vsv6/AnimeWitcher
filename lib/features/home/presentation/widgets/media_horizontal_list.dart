@@ -248,22 +248,18 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
               if (widget.showViewAll)
                 CardsWrapper(
                   onTap: () {
-                    // Push View All on the current branch navigator rather than
-                    // the root GoRouter navigator. This keeps AppScaffold (and
-                    // therefore the persistent bottom taskbar) mounted while the
-                    // page slides over the branch content like the rest of the app.
-                    Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (_) => ViewAllScreen(
-                          title: widget.title,
-                          initialMediaList: widget.mediaList,
-                          category: widget.category,
-                          onTap: widget.onTap,
-                          loadPage: widget.loadViewAllPage,
-                          forcePortrait: widget.forcePortrait,
-                        ),
+                    // Push on the root GoRouter stack (same as DetailsRoute) so
+                    // View All covers AppScaffold and the bottom taskbar.
+                    ViewAllRoute(
+                      $extra: ViewAllRouteExtra(
+                        title: widget.title,
+                        initialMediaList: widget.mediaList,
+                        category: widget.category,
+                        onTap: widget.onTap,
+                        loadPage: widget.loadViewAllPage,
+                        forcePortrait: widget.forcePortrait,
                       ),
-                    );
+                    ).push<void>(context);
                   },
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
