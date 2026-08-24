@@ -1,5 +1,3 @@
-import 'image_quality.dart';
-
 /// Utility for normalizing image URLs.
 ///
 /// Returns `null` when an image is missing so callers can use their local
@@ -48,9 +46,6 @@ class AppImageFallbacks {
       return null;
     }
 
-    // Stored and synced items keep whatever size they were saved with; ask for
-    // the largest variant so old library/history entries look as sharp as
-    // freshly fetched ones.
-    return highestQualityImageUrl(trimmed);
+    return trimmed;
   }
 }

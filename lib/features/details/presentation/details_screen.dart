@@ -556,7 +556,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<MultimediaItem?> detailsState,
   ) {
     final screenSize = MediaQuery.sizeOf(context);
-    final screenWidth = screenSize.width;
     // Scale the handset header from the physical phone width in portrait terms.
     // Using the landscape width makes every SDP position grow ~2x and pushes
     // the poster/title below the visible header on rotated phones.
@@ -611,10 +610,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           imageUrl: bannerUrl,
                           fit: BoxFit.cover,
                           alignment: Alignment.center,
-                          memCacheWidth:
-                              (screenWidth *
-                                      MediaQuery.devicePixelRatioOf(context))
-                                  .round(),
+                          filterQuality: FilterQuality.medium,
                           placeholder: (_, _) => const ColoredBox(
                             color: Colors.black,
                           ),
@@ -629,12 +625,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                                 imageUrl: posterUrl,
                                 fit: BoxFit.cover,
                                 alignment: Alignment.center,
-                                memCacheWidth:
-                                    (screenWidth *
-                                            MediaQuery.devicePixelRatioOf(
-                                              context,
-                                            ))
-                                        .round(),
+                                filterQuality: FilterQuality.medium,
                                 placeholder: (_, _) => const ColoredBox(
                                   color: Colors.black,
                                 ),
@@ -688,6 +679,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                         key: ValueKey<String>('details_poster_$posterUrl'),
                         imageUrl: posterUrl,
                         fit: BoxFit.cover,
+                        filterQuality: FilterQuality.medium,
                         placeholder: (_, _) => const ColoredBox(
                           color: Colors.black,
                         ),

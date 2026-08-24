@@ -301,8 +301,7 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               CachedNetworkImage(
                 imageUrl: imageUrl,
                 fit: BoxFit.cover,
-                memCacheWidth: (cardWidth * 2).round(),
-                memCacheHeight: (height * 2).round(),
+                filterQuality: FilterQuality.medium,
                 errorWidget: (context, url, error) =>
                     const ThumbnailErrorPlaceholder(),
                 placeholder: (context, url) => Container(

@@ -167,6 +167,7 @@ class _GroupedDownloadTile extends ConsumerWidget {
                 width: 80,
                 height: 120,
                 fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
                 errorWidget: (context, url, error) => Container(
                   width: 80,
                   height: 120,
@@ -351,6 +352,7 @@ class _DownloadItemTile extends ConsumerWidget {
             width: 80,
             height: 120,
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.medium,
             errorWidget: (context, url, error) => Container(
               width: 80,
               height: 120,

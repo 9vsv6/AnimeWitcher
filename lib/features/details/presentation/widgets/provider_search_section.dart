@@ -4,6 +4,7 @@ import '../../../../core/router/app_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
+import 'package:skystream/core/extensions/base_provider.dart';
 import 'package:skystream/core/extensions/extension_manager.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/features/search/presentation/search_provider.dart';
@@ -34,6 +35,9 @@ Stream<SearchAggregateState> providerSearch(Ref ref, String query) {
     query,
     manager,
     filter: SearchFilter.content,
+    // This section looks the same title up on other providers, so it never
+    // carries the search screen's filters.
+    providerFilters: const ProviderSearchFilters(),
     isCancelled: () => cancelled,
   );
 }
@@ -207,6 +211,7 @@ class _ProviderSearchSectionState extends ConsumerState<ProviderSearchSection> {
                                       ) ??
                                       '',
                                   fit: BoxFit.cover,
+                                  filterQuality: FilterQuality.medium,
                                   placeholder: (_, _) =>
                                       ShimmerPlaceholder(borderRadius: 8),
                                   errorWidget: (_, _, _) =>

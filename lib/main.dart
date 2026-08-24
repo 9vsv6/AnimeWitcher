@@ -33,12 +33,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
-  // Cap Flutter's image cache. Default is 1000 entries / 100 MB which is too
-  // generous for low-RAM TVs and even most phones — decoded media posters fill
-  // it quickly. Tighter limits force earlier eviction and keep raster smooth.
+  // Artwork is decoded at full source resolution so posters and banners are as
+  // sharp as the provider serves them. A single poster can take several MB, so
+  // the cache gets room to hold a screenful of them; a tighter budget would
+  // evict and re-decode while scrolling instead of saving memory.
   PaintingBinding.instance.imageCache
-    ..maximumSize = 200
-    ..maximumSizeBytes = 50 * 1024 * 1024; // 50 MB
+    ..maximumSize = 400
+    ..maximumSizeBytes = 256 * 1024 * 1024; // 256 MB
 
   // Silence logs in release mode
   if (kReleaseMode) {

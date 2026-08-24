@@ -736,7 +736,7 @@ class _EpisodeThumbnail extends StatelessWidget {
                 CachedNetworkImage(
                   imageUrl: posterUrl!,
                   fit: BoxFit.cover,
-                  memCacheWidth: 208,
+                  filterQuality: FilterQuality.medium,
                   fadeInDuration: Duration.zero,
                   fadeOutDuration: Duration.zero,
                   placeholder: (_, _) => const _ThumbPlaceholder(),

@@ -560,6 +560,7 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
             child: CachedNetworkImage(
               imageUrl: imageUrl,
               fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
               placeholder: (context, url) =>
                   Container(color: theme.colorScheme.surfaceContainerHighest),
               errorWidget: (_, _, _) =>

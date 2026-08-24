@@ -6,7 +6,6 @@ import 'package:html_unescape/html_unescape.dart';
 import '../../domain/entity/multimedia_item.dart';
 import '../../storage/settings_repository.dart';
 import '../../utils/episode_label.dart';
-import '../../utils/image_quality.dart';
 import '../../utils/safe_uri.dart';
 import '../base_provider.dart';
 import 'mediafire_utils.dart';
@@ -672,17 +671,15 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         'name',
       ]),
     );
-    final imageUrl = highestQualityImageUrl(
-      _firstText(source, const <String>[
-        'thumb_link',
-        'thumb_uri',
-        'thumb_url',
-        'image_url',
-        'image',
-        'poster_uri',
-        'cover_uri',
-      ]),
-    );
+    final imageUrl = _firstText(source, const <String>[
+      'thumb_link',
+      'thumb_uri',
+      'thumb_url',
+      'image_url',
+      'image',
+      'poster_uri',
+      'cover_uri',
+    ]);
     final newsUrl = _firstText(source, const <String>[
       'news_link',
       'newsLink',
@@ -816,28 +813,18 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     return _AnimeRoute(animeId: animeId, hit: hit);
   }
 
-  /// Biggest poster AnimeWitcher offers for a record.
-  ///
-  /// Documents carry several sizes and only some of them reach search/home
-  /// hits, so walk from the largest field down and never stop at a thumbnail
-  /// while a bigger asset is listed.
   String _posterFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
+    // AnimeWitcher exposes a dedicated large poster for cards and details.
+    // Prefer it everywhere so normal cards do not upscale the smaller asset.
     for (final candidate in <dynamic>[
-      poster['original'],
-      poster['full'],
-      poster['extraLarge'],
-      poster['extra_large'],
-      poster['extralarge'],
-      poster['xlarge'],
       poster['large'],
       source['poster_uri'],
       poster['medium'],
       source['cover_uri'],
-      source['thumb_uri'],
     ]) {
       final value = _text(candidate);
-      if (value.isNotEmpty) return highestQualityImageUrl(value);
+      if (value.isNotEmpty) return value;
     }
     return '';
   }
@@ -846,17 +833,11 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final poster = _map(source['poster']);
     for (final candidate in <dynamic>[
       source['cover_uri'],
-      poster['original'],
-      poster['full'],
-      poster['extraLarge'],
-      poster['extra_large'],
-      poster['extralarge'],
-      poster['xlarge'],
       poster['large'],
       source['poster_uri'],
     ]) {
       final value = _text(candidate);
-      if (value.isNotEmpty) return highestQualityImageUrl(value);
+      if (value.isNotEmpty) return value;
     }
     return '';
   }
@@ -2690,10 +2671,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     // the document id is the same server-side episode identity used by the
     // original AnimeWitcher implementation; use it only as a last resort.
     final number = serverNumber ?? _episodeNumberFromId(id);
-    final image = highestQualityImageUrl(
-      _text(
-        source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
-      ),
+    final image = _text(
+      source['thumb_uri'] ?? source['image'] ?? source['image_url'] ?? source['poster'],
     );
     final isFiller = _isTruthy(
       source['filler'] ?? source['is_filler'] ?? source['isFiller'],

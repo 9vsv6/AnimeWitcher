@@ -158,6 +158,7 @@ class NewsCard extends StatelessWidget {
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
+      filterQuality: FilterQuality.medium,
       fadeInDuration: const Duration(milliseconds: 120),
       fadeOutDuration: Duration.zero,
       placeholder: (context, url) => _imageFallback(colors),

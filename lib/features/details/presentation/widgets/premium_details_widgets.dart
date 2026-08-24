@@ -601,12 +601,8 @@ class TrailersSection extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      CachedNetworkImage(
-                        imageUrl:
-                            "https://img.youtube.com/vi/${_extractYoutubeId(trailer.url)}/mqdefault.jpg",
-                        fit: BoxFit.cover,
-                        errorWidget: (_, _, _) =>
-                            const Center(child: Icon(Icons.movie_rounded)),
+                      _YoutubeThumbnail(
+                        videoId: _extractYoutubeId(trailer.url),
                       ),
                       Container(
                         color: Colors.black26,
@@ -660,6 +656,38 @@ class TrailersSection extends StatelessWidget {
     if (url.contains("v=")) return url.split("v=")[1].split("&")[0];
     if (url.contains("be/")) return url.split("be/")[1].split("?")[0];
     return "";
+  }
+}
+
+/// Trailer still at the best resolution YouTube has for the video.
+///
+/// `maxresdefault` only exists for HD uploads, so each size falls back to the
+/// next one down instead of showing the placeholder icon.
+class _YoutubeThumbnail extends StatelessWidget {
+  const _YoutubeThumbnail({required this.videoId});
+
+  static const List<String> _sizes = <String>[
+    'maxresdefault',
+    'sddefault',
+    'hqdefault',
+    'mqdefault',
+  ];
+
+  final String videoId;
+
+  @override
+  Widget build(BuildContext context) => _buildSize(0);
+
+  Widget _buildSize(int index) {
+    if (videoId.isEmpty || index >= _sizes.length) {
+      return const Center(child: Icon(Icons.movie_rounded));
+    }
+    return CachedNetworkImage(
+      imageUrl: 'https://img.youtube.com/vi/$videoId/${_sizes[index]}.jpg',
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
+      errorWidget: (_, _, _) => _buildSize(index + 1),
+    );
   }
 }
 
@@ -807,6 +835,7 @@ class RecommendationsCarousel extends StatelessWidget {
                               '',
                           fit: BoxFit.cover,
                           width: cardWidth,
+                          filterQuality: FilterQuality.medium,
                           errorWidget: (_, _, _) =>
                               ThumbnailErrorPlaceholder(label: item.title),
                         ),

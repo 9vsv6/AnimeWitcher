@@ -624,9 +624,6 @@ class EpisodeCard extends HookConsumerWidget {
           posterUrl: parentItem.posterUrl,
           label: parentItem.title,
         );
-    final memCacheWidth = (140 * MediaQuery.devicePixelRatioOf(context))
-        .ceil()
-        .clamp(160, 640);
     final placeholderColor = Theme.of(
       context,
     ).colorScheme.surfaceContainerHighest;
@@ -640,7 +637,7 @@ class EpisodeCard extends HookConsumerWidget {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        memCacheWidth: memCacheWidth,
+        filterQuality: FilterQuality.medium,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
         useOldImageOnUrlChange: true,
