@@ -292,6 +292,12 @@ private func skyStreamUIColor(_ value: Any?, fallback: UIColor = .label) -> UICo
   return UIColor(red: red, green: green, blue: blue, alpha: alpha)
 }
 
+private func skyStreamMenuTitle(_ label: String, isRtl: Bool) -> String {
+  guard isRtl else { return label }
+  // Keep Arabic titles as one RTL run inside UIKit's LTR UIMenu layout.
+  return "\u{202B}\(label)\u{202C}"
+}
+
 private final class AppleNativeTabBarViewFactory: NSObject, FlutterPlatformViewFactory {
   private let messenger: FlutterBinaryMessenger
 
@@ -1650,6 +1656,7 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
     button.accessibilityLabel = values["accessibilityLabel"] as? String
     button.accessibilityTraits = .button
 
+    let isRtl = values["isRtl"] as? Bool == true
     let selectedValue = values["selectedValue"] as? String
     let items = values["items"] as? [[String: Any]] ?? []
     let actions: [UIAction] = items.compactMap { item in
@@ -1668,7 +1675,7 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
         attributes.insert(.destructive)
       }
       return UIAction(
-        title: label,
+        title: skyStreamMenuTitle(label, isRtl: isRtl),
         image: actionImage,
         attributes: attributes,
         state: value == selectedValue ? .on : .off
@@ -1901,6 +1908,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     }
 
     let selectedValue = values["sortValue"] as? String
+    let isRtl = values["isArabic"] as? Bool == true
     let items = values["sortItems"] as? [[String: Any]] ?? []
     let actions: [UIAction] = items.compactMap { item in
       guard let value = item["value"] as? String,
@@ -1910,7 +1918,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
         skyStreamMenuImage(named: name, tintColor: tintColor)
       }
       return UIAction(
-        title: label,
+        title: skyStreamMenuTitle(label, isRtl: isRtl),
         image: image,
         state: value == selectedValue ? .on : .off
       ) { [weak self] _ in

@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:background_downloader/background_downloader.dart';
-import 'package:collection/collection.dart';
-import '../downloaded_file_provider.dart';
 
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
 import 'package:skystream/core/storage/history_repository.dart';
@@ -14,10 +11,6 @@ import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/shared/widgets/custom_widgets.dart';
 import '../details_controller.dart';
 import 'package:skystream/core/extensions/extension_manager.dart';
-import 'package:skystream/core/services/download_service.dart';
-import '../download_launcher.dart';
-import 'download_progress_dialog.dart';
-import 'download_management_dialog.dart';
 import 'episode_card.dart';
 import 'package:skystream/core/providers/device_info_provider.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
@@ -202,130 +195,9 @@ class DetailsActionButtons extends HookConsumerWidget {
     );
 
     // Preferred quality is configured globally in Settings.
-
-    // Download feature: only for single episode VOD content
+    // Movies and one-episode titles download from the episode card, not a
+    // second primary button next to Play.
     final isLivestream = item.contentType == MultimediaContentType.livestream;
-    final showDownload =
-        details?.episodes != null &&
-        details?.episodes?.length == 1 &&
-        !isLivestream;
-
-    final episodeUrl = details?.episodes?.firstOrNull?.url ?? item.url;
-    final activeDownloads = ref.watch(activeDownloadsProvider);
-    final isDownloading = activeDownloads.contains(episodeUrl);
-    final progressMap = ref.watch(downloadProgressProvider);
-    final downloadProgressData =
-        progressMap[episodeUrl] ?? progressMap[item.url];
-    final downloadProgress = downloadProgressData?.progress ?? 0.0;
-
-    final downloadedFile = ref.watch(downloadedFilesProvider)[episodeUrl];
-
-    // Check for downloaded file on load
-    useEffect(() {
-      if (details != null && !isDownloading) {
-        Future.microtask(() {
-          ref
-              .read(downloadedFilesProvider.notifier)
-              .checkFile(
-                details!,
-                episode: details?.episodes?.firstWhereOrNull(
-                  (e) => e.url == episodeUrl,
-                ),
-              );
-        });
-      }
-      return null;
-    }, [details, episodeUrl, isDownloading]);
-
-    final downloadBtn = !showDownload
-        ? const SizedBox.shrink()
-        : downloadedFile != null
-        ? CustomButton(
-            isPrimary: false,
-            isOutlined: true,
-            onPressed: () {
-              DownloadManagementDialog.show(
-                context,
-                details ?? item,
-                downloadedFile,
-                episode: details?.episodes?.firstWhereOrNull(
-                  (e) => e.url == episodeUrl,
-                ),
-              );
-            },
-            child: Padding(
-              padding: btnPadding,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.download_done_sharp, color: Colors.green),
-                  const SizedBox(width: LayoutConstants.spacingXs),
-                  Text(AppLocalizations.of(context)!.downloaded),
-                ],
-              ),
-            ),
-          )
-        : CustomButton(
-            isPrimary: false,
-            isOutlined: true,
-            onPressed: isDownloading
-                ? () => DownloadProgressDialog.show(
-                    context,
-                    details?.title ?? item.title,
-                    episodeUrl,
-                  )
-                : () {
-                    ref
-                        .read(downloadLauncherProvider)
-                        .launch(
-                          context,
-                          details ?? item,
-                          episodeUrl: episodeUrl,
-                          episode: details?.episodes?.firstWhereOrNull(
-                            (e) => e.url == episodeUrl,
-                          ),
-                        );
-                  },
-            child: Padding(
-              padding: btnPadding,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: isDownloading
-                    ? [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child:
-                              downloadProgressData?.status == TaskStatus.paused
-                              ? Icon(
-                                  Icons.pause_rounded,
-                                  size: 18,
-                                  color: Theme.of(context).colorScheme.primary,
-                                )
-                              : CircularProgressIndicator(
-                                  value: downloadProgress > 0
-                                      ? downloadProgress
-                                      : null,
-                                  strokeWidth: 2,
-                                ),
-                        ),
-                        const SizedBox(width: LayoutConstants.spacingXs),
-                        Text(
-                          downloadProgressData?.status == TaskStatus.paused
-                              ? AppLocalizations.of(context)!.paused
-                              : downloadProgress > 0
-                              ? '${(downloadProgress * 100).toInt()}%'
-                              : AppLocalizations.of(context)!.starting,
-                        ),
-                      ]
-                    : [
-                        const Icon(Icons.download_rounded),
-                        const SizedBox(width: LayoutConstants.spacingXs),
-                        Text(AppLocalizations.of(context)!.download),
-                      ],
-              ),
-            ),
-          );
 
     Widget progressWidget = const SizedBox.shrink();
     if (pos > 0 && dur > 0 && !isLivestream) {
@@ -373,18 +245,9 @@ class DetailsActionButtons extends HookConsumerWidget {
       );
     }
 
-    // Keep Play full-width alone for single- and multi-episode titles so the
-    // primary CTA matches. Download (single-episode only) sits on the next row.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        progressWidget,
-        playBtn,
-        if (showDownload) ...[
-          const SizedBox(height: LayoutConstants.spacingSm),
-          downloadBtn,
-        ],
-      ],
+      children: [progressWidget, playBtn],
     );
   }
 }
