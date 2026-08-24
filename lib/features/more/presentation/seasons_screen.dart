@@ -149,9 +149,13 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen>
                   controller: _tabController,
                   children: [
                     for (var index = 0; index < 4; index++)
-                      RefreshIndicator(
-                        onRefresh: _refreshSeasons,
-                        child: _tabBody(data, isArabic, index),
+                      LazyTabChild(
+                        controller: _tabController,
+                        index: index,
+                        builder: (context) => RefreshIndicator(
+                          onRefresh: _refreshSeasons,
+                          child: _tabBody(data, isArabic, index),
+                        ),
                       ),
                   ],
                 ),

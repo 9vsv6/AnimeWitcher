@@ -30,16 +30,8 @@ class GlobalStatisticsScreen extends ConsumerStatefulWidget {
 
 class _GlobalStatisticsScreenState
     extends ConsumerState<GlobalStatisticsScreen>
-    with SingleTickerProviderStateMixin, FilterStyleTabPageSync {
+    with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  late final PageController _pageController;
-  int _selectedRanking = 0;
-
-  @override
-  TabController get filterTabController => _tabController;
-
-  @override
-  PageController get filterPageController => _pageController;
 
   @override
   void initState() {
@@ -48,25 +40,12 @@ class _GlobalStatisticsScreenState
       length: AnimeWitcherGlobalRanking.values.length,
       vsync: this,
     );
-    _pageController = PageController();
-    attachFilterStyleTabPageSync();
-    _tabController.addListener(_handleSelectedRankingTick);
   }
 
   @override
   void dispose() {
-    _tabController.removeListener(_handleSelectedRankingTick);
-    detachFilterStyleTabPageSync();
     _tabController.dispose();
-    _pageController.dispose();
     super.dispose();
-  }
-
-  void _handleSelectedRankingTick() {
-    final value = _tabController.index;
-    if (value != _selectedRanking) {
-      setState(() => _selectedRanking = value);
-    }
   }
 
   AnimeWitcherNativeProvider? _provider() {
@@ -142,26 +121,28 @@ class _GlobalStatisticsScreenState
             isArabic: isArabic,
           ),
           Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: AnimeWitcherGlobalRanking.values.length,
-              onPageChanged: (value) {
-                onFilterPageChanged(value);
-                if (value != _selectedRanking) {
-                  setState(() => _selectedRanking = value);
-                }
-              },
-              itemBuilder: (context, index) {
-                final ranking = AnimeWitcherGlobalRanking.values[index];
-                return _RankingPage(
-                  key: PageStorageKey<String>(
-                    'global-ranking-page-${ranking.queryType}',
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                for (var index = 0;
+                    index < AnimeWitcherGlobalRanking.values.length;
+                    index++)
+                  LazyTabChild(
+                    controller: _tabController,
+                    index: index,
+                    builder: (context) {
+                      final ranking = AnimeWitcherGlobalRanking.values[index];
+                      return _RankingPage(
+                        key: PageStorageKey<String>(
+                          'global-ranking-page-${ranking.queryType}',
+                        ),
+                        ranking: ranking,
+                        isArabic: isArabic,
+                        loadPage: _loadPage,
+                      );
+                    },
                   ),
-                  ranking: ranking,
-                  isArabic: isArabic,
-                  loadPage: _loadPage,
-                );
-              },
+              ],
             ),
           ),
         ],

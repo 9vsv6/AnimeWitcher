@@ -380,9 +380,9 @@ class DetailsController extends _$DetailsController {
       }
 
       unawaited(_loadBasicDetails(provider, item, generation));
-      if (autoPlay || _episodesRequested) {
-        unawaited(loadEpisodesOnDemand());
-      }
+      // Episodes are fetched right away so the Episodes tab is already
+      // populated when the user first opens it.
+      unawaited(loadEpisodesOnDemand());
 
       if (provider.supportsIndependentDetailSections) {
         unawaited(
@@ -899,12 +899,16 @@ class DetailsController extends _$DetailsController {
     }
   }
 
-  Future<void> loadEpisodesOnDemand() async {
+  Future<void> loadEpisodesOnDemand({bool forceReload = false}) async {
     _episodesRequested = true;
     if (_episodesLoadFuture != null) {
       if (state.episodes.isLoading) await _episodesLoadFuture;
       return;
     }
+    // Never refetch an already loaded list. Re-running the fetch republished
+    // the provider's pre-AniZip episodes, which made the cards flash the anime
+    // banner before the episode stills came back.
+    if (!forceReload && state.episodes.hasValue) return;
 
     final provider = _lastEpisodesProvider;
     final url = _lastEpisodesUrl;
@@ -923,7 +927,7 @@ class DetailsController extends _$DetailsController {
     await _episodesLoadFuture;
   }
 
-  Future<void> retryEpisodes() => loadEpisodesOnDemand();
+  Future<void> retryEpisodes() => loadEpisodesOnDemand(forceReload: true);
 
   List<Episode>? _processEpisodes(
     List<Episode>? episodes,

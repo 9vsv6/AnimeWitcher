@@ -1632,7 +1632,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     return FilterStyleTabBar(
       controller: _detailsTabController,
-      isScrollable: true,
+      isScrollable: false,
       tabs: [
         FilterStyleTab(
           icon: Icons.info_outline_rounded,
@@ -1851,7 +1851,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             ),
           ]
         : <Widget>[
-            _episodeLoadStatus(context, episodesState),
             if (episodesState.hasValue &&
                 (episodesState.value?.isNotEmpty ?? false)) ...[
               DetailsSeasonListWrapper(itemUrl: widget.item.url),
@@ -1861,7 +1860,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 itemUrl: widget.item.url,
                 isMovie: false,
               ),
-            ],
+            ] else
+              SizedBox(
+                height: 280,
+                width: double.infinity,
+                child: Center(
+                  child: _episodeLoadStatus(context, episodesState),
+                ),
+              ),
           ];
 
     return Column(
