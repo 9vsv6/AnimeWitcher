@@ -93,13 +93,7 @@ class DetailsDesktopHero extends ConsumerWidget {
               imageUrl: backdropUrl,
               fit: BoxFit.cover,
               alignment: Alignment.centerRight,
-              // Bound decoded bitmap; plugin-supplied backdrops are often
-              // already at source resolution (no size negotiation), so a 4K
-              // poster decoded at native size would burn ~33 MB.
-              memCacheWidth:
-                  (MediaQuery.sizeOf(context).width *
-                          MediaQuery.devicePixelRatioOf(context))
-                      .round(),
+              filterQuality: FilterQuality.medium,
               errorWidget: (_, _, _) {
                 if (providedBannerUrl != null &&
                     posterUrl != null &&
@@ -108,10 +102,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                     imageUrl: posterUrl,
                     fit: BoxFit.cover,
                     alignment: Alignment.centerRight,
-                    memCacheWidth:
-                        (MediaQuery.sizeOf(context).width *
-                                MediaQuery.devicePixelRatioOf(context))
-                            .round(),
+                    filterQuality: FilterQuality.medium,
                     errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
                       label: displayItem.title,
                       isBackdrop: true,
@@ -193,12 +184,7 @@ class DetailsDesktopHero extends ConsumerWidget {
                               child: CachedNetworkImage(
                                 imageUrl: posterUrl,
                                 fit: BoxFit.cover,
-                                memCacheWidth:
-                                    (180 *
-                                            MediaQuery.devicePixelRatioOf(
-                                              context,
-                                            ))
-                                        .round(),
+                                filterQuality: FilterQuality.medium,
                                 placeholder: (_, _) => ColoredBox(
                                   color: theme.colorScheme.surfaceContainerHighest,
                                 ),

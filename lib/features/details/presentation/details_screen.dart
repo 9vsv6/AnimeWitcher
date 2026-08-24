@@ -611,10 +611,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           imageUrl: bannerUrl,
                           fit: BoxFit.cover,
                           alignment: Alignment.center,
-                          memCacheWidth:
-                              (screenWidth *
-                                      MediaQuery.devicePixelRatioOf(context))
-                                  .round(),
+                          filterQuality: FilterQuality.medium,
                           placeholder: (_, _) => const ColoredBox(
                             color: Colors.black,
                           ),
@@ -629,12 +626,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                                 imageUrl: posterUrl,
                                 fit: BoxFit.cover,
                                 alignment: Alignment.center,
-                                memCacheWidth:
-                                    (screenWidth *
-                                            MediaQuery.devicePixelRatioOf(
-                                              context,
-                                            ))
-                                        .round(),
+                                filterQuality: FilterQuality.medium,
                                 placeholder: (_, _) => const ColoredBox(
                                   color: Colors.black,
                                 ),
@@ -688,6 +680,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                         key: ValueKey<String>('details_poster_$posterUrl'),
                         imageUrl: posterUrl,
                         fit: BoxFit.cover,
+                        filterQuality: FilterQuality.medium,
                         placeholder: (_, _) => const ColoredBox(
                           color: Colors.black,
                         ),

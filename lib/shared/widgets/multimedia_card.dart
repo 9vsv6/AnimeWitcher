@@ -68,22 +68,7 @@ class MultimediaCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: hasImageUrl
-            // Decode for the box the poster really fills. Grid cells and
-            // horizontal lists override [cardWidth], so sizing from that
-            // nominal value decoded posters smaller than they are painted,
-            // which is what made cards look soft next to the details page.
-            ? LayoutBuilder(
-                builder: (context, constraints) => _buildPoster(
-                  context,
-                  normalizedImageUrl,
-                  posterDecodeWidth(
-                    paintedWidth: constraints.hasBoundedWidth
-                        ? constraints.maxWidth
-                        : cardWidth,
-                    devicePixelRatio: devicePixelRatio,
-                  ),
-                ),
-              )
+            ? _buildPoster(context, normalizedImageUrl)
             : ThumbnailErrorPlaceholder(label: title),
       ),
     );
@@ -122,10 +107,12 @@ class MultimediaCard extends StatelessWidget {
 
   /// Poster loader that asks for the largest artwork and, if that variant is
   /// missing on the CDN, retries the smaller one before giving up.
+  ///
+  /// The bitmap is decoded at source resolution — no decode budget — and drawn
+  /// with mipmapped filtering so it stays sharp at any card size.
   Widget _buildPoster(
     BuildContext context,
-    String imageUrl,
-    int memoryCacheWidth, {
+    String imageUrl, {
     bool allowFallback = true,
   }) {
     final fallbackUrl = allowFallback
@@ -135,18 +122,13 @@ class MultimediaCard extends StatelessWidget {
       imageUrl: imageUrl,
       fit: BoxFit.cover,
       width: double.infinity,
-      memCacheWidth: memoryCacheWidth,
+      filterQuality: FilterQuality.medium,
       placeholder: (context, url) => showImageLoadingShimmer
           ? ShimmerPlaceholder(borderRadius: 12)
           : _buildImageLoadingCard(context),
       errorWidget: (context, url, error) => fallbackUrl == null
           ? ThumbnailErrorPlaceholder(label: title)
-          : _buildPoster(
-              context,
-              fallbackUrl,
-              memoryCacheWidth,
-              allowFallback: false,
-            ),
+          : _buildPoster(context, fallbackUrl, allowFallback: false),
       fadeOutDuration: Duration.zero,
       fadeInDuration: const Duration(milliseconds: 120),
       useOldImageOnUrlChange: true,

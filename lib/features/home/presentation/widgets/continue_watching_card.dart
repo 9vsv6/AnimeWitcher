@@ -122,11 +122,6 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
       if (animeBannerUrl != null) animeBannerUrl,
       if (animePosterUrl != null) animePosterUrl,
     }.toList(growable: false);
-    final memoryCacheWidth = (widget.width * MediaQuery.devicePixelRatioOf(context))
-        .ceil()
-        .clamp(280, 1280)
-        .toInt();
-
     Widget buildImageCandidate(int index) {
       if (index >= imageCandidates.length) {
         return const SizedBox.shrink();
@@ -134,7 +129,7 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
       return CachedNetworkImage(
         imageUrl: imageCandidates[index],
         fit: BoxFit.cover,
-        memCacheWidth: memoryCacheWidth,
+        filterQuality: FilterQuality.medium,
         placeholder: (_, _) => const SizedBox.shrink(),
         errorWidget: (_, _, _) => buildImageCandidate(index + 1),
       );
