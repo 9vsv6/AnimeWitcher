@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/utils/image_quality.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import 'cards_wrapper.dart';
 import 'shimmer_placeholder.dart';
@@ -71,20 +72,7 @@ class MultimediaCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: hasImageUrl
-            ? CachedNetworkImage(
-                imageUrl: normalizedImageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                memCacheWidth: memoryCacheWidth,
-                placeholder: (context, url) => showImageLoadingShimmer
-                    ? ShimmerPlaceholder(borderRadius: 12)
-                    : _buildImageLoadingCard(context),
-                errorWidget: (_, _, _) =>
-                    ThumbnailErrorPlaceholder(label: title),
-                fadeOutDuration: Duration.zero,
-                fadeInDuration: const Duration(milliseconds: 120),
-                useOldImageOnUrlChange: true,
-              )
+            ? _buildPoster(context, normalizedImageUrl, memoryCacheWidth)
             : ThumbnailErrorPlaceholder(label: title),
       ),
     );
@@ -118,6 +106,39 @@ class MultimediaCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// Poster loader that asks for the largest artwork and, if that variant is
+  /// missing on the CDN, retries the smaller one before giving up.
+  Widget _buildPoster(
+    BuildContext context,
+    String imageUrl,
+    int memoryCacheWidth, {
+    bool allowFallback = true,
+  }) {
+    final fallbackUrl = allowFallback
+        ? fallbackQualityImageUrl(imageUrl)
+        : null;
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      memCacheWidth: memoryCacheWidth,
+      placeholder: (context, url) => showImageLoadingShimmer
+          ? ShimmerPlaceholder(borderRadius: 12)
+          : _buildImageLoadingCard(context),
+      errorWidget: (context, url, error) => fallbackUrl == null
+          ? ThumbnailErrorPlaceholder(label: title)
+          : _buildPoster(
+              context,
+              fallbackUrl,
+              memoryCacheWidth,
+              allowFallback: false,
+            ),
+      fadeOutDuration: Duration.zero,
+      fadeInDuration: const Duration(milliseconds: 120),
+      useOldImageOnUrlChange: true,
     );
   }
 

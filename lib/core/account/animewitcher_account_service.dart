@@ -10,6 +10,7 @@ import '../storage/library_category.dart';
 import '../storage/secure_token_storage.dart';
 import '../storage/storage_service.dart';
 import '../utils/episode_label.dart';
+import '../utils/image_quality.dart';
 import 'animewitcher_account_config.dart';
 import 'animewitcher_account_models.dart';
 import 'animewitcher_comment_models.dart';
@@ -2918,17 +2919,30 @@ class AnimeWitcherAccountService {
     final title = _optionalString(source['name']) ??
         _optionalString(source['english_title']) ??
         animeId;
-    final posterUrl = _firstString(<dynamic>[
-      poster['large'],
-      source['poster_uri'],
-      poster['medium'],
-      source['cover_uri'],
-    ]);
-    final banner = _firstString(<dynamic>[
-      source['cover_uri'],
-      poster['large'],
-      source['poster_uri'],
-    ]);
+    final posterUrl = highestQualityImageUrl(
+      _firstString(<dynamic>[
+        poster['original'],
+        poster['full'],
+        poster['extraLarge'],
+        poster['extra_large'],
+        poster['extralarge'],
+        poster['xlarge'],
+        poster['large'],
+        source['poster_uri'],
+        poster['medium'],
+        source['cover_uri'],
+      ]),
+    );
+    final banner = highestQualityImageUrl(
+      _firstString(<dynamic>[
+        source['cover_uri'],
+        poster['original'],
+        poster['extraLarge'],
+        poster['extra_large'],
+        poster['large'],
+        source['poster_uri'],
+      ]),
+    );
     final rawType = _firstString(<dynamic>[source['type'], details['type']]);
     final isMovie = rawType.toLowerCase().contains('movie') ||
         rawType.contains('فيلم');
