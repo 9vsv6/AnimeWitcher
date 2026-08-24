@@ -373,22 +373,18 @@ class DetailsActionButtons extends HookConsumerWidget {
       );
     }
 
-    final actionRow = showDownload
-        ? IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: playBtn),
-                const SizedBox(width: LayoutConstants.spacingSm),
-                Expanded(child: downloadBtn),
-              ],
-            ),
-          )
-        : playBtn;
-
+    // Keep Play full-width alone for single- and multi-episode titles so the
+    // primary CTA matches. Download (single-episode only) sits on the next row.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [progressWidget, actionRow],
+      children: [
+        progressWidget,
+        playBtn,
+        if (showDownload) ...[
+          const SizedBox(height: LayoutConstants.spacingSm),
+          downloadBtn,
+        ],
+      ],
     );
   }
 }
