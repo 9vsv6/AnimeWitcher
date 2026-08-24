@@ -19,11 +19,6 @@ class MultimediaCard extends StatelessWidget {
   /// Search results disable the shimmer so the card is visible immediately.
   final bool showImageLoadingShimmer;
 
-  /// When false, skips the [Hero] wrapper. Search uses this because Details
-  /// has no matching tag — wrapping every poster in Hero still churns
-  /// GlobalKeys when the route is covered and restored.
-  final bool useHero;
-
   /// Fully formatted text supplied by the provider.
   ///
   /// This widget displays the string unchanged.
@@ -41,7 +36,6 @@ class MultimediaCard extends StatelessWidget {
     this.compact = false,
     this.episodeBadge,
     this.showImageLoadingShimmer = true,
-    this.useHero = true,
   });
 
   @override
@@ -72,28 +66,28 @@ class MultimediaCard extends StatelessWidget {
     final normalizedImageUrl = imageUrl?.trim();
     final hasImageUrl =
         normalizedImageUrl != null && normalizedImageUrl.isNotEmpty;
-    final clippedImage = ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: hasImageUrl
-          ? CachedNetworkImage(
-              imageUrl: normalizedImageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              memCacheWidth: memoryCacheWidth,
-              placeholder: (context, url) => showImageLoadingShimmer
-                  ? ShimmerPlaceholder(borderRadius: 12)
-                  : _buildImageLoadingCard(context),
-              errorWidget: (_, _, _) =>
-                  ThumbnailErrorPlaceholder(label: title),
-              fadeOutDuration: Duration.zero,
-              fadeInDuration: const Duration(milliseconds: 120),
-              useOldImageOnUrlChange: true,
-            )
-          : ThumbnailErrorPlaceholder(label: title),
+    final imageWidget = Hero(
+      tag: heroTag,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: hasImageUrl
+            ? CachedNetworkImage(
+                imageUrl: normalizedImageUrl!,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                memCacheWidth: memoryCacheWidth,
+                placeholder: (context, url) => showImageLoadingShimmer
+                    ? ShimmerPlaceholder(borderRadius: 12)
+                    : _buildImageLoadingCard(context),
+                errorWidget: (_, _, _) =>
+                    ThumbnailErrorPlaceholder(label: title),
+                fadeOutDuration: Duration.zero,
+                fadeInDuration: const Duration(milliseconds: 120),
+                useOldImageOnUrlChange: true,
+              )
+            : ThumbnailErrorPlaceholder(label: title),
+      ),
     );
-    final imageWidget = useHero
-        ? Hero(tag: heroTag, child: clippedImage)
-        : clippedImage;
 
     final titleTextStyle = TextStyle(
       color: Colors.white,

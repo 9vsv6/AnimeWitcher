@@ -623,9 +623,10 @@ class EpisodeCard extends HookConsumerWidget {
         return const ThumbnailErrorPlaceholder();
       }
       return CachedNetworkImage(
-        key: ValueKey<String>(imageUrl),
         imageUrl: imageUrl,
         fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
         memCacheWidth: memCacheWidth,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,

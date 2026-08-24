@@ -590,15 +590,8 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final ep = displayedEpisodes[index];
-            return KeepAlive(
-              keepAlive: true,
-              child: _withTransition(
-                EpisodeCard(
-                  key: ValueKey(ep.url),
-                  episode: ep,
-                  parentItem: parentItem,
-                ),
-              ),
+            return _withTransition(
+              EpisodeCard(episode: ep, parentItem: parentItem) as Widget,
             );
           },
         ),
