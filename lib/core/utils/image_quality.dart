@@ -8,6 +8,28 @@
 /// variant is missing.
 library;
 
+/// Pixels a poster should be decoded at when it is painted [paintedWidth]
+/// logical pixels wide.
+///
+/// Cards used to be decoded from their nominal card width, which grid cells and
+/// lists override, so posters were resampled below the size they were painted
+/// at and looked soft next to surfaces that decode at full size. Sizing from
+/// the painted width fixes that; rounding up in coarse steps lets nearby widths
+/// (and hero flights) share one decoded bitmap, and the cap keeps a very large
+/// source image from filling the image cache.
+int posterDecodeWidth({
+  required double paintedWidth,
+  required double devicePixelRatio,
+}) {
+  const step = 256;
+  const minWidth = 256;
+  const maxWidth = 2048;
+  final target = paintedWidth * devicePixelRatio;
+  if (target <= 0) return minWidth;
+  final rounded = (target / step).ceil() * step;
+  return rounded.clamp(minWidth, maxWidth);
+}
+
 const Set<String> _aniListCoverSizes = <String>{
   'small',
   'medium',

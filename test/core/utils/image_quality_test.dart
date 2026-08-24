@@ -74,6 +74,39 @@ void main() {
     });
   });
 
+  group('posterDecodeWidth', () {
+    test('covers the pixels the poster is painted with', () {
+      // A 2-column grid cell on a 3x phone paints ~183dp wide.
+      expect(
+        posterDecodeWidth(paintedWidth: 183, devicePixelRatio: 3),
+        greaterThanOrEqualTo(549),
+      );
+      expect(
+        posterDecodeWidth(paintedWidth: 130, devicePixelRatio: 3),
+        greaterThanOrEqualTo(390),
+      );
+      expect(
+        posterDecodeWidth(paintedWidth: 300, devicePixelRatio: 2),
+        greaterThanOrEqualTo(600),
+      );
+    });
+
+    test('reuses one decode size for nearby widths', () {
+      expect(
+        posterDecodeWidth(paintedWidth: 183, devicePixelRatio: 3),
+        posterDecodeWidth(paintedWidth: 190, devicePixelRatio: 3),
+      );
+    });
+
+    test('stays within the memory cap', () {
+      expect(
+        posterDecodeWidth(paintedWidth: 4000, devicePixelRatio: 4),
+        2048,
+      );
+      expect(posterDecodeWidth(paintedWidth: 0, devicePixelRatio: 3), 256);
+    });
+  });
+
   group('fallbackQualityImageUrl', () {
     test('steps back down one size', () {
       expect(

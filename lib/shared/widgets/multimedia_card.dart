@@ -53,10 +53,6 @@ class MultimediaCard extends StatelessWidget {
         ? (isPortrait ? 200.0 : 300.0)
         : (isPortrait ? 130.0 : 200.0);
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final memoryCacheWidth = (cardWidth * devicePixelRatio)
-        .ceil()
-        .clamp(160, 1024)
-        .toInt();
 
     final normalizedEpisodeBadge = episodeBadge?.trim();
     final badgeText =
@@ -72,7 +68,22 @@ class MultimediaCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: hasImageUrl
-            ? _buildPoster(context, normalizedImageUrl, memoryCacheWidth)
+            // Decode for the box the poster really fills. Grid cells and
+            // horizontal lists override [cardWidth], so sizing from that
+            // nominal value decoded posters smaller than they are painted,
+            // which is what made cards look soft next to the details page.
+            ? LayoutBuilder(
+                builder: (context, constraints) => _buildPoster(
+                  context,
+                  normalizedImageUrl,
+                  posterDecodeWidth(
+                    paintedWidth: constraints.hasBoundedWidth
+                        ? constraints.maxWidth
+                        : cardWidth,
+                    devicePixelRatio: devicePixelRatio,
+                  ),
+                ),
+              )
             : ThumbnailErrorPlaceholder(label: title),
       ),
     );
