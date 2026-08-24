@@ -1477,8 +1477,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     required bool isFavorite,
     required dynamic libraryNotifier,
   }) {
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final colors = Theme.of(context).colorScheme;
 
     return PreferredSize(
@@ -1487,7 +1485,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         textDirection: TextDirection.ltr,
         child: AppBar(
           automaticallyImplyLeading: false,
-          centerTitle: true,
           titleSpacing: 8,
           leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
           leading: appleUsesPersistentLiquidGlassHeader
@@ -1499,23 +1496,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
                 ),
-          title: Padding(
-            padding: EdgeInsets.only(
-              left: appleUsesPersistentLiquidGlassHeader ? 56 : 8,
-              right: appleUsesPersistentLiquidGlassHeader ? 148 : 8,
-            ),
-            child: Directionality(
-              textDirection:
-                  isArabic ? TextDirection.rtl : TextDirection.ltr,
-              child: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
           actions: appleUsesPersistentLiquidGlassHeader
               ? const <Widget>[]
               : [
@@ -1792,67 +1772,70 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     final colors = theme.colorScheme;
     final genres = _normalizedGenres(item);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.38),
+    return SizedBox(
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: colors.outlineVariant.withValues(alpha: 0.38),
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ExpandableText(
-              text: item.description ?? l10n.noDescription,
-              maxLines: 4,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: colors.onSurfaceVariant,
-                height: 1.55,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ExpandableText(
+                text: item.description ?? l10n.noDescription,
+                maxLines: 4,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  height: 1.55,
+                ),
               ),
-            ),
-            if (detailsState.hasError) ...[
-              const SizedBox(height: 12),
-              Text(
-                l10n.errorPrefix(detailsState.error.toString()),
-                style: TextStyle(color: colors.error),
-              ),
-            ],
-            if (genres.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
-                children: [
-                  for (final genre in genres)
-                    Material(
-                      color: colors.primary,
-                      borderRadius: BorderRadius.circular(999),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => _openGenreResults(context, genre),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            genre,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: colors.onPrimary,
-                              fontWeight: FontWeight.w600,
-                              height: 1,
+              if (detailsState.hasError) ...[
+                const SizedBox(height: 12),
+                Text(
+                  l10n.errorPrefix(detailsState.error.toString()),
+                  style: TextStyle(color: colors.error),
+                ),
+              ],
+              if (genres.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    for (final genre in genres)
+                      Material(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(999),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => _openGenreResults(context, genre),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              genre,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: colors.onPrimary,
+                                fontWeight: FontWeight.w600,
+                                height: 1,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
