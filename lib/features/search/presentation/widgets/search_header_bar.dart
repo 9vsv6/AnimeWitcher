@@ -157,58 +157,64 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                       );
                     }
 
-                    return TextField(
-                      controller: widget.textController,
-                      focusNode: widget.searchFocusNode,
-                      autofocus: false,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      textDirection: searchTextDirection(
-                        value.text,
-                        fallback: Directionality.of(context),
-                      ),
-                      textAlign: TextAlign.start,
-                      textAlignVertical: TextAlignVertical.center,
-                      textInputAction: TextInputAction.search,
-                      enableInteractiveSelection: true,
-                      contextMenuBuilder: (context, editableTextState) {
-                        return AdaptiveTextSelectionToolbar.buttonItems(
-                          anchors: editableTextState.contextMenuAnchors,
-                          buttonItems: editableTextState.contextMenuButtonItems,
-                        );
-                      },
-                      onChanged: widget.onChanged,
-                      onSubmitted: widget.onSubmitted,
-                      decoration: InputDecoration(
-                        hintText: searchHint,
-                        border: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        filled: false,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 15,
+                    // The field reads left-to-right in every locale: magnifier
+                    // on the left, hint and caret starting there.
+                    return Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: TextField(
+                        controller: widget.textController,
+                        focusNode: widget.searchFocusNode,
+                        autofocus: false,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurface,
                         ),
-                        hintStyle: TextStyle(
-                          fontSize: 13,
-                          color: theme.colorScheme.onSurfaceVariant,
+                        textDirection: searchTextDirection(
+                          value.text,
+                          fallback: TextDirection.ltr,
                         ),
-                        prefixIcon: Icon(
-                          Icons.search_rounded,
-                          size: 20,
-                          color: theme.colorScheme.primary,
-                        ),
-                        prefixIconConstraints: const BoxConstraints(
-                          minWidth: 46,
-                          minHeight: 48,
-                        ),
-                        suffixIcon: suffix,
-                        suffixIconConstraints: const BoxConstraints(
-                          minWidth: 46,
-                          minHeight: 48,
+                        textAlign: TextAlign.start,
+                        textAlignVertical: TextAlignVertical.center,
+                        textInputAction: TextInputAction.search,
+                        enableInteractiveSelection: true,
+                        contextMenuBuilder: (context, editableTextState) {
+                          return AdaptiveTextSelectionToolbar.buttonItems(
+                            anchors: editableTextState.contextMenuAnchors,
+                            buttonItems:
+                                editableTextState.contextMenuButtonItems,
+                          );
+                        },
+                        onChanged: widget.onChanged,
+                        onSubmitted: widget.onSubmitted,
+                        decoration: InputDecoration(
+                          hintText: searchHint,
+                          border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          filled: false,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 15,
+                          ),
+                          hintStyle: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search_rounded,
+                            size: 20,
+                            color: theme.colorScheme.primary,
+                          ),
+                          prefixIconConstraints: const BoxConstraints(
+                            minWidth: 46,
+                            minHeight: 48,
+                          ),
+                          suffixIcon: suffix,
+                          suffixIconConstraints: const BoxConstraints(
+                            minWidth: 46,
+                            minHeight: 48,
+                          ),
                         ),
                       ),
                     );

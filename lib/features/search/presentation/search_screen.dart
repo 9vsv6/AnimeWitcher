@@ -590,7 +590,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
               textDirection: searchTextDirection(
                 _controller.text,
-                fallback: Directionality.of(context),
+                fallback: TextDirection.ltr,
               ),
               textAlign: TextAlign.start,
               textAlignVertical: TextAlignVertical.center,
@@ -688,7 +688,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
                 ),
               ],
-        title: _buildMobileSearchField(context),
+        // The field reads left-to-right in every locale: magnifier on the
+        // left, hint and caret starting there.
+        title: Directionality(
+          textDirection: TextDirection.ltr,
+          child: _buildMobileSearchField(context),
+        ),
       ),
       body: Column(
         children: [
