@@ -1,8 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/features/player/presentation/player_chrome_actions.dart';
-import 'package:skystream/features/player/presentation/player_pip.dart';
-import 'package:skystream/features/player/presentation/player_platform_service.dart';
+import 'package:animewitcher/features/player/presentation/player_chrome_actions.dart';
+import 'package:animewitcher/features/player/presentation/player_pip.dart';
+import 'package:animewitcher/features/player/presentation/player_platform_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -145,7 +145,7 @@ void main() {
   });
 
   group('PlayerPlatformService PiP channel', () {
-    const channel = MethodChannel('dev.akash.skystream.player/pip.test');
+    const channel = MethodChannel('com.animewitcher.app.player/pip.test');
     late PlayerPlatformService service;
     late List<MethodCall> calls;
 

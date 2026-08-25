@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/domain/entity/multimedia_item.dart';
-import 'package:skystream/core/services/anizip_service.dart';
-import 'package:skystream/core/utils/episode_label.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/services/anizip_service.dart';
+import 'package:animewitcher/core/utils/episode_label.dart';
 
 void main() {
   group('isGenericEpisodeTitle', () {

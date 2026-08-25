@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/account/animewitcher_sync_conflict.dart';
+import 'package:animewitcher/core/account/animewitcher_sync_conflict.dart';
 
 void main() {
   group('resolveAnimeWitcherSyncConflict', () {

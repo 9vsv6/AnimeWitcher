@@ -1,4 +1,4 @@
-package dev.akash.skystream
+package com.animewitcher.app
 
 import android.annotation.SuppressLint
 import android.content.ComponentName
@@ -154,7 +154,7 @@ object TvChannelUtils {
             .setDisplayName(context.getString(R.string.app_name))
             .setAppLinkIntent(Intent(Intent.ACTION_VIEW).apply {
                 // Adjust to match your app's deep link if needed
-                data = "skystreamapp://open".toUri()
+                data = "animewitcherapp://open".toUri()
             })
             .setInputId(inputId)
             .build()

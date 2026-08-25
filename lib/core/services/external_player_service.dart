@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:open_file/open_file.dart';
 import '../utils/app_utils.dart';
 
-/// Represents an external video player that can be launched from Skystream.
+/// Represents an external video player that can be launched from AnimeWitcher.
 class ExternalPlayer {
   final String id;
   final String displayName;
@@ -93,7 +93,7 @@ class ExternalPlayerService {
     ),
     // Web Video Cast — accepts ACTION_VIEW with video/* mime, routes to
     // Chromecast / DLNA / Roku / Fire TV / smart TV. Useful for casting
-    // a SkyStream-resolved stream URL to a TV without leaving the phone.
+    // a AnimeWitcher-resolved stream URL to a TV without leaving the phone.
     ExternalPlayer(
       id: 'web_video_cast',
       displayName: 'Web Video Cast',
@@ -231,7 +231,7 @@ class ExternalPlayerService {
   // -- Android: Native Intent via platform channel --
 
   static const _playerChannel = MethodChannel(
-    'dev.akash.skystream/external_player',
+    'com.animewitcher.app/external_player',
   );
 
   Future<bool> _launchAndroid(

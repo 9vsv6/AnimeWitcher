@@ -137,7 +137,7 @@ class ProviderNewsPage {
   });
 }
 
-abstract class SkyStreamProvider {
+abstract class AnimeWitcherProvider {
   /// Unique provider package name.
   String get packageName;
 

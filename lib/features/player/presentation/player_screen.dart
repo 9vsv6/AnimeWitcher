@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,13 +13,13 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:video_view/video_view.dart' as vv;
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../features/settings/presentation/player_settings_provider.dart';
-import 'widgets/skystream_player_controls.dart';
+import 'widgets/animewitcher_player_controls.dart';
 import 'widgets/hotstar_player_style.dart';
 import 'widgets/player_ltr.dart';
 import 'player_controller.dart';
@@ -67,7 +67,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   _videoViewController; // video_view (ExoPlayer/AVPlayer)
 
   final ValueNotifier<BoxFit> _videoFit = ValueNotifier(BoxFit.contain);
-  // Mirrors SkyStreamPlayerControlsState._isVisible, fed by its
+  // Mirrors AnimeWitcherPlayerControlsState._isVisible, fed by its
   // onVisibilityChanged callback. Starts false to match the child's
   // initial state; the child will push true once it decides controls
   // should be visible (immediately on TV; on duration-load elsewhere).
@@ -75,7 +75,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   // intercept in PopScope.
   final ValueNotifier<bool> _controlsVisible = ValueNotifier(false);
 
-  final GlobalKey<SkyStreamPlayerControlsState> _controlsKeyFinal = GlobalKey();
+  final GlobalKey<AnimeWitcherPlayerControlsState> _controlsKeyFinal = GlobalKey();
 
   // The persistent root key handler. It always stays focusable (it is the
   // parent of the ExcludeFocus'd chrome), so when the controls hide we route
@@ -825,7 +825,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     ),
                     Positioned.fill(
                       child: RepaintBoundary(
-                        child: SkyStreamPlayerControls(
+                        child: AnimeWitcherPlayerControls(
                           key: _controlsKeyFinal,
                           isLoading: isLoading,
                           player: _player,
@@ -856,23 +856,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 }
 
-class SkyStreamEmbeddedSubtitleView extends ConsumerStatefulWidget {
+class AnimeWitcherEmbeddedSubtitleView extends ConsumerStatefulWidget {
   final Player player;
   final bool controlsVisible;
 
-  const SkyStreamEmbeddedSubtitleView({
+  const AnimeWitcherEmbeddedSubtitleView({
     super.key,
     required this.player,
     required this.controlsVisible,
   });
 
   @override
-  ConsumerState<SkyStreamEmbeddedSubtitleView> createState() =>
-      _SkyStreamEmbeddedSubtitleViewState();
+  ConsumerState<AnimeWitcherEmbeddedSubtitleView> createState() =>
+      _AnimeWitcherEmbeddedSubtitleViewState();
 }
 
-class _SkyStreamEmbeddedSubtitleViewState
-    extends ConsumerState<SkyStreamEmbeddedSubtitleView> {
+class _AnimeWitcherEmbeddedSubtitleViewState
+    extends ConsumerState<AnimeWitcherEmbeddedSubtitleView> {
   bool _customFontLoaded = false;
 
   @override
@@ -882,7 +882,7 @@ class _SkyStreamEmbeddedSubtitleViewState
   }
 
   @override
-  void didUpdateWidget(covariant SkyStreamEmbeddedSubtitleView oldWidget) {
+  void didUpdateWidget(covariant AnimeWitcherEmbeddedSubtitleView oldWidget) {
     super.didUpdateWidget(oldWidget);
     _loadCustomFontIfNeeded();
   }

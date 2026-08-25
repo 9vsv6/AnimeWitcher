@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/router/app_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:skystream/core/domain/entity/multimedia_item.dart';
-import 'package:skystream/core/extensions/base_provider.dart';
-import 'package:skystream/core/extensions/extension_manager.dart';
-import 'package:skystream/core/utils/artwork_quality.dart';
-import 'package:skystream/core/utils/image_fallbacks.dart';
-import 'package:skystream/features/search/presentation/search_provider.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/extensions/base_provider.dart';
+import 'package:animewitcher/core/extensions/extension_manager.dart';
+import 'package:animewitcher/core/utils/artwork_quality.dart';
+import 'package:animewitcher/core/utils/image_fallbacks.dart';
+import 'package:animewitcher/features/search/presentation/search_provider.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 
 import '../../../../shared/widgets/desktop_scroll_wrapper.dart';
@@ -16,9 +16,9 @@ import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 part 'provider_search_section.g.dart';
 
 // Delegates to the shared searchAllProviders() function — no duplicated

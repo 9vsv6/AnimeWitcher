@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skystream/core/navigation/taskbar_destination.dart';
+import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../core/providers/device_info_provider.dart';
@@ -20,8 +20,8 @@ import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
-import 'package:skystream/core/services/notification_service.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
+import 'package:animewitcher/core/services/notification_service.dart';
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -255,8 +255,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       SearchSortOption.mostFavorited => 'star.fill',
       SearchSortOption.productionDateAscending => 'arrow.up',
       SearchSortOption.productionDateDescending => 'arrow.down',
-      SearchSortOption.nameAscending => 'skystream.abc',
-      SearchSortOption.nameDescending => 'skystream.zyx',
+      SearchSortOption.nameAscending => 'animewitcher.abc',
+      SearchSortOption.nameDescending => 'animewitcher.zyx',
     };
   }
 

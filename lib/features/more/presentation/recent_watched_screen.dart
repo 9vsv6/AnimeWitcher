@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/services/notification_service.dart';
 import '../../../core/utils/responsive_breakpoints.dart';

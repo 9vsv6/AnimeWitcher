@@ -1,10 +1,10 @@
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/services/download_service.dart';
-import 'package:skystream/core/utils/download_time_remaining.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
-import 'package:skystream/l10n/generated/app_localizations_ar.dart';
+import 'package:animewitcher/core/services/download_service.dart';
+import 'package:animewitcher/core/utils/download_time_remaining.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations_ar.dart';
 
 DownloadProgressData _data({
   TaskStatus status = TaskStatus.running,

@@ -1,12 +1,12 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skystream/core/navigation/taskbar_destination.dart';
+import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import 'home_provider.dart';
 import 'home_state.dart';
-import 'package:skystream/features/home/presentation/widgets/continue_watching_section.dart';
-import 'package:skystream/features/search/presentation/search_provider.dart';
-import 'package:skystream/features/library/presentation/history_provider.dart';
+import 'package:animewitcher/features/home/presentation/widgets/continue_watching_section.dart';
+import 'package:animewitcher/features/search/presentation/search_provider.dart';
+import 'package:animewitcher/features/library/presentation/history_provider.dart';
 import 'widgets/home_hero_carousel.dart';
 import 'widgets/media_horizontal_list.dart';
 import 'view_all_screen.dart';
@@ -14,9 +14,9 @@ import '../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
-import 'package:skystream/core/extensions/extension_manager.dart';
-import 'package:skystream/core/extensions/base_provider.dart';
-import 'package:skystream/core/router/app_router.dart';
+import 'package:animewitcher/core/extensions/extension_manager.dart';
+import 'package:animewitcher/core/extensions/base_provider.dart';
+import 'package:animewitcher/core/router/app_router.dart';
 import '../../../shared/widgets/cards_wrapper.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
@@ -27,11 +27,11 @@ import '../../../../core/providers/device_info_provider.dart';
 import 'widgets/dashboard_header_bar.dart';
 import 'widgets/news_section.dart';
 import '../../../shared/widgets/taskbar_visibility.dart';
-import 'package:skystream/features/news/presentation/news_list_screen.dart';
-import 'package:skystream/features/news/presentation/news_utils.dart';
-import 'package:skystream/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/features/news/presentation/news_list_screen.dart';
+import 'package:animewitcher/features/news/presentation/news_utils.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -116,7 +116,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Future<void> _openLinkedNewsAnime(
     BuildContext context,
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     NewsItem item,
   ) async {
     final animeId = item.animeId?.trim();
@@ -138,7 +138,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   void _openNewsList(
     BuildContext context,
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     List<NewsItem> items,
   ) {
     pushOverTaskbar<void>(
@@ -351,7 +351,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     BuildContext context,
     Map<String, List<MultimediaItem>> data,
     List<NewsItem> news,
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
   ) {
     final entries = data.entries
         .where((entry) => entry.key != 'Trending')

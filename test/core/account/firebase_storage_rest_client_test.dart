@@ -2,8 +2,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/account/animewitcher_account_models.dart';
-import 'package:skystream/core/account/firebase_storage_rest_client.dart';
+import 'package:animewitcher/core/account/animewitcher_account_models.dart';
+import 'package:animewitcher/core/account/firebase_storage_rest_client.dart';
 
 void main() {
   test('profile image upload uses Firebase Storage multipart REST', () async {

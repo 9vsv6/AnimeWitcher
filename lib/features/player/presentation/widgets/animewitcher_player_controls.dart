@@ -32,7 +32,7 @@ import '../player_chrome_actions.dart';
 import '../player_gesture_handler.dart';
 import 'player_metadata_scrim.dart';
 
-class SkyStreamPlayerControls extends ConsumerStatefulWidget {
+class AnimeWitcherPlayerControls extends ConsumerStatefulWidget {
   final Player player;
   final vv.VideoController? videoViewController;
   final String? title;
@@ -53,7 +53,7 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   final String? backdropUrl;
   final String? logoUrl;
 
-  const SkyStreamPlayerControls({
+  const AnimeWitcherPlayerControls({
     super.key,
     required this.player,
     this.videoViewController,
@@ -74,12 +74,12 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   final bool isLoading;
 
   @override
-  ConsumerState<SkyStreamPlayerControls> createState() =>
-      SkyStreamPlayerControlsState();
+  ConsumerState<AnimeWitcherPlayerControls> createState() =>
+      AnimeWitcherPlayerControlsState();
 }
 
-class SkyStreamPlayerControlsState
-    extends ConsumerState<SkyStreamPlayerControls>
+class AnimeWitcherPlayerControlsState
+    extends ConsumerState<AnimeWitcherPlayerControls>
     with SingleTickerProviderStateMixin {
   bool _isVisible = false;
   bool _isIpad = false;
@@ -340,7 +340,7 @@ class SkyStreamPlayerControlsState
   }
 
   @override
-  void didUpdateWidget(SkyStreamPlayerControls oldWidget) {
+  void didUpdateWidget(AnimeWitcherPlayerControls oldWidget) {
     super.didUpdateWidget(oldWidget);
   }
 
@@ -536,7 +536,7 @@ class SkyStreamPlayerControlsState
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('SkyStreamPlayerControls._handleDoubleTap: $e');
+        debugPrint('AnimeWitcherPlayerControls._handleDoubleTap: $e');
       }
     }
 

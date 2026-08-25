@@ -17,7 +17,7 @@ import '../../../core/services/download_service.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../core/utils/app_utils.dart';
 import '../../../core/utils/episode_label.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../../core/services/notification_service.dart';
 import '../../library/presentation/history_provider.dart';
 
@@ -33,9 +33,9 @@ class PlaybackLauncher {
 
   PlaybackLauncher(this._ref);
 
-  SkyStreamProvider? _resolveProvider(MultimediaItem item) {
+  AnimeWitcherProvider? _resolveProvider(MultimediaItem item) {
     final manager = _ref.read(extensionManagerProvider.notifier);
-    SkyStreamProvider? provider;
+    AnimeWitcherProvider? provider;
     if (item.provider != null) {
       try {
         final val = item.provider!;
@@ -51,7 +51,7 @@ class PlaybackLauncher {
 
   Future<StreamResult?> _chooseSource(
     BuildContext context,
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String episodeDataUrl,
   ) async {
     bool isCanceled = false;
@@ -131,7 +131,7 @@ class PlaybackLauncher {
 
   Future<StreamResult?> _resolveSelectedSource(
     BuildContext context,
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     StreamResult source,
   ) async {
     if (!source.requiresResolution) return source;

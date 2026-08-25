@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/features/player/presentation/playback_resume.dart';
+import 'package:animewitcher/features/player/presentation/playback_resume.dart';
 
 void main() {
   group('PlaybackResume.shouldHoldUntilSeeked', () {

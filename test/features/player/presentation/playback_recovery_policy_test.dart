@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:skystream/features/player/presentation/playback_recovery_policy.dart';
+import 'package:animewitcher/features/player/presentation/playback_recovery_policy.dart';
 
 void main() {
   group('watchdogStage', () {

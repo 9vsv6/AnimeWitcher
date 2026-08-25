@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/account/firestore_rest_client.dart';
+import 'package:animewitcher/core/account/firestore_rest_client.dart';
 
 void main() {
   test('related anime uses one public Firestore IN query', () async {

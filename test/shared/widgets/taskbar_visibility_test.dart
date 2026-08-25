@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/shared/widgets/taskbar_visibility.dart';
+import 'package:animewitcher/shared/widgets/taskbar_visibility.dart';
 
 void main() {
   testWidgets('pushOverTaskbar covers a nested shell taskbar', (tester) async {

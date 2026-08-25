@@ -1,4 +1,4 @@
-package dev.akash.skystream
+package com.animewitcher.app
 
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
@@ -22,9 +22,9 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "dev.akash.skystream.player/pip"
-    private val TV_CHANNEL = "dev.akash.skystream/tv_channel"
-    private val PLAYER_CHANNEL = "dev.akash.skystream/external_player"
+    private val CHANNEL = "com.animewitcher.app.player/pip"
+    private val TV_CHANNEL = "com.animewitcher.app/tv_channel"
+    private val PLAYER_CHANNEL = "com.animewitcher.app/external_player"
 
     private var pipChannel: MethodChannel? = null
     private var isPlaying = false

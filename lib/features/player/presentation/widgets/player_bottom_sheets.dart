@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
@@ -11,13 +11,13 @@ import '../../../../shared/widgets/custom_widgets.dart';
 import '../../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../subtitle_search_provider.dart';
 import '../../domain/entity/subtitle_model.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'hotstar_player_style.dart';
 import 'subtitle_sync_dialog.dart';
 import 'subtitle_appearance_dialog.dart';
 import 'player_ltr.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 class PlayerBottomSheets {
   static void showSpeedSelection({
     required BuildContext context,

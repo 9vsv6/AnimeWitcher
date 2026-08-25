@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,10 +16,10 @@ import 'player_settings_provider.dart';
 import 'general_settings_provider.dart';
 import 'app_version_provider.dart';
 
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'cache_provider.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 

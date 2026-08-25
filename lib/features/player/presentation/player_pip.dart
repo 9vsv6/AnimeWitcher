@@ -10,7 +10,7 @@ import 'package:flutter/services.dart';
 /// iOS is not supported: Apple PiP requires a native `AVPlayerLayer`, which
 /// is a second video surface on top of the Flutter player.
 class PlayerPip {
-  static const channelName = 'dev.akash.skystream.player/pip';
+  static const channelName = 'com.animewitcher.app.player/pip';
   static const channel = MethodChannel(channelName);
 
   /// Android rejects PiP aspect ratios outside `1:2.39` … `2.39:1`.

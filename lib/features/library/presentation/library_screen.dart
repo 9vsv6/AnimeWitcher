@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skystream/core/navigation/taskbar_destination.dart';
+import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 
 import '../../../core/providers/device_info_provider.dart';
 import '../../../core/storage/library_category.dart';

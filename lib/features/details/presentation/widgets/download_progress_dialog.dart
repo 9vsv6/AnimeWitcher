@@ -4,7 +4,7 @@ import 'package:background_downloader/background_downloader.dart';
 import '../../../../core/services/download_service.dart';
 import '../../../../core/utils/file_size_formatter.dart';
 import '../../../../core/utils/download_time_remaining.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 class DownloadProgressDialog extends ConsumerWidget {
   final String title;

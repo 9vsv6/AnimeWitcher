@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../search_provider.dart';
 import '../search_text_direction.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 import 'search_action_buttons.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 
 /// Redesigned static widescreen/desktop search control bar.
 class SearchHeaderBar extends ConsumerStatefulWidget {

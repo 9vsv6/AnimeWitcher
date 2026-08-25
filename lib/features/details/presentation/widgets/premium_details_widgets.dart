@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:skystream/core/domain/entity/multimedia_item.dart';
-import 'package:skystream/core/utils/artwork_quality.dart';
-import 'package:skystream/core/utils/image_fallbacks.dart';
-import 'package:skystream/shared/widgets/cards_wrapper.dart';
-import 'package:skystream/shared/widgets/shimmer_placeholder.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/utils/artwork_quality.dart';
+import 'package:animewitcher/core/utils/image_fallbacks.dart';
+import 'package:animewitcher/shared/widgets/cards_wrapper.dart';
+import 'package:animewitcher/shared/widgets/shimmer_placeholder.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:skystream/shared/widgets/thumbnail_error_placeholder.dart';
-import 'package:skystream/core/utils/responsive_breakpoints.dart';
+import 'package:animewitcher/shared/widgets/thumbnail_error_placeholder.dart';
+import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'details_layout_widgets.dart';
 

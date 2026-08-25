@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/domain/entity/multimedia_item.dart';

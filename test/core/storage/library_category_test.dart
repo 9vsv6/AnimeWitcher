@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/storage/library_category.dart';
+import 'package:animewitcher/core/storage/library_category.dart';
 
 void main() {
   test('legacy on-hold values map to Continue Later', () {

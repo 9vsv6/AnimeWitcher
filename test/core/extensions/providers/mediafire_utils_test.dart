@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/extensions/providers/mediafire_utils.dart';
+import 'package:animewitcher/core/extensions/providers/mediafire_utils.dart';
 
 void main() {
   group('mediaFirePageRequestUrl', () {

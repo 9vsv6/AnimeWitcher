@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart'; // LogicalKeyboardKey, KeyDownEvent
 import 'package:flutter/foundation.dart'; // For kReleaseMode
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,7 +23,7 @@ import 'core/services/download_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/widgets/m3_toast_overlay.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/providers/device_info_provider.dart';
 import 'shared/widgets/loading_indicator.dart';
@@ -411,7 +411,7 @@ class _MyAppState extends ConsumerState<MyApp>
           scaffoldMessengerKey: ref
               .read(notificationServiceProvider)
               .messengerKey,
-          title: 'SkyStream',
+          title: 'AnimeWitcher',
           debugShowCheckedModeBanner: false,
           scrollBehavior: const MaterialScrollBehavior().copyWith(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -493,7 +493,7 @@ class _MyAppState extends ConsumerState<MyApp>
           rootWidget = PlatformMenuBar(
             menus: <PlatformMenuItem>[
               PlatformMenu(
-                label: 'SkyStream',
+                label: 'AnimeWitcher',
                 menus: <PlatformMenuItem>[
                   if (PlatformProvidedMenuItem.hasMenu(
                     PlatformProvidedMenuItemType.about,

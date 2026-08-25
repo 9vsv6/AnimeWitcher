@@ -23,7 +23,7 @@ private enum DownloadContinuedProcessingError: LocalizedError {
 
 /// Owns iOS 26 BGContinuedProcessingTask instances for downloads.
 ///
-/// The system, not SkyStream, renders the Dynamic Island and Lock Screen UI.
+/// The system, not AnimeWitcher, renders the Dynamic Island and Lock Screen UI.
 /// background_downloader remains responsible for the actual URLSession
 /// transfer; this class only supplies system progress and cancellation.
 @available(iOS 26.0, *)

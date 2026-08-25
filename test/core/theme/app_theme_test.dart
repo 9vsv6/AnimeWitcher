@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/theme/app_theme.dart';
+import 'package:animewitcher/core/theme/app_theme.dart';
 
 void main() {
   test('dark SnackBars use the application surface colors', () {

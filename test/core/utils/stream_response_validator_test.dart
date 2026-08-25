@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/utils/stream_response_validator.dart';
+import 'package:animewitcher/core/utils/stream_response_validator.dart';
 
 void main() {
   group('isLikelyPlayableHttpResponse', () {

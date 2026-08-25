@@ -145,7 +145,7 @@ Stream<SearchAggregateState> searchAllProviders(
   // Livestream-only providers (large M3U playlists) are deprioritized to the
   // back of the queue. They still run and IPTV channel searches work; we just
   // let movie/series providers finish their burst first to reduce peak jank.
-  final sortedProviders = List<SkyStreamProvider>.from(providers)
+  final sortedProviders = List<AnimeWitcherProvider>.from(providers)
     ..sort((a, b) {
       final aLiveOnly =
           a.supportedTypes.isNotEmpty &&
@@ -156,9 +156,9 @@ Stream<SearchAggregateState> searchAllProviders(
       if (aLiveOnly == bLiveOnly) return 0;
       return aLiveOnly ? 1 : -1;
     });
-  final queue = List<SkyStreamProvider>.from(sortedProviders);
+  final queue = List<AnimeWitcherProvider>.from(sortedProviders);
   final List<CancelToken> activeTokens = [];
-  final List<SkyStreamProvider> activeProviders = [];
+  final List<AnimeWitcherProvider> activeProviders = [];
   bool isCompleted = false;
 
   Timer? throttleTimer;
@@ -432,7 +432,7 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
     return const SearchAggregateState(isLoading: true);
   }
 
-  SkyStreamProvider? _provider() {
+  AnimeWitcherProvider? _provider() {
     final providers = ref
         .read(extensionManagerProvider.notifier)
         .getAllProviders()
@@ -448,7 +448,7 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
   }
 
   Future<ProviderMediaPage> _loadPage(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     int offset,
   ) {
     final pageSize = provider.searchPageSize;

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 class AppErrorMessages {
   AppErrorMessages._();

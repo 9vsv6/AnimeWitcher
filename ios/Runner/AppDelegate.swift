@@ -50,7 +50,7 @@ import UserNotifications
     let messenger = engineBridge.applicationRegistrar.messenger()
 
     let persistentHeaderChannel = FlutterMethodChannel(
-      name: "dev.akash.skystream/persistent_glass_header",
+      name: "com.animewitcher.app/persistent_glass_header",
       binaryMessenger: messenger
     )
     // With Flutter's UIScene lifecycle, AppDelegate.window can stay nil because
@@ -58,7 +58,7 @@ import UserNotifications
     // displaying this Flutter engine through its plugin registrar instead.
     // Keep AppDelegate.window only as a legacy fallback.
     let persistentHeaderRegistrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "SkyStreamPersistentGlassHeaderHost"
+      forPlugin: "AnimeWitcherPersistentGlassHeaderHost"
     )
     let persistentHeaderController = ApplePersistentGlassHeaderNativeController(
       channel: persistentHeaderChannel,
@@ -80,40 +80,40 @@ import UserNotifications
     }
 
     if let glassRegistrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "SkyStreamAppleLiquidGlass"
+      forPlugin: "AnimeWitcherAppleLiquidGlass"
     ) {
       glassRegistrar.register(
         AppleLiquidGlassViewFactory(),
-        withId: "dev.akash.skystream/liquid_glass"
+        withId: "com.animewitcher.app/liquid_glass"
       )
       glassRegistrar.register(
         AppleSearchGlassActionsViewFactory(messenger: messenger),
-        withId: "dev.akash.skystream/search_glass_actions"
+        withId: "com.animewitcher.app/search_glass_actions"
       )
       glassRegistrar.register(
         AppleNativeTabBarViewFactory(messenger: messenger),
-        withId: "dev.akash.skystream/native_tab_bar"
+        withId: "com.animewitcher.app/native_tab_bar"
       )
       glassRegistrar.register(
         AppleNativeGlassButtonViewFactory(messenger: messenger),
-        withId: "dev.akash.skystream/native_glass_button"
+        withId: "com.animewitcher.app/native_glass_button"
       )
       glassRegistrar.register(
         AppleNativeToolbarViewFactory(messenger: messenger),
-        withId: "dev.akash.skystream/native_toolbar"
+        withId: "com.animewitcher.app/native_toolbar"
       )
       glassRegistrar.register(
         AppleNativeSearchFieldViewFactory(messenger: messenger),
-        withId: "dev.akash.skystream/native_search_field"
+        withId: "com.animewitcher.app/native_search_field"
       )
       glassRegistrar.register(
         AppleNativeMenuButtonViewFactory(messenger: messenger),
-        withId: "dev.akash.skystream/native_menu_button"
+        withId: "com.animewitcher.app/native_menu_button"
       )
     }
 
     let glassPresenter = FlutterMethodChannel(
-      name: "dev.akash.skystream/liquid_glass_presenter",
+      name: "com.animewitcher.app/liquid_glass_presenter",
       binaryMessenger: messenger
     )
     glassPresenter.setMethodCallHandler { call, result in
@@ -135,7 +135,7 @@ import UserNotifications
           return
         }
         guard let arguments = call.arguments as? [String: Any],
-              let presenter = skyStreamTopViewController() else {
+              let presenter = animeWitcherTopViewController() else {
           result(FlutterError(
             code: "INVALID_ARGUMENTS",
             message: "Unable to present the native sort interface.",
@@ -155,7 +155,7 @@ import UserNotifications
           return
         }
         guard let arguments = call.arguments as? [String: Any],
-              let presenter = skyStreamTopViewController() else {
+              let presenter = animeWitcherTopViewController() else {
           result(FlutterError(
             code: "INVALID_ARGUMENTS",
             message: "Unable to present the native filter interface.",
@@ -289,7 +289,7 @@ import UserNotifications
   }
 }
 
-private func skyStreamUIColor(_ value: Any?, fallback: UIColor = .label) -> UIColor {
+private func animeWitcherUIColor(_ value: Any?, fallback: UIColor = .label) -> UIColor {
   guard let number = value as? NSNumber else { return fallback }
   let argb = number.uint32Value
   let alpha = CGFloat((argb >> 24) & 0xFF) / 255.0
@@ -299,7 +299,7 @@ private func skyStreamUIColor(_ value: Any?, fallback: UIColor = .label) -> UICo
   return UIColor(red: red, green: green, blue: blue, alpha: alpha)
 }
 
-private func skyStreamMenuTitle(_ label: String, isRtl: Bool) -> String {
+private func animeWitcherMenuTitle(_ label: String, isRtl: Bool) -> String {
   guard isRtl else { return label }
   // Keep Arabic titles as one RTL run inside UIKit's LTR UIMenu layout.
   return "\u{202B}\(label)\u{202C}"
@@ -345,7 +345,7 @@ private final class AppleNativeTabBarPlatformView: NSObject, FlutterPlatformView
   ) {
     rootView = UIView(frame: frame)
     channel = FlutterMethodChannel(
-      name: "dev.akash.skystream/native_tab_bar/\(viewId)",
+      name: "com.animewitcher.app/native_tab_bar/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
@@ -402,7 +402,7 @@ private final class AppleNativeTabBarPlatformView: NSObject, FlutterPlatformView
     }
 
     if let tint = values["tintColor"] {
-      tabBar.tintColor = skyStreamUIColor(tint, fallback: .systemBlue)
+      tabBar.tintColor = animeWitcherUIColor(tint, fallback: .systemBlue)
     }
     if let selectedId,
        let index = itemIds.firstIndex(of: selectedId),
@@ -420,18 +420,18 @@ private final class AppleNativeTabBarPlatformView: NSObject, FlutterPlatformView
   }
 }
 
-private func skyStreamMenuImage(
+private func animeWitcherMenuImage(
   named name: String,
   tintColor: UIColor,
   pointSize: CGFloat = 18
 ) -> UIImage? {
-  if name == "skystream.abc" || name == "skystream.zyx" {
+  if name == "animewitcher.abc" || name == "animewitcher.zyx" {
     let font = UIFont.systemFont(ofSize: 15, weight: .medium)
     let attributes: [NSAttributedString.Key: Any] = [
       .font: font,
       .foregroundColor: tintColor,
     ]
-    let text = (name == "skystream.abc" ? "ABC" : "ZYX") as NSString
+    let text = (name == "animewitcher.abc" ? "ABC" : "ZYX") as NSString
     let measured = text.size(withAttributes: attributes)
     // Use one fixed canvas so ABC and ZYX have identical visual/icon bounds.
     let size = CGSize(width: 34, height: 18)
@@ -449,7 +449,7 @@ private func skyStreamMenuImage(
   )?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
 }
 
-private func skyStreamConfigureGlassButton(
+private func animeWitcherConfigureGlassButton(
   _ button: UIButton,
   image: UIImage?,
   foreground: UIColor = .label
@@ -479,9 +479,9 @@ private func skyStreamConfigureGlassButton(
 private final class ApplePersistentGlassHeaderNativeController: NSObject {
   private let channel: FlutterMethodChannel
   private let hostViewProvider: () -> UIView?
-  private let rootView = SkyStreamPassthroughView(frame: .zero)
+  private let rootView = AnimeWitcherPassthroughView(frame: .zero)
   private let backButton = UIButton(type: .system)
-  private let toolbar = SkyStreamPassthroughToolbar(frame: .zero)
+  private let toolbar = AnimeWitcherPassthroughToolbar(frame: .zero)
   private var toolbarWidthConstraint: NSLayoutConstraint?
   private var toolbarTrailingConstraint: NSLayoutConstraint?
   private weak var installedHostView: UIView?
@@ -560,13 +560,13 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     }
     let visible = values["visible"] as? Bool ?? false
     let showBack = visible && (values["showBack"] as? Bool ?? false)
-    let backColor = skyStreamUIColor(values["backColor"], fallback: .label)
+    let backColor = animeWitcherUIColor(values["backColor"], fallback: .label)
     let backImage = UIImage(
       systemName: "chevron.left",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
     )
     UIView.performWithoutAnimation {
-      skyStreamConfigureGlassButton(backButton, image: backImage, foreground: backColor)
+      animeWitcherConfigureGlassButton(backButton, image: backImage, foreground: backColor)
       backButton.accessibilityLabel = values["backAccessibilityLabel"] as? String
       backButton.accessibilityTraits = .button
       backButton.layoutIfNeeded()
@@ -713,9 +713,9 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
   private func makeMenu(actionIndex: Int, action: [String: Any]) -> UIMenu? {
     guard #available(iOS 14.0, *) else { return nil }
     let selectedValue = action["selectedValue"] as? String
-    let menuTint = skyStreamUIColor(
+    let menuTint = animeWitcherUIColor(
       action["menuTintColor"],
-      fallback: skyStreamUIColor(action["color"], fallback: .label)
+      fallback: animeWitcherUIColor(action["color"], fallback: .label)
     )
     let rawItems = action["menuItems"] as? [[String: Any]] ?? []
     guard !rawItems.isEmpty else { return nil }
@@ -725,7 +725,7 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
       let isDestructive = menuItem["destructive"] as? Bool == true
       let image = (menuItem["systemImage"] as? String).flatMap { name -> UIImage? in
         if isDestructive { return UIImage(systemName: name) }
-        return skyStreamMenuImage(named: name, tintColor: menuTint)
+        return animeWitcherMenuImage(named: name, tintColor: menuTint)
       }
       var attributes: UIMenuElement.Attributes = []
       if isDestructive { attributes.insert(.destructive) }
@@ -751,10 +751,10 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     actionCount: Int
   ) {
     let systemName = action["systemName"] as? String ?? "circle"
-    let actionTint = skyStreamUIColor(action["color"], fallback: .label)
+    let actionTint = animeWitcherUIColor(action["color"], fallback: .label)
     item.image = actionTitleOnly(action)
       ? nil
-      : skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
+      : animeWitcherMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
     item.title = actionTitle(action)
     item.tag = actionIndex
     item.isEnabled = action["enabled"] as? Bool ?? true
@@ -769,8 +769,8 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
       item.sharesBackground = true
       item.hidesSharedBackground = false
       item.identifier = actionIndex == actionCount - 1
-        ? "skystream.trailing.anchor"
-        : "skystream.trailing.item.\(actionIndex)"
+        ? "animewitcher.trailing.anchor"
+        : "animewitcher.trailing.item.\(actionIndex)"
     }
   }
 
@@ -809,10 +809,10 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
   private func makeActionItems(actions: [[String: Any]]) -> [UIBarButtonItem] {
     let actionItems: [UIBarButtonItem] = actions.enumerated().map { index, action in
       let systemName = action["systemName"] as? String ?? "circle"
-      let actionTint = skyStreamUIColor(action["color"], fallback: .label)
+      let actionTint = animeWitcherUIColor(action["color"], fallback: .label)
       let image = actionTitleOnly(action)
         ? nil
-        : skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
+        : animeWitcherMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
       let item: UIBarButtonItem
       if #available(iOS 14.0, *), let menu = makeMenu(actionIndex: index, action: action) {
         item = UIBarButtonItem(
@@ -926,7 +926,7 @@ private final class AppleNativeGlassButtonPlatformView: NSObject, FlutterPlatfor
   ) {
     rootView = UIView(frame: frame)
     channel = FlutterMethodChannel(
-      name: "dev.akash.skystream/native_glass_button/\(viewId)",
+      name: "com.animewitcher.app/native_glass_button/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
@@ -969,8 +969,8 @@ private final class AppleNativeGlassButtonPlatformView: NSObject, FlutterPlatfor
       systemName: systemName,
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .semibold)
     )
-    let foreground = skyStreamUIColor(values["color"], fallback: .label)
-    skyStreamConfigureGlassButton(button, image: image, foreground: foreground)
+    let foreground = animeWitcherUIColor(values["color"], fallback: .label)
+    animeWitcherConfigureGlassButton(button, image: image, foreground: foreground)
     button.isEnabled = values["enabled"] as? Bool ?? true
     button.accessibilityLabel = values["accessibilityLabel"] as? String
     button.accessibilityTraits = .button
@@ -1032,7 +1032,7 @@ private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatfor
       effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
     }
     channel = FlutterMethodChannel(
-      name: "dev.akash.skystream/native_search_field/\(viewId)",
+      name: "com.animewitcher.app/native_search_field/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
@@ -1107,9 +1107,9 @@ private final class AppleNativeSearchFieldPlatformView: NSObject, FlutterPlatfor
     guard let values = arguments as? [String: Any] else { return }
     let text = values["text"] as? String ?? ""
     let placeholder = values["placeholder"] as? String ?? ""
-    let tint = skyStreamUIColor(values["tintColor"], fallback: .systemBlue)
-    let textColor = skyStreamUIColor(values["textColor"], fallback: .label)
-    let placeholderColor = skyStreamUIColor(
+    let tint = animeWitcherUIColor(values["tintColor"], fallback: .systemBlue)
+    let textColor = animeWitcherUIColor(values["textColor"], fallback: .label)
+    let placeholderColor = animeWitcherUIColor(
       values["placeholderColor"],
       fallback: .secondaryLabel
     )
@@ -1218,14 +1218,14 @@ private final class AppleNativeToolbarViewFactory: NSObject, FlutterPlatformView
   }
 }
 
-private final class SkyStreamPassthroughView: UIView {
+private final class AnimeWitcherPassthroughView: UIView {
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     let hit = super.hitTest(point, with: event)
     return hit === self ? nil : hit
   }
 }
 
-private final class SkyStreamPassthroughToolbar: UIToolbar {
+private final class AnimeWitcherPassthroughToolbar: UIToolbar {
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     guard let hit = super.hitTest(point, with: event) else { return nil }
 
@@ -1243,9 +1243,9 @@ private final class SkyStreamPassthroughToolbar: UIToolbar {
 }
 
 private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformView {
-  private let rootView: SkyStreamPassthroughView
+  private let rootView: AnimeWitcherPassthroughView
   private let channel: FlutterMethodChannel
-  private let toolbar: SkyStreamPassthroughToolbar
+  private let toolbar: AnimeWitcherPassthroughToolbar
   private var didApplyInitialState = false
   private var currentActionItems: [UIBarButtonItem] = []
   private var currentActionKinds: [Int] = []
@@ -1259,10 +1259,10 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     messenger: FlutterBinaryMessenger,
     arguments args: Any?
   ) {
-    rootView = SkyStreamPassthroughView(frame: frame)
-    toolbar = SkyStreamPassthroughToolbar(frame: .zero)
+    rootView = AnimeWitcherPassthroughView(frame: frame)
+    toolbar = AnimeWitcherPassthroughToolbar(frame: .zero)
     channel = FlutterMethodChannel(
-      name: "dev.akash.skystream/native_toolbar/\(viewId)",
+      name: "com.animewitcher.app/native_toolbar/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
@@ -1346,9 +1346,9 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
   ) -> UIMenu? {
     guard #available(iOS 14.0, *) else { return nil }
     let selectedValue = action["selectedValue"] as? String
-    let menuTint = skyStreamUIColor(
+    let menuTint = animeWitcherUIColor(
       action["menuTintColor"],
-      fallback: skyStreamUIColor(action["color"], fallback: .label)
+      fallback: animeWitcherUIColor(action["color"], fallback: .label)
     )
     let rawItems = action["menuItems"] as? [[String: Any]] ?? []
     guard !rawItems.isEmpty else { return nil }
@@ -1359,7 +1359,7 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
       let isDestructive = menuItem["destructive"] as? Bool == true
       let image = (menuItem["systemImage"] as? String).flatMap { name -> UIImage? in
         if isDestructive { return UIImage(systemName: name) }
-        return skyStreamMenuImage(named: name, tintColor: menuTint)
+        return animeWitcherMenuImage(named: name, tintColor: menuTint)
       }
       var attributes: UIMenuElement.Attributes = []
       if isDestructive { attributes.insert(.destructive) }
@@ -1400,8 +1400,8 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
     actionCount: Int
   ) {
     let systemName = action["systemName"] as? String ?? "circle"
-    let actionTint = skyStreamUIColor(action["color"], fallback: .label)
-    item.image = skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
+    let actionTint = animeWitcherUIColor(action["color"], fallback: .label)
+    item.image = animeWitcherMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
     item.title = actionTitle(action)
     item.tag = actionIndex
     item.isEnabled = action["enabled"] as? Bool ?? true
@@ -1414,16 +1414,16 @@ private final class AppleNativeToolbarPlatformView: NSObject, FlutterPlatformVie
       item.sharesBackground = true
       item.hidesSharedBackground = false
       item.identifier = actionIndex == actionCount - 1
-        ? "skystream.trailing.anchor"
-        : "skystream.trailing.item.\(actionIndex)"
+        ? "animewitcher.trailing.anchor"
+        : "animewitcher.trailing.item.\(actionIndex)"
     }
   }
 
   private func makeActionItems(actions: [[String: Any]]) -> [UIBarButtonItem] {
     let actionItems: [UIBarButtonItem] = actions.enumerated().map { index, action in
       let systemName = action["systemName"] as? String ?? "circle"
-      let actionTint = skyStreamUIColor(action["color"], fallback: .label)
-      let image = skyStreamMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
+      let actionTint = animeWitcherUIColor(action["color"], fallback: .label)
+      let image = animeWitcherMenuImage(named: systemName, tintColor: actionTint, pointSize: 19)
       let item: UIBarButtonItem
 
       if #available(iOS 14.0, *), let menu = makeMenu(actionIndex: index, action: action) {
@@ -1531,7 +1531,7 @@ private final class AppleNativeMenuButtonViewFactory: NSObject, FlutterPlatformV
   }
 }
 
-private final class SkyStreamMenuAwareButton: UIButton {
+private final class AnimeWitcherMenuAwareButton: UIButton {
   var onMenuWillShow: (() -> Void)?
   var onMenuWillHide: (() -> Void)?
 
@@ -1564,7 +1564,7 @@ private final class SkyStreamMenuAwareButton: UIButton {
 
 private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatformView {
   private let rootView: UIView
-  private let button = SkyStreamMenuAwareButton(type: .system)
+  private let button = AnimeWitcherMenuAwareButton(type: .system)
   private let channel: FlutterMethodChannel
 
   init(
@@ -1575,7 +1575,7 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
   ) {
     rootView = UIView(frame: frame)
     channel = FlutterMethodChannel(
-      name: "dev.akash.skystream/native_menu_button/\(viewId)",
+      name: "com.animewitcher.app/native_menu_button/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
@@ -1620,7 +1620,7 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
     guard let values = arguments as? [String: Any] else { return }
     let invisibleAnchor = values["invisibleAnchor"] as? Bool ?? false
     let systemName = values["systemImage"] as? String ?? "arrow.up.arrow.down"
-    let tintColor = skyStreamUIColor(values["tintColor"], fallback: .label)
+    let tintColor = animeWitcherUIColor(values["tintColor"], fallback: .label)
     let title = (values["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
     if invisibleAnchor {
@@ -1643,7 +1643,7 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
         systemName: systemName,
         withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
       )?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
-      skyStreamConfigureGlassButton(button, image: image, foreground: tintColor)
+      animeWitcherConfigureGlassButton(button, image: image, foreground: tintColor)
       button.tintColor = tintColor
       if #available(iOS 15.0, *), var configuration = button.configuration {
         configuration.title = (title?.isEmpty == false) ? title : nil
@@ -1675,14 +1675,14 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
         if isDestructive {
           return UIImage(systemName: name)
         }
-        return skyStreamMenuImage(named: name, tintColor: tintColor)
+        return animeWitcherMenuImage(named: name, tintColor: tintColor)
       }
       var attributes: UIMenuElement.Attributes = []
       if isDestructive {
         attributes.insert(.destructive)
       }
       return UIAction(
-        title: skyStreamMenuTitle(label, isRtl: isRtl),
+        title: animeWitcherMenuTitle(label, isRtl: isRtl),
         image: actionImage,
         attributes: attributes,
         state: value == selectedValue ? .on : .off
@@ -1804,7 +1804,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
   ) {
     rootView = UIView(frame: frame)
     channel = FlutterMethodChannel(
-      name: "dev.akash.skystream/search_glass_actions/\(viewId)",
+      name: "com.animewitcher.app/search_glass_actions/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()
@@ -1840,8 +1840,8 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
       systemName: "slider.horizontal.3",
       withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
     )
-    skyStreamConfigureGlassButton(sortButton, image: sortImage)
-    skyStreamConfigureGlassButton(filterButton, image: filterImage)
+    animeWitcherConfigureGlassButton(sortButton, image: sortImage)
+    animeWitcherConfigureGlassButton(filterButton, image: filterImage)
     filterButton.addTarget(self, action: #selector(filterPressed), for: .touchUpInside)
 
     filterBadge.textAlignment = .center
@@ -1886,7 +1886,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     guard let values = arguments as? [String: Any] else { return }
     filterCount = (values["filterCount"] as? NSNumber)?.intValue ?? 0
     filterLoading = values["filterLoading"] as? Bool ?? false
-    let tintColor = skyStreamUIColor(values["tintColor"], fallback: .label)
+    let tintColor = animeWitcherUIColor(values["tintColor"], fallback: .label)
     filterButton.isEnabled = !filterLoading
     filterBadge.text = filterCount > 99 ? "99+" : "\(filterCount)"
     filterBadge.backgroundColor = tintColor
@@ -1922,10 +1922,10 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
             let label = item["label"] as? String else { return nil }
       let symbolName = item["systemImage"] as? String
       let image = symbolName.flatMap { name in
-        skyStreamMenuImage(named: name, tintColor: tintColor)
+        animeWitcherMenuImage(named: name, tintColor: tintColor)
       }
       return UIAction(
-        title: skyStreamMenuTitle(label, isRtl: isRtl),
+        title: animeWitcherMenuTitle(label, isRtl: isRtl),
         image: image,
         state: value == selectedValue ? .on : .off
       ) { [weak self] _ in
@@ -1945,7 +1945,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
   }
 }
 
-private func skyStreamTopViewController() -> UIViewController? {
+private func animeWitcherTopViewController() -> UIViewController? {
   let scene = UIApplication.shared.connectedScenes
     .compactMap { $0 as? UIWindowScene }
     .first { $0.activationState == .foregroundActive }
@@ -2072,7 +2072,7 @@ private enum AppleSearchFilterTab: String, CaseIterable, Identifiable {
   var id: String { rawValue }
 }
 
-private func skyStreamStrings(_ value: Any?) -> [String] {
+private func animeWitcherStrings(_ value: Any?) -> [String] {
   if let strings = value as? [String] { return strings }
   if let values = value as? [Any] { return values.compactMap { $0 as? String } }
   return []
@@ -2107,22 +2107,22 @@ private struct AppleSearchFilterOverlay: View {
     onCancel: @escaping () -> Void,
     onApply: @escaping ([String: Any]) -> Void
   ) {
-    statuses = skyStreamStrings(options["statuses"])
-    types = skyStreamStrings(options["types"])
-    ageRatings = skyStreamStrings(options["ageRatings"])
-    years = skyStreamStrings(options["years"])
-    seasons = skyStreamStrings(options["seasons"])
-    genres = skyStreamStrings(options["genres"])
+    statuses = animeWitcherStrings(options["statuses"])
+    types = animeWitcherStrings(options["types"])
+    ageRatings = animeWitcherStrings(options["ageRatings"])
+    years = animeWitcherStrings(options["years"])
+    seasons = animeWitcherStrings(options["seasons"])
+    genres = animeWitcherStrings(options["genres"])
     self.isArabic = isArabic
     self.tintColor = tintColor
     self.onCancel = onCancel
     self.onApply = onApply
-    _selectedStatuses = State(initialValue: Set(skyStreamStrings(initialValue["statuses"])))
-    _selectedTypes = State(initialValue: Set(skyStreamStrings(initialValue["types"])))
-    _selectedAgeRatings = State(initialValue: Set(skyStreamStrings(initialValue["ageRatings"])))
-    _selectedYears = State(initialValue: Set(skyStreamStrings(initialValue["years"])))
-    _selectedSeasons = State(initialValue: Set(skyStreamStrings(initialValue["seasons"])))
-    _selectedGenres = State(initialValue: Set(skyStreamStrings(initialValue["genres"])))
+    _selectedStatuses = State(initialValue: Set(animeWitcherStrings(initialValue["statuses"])))
+    _selectedTypes = State(initialValue: Set(animeWitcherStrings(initialValue["types"])))
+    _selectedAgeRatings = State(initialValue: Set(animeWitcherStrings(initialValue["ageRatings"])))
+    _selectedYears = State(initialValue: Set(animeWitcherStrings(initialValue["years"])))
+    _selectedSeasons = State(initialValue: Set(animeWitcherStrings(initialValue["seasons"])))
+    _selectedGenres = State(initialValue: Set(animeWitcherStrings(initialValue["genres"])))
   }
 
   private var seasonRequiresYear: Bool {
@@ -2387,7 +2387,7 @@ private func presentAppleSearchSort(
   let initialValue = arguments["initialValue"] as? String ?? ""
   let isArabic = arguments["isArabic"] as? Bool ?? false
   let tintColor = Color(
-    uiColor: skyStreamUIColor(arguments["tintColor"], fallback: .systemBlue)
+    uiColor: animeWitcherUIColor(arguments["tintColor"], fallback: .systemBlue)
   )
   var hostingController: UIHostingController<AppleSearchSortOverlay>?
   let overlay = AppleSearchSortOverlay(
@@ -2420,7 +2420,7 @@ private func presentAppleSearchFilters(
   let initialValue = arguments["initialValue"] as? [String: Any] ?? [:]
   let isArabic = arguments["isArabic"] as? Bool ?? false
   let tintColor = Color(
-    uiColor: skyStreamUIColor(arguments["tintColor"], fallback: .systemBlue)
+    uiColor: animeWitcherUIColor(arguments["tintColor"], fallback: .systemBlue)
   )
   var hostingController: UIHostingController<AppleSearchFilterOverlay>?
   let overlay = AppleSearchFilterOverlay(

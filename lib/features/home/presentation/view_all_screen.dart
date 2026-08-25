@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
-import 'package:skystream/features/details/presentation/details_screen.dart';
+import 'package:animewitcher/features/details/presentation/details_screen.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/multimedia_card.dart';

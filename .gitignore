@@ -85,8 +85,8 @@ packages/flutter_torrent_server/go_src/.gradle/
 /coverage/
 plugins/
 keystore/
-skystream-plugins/
-skystream-tools/
+animewitcher-plugins/
+animewitcher-tools/
 tree-shaking-test*.js
 
 # Local build configuration and Firebase/Google client files. Keep production

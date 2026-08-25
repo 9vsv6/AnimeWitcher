@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import 'hotstar_player_style.dart';

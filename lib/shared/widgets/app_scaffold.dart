@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:skystream/core/navigation/taskbar_destination.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
-import 'package:skystream/shared/widgets/custom_bottom_nav.dart';
+import 'package:animewitcher/core/navigation/taskbar_destination.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/custom_bottom_nav.dart';
 
 import '../../features/settings/presentation/general_settings_provider.dart';
 

@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 typedef SystemDownloadCancellation = Future<void> Function(String taskId);
 
-/// Bridges SkyStream downloads to iOS 26's system-managed continued
+/// Bridges AnimeWitcher downloads to iOS 26's system-managed continued
 /// processing task UI. On older iOS versions the native side returns false
 /// and background_downloader continues to work normally.
 class DownloadContinuedProcessingService {

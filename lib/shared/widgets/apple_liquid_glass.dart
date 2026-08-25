@@ -6,20 +6,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/services.dart';
 
-const _appleLiquidGlassViewType = 'dev.akash.skystream/liquid_glass';
+const _appleLiquidGlassViewType = 'com.animewitcher.app/liquid_glass';
 const _appleNativeGlassButtonViewType =
-    'dev.akash.skystream/native_glass_button';
-const _appleNativeToolbarViewType = 'dev.akash.skystream/native_toolbar';
+    'com.animewitcher.app/native_glass_button';
+const _appleNativeToolbarViewType = 'com.animewitcher.app/native_toolbar';
 const _appleNativeSearchFieldViewType =
-    'dev.akash.skystream/native_search_field';
+    'com.animewitcher.app/native_search_field';
 const _appleNativeMenuButtonViewType =
-    'dev.akash.skystream/native_menu_button';
+    'com.animewitcher.app/native_menu_button';
 
 bool get _usesNativeAppleLiquidGlass =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
 
-/// True on iOS where SkyStream hosts the native Liquid Glass controls.
+/// True on iOS where AnimeWitcher hosts the native Liquid Glass controls.
 /// Screens use this to hand their header actions to the persistent overlay
 /// instead of creating route-local platform views that slide with transitions.
 bool get appleUsesPersistentLiquidGlassHeader => _usesNativeAppleLiquidGlass;
@@ -352,7 +352,7 @@ class ApplePersistentGlassHeaderOverlay extends StatefulWidget {
 class _ApplePersistentGlassHeaderOverlayState
     extends State<ApplePersistentGlassHeaderOverlay> {
   static const MethodChannel _nativeHeaderChannel = MethodChannel(
-    'dev.akash.skystream/persistent_glass_header',
+    'com.animewitcher.app/persistent_glass_header',
   );
 
   bool _syncScheduled = false;
@@ -1040,7 +1040,7 @@ class _AppleNativeGlassIconButtonState
 
   void _onPlatformViewCreated(int id) {
     final channel = MethodChannel(
-      'dev.akash.skystream/native_glass_button/$id',
+      'com.animewitcher.app/native_glass_button/$id',
     );
     channel.setMethodCallHandler((call) async {
       if (call.method == 'pressed') widget.onPressed?.call();
@@ -1139,7 +1139,7 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
   }
 
   void _onPlatformViewCreated(int id) {
-    final channel = MethodChannel('dev.akash.skystream/native_toolbar/$id');
+    final channel = MethodChannel('com.animewitcher.app/native_toolbar/$id');
     channel.setMethodCallHandler((call) async {
       if (call.method == 'pressed') {
         final index = call.arguments as int?;
@@ -1285,7 +1285,7 @@ class _AppleNativeGlassSearchFieldState
   }
 
   void _onPlatformViewCreated(int id) {
-    final channel = MethodChannel('dev.akash.skystream/native_search_field/$id');
+    final channel = MethodChannel('com.animewitcher.app/native_search_field/$id');
     channel.setMethodCallHandler((call) async {
       if (call.method == 'changed' && call.arguments is String) {
         final text = call.arguments as String;
@@ -1437,7 +1437,7 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
 
   void _onPlatformViewCreated(int id) {
     final channel = MethodChannel(
-      'dev.akash.skystream/native_menu_button/$id',
+      'com.animewitcher.app/native_menu_button/$id',
     );
     channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -1541,9 +1541,9 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
 }
 
 const _appleSearchGlassActionsViewType =
-    'dev.akash.skystream/search_glass_actions';
+    'com.animewitcher.app/search_glass_actions';
 const _appleLiquidGlassPresenterChannel = MethodChannel(
-  'dev.akash.skystream/liquid_glass_presenter',
+  'com.animewitcher.app/liquid_glass_presenter',
 );
 
 /// Returns true only when iOS is using Apple's iOS 26+ Liquid Glass APIs.
@@ -1681,7 +1681,7 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
 
   void _onPlatformViewCreated(int id) {
     final channel = MethodChannel(
-      'dev.akash.skystream/search_glass_actions/$id',
+      'com.animewitcher.app/search_glass_actions/$id',
     );
     channel.setMethodCallHandler((call) async {
       switch (call.method) {
