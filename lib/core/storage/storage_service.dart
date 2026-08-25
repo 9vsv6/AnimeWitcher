@@ -609,6 +609,21 @@ class StorageService {
         true;
   }
 
+  static const String _kHighQualityPosters =
+      'anime_source_high_quality_posters';
+
+  Future<void> setHighQualityPostersEnabled(bool enabled) async {
+    await _settingsBox.put(_kHighQualityPosters, enabled);
+  }
+
+  bool isHighQualityPostersEnabled() {
+    return (_settingsBox.get(
+              _kHighQualityPosters,
+              defaultValue: true,
+            ) as bool?) ??
+        true;
+  }
+
 
 
 

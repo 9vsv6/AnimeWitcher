@@ -168,6 +168,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   bool get _useAniZipEpisodeImages =>
       _settings.isEpisodeImagesFromAniZipEnabled();
 
+  bool get _useHighQualityPosters => _settings.isHighQualityPostersEnabled();
+
 
   @override
   String get packageName => 'com.fares669.animewitcher.native';
@@ -815,14 +817,22 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
   String _posterFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
-    // AnimeWitcher exposes a dedicated large poster for cards and details.
-    // Prefer it everywhere so normal cards do not upscale the smaller asset.
-    for (final candidate in <dynamic>[
-      poster['large'],
-      source['poster_uri'],
-      poster['medium'],
-      source['cover_uri'],
-    ]) {
+    // AnimeWitcher exposes a dedicated large poster next to the standard one.
+    // The high-quality setting decides which of the two is asked for first.
+    final candidates = _useHighQualityPosters
+        ? <dynamic>[
+            poster['large'],
+            source['poster_uri'],
+            poster['medium'],
+            source['cover_uri'],
+          ]
+        : <dynamic>[
+            source['poster_uri'],
+            poster['medium'],
+            poster['large'],
+            source['cover_uri'],
+          ];
+    for (final candidate in candidates) {
       final value = _text(candidate);
       if (value.isNotEmpty) return value;
     }

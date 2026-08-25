@@ -252,8 +252,8 @@ class SettingsScreen extends ConsumerWidget {
             SettingsGroup(
               title: appText(
                 context,
-                english: 'Episodes',
-                arabic: 'الحلقات',
+                english: 'Images',
+                arabic: 'الصور',
               ),
               children: [
                 SettingsTile(
@@ -274,11 +274,37 @@ class SettingsScreen extends ConsumerWidget {
                         .read(animeDataSourceSettingsProvider.notifier)
                         .setEpisodeImagesFromAniZip(value),
                   ),
-                  isLast: true,
                   onTap: () => ref
                       .read(animeDataSourceSettingsProvider.notifier)
                       .setEpisodeImagesFromAniZip(
                         !animeDataSettings.episodeImagesFromAniZip,
+                      ),
+                ),
+                SettingsTile(
+                  icon: Icons.hd_rounded,
+                  title: appText(
+                    context,
+                    english: 'High quality posters',
+                    arabic: 'بوسترات بجودة عالية',
+                  ),
+                  subtitle: appText(
+                    context,
+                    english:
+                        'Off loads the standard posters and uses less memory',
+                    arabic:
+                        'عند التعطيل يتم تحميل البوسترات العادية باستهلاك أقل',
+                  ),
+                  trailing: Switch(
+                    value: animeDataSettings.highQualityPosters,
+                    onChanged: (value) => ref
+                        .read(animeDataSourceSettingsProvider.notifier)
+                        .setHighQualityPosters(value),
+                  ),
+                  isLast: true,
+                  onTap: () => ref
+                      .read(animeDataSourceSettingsProvider.notifier)
+                      .setHighQualityPosters(
+                        !animeDataSettings.highQualityPosters,
                       ),
                 ),
               ],

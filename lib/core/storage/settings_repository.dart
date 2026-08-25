@@ -71,6 +71,12 @@ class SettingsRepository {
   bool isEpisodeImagesFromAniZipEnabled() =>
       _storageService.isEpisodeImagesFromAniZipEnabled();
 
+  Future<void> setHighQualityPostersEnabled(bool enabled) =>
+      _storageService.setHighQualityPostersEnabled(enabled);
+
+  bool isHighQualityPostersEnabled() =>
+      _storageService.isHighQualityPostersEnabled();
+
 
 
 

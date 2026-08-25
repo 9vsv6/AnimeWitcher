@@ -33,10 +33,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
-  // Artwork is decoded at full source resolution so posters and banners are as
-  // sharp as the provider serves them. A single poster can take several MB, so
-  // the cache gets room to hold a screenful of them; a tighter budget would
-  // evict and re-decode while scrolling instead of saving memory.
+  // Startup budget for full-resolution artwork; a single poster can take
+  // several MB, so the cache gets room to hold a screenful of them. The
+  // high-quality posters setting lowers this again when it is turned off.
   PaintingBinding.instance.imageCache
     ..maximumSize = 400
     ..maximumSizeBytes = 256 * 1024 * 1024; // 256 MB
