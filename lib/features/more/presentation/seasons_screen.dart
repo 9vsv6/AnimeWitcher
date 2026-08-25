@@ -580,7 +580,7 @@ class _SeasonGridState extends State<_SeasonGrid>
         if (index >= _items.length) {
           if (_error != null) {
             return IconButton(
-              tooltip: 'Retry',
+              tooltip: 'إعادة المحاولة',
               onPressed: _loadNext,
               icon: const Icon(Icons.refresh_rounded),
             );

@@ -13,14 +13,13 @@ import 'package:skystream/core/utils/responsive_breakpoints.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'details_layout_widgets.dart';
 
-bool _isArabicDetailsLocale(BuildContext context) =>
-    Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+bool _isArabicDetailsLocale(BuildContext context) => true;
 
 String _detailsText(
   BuildContext context, {
   required String english,
   required String arabic,
-}) => _isArabicDetailsLocale(context) ? arabic : english;
+}) => arabic;
 
 class MetadataBar extends ConsumerWidget {
   final MultimediaItem item;

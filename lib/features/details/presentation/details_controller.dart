@@ -372,7 +372,7 @@ class DetailsController extends _$DetailsController {
 
       provider ??= active;
       if (provider == null) {
-        throw Exception("No provider selected or found for this item");
+        throw Exception('لم يتم العثور على مزود التشغيل.');
       }
 
       _lastEpisodesProvider = provider;

@@ -77,11 +77,7 @@ class PlaybackLauncher {
       if (sources.isEmpty) {
         _ref
             .read(notificationServiceProvider)
-            .showError(
-              Localizations.localeOf(context).languageCode == 'ar'
-                  ? 'ÙÙ ÙØªÙ Ø§ÙØ¹Ø«ÙØ± Ø¹ÙÙ ÙØµØ§Ø¯Ø± ØªØ´ØºÙÙ.'
-                  : 'No playback sources found.',
-            );
+            .showError('لم يتم العثور على مصادر تشغيل.');
         return null;
       }
       return showStreamSourcePicker(context, sources, forDownload: false);
@@ -118,7 +114,7 @@ class PlaybackLauncher {
     if (localFile != null) {
       return StreamResult(
         url: AppUtils.normalizeUrl(localFile.path),
-        source: 'Local',
+        source: 'محلي',
       );
     }
 
@@ -126,11 +122,7 @@ class PlaybackLauncher {
     if (provider == null) {
       _ref
           .read(notificationServiceProvider)
-          .showError(
-            Localizations.localeOf(context).languageCode == 'ar'
-                ? 'لم يتم العثور على مزود التشغيل.'
-                : 'No playback provider found.',
-          );
+          .showError('لم يتم العثور على مزود التشغيل.');
       return null;
     }
 
@@ -166,11 +158,7 @@ class PlaybackLauncher {
       if (streams.isEmpty) {
         _ref
             .read(notificationServiceProvider)
-            .showError(
-              Localizations.localeOf(context).languageCode == 'ar'
-                  ? 'ØªØ¹Ø°Ø± Ø§Ø³ØªØ®Ø±Ø§Ø¬ Ø±Ø§Ø¨Ø· ØµØ§ÙØ­ ÙÙ ÙØ°Ø§ Ø§ÙÙØµØ¯Ø±.'
-                  : 'Could not extract a playable URL from this source.',
-            );
+            .showError('تعذر استخراج رابط صالح من هذا المصدر.');
         return null;
       }
       return streams.first;
@@ -239,7 +227,7 @@ class PlaybackLauncher {
     if (AppUtils.isLocalFile(localOrEpisodeUrl)) {
       await _recordEpisodeOpened(item, resolvedEpisode);
       if (settings.preferredPlayer != null) {
-        final stream = StreamResult(url: localOrEpisodeUrl, source: 'Local');
+        final stream = StreamResult(url: localOrEpisodeUrl, source: 'محلي');
         await _launchStream(
           context,
           stream,
@@ -266,11 +254,7 @@ class PlaybackLauncher {
     if (provider == null) {
       _ref
           .read(notificationServiceProvider)
-          .showError(
-            Localizations.localeOf(context).languageCode == 'ar'
-                ? 'لم يتم العثور على مزود التشغيل.'
-                : 'No playback provider found.',
-          );
+          .showError('لم يتم العثور على مزود التشغيل.');
       return;
     }
 

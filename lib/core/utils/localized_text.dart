@@ -1,10 +1,13 @@
 import 'package:flutter/widgets.dart';
 
-bool isArabicAppLocale(BuildContext context) =>
-    Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+/// The app ships Arabic-only. Kept as a helper so existing locale checks
+/// continue to compile without branching on English.
+bool isArabicAppLocale(BuildContext context) => true;
 
+/// Returns [arabic]. [english] is ignored and kept only so existing call
+/// sites do not need a mass rewrite.
 String appText(
   BuildContext context, {
   required String english,
   required String arabic,
-}) => isArabicAppLocale(context) ? arabic : english;
+}) => arabic;

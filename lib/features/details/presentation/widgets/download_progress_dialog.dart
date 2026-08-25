@@ -105,7 +105,7 @@ class DownloadProgressDialog extends ConsumerWidget {
                     context,
                     Icons.speed_rounded,
                     l10n.speed,
-                    data.speedString,
+                    formatDownloadSpeed(data, l10n),
                     valueTextDirection: TextDirection.ltr,
                   ),
                   _buildInfoItem(

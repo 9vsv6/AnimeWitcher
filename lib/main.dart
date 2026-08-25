@@ -208,7 +208,7 @@ class _AppRootState extends State<AppRoot> {
 
     if (!_initialized) {
       return Directionality(
-        textDirection: TextDirection.ltr,
+        textDirection: TextDirection.rtl,
         child: DynamicColorBuilder(
           builder: (lightDynamic, darkDynamic) {
             const color = AppTheme.animeWitcherAccent;
@@ -377,7 +377,6 @@ class _MyAppState extends ConsumerState<MyApp>
     final themeMode = ref.watch(appThemeModeProvider);
     final appRouter = ref.watch(appRouterProvider);
     final locale = ref.watch(localeProvider);
-    final isArabic = locale.languageCode.toLowerCase() == 'ar';
     final profileAsync = ref.watch(deviceProfileProvider);
 
     // Reactive Listener: Keeps UpdateController alive and handles the UI side-effect
@@ -508,10 +507,10 @@ class _MyAppState extends ConsumerState<MyApp>
                 ],
               ),
               PlatformMenu(
-                label: isArabic ? 'تحرير' : 'Edit',
+                label: 'تحرير',
                 menus: <PlatformMenuItem>[
                   PlatformMenuItem(
-                    label: isArabic ? 'تراجع' : 'Undo',
+                    label: 'تراجع',
                     shortcut: const SingleActivator(
                       LogicalKeyboardKey.keyZ,
                       meta: true,
@@ -519,7 +518,7 @@ class _MyAppState extends ConsumerState<MyApp>
                     onSelected: () {},
                   ),
                   PlatformMenuItem(
-                    label: isArabic ? 'إعادة' : 'Redo',
+                    label: 'إعادة',
                     shortcut: const SingleActivator(
                       LogicalKeyboardKey.keyZ,
                       meta: true,
@@ -530,7 +529,7 @@ class _MyAppState extends ConsumerState<MyApp>
                   PlatformMenuItemGroup(
                     members: <PlatformMenuItem>[
                       PlatformMenuItem(
-                        label: isArabic ? 'قص' : 'Cut',
+                        label: 'قص',
                         shortcut: SingleActivator(
                           LogicalKeyboardKey.keyX,
                           meta: true,
@@ -538,7 +537,7 @@ class _MyAppState extends ConsumerState<MyApp>
                         onSelected: null,
                       ),
                       PlatformMenuItem(
-                        label: isArabic ? 'نسخ' : 'Copy',
+                        label: 'نسخ',
                         shortcut: SingleActivator(
                           LogicalKeyboardKey.keyC,
                           meta: true,
@@ -546,7 +545,7 @@ class _MyAppState extends ConsumerState<MyApp>
                         onSelected: null,
                       ),
                       PlatformMenuItem(
-                        label: isArabic ? 'لصق' : 'Paste',
+                        label: 'لصق',
                         shortcut: SingleActivator(
                           LogicalKeyboardKey.keyV,
                           meta: true,
@@ -554,7 +553,7 @@ class _MyAppState extends ConsumerState<MyApp>
                         onSelected: null,
                       ),
                       PlatformMenuItem(
-                        label: isArabic ? 'تحديد الكل' : 'Select All',
+                        label: 'تحديد الكل',
                         shortcut: SingleActivator(
                           LogicalKeyboardKey.keyA,
                           meta: true,
@@ -566,7 +565,7 @@ class _MyAppState extends ConsumerState<MyApp>
                 ],
               ),
               PlatformMenu(
-                label: isArabic ? 'نافذة' : 'Window',
+                label: 'نافذة',
                 menus: <PlatformMenuItem>[
                   const PlatformProvidedMenuItem(
                     type: PlatformProvidedMenuItemType.minimizeWindow,
@@ -576,10 +575,8 @@ class _MyAppState extends ConsumerState<MyApp>
                   ),
                   PlatformMenuItem(
                     label: alwaysOnTop
-                        ? (isArabic
-                              ? 'إلغاء البقاء في المقدمة'
-                              : 'Disable Stay on Top')
-                        : (isArabic ? 'البقاء في المقدمة' : 'Stay on Top'),
+                        ? 'إلغاء البقاء في المقدمة'
+                        : 'البقاء في المقدمة',
                     shortcut: const SingleActivator(
                       LogicalKeyboardKey.keyT,
                       meta: true,
@@ -624,6 +621,7 @@ class LaunchErrorApp extends StatelessWidget {
       scrollBehavior: const MaterialScrollBehavior().copyWith(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       ),
+      locale: const Locale('ar'),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -649,7 +647,7 @@ class LaunchErrorApp extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      l10n?.startupError ?? 'Startup Error',
+                      l10n?.startupError ?? 'خطأ في بدء التشغيل',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24,
@@ -665,7 +663,7 @@ class LaunchErrorApp extends StatelessWidget {
                     const SizedBox(height: 32),
                     ElevatedButton.icon(
                       icon: const Icon(Icons.refresh),
-                      label: Text(l10n?.retry ?? 'Retry'),
+                      label: Text(l10n?.retry ?? 'إعادة المحاولة'),
                       onPressed: () => AppUtils.restartApp(context),
                     ),
                     const SizedBox(height: 16),
@@ -675,7 +673,7 @@ class LaunchErrorApp extends StatelessWidget {
                         side: const BorderSide(color: Colors.white),
                       ),
                       icon: const Icon(Icons.delete_forever),
-                      label: Text(l10n?.factoryReset ?? 'Factory Reset'),
+                      label: Text(l10n?.factoryReset ?? 'إعادة ضبط المصنع'),
                       onPressed: () async {
                         await storageService.deleteAllData();
                         if (context.mounted) await AppUtils.restartApp(context);

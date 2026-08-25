@@ -108,7 +108,7 @@ class UpdateController extends _$UpdateController {
           final status = await Permission.requestInstallPackages.request();
           if (!status.isGranted) {
             state = UpdateError(
-              "Install permission denied. Please grant permission to install unknown apps.",
+              'تم رفض إذن التثبيت. اسمح بتثبيت التطبيقات من مصادر غير معروفة.',
             );
             return;
           }
@@ -117,15 +117,15 @@ class UpdateController extends _$UpdateController {
         // Trigger installation
         final result = await OpenFile.open(file.path);
         if (result.type != ResultType.done) {
-          state = UpdateError("Install failed: ${result.message}");
+          state = UpdateError('فشل التثبيت: ${result.message}');
         }
       } else {
         state = UpdateError(
-          "Failed to find appropriate asset for this platform.",
+          'تعذر العثور على ملف مناسب لهذا النظام.',
         );
       }
     } catch (e) {
-      state = UpdateError("Download failed: $e");
+      state = UpdateError('فشل التنزيل: $e');
     }
   }
 }

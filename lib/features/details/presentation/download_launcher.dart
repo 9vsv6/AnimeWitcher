@@ -58,7 +58,7 @@ class DownloadLauncher {
     if (provider == null) {
       _ref
           .read(notificationServiceProvider)
-          .showError(l10n.errorPrefix('No active provider'));
+          .showError(l10n.errorPrefix('لا يوجد مزود تشغيل نشط'));
       return;
     }
 
@@ -85,7 +85,7 @@ class DownloadLauncher {
         dialogDismissed = true;
       }
       if (sources.isEmpty) {
-        throw Exception('No download sources found for this item.');
+        throw Exception('لم يتم العثور على مصادر تنزيل لهذا العنصر.');
       }
 
       final selected = await showStreamSourcePicker(
@@ -116,11 +116,7 @@ class DownloadLauncher {
           dialogDismissed = true;
         }
         if (resolved.isEmpty) {
-          throw Exception(
-            Localizations.localeOf(context).languageCode == 'ar'
-                ? 'تعذر استخراج رابط صالح من هذا المصدر.'
-                : 'Could not extract a downloadable URL from this source.',
-          );
+          throw Exception('تعذر استخراج رابط صالح من هذا المصدر.');
         }
         stream = resolved.first;
       }

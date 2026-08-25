@@ -30,7 +30,6 @@ import '../../../../core/utils/episode_label.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/stream_response_validator.dart';
 import '../../settings/presentation/player_settings_provider.dart';
-import '../../../../core/providers/locale_provider.dart';
 import '../../../../core/services/local_proxy_service.dart';
 import '../../../../core/network/http_defaults.dart';
 import '../../skip/data/intro_db_service.dart';
@@ -298,8 +297,7 @@ class PlayerController extends Notifier<PlayerState> {
     required String english,
     required String arabic,
   }) {
-    final locale = ref.read(localeProvider);
-    return locale.languageCode.toLowerCase() == 'ar' ? arabic : english;
+    return arabic;
   }
 
   bool _isDashStreamUrl(String url) {

@@ -648,7 +648,7 @@ class StorageService {
   }
 
   String getLanguage() {
-    return _settingsBox.get('language', defaultValue: 'en') as String;
+    return _settingsBox.get('language', defaultValue: 'ar') as String;
   }
 
   Future<void> setExploreLanguage(String lang) async {

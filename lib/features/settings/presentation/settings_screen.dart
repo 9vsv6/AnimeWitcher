@@ -17,7 +17,6 @@ import 'general_settings_provider.dart';
 import 'app_version_provider.dart';
 
 import 'package:skystream/l10n/generated/app_localizations.dart';
-import '../../../core/providers/locale_provider.dart';
 import 'cache_provider.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
@@ -152,17 +151,7 @@ class SettingsScreen extends ConsumerWidget {
                     generalSettings.taskbarOrder,
                     generalSettings.hiddenTaskbarItems,
                   ),
-                ),
-                SettingsTile(
-                  icon: Icons.translate_rounded,
-                  title: l10n.language,
-                  subtitle: l10n.languageName,
                   isLast: true,
-                  onTap: () => showLanguageDialog(
-                    context,
-                    ref,
-                    ref.read(localeProvider),
-                  ),
                 ),
               ],
             ),
