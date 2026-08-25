@@ -1,17 +1,9 @@
 // Tuning knobs for mid-playback recovery, in one place.
 //
-// `player_controller.dart` recovers from seeks/buffering outside the cache
-// and from mid-playback errors with an escalating ladder: nudge the seek →
-// re-open the same source → fail over to the next source, plus up to three
-// seamless same-source reconnects with exponential backoff. The constants
-// below are the values currently shipped in the controller; centralizing
-// them documents intent and gives the ladder a single source of truth. See
-// docs/stream-links-and-player-audit.md findings A1/A2/B1/B2.
-//
-// Known production bug this makes trivial to fix: the controller's watchdog
-// leaves its periodic timer armed after the terminal stage. Callers adopting
-// [PlaybackRecoveryPolicy.watchdogStage] should stop polling once it reports
-// [BufferWatchdogStage.failover].
+// The controller recovers from seeks/buffering outside the cache and from
+// mid-playback errors with an escalating ladder: nudge the seek → re-open
+// the same source → fail over to the next source, plus up to three seamless
+// same-source reconnects.
 
 /// What the buffer watchdog wants the controller to do at a given moment.
 enum BufferWatchdogStage {
@@ -45,12 +37,9 @@ class PlaybackRecoveryPolicy {
   /// Seamless same-source reconnects allowed for mid-playback errors.
   static const int maxMidPlaybackRetries = 3;
 
-  /// Backoff before reconnect attempt [attempt] (1-based): 2 s, 4 s, 8 s.
-  /// Attempts beyond the cap clamp to the last delay so callers can schedule
-  /// without range checks.
-  static Duration reconnectBackoff(int attempt) => Duration(
-        seconds: 1 << attempt.clamp(1, maxMidPlaybackRetries),
-      );
+  /// Pause long enough that a signed CDN URL should be re-extracted
+  /// before play() hits a stale 403.
+  static const Duration signedUrlRefreshAfter = Duration(minutes: 10);
 
   /// Whether another seamless reconnect may still be attempted after
   /// [attemptsMade] attempts have already been made (starts at 0).
@@ -60,7 +49,21 @@ class PlaybackRecoveryPolicy {
   static bool canReconnect(int attemptsMade) =>
       attemptsMade >= 0 && attemptsMade < maxMidPlaybackRetries;
 
+  /// Delay after [attemptsMade] failed reconnects, before the next try.
+  ///
+  /// The first attempt is immediate (`attemptsMade == 0`). After failure 1
+  /// wait 2 s, after failure 2 wait 4 s. Returns null when the budget is
+  /// spent so the caller failsover instead of scheduling.
+  static Duration? reconnectBackoff(int attemptsMade) {
+    if (attemptsMade <= 0) return Duration.zero;
+    if (attemptsMade >= maxMidPlaybackRetries) return null;
+    return Duration(seconds: 1 << attemptsMade);
+  }
+
   /// Maps how long playback has been stuck buffering to the action to take.
+  ///
+  /// The controller still fires each stage once via its own stage counter;
+  /// this classifier is the named form of the 12/25/45 s thresholds.
   static BufferWatchdogStage watchdogStage(Duration stuckFor) {
     if (stuckFor >= failoverSourceAfter) return BufferWatchdogStage.failover;
     if (stuckFor >= reopenSourceAfter) return BufferWatchdogStage.reopenSource;
@@ -68,13 +71,27 @@ class PlaybackRecoveryPolicy {
     return BufferWatchdogStage.none;
   }
 
-  /// Total worst-case time the reconnect ladder spends waiting between
-  /// attempts before failover, assuming every backoff elapses.
+  /// Waiting time between reconnect attempts before failover, assuming
+  /// every backoff elapses (2 s + 4 s). The first try is immediate.
   static Duration get worstCaseReconnectLadder {
     var total = Duration.zero;
-    for (var attempt = 1; attempt <= maxMidPlaybackRetries; attempt++) {
-      total += reconnectBackoff(attempt);
+    for (var attempt = 1; attempt < maxMidPlaybackRetries; attempt++) {
+      total += reconnectBackoff(attempt) ?? Duration.zero;
     }
     return total;
+  }
+
+  /// HTTP 401/403/404/410 and similar "this URL is dead" errors should skip
+  /// the reconnect ladder and fail over immediately.
+  static bool isPermanentPlaybackError(Object error) {
+    final text = error.toString().toLowerCase();
+    if (RegExp(r'\b(401|403|404|410)\b').hasMatch(text)) return true;
+    if (text.contains('unauthorized') ||
+        text.contains('forbidden') ||
+        text.contains('not found') ||
+        text.contains('status code of 4')) {
+      return true;
+    }
+    return false;
   }
 }

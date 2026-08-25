@@ -210,8 +210,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
 
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.hidden) {
       _playerController.setAppBackgrounded(true);
       final ctrl = ref.read(playerControllerProvider);
       _wasPlayingBeforeBackground = ctrl.useExoPlayer

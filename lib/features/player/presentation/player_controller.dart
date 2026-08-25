@@ -37,6 +37,7 @@ import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/anime_skip_service.dart';
 import '../../skip/data/skip_service.dart';
 import '../../../../core/storage/settings_repository.dart';
+import 'playback_recovery_policy.dart';
 
 // Sentinel so copyWith can distinguish "not passed" from "explicitly null".
 const Object _keep = Object();
@@ -469,6 +470,22 @@ class PlayerController extends Notifier<PlayerState> {
   int _midPlaybackRetryCount = 0;
   bool _isReconnectingCurrentStream = false;
   Timer? _midPlaybackRetryTimer;
+  DateTime? _pausedAt;
+
+  void _resetMidPlaybackReconnect() {
+    _midPlaybackRetryTimer?.cancel();
+    _midPlaybackRetryTimer = null;
+    _isReconnectingCurrentStream = false;
+    _midPlaybackRetryCount = 0;
+  }
+
+  void _resetBufferWatchdog() {
+    _bufferingSince = null;
+    _bufferingStartPosition = null;
+    _bufferRecoveryStage = 0;
+    _bufferWatchdogTimer?.cancel();
+    _bufferWatchdogTimer = null;
+  }
 
   void setAppBackgrounded(bool backgrounded) {
     _isAppBackgrounded = backgrounded;
@@ -478,9 +495,9 @@ class PlayerController extends Notifier<PlayerState> {
     if (!backgrounded &&
         _hasConfirmedPlaybackFrame &&
         state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime) {
-      // Returning to foreground while buffering/reconnecting — kick reconnect.
-      _midPlaybackRetryTimer?.cancel();
-      unawaited(_triggerMidPlaybackReconnect());
+      // Returning to foreground while buffering/reconnecting — kick reconnect
+      // through the same budget gate as the error paths.
+      _requestMidPlaybackReconnect(preferImmediate: true);
     }
   }
 
@@ -672,11 +689,8 @@ class PlayerController extends Notifier<PlayerState> {
     _isReconnectingCurrentStream = false;
     _midPlaybackRetryTimer?.cancel();
     _midPlaybackRetryTimer = null;
-    _bufferWatchdogTimer?.cancel();
-    _bufferWatchdogTimer = null;
-    _bufferingSince = null;
-    _bufferingStartPosition = null;
-    _bufferRecoveryStage = 0;
+    _pausedAt = null;
+    _resetBufferWatchdog();
     _player = player;
     _videoViewController = videoViewController;
     _videoUrl = videoUrl;
@@ -1040,9 +1054,8 @@ class PlayerController extends Notifier<PlayerState> {
             return;
           }
           if (_isReconnectingCurrentStream) return;
-          if (_midPlaybackRetryCount < 3 && state.currentStream != null) {
-            _midPlaybackRetryCount++;
-            unawaited(_triggerMidPlaybackReconnect());
+          if (state.currentStream != null) {
+            _requestMidPlaybackReconnect();
             return;
           }
           _markSourceAttempt(
@@ -1291,11 +1304,7 @@ class PlayerController extends Notifier<PlayerState> {
   /// Called whenever the backend flips its buffering flag.
   void _onBufferingChanged(bool isBuffering) {
     if (!isBuffering) {
-      _bufferingSince = null;
-      _bufferingStartPosition = null;
-      _bufferRecoveryStage = 0;
-      _bufferWatchdogTimer?.cancel();
-      _bufferWatchdogTimer = null;
+      _resetBufferWatchdog();
       return;
     }
     _bufferingSince ??= DateTime.now();
@@ -1330,7 +1339,8 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     final stuckFor = DateTime.now().difference(since);
-    if (_bufferRecoveryStage == 0 && stuckFor.inSeconds >= 12) {
+    if (_bufferRecoveryStage == 0 &&
+        stuckFor >= PlaybackRecoveryPolicy.bufferNudgeAfter) {
       _bufferRecoveryStage = 1;
       if (kDebugMode) {
         debugPrint('Watchdog: buffering 12s — re-issuing seek to $position');
@@ -1342,7 +1352,8 @@ class PlayerController extends Notifier<PlayerState> {
       return;
     }
 
-    if (_bufferRecoveryStage == 1 && stuckFor.inSeconds >= 25) {
+    if (_bufferRecoveryStage == 1 &&
+        stuckFor >= PlaybackRecoveryPolicy.reopenSourceAfter) {
       _bufferRecoveryStage = 2;
       final current = state.currentStream;
       if (current == null) return;
@@ -1356,11 +1367,14 @@ class PlayerController extends Notifier<PlayerState> {
       return;
     }
 
-    if (_bufferRecoveryStage == 2 && stuckFor.inSeconds >= 45) {
+    if (_bufferRecoveryStage == 2 &&
+        stuckFor >= PlaybackRecoveryPolicy.failoverSourceAfter) {
       _bufferRecoveryStage = 3;
       if (kDebugMode) {
         debugPrint('Watchdog: buffering 45s — moving to the next source');
       }
+      _resetBufferWatchdog();
+      _resetMidPlaybackReconnect();
       _revertMessage = _playerText(
         english:
             'This source stopped responding after the seek. Trying the next one…',
@@ -1579,14 +1593,14 @@ class PlayerController extends Notifier<PlayerState> {
         // During active playback, seamlessly reconnect/refresh the same source
         // up to 3 times before considering failover to a different source.
         if (_isReconnectingCurrentStream) return;
-        if (_midPlaybackRetryCount < 3 && state.currentStream != null) {
-          _midPlaybackRetryCount++;
+        if (state.currentStream != null) {
           if (kDebugMode) {
             debugPrint(
-              '[Player] Mid-playback error — attempting seamless reconnect ($_midPlaybackRetryCount/3).',
+              '[Player] Mid-playback error — requesting seamless reconnect '
+              '($_midPlaybackRetryCount/${PlaybackRecoveryPolicy.maxMidPlaybackRetries}).',
             );
           }
-          unawaited(_triggerMidPlaybackReconnect());
+          _requestMidPlaybackReconnect();
           return;
         }
 
@@ -1608,27 +1622,76 @@ class PlayerController extends Notifier<PlayerState> {
     _connectivitySub?.cancel();
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
       final isConnected = results.any((r) => r != ConnectivityResult.none);
-      if (isConnected) {
-        // If we were stalled / reconnecting during active playback, kick reconnection immediately
-        if (_isReconnectingCurrentStream ||
-            (_hasConfirmedPlaybackFrame &&
-                state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime)) {
-          if (kDebugMode) {
-            debugPrint(
-              '[Player] Network restored — triggering immediate stream reconnect.',
-            );
-          }
-          _midPlaybackRetryTimer?.cancel();
-          _triggerMidPlaybackReconnect();
+      if (!isConnected) return;
+      if (!_hasConfirmedPlaybackFrame) return;
+      final waitingOnBackoff = _midPlaybackRetryTimer != null;
+      final buffering =
+          state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime;
+      if (_isReconnectingCurrentStream && !waitingOnBackoff) {
+        // An in-flight reopen is already talking to the network.
+        return;
+      }
+      if (_isReconnectingCurrentStream || buffering || waitingOnBackoff) {
+        if (kDebugMode) {
+          debugPrint(
+            '[Player] Network restored — triggering immediate stream reconnect.',
+          );
         }
+        _requestMidPlaybackReconnect(preferImmediate: true);
       }
     });
   }
 
-  Future<void> _triggerMidPlaybackReconnect() async {
+  void _requestMidPlaybackReconnect({bool preferImmediate = false}) {
+    if (_isDisposed || state.currentStream == null) return;
+    if (state.isLive) return;
+    if (_isReconnectingCurrentStream) return;
+    if (preferImmediate) {
+      _midPlaybackRetryTimer?.cancel();
+      _midPlaybackRetryTimer = null;
+    } else if (_midPlaybackRetryTimer != null) {
+      return;
+    }
+    if (!PlaybackRecoveryPolicy.canReconnect(_midPlaybackRetryCount)) {
+      _failoverAfterReconnectBudget();
+      return;
+    }
+    unawaited(_triggerMidPlaybackReconnect());
+  }
+
+  void _failoverAfterReconnectBudget() {
+    _resetMidPlaybackReconnect();
+    _resetBufferWatchdog();
+    if (state.currentStream == null) return;
+    _markSourceAttempt(
+      state.currentStreamIndex,
+      SourceAttemptStatus.failed,
+    );
+    _revertMessage = _playerText(
+      english:
+          'Current source stopped unexpectedly. Trying next available source...',
+      arabic:
+          'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
+    );
+    unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
+  }
+
+  Future<void> _triggerMidPlaybackReconnect({
+    bool consumeRetryBudget = true,
+  }) async {
     if (state.currentStream == null || _isDisposed) return;
     if (_isReconnectingCurrentStream) return;
+
+    if (consumeRetryBudget &&
+        !PlaybackRecoveryPolicy.canReconnect(_midPlaybackRetryCount)) {
+      _failoverAfterReconnectBudget();
+      return;
+    }
+
     _isReconnectingCurrentStream = true;
+    if (consumeRetryBudget) {
+      _midPlaybackRetryCount++;
+    }
 
     // Check connectivity first
     bool hasConnection = true;
@@ -1645,6 +1708,9 @@ class PlayerController extends Notifier<PlayerState> {
           '[Player] Device is offline — waiting for network reconnection.',
         );
       }
+      if (consumeRetryBudget && _midPlaybackRetryCount > 0) {
+        _midPlaybackRetryCount--;
+      }
       _isReconnectingCurrentStream = false;
       _enterRuntimePhase(kind: PlaybackUiPhaseKind.bufferingRuntime);
       return;
@@ -1658,28 +1724,29 @@ class PlayerController extends Notifier<PlayerState> {
 
     try {
       final stream = state.currentStream!;
-      final playUrl = await _resolveStreamUrl(stream);
+      final playUrl = await _resolveStreamUrl(stream, forceRefresh: true);
       if (playUrl == null) throw Exception("Failed to re-resolve stream URL");
       if (_isDisposed) return;
 
-      final headers = _buildPlaybackHeaders(stream);
+      final current = state.currentStream ?? stream;
+      final headers = _buildPlaybackHeaders(current);
       final resolvedIsLive = _detectResolvedLiveState(playUrl);
       final useVideoView = _canUseVideoViewForStream(
         playUrl,
-        stream,
+        current,
         isLive: resolvedIsLive,
       );
 
       await _applyPlaybackProperties(
         headers,
-        stream,
+        current,
         useVideoView: useVideoView,
       );
       if (_isDisposed) return;
 
       await _openResolvedStream(
         playUrl,
-        stream,
+        current,
         headers,
         useVideoView: useVideoView,
       );
@@ -1693,38 +1760,34 @@ class PlayerController extends Notifier<PlayerState> {
           '[Player] Reconnect successful at position ${oldPos.inSeconds}s.',
         );
       }
+      _isReconnectingCurrentStream = false;
     } catch (e) {
       if (kDebugMode) {
         debugPrint(
           '[Player] Reconnect attempt $_midPlaybackRetryCount failed: $e',
         );
       }
-      if (_midPlaybackRetryCount < 3) {
-        final delaySeconds = 1 << _midPlaybackRetryCount; // 2s, 4s, 8s
-        _midPlaybackRetryTimer?.cancel();
-        _midPlaybackRetryTimer = Timer(Duration(seconds: delaySeconds), () {
-          if (!_isDisposed && state.currentStream != null) {
-            _midPlaybackRetryCount++;
-            unawaited(_triggerMidPlaybackReconnect());
-          }
-        });
-      } else {
-        _isReconnectingCurrentStream = false;
-        _markSourceAttempt(
-          state.currentStreamIndex,
-          SourceAttemptStatus.failed,
-        );
-        _revertMessage = _playerText(
-          english:
-              'Current source stopped unexpectedly. Trying next available source...',
-          arabic:
-              'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
-        );
-        unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
+      _isReconnectingCurrentStream = false;
+      if (!consumeRetryBudget) return;
+      if (PlaybackRecoveryPolicy.isPermanentPlaybackError(e) ||
+          !PlaybackRecoveryPolicy.canReconnect(_midPlaybackRetryCount)) {
+        _failoverAfterReconnectBudget();
+        return;
       }
-      return;
+      final delay = PlaybackRecoveryPolicy.reconnectBackoff(
+        _midPlaybackRetryCount,
+      );
+      if (delay == null) {
+        _failoverAfterReconnectBudget();
+        return;
+      }
+      _midPlaybackRetryTimer?.cancel();
+      _midPlaybackRetryTimer = Timer(delay, () {
+        if (!_isDisposed && state.currentStream != null) {
+          unawaited(_triggerMidPlaybackReconnect());
+        }
+      });
     }
-    _isReconnectingCurrentStream = false;
   }
 
   void _setupEventDrivenProgressSaving() {
@@ -2290,6 +2353,13 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<void> play() async {
+    if (_shouldRefreshSignedUrl() && !_isReconnectingCurrentStream) {
+      _pausedAt = null;
+      await _triggerMidPlaybackReconnect(consumeRetryBudget: false);
+      if (isPlaying) return;
+    } else {
+      _pausedAt = null;
+    }
     if (state.useExoPlayer && _videoViewController != null) {
       _videoViewController!.play();
     } else {
@@ -2298,11 +2368,24 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<void> pause() async {
+    _pausedAt = DateTime.now();
     if (state.useExoPlayer && _videoViewController != null) {
       _videoViewController!.pause();
     } else {
       await _player.pause();
     }
+  }
+
+  bool _shouldRefreshSignedUrl() {
+    final stream = state.currentStream;
+    if (stream == null) return false;
+    if (AppUtils.isLocalFile(stream.url)) return false;
+    final token = stream.refreshUrl;
+    if (token == null || token.isEmpty) return false;
+    final pausedAt = _pausedAt;
+    if (pausedAt == null) return false;
+    return DateTime.now().difference(pausedAt) >=
+        PlaybackRecoveryPolicy.signedUrlRefreshAfter;
   }
 
   bool get isPlaying {
@@ -2739,6 +2822,8 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<void> retryNextStream({int? sourceSessionId}) async {
+    _resetBufferWatchdog();
+    _resetMidPlaybackReconnect();
     if (sourceSessionId != null && !_isCurrentSourceSession(sourceSessionId)) {
       return;
     }
@@ -3319,8 +3404,41 @@ class PlayerController extends Notifier<PlayerState> {
     return start; // Fallback to initial
   }
 
-  Future<String?> _resolveStreamUrl(StreamResult stream) async =>
-      AppUtils.normalizeUrl(stream.url);
+  Future<String?> _resolveStreamUrl(
+    StreamResult stream, {
+    bool forceRefresh = false,
+  }) async {
+    final token = stream.refreshUrl;
+    final shouldRefresh = forceRefresh && token != null && token.isNotEmpty;
+    if (shouldRefresh) {
+      final provider = _resolveProvider();
+      if (provider != null) {
+        final fresh = await provider.loadStreams(token);
+        if (fresh.isEmpty) {
+          throw StateError('Failed to re-resolve stream URL');
+        }
+        final resolved = fresh.first;
+        final merged = stream.copyWith(
+          url: resolved.url,
+          headers: resolved.headers,
+          quality: resolved.quality,
+          refreshUrl: token,
+        );
+        _replaceCurrentStream(merged);
+        return AppUtils.normalizeUrl(merged.url);
+      }
+    }
+    return AppUtils.normalizeUrl(stream.url);
+  }
+
+  void _replaceCurrentStream(StreamResult updated) {
+    final streams = List<StreamResult>.from(state.streams);
+    final index = state.currentStreamIndex;
+    if (index >= 0 && index < streams.length) {
+      streams[index] = updated;
+    }
+    state = state.copyWith(streams: streams, currentStream: updated);
+  }
 
   /// Applies per-playback MPV properties (headers, cookies, DRM).
   Future<void> _applyPlaybackProperties(
@@ -3523,6 +3641,8 @@ class PlayerController extends Notifier<PlayerState> {
 
         // Force mpv to select the highest-bandwidth HLS variant so it never
         // picks an audio-only rendition when the master playlist lists one first.
+        // Do not switch this to auto: data-saver-style auto-select has been
+        // observed to lock onto the audio group on some AnimeWitcher masters.
         await native.setProperty('hls-bitrate', 'max');
 
         // Allow segment URLs with any file extension (ts, mp4, m4s, no-ext…).

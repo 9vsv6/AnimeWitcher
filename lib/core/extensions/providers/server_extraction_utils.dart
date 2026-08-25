@@ -1,49 +1,67 @@
-// Pure helpers for AnimeWitcher-style server URL extraction.
-//
-// These mirror the production path in `animewitcher_native_provider.dart`
-// (`_extractAnimeWitcherGenericServer` / `_normalizePageEscapes`) as
-// dependency-free functions so the fragile part of stream-link acquisition —
-// cutting a media URL out of a server page — can be unit-tested against
-// fixtures instead of live pages. See
-// docs/stream-links-and-player-audit.md finding A4.
+import 'package:html_unescape/html_unescape.dart';
+
+/// Shared AnimeWitcher page-decoding helpers.
+///
+/// These are the same steps `_extractAnimeWitcherGenericServer` used inline:
+/// HTML unescape, JS unicode/`\xNN`/`\/` decoding, then marker cuts. Keeping
+/// them here means the provider and the tests cannot drift apart.
+final HtmlUnescape _pageUnescape = HtmlUnescape();
 
 /// Removes the escaped-HTML/JavaScript wrappers pages serialize markers
-/// through: JS unicode and string escapes first, then HTML entities (named
-/// plus numeric/hex) for the characters URLs actually contain (`/ : & " '`).
+/// through. Matches production, plus leftover `\uXXXX` / `\xNN` sequences
+/// that the older hardcoded list missed.
 String normalizePageEscapes(String input) {
   if (input.isEmpty) return input;
-  var out = input.replaceAllMapped(
-    RegExp(r'\\u([0-9a-fA-F]{4})'),
-    (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
-  );
-  out = out
+  var text = _pageUnescape.convert(input);
+  text = text
+      .replaceAll(r'\u003a', ':')
+      .replaceAll(r'\u003A', ':')
+      .replaceAll(r'\u0026', '&')
+      .replaceAll(r'\u003d', '=')
+      .replaceAll(r'\u003D', '=')
+      .replaceAll(r'\u002f', '/')
+      .replaceAll(r'\u002F', '/')
+      .replaceAll(r'\x3a', ':')
+      .replaceAll(r'\x3A', ':')
+      .replaceAll(r'\x26', '&')
+      .replaceAll(r'\x3d', '=')
+      .replaceAll(r'\x3D', '=')
+      .replaceAll(r'\x2f', '/')
+      .replaceAll(r'\x2F', '/')
       .replaceAll(r'\/', '/')
       .replaceAll(r'\"', '"')
       .replaceAll(r"\'", "'");
-  if (out.contains('&')) {
-    out = out.replaceAllMapped(
-      RegExp(r'&#x([0-9a-fA-F]+);|&#(\d+);'),
-      (m) {
-        final hex = m.group(1);
-        final dec = m.group(2);
-        final code = hex != null ? int.parse(hex, radix: 16) : int.parse(dec!);
-        return String.fromCharCode(code);
-      },
-    );
-    out = out
-        .replaceAll('&amp;', '&')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&apos;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>');
-  }
-  return out;
+  text = text.replaceAllMapped(
+    RegExp(r'\\u([0-9a-fA-F]{4})'),
+    (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
+  );
+  text = text.replaceAllMapped(
+    RegExp(r'\\x([0-9a-fA-F]{2})'),
+    (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
+  );
+  return text;
 }
 
-/// AnimeWitcher's original generic `loadServer` extraction: keep the first
-/// occurrence of [start], cut at the next [end], remove the marker text
-/// itself, and trim surrounding whitespace. Returns '' when either marker is
-/// missing or the inputs are empty.
+/// Post-cut cleanup: decode leftovers and drop broken `amp;` fragments.
+String cleanServerExtract(String value) {
+  return normalizePageEscapes(
+    value,
+  ).replaceAll('amp;', '').replaceAll('&amp;', '&').trim();
+}
+
+/// Classic `indexOf(start) + start.length` … `indexOf(end)` slice.
+String extractBetweenWords(String input, String start, String end) {
+  if (input.isEmpty || start.isEmpty || end.isEmpty) return '';
+  final startIndex = input.indexOf(start);
+  if (startIndex < 0) return '';
+  final valueStart = startIndex + start.length;
+  final endIndex = input.indexOf(end, valueStart);
+  if (endIndex < 0 || endIndex < valueStart) return '';
+  return input.substring(valueStart, endIndex).trim();
+}
+
+/// AnimeWitcher's generic `loadServer` cut: keep the first [start] in the
+/// slice, cut at the next [end], then strip the marker text itself.
 String extractBetweenMarkers(String input, String start, String end) {
   if (input.isEmpty || start.isEmpty || end.isEmpty) return '';
   final startIndex = input.indexOf(start);
@@ -51,39 +69,47 @@ String extractBetweenMarkers(String input, String start, String end) {
   final fromStart = input.substring(startIndex);
   final endIndex = fromStart.indexOf(end);
   if (endIndex < 0) return '';
-  return fromStart
-      .substring(0, endIndex)
-      .replaceAll(start, '')
-      .replaceAll(end, '')
-      .trim();
+  final beforeEnd = fromStart.substring(0, endIndex);
+  return cleanServerExtract(
+    beforeEnd.replaceAll(start, '').replaceAll(end, ''),
+  );
 }
 
-/// Marker extraction with one normalized retry: when the direct cut comes up
-/// empty, the body and both markers are passed through [normalizePageEscapes]
-/// and tried again. Returns '' when even the normalized pass fails, matching
-/// the provider's "no wasted work when nothing changed" short-circuit.
-String extractServerUrlWithRetry({
-  required String body,
-  required String start,
-  required String end,
-}) {
-  final direct = extractBetweenMarkers(body, start, end);
+/// Marker extraction with one normalized retry. Body *and* markers are
+/// decoded on the second pass, matching the provider short-circuit when
+/// unescape would not change anything.
+String extractGenericServer(String input, String start, String end) {
+  final direct = extractBetweenMarkers(input, start, end);
   if (direct.isNotEmpty) return direct;
 
-  final normalizedBody = normalizePageEscapes(body);
+  final normalizedInput = normalizePageEscapes(input);
   final normalizedStart = normalizePageEscapes(start);
   final normalizedEnd = normalizePageEscapes(end);
-  if (normalizedBody == body &&
+  if (normalizedInput == input &&
       normalizedStart == start &&
       normalizedEnd == end) {
     return '';
   }
-  return extractBetweenMarkers(normalizedBody, normalizedStart, normalizedEnd);
+  return extractBetweenMarkers(normalizedInput, normalizedStart, normalizedEnd);
 }
 
-/// Cheap sanity check that an extracted value is actually a playable http(s)
-/// URL before handing it to the player. Guards against markers drifting onto
-/// non-URL payloads (HTML fragments, base64 blobs, relative paths).
+/// Backward-compatible name used by the original audit tests.
+String extractServerUrlWithRetry({
+  required String body,
+  required String start,
+  required String end,
+}) => extractGenericServer(body, start, end);
+
+/// Prefix `//host/...` and strip wrapping quotes after a marker cut.
+String prepareExtractedMediaUrl(String raw) {
+  var value = cleanServerExtract(
+    raw,
+  ).replaceAll(RegExp(r'''^[\s"'`]+|[\s"'`]+$'''), '');
+  if (value.startsWith('//')) value = 'https:$value';
+  return value.trim();
+}
+
+/// Cheap sanity check that an extracted value is a playable http(s) URL.
 bool looksLikeStreamUrl(String value) {
   final v = value.trim();
   if (v.length < 8) return false;

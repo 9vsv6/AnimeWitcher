@@ -12,45 +12,53 @@ void main() {
     });
 
     test('escalates at each threshold boundary', () {
-      const p = PlaybackRecoveryPolicy;
-      expect(p.watchdogStage(p.bufferNudgeAfter),
-          BufferWatchdogStage.reissueSeek);
       expect(
-        p.watchdogStage(p.reopenSourceAfter - const Duration(milliseconds: 1)),
+        PlaybackRecoveryPolicy.watchdogStage(
+          PlaybackRecoveryPolicy.bufferNudgeAfter,
+        ),
         BufferWatchdogStage.reissueSeek,
       );
-      expect(p.watchdogStage(p.reopenSourceAfter),
-          BufferWatchdogStage.reopenSource);
       expect(
-        p.watchdogStage(p.failoverSourceAfter - const Duration(minutes: 1)),
+        PlaybackRecoveryPolicy.watchdogStage(
+          PlaybackRecoveryPolicy.reopenSourceAfter -
+              const Duration(milliseconds: 1),
+        ),
+        BufferWatchdogStage.reissueSeek,
+      );
+      expect(
+        PlaybackRecoveryPolicy.watchdogStage(
+          PlaybackRecoveryPolicy.reopenSourceAfter,
+        ),
         BufferWatchdogStage.reopenSource,
       );
-      expect(p.watchdogStage(p.failoverSourceAfter),
-          BufferWatchdogStage.failover);
       expect(
-        p.watchdogStage(p.failoverSourceAfter * 2),
+        PlaybackRecoveryPolicy.watchdogStage(
+          PlaybackRecoveryPolicy.failoverSourceAfter -
+              const Duration(milliseconds: 1),
+        ),
+        BufferWatchdogStage.reopenSource,
+      );
+      expect(
+        PlaybackRecoveryPolicy.watchdogStage(
+          PlaybackRecoveryPolicy.failoverSourceAfter,
+        ),
         BufferWatchdogStage.failover,
       );
     });
   });
 
   group('reconnectBackoff', () {
-    test('doubles per attempt: 2s, 4s, 8s', () {
-      expect(PlaybackRecoveryPolicy.reconnectBackoff(1),
-          const Duration(seconds: 2));
-      expect(PlaybackRecoveryPolicy.reconnectBackoff(2),
-          const Duration(seconds: 4));
-      expect(PlaybackRecoveryPolicy.reconnectBackoff(3),
-          const Duration(seconds: 8));
-    });
-
-    test('clamps out-of-range attempts', () {
-      expect(PlaybackRecoveryPolicy.reconnectBackoff(0),
-          const Duration(seconds: 2));
-      expect(PlaybackRecoveryPolicy.reconnectBackoff(-3),
-          const Duration(seconds: 2));
-      expect(PlaybackRecoveryPolicy.reconnectBackoff(99),
-          const Duration(seconds: 8));
+    test('first try is immediate; later failures wait 2s then 4s', () {
+      expect(PlaybackRecoveryPolicy.reconnectBackoff(0), Duration.zero);
+      expect(
+        PlaybackRecoveryPolicy.reconnectBackoff(1),
+        const Duration(seconds: 2),
+      );
+      expect(
+        PlaybackRecoveryPolicy.reconnectBackoff(2),
+        const Duration(seconds: 4),
+      );
+      expect(PlaybackRecoveryPolicy.reconnectBackoff(3), isNull);
     });
   });
 
@@ -59,15 +67,37 @@ void main() {
       expect(PlaybackRecoveryPolicy.canReconnect(0), isTrue);
       expect(PlaybackRecoveryPolicy.canReconnect(2), isTrue);
       expect(PlaybackRecoveryPolicy.canReconnect(3), isFalse);
-      expect(PlaybackRecoveryPolicy.canReconnect(4), isFalse);
     });
   });
 
   group('worstCaseReconnectLadder', () {
-    test('sums the full ladder (2+4+8s)', () {
+    test('sums waiting time between the three attempts (2+4s)', () {
       expect(
         PlaybackRecoveryPolicy.worstCaseReconnectLadder,
-        const Duration(seconds: 14),
+        const Duration(seconds: 6),
+      );
+    });
+  });
+
+  group('isPermanentPlaybackError', () {
+    test('treats 401/403/404 as dead URLs', () {
+      expect(
+        PlaybackRecoveryPolicy.isPermanentPlaybackError(
+          Exception('HTTP 403 Forbidden'),
+        ),
+        isTrue,
+      );
+      expect(
+        PlaybackRecoveryPolicy.isPermanentPlaybackError(
+          Exception('status code of 404'),
+        ),
+        isTrue,
+      );
+      expect(
+        PlaybackRecoveryPolicy.isPermanentPlaybackError(
+          Exception('SocketException: Connection reset'),
+        ),
+        isFalse,
       );
     });
   });
