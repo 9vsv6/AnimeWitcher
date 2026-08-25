@@ -14,6 +14,7 @@ import 'package:skystream/core/storage/storage_service.dart';
 import '../../library/presentation/history_provider.dart';
 import 'playback_launcher.dart';
 import '../../../core/services/download_service.dart';
+import '../../../core/providers/anime_data_source_settings_provider.dart';
 import '../../../core/services/anizip_service.dart';
 import 'downloaded_file_provider.dart';
 import 'details_item_merge.dart';
@@ -793,6 +794,11 @@ class DetailsController extends _$DetailsController {
     MultimediaItem contextItem,
     int generation,
   ) async {
+    // The episode-images setting owns every AniZip artwork path, including this
+    // one; without the check the stills came back even with the switch off.
+    if (!ref.read(animeDataSourceSettingsProvider).episodeImagesFromAniZip) {
+      return;
+    }
     try {
       final currentEpisodes =
           state.episodes.asData?.value ??

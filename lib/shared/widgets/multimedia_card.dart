@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/anime_data_source_settings_provider.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import 'cards_wrapper.dart';
 import 'shimmer_placeholder.dart';
 import 'thumbnail_error_placeholder.dart';
 
-class MultimediaCard extends StatelessWidget {
+class MultimediaCard extends ConsumerWidget {
   final String? imageUrl;
   final String title;
   final VoidCallback onTap;
@@ -39,7 +41,12 @@ class MultimediaCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final highQuality = ref.watch(
+      animeDataSourceSettingsProvider.select(
+        (settings) => settings.highQualityPosters,
+      ),
+    );
     final isHandsetLandscape = context.isHandsetLandscape;
     final isDesktopLandscape = context.isDesktopLandscape;
     final isDesktop = context.isDesktop;
@@ -65,7 +72,18 @@ class MultimediaCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: hasImageUrl
-            ? _buildPoster(context, normalizedImageUrl)
+            ? _buildPoster(
+                context,
+                normalizedImageUrl,
+                // Standard quality keeps the old decode budget so cards stay
+                // light; high quality decodes the poster as it was served.
+                decodeWidth: highQuality
+                    ? null
+                    : (cardWidth * MediaQuery.devicePixelRatioOf(context))
+                          .ceil()
+                          .clamp(160, 1024)
+                          .toInt(),
+              )
             : ThumbnailErrorPlaceholder(label: title),
       ),
     );
@@ -102,13 +120,18 @@ class MultimediaCard extends StatelessWidget {
     );
   }
 
-  /// Decoded at source resolution — no decode budget — and drawn with
-  /// mipmapped filtering so the poster stays sharp at any card size.
-  Widget _buildPoster(BuildContext context, String imageUrl) {
+  /// Drawn with mipmapped filtering so the poster stays sharp at any card size.
+  /// A null [decodeWidth] decodes the artwork at source resolution.
+  Widget _buildPoster(
+    BuildContext context,
+    String imageUrl, {
+    required int? decodeWidth,
+  }) {
     return CachedNetworkImage(
       imageUrl: imageUrl,
       fit: BoxFit.cover,
       width: double.infinity,
+      memCacheWidth: decodeWidth,
       filterQuality: FilterQuality.medium,
       placeholder: (context, url) => showImageLoadingShimmer
           ? ShimmerPlaceholder(borderRadius: 12)
