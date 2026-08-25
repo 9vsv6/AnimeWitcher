@@ -26,6 +26,7 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import 'widgets/dashboard_header_bar.dart';
 import 'widgets/news_section.dart';
+import '../../../shared/widgets/taskbar_visibility.dart';
 import 'package:skystream/features/news/presentation/news_list_screen.dart';
 import 'package:skystream/features/news/presentation/news_utils.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
@@ -140,8 +141,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     SkyStreamProvider provider,
     List<NewsItem> items,
   ) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
+    pushOverTaskbar<void>(
+      context,
+      MaterialPageRoute<void>(
         builder: (_) => NewsListScreen(
           initialItems: items,
           loadPage: (offset, limit) =>
