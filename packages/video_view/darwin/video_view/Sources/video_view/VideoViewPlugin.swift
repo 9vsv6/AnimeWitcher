@@ -750,7 +750,7 @@ class VideoController: NSObject, FlutterStreamHandler {
 #if os(iOS)
 	private func publishPipPlayer(_ player: AVPlayer?) {
 		NotificationCenter.default.post(
-			name: Notification.Name("dev.akash.skystream.pipPlayer"),
+			name: Notification.Name("com.animewitcher.app.pipPlayer"),
 			object: player
 		)
 	}
