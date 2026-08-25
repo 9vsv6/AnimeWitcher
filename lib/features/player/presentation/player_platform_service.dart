@@ -6,13 +6,99 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'player_pip.dart';
+
 class PlayerPlatformService {
-  Future<void> enterPip(bool isPlaying) async {
+  PlayerPlatformService({MethodChannel? pipChannel, bool? androidPip})
+    : _pipChannel = pipChannel ?? PlayerPip.channel,
+      _androidPip = androidPip;
+
+  final MethodChannel _pipChannel;
+  final bool? _androidPip;
+
+  bool get _usesAndroidPip {
+    if (_androidPip != null) return _androidPip;
+    if (kIsWeb) return false;
     try {
-      const platform = MethodChannel('dev.akash.skystream.player/pip');
-      await platform.invokeMethod('enterPip', {'isPlaying': isPlaying});
+      return Platform.isAndroid;
     } catch (e) {
-      if (kDebugMode) debugPrint("PIP Error: $e");
+      if (kDebugMode) debugPrint('PlayerPlatformService.androidPip: $e');
+      return false;
+    }
+  }
+
+  Map<String, Object> _pipPayload({
+    required bool isPlaying,
+    bool? active,
+    bool? enabled,
+    int? width,
+    int? height,
+  }) {
+    final aspect = PlayerPip.clampAspectRatio(width ?? 16, height ?? 9);
+    return {
+      'isPlaying': isPlaying,
+      'width': aspect.$1,
+      'height': aspect.$2,
+      'active': ?active,
+      'enabled': ?enabled,
+    };
+  }
+
+  /// Enters system Picture-in-Picture via the Android Activity API.
+  /// Returns `false` when PiP is unavailable or the OS rejects the request.
+  Future<bool> enterPip({
+    required bool isPlaying,
+    int? width,
+    int? height,
+  }) async {
+    if (!_usesAndroidPip) return false;
+    try {
+      final result = await _pipChannel.invokeMethod<bool>(
+        'enterPip',
+        _pipPayload(isPlaying: isPlaying, width: width, height: height),
+      );
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) debugPrint('PIP Error: $e');
+      return false;
+    }
+  }
+
+  /// Keeps Android `PictureInPictureParams` in sync (auto-enter, aspect,
+  /// RemoteActions). Call while the player is open and with [active] false
+  /// on dispose so Home does not PiP from other screens.
+  Future<void> updatePipSession({
+    required bool active,
+    required bool enabled,
+    required bool isPlaying,
+    int? width,
+    int? height,
+  }) async {
+    if (!_usesAndroidPip) return;
+    try {
+      await _pipChannel.invokeMethod<void>(
+        'updatePip',
+        _pipPayload(
+          isPlaying: isPlaying,
+          active: active,
+          enabled: enabled,
+          width: width,
+          height: height,
+        ),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('PIP session error: $e');
+    }
+  }
+
+  Future<bool> isPipAvailable() async {
+    if (!_usesAndroidPip) return false;
+    try {
+      final result = await _pipChannel.invokeMethod<bool>('isPipAvailable');
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) debugPrint('PIP availability error: $e');
+      return false;
     }
   }
 

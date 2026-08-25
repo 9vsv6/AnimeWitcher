@@ -1,13 +1,24 @@
 package dev.akash.skystream
 
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.graphics.Rect
+import android.graphics.drawable.Icon
 import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.util.Rational
+import android.view.View
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import android.app.PictureInPictureParams
-import android.os.Build
-import androidx.core.content.FileProvider
 import java.io.File
 
 class MainActivity : FlutterActivity() {
@@ -15,39 +26,36 @@ class MainActivity : FlutterActivity() {
     private val TV_CHANNEL = "dev.akash.skystream/tv_channel"
     private val PLAYER_CHANNEL = "dev.akash.skystream/external_player"
 
+    private var pipChannel: MethodChannel? = null
     private var isPlaying = false
+    private var pipSessionActive = false
+    private var pipEnabled = true
+    private var pipWidth = 16
+    private var pipHeight = 9
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        
-        // PiP Channel
-        MethodChannel(messenger, CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "enterPip") {
-                val playing = call.argument<Boolean>("isPlaying") ?: false
-                this.isPlaying = playing // Sync state immediately
-                
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    updatePipActions()
-                    val builder = PictureInPictureParams.Builder()
-                    builder.setActions(createPipActions())
-                    enterPictureInPictureMode(builder.build())
+
+        // Official Android PiP: Activity.enterPictureInPictureMode +
+        // PictureInPictureParams (API 26+), with setAutoEnterEnabled on
+        // Android 12 so Home / gesture navigation can enter PiP.
+        // https://developer.android.com/develop/ui/views/picture-in-picture
+        pipChannel = MethodChannel(messenger, CHANNEL)
+        pipChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "enterPip" -> {
+                    applyPipArguments(call.arguments)
+                    pipSessionActive = true
+                    result.success(enterPipNow())
+                }
+                "updatePip", "setPipState" -> {
+                    applyPipArguments(call.arguments)
+                    refreshPipParams()
                     result.success(null)
-                } else {
-                    result.error("UNSUPPORTED", "PIP not supported", null)
                 }
-            } else if (call.method == "setPipState") {
-                // Flutter tells us if playing or not
-                val playing = call.argument<Boolean>("isPlaying") ?: false
-                // Always update state and force refresh actions
-                // The user reported sync issues, so we shouldn't skip update if values match
-                this.isPlaying = playing
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    updatePipActions()
-                }
-                result.success(null)
-            } else {
-                result.notImplemented()
+                "isPipAvailable" -> result.success(isPipSupported())
+                else -> result.notImplemented()
             }
         }
 
@@ -59,10 +67,6 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "addPrograms" -> {
-                    // Start a background thread or coroutine ideally, but for now simple invocation
-                    // The TvUtils methods do ContentProvider ops which should be background, but strict mode might complain. 
-                    // Given this is a demo clone, running on UI thread (MethodChannel default) might cause minor frame drop but is simplest.
-                    // Ideally use Thread { ... }.start() if heavy.
                     Thread {
                         val channelId = TvChannelUtils.getChannelId(this, getString(R.string.app_name))
                         if (channelId != null) {
@@ -70,7 +74,6 @@ class MainActivity : FlutterActivity() {
                              TvChannelUtils.addPrograms(this, channelId, items)
                              runOnUiThread { result.success(null) }
                         } else {
-                             // Try to create channel if missing?
                              TvChannelUtils.createTvChannel(this)
                              val newId = TvChannelUtils.getChannelId(this, getString(R.string.app_name))
                              if (newId != null) {
@@ -138,6 +141,87 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
+
+    private fun applyPipArguments(raw: Any?) {
+        val args = raw as? Map<*, *> ?: return
+        (args["isPlaying"] as? Boolean)?.let { isPlaying = it }
+        (args["active"] as? Boolean)?.let { pipSessionActive = it }
+        (args["enabled"] as? Boolean)?.let { pipEnabled = it }
+        intArg(args, "width")?.let { if (it > 0) pipWidth = it }
+        intArg(args, "height")?.let { if (it > 0) pipHeight = it }
+    }
+
+    private fun intArg(args: Map<*, *>, key: String): Int? {
+        return when (val raw = args[key]) {
+            is Int -> raw
+            is Long -> raw.toInt()
+            is Double -> raw.toInt()
+            is Float -> raw.toInt()
+            else -> null
+        }
+    }
+
+    private fun isPipSupported(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        return packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    }
+
+    private fun shouldAutoEnterPip(): Boolean {
+        return pipSessionActive && pipEnabled && isPlaying && isPipSupported()
+    }
+
+    private fun pipAspectRatio(): Rational {
+        val ratio = pipWidth.toDouble() / pipHeight.toDouble()
+        val min = 1.0 / 2.39
+        val max = 2.39
+        return when {
+            ratio < min -> Rational(100, 239)
+            ratio > max -> Rational(239, 100)
+            else -> Rational(pipWidth, pipHeight)
+        }
+    }
+
+    private fun sourceRectHint(): Rect {
+        val hint = Rect()
+        findViewById<View>(android.R.id.content)?.getGlobalVisibleRect(hint)
+        if (hint.width() <= 0 || hint.height() <= 0) {
+            window.decorView.getGlobalVisibleRect(hint)
+        }
+        return hint
+    }
+
+    private fun buildPipParams(): PictureInPictureParams {
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(pipAspectRatio())
+            .setSourceRectHint(sourceRectHint())
+            .setActions(createPipActions())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(shouldAutoEnterPip())
+            builder.setSeamlessResizeEnabled(true)
+        }
+        return builder.build()
+    }
+
+    private fun refreshPipParams() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !isPipSupported()) return
+        try {
+            setPictureInPictureParams(buildPipParams())
+        } catch (_: IllegalStateException) {
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    private fun enterPipNow(): Boolean {
+        if (!isPipSupported() || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        if (isInPictureInPictureMode) return true
+        return try {
+            enterPictureInPictureMode(buildPipParams())
+        } catch (_: IllegalStateException) {
+            false
+        } catch (_: IllegalArgumentException) {
+            false
+        }
+    }
     
     // Action Constants
     private val ACTION_MEDIA_CONTROL = "media_control"
@@ -147,8 +231,8 @@ class MainActivity : FlutterActivity() {
     private val CONTROL_TYPE_REWIND = 3
     private val CONTROL_TYPE_FORWARD = 4
 
-    private val receiver = object : android.content.BroadcastReceiver() {
-        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ACTION_MEDIA_CONTROL) {
                 val type = intent.getIntExtra(EXTRA_CONTROL_TYPE, 0)
                 val method = when (type) {
@@ -159,20 +243,18 @@ class MainActivity : FlutterActivity() {
                     else -> null
                 }
                 if (method != null) {
-                    flutterEngine?.dartExecutor?.binaryMessenger?.let {
-                        MethodChannel(it, CHANNEL).invokeMethod(method, null)
-                    }
+                    pipChannel?.invokeMethod(method, null)
                 }
             }
         }
     }
 
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val filter = android.content.IntentFilter(ACTION_MEDIA_CONTROL)
+            val filter = IntentFilter(ACTION_MEDIA_CONTROL)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED)
+                registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
             } else {
                 registerReceiver(receiver, filter)
             }
@@ -180,65 +262,85 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        pipSessionActive = false
         super.onDestroy()
         try {
             unregisterReceiver(receiver)
-        } catch (e: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
-    private fun createPipActions(): List<android.app.RemoteAction> {
+    @Deprecated("Deprecated in Java")
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Android 12+ uses setAutoEnterEnabled instead of this callback.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
+        if (shouldAutoEnterPip()) {
+            enterPipNow()
+        }
+    }
+
+    private fun mediaControlIntent(controlType: Int): Intent {
+        return Intent(ACTION_MEDIA_CONTROL).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_CONTROL_TYPE, controlType)
+        }
+    }
+
+    private fun createPipActions(): List<RemoteAction> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()
 
-        val actions = mutableListOf<android.app.RemoteAction>()
+        val actions = mutableListOf<RemoteAction>()
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
-        // 1. Rewind (Use custom 10s icon)
-        val rewindIntent = android.content.Intent(ACTION_MEDIA_CONTROL).apply {
-            putExtra(EXTRA_CONTROL_TYPE, CONTROL_TYPE_REWIND)
-        }
-        val rewindPendingIntent = android.app.PendingIntent.getBroadcast(
-            this, CONTROL_TYPE_REWIND, rewindIntent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        val rewindPendingIntent = PendingIntent.getBroadcast(
+            this, CONTROL_TYPE_REWIND, mediaControlIntent(CONTROL_TYPE_REWIND), flags
         )
-        val rewindIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_replay_10)
-        actions.add(android.app.RemoteAction(rewindIcon, "Rewind", "Rewind 10s", rewindPendingIntent))
+        actions.add(
+            RemoteAction(
+                Icon.createWithResource(this, R.drawable.ic_replay_10),
+                "Rewind",
+                "Rewind 10s",
+                rewindPendingIntent
+            )
+        )
 
-        // 2. Play/Pause
-        val playPauseIntent = android.content.Intent(ACTION_MEDIA_CONTROL).apply {
-            putExtra(EXTRA_CONTROL_TYPE, if (isPlaying) CONTROL_TYPE_PAUSE else CONTROL_TYPE_PLAY)
-        }
-        // Unique Request Code is Critical
         val playPauseReqCode = if (isPlaying) CONTROL_TYPE_PAUSE else CONTROL_TYPE_PLAY
-        val playPausePendingIntent = android.app.PendingIntent.getBroadcast(
-            this, playPauseReqCode, playPauseIntent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        val playPausePendingIntent = PendingIntent.getBroadcast(
+            this, playPauseReqCode, mediaControlIntent(playPauseReqCode), flags
         )
-        val playPauseIconIdx = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow
         val playPauseTitle = if (isPlaying) "Pause" else "Play"
-        val playPauseIcon = android.graphics.drawable.Icon.createWithResource(this, playPauseIconIdx)
-        actions.add(android.app.RemoteAction(playPauseIcon, playPauseTitle, playPauseTitle, playPausePendingIntent))
-
-        // 3. Forward (Use custom 10s icon)
-        val forwardIntent = android.content.Intent(ACTION_MEDIA_CONTROL).apply {
-            putExtra(EXTRA_CONTROL_TYPE, CONTROL_TYPE_FORWARD)
-        }
-        val forwardPendingIntent = android.app.PendingIntent.getBroadcast(
-            this, CONTROL_TYPE_FORWARD, forwardIntent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        val playPauseIconIdx = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow
+        actions.add(
+            RemoteAction(
+                Icon.createWithResource(this, playPauseIconIdx),
+                playPauseTitle,
+                playPauseTitle,
+                playPausePendingIntent
+            )
         )
-        val forwardIcon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_forward_10)
-        actions.add(android.app.RemoteAction(forwardIcon, "Forward", "Forward 10s", forwardPendingIntent))
+
+        val forwardPendingIntent = PendingIntent.getBroadcast(
+            this, CONTROL_TYPE_FORWARD, mediaControlIntent(CONTROL_TYPE_FORWARD), flags
+        )
+        actions.add(
+            RemoteAction(
+                Icon.createWithResource(this, R.drawable.ic_forward_10),
+                "Forward",
+                "Forward 10s",
+                forwardPendingIntent
+            )
+        )
 
         return actions
     }
 
-    private fun updatePipActions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            setPictureInPictureParams(PictureInPictureParams.Builder()
-                .setActions(createPipActions())
-                .build())
-        }
-    }
-
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration
+    ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        io.flutter.plugin.common.MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, CHANNEL)
-            .invokeMethod("pipModeChanged", isInPictureInPictureMode)
+        pipChannel?.invokeMethod("pipModeChanged", isInPictureInPictureMode)
+        refreshPipParams()
     }
 }

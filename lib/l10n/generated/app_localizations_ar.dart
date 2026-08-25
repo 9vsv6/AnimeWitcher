@@ -861,6 +861,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pip => 'صورة داخل صورة';
 
   @override
+  String get pipUnavailable => 'تعذر تفعيل صورة داخل صورة على هذا الجهاز';
+
+  @override
   String get rotate => 'تدوير';
 
   @override
