@@ -10,7 +10,6 @@ import UserNotifications
   private var liquidGlassPresenterChannel: FlutterMethodChannel?
   private var persistentGlassHeaderChannel: FlutterMethodChannel?
   private var persistentGlassHeaderController: ApplePersistentGlassHeaderNativeController?
-  private var playerPipHost: PlayerPipHost?
 
   override func application(
     _ application: UIApplication,
@@ -70,16 +69,6 @@ import UserNotifications
     )
     persistentGlassHeaderChannel = persistentHeaderChannel
     persistentGlassHeaderController = persistentHeaderController
-    playerPipHost = PlayerPipHost(
-      messenger: messenger,
-      hostViewProvider: {
-        persistentHeaderRegistrar?.viewController?.view
-          ?? UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }?
-            .windows.first(where: \.isKeyWindow)?.rootViewController?.view
-      }
-    )
     persistentHeaderChannel.setMethodCallHandler { [weak persistentHeaderController] call, result in
       switch call.method {
       case "update":

@@ -37,6 +37,7 @@ import '../../skip/data/anime_skip_service.dart';
 import '../../skip/data/skip_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 import 'playback_recovery_policy.dart';
+import 'playback_resume.dart';
 
 // Sentinel so copyWith can distinguish "not passed" from "explicitly null".
 const Object _keep = Object();
@@ -610,6 +611,18 @@ class PlayerController extends Notifier<PlayerState> {
     state = state.copyWith(uiPhase: const PlaybackUiPhase.idle());
   }
 
+  void _maybeConfirmPlaybackStarted(int positionMs) {
+    if (_hasConfirmedPlaybackFrame) return;
+    if (!PlaybackResume.canRevealVideo(
+      pendingResumeMs: _pendingResumeSeekPosition,
+      applyingResume: _isApplyingPendingResumeSeek,
+      currentMs: positionMs,
+    )) {
+      return;
+    }
+    _confirmPlaybackStarted();
+  }
+
   @override
   PlayerState build() {
     ref.keepAlive();
@@ -1127,9 +1140,7 @@ class PlayerController extends Notifier<PlayerState> {
       if (posMs > 0) _lastKnownPlaybackPositionMs = posMs;
       if (durationMs >= 30000) _lastKnownPlaybackDurationMs = durationMs;
 
-      if (posMs > 0 && !_hasConfirmedPlaybackFrame) {
-        _confirmPlaybackStarted();
-      }
+      _maybeConfirmPlaybackStarted(posMs);
 
       if (_midPlaybackRetryCount > 0 &&
           _videoViewController!.playbackState.value ==
@@ -1757,16 +1768,18 @@ class PlayerController extends Notifier<PlayerState> {
       );
       if (_isDisposed) return;
 
+      final holdPosition = oldPos > Duration.zero;
       await _openResolvedStream(
         playUrl,
         current,
         headers,
         useVideoView: useVideoView,
+        play: !holdPosition,
       );
       if (_isDisposed) return;
 
-      if (oldPos > Duration.zero) {
-        await _safeSeekTo(oldPos.inMilliseconds);
+      if (holdPosition) {
+        await _seekThenPlay(oldPos.inMilliseconds);
       }
       if (kDebugMode) {
         debugPrint(
@@ -1845,9 +1858,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     _positionSub?.cancel();
     _positionSub = _player.stream.position.listen((pos) {
-      if (pos.inMilliseconds > 0 && !_hasConfirmedPlaybackFrame) {
-        _confirmPlaybackStarted();
-      }
+      _maybeConfirmPlaybackStarted(pos.inMilliseconds);
 
       final now = DateTime.now();
 
@@ -2217,6 +2228,7 @@ class PlayerController extends Notifier<PlayerState> {
     StreamResult stream,
     Map<String, String> headers, {
     required bool useVideoView,
+    bool play = true,
   }) async {
     _resolvedPlayUrl = playUrl;
     if (useVideoView) {
@@ -2225,6 +2237,7 @@ class PlayerController extends Notifier<PlayerState> {
       if (!state.useExoPlayer) {
         await _player.pause();
       }
+      _videoViewController?.setAutoPlay(play);
 
       String finalUrl = playUrl;
       if (finalUrl.contains('play.php') || finalUrl.contains('index.php')) {
@@ -2342,7 +2355,7 @@ class PlayerController extends Notifier<PlayerState> {
       }
     }
 
-    await _player.open(Media(mediaKitUrl, httpHeaders: headers));
+    await _player.open(Media(mediaKitUrl, httpHeaders: headers), play: play);
     state = state.copyWith(useExoPlayer: false, isSeekable: true);
     _scheduleAutoSubtitleSelection();
   }
@@ -2393,81 +2406,6 @@ class PlayerController extends Notifier<PlayerState> {
       _videoViewController!.pause();
     } else {
       await _player.pause();
-    }
-  }
-
-  /// iOS system PiP needs an `AVPlayerLayer`. VOD normally uses media_kit,
-  /// so switch the active stream onto video_view (AVPlayer) first.
-  Future<bool> prepareIosPictureInPicture() async {
-    if (!Platform.isIOS) return true;
-    final stream = state.currentStream;
-    if (stream == null) return false;
-    final playUrl = _resolvedPlayUrl ?? stream.url;
-    if (playUrl.isEmpty) return false;
-    if (_isDashStreamUrl(playUrl) || _isDashStreamUrl(stream.url)) {
-      return false;
-    }
-    if (_streamRequiresNativeDrm(stream)) return false;
-    if (_videoViewController == null) return false;
-
-    try {
-      if (!state.useExoPlayer) {
-        final position = _currentPosition;
-        final headers = _buildPlaybackHeaders(stream);
-        await _openResolvedStream(
-          playUrl,
-          stream,
-          headers,
-          useVideoView: true,
-        );
-        await _waitForVideoViewReady();
-        if (_videoViewController?.error.value?.isNotEmpty ?? false) {
-          return false;
-        }
-        if (position > Duration.zero) {
-          try {
-            _videoViewController?.seekTo(position.inMilliseconds);
-          } catch (e) {
-            if (kDebugMode) debugPrint('PiP seek failed: $e');
-          }
-        }
-        await play();
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('prepareIosPictureInPicture: $e');
-      return false;
-    }
-    return state.useExoPlayer && _videoViewController != null;
-  }
-
-  Future<void> _waitForVideoViewReady() async {
-    final controller = _videoViewController;
-    if (controller == null) return;
-    bool ready() =>
-        controller.mediaInfo.value != null ||
-        controller.playbackState.value ==
-            VideoControllerPlaybackState.playing ||
-        (controller.error.value?.isNotEmpty ?? false);
-    if (ready()) return;
-    final completer = Completer<void>();
-    void listener() {
-      if (ready() && !completer.isCompleted) {
-        completer.complete();
-      }
-    }
-
-    controller.mediaInfo.addListener(listener);
-    controller.playbackState.addListener(listener);
-    controller.error.addListener(listener);
-    try {
-      await completer.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {},
-      );
-    } finally {
-      controller.mediaInfo.removeListener(listener);
-      controller.playbackState.removeListener(listener);
-      controller.error.removeListener(listener);
     }
   }
 
@@ -2729,69 +2667,28 @@ class PlayerController extends Notifier<PlayerState> {
           !_isCurrentSourceSession(sourceSessionId)) {
         return;
       }
+
+      final savedPos = await _resolveResumePosition(isLive: resolvedIsLive);
+      final holdForResume = PlaybackResume.shouldHoldUntilSeeked(savedPos);
+      if (holdForResume) {
+        _pendingResumeSeekPosition = savedPos;
+      }
+
       await _openResolvedStream(
         playUrl,
         stream,
         headers,
         useVideoView: useVideoView,
+        play: !holdForResume,
       );
       if (sourceSessionId != null &&
           !_isCurrentSourceSession(sourceSessionId)) {
         return;
       }
-      _enterStartupPhase(kind: PlaybackUiPhaseKind.bufferingInitial);
-
-      final historyRepo = ref.read(historyRepositoryProvider);
-      final isSeries =
-          (_item.contentType == MultimediaContentType.series ||
-          _item.contentType == MultimediaContentType.anime);
-
-      if (!_hasRefreshedCloudProgress) {
-        _hasRefreshedCloudProgress = true;
-        try {
-          await ref
-              .read(animeWitcherAccountServiceProvider)
-              .syncContinueWatchingItem(_item.url);
-        } catch (error) {
-          if (kDebugMode) {
-            debugPrint('[Player] Cloud progress sync deferred: $error');
-          }
-        }
+      if (!_hasConfirmedPlaybackFrame) {
+        _enterStartupPhase(kind: PlaybackUiPhaseKind.bufferingInitial);
       }
-
-      int savedPos = 0;
-      if (isSeries) {
-        final ep = _resolveCurrentEpisode();
-        final historyEpisodeUrl = _currentProgressUrl;
-        savedPos = historyRepo.getEpisodePosition(
-          historyEpisodeUrl,
-          mainUrl: _item.url,
-          season: ep?.season,
-          episode: ep?.episode,
-        );
-        if (savedPos <= 0 && ep != null) {
-          try {
-            savedPos = await ref
-                .read(animeWitcherAccountServiceProvider)
-                .remoteEpisodePosition(
-                  mainUrl: _item.url,
-                  episodeUrl: historyEpisodeUrl,
-                  refresh: true,
-                );
-          } catch (error) {
-            if (kDebugMode) {
-              debugPrint('[Player] Cloud resume lookup deferred: $error');
-            }
-          }
-        }
-      } else {
-        savedPos = historyRepo.getPosition(_item.url);
-      }
-
-      if (savedPos > 0) {
-        // Resume automatically at the exact saved stop time. The pending path
-        // safely waits for the active engine to become seekable.
-        _pendingResumeSeekPosition = savedPos;
+      if (holdForResume) {
         await _flushPendingResumeSeek();
       }
     } catch (e) {
@@ -2861,6 +2758,7 @@ class PlayerController extends Notifier<PlayerState> {
     final oldPos = state.useExoPlayer
         ? Duration(milliseconds: _videoViewController?.position.value ?? 0)
         : _player.state.position;
+    final holdPosition = oldPos > Duration.zero && !resetPosition;
 
     _enterRuntimePhase(kind: PlaybackUiPhaseKind.switchingSource);
 
@@ -2896,10 +2794,11 @@ class PlayerController extends Notifier<PlayerState> {
         stream,
         headers,
         useVideoView: useVideoView,
+        play: !holdPosition,
       );
 
-      if (oldPos > Duration.zero && !resetPosition) {
-        await _safeSeekTo(oldPos.inMilliseconds);
+      if (holdPosition) {
+        await _seekThenPlay(oldPos.inMilliseconds);
       } else if (resetPosition) {
         await seekTo(Duration.zero, fast: true);
       }
@@ -4108,10 +4007,34 @@ class PlayerController extends Notifier<PlayerState> {
   Future<void> _safeSeekTo(int position) async {
     if (position <= 0) return;
 
-    // ExoPlayer path: seek directly; no media_kit stream to wait on.
+    // ExoPlayer path: wait until the item reports a duration, then seek.
     if (state.useExoPlayer && _videoViewController != null) {
+      final controller = _videoViewController!;
       try {
-        _videoViewController!.seekTo(position);
+        var durationMs = controller.mediaInfo.value?.duration ?? 0;
+        if (durationMs <= 0) {
+          final completer = Completer<void>();
+          void listener() {
+            if ((controller.mediaInfo.value?.duration ?? 0) > 0 &&
+                !completer.isCompleted) {
+              completer.complete();
+            }
+          }
+
+          controller.mediaInfo.addListener(listener);
+          try {
+            await completer.future.timeout(
+              const Duration(seconds: 8),
+              onTimeout: () {},
+            );
+          } finally {
+            controller.mediaInfo.removeListener(listener);
+          }
+          durationMs = controller.mediaInfo.value?.duration ?? 0;
+        }
+        final targetMs =
+            durationMs > 0 ? position.clamp(0, durationMs) : position;
+        controller.seekTo(targetMs);
       } catch (e) {
         if (kDebugMode) debugPrint("ExoPlayer seek failed: $e");
       }
@@ -4152,16 +4075,126 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
+  Future<void> _seekThenPlay(int positionMs) async {
+    if (positionMs <= 0) return;
+    await pause();
+    await _safeSeekTo(positionMs);
+    await _waitUntilNearResumePosition(positionMs);
+    await play();
+    await _waitUntilNearResumePosition(positionMs);
+  }
+
   Future<void> _flushPendingResumeSeek() async {
     final pos = _pendingResumeSeekPosition;
-    if (pos == null || pos <= 0 || _isApplyingPendingResumeSeek) return;
+    if (pos == null ||
+        !PlaybackResume.shouldHoldUntilSeeked(pos) ||
+        _isApplyingPendingResumeSeek) {
+      return;
+    }
 
     _isApplyingPendingResumeSeek = true;
     try {
-      await _safeSeekTo(pos);
-      _pendingResumeSeekPosition = null;
+      await _seekThenPlay(pos);
+    } catch (e) {
+      if (kDebugMode) debugPrint('Resume seek failed: $e');
     } finally {
+      _pendingResumeSeekPosition = null;
       _isApplyingPendingResumeSeek = false;
+    }
+    _maybeConfirmPlaybackStarted(_currentPosition.inMilliseconds);
+  }
+
+  Future<void> _waitUntilNearResumePosition(int targetMs) async {
+    bool near() => PlaybackResume.isNear(
+      currentMs: _currentPosition.inMilliseconds,
+      targetMs: targetMs,
+    );
+    if (near()) return;
+
+    final deadline = DateTime.now().add(PlaybackResume.seekSettleTimeout);
+    while (!_isDisposed && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (near()) return;
+    }
+  }
+
+  Future<int> _resolveResumePosition({required bool isLive}) async {
+    if (isLive) return 0;
+
+    final historyRepo = ref.read(historyRepositoryProvider);
+    final isSeries =
+        _item.contentType == MultimediaContentType.series ||
+        _item.contentType == MultimediaContentType.anime;
+
+    int localPosition() {
+      if (isSeries) {
+        final ep = _resolveCurrentEpisode();
+        return historyRepo.getEpisodePosition(
+          _currentProgressUrl,
+          mainUrl: _item.url,
+          season: ep?.season,
+          episode: ep?.episode,
+        );
+      }
+      return historyRepo.getPosition(_item.url);
+    }
+
+    final local = localPosition();
+    if (PlaybackResume.shouldHoldUntilSeeked(local)) {
+      if (!_hasRefreshedCloudProgress) {
+        _hasRefreshedCloudProgress = true;
+        unawaited(_syncContinueWatchingInBackground());
+      }
+      return local;
+    }
+
+    if (!_hasRefreshedCloudProgress) {
+      _hasRefreshedCloudProgress = true;
+      try {
+        await ref
+            .read(animeWitcherAccountServiceProvider)
+            .syncContinueWatchingItem(_item.url);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('[Player] Cloud progress sync deferred: $error');
+        }
+      }
+      final afterSync = localPosition();
+      if (PlaybackResume.shouldHoldUntilSeeked(afterSync)) {
+        return afterSync;
+      }
+    }
+
+    if (isSeries) {
+      final ep = _resolveCurrentEpisode();
+      if (ep != null) {
+        try {
+          return await ref
+              .read(animeWitcherAccountServiceProvider)
+              .remoteEpisodePosition(
+                mainUrl: _item.url,
+                episodeUrl: _currentProgressUrl,
+                refresh: true,
+              );
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint('[Player] Cloud resume lookup deferred: $error');
+          }
+        }
+      }
+    }
+    return 0;
+  }
+
+  Future<void> _syncContinueWatchingInBackground() async {
+    try {
+      await ref
+          .read(animeWitcherAccountServiceProvider)
+          .syncContinueWatchingItem(_item.url);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[Player] Cloud progress sync deferred: $error');
+      }
     }
   }
 

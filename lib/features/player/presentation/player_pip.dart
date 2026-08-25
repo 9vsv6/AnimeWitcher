@@ -7,10 +7,8 @@ import 'package:flutter/services.dart';
 /// Android 12. See:
 /// https://developer.android.com/develop/ui/views/picture-in-picture
 ///
-/// iOS: [AVPictureInPictureController] with an [AVPlayerLayer] in the
-/// view hierarchy, `UIBackgroundModes=audio`, and an `.playback` audio
-/// session. See:
-/// https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller
+/// iOS is not supported: Apple PiP requires a native `AVPlayerLayer`, which
+/// is a second video surface on top of the Flutter player.
 class PlayerPip {
   static const channelName = 'com.animewitcher.app.player/pip';
   static const channel = MethodChannel(channelName);
@@ -19,15 +17,14 @@ class PlayerPip {
   static const minAspectRatio = 1 / 2.39;
   static const maxAspectRatio = 2.39;
 
-  /// Phone/tablet only. TV uses a different shell.
+  /// Android phone/tablet only. TV uses a different shell. iOS has no PiP.
   static bool shouldShowButton({
     required bool showPip,
     required bool isAndroid,
-    required bool isIos,
     required bool isTv,
     bool pipAvailable = true,
   }) {
-    return showPip && (isAndroid || isIos) && !isTv && pipAvailable;
+    return showPip && isAndroid && !isTv && pipAvailable;
   }
 
   /// Clamp a video size into the ratio window Android accepts.
@@ -39,4 +36,15 @@ class PlayerPip {
     if (ratio > maxAspectRatio) return (239, 100);
     return (safeW, safeH);
   }
+
+  /// Android sends a bool.
+  static PlayerPipMode modeFromNative(dynamic arguments) {
+    return PlayerPipMode(active: arguments == true);
+  }
+}
+
+class PlayerPipMode {
+  const PlayerPipMode({required this.active});
+
+  final bool active;
 }

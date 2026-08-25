@@ -264,17 +264,18 @@ class AnimeWitcherPlayerControlsState
     widget.videoViewController?.videoSize.addListener(_updateOrientation);
     widget.videoViewController?.orientation.addListener(_updateOrientation);
 
-    // PiP is phone/tablet-only — never register the handler on TV.
-    _pipAvailable = (Platform.isAndroid || Platform.isIOS) && !_isTv;
+    // PiP is Android phone/tablet-only — never register the handler on TV or iOS.
+    _pipAvailable = Platform.isAndroid && !_isTv;
     if (_pipAvailable) {
       PlayerPip.channel.setMethodCallHandler((call) async {
         switch (call.method) {
           case 'pipModeChanged':
-            final inPip = call.arguments as bool;
-            ref.read(playerControllerProvider.notifier).setInPip(inPip);
+            final mode = PlayerPip.modeFromNative(call.arguments);
+            final controller = ref.read(playerControllerProvider.notifier);
+            controller.setInPip(mode.active);
             if (mounted) {
               setState(() {
-                _isInPip = inPip;
+                _isInPip = mode.active;
               });
             }
             break;
@@ -390,7 +391,7 @@ class AnimeWitcherPlayerControlsState
     SystemChrome.setPreferredOrientations([]); // Reset to system default
     // Clear the PiP method channel handler to prevent a stale handler from
     // accessing the disposed provider after the player exits.
-    if ((Platform.isAndroid || Platform.isIOS) && !_isTv) {
+    if (Platform.isAndroid && !_isTv) {
       unawaited(
         _platformService.updatePipSession(
           active: false,
@@ -451,7 +452,7 @@ class AnimeWitcherPlayerControlsState
   }
 
   void _syncPipSession({bool active = true}) {
-    if ((!Platform.isAndroid && !Platform.isIOS) || _isTv) return;
+    if (!Platform.isAndroid || _isTv) return;
     try {
       final settings =
           ref.read(playerSettingsProvider).asData?.value ??
@@ -473,28 +474,13 @@ class AnimeWitcherPlayerControlsState
 
   Future<void> _enterPip() async {
     final controller = ref.read(playerControllerProvider.notifier);
-    controller.setInPip(true);
-    if (Platform.isIOS) {
-      final prepared = await controller.prepareIosPictureInPicture();
-      if (!prepared) {
-        controller.setInPip(false);
-        if (mounted) {
-          final l10n = AppLocalizations.of(context);
-          if (l10n != null) {
-            ref.read(notificationServiceProvider).showError(l10n.pipUnavailable);
-          }
-        }
-        return;
-      }
-    }
     final size = _videoSize();
+
+    controller.setInPip(true);
     final ok = await _platformService.enterPip(
       isPlaying: _isPlaying,
       width: size?.$1,
       height: size?.$2,
-      url: controller.resolvedPlayUrl,
-      headers: controller.currentPlaybackHeaders,
-      positionMs: controller.currentPosition.inMilliseconds,
     );
     if (!ok) {
       controller.setInPip(false);
@@ -1399,7 +1385,6 @@ class AnimeWitcherPlayerControlsState
     final pipSupported = PlayerPip.shouldShowButton(
       showPip: true,
       isAndroid: Platform.isAndroid,
-      isIos: Platform.isIOS,
       isTv: _isTv,
       pipAvailable: _pipAvailable,
     );
@@ -1567,6 +1552,7 @@ class AnimeWitcherPlayerControlsState
       child: Stack(
         fit: StackFit.expand,
         children: [
+          const ColoredBox(color: Colors.black),
           Center(
             child: SizedBox(
               width: 34,

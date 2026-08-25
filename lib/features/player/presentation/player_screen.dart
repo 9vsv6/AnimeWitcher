@@ -244,12 +244,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       final allowAutoPip =
           showPip &&
           !isTv &&
-          (Platform.isAndroid || Platform.isIOS) &&
+          Platform.isAndroid &&
           _wasPlayingBeforeBackground;
       if (allowAutoPip) {
-        // Official auto-enter PiP (Android 12+ / iOS 14.2+) starts while the
-        // app is backgrounding. Keep the stream playing so the system can
-        // snapshot it; pausing here would cancel PiP.
+        // Official auto-enter PiP (Android 12+) starts while the app is
+        // backgrounding. Keep the stream playing so the system can snapshot
+        // it; pausing here would cancel PiP.
         return;
       } else {
         _playerController.pause();
