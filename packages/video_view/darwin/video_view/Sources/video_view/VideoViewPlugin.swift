@@ -110,6 +110,11 @@ class VideoController: NSObject, FlutterStreamHandler {
 		avPlayer.addObserver(self, forKeyPath: #keyPath(AVPlayer.currentItem.loadedTimeRanges), context: nil)
 		avPlayer.addObserver(self, forKeyPath: #keyPath(AVPlayer.currentItem.presentationSize), context: nil)
 		subtitleLayer.player = avPlayer
+#if os(iOS)
+		if #available(iOS 15.0, *) {
+			avPlayer.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+		}
+#endif
 	}
 
 	deinit {
@@ -128,6 +133,9 @@ class VideoController: NSObject, FlutterStreamHandler {
 		avPlayer.removeObserver(self, forKeyPath: #keyPath(AVPlayer.currentItem.presentationSize))
 		textureRegistry.unregisterTexture(id)
 		subtitleLayer.player = nil
+#if os(iOS)
+		publishPipPlayer(nil)
+#endif
 	}
 
 	private func openResolved(source: String, headers: [String: String]? = nil) {
@@ -167,6 +175,9 @@ class VideoController: NSObject, FlutterStreamHandler {
 			avPlayer.automaticallyWaitsToMinimizeStalling = true // 2.5s threshold analog
 			
 			avPlayer.replaceCurrentItem(with: item)
+#if os(iOS)
+			publishPipPlayer(avPlayer)
+#endif
 			NotificationCenter.default.addObserver(
 				self,
 				selector: #selector(onFinish(notification:)),
@@ -216,6 +227,9 @@ class VideoController: NSObject, FlutterStreamHandler {
 			)
 			avPlayer.replaceCurrentItem(with: nil)
 		}
+#if os(iOS)
+		publishPipPlayer(nil)
+#endif
 	}
 
 	func play() {
@@ -364,6 +378,9 @@ class VideoController: NSObject, FlutterStreamHandler {
 					}
 				}
 				avPlayer.rate = streaming ? 1 : speed
+#if os(iOS)
+				publishPipPlayer(avPlayer)
+#endif
 			}
 		}
 
@@ -729,6 +746,15 @@ class VideoController: NSObject, FlutterStreamHandler {
 			break
 		}
 	}
+
+#if os(iOS)
+	private func publishPipPlayer(_ player: AVPlayer?) {
+		NotificationCenter.default.post(
+			name: Notification.Name("dev.akash.skystream.pipPlayer"),
+			object: player
+		)
+	}
+#endif
 }
 
 public class VideoViewPlugin: NSObject, FlutterPlugin {

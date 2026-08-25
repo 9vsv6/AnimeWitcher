@@ -261,6 +261,8 @@ class PlayerController extends Notifier<PlayerState> {
   VideoController? _videoViewController;
   late MultimediaItem _item;
   late String _videoUrl;
+  String? _resolvedPlayUrl;
+  bool _isInPip = false;
   late String _progressUrl;
   Episode? _episode;
   bool _isInitialized = false;
@@ -273,6 +275,19 @@ class PlayerController extends Notifier<PlayerState> {
   VideoController? get videoViewController => _videoViewController;
   bool get isDisposed => _isDisposed;
   bool get hasConfirmedPlaybackFrame => _hasConfirmedPlaybackFrame;
+  bool get isInPip => _isInPip;
+  String? get resolvedPlayUrl => _resolvedPlayUrl;
+  Duration get currentPosition => _currentPosition;
+  Map<String, String>? get currentPlaybackHeaders {
+    final stream = state.currentStream;
+    if (stream == null) return null;
+    return _buildPlaybackHeaders(stream);
+  }
+
+  void setInPip(bool value) {
+    _isInPip = value;
+  }
+
   PlayerState get currentState => state;
   List<SubtitleFile> get userAddedExternalSubtitles =>
       _userAddedExternalSubtitles;
@@ -2203,6 +2218,7 @@ class PlayerController extends Notifier<PlayerState> {
     Map<String, String> headers, {
     required bool useVideoView,
   }) async {
+    _resolvedPlayUrl = playUrl;
     if (useVideoView) {
       // Pause media_kit so it stops consuming bandwidth while video_view plays.
       // (media_kit.open() will replace it if the user switches back.)
@@ -2217,6 +2233,7 @@ class PlayerController extends Notifier<PlayerState> {
           headers: headers,
           forceM3u8Extension: true,
         );
+        _resolvedPlayUrl = finalUrl;
         if (kDebugMode) {
           debugPrint("[PLAYER] Proxied non-standard HLS: $finalUrl");
         }
@@ -2256,7 +2273,12 @@ class PlayerController extends Notifier<PlayerState> {
           drmKid: stream.drmKid,
         );
       }
-      state = state.copyWith(useExoPlayer: true, isSeekable: false);
+      final isLivePlayback =
+          state.isLive || _detectResolvedLiveState(playUrl);
+      state = state.copyWith(
+        useExoPlayer: true,
+        isSeekable: !isLivePlayback,
+      );
       _scheduleAutoSubtitleSelection();
       return;
     }
@@ -2371,6 +2393,81 @@ class PlayerController extends Notifier<PlayerState> {
       _videoViewController!.pause();
     } else {
       await _player.pause();
+    }
+  }
+
+  /// iOS system PiP needs an `AVPlayerLayer`. VOD normally uses media_kit,
+  /// so switch the active stream onto video_view (AVPlayer) first.
+  Future<bool> prepareIosPictureInPicture() async {
+    if (!Platform.isIOS) return true;
+    final stream = state.currentStream;
+    if (stream == null) return false;
+    final playUrl = _resolvedPlayUrl ?? stream.url;
+    if (playUrl.isEmpty) return false;
+    if (_isDashStreamUrl(playUrl) || _isDashStreamUrl(stream.url)) {
+      return false;
+    }
+    if (_streamRequiresNativeDrm(stream)) return false;
+    if (_videoViewController == null) return false;
+
+    try {
+      if (!state.useExoPlayer) {
+        final position = _currentPosition;
+        final headers = _buildPlaybackHeaders(stream);
+        await _openResolvedStream(
+          playUrl,
+          stream,
+          headers,
+          useVideoView: true,
+        );
+        await _waitForVideoViewReady();
+        if (_videoViewController?.error.value?.isNotEmpty ?? false) {
+          return false;
+        }
+        if (position > Duration.zero) {
+          try {
+            _videoViewController?.seekTo(position.inMilliseconds);
+          } catch (e) {
+            if (kDebugMode) debugPrint('PiP seek failed: $e');
+          }
+        }
+        await play();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('prepareIosPictureInPicture: $e');
+      return false;
+    }
+    return state.useExoPlayer && _videoViewController != null;
+  }
+
+  Future<void> _waitForVideoViewReady() async {
+    final controller = _videoViewController;
+    if (controller == null) return;
+    bool ready() =>
+        controller.mediaInfo.value != null ||
+        controller.playbackState.value ==
+            VideoControllerPlaybackState.playing ||
+        (controller.error.value?.isNotEmpty ?? false);
+    if (ready()) return;
+    final completer = Completer<void>();
+    void listener() {
+      if (ready() && !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+
+    controller.mediaInfo.addListener(listener);
+    controller.playbackState.addListener(listener);
+    controller.error.addListener(listener);
+    try {
+      await completer.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {},
+      );
+    } finally {
+      controller.mediaInfo.removeListener(listener);
+      controller.playbackState.removeListener(listener);
+      controller.error.removeListener(listener);
     }
   }
 

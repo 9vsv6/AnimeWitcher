@@ -1654,6 +1654,12 @@ abstract class AppLocalizations {
   /// **'صورة داخل صورة'**
   String get pip;
 
+  /// No description provided for @pipUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تفعيل صورة داخل صورة على هذا الجهاز'**
+  String get pipUnavailable;
+
   /// No description provided for @rotate.
   ///
   /// In ar, this message translates to:

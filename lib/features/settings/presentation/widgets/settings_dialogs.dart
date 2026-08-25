@@ -554,6 +554,9 @@ class _SocialButton extends StatelessWidget {
 
 /// Shows a dialog to toggle the visibility of individual player control
 /// buttons. Changes apply live via the player settings notifier.
+///
+/// The Picture-in-Picture switch ([AppLocalizations.showPip]) shows or hides
+/// the in-player PiP control and also gates Android system PiP auto-enter.
 void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
   final l10n = AppLocalizations.of(context)!;
   final notifier = ref.read(playerSettingsProvider.notifier);

@@ -27,6 +27,8 @@ import 'player_osd_overlay.dart';
 import 'skip_segment_overlay.dart';
 import 'hotstar_player_style.dart';
 import '../player_platform_service.dart';
+import '../player_pip.dart';
+import '../player_chrome_actions.dart';
 import '../player_gesture_handler.dart';
 import 'player_metadata_scrim.dart';
 
@@ -83,6 +85,7 @@ class SkyStreamPlayerControlsState
   bool _isIpad = false;
   bool _isTv = false;
   bool _isInPip = false;
+  bool _pipAvailable = false;
 
   void togglePlayPause() => _togglePlay();
 
@@ -121,6 +124,7 @@ class SkyStreamPlayerControlsState
   late final FocusNode _skipFocusNode;
   bool _isSkipActive = false;
   ProviderSubscription<dynamic>? _revertMessageSub;
+  ProviderSubscription<dynamic>? _pipSettingsSub;
 
   @override
   void initState() {
@@ -220,12 +224,7 @@ class SkyStreamPlayerControlsState
         if (mounted && val && !oldPlaying && _duration == Duration.zero) {
           setState(() {});
         }
-        // Sync PiP state with Android
-        if (Platform.isAndroid) {
-          const MethodChannel(
-            'dev.akash.skystream.player/pip',
-          ).invokeMethod('setPipState', {'isPlaying': val});
-        }
+        _syncPipSession();
       }),
       // Position: No setState needed - StreamBuilder in PlayerProgressBar handles UI
       widget.player.stream.position.listen((val) {
@@ -265,16 +264,17 @@ class SkyStreamPlayerControlsState
     widget.videoViewController?.videoSize.addListener(_updateOrientation);
     widget.videoViewController?.orientation.addListener(_updateOrientation);
 
-    // PiP is phone/tablet-only â never register the handler on TV.
-    if (Platform.isAndroid && !_isTv) {
-      const MethodChannel(
-        'dev.akash.skystream.player/pip',
-      ).setMethodCallHandler((call) async {
+    // PiP is phone/tablet-only — never register the handler on TV.
+    _pipAvailable = (Platform.isAndroid || Platform.isIOS) && !_isTv;
+    if (_pipAvailable) {
+      PlayerPip.channel.setMethodCallHandler((call) async {
         switch (call.method) {
           case 'pipModeChanged':
+            final inPip = call.arguments as bool;
+            ref.read(playerControllerProvider.notifier).setInPip(inPip);
             if (mounted) {
               setState(() {
-                _isInPip = call.arguments as bool;
+                _isInPip = inPip;
               });
             }
             break;
@@ -292,7 +292,19 @@ class SkyStreamPlayerControlsState
             break;
         }
       });
+      unawaited(
+        _platformService.isPipAvailable().then((available) {
+          if (!mounted || available == _pipAvailable) return;
+          setState(() => _pipAvailable = available);
+        }),
+      );
     }
+    _pipSettingsSub = ref.listenManual(playerSettingsProvider, (_, _) {
+      _syncPipSession();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncPipSession();
+    });
 
     if (widget.streams != null && widget.streams!.isNotEmpty) {
       _isVisible = true;
@@ -349,6 +361,12 @@ class SkyStreamPlayerControlsState
       );
     }
     FocusManager.instance.removeListener(_onFocusChange);
+    for (final s in _subscriptions) {
+      s.cancel();
+    }
+    _subscriptions.clear();
+    _syncPipSession(active: false);
+    _pipSettingsSub?.close();
     _revertMessageSub?.close();
     _playFocusNode.dispose();
     _backFocusNode.dispose();
@@ -357,9 +375,6 @@ class SkyStreamPlayerControlsState
     _skipFocusNode.dispose();
     _hideTimer?.cancel();
     _seekAnimController.dispose();
-    for (final s in _subscriptions) {
-      s.cancel();
-    }
     try {
       ScreenBrightness().resetApplicationScreenBrightness();
     } catch (e) {
@@ -375,10 +390,15 @@ class SkyStreamPlayerControlsState
     SystemChrome.setPreferredOrientations([]); // Reset to system default
     // Clear the PiP method channel handler to prevent a stale handler from
     // accessing the disposed provider after the player exits.
-    if (Platform.isAndroid && !_isTv) {
-      const MethodChannel(
-        'dev.akash.skystream.player/pip',
-      ).setMethodCallHandler(null);
+    if ((Platform.isAndroid || Platform.isIOS) && !_isTv) {
+      unawaited(
+        _platformService.updatePipSession(
+          active: false,
+          enabled: false,
+          isPlaying: false,
+        ),
+      );
+      PlayerPip.channel.setMethodCallHandler(null);
     }
     super.dispose();
   }
@@ -405,10 +425,90 @@ class SkyStreamPlayerControlsState
         widget.player.state.height,
       );
     }
+    _syncPipSession();
+  }
+
+  (int, int)? _videoSize() {
+    try {
+      final useExo = ref.read(
+        playerControllerProvider.select((s) => s.useExoPlayer),
+      );
+      if (useExo && widget.videoViewController != null) {
+        final size = widget.videoViewController!.videoSize.value;
+        if (size.width > 0 && size.height > 0) {
+          return (size.width.round(), size.height.round());
+        }
+      }
+      final width = widget.player.state.width;
+      final height = widget.player.state.height;
+      if (width != null && height != null && width > 0 && height > 0) {
+        return (width, height);
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Player video size: $e');
+    }
+    return null;
+  }
+
+  void _syncPipSession({bool active = true}) {
+    if ((!Platform.isAndroid && !Platform.isIOS) || _isTv) return;
+    try {
+      final settings =
+          ref.read(playerSettingsProvider).asData?.value ??
+          const PlayerSettings();
+      final size = active ? _videoSize() : null;
+      unawaited(
+        _platformService.updatePipSession(
+          active: active,
+          enabled: settings.showPip,
+          isPlaying: _isPlaying,
+          width: size?.$1,
+          height: size?.$2,
+        ),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('PIP session sync: $e');
+    }
   }
 
   Future<void> _enterPip() async {
-    await _platformService.enterPip(_isPlaying);
+    final controller = ref.read(playerControllerProvider.notifier);
+    controller.setInPip(true);
+    if (Platform.isIOS) {
+      final prepared = await controller.prepareIosPictureInPicture();
+      if (!prepared) {
+        controller.setInPip(false);
+        if (mounted) {
+          final l10n = AppLocalizations.of(context);
+          if (l10n != null) {
+            ref.read(notificationServiceProvider).showError(l10n.pipUnavailable);
+          }
+        }
+        return;
+      }
+    }
+    final size = _videoSize();
+    final ok = await _platformService.enterPip(
+      isPlaying: _isPlaying,
+      width: size?.$1,
+      height: size?.$2,
+      url: controller.resolvedPlayUrl,
+      headers: controller.currentPlaybackHeaders,
+      positionMs: controller.currentPosition.inMilliseconds,
+    );
+    if (!ok) {
+      controller.setInPip(false);
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        if (l10n != null) {
+          ref.read(notificationServiceProvider).showError(l10n.pipUnavailable);
+        }
+      }
+      return;
+    }
+    if (mounted) {
+      setState(() => _isInPip = true);
+    }
   }
 
   void _toggleOrientation() {
@@ -421,12 +521,9 @@ class SkyStreamPlayerControlsState
     final item = controller.multimediaItem;
     if (episode == null || item == null) return;
 
-    final selected = await ref.read(playbackLauncherProvider).chooseSourceForItem(
-      context,
-      item,
-      episode.url,
-      episode: episode,
-    );
+    final selected = await ref
+        .read(playbackLauncherProvider)
+        .chooseSourceForItem(context, item, episode.url, episode: episode);
     if (selected == null || !mounted) return;
 
     await controller.playNextEpisode(selectedSource: selected);
@@ -584,7 +681,6 @@ class SkyStreamPlayerControlsState
     ref.read(playerControllerProvider.notifier).openEpisodeList();
   }
 
-
   /// Close the episodes panel and bring the chrome back with a fresh auto-hide.
   void closeEpisodesPanel() {
     if (!ref.read(playerControllerProvider).showEpisodeList) return;
@@ -674,6 +770,7 @@ class SkyStreamPlayerControlsState
         _cancelHideTimer();
         _metadataScrimKey.currentState?.resetSchedule();
       }
+      _syncPipSession();
     }
   }
 
@@ -1116,9 +1213,8 @@ class SkyStreamPlayerControlsState
                     nextEpisodeDescription: nextEpDescription,
                     nextEpisodeIsFinal: nextEpIsFinal,
                     nextEpisodeServerName: nextEpServerName,
-                    onPlayNext: () => unawaited(
-                      _playNextEpisodeWithSourcePicker(),
-                    ),
+                    onPlayNext: () =>
+                        unawaited(_playNextEpisodeWithSourcePicker()),
                     onDismiss: () => ref
                         .read(playerControllerProvider.notifier)
                         .dismissNextEpisodeOverlay(),
@@ -1196,7 +1292,6 @@ class SkyStreamPlayerControlsState
                   isTv: _isTv,
                   onHidePlayerUI: hideControls,
                 ),
-
               ],
             ),
           ),
@@ -1291,9 +1386,7 @@ class SkyStreamPlayerControlsState
         PlayerIconButton(
           icon: Icons.skip_next_rounded,
           tooltip: l10n.next,
-          onPressed: () => unawaited(
-            _playNextEpisodeWithSourcePicker(),
-          ),
+          onPressed: () => unawaited(_playNextEpisodeWithSourcePicker()),
           isTv: _isTv,
         ),
     ];
@@ -1301,63 +1394,81 @@ class SkyStreamPlayerControlsState
     final playerSettings =
         ref.watch(playerSettingsProvider).asData?.value ??
         const PlayerSettings();
+    final canRotate =
+        isTouch && (Platform.isAndroid || (Platform.isIOS && !_isIpad));
+    final pipSupported = PlayerPip.shouldShowButton(
+      showPip: true,
+      isAndroid: Platform.isAndroid,
+      isIos: Platform.isIOS,
+      isTv: _isTv,
+      pipAvailable: _pipAvailable,
+    );
+    final chromeActions = PlayerChromeActions.visible(
+      showPlaybackSpeed: playerSettings.showPlaybackSpeed,
+      supportsPlaybackSpeed: supportsPlaybackSpeed,
+      showPip: playerSettings.showPip,
+      pipSupported: pipSupported,
+      showRotate: playerSettings.showRotate,
+      canRotate: canRotate,
+      showEpisodes: playerSettings.showEpisodes,
+      hasEpisodePicker: hasEpisodePicker,
+      showResize: playerSettings.showResize,
+      isDesktop: isDesktop,
+    );
 
-    // Right-side optional player controls.
+    // Right-side optional player controls. PiP sits immediately left of
+    // rotate so it lands in the circled slot next to the seek bar.
     final actions = <Widget>[
-      if (supportsPlaybackSpeed && playerSettings.showPlaybackSpeed)
-        PlayerIconButton(
-          icon: Icons.speed,
-          tooltip:
-              "${playbackSpeed.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}x",
-          onPressed: () => PlayerBottomSheets.showSpeedSelection(
-            context: context,
-            currentSpeed: playbackSpeed,
-            maxSpeed: maxPlaybackSpeed,
-            onSpeedSelected: (s) => ref
-                .read(playerControllerProvider.notifier)
-                .setPlaybackSpeed(s, persist: true),
+      for (final action in chromeActions)
+        switch (action) {
+          PlayerChromeAction.playbackSpeed => PlayerIconButton(
+            icon: Icons.speed,
+            tooltip:
+                "${playbackSpeed.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}x",
+            onPressed: () => PlayerBottomSheets.showSpeedSelection(
+              context: context,
+              currentSpeed: playbackSpeed,
+              maxSpeed: maxPlaybackSpeed,
+              onSpeedSelected: (s) => ref
+                  .read(playerControllerProvider.notifier)
+                  .setPlaybackSpeed(s, persist: true),
+            ),
+            isTv: _isTv,
           ),
-          isTv: _isTv,
-        ),
-      if (isTouch &&
-          (Platform.isAndroid || (Platform.isIOS && !_isIpad)) &&
-          playerSettings.showRotate)
-        PlayerIconButton(
-          icon: Icons.screen_rotation,
-          tooltip: l10n.rotate,
-          onPressed: _toggleOrientation,
-          isTv: _isTv,
-        ),
-      if (hasEpisodePicker && playerSettings.showEpisodes)
-        PlayerIconButton(
-          icon: Icons.playlist_play_rounded,
-          tooltip: l10n.episodes,
-          onPressed: openEpisodesPanel,
-          isTv: _isTv,
-        ),
-      if (playerSettings.showResize)
-        PlayerIconButton(
-          icon: Icons.aspect_ratio_rounded,
-          tooltip: l10n.resize,
-          onPressed: cycleResize,
-          isTv: _isTv,
-        ),
-      if (Platform.isAndroid && !_isTv && playerSettings.showPip)
-        PlayerIconButton(
-          icon: Icons.picture_in_picture_alt_rounded,
-          tooltip: l10n.pip,
-          onPressed: _enterPip,
-          isTv: _isTv,
-        ),
-      if (isDesktop)
-        PlayerIconButton(
-          icon: _isFullscreen
-              ? Icons.fullscreen_exit_rounded
-              : Icons.fullscreen_rounded,
-          tooltip: _isFullscreen ? l10n.windowed : l10n.fullscreen,
-          onPressed: toggleFullscreen,
-          isTv: _isTv,
-        ),
+          PlayerChromeAction.pip => PlayerIconButton(
+            key: const ValueKey<String>('playerPipButton'),
+            icon: Icons.picture_in_picture_alt_rounded,
+            tooltip: l10n.pip,
+            onPressed: () => unawaited(_enterPip()),
+            isTv: _isTv,
+          ),
+          PlayerChromeAction.rotate => PlayerIconButton(
+            icon: Icons.screen_rotation,
+            tooltip: l10n.rotate,
+            onPressed: _toggleOrientation,
+            isTv: _isTv,
+          ),
+          PlayerChromeAction.episodes => PlayerIconButton(
+            icon: Icons.playlist_play_rounded,
+            tooltip: l10n.episodes,
+            onPressed: openEpisodesPanel,
+            isTv: _isTv,
+          ),
+          PlayerChromeAction.resize => PlayerIconButton(
+            icon: Icons.aspect_ratio_rounded,
+            tooltip: l10n.resize,
+            onPressed: cycleResize,
+            isTv: _isTv,
+          ),
+          PlayerChromeAction.desktopFullscreen => PlayerIconButton(
+            icon: _isFullscreen
+                ? Icons.fullscreen_exit_rounded
+                : Icons.fullscreen_rounded,
+            tooltip: _isFullscreen ? l10n.windowed : l10n.fullscreen,
+            onPressed: toggleFullscreen,
+            isTv: _isTv,
+          ),
+        },
     ];
 
     // One overlay layer: a Column with top bar / center / bottom bar. No
@@ -1449,10 +1560,7 @@ class SkyStreamPlayerControlsState
     );
   }
 
-  Widget _buildLoadingUI({
-    required String title,
-    String? episodeLabel,
-  }) {
+  Widget _buildLoadingUI({required String title, String? episodeLabel}) {
     return GestureDetector(
       onDoubleTap: _handleDoubleTap,
       behavior: HitTestBehavior.translucent,

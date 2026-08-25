@@ -218,7 +218,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                 vv.VideoControllerPlaybackState.playing
           : _player.state.playing;
       _playerController.saveProgress();
-      _playerController.pause();
 
       // Tear down any in-flight space-hold speed boost. If the user is
       // holding space (2Ã speed) and the OS backgrounds the app, the
@@ -233,6 +232,27 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         _spaceHeldForSpeed = false;
         _speedBeforeSpaceHold = null;
         unawaited(_playerController.setPlaybackSpeed(previousSpeed));
+      }
+
+      if (_playerController.isInPip) {
+        return;
+      }
+
+      final showPip =
+          ref.read(playerSettingsProvider).asData?.value.showPip ?? true;
+      final isTv = ref.read(deviceProfileProvider).asData?.value.isTv ?? false;
+      final allowAutoPip =
+          showPip &&
+          !isTv &&
+          (Platform.isAndroid || Platform.isIOS) &&
+          _wasPlayingBeforeBackground;
+      if (allowAutoPip) {
+        // Official auto-enter PiP (Android 12+ / iOS 14.2+) starts while the
+        // app is backgrounding. Keep the stream playing so the system can
+        // snapshot it; pausing here would cancel PiP.
+        return;
+      } else {
+        _playerController.pause();
       }
     } else if (state == AppLifecycleState.resumed) {
       _playerController.setAppBackgrounded(false);

@@ -1,3 +1,4 @@
+import AVFoundation
 import Flutter
 import UIKit
 import SwiftUI
@@ -9,11 +10,18 @@ import UserNotifications
   private var liquidGlassPresenterChannel: FlutterMethodChannel?
   private var persistentGlassHeaderChannel: FlutterMethodChannel?
   private var persistentGlassHeaderController: ApplePersistentGlassHeaderNativeController?
+  private var playerPipHost: PlayerPipHost?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    do {
+      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+      try AVAudioSession.sharedInstance().setActive(true)
+    } catch {
+      print("[AppDelegate] Audio session error: \(error)")
+    }
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
       UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
@@ -62,6 +70,16 @@ import UserNotifications
     )
     persistentGlassHeaderChannel = persistentHeaderChannel
     persistentGlassHeaderController = persistentHeaderController
+    playerPipHost = PlayerPipHost(
+      messenger: messenger,
+      hostViewProvider: {
+        persistentHeaderRegistrar?.viewController?.view
+          ?? UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }?
+            .windows.first(where: \.isKeyWindow)?.rootViewController?.view
+      }
+    )
     persistentHeaderChannel.setMethodCallHandler { [weak persistentHeaderController] call, result in
       switch call.method {
       case "update":
