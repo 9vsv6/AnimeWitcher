@@ -7,7 +7,6 @@
   "explore": "استكشاف",
   "library": "المكتبة",
   "settings": "الإعدادات",
-  "extensions": "الإضافات",
   "updateAvailable": "يتوفر تحديث",
   "retry": "إعادة المحاولة",
   "factoryReset": "إعادة ضبط المصنع",
@@ -29,9 +28,7 @@
   "network": "الشبكة",
   "dnsOverHttps": "DNS عبر HTTPS",
   "dohProvider": "مزود DoH",
-  "manageExtensions": "إدارة الإضافات",
   "appData": "بيانات التطبيق",
-  "resetDataKeepExtensions": "إعادة ضبط البيانات (مع الاحتفاظ بالإضافات)",
   "developer": "المطور",
   "developerOptions": "خيارات المطور",
   "about": "حول",
@@ -152,7 +149,6 @@
   "recommended": "موصى به",
   "on": "تشغيل",
   "off": "إيقاف",
-  "installRemoveProviders": "تثبيت أو إزالة المزودين",
   "resetDataSubtitle": "مسح الإعدادات وقاعدة البيانات، والحفاظ على الإضافات",
   "factoryResetSubtitle": "حذف جميع البيانات والإعدادات والإضافات",
   "developerOptionsSubtitle": "أدوات التصحيح والتشغيل المحلي",
@@ -237,52 +233,13 @@
   "downloadingApplyingSubtitle": "جارٍ تنزيل وتطبيق الترجمة...",
   "failedToDownloadSubtitle": "فشل تنزيل الترجمة.",
   "failedToLoadSubtitles": "فشل تحميل الترجمة. يرجى المحاولة مرة أخرى.",
-  "noReposFound": "لم يتم العثور على مستودعات أو إضافات",
-  "downloadAllProviders": "تنزيل الكل",
-  "removeRepository": "إزالة المستودع",
-  "addRepo": "إضافة مستودع",
-  "extensionsNotInRepos": "إضافات ليست في المستودعات",
-  "noLongerInRepo": "لم يعد مدرجاً في أي مستودع",
-  "addRepoToBrowse": "أضف مستودعاً لتصفح وتحديث الإضافات",
-  "debugExtensions": "تصحيح الإضافات",
-  "removeRepoConfirm": "إزالة {repoName}؟",
-  "@removeRepoConfirm": {
-    "placeholders": {
-      "repoName": {
-        "type": "String"
-      }
-    }
-  },
-  "removeRepoWarning": "سيؤدي هذا إلى إزالة المستودع وإلغاء تثبيت جميع إضافاته.",
-  "addRepository": "إضافة مستودع",
-  "repoUrlOrShortcode": "رابط المستودع أو الرمز المختصر",
-  "assetPlugin": "إضافة أصل",
-  "installed": "مثبت",
-  "updateTo": "التحديث إلى {version}",
-  "@updateTo": {
-    "placeholders": {
-      "version": {
-        "type": "String"
-      }
-    }
-  },
-  "install": "تثبيت",
   "error": "خطأ",
   "ok": "موافق",
-  "pluginSettings": "إعدادات {pluginName}",
-  "@pluginSettings": {
-    "placeholders": {
-      "pluginName": {
-        "type": "String"
-      }
-    }
-  },
   "movies": "الأفلام",
   "series": "المسلسلات",
   "anime": "الأنمي",
   "liveStreams": "البث المباشر",
   "debug": "تصحيح",
-  "extensionsUpdated": "{count, plural, =1{تم تحديث إضافة واحدة} other{تم تحديث {count} إضافات}}",
   "invalidNavigation": "انتقال غير صالح. يرجى العودة.",
   "startOver": "البدء من جديد",
   "goBack": "العودة",
@@ -353,7 +310,6 @@
   "streamUrlSubtitle": "التشغيل من رابط شبكة",
   "streamTorrent": "بث تورنت",
   "streamTorrentSubtitle": "اختر ملف تورنت محلي للتشغيل",
-  "loadPluginFromAssets": "تحميل الإضافة من الأصول",
   "enterVideoUrlHint": "أدخل رابط الفيديو (http أو magnet أو غيرهما)",
   "networkStream": "بث الشبكة",
   "removedFromHistory": "تمت إزالة {title} من السجل",
@@ -584,8 +540,6 @@
   "diagnostics": "التشخيصات",
   "viewLogs": "عرض السجلات",
   "viewLogsSubtitle": "عرض نشاط التطبيق والأخطاء",
-  "goToExtensions": "الذهاب إلى الإضافات",
-  "noPluginsMessage": "قم بتثبيت الإضافات لتصفح وبث المحتوى.",
   "clearCache": "مسح ذاكرة الصور والفيديو المؤقتة",
   "clearCacheSubtitle": "تحرير مساحة التخزين المستخدمة للصور وملفات الفيديو المؤقتة",
   "clearCacheDialogTitle": "مسح الذاكرة المؤقتة؟",
@@ -602,15 +556,8 @@
   "playerControlsSubtitle": "إظهار أزرار التحكم في المشغل أو إخفاؤها",
   "relatedAnime": "ذات صلة",
   "accounts": "الحسابات",
-  "addRepoDescription": "أضف رابط مستودع أو رمزًا مختصرًا لاكتشاف إضافات الامتدادات وتثبيتها.",
-  "browseRepositories": "تصفح المستودعات",
-  "browseRepositoriesToInstall": "تصفح تبويب المستودعات لاكتشاف الإضافات وتثبيتها.",
   "exploreAnime": "استكشاف الأنمي",
   "exploreMovies": "استكشاف الأفلام",
-  "githubProxy": "وكيل GitHub",
-  "githubProxySubtitle": "تمرير تنزيلات الإضافات عبر jsDelivr لتجاوز حجب مزود خدمة الإنترنت.",
-  "noExtensionsInstalled": "لا توجد إضافات مثبتة",
-  "repositories": "المستودعات",
   "skipIntro": "تخطي المقدمة",
   "skipOutro": "تخطي النهاية",
   "skipRecap": "تخطي الملخص السابق",

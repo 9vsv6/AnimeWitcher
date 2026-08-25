@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:skystream/core/utils/artwork_quality.dart';
 import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/shared/widgets/thumbnail_error_placeholder.dart';
 import 'hotstar_player_style.dart';
@@ -298,22 +299,27 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
           fit: StackFit.expand,
           children: [
             if (imageUrl != null)
-              CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.medium,
-                errorWidget: (context, url, error) =>
-                    const ThumbnailErrorPlaceholder(),
-                placeholder: (context, url) => Container(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  child: const Center(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+              ArtworkDecode(
+                paintedWidth: cardWidth,
+                builder: (BuildContext context, int? decodeWidth) =>
+                    CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.cover,
+                      memCacheWidth: decodeWidth,
+                      filterQuality: FilterQuality.medium,
+                      errorWidget: (context, url, error) =>
+                          const ThumbnailErrorPlaceholder(),
+                      placeholder: (context, url) => Container(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
               )
             else
               const ThumbnailErrorPlaceholder(),

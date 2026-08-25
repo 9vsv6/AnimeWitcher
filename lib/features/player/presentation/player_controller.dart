@@ -639,7 +639,7 @@ class PlayerController extends Notifier<PlayerState> {
   /// `{series} - {episode}`, where the episode part is its number label or, for
   /// numberless rows (specials, OVAs, مترجم/مدبلج), the name the server gave.
   String _titleWithEpisode(Episode episode) {
-    final label = episodeIdentityLabel(
+    final label = formatEpisodeLabel(
       episode: episode.episode,
       isArabic: true,
       title: episode.name,

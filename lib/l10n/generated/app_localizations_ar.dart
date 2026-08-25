@@ -36,9 +36,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get settings => 'الإعدادات';
 
   @override
-  String get extensions => 'الإضافات';
-
-  @override
   String get updateAvailable => 'يتوفر تحديث';
 
   @override
@@ -111,20 +108,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dohProvider => 'مزود DoH';
 
   @override
-  String get githubProxy => 'وكيل GitHub';
-
-  @override
-  String get githubProxySubtitle => 'تمرير تنزيلات الإضافات عبر jsDelivr لتجاوز حجب مزود خدمة الإنترنت.';
-
-  @override
-  String get manageExtensions => 'إدارة الإضافات';
-
-  @override
   String get appData => 'بيانات التطبيق';
-
-  @override
-  String get resetDataKeepExtensions =>
-      'إعادة ضبط البيانات (مع الاحتفاظ بالإضافات)';
 
   @override
   String get developer => 'المطور';
@@ -395,9 +379,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get off => 'إيقاف';
 
   @override
-  String get installRemoveProviders => 'تثبيت أو إزالة المزودين';
-
-  @override
   String get resetDataSubtitle =>
       'مسح الإعدادات وقاعدة البيانات، والحفاظ على الإضافات';
 
@@ -625,83 +606,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'فشل تحميل الترجمة. يرجى المحاولة مرة أخرى.';
 
   @override
-  String get noReposFound => 'لم يتم العثور على مستودعات أو إضافات';
-
-  @override
-  String get downloadAllProviders => 'تنزيل الكل';
-
-  @override
-  String get removeRepository => 'إزالة المستودع';
-
-  @override
-  String get addRepo => 'إضافة مستودع';
-
-  @override
-  String get extensionsNotInRepos => 'إضافات ليست في المستودعات';
-
-  @override
-  String get noLongerInRepo => 'لم يعد مدرجاً في أي مستودع';
-
-  @override
-  String get addRepoToBrowse => 'أضف مستودعاً لتصفح وتحديث الإضافات';
-
-  @override
-  String get debugExtensions => 'تصحيح الإضافات';
-
-  @override
-  String removeRepoConfirm(String repoName) {
-    return 'إزالة $repoName؟';
-  }
-
-  @override
-  String get removeRepoWarning =>
-      'سيؤدي هذا إلى إزالة المستودع وإلغاء تثبيت جميع إضافاته.';
-
-  @override
-  String get addRepository => 'إضافة مستودع';
-
-  @override
-  String get repoUrlOrShortcode => 'رابط المستودع أو الرمز المختصر';
-
-  @override
-  String get assetPlugin => 'إضافة أصل';
-
-  @override
-  String get installed => 'مثبت';
-
-  @override
-  String get repositories => 'المستودعات';
-
-  @override
-  String get noExtensionsInstalled => 'لا توجد إضافات مثبتة';
-
-  @override
-  String get browseRepositoriesToInstall => 'تصفح تبويب المستودعات لاكتشاف الإضافات وتثبيتها.';
-
-  @override
-  String get browseRepositories => 'تصفح المستودعات';
-
-  @override
-  String get addRepoDescription => 'أضف رابط مستودع أو رمزًا مختصرًا لاكتشاف إضافات الامتدادات وتثبيتها.';
-
-  @override
-  String updateTo(String version) {
-    return 'التحديث إلى $version';
-  }
-
-  @override
-  String get install => 'تثبيت';
-
-  @override
   String get error => 'خطأ';
 
   @override
   String get ok => 'موافق';
-
-  @override
-  String pluginSettings(String pluginName) {
-    return 'إعدادات $pluginName';
-  }
 
   @override
   String get movies => 'الأفلام';
@@ -717,17 +625,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get debug => 'تصحيح';
-
-  @override
-  String extensionsUpdated(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'تم تحديث $count إضافات',
-      one: 'تم تحديث إضافة واحدة',
-    );
-    return '$_temp0';
-  }
 
   @override
   String get invalidNavigation => 'انتقال غير صالح. يرجى العودة.';
@@ -840,10 +737,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get streamTorrentSubtitle => 'اختر ملف تورنت محلي للتشغيل';
 
   @override
-  String get loadPluginFromAssets => 'تحميل الإضافة من الأصول';
-
-  @override
-  String get enterVideoUrlHint => 'أدخل رابط الفيديو (http أو magnet أو غيرهما)';
+  String get enterVideoUrlHint =>
+      'أدخل رابط الفيديو (http أو magnet أو غيرهما)';
 
   @override
   String get networkStream => 'بث الشبكة';
@@ -941,12 +836,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get noPluginsInstalled => 'لا توجد إضافات مثبتة';
-
-  @override
-  String get noPluginsMessage => 'قم بتثبيت الإضافات لتصفح وبث المحتوى.';
-
-  @override
-  String get goToExtensions => 'الذهاب إلى الإضافات';
 
   @override
   String get availableSources => 'المصادر المتاحة';
@@ -1274,13 +1163,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get clearCache => 'مسح ذاكرة الصور والفيديو المؤقتة';
 
   @override
-  String get clearCacheSubtitle => 'تحرير مساحة التخزين المستخدمة للصور وملفات الفيديو المؤقتة';
+  String get clearCacheSubtitle =>
+      'تحرير مساحة التخزين المستخدمة للصور وملفات الفيديو المؤقتة';
 
   @override
   String get clearCacheDialogTitle => 'مسح الذاكرة المؤقتة؟';
 
   @override
-  String get clearCacheDialogContent => 'سيؤدي هذا إلى حذف الصور وملفات الفيديو المؤقتة. لن تتأثر إعداداتك أو سجل المشاهدة أو الإضافات.';
+  String get clearCacheDialogContent =>
+      'سيؤدي هذا إلى حذف الصور وملفات الفيديو المؤقتة. لن تتأثر إعداداتك أو سجل المشاهدة أو الإضافات.';
 
   @override
   String get clearCacheNow => 'مسح الذاكرة المؤقتة';
@@ -1295,7 +1186,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get playerControls => 'عناصر تحكم المشغل';
 
   @override
-  String get playerControlsSubtitle => 'إظهار أزرار التحكم في المشغل أو إخفاؤها';
+  String get playerControlsSubtitle =>
+      'إظهار أزرار التحكم في المشغل أو إخفاؤها';
 
   @override
   String get showPip => 'زر صورة داخل صورة';
@@ -1315,5 +1207,3 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get relatedAnime => 'ذات صلة';
 }
-
-/// The translations for Arabic (`ar_apc`).

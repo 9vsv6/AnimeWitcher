@@ -15,6 +15,7 @@ import 'core/theme/app_theme.dart';
 import 'core/storage/storage_service.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'core/utils/app_utils.dart';
+import 'core/utils/artwork_quality.dart';
 import 'core/utils/localized_text.dart';
 import 'core/providers/update_provider.dart';
 import 'core/widgets/update_dialog.dart';
@@ -32,13 +33,6 @@ import 'core/account/account_providers.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
-
-  // Startup budget for full-resolution artwork; a single poster can take
-  // several MB, so the cache gets room to hold a screenful of them. The
-  // high-quality posters setting lowers this again when it is turned off.
-  PaintingBinding.instance.imageCache
-    ..maximumSize = 400
-    ..maximumSizeBytes = 256 * 1024 * 1024; // 256 MB
 
   // Silence logs in release mode
   if (kReleaseMode) {
@@ -72,7 +66,6 @@ void main() async {
   AppUtils.setRestartFunction(() => runApp(const AppRoot()));
   runApp(const AppRoot());
 }
-
 
 /// iOS does not expose touches that begin inside the system keyboard window to
 /// Flutter. This lightweight edge gesture mirrors the native "pull keyboard
@@ -117,7 +110,8 @@ class _IosKeyboardEdgeSwipeDismissState
 
     _pointer = event.pointer;
     _start = event.position;
-    _eligible = hasEditableFocus &&
+    _eligible =
+        hasEditableFocus &&
         distanceAboveKeyboard >= 0 &&
         distanceAboveKeyboard <= _activationBand;
   }
@@ -126,8 +120,8 @@ class _IosKeyboardEdgeSwipeDismissState
     if (!_eligible || event.pointer != _pointer || _start == null) return;
 
     final delta = event.position - _start!;
-    final isLightDownwardSwipe = delta.dy >= _dismissDistance &&
-        delta.dy > delta.dx.abs() * 0.65;
+    final isLightDownwardSwipe =
+        delta.dy >= _dismissDistance && delta.dy > delta.dx.abs() * 0.65;
     if (!isLightDownwardSwipe) return;
 
     _eligible = false;
@@ -177,6 +171,10 @@ class _AppRootState extends State<AppRoot> {
             if (kDebugMode) debugPrint("Error setting high refresh rate: $e");
           }),
       ]);
+
+      // Image widgets read the artwork quality switch directly, so publish it
+      // (and the matching image cache budget) before the first screen paints.
+      applyArtworkQuality(_storageService.isHighQualityPostersEnabled());
 
       if (Platform.isMacOS || Platform.isWindows) {
         final alwaysOnTop = _storageService.isAlwaysOnTop();
@@ -360,7 +358,6 @@ class _MyAppState extends ConsumerState<MyApp>
     }
   }
 
-
   Future<void> _toggleFullscreen() async {
     if (!(Platform.isMacOS || Platform.isWindows)) return;
     try {
@@ -451,8 +448,7 @@ class _MyAppState extends ConsumerState<MyApp>
               );
             }
 
-            if (!kIsWeb &&
-                (Platform.isWindows || Platform.isMacOS)) {
+            if (!kIsWeb && (Platform.isWindows || Platform.isMacOS)) {
               final isMac = Platform.isMacOS;
               if (!isMac) {
                 result = Stack(
@@ -580,7 +576,9 @@ class _MyAppState extends ConsumerState<MyApp>
                   ),
                   PlatformMenuItem(
                     label: alwaysOnTop
-                        ? (isArabic ? 'إلغاء البقاء في المقدمة' : 'Disable Stay on Top')
+                        ? (isArabic
+                              ? 'إلغاء البقاء في المقدمة'
+                              : 'Disable Stay on Top')
                         : (isArabic ? 'البقاء في المقدمة' : 'Stay on Top'),
                     shortcut: const SingleActivator(
                       LogicalKeyboardKey.keyT,
@@ -691,7 +689,11 @@ class LaunchErrorApp extends StatelessWidget {
                       ),
                       icon: const Icon(Icons.restore),
                       label: Text(
-                        appText(context, english: 'Reset Preferences', arabic: 'إعادة ضبط التفضيلات'),
+                        appText(
+                          context,
+                          english: 'Reset Preferences',
+                          arabic: 'إعادة ضبط التفضيلات',
+                        ),
                       ),
                       onPressed: () async {
                         await storageService.clearPreferences();

@@ -152,12 +152,6 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settings;
 
-  /// No description provided for @extensions.
-  ///
-  /// In en, this message translates to:
-  /// **'Extensions'**
-  String get extensions;
-
   /// No description provided for @updateAvailable.
   ///
   /// In en, this message translates to:
@@ -302,35 +296,11 @@ abstract class AppLocalizations {
   /// **'DoH Provider'**
   String get dohProvider;
 
-  /// No description provided for @githubProxy.
-  ///
-  /// In en, this message translates to:
-  /// **'GitHub Proxy'**
-  String get githubProxy;
-
-  /// No description provided for @githubProxySubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Route extension downloads through jsDelivr to bypass ISP blocks.'**
-  String get githubProxySubtitle;
-
-  /// No description provided for @manageExtensions.
-  ///
-  /// In en, this message translates to:
-  /// **'Manage Extensions'**
-  String get manageExtensions;
-
   /// No description provided for @appData.
   ///
   /// In en, this message translates to:
   /// **'App Data'**
   String get appData;
-
-  /// No description provided for @resetDataKeepExtensions.
-  ///
-  /// In en, this message translates to:
-  /// **'Reset Data (Keep Extensions)'**
-  String get resetDataKeepExtensions;
 
   /// No description provided for @developer.
   ///
@@ -836,12 +806,6 @@ abstract class AppLocalizations {
   /// **'Off'**
   String get off;
 
-  /// No description provided for @installRemoveProviders.
-  ///
-  /// In en, this message translates to:
-  /// **'Install or remove providers'**
-  String get installRemoveProviders;
-
   /// No description provided for @resetDataSubtitle.
   ///
   /// In en, this message translates to:
@@ -1268,132 +1232,6 @@ abstract class AppLocalizations {
   /// **'Failed to load subtitles. Please try again.'**
   String get failedToLoadSubtitles;
 
-  /// No description provided for @noReposFound.
-  ///
-  /// In en, this message translates to:
-  /// **'No repositories or plugins found'**
-  String get noReposFound;
-
-  /// No description provided for @downloadAllProviders.
-  ///
-  /// In en, this message translates to:
-  /// **'Download All'**
-  String get downloadAllProviders;
-
-  /// No description provided for @removeRepository.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove Repository'**
-  String get removeRepository;
-
-  /// No description provided for @addRepo.
-  ///
-  /// In en, this message translates to:
-  /// **'Add Repo'**
-  String get addRepo;
-
-  /// No description provided for @extensionsNotInRepos.
-  ///
-  /// In en, this message translates to:
-  /// **'Extensions Not in Repositories'**
-  String get extensionsNotInRepos;
-
-  /// No description provided for @noLongerInRepo.
-  ///
-  /// In en, this message translates to:
-  /// **'No longer listed in any repository'**
-  String get noLongerInRepo;
-
-  /// No description provided for @addRepoToBrowse.
-  ///
-  /// In en, this message translates to:
-  /// **'Add a repository to browse and update plugins'**
-  String get addRepoToBrowse;
-
-  /// No description provided for @debugExtensions.
-  ///
-  /// In en, this message translates to:
-  /// **'Debug Extensions'**
-  String get debugExtensions;
-
-  /// No description provided for @removeRepoConfirm.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove {repoName}?'**
-  String removeRepoConfirm(String repoName);
-
-  /// No description provided for @removeRepoWarning.
-  ///
-  /// In en, this message translates to:
-  /// **'This will remove the repository and uninstall ALL its plugin.'**
-  String get removeRepoWarning;
-
-  /// No description provided for @addRepository.
-  ///
-  /// In en, this message translates to:
-  /// **'Add Repository'**
-  String get addRepository;
-
-  /// No description provided for @repoUrlOrShortcode.
-  ///
-  /// In en, this message translates to:
-  /// **'Repository URL or Shortcode'**
-  String get repoUrlOrShortcode;
-
-  /// No description provided for @assetPlugin.
-  ///
-  /// In en, this message translates to:
-  /// **'Asset Plugin'**
-  String get assetPlugin;
-
-  /// No description provided for @installed.
-  ///
-  /// In en, this message translates to:
-  /// **'Installed'**
-  String get installed;
-
-  /// No description provided for @repositories.
-  ///
-  /// In en, this message translates to:
-  /// **'Repositories'**
-  String get repositories;
-
-  /// No description provided for @noExtensionsInstalled.
-  ///
-  /// In en, this message translates to:
-  /// **'No Extensions Installed'**
-  String get noExtensionsInstalled;
-
-  /// No description provided for @browseRepositoriesToInstall.
-  ///
-  /// In en, this message translates to:
-  /// **'Browse the Repositories tab to discover and install extensions.'**
-  String get browseRepositoriesToInstall;
-
-  /// No description provided for @browseRepositories.
-  ///
-  /// In en, this message translates to:
-  /// **'Browse Repositories'**
-  String get browseRepositories;
-
-  /// No description provided for @addRepoDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Add a repository URL or shortcode to discover and install extension plugins.'**
-  String get addRepoDescription;
-
-  /// No description provided for @updateTo.
-  ///
-  /// In en, this message translates to:
-  /// **'Update to {version}'**
-  String updateTo(String version);
-
-  /// No description provided for @install.
-  ///
-  /// In en, this message translates to:
-  /// **'Install'**
-  String get install;
-
   /// No description provided for @error.
   ///
   /// In en, this message translates to:
@@ -1405,12 +1243,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'OK'**
   String get ok;
-
-  /// No description provided for @pluginSettings.
-  ///
-  /// In en, this message translates to:
-  /// **'{pluginName} Settings'**
-  String pluginSettings(String pluginName);
 
   /// No description provided for @movies.
   ///
@@ -1441,12 +1273,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'DEBUG'**
   String get debug;
-
-  /// No description provided for @extensionsUpdated.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{Updated 1 extension} other{Updated {count} extensions}}'**
-  String extensionsUpdated(num count);
 
   /// No description provided for @invalidNavigation.
   ///
@@ -1628,12 +1454,6 @@ abstract class AppLocalizations {
   /// **'Select a local torrent file to play'**
   String get streamTorrentSubtitle;
 
-  /// No description provided for @loadPluginFromAssets.
-  ///
-  /// In en, this message translates to:
-  /// **'Load plugin from assets'**
-  String get loadPluginFromAssets;
-
   /// No description provided for @enterVideoUrlHint.
   ///
   /// In en, this message translates to:
@@ -1801,18 +1621,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No plugins installed'**
   String get noPluginsInstalled;
-
-  /// No description provided for @noPluginsMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Install extensions to browse and stream content.'**
-  String get noPluginsMessage;
-
-  /// No description provided for @goToExtensions.
-  ///
-  /// In en, this message translates to:
-  /// **'Go to Extensions'**
-  String get goToExtensions;
 
   /// No description provided for @availableSources.
   ///
@@ -2523,6 +2331,7 @@ class _AppLocalizationsDelegate
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
+  // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
     case 'ar':
       return AppLocalizationsAr();
@@ -2531,7 +2340,9 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   }
 
   throw FlutterError(
-    'AppLocalizations.delegate failed to load unsupported locale "$locale". '
-    'Only Arabic and English are supported.',
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
   );
 }

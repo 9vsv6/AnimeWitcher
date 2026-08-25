@@ -13,6 +13,7 @@ import 'package:skystream/features/comments/presentation/animewitcher_comments_s
 import 'package:skystream/core/storage/history_repository.dart';
 import 'package:skystream/core/storage/episode_watch_repository.dart';
 import 'package:skystream/core/services/download_service.dart';
+import 'package:skystream/core/utils/artwork_quality.dart';
 import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
@@ -29,7 +30,7 @@ import '../../../../l10n/generated/app_localizations.dart';
 /// `{series} - {episode}` for download dialogs, keeping the name of numberless
 /// rows (specials, OVAs, مترجم/مدبلج) instead of an empty trailing dash.
 String _downloadDialogTitle(MultimediaItem parentItem, Episode episode) {
-  final label = episodeIdentityLabel(
+  final label = formatEpisodeLabel(
     episode: episode.episode,
     isArabic: true,
     title: episode.name,
@@ -358,13 +359,15 @@ class EpisodeCard extends HookConsumerWidget {
                             const SizedBox(height: 2),
                             Text(
                               episodeTitle,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w500,
-                                color: theme.colorScheme.onSurfaceVariant.withValues(
-                                  alpha: isWatched ? 0.55 : 0.72,
-                                ),
-                                height: 1.25,
-                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.colorScheme.onSurfaceVariant
+                                        .withValues(
+                                          alpha: isWatched ? 0.55 : 0.72,
+                                        ),
+                                    height: 1.25,
+                                  ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -469,7 +472,8 @@ class EpisodeCard extends HookConsumerWidget {
     if (commentsTarget == null) return downloadAction;
 
     final commentsButton = IconButton(
-      tooltip: Localizations.localeOf(context).languageCode.toLowerCase() == 'ar'
+      tooltip:
+          Localizations.localeOf(context).languageCode.toLowerCase() == 'ar'
           ? 'تعليقات الحلقة'
           : 'Episode comments',
       icon: Icon(
@@ -632,19 +636,23 @@ class EpisodeCard extends HookConsumerWidget {
       if (imageUrl == null || imageUrl.isEmpty) {
         return const ThumbnailErrorPlaceholder();
       }
-      return CachedNetworkImage(
-        imageUrl: imageUrl,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        filterQuality: FilterQuality.medium,
-        fadeInDuration: Duration.zero,
-        fadeOutDuration: Duration.zero,
-        useOldImageOnUrlChange: true,
-        placeholder: (_, _) => ColoredBox(color: placeholderColor),
-        errorWidget: (_, _, _) => episodePosterUrl != null
-            ? ColoredBox(color: placeholderColor)
-            : const ThumbnailErrorPlaceholder(),
+      return ArtworkDecode(
+        paintedWidth: 140,
+        builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
+          imageUrl: imageUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          memCacheWidth: decodeWidth,
+          filterQuality: FilterQuality.medium,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          useOldImageOnUrlChange: true,
+          placeholder: (_, _) => ColoredBox(color: placeholderColor),
+          errorWidget: (_, _, _) => episodePosterUrl != null
+              ? ColoredBox(color: placeholderColor)
+              : const ThumbnailErrorPlaceholder(),
+        ),
       );
     }
 

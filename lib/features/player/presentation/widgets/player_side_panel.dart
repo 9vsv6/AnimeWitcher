@@ -16,8 +16,10 @@ import '../../../details/presentation/details_controller.dart';
 import '../../../details/presentation/playback_launcher.dart';
 import 'hotstar_player_style.dart';
 
+import 'package:skystream/core/utils/artwork_quality.dart';
 import 'package:skystream/core/utils/episode_label.dart';
 import 'package:skystream/core/utils/episode_order.dart';
+
 const List<Shadow> _kGlassTextShadow = [
   Shadow(color: Colors.black54, offset: Offset(0, 1.5), blurRadius: 3.0),
 ];
@@ -321,9 +323,7 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
     // the canonical episode URL. Use the episode identity stored by the
     // controller so the active-row highlight follows the episode being played.
     final currentUrl =
-        ref.watch(
-          playerControllerProvider.select((s) => s.activeEpisodeUrl),
-        ) ??
+        ref.watch(playerControllerProvider.select((s) => s.activeEpisodeUrl)) ??
         ref.read(playerControllerProvider.notifier).currentEpisodeUrl;
     var episodes = widget.item.episodes ?? const <Episode>[];
     final currentEpisode = episodes.firstWhereOrNull(
@@ -557,8 +557,10 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                               child: Text(
                                 formatEpisodePrimaryLabel(
                                   episode: ep.episode,
-                                  isArabic: Localizations.localeOf(context)
-                                          .languageCode ==
+                                  isArabic:
+                                      Localizations.localeOf(
+                                        context,
+                                      ).languageCode ==
                                       'ar',
                                   isFinal: ep.isFinal,
                                   serverName: ep.serverName,
@@ -733,73 +735,81 @@ class _EpisodeThumbnail extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               if (hasPoster)
-                CachedNetworkImage(
-                  imageUrl: posterUrl!,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.medium,
-                  fadeInDuration: Duration.zero,
-                  fadeOutDuration: Duration.zero,
-                  placeholder: (_, _) => const _ThumbPlaceholder(),
-                  errorWidget: (_, _, _) => const _ThumbPlaceholder(),
+                ArtworkDecode(
+                  paintedWidth: 104,
+                  builder: (BuildContext context, int? decodeWidth) =>
+                      CachedNetworkImage(
+                        imageUrl: posterUrl!,
+                        fit: BoxFit.cover,
+                        memCacheWidth: decodeWidth,
+                        filterQuality: FilterQuality.medium,
+                        fadeInDuration: Duration.zero,
+                        fadeOutDuration: Duration.zero,
+                        placeholder: (_, _) => const _ThumbPlaceholder(),
+                        errorWidget: (_, _, _) => const _ThumbPlaceholder(),
+                      ),
                 )
               else
                 const _ThumbPlaceholder(),
-            if (isWatched)
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.28),
-                ),
-              ),
-            if (isCurrent)
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.4),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.play_arrow_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-              ),
-            if (isWatched)
-              Positioned(
-                top: 5,
-                left: 5,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              if (isWatched)
+                DecoratedBox(
                   decoration: BoxDecoration(
-                    color: HotstarPlayerStyle.accent.withValues(alpha: 0.94),
-                    borderRadius: BorderRadius.circular(4),
+                    color: Colors.black.withValues(alpha: 0.28),
                   ),
-                  child: Text(
-                    watchedLabel,
-                    style: const TextStyle(
+                ),
+              if (isCurrent)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.4),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.play_arrow_rounded,
                       color: Colors.white,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w800,
-                      height: 1.15,
-                      shadows: _kGlassTextShadow,
+                      size: 28,
                     ),
                   ),
                 ),
-              ),
-            if (hasProgress)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 3,
-                  backgroundColor: Colors.white24,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    HotstarPlayerStyle.accent,
+              if (isWatched)
+                Positioned(
+                  top: 5,
+                  left: 5,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: HotstarPlayerStyle.accent.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      watchedLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                        shadows: _kGlassTextShadow,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-          ],
+              if (hasProgress)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 3,
+                    backgroundColor: Colors.white24,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      HotstarPlayerStyle.accent,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }

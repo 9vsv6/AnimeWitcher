@@ -36,9 +36,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
-  String get extensions => 'Extensions';
-
-  @override
   String get updateAvailable => 'Update Available';
 
   @override
@@ -111,20 +108,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dohProvider => 'DoH Provider';
 
   @override
-  String get githubProxy => 'GitHub Proxy';
-
-  @override
-  String get githubProxySubtitle =>
-      'Route extension downloads through jsDelivr to bypass ISP blocks.';
-
-  @override
-  String get manageExtensions => 'Manage Extensions';
-
-  @override
   String get appData => 'App Data';
-
-  @override
-  String get resetDataKeepExtensions => 'Reset Data (Keep Extensions)';
 
   @override
   String get developer => 'Developer';
@@ -394,9 +378,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get off => 'Off';
 
   @override
-  String get installRemoveProviders => 'Install or remove providers';
-
-  @override
   String get resetDataSubtitle => 'Clear settings & database, keep plugin';
 
   @override
@@ -625,85 +606,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Failed to load subtitles. Please try again.';
 
   @override
-  String get noReposFound => 'No repositories or plugins found';
-
-  @override
-  String get downloadAllProviders => 'Download All';
-
-  @override
-  String get removeRepository => 'Remove Repository';
-
-  @override
-  String get addRepo => 'Add Repo';
-
-  @override
-  String get extensionsNotInRepos => 'Extensions Not in Repositories';
-
-  @override
-  String get noLongerInRepo => 'No longer listed in any repository';
-
-  @override
-  String get addRepoToBrowse => 'Add a repository to browse and update plugins';
-
-  @override
-  String get debugExtensions => 'Debug Extensions';
-
-  @override
-  String removeRepoConfirm(String repoName) {
-    return 'Remove $repoName?';
-  }
-
-  @override
-  String get removeRepoWarning =>
-      'This will remove the repository and uninstall ALL its plugin.';
-
-  @override
-  String get addRepository => 'Add Repository';
-
-  @override
-  String get repoUrlOrShortcode => 'Repository URL or Shortcode';
-
-  @override
-  String get assetPlugin => 'Asset Plugin';
-
-  @override
-  String get installed => 'Installed';
-
-  @override
-  String get repositories => 'Repositories';
-
-  @override
-  String get noExtensionsInstalled => 'No Extensions Installed';
-
-  @override
-  String get browseRepositoriesToInstall =>
-      'Browse the Repositories tab to discover and install extensions.';
-
-  @override
-  String get browseRepositories => 'Browse Repositories';
-
-  @override
-  String get addRepoDescription =>
-      'Add a repository URL or shortcode to discover and install extension plugins.';
-
-  @override
-  String updateTo(String version) {
-    return 'Update to $version';
-  }
-
-  @override
-  String get install => 'Install';
-
-  @override
   String get error => 'Error';
 
   @override
   String get ok => 'OK';
-
-  @override
-  String pluginSettings(String pluginName) {
-    return '$pluginName Settings';
-  }
 
   @override
   String get movies => 'Movies';
@@ -719,17 +625,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get debug => 'DEBUG';
-
-  @override
-  String extensionsUpdated(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Updated $count extensions',
-      one: 'Updated 1 extension',
-    );
-    return '$_temp0';
-  }
 
   @override
   String get invalidNavigation => 'Invalid navigation. Please go back.';
@@ -843,9 +738,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get streamTorrentSubtitle => 'Select a local torrent file to play';
 
   @override
-  String get loadPluginFromAssets => 'Load plugin from assets';
-
-  @override
   String get enterVideoUrlHint => 'Enter video URL (http, magnet, etc.)';
 
   @override
@@ -944,13 +836,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noPluginsInstalled => 'No plugins installed';
-
-  @override
-  String get noPluginsMessage =>
-      'Install extensions to browse and stream content.';
-
-  @override
-  String get goToExtensions => 'Go to Extensions';
 
   @override
   String get availableSources => 'Available Sources';

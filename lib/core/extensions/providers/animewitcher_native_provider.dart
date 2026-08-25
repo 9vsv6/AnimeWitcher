@@ -962,8 +962,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
           hasFinalEpisodeSuffix(note);
 
       if (episodeNumber > 0 || serverName.isNotEmpty) {
-        episodeBadge = formatCatalogEpisodeBadge(
+        episodeBadge = formatEpisodePrimaryLabel(
           episode: episodeNumber,
+          isArabic: true,
           serverName: serverName.isEmpty ? null : serverName,
           isFinal: isFinal,
         );

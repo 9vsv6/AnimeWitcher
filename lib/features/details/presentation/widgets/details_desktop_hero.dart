@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/utils/artwork_quality.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import 'premium_details_widgets.dart';
@@ -11,6 +12,7 @@ import 'details_layout_widgets.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
 import 'package:skystream/core/services/notification_service.dart';
+
 /// Immersive desktop/TV hero for non-TMDB details.
 ///
 /// Layout: full-viewport backdrop fading via gradients, with metadata
@@ -52,9 +54,7 @@ class DetailsDesktopHero extends ConsumerWidget {
     final scaffoldColor = theme.scaffoldBackgroundColor;
     final textColor = theme.colorScheme.onSurface;
 
-    final providedBannerUrl = AppImageFallbacks.optional(
-      displayItem.bannerUrl,
-    );
+    final providedBannerUrl = AppImageFallbacks.optional(displayItem.bannerUrl);
     final posterUrl = AppImageFallbacks.poster(
       displayItem.posterUrl,
       label: displayItem.title,
@@ -89,31 +89,37 @@ class DetailsDesktopHero extends ConsumerWidget {
               ).createShader(rect);
             },
             blendMode: BlendMode.dstOut,
-            child: CachedNetworkImage(
-              imageUrl: backdropUrl,
-              fit: BoxFit.cover,
-              alignment: Alignment.centerRight,
-              filterQuality: FilterQuality.medium,
-              errorWidget: (_, _, _) {
-                if (providedBannerUrl != null &&
-                    posterUrl != null &&
-                    providedBannerUrl != posterUrl) {
-                  return CachedNetworkImage(
-                    imageUrl: posterUrl,
+            child: ArtworkDecode(
+              paintedWidth: MediaQuery.sizeOf(context).width,
+              builder: (BuildContext context, int? decodeWidth) =>
+                  CachedNetworkImage(
+                    imageUrl: backdropUrl,
                     fit: BoxFit.cover,
                     alignment: Alignment.centerRight,
+                    memCacheWidth: decodeWidth,
                     filterQuality: FilterQuality.medium,
-                    errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
-                      label: displayItem.title,
-                      isBackdrop: true,
-                    ),
-                  );
-                }
-                return ThumbnailErrorPlaceholder(
-                  label: displayItem.title,
-                  isBackdrop: true,
-                );
-              },
+                    errorWidget: (_, _, _) {
+                      if (providedBannerUrl != null &&
+                          posterUrl != null &&
+                          providedBannerUrl != posterUrl) {
+                        return CachedNetworkImage(
+                          imageUrl: posterUrl,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.centerRight,
+                          memCacheWidth: decodeWidth,
+                          filterQuality: FilterQuality.medium,
+                          errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                            label: displayItem.title,
+                            isBackdrop: true,
+                          ),
+                        );
+                      }
+                      return ThumbnailErrorPlaceholder(
+                        label: displayItem.title,
+                        isBackdrop: true,
+                      );
+                    },
+                  ),
             ),
           ),
         ),
@@ -181,17 +187,25 @@ class DetailsDesktopHero extends ConsumerWidget {
                             child: SizedBox(
                               width: 180,
                               height: 270,
-                              child: CachedNetworkImage(
-                                imageUrl: posterUrl,
-                                fit: BoxFit.cover,
-                                filterQuality: FilterQuality.medium,
-                                placeholder: (_, _) => ColoredBox(
-                                  color: theme.colorScheme.surfaceContainerHighest,
-                                ),
-                                errorWidget: (_, _, _) =>
-                                    ThumbnailErrorPlaceholder(
-                                      label: displayItem.title,
-                                    ),
+                              child: ArtworkDecode(
+                                paintedWidth: 180,
+                                builder:
+                                    (BuildContext context, int? decodeWidth) =>
+                                        CachedNetworkImage(
+                                          imageUrl: posterUrl,
+                                          fit: BoxFit.cover,
+                                          memCacheWidth: decodeWidth,
+                                          filterQuality: FilterQuality.medium,
+                                          placeholder: (_, _) => ColoredBox(
+                                            color: theme
+                                                .colorScheme
+                                                .surfaceContainerHighest,
+                                          ),
+                                          errorWidget: (_, _, _) =>
+                                              ThumbnailErrorPlaceholder(
+                                                label: displayItem.title,
+                                              ),
+                                        ),
                               ),
                             ),
                           ),
@@ -206,15 +220,23 @@ class DetailsDesktopHero extends ConsumerWidget {
                                 behavior: HitTestBehavior.opaque,
                                 onLongPress: () => _copyAnimeTitle(context),
                                 child: displayItem.logoUrl != null
-                                    ? CachedNetworkImage(
-                                        imageUrl: displayItem.logoUrl!,
-                                        height: 200,
-                                        alignment: Alignment.centerLeft,
-                                        fit: BoxFit.contain,
-                                        placeholder: (_, _) =>
-                                            _buildTitle(textColor),
-                                        errorWidget: (_, _, _) =>
-                                            _buildTitle(textColor),
+                                    ? ArtworkDecode(
+                                        paintedWidth: 400,
+                                        builder:
+                                            (
+                                              BuildContext context,
+                                              int? decodeWidth,
+                                            ) => CachedNetworkImage(
+                                              imageUrl: displayItem.logoUrl!,
+                                              height: 200,
+                                              alignment: Alignment.centerLeft,
+                                              fit: BoxFit.contain,
+                                              memCacheWidth: decodeWidth,
+                                              placeholder: (_, _) =>
+                                                  _buildTitle(textColor),
+                                              errorWidget: (_, _, _) =>
+                                                  _buildTitle(textColor),
+                                            ),
                                       )
                                     : _buildTitle(textColor),
                               ),
@@ -236,7 +258,9 @@ class DetailsDesktopHero extends ConsumerWidget {
                               const SizedBox(height: 32),
 
                               ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 400),
+                                constraints: const BoxConstraints(
+                                  maxWidth: 400,
+                                ),
                                 child: DetailsActionButtons(
                                   item: baseItem,
                                   details: details,
