@@ -16,7 +16,9 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/core/services/notification_service.dart';
 
 import 'package:skystream/core/utils/localized_text.dart';
+import 'package:skystream/core/utils/artwork_quality.dart';
 import 'package:skystream/core/utils/episode_label.dart';
+
 class ContinueWatchingCard extends ConsumerStatefulWidget {
   final HistoryItem historyItem;
   final double width;
@@ -126,12 +128,16 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
       if (index >= imageCandidates.length) {
         return const SizedBox.shrink();
       }
-      return CachedNetworkImage(
-        imageUrl: imageCandidates[index],
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.medium,
-        placeholder: (_, _) => const SizedBox.shrink(),
-        errorWidget: (_, _, _) => buildImageCandidate(index + 1),
+      return ArtworkDecode(
+        paintedWidth: widget.width,
+        builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
+          imageUrl: imageCandidates[index],
+          fit: BoxFit.cover,
+          memCacheWidth: decodeWidth,
+          filterQuality: FilterQuality.medium,
+          placeholder: (_, _) => const SizedBox.shrink(),
+          errorWidget: (_, _, _) => buildImageCandidate(index + 1),
+        ),
       );
     }
 
@@ -313,21 +319,21 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                 // Duration badge (bottom-right)
                 if (!isLivestream)
                   // Progress bar (bottom edge)
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: SizedBox(
-                    height: 4,
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      backgroundColor: Colors.transparent,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Colors.white,
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: SizedBox(
+                      height: 4,
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: Colors.transparent,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                ),
 
                 // Bottom info column
                 Positioned(
@@ -371,7 +377,11 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                               ),
                             ),
                             child: Text(
-                              appText(context, english: 'LIVE', arabic: 'مباشر'),
+                              appText(
+                                context,
+                                english: 'LIVE',
+                                arabic: 'مباشر',
+                              ),
                               style: const TextStyle(
                                 color: Colors.red,
                                 fontSize: 10,

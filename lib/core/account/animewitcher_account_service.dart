@@ -2573,7 +2573,6 @@ class AnimeWitcherAccountService {
                             episode: episodeNumber,
                             isArabic: true,
                             isFinal: hasFinalEpisodeSuffix(episodeTitle),
-                            rawName: episodeTitle,
                           )),
                 'anime_name': item.title,
                 'anime_type': item.contentType.name,

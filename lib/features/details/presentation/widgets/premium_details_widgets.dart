@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
+import 'package:skystream/core/utils/artwork_quality.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/shared/widgets/shimmer_placeholder.dart';
@@ -171,10 +172,7 @@ class MetadataBar extends ConsumerWidget {
         .replaceFirst(RegExp(r'[.]$'), '');
   }
 
-  Widget _buildMetadataRow(
-    List<Widget> entries,
-    TextStyle? separatorStyle,
-  ) {
+  Widget _buildMetadataRow(List<Widget> entries, TextStyle? separatorStyle) {
     return Wrap(
       spacing: 8,
       runSpacing: 7,
@@ -209,7 +207,9 @@ class MetadataBar extends ConsumerWidget {
       height: 1.2,
     );
     final separatorStyle = style?.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
+      color: Theme.of(
+        context,
+      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
       fontWeight: FontWeight.w600,
     );
 
@@ -235,11 +235,7 @@ class MetadataBar extends ConsumerWidget {
         : Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.star_rounded,
-                size: 17,
-                color: Colors.amber.shade600,
-              ),
+              Icon(Icons.star_rounded, size: 17, color: Colors.amber.shade600),
               const SizedBox(width: 3),
               Text(ratingValue, style: style),
             ],
@@ -266,9 +262,7 @@ class MetadataBar extends ConsumerWidget {
         if (ageEntry != null) ageEntry,
       ],
     ];
-    final thirdRow = <Widget>[
-      if (ratingEntry != null) ratingEntry,
-    ];
+    final thirdRow = <Widget>[if (ratingEntry != null) ratingEntry];
 
     if (firstRow.isEmpty &&
         secondRow.isEmpty &&
@@ -375,7 +369,9 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
         decoration: BoxDecoration(
           color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.45)),
+          border: Border.all(
+            color: colors.outlineVariant.withValues(alpha: 0.45),
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -418,8 +414,14 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
 
     final days = _remaining.inDays.toString();
     final hours = _remaining.inHours.remainder(24).toString().padLeft(2, '0');
-    final minutes = _remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = _remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final minutes = _remaining.inMinutes
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+    final seconds = _remaining.inSeconds
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
 
     return Container(
       width: double.infinity,
@@ -440,7 +442,11 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
           const SizedBox(height: 10),
           if (_remaining == Duration.zero)
             Text(
-              _detailsText(context, english: 'Airing now', arabic: 'تُعرض الآن'),
+              _detailsText(
+                context,
+                english: 'Airing now',
+                arabic: 'تُعرض الآن',
+              ),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: Theme.of(context).colorScheme.primary,
@@ -682,11 +688,15 @@ class _YoutubeThumbnail extends StatelessWidget {
     if (videoId.isEmpty || index >= _sizes.length) {
       return const Center(child: Icon(Icons.movie_rounded));
     }
-    return CachedNetworkImage(
-      imageUrl: 'https://img.youtube.com/vi/$videoId/${_sizes[index]}.jpg',
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.medium,
-      errorWidget: (_, _, _) => _buildSize(index + 1),
+    return ArtworkDecode(
+      paintedWidth: 240,
+      builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
+        imageUrl: 'https://img.youtube.com/vi/$videoId/${_sizes[index]}.jpg',
+        fit: BoxFit.cover,
+        memCacheWidth: decodeWidth,
+        filterQuality: FilterQuality.medium,
+        errorWidget: (_, _, _) => _buildSize(index + 1),
+      ),
     );
   }
 }
@@ -826,18 +836,25 @@ class RecommendationsCarousel extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        CachedNetworkImage(
-                          imageUrl:
-                              AppImageFallbacks.poster(
-                                item.posterUrl,
-                                label: item.title,
-                              ) ??
-                              '',
-                          fit: BoxFit.cover,
-                          width: cardWidth,
-                          filterQuality: FilterQuality.medium,
-                          errorWidget: (_, _, _) =>
-                              ThumbnailErrorPlaceholder(label: item.title),
+                        ArtworkDecode(
+                          paintedWidth: cardWidth,
+                          builder: (BuildContext context, int? decodeWidth) =>
+                              CachedNetworkImage(
+                                imageUrl:
+                                    AppImageFallbacks.poster(
+                                      item.posterUrl,
+                                      label: item.title,
+                                    ) ??
+                                    '',
+                                fit: BoxFit.cover,
+                                width: cardWidth,
+                                memCacheWidth: decodeWidth,
+                                filterQuality: FilterQuality.medium,
+                                errorWidget: (_, _, _) =>
+                                    ThumbnailErrorPlaceholder(
+                                      label: item.title,
+                                    ),
+                              ),
                         ),
                         Positioned(
                           left: 0,
@@ -885,7 +902,9 @@ class RecommendationsCarousel extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onPrimary,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
                                   fontSize: isLarge ? 12 : 11,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -901,19 +920,20 @@ class RecommendationsCarousel extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.start,
-                            style: (isLarge
-                                    ? Theme.of(context).textTheme.bodyMedium
-                                    : Theme.of(context).textTheme.bodySmall)
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  shadows: const [
-                                    Shadow(
-                                      color: Colors.black,
-                                      blurRadius: 4,
+                            style:
+                                (isLarge
+                                        ? Theme.of(context).textTheme.bodyMedium
+                                        : Theme.of(context).textTheme.bodySmall)
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      shadows: const [
+                                        Shadow(
+                                          color: Colors.black,
+                                          blurRadius: 4,
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
                           ),
                         ),
                       ],

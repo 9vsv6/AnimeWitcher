@@ -9,7 +9,6 @@
   "exploreMovies": "Explore Movies",
   "library": "Library",
   "settings": "Settings",
-  "extensions": "Extensions",
   "updateAvailable": "Update Available",
   "retry": "Retry",
   "factoryReset": "Factory Reset",
@@ -34,11 +33,7 @@
   "network": "Network",
   "dnsOverHttps": "DNS over HTTPS",
   "dohProvider": "DoH Provider",
-  "githubProxy": "GitHub Proxy",
-  "githubProxySubtitle": "Route extension downloads through jsDelivr to bypass ISP blocks.",
-  "manageExtensions": "Manage Extensions",
   "appData": "App Data",
-  "resetDataKeepExtensions": "Reset Data (Keep Extensions)",
   "developer": "Developer",
   "developerOptions": "Developer Options",
   "about": "About",
@@ -171,7 +166,6 @@
   "recommended": "Recommended",
   "on": "On",
   "off": "Off",
-  "installRemoveProviders": "Install or remove providers",
   "resetDataSubtitle": "Clear settings & database, keep plugin",
   "factoryResetSubtitle": "Delete all data, settings, and extensions",
   "developerOptionsSubtitle": "Debug tools & local play",
@@ -257,57 +251,13 @@
   "downloadingApplyingSubtitle": "Downloading & applying subtitle...",
   "failedToDownloadSubtitle": "Failed to download subtitle.",
   "failedToLoadSubtitles": "Failed to load subtitles. Please try again.",
-  "noReposFound": "No repositories or plugins found",
-  "downloadAllProviders": "Download All",
-  "removeRepository": "Remove Repository",
-  "addRepo": "Add Repo",
-  "extensionsNotInRepos": "Extensions Not in Repositories",
-  "noLongerInRepo": "No longer listed in any repository",
-  "addRepoToBrowse": "Add a repository to browse and update plugins",
-  "debugExtensions": "Debug Extensions",
-  "removeRepoConfirm": "Remove {repoName}?",
-  "@removeRepoConfirm": {
-    "placeholders": {
-      "repoName": {
-        "type": "String"
-      }
-    }
-  },
-  "removeRepoWarning": "This will remove the repository and uninstall ALL its plugin.",
-  "addRepository": "Add Repository",
-  "repoUrlOrShortcode": "Repository URL or Shortcode",
-  "assetPlugin": "Asset Plugin",
-  "installed": "Installed",
-  "repositories": "Repositories",
-  "noExtensionsInstalled": "No Extensions Installed",
-  "browseRepositoriesToInstall": "Browse the Repositories tab to discover and install extensions.",
-  "browseRepositories": "Browse Repositories",
-  "addRepoDescription": "Add a repository URL or shortcode to discover and install extension plugins.",
-  "updateTo": "Update to {version}",
-  "@updateTo": {
-    "placeholders": {
-      "version": {
-        "type": "String"
-      }
-    }
-  },
-  "install": "Install",
   "error": "Error",
   "ok": "OK",
-  "pluginSettings": "{pluginName} Settings",
-  "@pluginSettings": {
-    "placeholders": {
-      "pluginName": {
-        "type": "String"
-      }
-    }
-  },
   "movies": "Movies",
   "series": "Series",
   "anime": "Anime",
   "liveStreams": "Live Streams",
   "debug": "DEBUG",
-  "extensionsUpdated": "{count, plural, =1{Updated 1 extension} other{Updated {count} extensions}}",
   "invalidNavigation": "Invalid navigation. Please go back.",
   "startOver": "Start Over",
   "goBack": "Go Back",
@@ -389,7 +339,6 @@
   "streamUrlSubtitle": "Play from network URL",
   "streamTorrent": "Stream torrent",
   "streamTorrentSubtitle": "Select a local torrent file to play",
-  "loadPluginFromAssets": "Load plugin from assets",
   "enterVideoUrlHint": "Enter video URL (http, magnet, etc.)",
   "networkStream": "Network Stream",
   "removedFromHistory": "Removed {title} from history",
@@ -470,8 +419,6 @@
   "tmdb": "TMDB",
   "selectSourceForPlayer": "Select Source for {playerName}",
   "noPluginsInstalled": "No plugins installed",
-  "noPluginsMessage": "Install extensions to browse and stream content.",
-  "goToExtensions": "Go to Extensions",
   "availableSources": "Available Sources",
   "seasons": "Seasons",
   "episodes": "Episodes",

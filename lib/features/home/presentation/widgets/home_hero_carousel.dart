@@ -5,6 +5,7 @@ import '../../../../core/router/app_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import '../../../../core/utils/artwork_quality.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
@@ -557,14 +558,22 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
             bottom: -bleed - parallaxOffset,
             left: 0,
             right: 0,
-            child: CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.medium,
-              placeholder: (context, url) =>
-                  Container(color: theme.colorScheme.surfaceContainerHighest),
-              errorWidget: (_, _, _) =>
-                  ThumbnailErrorPlaceholder(label: title, isBackdrop: true),
+            child: ArtworkDecode(
+              paintedWidth: MediaQuery.sizeOf(context).width,
+              builder: (BuildContext context, int? decodeWidth) =>
+                  CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    memCacheWidth: decodeWidth,
+                    filterQuality: FilterQuality.medium,
+                    placeholder: (context, url) => Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                    ),
+                    errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                      label: title,
+                      isBackdrop: true,
+                    ),
+                  ),
             ),
           ),
 
@@ -760,18 +769,22 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         ),
       );
     }
-    return CachedNetworkImage(
-      imageUrl: logoUrl,
-      height: logoHeight,
-      width: logoWidth,
-      fit: BoxFit.contain,
-      alignment: Alignment.bottomCenter,
-      placeholder: (context, url) =>
-          SizedBox(height: logoHeight, width: logoWidth),
-      errorWidget: (context, url, error) => _buildTitleFallback(
-        title,
-        isDesktop: isDesktop,
-        compactLandscape: compactLandscape,
+    return ArtworkDecode(
+      paintedWidth: logoWidth,
+      builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
+        imageUrl: logoUrl,
+        height: logoHeight,
+        width: logoWidth,
+        memCacheWidth: decodeWidth,
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomCenter,
+        placeholder: (context, url) =>
+            SizedBox(height: logoHeight, width: logoWidth),
+        errorWidget: (context, url, error) => _buildTitleFallback(
+          title,
+          isDesktop: isDesktop,
+          compactLandscape: compactLandscape,
+        ),
       ),
     );
   }

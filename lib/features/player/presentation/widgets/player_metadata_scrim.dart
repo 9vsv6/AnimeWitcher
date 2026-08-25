@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/utils/artwork_quality.dart';
 import '../../../../core/utils/episode_label.dart';
 import 'hotstar_player_style.dart';
 
@@ -337,13 +338,17 @@ class PlayerMetadataScrimState extends State<PlayerMetadataScrim>
         maxHeight: logoHeight,
         maxWidth: double.infinity,
       ),
-      child: CachedNetworkImage(
-        imageUrl: logoUrl,
-        height: logoHeight,
-        alignment: Alignment.centerLeft,
-        fit: BoxFit.contain,
-        placeholder: (_, _) => _titleText(item.title),
-        errorWidget: (_, _, _) => _titleText(item.title),
+      child: ArtworkDecode(
+        paintedWidth: 400,
+        builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
+          imageUrl: logoUrl,
+          height: logoHeight,
+          alignment: Alignment.centerLeft,
+          fit: BoxFit.contain,
+          memCacheWidth: decodeWidth,
+          placeholder: (_, _) => _titleText(item.title),
+          errorWidget: (_, _, _) => _titleText(item.title),
+        ),
       ),
     );
   }
@@ -385,7 +390,7 @@ class PlayerMetadataScrimState extends State<PlayerMetadataScrim>
       if (widget.isSeries && ep.episode > 0) {
         parts.add('S${ep.season}:E${ep.episode}');
       } else {
-        final label = episodeIdentityLabel(
+        final label = formatEpisodeLabel(
           episode: ep.episode,
           isArabic: true,
           title: ep.name,

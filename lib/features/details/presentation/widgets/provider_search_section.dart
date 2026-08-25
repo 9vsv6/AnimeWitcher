@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
 import 'package:skystream/core/extensions/base_provider.dart';
 import 'package:skystream/core/extensions/extension_manager.dart';
+import 'package:skystream/core/utils/artwork_quality.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/features/search/presentation/search_provider.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
@@ -203,19 +204,27 @@ class _ProviderSearchSectionState extends ConsumerState<ProviderSearchSection> {
                               SizedBox(
                                 width: 90,
                                 height: double.infinity,
-                                child: CachedNetworkImage(
-                                  imageUrl:
-                                      AppImageFallbacks.poster(
-                                        item.posterUrl,
-                                        label: item.title,
-                                      ) ??
-                                      '',
-                                  fit: BoxFit.cover,
-                                  filterQuality: FilterQuality.medium,
-                                  placeholder: (_, _) =>
-                                      ShimmerPlaceholder(borderRadius: 8),
-                                  errorWidget: (_, _, _) =>
-                                      const ThumbnailErrorPlaceholder(),
+                                child: ArtworkDecode(
+                                  paintedWidth: 90,
+                                  builder:
+                                      (
+                                        BuildContext context,
+                                        int? decodeWidth,
+                                      ) => CachedNetworkImage(
+                                        imageUrl:
+                                            AppImageFallbacks.poster(
+                                              item.posterUrl,
+                                              label: item.title,
+                                            ) ??
+                                            '',
+                                        fit: BoxFit.cover,
+                                        memCacheWidth: decodeWidth,
+                                        filterQuality: FilterQuality.medium,
+                                        placeholder: (_, _) =>
+                                            ShimmerPlaceholder(borderRadius: 8),
+                                        errorWidget: (_, _, _) =>
+                                            const ThumbnailErrorPlaceholder(),
+                                      ),
                                 ),
                               ),
                               Expanded(

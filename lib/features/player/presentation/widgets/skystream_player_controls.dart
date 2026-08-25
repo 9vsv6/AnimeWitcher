@@ -823,7 +823,7 @@ class SkyStreamPlayerControlsState
   String? _buildEpisodeLine(BuildContext context, Episode? episode) {
     if (episode == null) return null;
     // Specials, OVAs and مترجم/مدبلج rows have no number but still have a name.
-    final label = episodeIdentityLabel(
+    final label = formatEpisodeLabel(
       episode: episode.episode,
       isArabic:
           Localizations.localeOf(context).languageCode.toLowerCase() == 'ar',

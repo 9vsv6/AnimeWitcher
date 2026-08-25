@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/providers/anime_data_source_settings_provider.dart';
+import '../../core/utils/artwork_quality.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import 'cards_wrapper.dart';
 import 'shimmer_placeholder.dart';
 import 'thumbnail_error_placeholder.dart';
 
-class MultimediaCard extends ConsumerWidget {
+class MultimediaCard extends StatelessWidget {
   final String? imageUrl;
   final String title;
   final VoidCallback onTap;
@@ -41,12 +40,7 @@ class MultimediaCard extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final highQuality = ref.watch(
-      animeDataSourceSettingsProvider.select(
-        (settings) => settings.highQualityPosters,
-      ),
-    );
+  Widget build(BuildContext context) {
     final isHandsetLandscape = context.isHandsetLandscape;
     final isDesktopLandscape = context.isDesktopLandscape;
     final isDesktop = context.isDesktop;
@@ -72,17 +66,14 @@ class MultimediaCard extends ConsumerWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: hasImageUrl
-            ? _buildPoster(
-                context,
-                normalizedImageUrl,
-                // Standard quality keeps the old decode budget so cards stay
-                // light; high quality decodes the poster as it was served.
-                decodeWidth: highQuality
-                    ? null
-                    : (cardWidth * MediaQuery.devicePixelRatioOf(context))
-                          .ceil()
-                          .clamp(160, 1024)
-                          .toInt(),
+            ? ArtworkDecode(
+                paintedWidth: cardWidth,
+                builder: (BuildContext context, int? decodeWidth) =>
+                    _buildPoster(
+                      context,
+                      normalizedImageUrl,
+                      decodeWidth: decodeWidth,
+                    ),
               )
             : ThumbnailErrorPlaceholder(label: title),
       ),
@@ -93,11 +84,7 @@ class MultimediaCard extends ConsumerWidget {
       fontSize: effectiveCompact ? 14 : (isDesktop ? 22 : 14),
       fontWeight: FontWeight.w500,
       shadows: const [
-        Shadow(
-          color: Colors.black87,
-          blurRadius: 4,
-          offset: Offset(0, 1),
-        ),
+        Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
       ],
     );
 
@@ -150,10 +137,7 @@ class MultimediaCard extends ConsumerWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            colors.surfaceContainerHighest,
-            colors.surface,
-          ],
+          colors: [colors.surfaceContainerHighest, colors.surface],
         ),
       ),
       child: Center(

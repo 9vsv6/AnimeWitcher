@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/utils/artwork_quality.dart';
 import '../../../../core/account/animewitcher_comment_models.dart';
 import '../../../comments/presentation/animewitcher_comments_screen.dart';
 
@@ -81,7 +82,9 @@ class NewsCard extends StatelessWidget {
                           _NewsActionIcon(
                             icon: Icons.chat_bubble_outline_rounded,
                             onTap: () {
-                              final target = animeWitcherNewsCommentTarget(item);
+                              final target = animeWitcherNewsCommentTarget(
+                                item,
+                              );
                               Navigator.of(context).push(
                                 MaterialPageRoute<void>(
                                   builder: (_) => AnimeWitcherCommentsScreen(
@@ -153,16 +156,20 @@ class NewsCard extends StatelessWidget {
     final url = item.imageUrl.trim();
     if (url.isEmpty) return _imageFallback(colors);
 
-    return CachedNetworkImage(
-      imageUrl: url,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      filterQuality: FilterQuality.medium,
-      fadeInDuration: const Duration(milliseconds: 120),
-      fadeOutDuration: Duration.zero,
-      placeholder: (context, url) => _imageFallback(colors),
-      errorWidget: (context, url, error) => _imageFallback(colors),
+    return ArtworkDecode(
+      paintedWidth: compact ? 200 : MediaQuery.sizeOf(context).width,
+      builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        memCacheWidth: decodeWidth,
+        filterQuality: FilterQuality.medium,
+        fadeInDuration: const Duration(milliseconds: 120),
+        fadeOutDuration: Duration.zero,
+        placeholder: (context, url) => _imageFallback(colors),
+        errorWidget: (context, url, error) => _imageFallback(colors),
+      ),
     );
   }
 

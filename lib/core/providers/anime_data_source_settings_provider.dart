@@ -1,7 +1,7 @@
-import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../storage/settings_repository.dart';
+import '../utils/artwork_quality.dart';
 
 class AnimeDataSourceSettings {
   final bool episodeImagesFromAniZip;
@@ -27,9 +27,10 @@ class AnimeDataSourceSettings {
   }
 }
 
-final animeDataSourceSettingsProvider = NotifierProvider<
-    AnimeDataSourceSettingsNotifier,
-    AnimeDataSourceSettings>(AnimeDataSourceSettingsNotifier.new);
+final animeDataSourceSettingsProvider =
+    NotifierProvider<AnimeDataSourceSettingsNotifier, AnimeDataSourceSettings>(
+      AnimeDataSourceSettingsNotifier.new,
+    );
 
 class AnimeDataSourceSettingsNotifier
     extends Notifier<AnimeDataSourceSettings> {
@@ -39,10 +40,9 @@ class AnimeDataSourceSettingsNotifier
   AnimeDataSourceSettings build() {
     _repository = ref.watch(settingsRepositoryProvider);
     final highQualityPosters = _repository.isHighQualityPostersEnabled();
-    _applyImageCacheBudget(highQualityPosters);
+    applyArtworkQuality(highQualityPosters);
     return AnimeDataSourceSettings(
-      episodeImagesFromAniZip:
-          _repository.isEpisodeImagesFromAniZipEnabled(),
+      episodeImagesFromAniZip: _repository.isEpisodeImagesFromAniZipEnabled(),
       highQualityPosters: highQualityPosters,
     );
   }
@@ -54,17 +54,7 @@ class AnimeDataSourceSettingsNotifier
 
   Future<void> setHighQualityPosters(bool enabled) async {
     state = state.copyWith(highQualityPosters: enabled);
-    _applyImageCacheBudget(enabled);
+    applyArtworkQuality(enabled);
     await _repository.setHighQualityPostersEnabled(enabled);
-  }
-
-  /// Full-size artwork needs room to stay cached; a small budget would only
-  /// evict and re-decode the same posters while scrolling. Standard artwork is
-  /// small enough for the lighter budget the app used before.
-  void _applyImageCacheBudget(bool highQuality) {
-    PaintingBinding.instance.imageCache
-      ..maximumSize = highQuality ? 400 : 200
-      ..maximumSizeBytes =
-          (highQuality ? 256 : 50) * 1024 * 1024;
   }
 }

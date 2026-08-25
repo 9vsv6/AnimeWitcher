@@ -4,6 +4,7 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:skystream/core/utils/artwork_quality.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 import 'package:skystream/core/utils/episode_label.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
@@ -129,8 +130,9 @@ class _GroupedDownloadTile extends ConsumerWidget {
 
     // Calculate overall progress or status
     final completedCount = items.where((i) {
-      final trackingUrl =
-          i.task.metaData.isNotEmpty ? i.task.metaData : i.task.url;
+      final trackingUrl = i.task.metaData.isNotEmpty
+          ? i.task.metaData
+          : i.task.url;
       final status = activeProgress[trackingUrl]?.status ?? i.status;
       return status == TaskStatus.complete;
     }).length;
@@ -157,23 +159,28 @@ class _GroupedDownloadTile extends ConsumerWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(LayoutConstants.radiusMd),
-              child: CachedNetworkImage(
-                imageUrl:
-                    AppImageFallbacks.poster(
-                      firstItem.item.posterUrl,
-                      label: firstItem.item.title,
-                    ) ??
-                    '',
-                width: 80,
-                height: 120,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.medium,
-                errorWidget: (context, url, error) => Container(
-                  width: 80,
-                  height: 120,
-                  color: theme.dividerColor,
-                  child: const Icon(Icons.movie_outlined),
-                ),
+              child: ArtworkDecode(
+                paintedWidth: 80,
+                builder: (BuildContext context, int? decodeWidth) =>
+                    CachedNetworkImage(
+                      imageUrl:
+                          AppImageFallbacks.poster(
+                            firstItem.item.posterUrl,
+                            label: firstItem.item.title,
+                          ) ??
+                          '',
+                      width: 80,
+                      height: 120,
+                      fit: BoxFit.cover,
+                      memCacheWidth: decodeWidth,
+                      filterQuality: FilterQuality.medium,
+                      errorWidget: (context, url, error) => Container(
+                        width: 80,
+                        height: 120,
+                        color: theme.dividerColor,
+                        child: const Icon(Icons.movie_outlined),
+                      ),
+                    ),
               ),
             ),
             const SizedBox(width: LayoutConstants.spacingMd),
@@ -342,23 +349,28 @@ class _DownloadItemTile extends ConsumerWidget {
         // Poster
         ClipRRect(
           borderRadius: BorderRadius.circular(LayoutConstants.radiusMd),
-          child: CachedNetworkImage(
-            imageUrl:
-                AppImageFallbacks.poster(
-                  item.item.posterUrl,
-                  label: item.item.title,
-                ) ??
-                '',
-            width: 80,
-            height: 120,
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.medium,
-            errorWidget: (context, url, error) => Container(
-              width: 80,
-              height: 120,
-              color: theme.dividerColor,
-              child: const Icon(Icons.movie_outlined),
-            ),
+          child: ArtworkDecode(
+            paintedWidth: 80,
+            builder: (BuildContext context, int? decodeWidth) =>
+                CachedNetworkImage(
+                  imageUrl:
+                      AppImageFallbacks.poster(
+                        item.item.posterUrl,
+                        label: item.item.title,
+                      ) ??
+                      '',
+                  width: 80,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  memCacheWidth: decodeWidth,
+                  filterQuality: FilterQuality.medium,
+                  errorWidget: (context, url, error) => Container(
+                    width: 80,
+                    height: 120,
+                    color: theme.dividerColor,
+                    child: const Icon(Icons.movie_outlined),
+                  ),
+                ),
           ),
         ),
         const SizedBox(width: LayoutConstants.spacingMd),

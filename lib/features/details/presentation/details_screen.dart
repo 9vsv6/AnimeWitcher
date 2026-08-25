@@ -10,6 +10,7 @@ import '../../home/presentation/view_all_screen.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/account/animewitcher_comment_models.dart';
 import '../../comments/presentation/animewitcher_comments_screen.dart';
+import '../../../core/utils/artwork_quality.dart';
 import '../../../core/utils/image_fallbacks.dart';
 import 'details_item_merge.dart';
 
@@ -133,8 +134,7 @@ class _DeferredDetailSectionState extends State<_DeferredDetailSection> {
       final top = renderObject.localToGlobal(Offset.zero).dy;
       final bottom = top + renderObject.size.height;
       final viewportHeight = MediaQuery.sizeOf(context).height;
-      if (top <= viewportHeight + _preloadExtent &&
-          bottom >= -_preloadExtent) {
+      if (top <= viewportHeight + _preloadExtent && bottom >= -_preloadExtent) {
         setState(() => _activated = true);
         widget.onVisible();
       }
@@ -209,11 +209,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     return <AppleLiquidGlassToolbarButton>[
       if (commentTarget != null)
         AppleLiquidGlassToolbarButton(
-          tooltip: appText(
-            context,
-            english: 'Comments',
-            arabic: 'التعليقات',
-          ),
+          tooltip: appText(context, english: 'Comments', arabic: 'التعليقات'),
           icon: Icons.chat_bubble_outline_rounded,
           color: foregroundColor,
           onPressed: () => _openAnimeComments(context, commentTarget),
@@ -237,11 +233,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         onPressed: () => libraryNotifier.setFavorite(item, !isFavorite),
       ),
       AppleLiquidGlassToolbarButton(
-        tooltip: appText(
-          context,
-          english: 'Choose list',
-          arabic: 'اختر قائمة',
-        ),
+        tooltip: appText(context, english: 'Choose list', arabic: 'اختر قائمة'),
         icon: currentCategory == null
             ? Icons.bookmark_border_rounded
             : _libraryCategoryIcon(currentCategory),
@@ -252,11 +244,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         menuTintColor: colors.primary,
         onPressed: null,
         selectedMenuValue: currentCategory?.storageKey,
-        menuItems: _libraryCategoryMenuItems(
-          context,
-          item,
-          currentCategory,
-        ),
+        menuItems: _libraryCategoryMenuItems(context, item, currentCategory),
         onMenuSelected: (value) => _handleLibraryMenuSelection(item, value),
       ),
     ];
@@ -321,7 +309,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       LibraryCategory.notInterested => Icons.block_rounded,
     };
   }
-
 
   String _libraryCategorySystemImage(LibraryCategory category) {
     return switch (category) {
@@ -487,9 +474,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       return;
     }
 
-    ref.read(notificationServiceProvider).showSuccess(
-      appText(context, english: 'Title copied', arabic: 'تم نسخ العنوان'),
-    );
+    ref
+        .read(notificationServiceProvider)
+        .showSuccess(
+          appText(context, english: 'Title copied', arabic: 'تم نسخ العنوان'),
+        );
   }
 
   Future<void> _showPosterViewer(
@@ -506,9 +495,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       context: context,
       useRootNavigator: true,
       barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(
-        context,
-      ).modalBarrierDismissLabel,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black,
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (dialogContext, _, _) {
@@ -524,12 +511,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               child: SizedBox(
                 width: size.width,
                 height: size.height,
+                // Zoomable viewer: always decode at source resolution, that is
+                // the point of opening it.
                 child: CachedNetworkImage(
                   imageUrl: posterUrl,
                   fit: BoxFit.contain,
-                  placeholder: (_, _) => const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  filterQuality: FilterQuality.medium,
+                  placeholder: (_, _) =>
+                      const Center(child: CircularProgressIndicator()),
                   errorWidget: (_, _, _) => const Center(
                     child: Icon(
                       Icons.broken_image_outlined,
@@ -543,10 +532,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           ),
         );
       },
-      transitionBuilder: (_, animation, _, child) => FadeTransition(
-        opacity: animation,
-        child: child,
-      ),
+      transitionBuilder: (_, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
     );
   }
 
@@ -605,37 +592,42 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     ? const ColoredBox(color: Colors.black)
                     : ColoredBox(
                         color: Colors.black,
-                        child: CachedNetworkImage(
-                          key: ValueKey<String>('details_banner_$bannerUrl'),
-                          imageUrl: bannerUrl,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                          filterQuality: FilterQuality.medium,
-                          placeholder: (_, _) => const ColoredBox(
-                            color: Colors.black,
-                          ),
-                          errorWidget: (_, _, _) {
-                            if (providedBannerUrl != null &&
-                                posterUrl.isNotEmpty &&
-                                providedBannerUrl != posterUrl) {
-                              return CachedNetworkImage(
+                        child: ArtworkDecode(
+                          paintedWidth: screenSize.width,
+                          builder: (BuildContext context, int? decodeWidth) =>
+                              CachedNetworkImage(
                                 key: ValueKey<String>(
-                                  'details_banner_poster_$posterUrl',
+                                  'details_banner_$bannerUrl',
                                 ),
-                                imageUrl: posterUrl,
+                                imageUrl: bannerUrl,
                                 fit: BoxFit.cover,
                                 alignment: Alignment.center,
+                                memCacheWidth: decodeWidth,
                                 filterQuality: FilterQuality.medium,
-                                placeholder: (_, _) => const ColoredBox(
-                                  color: Colors.black,
-                                ),
-                                errorWidget: (_, _, _) => const ColoredBox(
-                                  color: Colors.black,
-                                ),
-                              );
-                            }
-                            return const ColoredBox(color: Colors.black);
-                          },
+                                placeholder: (_, _) =>
+                                    const ColoredBox(color: Colors.black),
+                                errorWidget: (_, _, _) {
+                                  if (providedBannerUrl != null &&
+                                      posterUrl.isNotEmpty &&
+                                      providedBannerUrl != posterUrl) {
+                                    return CachedNetworkImage(
+                                      key: ValueKey<String>(
+                                        'details_banner_poster_$posterUrl',
+                                      ),
+                                      imageUrl: posterUrl,
+                                      fit: BoxFit.cover,
+                                      alignment: Alignment.center,
+                                      memCacheWidth: decodeWidth,
+                                      filterQuality: FilterQuality.medium,
+                                      placeholder: (_, _) =>
+                                          const ColoredBox(color: Colors.black),
+                                      errorWidget: (_, _, _) =>
+                                          const ColoredBox(color: Colors.black),
+                                    );
+                                  }
+                                  return const ColoredBox(color: Colors.black);
+                                },
+                              ),
                         ),
                       ),
                 // Keep the fade broad and finish on the same solid black as
@@ -675,17 +667,24 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 clipBehavior: Clip.antiAlias,
                 child: posterUrl.isEmpty
                     ? const ColoredBox(color: Colors.black)
-                    : CachedNetworkImage(
-                        key: ValueKey<String>('details_poster_$posterUrl'),
-                        imageUrl: posterUrl,
-                        fit: BoxFit.cover,
-                        filterQuality: FilterQuality.medium,
-                        placeholder: (_, _) => const ColoredBox(
-                          color: Colors.black,
+                    : ArtworkDecode(
+                        paintedWidth: sdp(
+                          LayoutConstants.detailsPosterWidthMobile,
                         ),
-                        errorWidget: (_, _, _) => const ColoredBox(
-                          color: Colors.black,
-                        ),
+                        builder: (BuildContext context, int? decodeWidth) =>
+                            CachedNetworkImage(
+                              key: ValueKey<String>(
+                                'details_poster_$posterUrl',
+                              ),
+                              imageUrl: posterUrl,
+                              fit: BoxFit.cover,
+                              memCacheWidth: decodeWidth,
+                              filterQuality: FilterQuality.medium,
+                              placeholder: (_, _) =>
+                                  const ColoredBox(color: Colors.black),
+                              errorWidget: (_, _, _) =>
+                                  const ColoredBox(color: Colors.black),
+                            ),
                       ),
               ),
             ),
@@ -703,23 +702,28 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: logoUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: logoUrl,
-                          height: titleHeight,
-                          fit: BoxFit.contain,
-                          alignment: Alignment.centerLeft,
-                          placeholder: (_, _) => Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: titleStyle,
-                          ),
-                          errorWidget: (_, _, _) => Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: titleStyle,
-                          ),
+                      ? ArtworkDecode(
+                          paintedWidth: 280,
+                          builder: (BuildContext context, int? decodeWidth) =>
+                              CachedNetworkImage(
+                                imageUrl: logoUrl,
+                                height: titleHeight,
+                                fit: BoxFit.contain,
+                                alignment: Alignment.centerLeft,
+                                memCacheWidth: decodeWidth,
+                                placeholder: (_, _) => Text(
+                                  item.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: titleStyle,
+                                ),
+                                errorWidget: (_, _, _) => Text(
+                                  item.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: titleStyle,
+                                ),
+                              ),
                         )
                       : Text(
                           item.title,
@@ -874,9 +878,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       final episodes = nextState.episodes.value ?? const <Episode>[];
       final resumeEpisode = _resumeEpisodeFrom(episodes);
       final resumeUrl = widget.resumeEpisodeUrl?.trim();
-      final fallbackResumeUrl = resumeEpisode == null &&
-              resumeUrl != null &&
-              resumeUrl.isNotEmpty
+      final fallbackResumeUrl =
+          resumeEpisode == null && resumeUrl != null && resumeUrl.isNotEmpty
           ? resumeUrl
           : null;
       _didTriggerAutoPlay = true;
@@ -924,9 +927,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       detailsControllerProvider(widget.item.url).select((s) => s.item),
     );
     final initialPageReady = ref.watch(
-      detailsControllerProvider(widget.item.url).select(
-        (s) => s.basicDetailsResolved && s.nextAiringResolved,
-      ),
+      detailsControllerProvider(
+        widget.item.url,
+      ).select((s) => s.basicDetailsResolved && s.nextAiringResolved),
     );
     // Movies and one-episode anime share the exact same mobile layout, so
     // iPhone/iPad-small pages must not rebuild just because isMovie resolves.
@@ -1009,8 +1012,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
 
     // ── Mobile: pinned chrome + Seasons-style Details/Episodes pages ──
     return Scaffold(
-      bottomNavigationBar:
-          selectedEpisodeCount == 0 || _selectedDetailsTab != 1
+      bottomNavigationBar: selectedEpisodeCount == 0 || _selectedDetailsTab != 1
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       appBar: _buildPinnedDetailsAppBar(
@@ -1151,7 +1153,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                             ),
                           ),
                           IconButton(
-                            tooltip: isArabic ? 'إلغاء التحديد' : 'Cancel selection',
+                            tooltip: isArabic
+                                ? 'إلغاء التحديد'
+                                : 'Cancel selection',
                             visualDensity: VisualDensity.compact,
                             onPressed: controller.clearEpisodeSelection,
                             icon: const Icon(Icons.close_rounded),
@@ -1190,7 +1194,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           ),
                           const SizedBox(width: 8),
                           IconButton.filledTonal(
-                            tooltip: isArabic ? 'تحديد جميع الحلقات' : 'Select all episodes',
+                            tooltip: isArabic
+                                ? 'تحديد جميع الحلقات'
+                                : 'Select all episodes',
                             onPressed: controller.selectAllEpisodes,
                             icon: const Icon(Icons.select_all_rounded),
                             style: IconButton.styleFrom(
@@ -1345,7 +1351,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     Widget castSection() {
       if (cast.isNotEmpty) {
         return Column(
-          children: [const SizedBox(height: 32), CastCarousel(cast: cast)],
+          children: [
+            const SizedBox(height: 32),
+            CastCarousel(cast: cast),
+          ],
         );
       }
       if (castState.isLoading) {
@@ -1540,8 +1549,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
 
     return Scaffold(
-      bottomNavigationBar:
-          selectedEpisodeCount == 0 || _selectedDetailsTab != 1
+      bottomNavigationBar: selectedEpisodeCount == 0 || _selectedDetailsTab != 1
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
       extendBodyBehindAppBar: true,
@@ -1896,11 +1904,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           height: headerHeight,
           width: double.infinity,
           child: ClipRect(
-            child: _buildAnimeWitcherMobileHeader(
-              context,
-              item,
-              detailsState,
-            ),
+            child: _buildAnimeWitcherMobileHeader(context, item, detailsState),
           ),
         ),
       ),
