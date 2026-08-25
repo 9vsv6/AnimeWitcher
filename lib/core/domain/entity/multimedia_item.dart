@@ -1,7 +1,6 @@
 import 'package:html_unescape/html_unescape.dart';
 import 'package:collection/collection.dart';
 
-
 enum MultimediaContentType { movie, series, anime, livestream, other }
 
 enum ShowStatus { completed, ongoing, upcoming }
@@ -294,7 +293,6 @@ class MultimediaItem {
     );
   }
 
-
   static ShowStatus _parseShowStatus(dynamic raw) {
     if (raw == null) return ShowStatus.ongoing;
     final str = raw.toString().toLowerCase();
@@ -340,6 +338,7 @@ class MultimediaItem {
         ? posterUrl
         : normalizedBanner;
   }
+
   String get posterImageUrl => posterUrl;
   String get thumbnailImageUrl => posterUrl;
   String get releaseDate => year?.toString() ?? '';
@@ -592,7 +591,10 @@ class Episode {
       rating: (json['rating'] as num?)?.toDouble(),
       runtime: (json['runtime'] as int?) ?? (json['duration'] as int?),
       airDate: json['airDate'] as String?,
-      dubStatus: _parseDubStatus(json['dubStatus'], name.isNotEmpty ? name : serverName),
+      dubStatus: _parseDubStatus(
+        json['dubStatus'],
+        name.isNotEmpty ? name : serverName,
+      ),
       playbackPolicy:
           (json['playbackPolicy'] as String?) ?? (json['vpnStatus'] as String?),
       streams: json['streams'] != null
@@ -688,6 +690,11 @@ class StreamResult {
   final String? drmKey;
   final String? licenseUrl;
 
+  /// Opaque provider URL that [SkyStreamProvider.loadStreams] can extract
+  /// again — used to mint a fresh signed CDN link after a long pause or a
+  /// mid-playback 403. AnimeWitcher stores `animewitcher-source://…` here.
+  final String? refreshUrl;
+
   const StreamResult({
     required this.url,
     required this.source,
@@ -698,7 +705,34 @@ class StreamResult {
     this.drmKid,
     this.drmKey,
     this.licenseUrl,
+    this.refreshUrl,
   });
+
+  StreamResult copyWith({
+    String? url,
+    String? source,
+    String? quality,
+    bool? requiresResolution,
+    Map<String, String>? headers,
+    List<SubtitleFile>? subtitles,
+    String? drmKid,
+    String? drmKey,
+    String? licenseUrl,
+    String? refreshUrl,
+  }) {
+    return StreamResult(
+      url: url ?? this.url,
+      source: source ?? this.source,
+      quality: quality ?? this.quality,
+      requiresResolution: requiresResolution ?? this.requiresResolution,
+      headers: headers ?? this.headers,
+      subtitles: subtitles ?? this.subtitles,
+      drmKid: drmKid ?? this.drmKid,
+      drmKey: drmKey ?? this.drmKey,
+      licenseUrl: licenseUrl ?? this.licenseUrl,
+      refreshUrl: refreshUrl ?? this.refreshUrl,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'url': url,
@@ -710,6 +744,7 @@ class StreamResult {
     'drmKid': drmKid,
     'drmKey': drmKey,
     'licenseUrl': licenseUrl,
+    'refreshUrl': refreshUrl,
   };
 
   factory StreamResult.fromJson(Map<String, dynamic> json) {
@@ -733,6 +768,7 @@ class StreamResult {
       drmKid: json['drmKid'] as String?,
       drmKey: json['drmKey'] as String?,
       licenseUrl: json['licenseUrl'] as String?,
+      refreshUrl: json['refreshUrl'] as String?,
     );
   }
 }
@@ -754,7 +790,6 @@ class SubtitleFile {
     );
   }
 }
-
 
 /// A news article shown in the provider home feed or news list.
 ///

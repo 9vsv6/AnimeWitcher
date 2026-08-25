@@ -9,6 +9,7 @@ import '../../utils/episode_label.dart';
 import '../../utils/safe_uri.dart';
 import '../base_provider.dart';
 import 'mediafire_utils.dart';
+import 'server_extraction_utils.dart';
 
 class AnimeWitcherSeasonConfig {
   final String past;
@@ -3147,29 +3148,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         lower.contains('/api/file/');
   }
 
-  String _normalizePageEscapes(String value) {
-    var text = _unescape.convert(value);
-    text = text
-        .replaceAll(r'\u003a', ':')
-        .replaceAll(r'\u003A', ':')
-        .replaceAll(r'\u0026', '&')
-        .replaceAll(r'\u003d', '=')
-        .replaceAll(r'\u003D', '=')
-        .replaceAll(r'\u002f', '/')
-        .replaceAll(r'\u002F', '/')
-        .replaceAll(r'\x3a', ':')
-        .replaceAll(r'\x3A', ':')
-        .replaceAll(r'\x26', '&')
-        .replaceAll(r'\x3d', '=')
-        .replaceAll(r'\x3D', '=')
-        .replaceAll(r'\x2f', '/')
-        .replaceAll(r'\x2F', '/')
-        .replaceAll(r'\/', '/');
-    return text;
-  }
-
   String _absoluteUrl(String raw, String base) {
-    final value = _normalizePageEscapes(raw).trim().replaceAll(RegExp(r"""^[\s"'`]+|[\s"'`]+$"""), '');
+    final value = prepareExtractedMediaUrl(raw);
     if (value.isEmpty) return '';
     if (value.startsWith('//')) return 'https:$value';
     final uri = Uri.tryParse(value);
@@ -3266,7 +3246,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     if (response == null) return const <StreamResult>[];
     final finalUrl = response.realUri.toString();
     var playable = _mediaFireCandidate(finalUrl, pageUrl);
-    final body = _normalizePageEscapes(response.data ?? '');
+    final body = normalizePageEscapes(response.data ?? '');
     if (playable.isEmpty) {
       final anchorPattern = RegExp(r'<a\b[^>]*>', caseSensitive: false);
       for (final match in anchorPattern.allMatches(body)) {
@@ -3325,7 +3305,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   String _canonicalStreamTapeUrl(String raw) {
-    var value = _normalizePageEscapes(raw).trim();
+    var value = prepareExtractedMediaUrl(raw);
     if (value.startsWith('//')) value = 'https:$value';
     if (value.startsWith('/')) value = 'https://streamtape.com$value';
     final uri = Uri.tryParse(value);
@@ -3354,7 +3334,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   }
 
   String _streamTapeConstructedUrl(String body) {
-    final source = _normalizePageEscapes(body);
+    final source = normalizePageEscapes(body);
     final constructed = RegExp(
       r'''innerHTML\s*=\s*["']([^"']+)["']\s*\+\s*\(\s*["']([^"']+)["']\s*\)''',
       caseSensitive: false,
@@ -3397,10 +3377,9 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     if (tokenUrl.isEmpty) return const <StreamResult>[];
     final playbackUrl = '$tokenUrl${tokenUrl.contains('?') ? '&' : '?'}dl=1';
     return <StreamResult>[
-      StreamResult(
-        url: playbackUrl,
-        source: server.name,
-        quality: _sourceQuality(server.quality),
+      _serverStream(
+        server,
+        playbackUrl,
         headers: <String, String>{
           'User-Agent': _userAgent,
           'Referer': response.realUri.toString(),
@@ -3461,59 +3440,6 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     );
   }
 
-  String _betweenWords(String input, String start, String end) {
-    if (input.isEmpty || start.isEmpty || end.isEmpty) return '';
-    final startIndex = input.indexOf(start);
-    if (startIndex < 0) return '';
-    final valueStart = startIndex + start.length;
-    final endIndex = input.indexOf(end, valueStart);
-    if (endIndex < 0 || endIndex < valueStart) return '';
-    return input.substring(valueStart, endIndex).trim();
-  }
-
-  String _cleanServerExtract(String value) {
-    return _normalizePageEscapes(value)
-        .replaceAll('amp;', '')
-        .replaceAll('&amp;', '&')
-        .trim();
-  }
-
-  /// Matches AnimeWitcher's original generic `loadServer` extraction.
-  /// GF uses this path: keep the first marker in the slice, cut at the second
-  /// marker, then remove the marker text itself. A normalized retry covers
-  /// pages that serialize the same markers through escaped HTML/JavaScript.
-  String _extractAnimeWitcherGenericServer(
-    String input,
-    String start,
-    String end,
-  ) {
-    String extract(String source, String startWord, String endWord) {
-      if (source.isEmpty || startWord.isEmpty || endWord.isEmpty) return '';
-      final startIndex = source.indexOf(startWord);
-      if (startIndex < 0) return '';
-      final fromStart = source.substring(startIndex);
-      final endIndex = fromStart.indexOf(endWord);
-      if (endIndex < 0) return '';
-      final beforeEnd = fromStart.substring(0, endIndex);
-      return _cleanServerExtract(
-        beforeEnd.replaceAll(startWord, '').replaceAll(endWord, ''),
-      );
-    }
-
-    final direct = extract(input, start, end);
-    if (direct.isNotEmpty) return direct;
-
-    final normalizedInput = _normalizePageEscapes(input);
-    final normalizedStart = _normalizePageEscapes(start);
-    final normalizedEnd = _normalizePageEscapes(end);
-    if (normalizedInput == input &&
-        normalizedStart == start &&
-        normalizedEnd == end) {
-      return '';
-    }
-    return extract(normalizedInput, normalizedStart, normalizedEnd);
-  }
-
   StreamResult _serverStream(
     _ServerRecord server,
     String url, {
@@ -3524,6 +3450,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       source: server.name,
       quality: _sourceQuality(server.quality),
       headers: headers,
+      refreshUrl: _encodeServerSource(server),
     );
   }
 
@@ -3539,7 +3466,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
 
     try {
       if (rawName == 'MF') {
-        final first = _betweenWords(body, words.word1, words.word2).trim();
+        final first = extractBetweenWords(body, words.word1, words.word2).trim();
         if (first.isEmpty) return const <StreamResult>[];
         var next = first;
         if (next.endsWith('/') || next.endsWith('"') || next.endsWith("'")) {
@@ -3552,8 +3479,8 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
         if (secondResponse == null || words.word3.isEmpty || words.word4.isEmpty) {
           return const <StreamResult>[];
         }
-        final finalUrl = _cleanServerExtract(
-          _betweenWords(secondResponse.data ?? '', words.word3, words.word4),
+        final finalUrl = prepareExtractedMediaUrl(
+          extractBetweenWords(secondResponse.data ?? '', words.word3, words.word4),
         );
         if (finalUrl.isEmpty) return const <StreamResult>[];
         final mediaFire = _mediaFireStreams(
@@ -3568,10 +3495,18 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       }
 
       var finalUrl = rawName == 'GF'
-          ? _extractAnimeWitcherGenericServer(body, words.word1, words.word2)
-          : _cleanServerExtract(
-              _betweenWords(body, words.word1, words.word2),
+          ? extractGenericServer(body, words.word1, words.word2)
+          : prepareExtractedMediaUrl(
+              extractBetweenWords(body, words.word1, words.word2),
             );
+      // GF pages sometimes serialize the same payload as a plain word slice
+      // instead of the generic marker-in-slice form. Try the other cut before
+      // giving up, otherwise playback dies silently on a markup tweak.
+      if (finalUrl.isEmpty && rawName == 'GF') {
+        finalUrl = prepareExtractedMediaUrl(
+          extractBetweenWords(body, words.word1, words.word2),
+        );
+      }
       if (finalUrl.isEmpty) return const <StreamResult>[];
 
       if (rawName == 'ST') {
@@ -3593,6 +3528,10 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       }
 
       if (finalUrl.isEmpty) return const <StreamResult>[];
+      finalUrl = prepareExtractedMediaUrl(finalUrl);
+      if (finalUrl.isEmpty || !looksLikeStreamUrl(finalUrl)) {
+        return const <StreamResult>[];
+      }
 
       if (_serverFamily(server) == 'MF') {
         final absolute = _absoluteUrl(finalUrl, response.realUri.toString());
