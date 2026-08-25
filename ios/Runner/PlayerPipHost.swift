@@ -9,7 +9,7 @@ import UIKit
 /// view hierarchy, the Audio background mode, and an `.playback` audio session.
 /// https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller
 final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
-    static let playerDidChange = Notification.Name("dev.akash.skystream.pipPlayer")
+    static let playerDidChange = Notification.Name("com.animewitcher.app.pipPlayer")
 
     private let channel: FlutterMethodChannel
     private let hostViewProvider: () -> UIView?
@@ -25,7 +25,7 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
 
     init(messenger: FlutterBinaryMessenger, hostViewProvider: @escaping () -> UIView?) {
         channel = FlutterMethodChannel(
-            name: "dev.akash.skystream.player/pip",
+            name: "com.animewitcher.app.player/pip",
             binaryMessenger: messenger
         )
         self.hostViewProvider = hostViewProvider

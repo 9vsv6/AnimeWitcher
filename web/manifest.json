@@ -1,6 +1,6 @@
 {
-    "name": "SkyStream",
-    "short_name": "SkyStream",
+    "name": "AnimeWitcher",
+    "short_name": "AnimeWitcher",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#000000",
