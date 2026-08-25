@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,6 +16,7 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
 
 import 'package:skystream/core/services/notification_service.dart';
+
 /// Returns a localized label for a resize mode string.
 String getResizeModeLabel(String mode, AppLocalizations l10n) {
   switch (mode.toLowerCase()) {
@@ -42,17 +44,18 @@ void showDefaultHomeScreenDialog(
 ) {
   final l10n = AppLocalizations.of(context)!;
   final settings = ref.read(generalSettingsProvider);
-  final options = visibleTaskbarDestinations(
-    settings.taskbarOrder,
-    settings.hiddenTaskbarItems,
-  )
-      .map(
-        (destination) => <String, String>{
-          'label': destination.label(l10n),
-          'route': destination.route,
-        },
-      )
-      .toList(growable: false);
+  final options =
+      visibleTaskbarDestinations(
+            settings.taskbarOrder,
+            settings.hiddenTaskbarItems,
+          )
+          .map(
+            (destination) => <String, String>{
+              'label': destination.label(l10n),
+              'route': destination.route,
+            },
+          )
+          .toList(growable: false);
 
   showDialog<void>(
     context: context,
@@ -555,30 +558,32 @@ class _SocialButton extends StatelessWidget {
 /// Shows a dialog to toggle the visibility of individual player control
 /// buttons. Changes apply live via the player settings notifier.
 ///
-/// The Picture-in-Picture switch ([AppLocalizations.showPip]) shows or hides
-/// the in-player PiP control and also gates Android system PiP auto-enter.
+/// The Picture-in-Picture switch ([AppLocalizations.showPip]) is Android-only:
+/// it shows or hides the in-player PiP control and gates system PiP auto-enter.
 void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
   final l10n = AppLocalizations.of(context)!;
   final notifier = ref.read(playerSettingsProvider.notifier);
   final settings =
       ref.read(playerSettingsProvider).asData?.value ?? const PlayerSettings();
+  final includePip = defaultTargetPlatform == TargetPlatform.android;
 
   final metadata = [
-    (icon: Icons.picture_in_picture_alt_rounded, label: l10n.showPip),
+    if (includePip)
+      (icon: Icons.picture_in_picture_alt_rounded, label: l10n.showPip),
     (icon: Icons.aspect_ratio_rounded, label: l10n.showResize),
     (icon: Icons.screen_rotation_rounded, label: l10n.showRotate),
     (icon: Icons.speed_rounded, label: l10n.showPlaybackSpeed),
     (icon: Icons.playlist_play_rounded, label: l10n.showEpisodes),
   ];
   final setters = [
-    notifier.setShowPip,
+    if (includePip) notifier.setShowPip,
     notifier.setShowResize,
     notifier.setShowRotate,
     notifier.setShowPlaybackSpeed,
     notifier.setShowEpisodes,
   ];
   final values = [
-    settings.showPip,
+    if (includePip) settings.showPip,
     settings.showResize,
     settings.showRotate,
     settings.showPlaybackSpeed,
@@ -625,5 +630,3 @@ void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
     ),
   );
 }
-
-
