@@ -10,7 +10,24 @@ void main() {
   group('PlayerPip.shouldShowButton', () {
     test('shows on Android phones when the settings toggle is on', () {
       expect(
-        PlayerPip.shouldShowButton(showPip: true, isAndroid: true, isTv: false),
+        PlayerPip.shouldShowButton(
+          showPip: true,
+          isAndroid: true,
+          isIos: false,
+          isTv: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('shows on iOS when the settings toggle is on', () {
+      expect(
+        PlayerPip.shouldShowButton(
+          showPip: true,
+          isAndroid: false,
+          isIos: true,
+          isTv: false,
+        ),
         isTrue,
       );
     });
@@ -20,21 +37,28 @@ void main() {
         PlayerPip.shouldShowButton(
           showPip: false,
           isAndroid: true,
+          isIos: true,
           isTv: false,
         ),
         isFalse,
       );
     });
 
-    test('hides on TV, iOS, and devices without system PiP', () {
+    test('hides on TV, desktop, and devices without system PiP', () {
       expect(
-        PlayerPip.shouldShowButton(showPip: true, isAndroid: true, isTv: true),
+        PlayerPip.shouldShowButton(
+          showPip: true,
+          isAndroid: true,
+          isIos: false,
+          isTv: true,
+        ),
         isFalse,
       );
       expect(
         PlayerPip.shouldShowButton(
           showPip: true,
           isAndroid: false,
+          isIos: false,
           isTv: false,
         ),
         isFalse,
@@ -43,6 +67,7 @@ void main() {
         PlayerPip.shouldShowButton(
           showPip: true,
           isAndroid: true,
+          isIos: false,
           isTv: false,
           pipAvailable: false,
         ),
@@ -140,7 +165,7 @@ void main() {
             if (call.method == 'isPipAvailable') return true;
             return null;
           });
-      service = PlayerPlatformService(pipChannel: channel, androidPip: true);
+      service = PlayerPlatformService(pipChannel: channel, nativePip: true);
     });
 
     tearDown(() {
@@ -149,7 +174,7 @@ void main() {
     });
 
     test(
-      'enterPip calls the official Android method with video size',
+      'enterPip calls the official system method with video size',
       () async {
         final ok = await service.enterPip(
           isPlaying: true,
@@ -167,6 +192,28 @@ void main() {
         });
       },
     );
+
+    test('enterPip forwards the iOS AVPlayer source payload', () async {
+      final ok = await service.enterPip(
+        isPlaying: true,
+        width: 1280,
+        height: 720,
+        url: 'https://example.com/episode.m3u8',
+        headers: const {'Referer': 'https://example.com'},
+        positionMs: 15000,
+      );
+
+      expect(ok, isTrue);
+      expect(calls.single.method, 'enterPip');
+      expect(calls.single.arguments, {
+        'isPlaying': true,
+        'width': 1280,
+        'height': 720,
+        'url': 'https://example.com/episode.m3u8',
+        'positionMs': 15000,
+        'headers': {'Referer': 'https://example.com'},
+      });
+    });
 
     test(
       'updatePipSession sends the settings-gated auto-enter payload',
@@ -195,10 +242,10 @@ void main() {
       expect(calls.single.method, 'isPipAvailable');
     });
 
-    test('skips native calls when Android PiP is not used', () async {
+    test('skips native calls when system PiP is not used', () async {
       final desktop = PlayerPlatformService(
         pipChannel: channel,
-        androidPip: false,
+        nativePip: false,
       );
 
       expect(await desktop.enterPip(isPlaying: true), isFalse);

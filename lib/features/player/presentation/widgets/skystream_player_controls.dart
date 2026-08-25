@@ -265,14 +265,16 @@ class SkyStreamPlayerControlsState
     widget.videoViewController?.orientation.addListener(_updateOrientation);
 
     // PiP is phone/tablet-only — never register the handler on TV.
-    _pipAvailable = Platform.isAndroid && !_isTv;
+    _pipAvailable = (Platform.isAndroid || Platform.isIOS) && !_isTv;
     if (_pipAvailable) {
       PlayerPip.channel.setMethodCallHandler((call) async {
         switch (call.method) {
           case 'pipModeChanged':
+            final inPip = call.arguments as bool;
+            ref.read(playerControllerProvider.notifier).setInPip(inPip);
             if (mounted) {
               setState(() {
-                _isInPip = call.arguments as bool;
+                _isInPip = inPip;
               });
             }
             break;
@@ -388,7 +390,14 @@ class SkyStreamPlayerControlsState
     SystemChrome.setPreferredOrientations([]); // Reset to system default
     // Clear the PiP method channel handler to prevent a stale handler from
     // accessing the disposed provider after the player exits.
-    if (Platform.isAndroid && !_isTv) {
+    if ((Platform.isAndroid || Platform.isIOS) && !_isTv) {
+      unawaited(
+        _platformService.updatePipSession(
+          active: false,
+          enabled: false,
+          isPlaying: false,
+        ),
+      );
       PlayerPip.channel.setMethodCallHandler(null);
     }
     super.dispose();
@@ -442,7 +451,7 @@ class SkyStreamPlayerControlsState
   }
 
   void _syncPipSession({bool active = true}) {
-    if (!Platform.isAndroid || _isTv) return;
+    if ((!Platform.isAndroid && !Platform.isIOS) || _isTv) return;
     try {
       final settings =
           ref.read(playerSettingsProvider).asData?.value ??
@@ -463,17 +472,42 @@ class SkyStreamPlayerControlsState
   }
 
   Future<void> _enterPip() async {
+    final controller = ref.read(playerControllerProvider.notifier);
+    controller.setInPip(true);
+    if (Platform.isIOS) {
+      final prepared = await controller.prepareIosPictureInPicture();
+      if (!prepared) {
+        controller.setInPip(false);
+        if (mounted) {
+          final l10n = AppLocalizations.of(context);
+          if (l10n != null) {
+            ref.read(notificationServiceProvider).showError(l10n.pipUnavailable);
+          }
+        }
+        return;
+      }
+    }
     final size = _videoSize();
     final ok = await _platformService.enterPip(
       isPlaying: _isPlaying,
       width: size?.$1,
       height: size?.$2,
+      url: controller.resolvedPlayUrl,
+      headers: controller.currentPlaybackHeaders,
+      positionMs: controller.currentPosition.inMilliseconds,
     );
-    if (!ok && mounted) {
-      final l10n = AppLocalizations.of(context);
-      if (l10n != null) {
-        ref.read(notificationServiceProvider).showError(l10n.pipUnavailable);
+    if (!ok) {
+      controller.setInPip(false);
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        if (l10n != null) {
+          ref.read(notificationServiceProvider).showError(l10n.pipUnavailable);
+        }
       }
+      return;
+    }
+    if (mounted) {
+      setState(() => _isInPip = true);
     }
   }
 
@@ -1365,6 +1399,7 @@ class SkyStreamPlayerControlsState
     final pipSupported = PlayerPip.shouldShowButton(
       showPip: true,
       isAndroid: Platform.isAndroid,
+      isIos: Platform.isIOS,
       isTv: _isTv,
       pipAvailable: _pipAvailable,
     );
