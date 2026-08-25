@@ -8,6 +8,10 @@ import UIKit
 /// Apple requires `AVPictureInPictureController` plus an `AVPlayerLayer` in the
 /// view hierarchy, the Audio background mode, and an `.playback` audio session.
 /// https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller
+///
+/// The layer stays *behind* Flutter. Making Flutter's view non-opaque lets the
+/// video show through the player chrome instead of covering the buttons. After
+/// system PiP starts or stops, iOS often raises that view — we pin it back.
 final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
     static let playerDidChange = Notification.Name("dev.akash.skystream.pipPlayer")
 
@@ -21,6 +25,8 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
     private var sessionEnabled = true
     private var isPlaying = false
     private var pendingStart = false
+    private var surfaceActive = false
+    private var startRetryWorkItem: DispatchWorkItem?
     private weak var attachedHost: UIView?
 
     init(messenger: FlutterBinaryMessenger, hostViewProvider: @escaping () -> UIView?) {
@@ -35,9 +41,8 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
         playerView.isOpaque = false
         playerView.backgroundColor = .clear
         playerView.isHidden = false
-        // Keep a real, non-zero layer in the window. Flutter's texture sits
-        // above it, so this copy is not visible but PiP can snapshot it.
-        playerView.alpha = 0.02
+        playerView.alpha = 0.01
+        playerView.layer.zPosition = -1
         playerView.playerLayer.videoGravity = .resizeAspect
         playerView.playerLayer.opacity = 1
 
@@ -47,6 +52,12 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
             name: Self.playerDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationBecameActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
 
         channel.setMethodCallHandler { [weak self] call, result in
             self?.handle(call, result: result)
@@ -54,6 +65,7 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
     }
 
     deinit {
+        startRetryWorkItem?.cancel()
         NotificationCenter.default.removeObserver(self)
         possibleObservation = nil
         channel.setMethodCallHandler(nil)
@@ -84,16 +96,23 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
         if let playing = args["isPlaying"] as? Bool { isPlaying = playing }
         if let active = args["active"] as? Bool {
             sessionActive = active
-            if !active { stopPictureInPictureIfNeeded() }
+            if !active {
+                stopPictureInPictureIfNeeded()
+                deactivateInlineSurface()
+            }
         }
         if let enabled = args["enabled"] as? Bool {
             sessionEnabled = enabled
-            if !enabled { stopPictureInPictureIfNeeded() }
+            if !enabled {
+                stopPictureInPictureIfNeeded()
+                deactivateInlineSurface()
+            }
         }
     }
 
     private func stopPictureInPictureIfNeeded() {
         pendingStart = false
+        startRetryWorkItem?.cancel()
         if pipController?.isPictureInPictureActive == true {
             pipController?.stopPictureInPicture()
         }
@@ -101,6 +120,11 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
 
     private var shouldAutoEnter: Bool {
         sessionActive && sessionEnabled && isPlaying && isPipAvailable
+    }
+
+    @objc
+    private func applicationBecameActive() {
+        pinLayerBehindFlutter()
     }
 
     @objc
@@ -124,6 +148,7 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
         if #available(iOS 15.0, *), let player {
             player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         }
+        pinLayerBehindFlutter()
         if previous === player, pipController != nil {
             refreshAutoEnter()
             return
@@ -141,6 +166,7 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
         if attachedHost !== host || playerView.superview !== host {
             playerView.removeFromSuperview()
             playerView.translatesAutoresizingMaskIntoConstraints = false
+            playerView.layer.zPosition = -1
             host.insertSubview(playerView, at: 0)
             NSLayoutConstraint.activate([
                 playerView.leadingAnchor.constraint(equalTo: host.leadingAnchor),
@@ -151,6 +177,50 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
             attachedHost = host
         }
         host.sendSubviewToBack(playerView)
+    }
+
+    private func pinLayerBehindFlutter() {
+        attachLayerIfNeeded()
+        playerView.layer.zPosition = -1
+        playerView.isUserInteractionEnabled = false
+        playerView.superview?.sendSubviewToBack(playerView)
+    }
+
+    private func setFlutterViewOpaque(_ opaque: Bool) {
+        guard let host = hostViewProvider() ?? keyWindowRootView() else { return }
+        applyOpacity(to: host, opaque: opaque)
+    }
+
+    private func applyOpacity(to view: UIView, opaque: Bool) {
+        view.isOpaque = opaque
+        view.backgroundColor = opaque ? .black : .clear
+        for sub in view.subviews where sub !== playerView {
+            let name = NSStringFromClass(type(of: sub))
+            if name.contains("FlutterView") {
+                applyOpacity(to: sub, opaque: opaque)
+            }
+        }
+    }
+
+    private func activateInlineSurface() {
+        surfaceActive = true
+        setFlutterViewOpaque(false)
+        playerView.alpha = 1
+        playerView.isHidden = false
+        pinLayerBehindFlutter()
+        channel.invokeMethod("pipSurfaceActive", arguments: true)
+    }
+
+    private func deactivateInlineSurface() {
+        guard surfaceActive else {
+            pinLayerBehindFlutter()
+            return
+        }
+        surfaceActive = false
+        playerView.alpha = 0.01
+        pinLayerBehindFlutter()
+        setFlutterViewOpaque(true)
+        channel.invokeMethod("pipSurfaceActive", arguments: false)
     }
 
     private func keyWindowRootView() -> UIView? {
@@ -165,8 +235,6 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
         possibleObservation = nil
         pipController = nil
         guard isPipAvailable, playerView.playerLayer.player != nil else { return }
-        // The playerLayer initializer is failable on some SDKs and non-optional
-        // on others. Assigning through AVPictureInPictureController? covers both.
         let controller: AVPictureInPictureController? =
             AVPictureInPictureController(playerLayer: playerView.playerLayer)
         guard let controller else { return }
@@ -174,6 +242,7 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
         pipController = controller
         possibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new]) {
             [weak self] _, _ in
+            self?.pinLayerBehindFlutter()
             self?.tryStartIfPending()
         }
         refreshAutoEnter()
@@ -199,28 +268,31 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
         guard isPipAvailable else { return false }
         activateAudioSession()
         sessionActive = true
-        attachLayerIfNeeded()
         pendingStart = true
+        activateInlineSurface()
         if playerView.playerLayer.player == nil {
-            // video_view publishes the AVPlayer asynchronously. Give it a beat
-            // before opening a second AVPlayer for the same URL.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-                guard let self, self.pendingStart else { return }
-                if self.playerView.playerLayer.player == nil {
-                    self.startFallbackPlayer(arguments: arguments)
-                }
-                self.recreatePipController()
+            startFallbackPlayer(arguments: arguments)
+        }
+        recreatePipController()
+        tryStartIfPending()
+        scheduleStartRetries()
+        return true
+    }
+
+    private func scheduleStartRetries() {
+        startRetryWorkItem?.cancel()
+        let delays: [TimeInterval] = [0.05, 0.15, 0.3, 0.6, 1.0, 1.6, 2.2]
+        let work = DispatchWorkItem { [weak self] in
+            self?.tryStartIfPending()
+        }
+        startRetryWorkItem = work
+        for delay in delays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.pendingStart, !work.isCancelled else { return }
+                self.pinLayerBehindFlutter()
                 self.tryStartIfPending()
             }
-        } else {
-            recreatePipController()
-            tryStartIfPending()
         }
-        if pipController?.isPictureInPictureActive == true {
-            pendingStart = false
-            return true
-        }
-        return true
     }
 
     private func stringHeaders(_ value: Any?) -> [String: String]? {
@@ -269,40 +341,74 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
 
     private func tryStartIfPending() {
         guard pendingStart, let pipController else { return }
+        pinLayerBehindFlutter()
         if pipController.isPictureInPictureActive {
             pendingStart = false
+            startRetryWorkItem?.cancel()
             return
         }
         guard pipController.isPictureInPicturePossible else { return }
         pipController.startPictureInPicture()
-        pendingStart = false
+    }
+
+    private func currentPositionMs() -> Int {
+        guard let time = playerView.playerLayer.player?.currentTime() else { return 0 }
+        let seconds = CMTimeGetSeconds(time)
+        guard seconds.isFinite, seconds > 0 else { return 0 }
+        return Int(seconds * 1000)
+    }
+
+    private func notifyPipMode(active: Bool) {
+        channel.invokeMethod(
+            "pipModeChanged",
+            arguments: [
+                "active": active,
+                "positionMs": currentPositionMs(),
+            ]
+        )
     }
 
     func pictureInPictureControllerWillStartPictureInPicture(
         _ pictureInPictureController: AVPictureInPictureController
     ) {
-        channel.invokeMethod("pipModeChanged", arguments: true)
+        pinLayerBehindFlutter()
+        notifyPipMode(active: true)
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(
         _ pictureInPictureController: AVPictureInPictureController
     ) {
-        channel.invokeMethod("pipModeChanged", arguments: true)
+        pendingStart = false
+        startRetryWorkItem?.cancel()
+        // Keep the inline copy behind Flutter at near-zero alpha so a failed
+        // restore animation cannot cover the player chrome.
+        playerView.alpha = 0.01
+        pinLayerBehindFlutter()
+        notifyPipMode(active: true)
     }
 
     func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         failedToStartPictureInPictureWithError error: Error
     ) {
-        pendingStart = false
-        channel.invokeMethod("pipModeChanged", arguments: false)
+        NSLog("[PlayerPip] start failed: \(error.localizedDescription)")
+        pinLayerBehindFlutter()
+        activateInlineSurface()
+        notifyPipMode(active: false)
+    }
+
+    func pictureInPictureControllerWillStopPictureInPicture(
+        _ pictureInPictureController: AVPictureInPictureController
+    ) {
+        pinLayerBehindFlutter()
     }
 
     func pictureInPictureControllerDidStopPictureInPicture(
         _ pictureInPictureController: AVPictureInPictureController
     ) {
         pendingStart = false
-        channel.invokeMethod("pipModeChanged", arguments: false)
+        startRetryWorkItem?.cancel()
+        pinLayerBehindFlutter()
         if let fallbackPlayer {
             fallbackPlayer.pause()
             self.fallbackPlayer = nil
@@ -310,12 +416,18 @@ final class PlayerPipHost: NSObject, AVPictureInPictureControllerDelegate {
                 playerView.playerLayer.player = nil
             }
         }
+        notifyPipMode(active: false)
+        deactivateInlineSurface()
     }
 
     func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
     ) {
+        pinLayerBehindFlutter()
+        DispatchQueue.main.async { [weak self] in
+            self?.pinLayerBehindFlutter()
+        }
         completionHandler(true)
     }
 }

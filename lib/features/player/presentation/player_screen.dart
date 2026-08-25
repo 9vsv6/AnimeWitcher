@@ -76,6 +76,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   final ValueNotifier<bool> _controlsVisible = ValueNotifier(false);
 
   final GlobalKey<SkyStreamPlayerControlsState> _controlsKeyFinal = GlobalKey();
+  bool _iosPipHidesFlutterVideo = false;
 
   // The persistent root key handler. It always stays focusable (it is the
   // parent of the ExcludeFocus'd chrome), so when the controls hide we route
@@ -713,6 +714,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             await _handleBack();
           },
           child: Scaffold(
+            backgroundColor: _iosPipHidesFlutterVideo
+                ? Colors.transparent
+                : null,
             body: Focus(
               focusNode: _rootFocusNode,
               autofocus: true,
@@ -734,6 +738,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           // Phase 8: Switch engine based on stream type
                           child: Consumer(
                             builder: (context, ref, _) {
+                              if (_iosPipHidesFlutterVideo) {
+                                return const SizedBox.expand();
+                              }
                               final useExoPlayer = ref.watch(
                                 playerControllerProvider.select(
                                   (s) => s.useExoPlayer,
@@ -841,6 +848,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                             if (!mounted) return;
                             _controlsVisible.value = v;
                             _publishPersistentPlayerHeader(controlsVisible: v);
+                          },
+                          onIosPipSurfaceChanged: (active) {
+                            if (!mounted) return;
+                            setState(() => _iosPipHidesFlutterVideo = active);
                           },
                         ),
                       ),

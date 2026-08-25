@@ -39,4 +39,30 @@ class PlayerPip {
     if (ratio > maxAspectRatio) return (239, 100);
     return (safeW, safeH);
   }
+
+  /// Android sends a bool. iOS sends `{active, positionMs}` so restore can
+  /// seek the Flutter engine back to the native clock.
+  static PlayerPipMode modeFromNative(dynamic arguments) {
+    if (arguments is bool) {
+      return PlayerPipMode(active: arguments);
+    }
+    if (arguments is Map) {
+      final active = arguments['active'] == true;
+      final raw = arguments['positionMs'];
+      final positionMs = switch (raw) {
+        final int value => value,
+        final num value => value.toInt(),
+        _ => null,
+      };
+      return PlayerPipMode(active: active, positionMs: positionMs);
+    }
+    return const PlayerPipMode(active: false);
+  }
+}
+
+class PlayerPipMode {
+  const PlayerPipMode({required this.active, this.positionMs});
+
+  final bool active;
+  final int? positionMs;
 }
