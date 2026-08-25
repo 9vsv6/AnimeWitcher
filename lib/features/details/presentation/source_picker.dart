@@ -147,7 +147,7 @@ String _qualityLabel(String? quality) {
 
   final raw = quality?.trim();
   if (raw != null && raw.isNotEmpty) return raw;
-  return 'Unknown';
+  return 'غير معروف';
 }
 
 class _SourcePickerEntry {

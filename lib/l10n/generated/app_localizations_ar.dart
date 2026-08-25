@@ -24,12 +24,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get explore => 'استكشاف';
 
   @override
-  String get exploreAnime => 'استكشاف الأنمي';
-
-  @override
-  String get exploreMovies => 'استكشاف الأفلام';
-
-  @override
   String get library => 'المكتبة';
 
   @override
@@ -58,15 +52,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get defaultHomeScreen => 'الشاشة الرئيسية الافتراضية';
-
-  @override
-  String get titlePosition => 'موضع العنوان';
-
-  @override
-  String get titlePositionBelowPoster => 'أسفل الملصق';
-
-  @override
-  String get titlePositionInsidePoster => 'داخل الملصق';
 
   @override
   String get player => 'المشغل';
@@ -127,23 +112,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get disabled => 'معطل';
-
-  @override
-  String get discord => 'Discord';
-
-  @override
-  String get discordSubtitle => 'انضم إلى خادمنا';
-
-  @override
-  String get telegram => 'Telegram';
-
-  @override
-  String get telegramSubtitle => 'انضم إلى قناتنا';
-
-  @override
-  String developedBy(String name) {
-    return 'تم التطوير بواسطة $name';
-  }
 
   @override
   String get system => 'النظام';
@@ -474,9 +442,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get playNow => 'تشغيل الآن';
 
   @override
-  String get upNext => 'التالي';
-
-  @override
   String get deleteDownloadPrompt => 'حذف التنزيل؟';
 
   @override
@@ -711,11 +676,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String playEpisode(String label, Object season, Object episode) {
     return '$label م$season ح$episode';
-  }
-
-  @override
-  String playEpisodeOnly(String label, int episode) {
-    return '$label حلقة $episode';
   }
 
   @override
@@ -1007,15 +967,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get skip => 'تخطي';
 
   @override
-  String get skipIntro => 'تخطي المقدمة';
-
-  @override
-  String get skipOutro => 'تخطي النهاية';
-
-  @override
-  String get skipRecap => 'تخطي الملخص السابق';
-
-  @override
   String get goLive => 'البث المباشر';
 
   @override
@@ -1045,13 +996,26 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pending => 'قيد الانتظار';
 
   @override
-  String get openSubtitles => 'OpenSubtitles';
+  String get discord => 'Discord';
 
   @override
-  String get subDl => 'SubDL';
+  String get discordSubtitle => 'انضم إلى خادمنا';
 
   @override
-  String get subSource => 'SubSource';
+  String get telegram => 'Telegram';
+
+  @override
+  String get telegramSubtitle => 'انضم إلى قناتنا';
+
+  @override
+  String developedBy(String name) {
+    return 'تم التطوير بواسطة $name';
+  }
+
+  @override
+  String playEpisodeOnly(String label, int episode) {
+    return '$label حلقة $episode';
+  }
 
   @override
   String get wifiQualityPreference => 'تفضيل جودة الواي فاي';
@@ -1064,9 +1028,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get subtitleAccounts => 'حسابات الترجمة';
-
-  @override
-  String get accounts => 'الحسابات';
 
   @override
   String get notLoggedIn => 'غير مسجّل الدخول';
@@ -1151,6 +1112,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get openLink => 'فتح الرابط';
 
   @override
+  String get openSubtitles => 'OpenSubtitles';
+
+  @override
+  String get subDl => 'SubDL';
+
+  @override
+  String get subSource => 'SubSource';
+
+  @override
   String get diagnostics => 'التشخيصات';
 
   @override
@@ -1186,10 +1156,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get playerControls => 'عناصر تحكم المشغل';
 
   @override
-  String get playerControlsSubtitle =>
-      'إظهار أزرار التحكم في المشغل أو إخفاؤها';
-
-  @override
   String get showPip => 'زر صورة داخل صورة';
 
   @override
@@ -1205,5 +1171,39 @@ class AppLocalizationsAr extends AppLocalizations {
   String get showEpisodes => 'زر الحلقات';
 
   @override
+  String get playerControlsSubtitle =>
+      'إظهار أزرار التحكم في المشغل أو إخفاؤها';
+
+  @override
   String get relatedAnime => 'ذات صلة';
+
+  @override
+  String get accounts => 'الحسابات';
+
+  @override
+  String get exploreAnime => 'استكشاف الأنمي';
+
+  @override
+  String get exploreMovies => 'استكشاف الأفلام';
+
+  @override
+  String get skipIntro => 'تخطي المقدمة';
+
+  @override
+  String get skipOutro => 'تخطي النهاية';
+
+  @override
+  String get skipRecap => 'تخطي الملخص السابق';
+
+  @override
+  String get titlePosition => 'موضع العنوان';
+
+  @override
+  String get titlePositionBelowPoster => 'أسفل الملصق';
+
+  @override
+  String get titlePositionInsidePoster => 'داخل الملصق';
+
+  @override
+  String get upNext => 'التالي';
 }

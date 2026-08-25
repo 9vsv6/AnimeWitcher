@@ -11,11 +11,9 @@ import '../../../../core/utils/app_utils.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../player_settings_provider.dart';
 import '../general_settings_provider.dart';
-import '../../../../core/providers/locale_provider.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
 import 'package:skystream/core/services/notification_service.dart';
 /// Returns a localized label for a resize mode string.
 String getResizeModeLabel(String mode, AppLocalizations l10n) {
@@ -515,66 +513,6 @@ void showClearCacheDialog(BuildContext context, WidgetRef ref) {
           child: Text(l10n.clearCacheNow),
         ),
       ],
-    ),
-  );
-}
-
-/// Shows a dialog to pick the application language.
-void showLanguageDialog(
-  BuildContext context,
-  WidgetRef ref,
-  Locale currentLocale,
-) {
-  final l10n = AppLocalizations.of(context)!;
-
-  showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(l10n.selectLanguage),
-      content: FutureBuilder<List<Map<String, dynamic>>>(
-        future: Future.wait(
-          AppLocalizations.supportedLocales.map((locale) async {
-            final localL10n = await AppLocalizations.delegate.load(locale);
-            return {'label': localL10n.languageName, 'locale': locale};
-          }),
-        ),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const SizedBox(
-              height: 100,
-              child: Center(child: AppLoadingIndicator()),
-            );
-          }
-
-          final options = snapshot.data!;
-
-          return RadioGroup<Locale>(
-            groupValue: currentLocale,
-            onChanged: (val) {
-              if (val == null) return;
-              ref.read(localeProvider.notifier).setLocale(val);
-              Navigator.pop<void>(context);
-            },
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: options.map((opt) {
-                  final locale = opt['locale'] as Locale;
-                  return ListTile(
-                    title: Text(opt['label'] as String),
-                    leading: Radio<Locale>(value: locale),
-                    onTap: () {
-                      ref.read(localeProvider.notifier).setLocale(locale);
-                      Navigator.pop<void>(context);
-                    },
-                  );
-                }).toList(),
-              ),
-            ),
-          );
-        },
-      ),
     ),
   );
 }

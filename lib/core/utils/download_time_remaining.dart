@@ -4,8 +4,7 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 
 import '../services/download_service.dart';
 
-/// Formats [DownloadProgressData.timeRemaining] the same way as the episode
-/// download progress dialog (Arabic dual/plural units included).
+/// Formats [DownloadProgressData.timeRemaining] with Arabic dual/plural units.
 String formatDownloadTimeRemaining(
   BuildContext context,
   DownloadProgressData data,
@@ -16,68 +15,71 @@ String formatDownloadTimeRemaining(
   if (data.timeRemaining.inSeconds <= 0) return l10n.calculating;
 
   final duration = data.timeRemaining;
-  if (Localizations.localeOf(context).languageCode == 'ar') {
-    if (duration.inHours > 0) {
-      final parts = <String>[
+  if (duration.inHours > 0) {
+    final parts = <String>[
+      _formatArabicUnit(
+        duration.inHours,
+        singular: 'ساعة',
+        dual: 'ساعتان',
+        plural: 'ساعات',
+      ),
+    ];
+    final minutes = duration.inMinutes % 60;
+    if (minutes > 0) {
+      parts.add(
         _formatArabicUnit(
-          duration.inHours,
-          singular: 'ساعة',
-          dual: 'ساعتان',
-          plural: 'ساعات',
-        ),
-      ];
-      final minutes = duration.inMinutes % 60;
-      if (minutes > 0) {
-        parts.add(
-          _formatArabicUnit(
-            minutes,
-            singular: 'دقيقة',
-            dual: 'دقيقتان',
-            plural: 'دقائق',
-          ),
-        );
-      }
-      return parts.join(' و');
-    }
-
-    if (duration.inMinutes > 0) {
-      final parts = <String>[
-        _formatArabicUnit(
-          duration.inMinutes,
+          minutes,
           singular: 'دقيقة',
           dual: 'دقيقتان',
           plural: 'دقائق',
         ),
-      ];
-      final seconds = duration.inSeconds % 60;
-      if (seconds > 0) {
-        parts.add(
-          _formatArabicUnit(
-            seconds,
-            singular: 'ثانية',
-            dual: 'ثانيتان',
-            plural: 'ثوانٍ',
-          ),
-        );
-      }
-      return parts.join(' و');
+      );
     }
-
-    return _formatArabicUnit(
-      duration.inSeconds,
-      singular: 'ثانية',
-      dual: 'ثانيتان',
-      plural: 'ثوانٍ',
-    );
+    return parts.join(' و');
   }
 
-  if (duration.inHours > 0) {
-    return '${duration.inHours}h ${duration.inMinutes % 60}m';
-  }
   if (duration.inMinutes > 0) {
-    return '${duration.inMinutes}m ${duration.inSeconds % 60}s';
+    final parts = <String>[
+      _formatArabicUnit(
+        duration.inMinutes,
+        singular: 'دقيقة',
+        dual: 'دقيقتان',
+        plural: 'دقائق',
+      ),
+    ];
+    final seconds = duration.inSeconds % 60;
+    if (seconds > 0) {
+      parts.add(
+        _formatArabicUnit(
+          seconds,
+          singular: 'ثانية',
+          dual: 'ثانيتان',
+          plural: 'ثوانٍ',
+        ),
+      );
+    }
+    return parts.join(' و');
   }
-  return '${duration.inSeconds}s';
+
+  return _formatArabicUnit(
+    duration.inSeconds,
+    singular: 'ثانية',
+    dual: 'ثانيتان',
+    plural: 'ثوانٍ',
+  );
+}
+
+/// Status / throughput line shown on download tiles and the progress dialog.
+String formatDownloadSpeed(DownloadProgressData data, AppLocalizations l10n) {
+  if (data.status == TaskStatus.paused) return l10n.statusPaused;
+  if (data.progress >= 1.0) return l10n.statusFinished;
+  if (data.networkSpeed < 0) return l10n.calculating;
+  if (data.networkSpeed == 0) return '0 MB/s';
+
+  if (data.networkSpeed < 1.0) {
+    return '${(data.networkSpeed * 1024).toStringAsFixed(2)} KB/s';
+  }
+  return '${data.networkSpeed.toStringAsFixed(2)} MB/s';
 }
 
 String _formatArabicUnit(

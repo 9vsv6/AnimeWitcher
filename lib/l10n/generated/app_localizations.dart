@@ -6,7 +6,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_ar.dart';
-import 'app_localizations_en.dart';
 
 // ignore_for_file: type=lint
 
@@ -93,2224 +92,2221 @@ abstract class AppLocalizations {
       ];
 
   /// A list of this localizations delegate's supported locales.
-  static const List<Locale> supportedLocales = <Locale>[
-    Locale('ar'),
-    Locale('en'),
-  ];
+  static const List<Locale> supportedLocales = <Locale>[Locale('ar')];
 
   /// No description provided for @appTitle.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'AnimeWitcher'**
   String get appTitle;
 
   /// No description provided for @languageName.
   ///
-  /// In en, this message translates to:
-  /// **'English'**
+  /// In ar, this message translates to:
+  /// **'العربية'**
   String get languageName;
 
   /// No description provided for @home.
   ///
-  /// In en, this message translates to:
-  /// **'Home'**
+  /// In ar, this message translates to:
+  /// **'الرئيسية'**
   String get home;
 
   /// No description provided for @search.
   ///
-  /// In en, this message translates to:
-  /// **'Search'**
+  /// In ar, this message translates to:
+  /// **'بحث'**
   String get search;
 
   /// No description provided for @explore.
   ///
-  /// In en, this message translates to:
-  /// **'Explore'**
+  /// In ar, this message translates to:
+  /// **'استكشاف'**
   String get explore;
-
-  /// No description provided for @exploreAnime.
-  ///
-  /// In en, this message translates to:
-  /// **'Explore Anime'**
-  String get exploreAnime;
-
-  /// No description provided for @exploreMovies.
-  ///
-  /// In en, this message translates to:
-  /// **'Explore Movies'**
-  String get exploreMovies;
 
   /// No description provided for @library.
   ///
-  /// In en, this message translates to:
-  /// **'Library'**
+  /// In ar, this message translates to:
+  /// **'المكتبة'**
   String get library;
 
   /// No description provided for @settings.
   ///
-  /// In en, this message translates to:
-  /// **'Settings'**
+  /// In ar, this message translates to:
+  /// **'الإعدادات'**
   String get settings;
 
   /// No description provided for @updateAvailable.
   ///
-  /// In en, this message translates to:
-  /// **'Update Available'**
+  /// In ar, this message translates to:
+  /// **'يتوفر تحديث'**
   String get updateAvailable;
 
   /// No description provided for @retry.
   ///
-  /// In en, this message translates to:
-  /// **'Retry'**
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
   String get retry;
 
   /// No description provided for @factoryReset.
   ///
-  /// In en, this message translates to:
-  /// **'Factory Reset'**
+  /// In ar, this message translates to:
+  /// **'إعادة ضبط المصنع'**
   String get factoryReset;
 
   /// No description provided for @startupError.
   ///
-  /// In en, this message translates to:
-  /// **'Startup Error'**
+  /// In ar, this message translates to:
+  /// **'خطأ في بدء التشغيل'**
   String get startupError;
 
   /// No description provided for @general.
   ///
-  /// In en, this message translates to:
-  /// **'General'**
+  /// In ar, this message translates to:
+  /// **'عام'**
   String get general;
 
   /// No description provided for @appTheme.
   ///
-  /// In en, this message translates to:
-  /// **'App Theme'**
+  /// In ar, this message translates to:
+  /// **'مظهر التطبيق'**
   String get appTheme;
 
   /// No description provided for @recordWatchHistory.
   ///
-  /// In en, this message translates to:
-  /// **'Record Watch History'**
+  /// In ar, this message translates to:
+  /// **'سجل المشاهدة'**
   String get recordWatchHistory;
 
   /// No description provided for @defaultHomeScreen.
   ///
-  /// In en, this message translates to:
-  /// **'Default Home Screen'**
+  /// In ar, this message translates to:
+  /// **'الشاشة الرئيسية الافتراضية'**
   String get defaultHomeScreen;
-
-  /// No description provided for @titlePosition.
-  ///
-  /// In en, this message translates to:
-  /// **'Title Position'**
-  String get titlePosition;
-
-  /// No description provided for @titlePositionBelowPoster.
-  ///
-  /// In en, this message translates to:
-  /// **'Below Poster'**
-  String get titlePositionBelowPoster;
-
-  /// No description provided for @titlePositionInsidePoster.
-  ///
-  /// In en, this message translates to:
-  /// **'Inside Poster'**
-  String get titlePositionInsidePoster;
 
   /// No description provided for @player.
   ///
-  /// In en, this message translates to:
-  /// **'Player'**
+  /// In ar, this message translates to:
+  /// **'المشغل'**
   String get player;
 
   /// No description provided for @defaultPlayer.
   ///
-  /// In en, this message translates to:
-  /// **'Default Player'**
+  /// In ar, this message translates to:
+  /// **'المشغل الافتراضي'**
   String get defaultPlayer;
 
   /// No description provided for @leftGesture.
   ///
-  /// In en, this message translates to:
-  /// **'Left Gesture'**
+  /// In ar, this message translates to:
+  /// **'إيماءة اليسار'**
   String get leftGesture;
 
   /// No description provided for @rightGesture.
   ///
-  /// In en, this message translates to:
-  /// **'Right Gesture'**
+  /// In ar, this message translates to:
+  /// **'إيماءة اليمين'**
   String get rightGesture;
 
   /// No description provided for @doubleTapToSeek.
   ///
-  /// In en, this message translates to:
-  /// **'Double Tap to Seek'**
+  /// In ar, this message translates to:
+  /// **'النقر المزدوج للتقديم/التأخير'**
   String get doubleTapToSeek;
 
   /// No description provided for @swipeToSeek.
   ///
-  /// In en, this message translates to:
-  /// **'Swipe to Seek'**
+  /// In ar, this message translates to:
+  /// **'السحب للتقديم/التأخير'**
   String get swipeToSeek;
 
   /// No description provided for @seekDuration.
   ///
-  /// In en, this message translates to:
-  /// **'Seek Duration'**
+  /// In ar, this message translates to:
+  /// **'مدة القفز'**
   String get seekDuration;
 
   /// No description provided for @bufferDepth.
   ///
-  /// In en, this message translates to:
-  /// **'Buffer depth'**
+  /// In ar, this message translates to:
+  /// **'عمق التخزين المؤقت'**
   String get bufferDepth;
 
   /// No description provided for @defaultResizeMode.
   ///
-  /// In en, this message translates to:
-  /// **'Default Resize Mode'**
+  /// In ar, this message translates to:
+  /// **'وضع تغيير الحجم الافتراضي'**
   String get defaultResizeMode;
 
   /// No description provided for @hardwareDecoding.
   ///
-  /// In en, this message translates to:
-  /// **'Hardware Decoding'**
+  /// In ar, this message translates to:
+  /// **'فك ترميز العتاد'**
   String get hardwareDecoding;
 
   /// No description provided for @network.
   ///
-  /// In en, this message translates to:
-  /// **'Network'**
+  /// In ar, this message translates to:
+  /// **'الشبكة'**
   String get network;
 
   /// No description provided for @dnsOverHttps.
   ///
-  /// In en, this message translates to:
-  /// **'DNS over HTTPS'**
+  /// In ar, this message translates to:
+  /// **'DNS عبر HTTPS'**
   String get dnsOverHttps;
 
   /// No description provided for @dohProvider.
   ///
-  /// In en, this message translates to:
-  /// **'DoH Provider'**
+  /// In ar, this message translates to:
+  /// **'مزود DoH'**
   String get dohProvider;
 
   /// No description provided for @appData.
   ///
-  /// In en, this message translates to:
-  /// **'App Data'**
+  /// In ar, this message translates to:
+  /// **'بيانات التطبيق'**
   String get appData;
 
   /// No description provided for @developer.
   ///
-  /// In en, this message translates to:
-  /// **'Developer'**
+  /// In ar, this message translates to:
+  /// **'المطور'**
   String get developer;
 
   /// No description provided for @developerOptions.
   ///
-  /// In en, this message translates to:
-  /// **'Developer Options'**
+  /// In ar, this message translates to:
+  /// **'خيارات المطور'**
   String get developerOptions;
 
   /// No description provided for @about.
   ///
-  /// In en, this message translates to:
-  /// **'About'**
+  /// In ar, this message translates to:
+  /// **'حول'**
   String get about;
 
   /// No description provided for @version.
   ///
-  /// In en, this message translates to:
-  /// **'Version'**
+  /// In ar, this message translates to:
+  /// **'الإصدار'**
   String get version;
 
   /// No description provided for @enabled.
   ///
-  /// In en, this message translates to:
-  /// **'Enabled'**
+  /// In ar, this message translates to:
+  /// **'مفعل'**
   String get enabled;
 
   /// No description provided for @disabled.
   ///
-  /// In en, this message translates to:
-  /// **'Disabled'**
+  /// In ar, this message translates to:
+  /// **'معطل'**
   String get disabled;
-
-  /// No description provided for @discord.
-  ///
-  /// In en, this message translates to:
-  /// **'Discord'**
-  String get discord;
-
-  /// No description provided for @discordSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Join our server'**
-  String get discordSubtitle;
-
-  /// No description provided for @telegram.
-  ///
-  /// In en, this message translates to:
-  /// **'Telegram'**
-  String get telegram;
-
-  /// No description provided for @telegramSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Join our channel'**
-  String get telegramSubtitle;
-
-  /// No description provided for @developedBy.
-  ///
-  /// In en, this message translates to:
-  /// **'Developed by {name}'**
-  String developedBy(String name);
 
   /// No description provided for @system.
   ///
-  /// In en, this message translates to:
-  /// **'System'**
+  /// In ar, this message translates to:
+  /// **'النظام'**
   String get system;
 
   /// No description provided for @dark.
   ///
-  /// In en, this message translates to:
-  /// **'Dark'**
+  /// In ar, this message translates to:
+  /// **'داكن'**
   String get dark;
 
   /// No description provided for @light.
   ///
-  /// In en, this message translates to:
-  /// **'Light'**
+  /// In ar, this message translates to:
+  /// **'فاتح'**
   String get light;
 
   /// No description provided for @later.
   ///
-  /// In en, this message translates to:
-  /// **'Later'**
+  /// In ar, this message translates to:
+  /// **'لاحقاً'**
   String get later;
 
   /// No description provided for @updateNow.
   ///
-  /// In en, this message translates to:
-  /// **'Update Now'**
+  /// In ar, this message translates to:
+  /// **'التحديث الآن'**
   String get updateNow;
 
   /// No description provided for @save.
   ///
-  /// In en, this message translates to:
-  /// **'Save'**
+  /// In ar, this message translates to:
+  /// **'حفظ'**
   String get save;
 
   /// No description provided for @cancel.
   ///
-  /// In en, this message translates to:
-  /// **'Cancel'**
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
   String get cancel;
 
   /// No description provided for @close.
   ///
-  /// In en, this message translates to:
-  /// **'Close'**
+  /// In ar, this message translates to:
+  /// **'إغلاق'**
   String get close;
 
   /// No description provided for @delete.
   ///
-  /// In en, this message translates to:
-  /// **'Delete'**
+  /// In ar, this message translates to:
+  /// **'حذف'**
   String get delete;
 
   /// No description provided for @viewDetails.
   ///
-  /// In en, this message translates to:
-  /// **'View Details'**
+  /// In ar, this message translates to:
+  /// **'عرض التفاصيل'**
   String get viewDetails;
 
   /// No description provided for @clearAll.
   ///
-  /// In en, this message translates to:
-  /// **'Clear All'**
+  /// In ar, this message translates to:
+  /// **'مسح الكل'**
   String get clearAll;
 
   /// No description provided for @clearAllHistory.
   ///
-  /// In en, this message translates to:
-  /// **'Clear All History'**
+  /// In ar, this message translates to:
+  /// **'مسح كل السجل'**
   String get clearAllHistory;
 
   /// No description provided for @all.
   ///
-  /// In en, this message translates to:
-  /// **'All'**
+  /// In ar, this message translates to:
+  /// **'الكل'**
   String get all;
 
   /// No description provided for @none.
   ///
-  /// In en, this message translates to:
-  /// **'None'**
+  /// In ar, this message translates to:
+  /// **'لا شيء'**
   String get none;
 
   /// No description provided for @confirmDownload.
   ///
-  /// In en, this message translates to:
-  /// **'Confirm Download'**
+  /// In ar, this message translates to:
+  /// **'تأكيد التنزيل'**
   String get confirmDownload;
 
   /// No description provided for @downloadNow.
   ///
-  /// In en, this message translates to:
-  /// **'Download Now'**
+  /// In ar, this message translates to:
+  /// **'تنزيل الآن'**
   String get downloadNow;
 
   /// No description provided for @selectSource.
   ///
-  /// In en, this message translates to:
-  /// **'Select Source'**
+  /// In ar, this message translates to:
+  /// **'اختر المصدر'**
   String get selectSource;
 
   /// No description provided for @downloadUnavailable.
   ///
-  /// In en, this message translates to:
-  /// **'Download Unavailable'**
+  /// In ar, this message translates to:
+  /// **'التنزيل غير متاح'**
   String get downloadUnavailable;
 
   /// No description provided for @selectAnotherSource.
   ///
-  /// In en, this message translates to:
-  /// **'Select Another Source'**
+  /// In ar, this message translates to:
+  /// **'اختر مصدراً آخر'**
   String get selectAnotherSource;
 
   /// No description provided for @watchHistoryCleared.
   ///
-  /// In en, this message translates to:
-  /// **'Watch history cleared'**
+  /// In ar, this message translates to:
+  /// **'تم مسح سجل المشاهدة'**
   String get watchHistoryCleared;
 
   /// No description provided for @downloadingUpdate.
   ///
-  /// In en, this message translates to:
-  /// **'Downloading update...'**
+  /// In ar, this message translates to:
+  /// **'جارٍ تنزيل التحديث...'**
   String get downloadingUpdate;
 
   /// No description provided for @errorPrefix.
   ///
-  /// In en, this message translates to:
-  /// **'Error: {message}'**
+  /// In ar, this message translates to:
+  /// **'خطأ: {message}'**
   String errorPrefix(String message);
 
   /// No description provided for @updateAvailableTag.
   ///
-  /// In en, this message translates to:
-  /// **'Update Available: {tag}'**
+  /// In ar, this message translates to:
+  /// **'التحديث متاح: {tag}'**
   String updateAvailableTag(String tag);
 
   /// No description provided for @selectProviderToStart.
   ///
-  /// In en, this message translates to:
-  /// **'Select a provider to start watching'**
+  /// In ar, this message translates to:
+  /// **'اختر مزوداً لبدء المشاهدة'**
   String get selectProviderToStart;
 
   /// No description provided for @tapExtensionIcon.
   ///
-  /// In en, this message translates to:
-  /// **'Tap the extension icon in the corner'**
+  /// In ar, this message translates to:
+  /// **'اضغط على أيقونة الإضافة في الزاوية'**
   String get tapExtensionIcon;
 
   /// No description provided for @continueWatching.
   ///
-  /// In en, this message translates to:
-  /// **'Continue Watching'**
+  /// In ar, this message translates to:
+  /// **'مواصلة المشاهدة'**
   String get continueWatching;
 
   /// No description provided for @noInternetConnection.
   ///
-  /// In en, this message translates to:
-  /// **'No Internet Connection'**
+  /// In ar, this message translates to:
+  /// **'لا يوجد اتصال بالإنترنت'**
   String get noInternetConnection;
 
   /// No description provided for @siteNotReachable.
   ///
-  /// In en, this message translates to:
-  /// **'Site Not Reachable'**
+  /// In ar, this message translates to:
+  /// **'لا يمكن الوصول إلى الموقع'**
   String get siteNotReachable;
 
   /// No description provided for @checkConnectionOrDownloads.
   ///
-  /// In en, this message translates to:
-  /// **'Check your connection or view your downloaded content.'**
+  /// In ar, this message translates to:
+  /// **'تحقق من اتصالك أو شاهد المحتوى الذي قمت بتنزيله.'**
   String get checkConnectionOrDownloads;
 
   /// No description provided for @tryVpnOrConnection.
   ///
-  /// In en, this message translates to:
-  /// **'Please try accessing the site with a VPN or checking your internet connection.'**
+  /// In ar, this message translates to:
+  /// **'يرجى محاولة الوصول إلى الموقع باستخدام VPN أو التحقق من اتصالك بالإنترنت.'**
   String get tryVpnOrConnection;
 
   /// No description provided for @errorDetails.
   ///
-  /// In en, this message translates to:
-  /// **'Error Details: {error}'**
+  /// In ar, this message translates to:
+  /// **'تفاصيل الخطأ: {error}'**
   String errorDetails(String error);
 
   /// No description provided for @goToDownloads.
   ///
-  /// In en, this message translates to:
-  /// **'Go to Downloads'**
+  /// In ar, this message translates to:
+  /// **'الانتقال إلى التنزيلات'**
   String get goToDownloads;
 
   /// No description provided for @selectProvider.
   ///
-  /// In en, this message translates to:
-  /// **'Select Provider'**
+  /// In ar, this message translates to:
+  /// **'اختر المزود'**
   String get selectProvider;
 
   /// No description provided for @searchHint.
   ///
-  /// In en, this message translates to:
-  /// **'Search movies, series...'**
+  /// In ar, this message translates to:
+  /// **'ابحث عن أفلام ومسلسلات...'**
   String get searchHint;
 
   /// No description provided for @searchFavoriteContent.
   ///
-  /// In en, this message translates to:
-  /// **'Search for your favorite content'**
+  /// In ar, this message translates to:
+  /// **'ابحث عن محتواك المفضل'**
   String get searchFavoriteContent;
 
   /// No description provided for @pressSearchOrEnter.
   ///
-  /// In en, this message translates to:
-  /// **'Press the Search key or Enter to start'**
+  /// In ar, this message translates to:
+  /// **'اضغط على مفتاح البحث أو الإدخال للبدء'**
   String get pressSearchOrEnter;
 
   /// No description provided for @noResultsFound.
   ///
-  /// In en, this message translates to:
-  /// **'No results found.'**
+  /// In ar, this message translates to:
+  /// **'لم يتم العثور على نتائج.'**
   String get noResultsFound;
 
   /// No description provided for @couldNotLoadTrending.
   ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t load trending items'**
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل العناصر الشائعة'**
   String get couldNotLoadTrending;
 
   /// No description provided for @popularMovies.
   ///
-  /// In en, this message translates to:
-  /// **'Popular Movies'**
+  /// In ar, this message translates to:
+  /// **'أفلام شعبية'**
   String get popularMovies;
 
   /// No description provided for @popularTVShows.
   ///
-  /// In en, this message translates to:
-  /// **'Popular TV Shows'**
+  /// In ar, this message translates to:
+  /// **'مسلسلات تلفزيونية شعبية'**
   String get popularTVShows;
 
   /// No description provided for @newMovies.
   ///
-  /// In en, this message translates to:
-  /// **'New Movies'**
+  /// In ar, this message translates to:
+  /// **'أفلام جديدة'**
   String get newMovies;
 
   /// No description provided for @newTVShows.
   ///
-  /// In en, this message translates to:
-  /// **'New TV Shows'**
+  /// In ar, this message translates to:
+  /// **'مسلسلات تلفزيونية جديدة'**
   String get newTVShows;
 
   /// No description provided for @featuredMovies.
   ///
-  /// In en, this message translates to:
-  /// **'Featured Movies'**
+  /// In ar, this message translates to:
+  /// **'أفلام مختارة'**
   String get featuredMovies;
 
   /// No description provided for @featuredTVShows.
   ///
-  /// In en, this message translates to:
-  /// **'Featured TV Shows'**
+  /// In ar, this message translates to:
+  /// **'مسلسلات تلفزيونية مختارة'**
   String get featuredTVShows;
 
   /// No description provided for @lastVideosTVShows.
   ///
-  /// In en, this message translates to:
-  /// **'Last videos TV Shows'**
+  /// In ar, this message translates to:
+  /// **'آخر المسلسلات التلفزيونية'**
   String get lastVideosTVShows;
 
   /// No description provided for @downloads.
   ///
-  /// In en, this message translates to:
-  /// **'Downloads'**
+  /// In ar, this message translates to:
+  /// **'التنزيلات'**
   String get downloads;
 
   /// No description provided for @bookmarks.
   ///
-  /// In en, this message translates to:
-  /// **'Bookmarks'**
+  /// In ar, this message translates to:
+  /// **'الإشارات المرجعية'**
   String get bookmarks;
 
   /// No description provided for @noDownloadsYet.
   ///
-  /// In en, this message translates to:
-  /// **'No downloads yet'**
+  /// In ar, this message translates to:
+  /// **'لا توجد تنزيلات بعد'**
   String get noDownloadsYet;
 
   /// No description provided for @episodesCount.
   ///
-  /// In en, this message translates to:
-  /// **'{count} Episodes • {done} Done'**
+  /// In ar, this message translates to:
+  /// **'{count} حلقة • {done} اكتملت'**
   String episodesCount(int count, int done);
 
   /// No description provided for @deleteAllEpisodes.
   ///
-  /// In en, this message translates to:
-  /// **'Delete All Episodes'**
+  /// In ar, this message translates to:
+  /// **'حذف جميع الحلقات'**
   String get deleteAllEpisodes;
 
   /// No description provided for @confirmDeleteAllEpisodes.
   ///
-  /// In en, this message translates to:
-  /// **'Are you sure you want to delete all {count} episodes of \"{title}\" and their files?'**
+  /// In ar, this message translates to:
+  /// **'هل أنت متأكد أنك تريد حذف جميع الحلقات الـ {count} من \"{title}\" وملفاتها؟'**
   String confirmDeleteAllEpisodes(int count, String title);
 
   /// No description provided for @deleteAll.
   ///
-  /// In en, this message translates to:
-  /// **'Delete All'**
+  /// In ar, this message translates to:
+  /// **'حذف الكل'**
   String get deleteAll;
 
   /// No description provided for @completed.
   ///
-  /// In en, this message translates to:
-  /// **'Completed'**
+  /// In ar, this message translates to:
+  /// **'مكتمل'**
   String get completed;
 
   /// No description provided for @statusQueued.
   ///
-  /// In en, this message translates to:
-  /// **'Queued...'**
+  /// In ar, this message translates to:
+  /// **'في الانتظار...'**
   String get statusQueued;
 
   /// No description provided for @statusDownloading.
   ///
-  /// In en, this message translates to:
-  /// **'Downloading...'**
+  /// In ar, this message translates to:
+  /// **'جارٍ التنزيل...'**
   String get statusDownloading;
 
   /// No description provided for @statusFinished.
   ///
-  /// In en, this message translates to:
-  /// **'Finished'**
+  /// In ar, this message translates to:
+  /// **'انتهى'**
   String get statusFinished;
 
   /// No description provided for @statusFailed.
   ///
-  /// In en, this message translates to:
-  /// **'Failed'**
+  /// In ar, this message translates to:
+  /// **'فشل'**
   String get statusFailed;
 
   /// No description provided for @statusCanceled.
   ///
-  /// In en, this message translates to:
-  /// **'Canceled'**
+  /// In ar, this message translates to:
+  /// **'ملغى'**
   String get statusCanceled;
 
   /// No description provided for @statusPaused.
   ///
-  /// In en, this message translates to:
-  /// **'Paused'**
+  /// In ar, this message translates to:
+  /// **'متوقف مؤقتاً'**
   String get statusPaused;
 
   /// No description provided for @statusWaiting.
   ///
-  /// In en, this message translates to:
-  /// **'Waiting...'**
+  /// In ar, this message translates to:
+  /// **'انتظار...'**
   String get statusWaiting;
 
   /// No description provided for @fileNotFoundRemoving.
   ///
-  /// In en, this message translates to:
-  /// **'File not found on disk. Removing record.'**
+  /// In ar, this message translates to:
+  /// **'الملف غير موجود على القرص. جارٍ إزالة السجل.'**
   String get fileNotFoundRemoving;
 
   /// No description provided for @fileNotFound.
   ///
-  /// In en, this message translates to:
-  /// **'File not found'**
+  /// In ar, this message translates to:
+  /// **'الملف غير موجود'**
   String get fileNotFound;
 
   /// No description provided for @deleteDownload.
   ///
-  /// In en, this message translates to:
-  /// **'Delete Download'**
+  /// In ar, this message translates to:
+  /// **'حذف التنزيل'**
   String get deleteDownload;
 
   /// No description provided for @confirmDeleteDownload.
   ///
-  /// In en, this message translates to:
-  /// **'Are you sure you want to delete this download and its file?'**
+  /// In ar, this message translates to:
+  /// **'هل أنت متأكد أنك تريد حذف هذا التنزيل وملفه؟'**
   String get confirmDeleteDownload;
 
   /// No description provided for @libraryEmpty.
   ///
-  /// In en, this message translates to:
-  /// **'Your library is empty'**
+  /// In ar, this message translates to:
+  /// **'مكتبتك فارغة'**
   String get libraryEmpty;
 
   /// No description provided for @language.
   ///
-  /// In en, this message translates to:
-  /// **'Language'**
+  /// In ar, this message translates to:
+  /// **'اللغة'**
   String get language;
 
   /// No description provided for @english.
   ///
-  /// In en, this message translates to:
-  /// **'English'**
+  /// In ar, this message translates to:
+  /// **'الإنجليزية'**
   String get english;
 
   /// No description provided for @hindi.
   ///
-  /// In en, this message translates to:
-  /// **'Hindi (हिंदी)'**
+  /// In ar, this message translates to:
+  /// **'الهندية'**
   String get hindi;
 
   /// No description provided for @kannada.
   ///
-  /// In en, this message translates to:
-  /// **'Kannada (ಕನ್ನಡ)'**
+  /// In ar, this message translates to:
+  /// **'الكانادية'**
   String get kannada;
 
   /// No description provided for @unknown.
   ///
-  /// In en, this message translates to:
-  /// **'Unknown'**
+  /// In ar, this message translates to:
+  /// **'غير معروف'**
   String get unknown;
 
   /// No description provided for @recommended.
   ///
-  /// In en, this message translates to:
-  /// **'Recommended'**
+  /// In ar, this message translates to:
+  /// **'موصى به'**
   String get recommended;
 
   /// No description provided for @on.
   ///
-  /// In en, this message translates to:
-  /// **'On'**
+  /// In ar, this message translates to:
+  /// **'تشغيل'**
   String get on;
 
   /// No description provided for @off.
   ///
-  /// In en, this message translates to:
-  /// **'Off'**
+  /// In ar, this message translates to:
+  /// **'إيقاف'**
   String get off;
 
   /// No description provided for @resetDataSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Clear settings & database, keep plugin'**
+  /// In ar, this message translates to:
+  /// **'مسح الإعدادات وقاعدة البيانات، والحفاظ على الإضافات'**
   String get resetDataSubtitle;
 
   /// No description provided for @factoryResetSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Delete all data, settings, and extensions'**
+  /// In ar, this message translates to:
+  /// **'حذف جميع البيانات والإعدادات والإضافات'**
   String get factoryResetSubtitle;
 
   /// No description provided for @developerOptionsSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Debug tools & local play'**
+  /// In ar, this message translates to:
+  /// **'أدوات التصحيح والتشغيل المحلي'**
   String get developerOptionsSubtitle;
 
   /// No description provided for @loading.
   ///
-  /// In en, this message translates to:
-  /// **'Loading...'**
+  /// In ar, this message translates to:
+  /// **'جارٍ التحميل...'**
   String get loading;
 
   /// No description provided for @sec.
   ///
-  /// In en, this message translates to:
-  /// **'sec'**
+  /// In ar, this message translates to:
+  /// **'ثانية'**
   String get sec;
 
   /// No description provided for @min.
   ///
-  /// In en, this message translates to:
-  /// **'min'**
+  /// In ar, this message translates to:
+  /// **'دقيقة'**
   String get min;
 
   /// No description provided for @internalPlayer.
   ///
-  /// In en, this message translates to:
-  /// **'Internal (media_kit)'**
+  /// In ar, this message translates to:
+  /// **'مشغل داخلي (media_kit)'**
   String get internalPlayer;
 
   /// No description provided for @builtInPlayer.
   ///
-  /// In en, this message translates to:
-  /// **'Built-in player'**
+  /// In ar, this message translates to:
+  /// **'المشغل المدمج'**
   String get builtInPlayer;
 
   /// No description provided for @customNotSet.
   ///
-  /// In en, this message translates to:
-  /// **'Custom (not set)'**
+  /// In ar, this message translates to:
+  /// **'مخصص (غير محدد)'**
   String get customNotSet;
 
   /// No description provided for @selectGesture.
   ///
-  /// In en, this message translates to:
-  /// **'Select {side} Gesture'**
+  /// In ar, this message translates to:
+  /// **'اختر إيماءة {side}'**
   String selectGesture(String side);
 
   /// No description provided for @left.
   ///
-  /// In en, this message translates to:
-  /// **'Left'**
+  /// In ar, this message translates to:
+  /// **'اليسار'**
   String get left;
 
   /// No description provided for @right.
   ///
-  /// In en, this message translates to:
-  /// **'Right'**
+  /// In ar, this message translates to:
+  /// **'اليمين'**
   String get right;
 
   /// No description provided for @selectSeekDuration.
   ///
-  /// In en, this message translates to:
-  /// **'Select Seek Duration'**
+  /// In ar, this message translates to:
+  /// **'اختر مدة القفز'**
   String get selectSeekDuration;
 
   /// No description provided for @selectBufferDepth.
   ///
-  /// In en, this message translates to:
-  /// **'Select Buffer depth'**
+  /// In ar, this message translates to:
+  /// **'اختر عمق التخزين المؤقت'**
   String get selectBufferDepth;
 
   /// No description provided for @subtitleSettings.
   ///
-  /// In en, this message translates to:
-  /// **'Subtitle Settings'**
+  /// In ar, this message translates to:
+  /// **'إعدادات الترجمة'**
   String get subtitleSettings;
 
   /// No description provided for @size.
   ///
-  /// In en, this message translates to:
-  /// **'Size: {size}'**
+  /// In ar, this message translates to:
+  /// **'الحجم: {size}'**
   String size(int size);
 
   /// No description provided for @background.
   ///
-  /// In en, this message translates to:
-  /// **'Background'**
+  /// In ar, this message translates to:
+  /// **'الخلفية'**
   String get background;
 
   /// No description provided for @customDohUrlLabel.
   ///
-  /// In en, this message translates to:
-  /// **'Custom DoH URL'**
+  /// In ar, this message translates to:
+  /// **'رابط DoH مخصص'**
   String get customDohUrlLabel;
 
   /// No description provided for @enterCustomDohUrl.
   ///
-  /// In en, this message translates to:
-  /// **'Enter your own DoH URL'**
+  /// In ar, this message translates to:
+  /// **'أدخل رابط DoH الخاص بك'**
   String get enterCustomDohUrl;
 
   /// No description provided for @chooseTheme.
   ///
-  /// In en, this message translates to:
-  /// **'Choose Theme'**
+  /// In ar, this message translates to:
+  /// **'اختر المظهر'**
   String get chooseTheme;
 
   /// No description provided for @resetDataDialogTitle.
   ///
-  /// In en, this message translates to:
-  /// **'Reset Data?'**
+  /// In ar, this message translates to:
+  /// **'إعادة ضبط البيانات؟'**
   String get resetDataDialogTitle;
 
   /// No description provided for @resetDataDialogContent.
   ///
-  /// In en, this message translates to:
-  /// **'This will clear Settings, Favorites, and History. Your installed Extensions will NOT be deleted.'**
+  /// In ar, this message translates to:
+  /// **'سيؤدي هذا إلى مسح الإعدادات والمفضلات والسجل. لن يتم حذف إضافاتك المثبتة.'**
   String get resetDataDialogContent;
 
   /// No description provided for @factoryResetDialogTitle.
   ///
-  /// In en, this message translates to:
-  /// **'Factory Reset?'**
+  /// In ar, this message translates to:
+  /// **'إعادة ضبط المصنع؟'**
   String get factoryResetDialogTitle;
 
   /// No description provided for @factoryResetDialogContent.
   ///
-  /// In en, this message translates to:
-  /// **'This will delete EVERYTHING: Favorites, History, Settings, and ALL Extensions. This cannot be undone.'**
+  /// In ar, this message translates to:
+  /// **'سيؤدي هذا إلى حذف كل شيء: المفضلات والسجل والإعدادات وجميع الإضافات. لا يمكن التراجع عن هذا الإجراء.'**
   String get factoryResetDialogContent;
 
   /// No description provided for @selectLanguage.
   ///
-  /// In en, this message translates to:
-  /// **'Select Language'**
+  /// In ar, this message translates to:
+  /// **'اختر اللغة'**
   String get selectLanguage;
 
   /// No description provided for @synopsis.
   ///
-  /// In en, this message translates to:
-  /// **'Synopsis'**
+  /// In ar, this message translates to:
+  /// **'ملخص'**
   String get synopsis;
 
   /// No description provided for @noDescription.
   ///
-  /// In en, this message translates to:
-  /// **'No description available.'**
+  /// In ar, this message translates to:
+  /// **'لا يوجد وصف متاح.'**
   String get noDescription;
 
   /// No description provided for @videoAlreadyDownloadedPrompt.
   ///
-  /// In en, this message translates to:
-  /// **'This video is already downloaded. What would you like to do?'**
+  /// In ar, this message translates to:
+  /// **'هذا الفيديو تم تنزيله بالفعل. ماذا تريد أن تفعل؟'**
   String get videoAlreadyDownloadedPrompt;
 
   /// No description provided for @playNow.
   ///
-  /// In en, this message translates to:
-  /// **'Play Now'**
+  /// In ar, this message translates to:
+  /// **'تشغيل الآن'**
   String get playNow;
-
-  /// No description provided for @upNext.
-  ///
-  /// In en, this message translates to:
-  /// **'Up Next'**
-  String get upNext;
 
   /// No description provided for @deleteDownloadPrompt.
   ///
-  /// In en, this message translates to:
-  /// **'Delete Download?'**
+  /// In ar, this message translates to:
+  /// **'حذف التنزيل؟'**
   String get deleteDownloadPrompt;
 
   /// No description provided for @deleteDownloadConfirmation.
   ///
-  /// In en, this message translates to:
-  /// **'Are you sure you want to delete this file? This cannot be undone.'**
+  /// In ar, this message translates to:
+  /// **'هل أنت متأكد أنك تريد حذف هذا الملف؟ لا يمكن التراجع عن هذا الإجراء.'**
   String get deleteDownloadConfirmation;
 
   /// No description provided for @no.
   ///
-  /// In en, this message translates to:
-  /// **'No'**
+  /// In ar, this message translates to:
+  /// **'لا'**
   String get no;
 
   /// No description provided for @yesDelete.
   ///
-  /// In en, this message translates to:
-  /// **'Yes, Delete'**
+  /// In ar, this message translates to:
+  /// **'نعم، حذف'**
   String get yesDelete;
 
   /// No description provided for @downloadPaused.
   ///
-  /// In en, this message translates to:
-  /// **'Download Paused'**
+  /// In ar, this message translates to:
+  /// **'التنزيل متوقف مؤقتاً'**
   String get downloadPaused;
 
   /// No description provided for @downloading.
   ///
-  /// In en, this message translates to:
-  /// **'Downloading'**
+  /// In ar, this message translates to:
+  /// **'جارٍ التنزيل'**
   String get downloading;
 
   /// No description provided for @speed.
   ///
-  /// In en, this message translates to:
-  /// **'Speed'**
+  /// In ar, this message translates to:
+  /// **'السرعة'**
   String get speed;
 
   /// No description provided for @remaining.
   ///
-  /// In en, this message translates to:
-  /// **'Remaining'**
+  /// In ar, this message translates to:
+  /// **'المتبقي'**
   String get remaining;
 
   /// No description provided for @resume.
   ///
-  /// In en, this message translates to:
-  /// **'Resume'**
+  /// In ar, this message translates to:
+  /// **'استئناف'**
   String get resume;
 
   /// No description provided for @pause.
   ///
-  /// In en, this message translates to:
-  /// **'Pause'**
+  /// In ar, this message translates to:
+  /// **'إيقاف مؤقت'**
   String get pause;
 
   /// No description provided for @torrentContent.
   ///
-  /// In en, this message translates to:
-  /// **'Torrent Content'**
+  /// In ar, this message translates to:
+  /// **'محتوى تورنت'**
   String get torrentContent;
 
   /// No description provided for @audioTracks.
   ///
-  /// In en, this message translates to:
-  /// **'Audio Tracks'**
+  /// In ar, this message translates to:
+  /// **'المسارات الصوتية'**
   String get audioTracks;
 
   /// No description provided for @noAudioTracks.
   ///
-  /// In en, this message translates to:
-  /// **'No audio tracks found'**
+  /// In ar, this message translates to:
+  /// **'لم يتم العثور على مسارات صوتية'**
   String get noAudioTracks;
 
   /// No description provided for @subtitles.
   ///
-  /// In en, this message translates to:
-  /// **'Subtitles'**
+  /// In ar, this message translates to:
+  /// **'الترجمات'**
   String get subtitles;
 
   /// No description provided for @options.
   ///
-  /// In en, this message translates to:
-  /// **'Options'**
+  /// In ar, this message translates to:
+  /// **'خيارات'**
   String get options;
 
   /// No description provided for @noSubtitlesFound.
   ///
-  /// In en, this message translates to:
-  /// **'No subtitle tracks found'**
+  /// In ar, this message translates to:
+  /// **'لم يتم العثور على مسارات ترجمة'**
   String get noSubtitlesFound;
 
   /// No description provided for @playbackSpeed.
   ///
-  /// In en, this message translates to:
-  /// **'Playback Speed'**
+  /// In ar, this message translates to:
+  /// **'سرعة التشغيل'**
   String get playbackSpeed;
 
   /// No description provided for @subtitleOptions.
   ///
-  /// In en, this message translates to:
-  /// **'Subtitle Options'**
+  /// In ar, this message translates to:
+  /// **'خيارات الترجمة'**
   String get subtitleOptions;
 
   /// No description provided for @hlsSubtitleWarning.
   ///
-  /// In en, this message translates to:
-  /// **'External subtitle files are not supported on the active HLS player on this platform.'**
+  /// In ar, this message translates to:
+  /// **'ملفات الترجمة الخارجية غير مدعومة على مشغل HLS النشط على هذه المنصة.'**
   String get hlsSubtitleWarning;
 
   /// No description provided for @loadFromDevice.
   ///
-  /// In en, this message translates to:
-  /// **'Load from Device'**
+  /// In ar, this message translates to:
+  /// **'تحميل من الجهاز'**
   String get loadFromDevice;
 
   /// No description provided for @syncDelay.
   ///
-  /// In en, this message translates to:
-  /// **'Sync / Delay'**
+  /// In ar, this message translates to:
+  /// **'المزامنة / التأخير'**
   String get syncDelay;
 
   /// No description provided for @styleSettings.
   ///
-  /// In en, this message translates to:
-  /// **'Style Settings'**
+  /// In ar, this message translates to:
+  /// **'إعدادات النمط'**
   String get styleSettings;
 
   /// No description provided for @searchOnline.
   ///
-  /// In en, this message translates to:
-  /// **'Search Online (Subtitle Search)'**
+  /// In ar, this message translates to:
+  /// **'بحث عبر الإنترنت (بحث عن الترجمة)'**
   String get searchOnline;
 
   /// No description provided for @subtitleSync.
   ///
-  /// In en, this message translates to:
-  /// **'Subtitle Sync'**
+  /// In ar, this message translates to:
+  /// **'مزامنة الترجمة'**
   String get subtitleSync;
 
   /// No description provided for @subtitleDelayWarning.
   ///
-  /// In en, this message translates to:
-  /// **'Subtitle delay is not supported by the active playback engine.'**
+  /// In ar, this message translates to:
+  /// **'تأخير الترجمة غير مدعوم من قبل محرك التشغيل النشط.'**
   String get subtitleDelayWarning;
 
   /// No description provided for @resetDelay.
   ///
-  /// In en, this message translates to:
-  /// **'Reset Delay'**
+  /// In ar, this message translates to:
+  /// **'إعادة ضبط التأخير'**
   String get resetDelay;
 
   /// No description provided for @subtitleStyles.
   ///
-  /// In en, this message translates to:
-  /// **'Subtitle Styles'**
+  /// In ar, this message translates to:
+  /// **'أنماط الترجمة'**
   String get subtitleStyles;
 
   /// No description provided for @mediaKitStylingWarning.
   ///
-  /// In en, this message translates to:
-  /// **'Subtitle styling is only available on the media_kit player right now.'**
+  /// In ar, this message translates to:
+  /// **'تنسيق الترجمة متاح فقط على مشغل media_kit حالياً.'**
   String get mediaKitStylingWarning;
 
   /// No description provided for @resetToDefault.
   ///
-  /// In en, this message translates to:
-  /// **'Reset to Default'**
+  /// In ar, this message translates to:
+  /// **'إعادة الضبط للافتراضي'**
   String get resetToDefault;
 
   /// No description provided for @fontSize.
   ///
-  /// In en, this message translates to:
-  /// **'Font Size'**
+  /// In ar, this message translates to:
+  /// **'حجم الخط'**
   String get fontSize;
 
   /// No description provided for @verticalPosition.
   ///
-  /// In en, this message translates to:
-  /// **'Vertical Position'**
+  /// In ar, this message translates to:
+  /// **'الموضع العمودي'**
   String get verticalPosition;
 
   /// No description provided for @textColor.
   ///
-  /// In en, this message translates to:
-  /// **'Text Color'**
+  /// In ar, this message translates to:
+  /// **'لون النص'**
   String get textColor;
 
   /// No description provided for @backgroundColor.
   ///
-  /// In en, this message translates to:
-  /// **'Background Color'**
+  /// In ar, this message translates to:
+  /// **'لون الخلفية'**
   String get backgroundColor;
 
   /// No description provided for @backgroundOpacity.
   ///
-  /// In en, this message translates to:
-  /// **'Background Opacity'**
+  /// In ar, this message translates to:
+  /// **'شفافية الخلفية'**
   String get backgroundOpacity;
 
   /// No description provided for @subtitleSearch.
   ///
-  /// In en, this message translates to:
-  /// **'Subtitle Search'**
+  /// In ar, this message translates to:
+  /// **'البحث عن الترجمة'**
   String get subtitleSearch;
 
   /// No description provided for @searchSubtitleNameHint.
   ///
-  /// In en, this message translates to:
-  /// **'Search subtitle name...'**
+  /// In ar, this message translates to:
+  /// **'ابحث عن اسم الترجمة...'**
   String get searchSubtitleNameHint;
 
   /// No description provided for @enterSearchSubtitlePrompt.
   ///
-  /// In en, this message translates to:
-  /// **'Enter a name or search to find subtitles.'**
+  /// In ar, this message translates to:
+  /// **'أدخل اسماً أو ابحث للعثور على الترجمة.'**
   String get enterSearchSubtitlePrompt;
 
   /// No description provided for @noSubtitleResults.
   ///
-  /// In en, this message translates to:
-  /// **'No results found. Try another query.'**
+  /// In ar, this message translates to:
+  /// **'لم يتم العثور على نتائج. جرب استعلاماً آخر.'**
   String get noSubtitleResults;
 
   /// No description provided for @downloadingApplyingSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Downloading & applying subtitle...'**
+  /// In ar, this message translates to:
+  /// **'جارٍ تنزيل وتطبيق الترجمة...'**
   String get downloadingApplyingSubtitle;
 
   /// No description provided for @failedToDownloadSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Failed to download subtitle.'**
+  /// In ar, this message translates to:
+  /// **'فشل تنزيل الترجمة.'**
   String get failedToDownloadSubtitle;
 
   /// No description provided for @failedToLoadSubtitles.
   ///
-  /// In en, this message translates to:
-  /// **'Failed to load subtitles. Please try again.'**
+  /// In ar, this message translates to:
+  /// **'فشل تحميل الترجمة. يرجى المحاولة مرة أخرى.'**
   String get failedToLoadSubtitles;
 
   /// No description provided for @error.
   ///
-  /// In en, this message translates to:
-  /// **'Error'**
+  /// In ar, this message translates to:
+  /// **'خطأ'**
   String get error;
 
   /// No description provided for @ok.
   ///
-  /// In en, this message translates to:
-  /// **'OK'**
+  /// In ar, this message translates to:
+  /// **'موافق'**
   String get ok;
 
   /// No description provided for @movies.
   ///
-  /// In en, this message translates to:
-  /// **'Movies'**
+  /// In ar, this message translates to:
+  /// **'الأفلام'**
   String get movies;
 
   /// No description provided for @series.
   ///
-  /// In en, this message translates to:
-  /// **'Series'**
+  /// In ar, this message translates to:
+  /// **'المسلسلات'**
   String get series;
 
   /// No description provided for @anime.
   ///
-  /// In en, this message translates to:
-  /// **'Anime'**
+  /// In ar, this message translates to:
+  /// **'الأنمي'**
   String get anime;
 
   /// No description provided for @liveStreams.
   ///
-  /// In en, this message translates to:
-  /// **'Live Streams'**
+  /// In ar, this message translates to:
+  /// **'البث المباشر'**
   String get liveStreams;
 
   /// No description provided for @debug.
   ///
-  /// In en, this message translates to:
-  /// **'DEBUG'**
+  /// In ar, this message translates to:
+  /// **'تصحيح'**
   String get debug;
 
   /// No description provided for @invalidNavigation.
   ///
-  /// In en, this message translates to:
-  /// **'Invalid navigation. Please go back.'**
+  /// In ar, this message translates to:
+  /// **'انتقال غير صالح. يرجى العودة.'**
   String get invalidNavigation;
 
   /// No description provided for @startOver.
   ///
-  /// In en, this message translates to:
-  /// **'Start Over'**
+  /// In ar, this message translates to:
+  /// **'البدء من جديد'**
   String get startOver;
 
   /// No description provided for @goBack.
   ///
-  /// In en, this message translates to:
-  /// **'Go Back'**
+  /// In ar, this message translates to:
+  /// **'العودة'**
   String get goBack;
 
   /// No description provided for @resolving.
   ///
-  /// In en, this message translates to:
-  /// **'Resolving...'**
+  /// In ar, this message translates to:
+  /// **'جارٍ الحل...'**
   String get resolving;
 
   /// No description provided for @downloaded.
   ///
-  /// In en, this message translates to:
-  /// **'Downloaded'**
+  /// In ar, this message translates to:
+  /// **'تم التنزيل'**
   String get downloaded;
 
   /// No description provided for @download.
   ///
-  /// In en, this message translates to:
-  /// **'Download'**
+  /// In ar, this message translates to:
+  /// **'تنزيل'**
   String get download;
 
   /// No description provided for @debugOnlyFeature.
   ///
-  /// In en, this message translates to:
-  /// **'This feature is only available in Debug builds'**
+  /// In ar, this message translates to:
+  /// **'هذه الميزة متاحة فقط في إصدارات التصحيح'**
   String get debugOnlyFeature;
 
   /// No description provided for @streamUrl.
   ///
-  /// In en, this message translates to:
-  /// **'Stream URL'**
+  /// In ar, this message translates to:
+  /// **'رابط البث'**
   String get streamUrl;
 
   /// No description provided for @play.
   ///
-  /// In en, this message translates to:
-  /// **'Play'**
+  /// In ar, this message translates to:
+  /// **'تشغيل'**
   String get play;
 
   /// No description provided for @verifyingSourceSize.
   ///
-  /// In en, this message translates to:
-  /// **'Verifying source & size...'**
+  /// In ar, this message translates to:
+  /// **'جارٍ التحقق من المصدر والحجم...'**
   String get verifyingSourceSize;
 
   /// No description provided for @fileSaveLocationNotification.
   ///
-  /// In en, this message translates to:
-  /// **'The file will be saved in your Downloads folder.'**
+  /// In ar, this message translates to:
+  /// **'سيتم حفظ الملف في مجلد التنزيلات الخاص بك.'**
   String get fileSaveLocationNotification;
 
   /// No description provided for @resumingPlayback.
   ///
-  /// In en, this message translates to:
-  /// **'Resuming Playback'**
+  /// In ar, this message translates to:
+  /// **'استئناف التشغيل'**
   String get resumingPlayback;
 
   /// No description provided for @pausedAt.
   ///
-  /// In en, this message translates to:
-  /// **'Paused at {time}'**
+  /// In ar, this message translates to:
+  /// **'توقف عند {time}'**
   String pausedAt(String time);
 
   /// No description provided for @resumesAutomatically.
   ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{Resumes automatically in 1 second} other{Resumes automatically in {count} seconds}}'**
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{يستأنف تلقائياً خلال ثانية واحدة} other{يستأنف تلقائياً خلال {count} ثوانٍ}}'**
   String resumesAutomatically(int count);
 
   /// No description provided for @resumeNow.
   ///
-  /// In en, this message translates to:
-  /// **'Resume Now'**
+  /// In ar, this message translates to:
+  /// **'استئناف الآن'**
   String get resumeNow;
 
   /// No description provided for @playbackError.
   ///
-  /// In en, this message translates to:
-  /// **'Playback Error'**
+  /// In ar, this message translates to:
+  /// **'خطأ في التشغيل'**
   String get playbackError;
 
   /// No description provided for @confirmClearHistory.
   ///
-  /// In en, this message translates to:
-  /// **'Are you sure you want to remove all items from your watch history?'**
+  /// In ar, this message translates to:
+  /// **'هل أنت متأكد أنك تريد إزالة جميع العناصر من سجل المشاهدة؟'**
   String get confirmClearHistory;
 
   /// No description provided for @seasonWithNumber.
   ///
-  /// In en, this message translates to:
-  /// **'Season {number}'**
+  /// In ar, this message translates to:
+  /// **'الموسم {number}'**
   String seasonWithNumber(Object number);
 
   /// No description provided for @starting.
   ///
-  /// In en, this message translates to:
-  /// **'Starting...'**
+  /// In ar, this message translates to:
+  /// **'جارٍ البدء...'**
   String get starting;
 
   /// No description provided for @percentWatched.
   ///
-  /// In en, this message translates to:
-  /// **'{percent}% watched'**
+  /// In ar, this message translates to:
+  /// **'{percent}% تمت مشاهدته'**
   String percentWatched(int percent);
 
   /// No description provided for @sub.
   ///
-  /// In en, this message translates to:
-  /// **'Sub'**
+  /// In ar, this message translates to:
+  /// **'ترجمة'**
   String get sub;
 
   /// No description provided for @dub.
   ///
-  /// In en, this message translates to:
-  /// **'Dub'**
+  /// In ar, this message translates to:
+  /// **'دبلجة'**
   String get dub;
 
   /// No description provided for @playEpisode.
   ///
-  /// In en, this message translates to:
-  /// **'{label} S{season} E{episode}'**
+  /// In ar, this message translates to:
+  /// **'{label} م{season} ح{episode}'**
   String playEpisode(String label, Object season, Object episode);
-
-  /// No description provided for @playEpisodeOnly.
-  ///
-  /// In en, this message translates to:
-  /// **'{label} E{episode}'**
-  String playEpisodeOnly(String label, int episode);
 
   /// No description provided for @debugTools.
   ///
-  /// In en, this message translates to:
-  /// **'Debug Tools'**
+  /// In ar, this message translates to:
+  /// **'أدوات التصحيح'**
   String get debugTools;
 
   /// No description provided for @playLocalVideo.
   ///
-  /// In en, this message translates to:
-  /// **'Play local video file'**
+  /// In ar, this message translates to:
+  /// **'تشغيل فيديو محلي'**
   String get playLocalVideo;
 
   /// No description provided for @playLocalVideoSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Play any video from device'**
+  /// In ar, this message translates to:
+  /// **'تشغيل أي فيديو من الجهاز'**
   String get playLocalVideoSubtitle;
 
   /// No description provided for @streamUrlSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Play from network URL'**
+  /// In ar, this message translates to:
+  /// **'التشغيل من رابط شبكة'**
   String get streamUrlSubtitle;
 
   /// No description provided for @streamTorrent.
   ///
-  /// In en, this message translates to:
-  /// **'Stream torrent'**
+  /// In ar, this message translates to:
+  /// **'بث تورنت'**
   String get streamTorrent;
 
   /// No description provided for @streamTorrentSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Select a local torrent file to play'**
+  /// In ar, this message translates to:
+  /// **'اختر ملف تورنت محلي للتشغيل'**
   String get streamTorrentSubtitle;
 
   /// No description provided for @enterVideoUrlHint.
   ///
-  /// In en, this message translates to:
-  /// **'Enter video URL (http, magnet, etc.)'**
+  /// In ar, this message translates to:
+  /// **'أدخل رابط الفيديو (http أو magnet أو غيرهما)'**
   String get enterVideoUrlHint;
 
   /// No description provided for @networkStream.
   ///
-  /// In en, this message translates to:
-  /// **'Network Stream'**
+  /// In ar, this message translates to:
+  /// **'بث الشبكة'**
   String get networkStream;
 
   /// No description provided for @removedFromHistory.
   ///
-  /// In en, this message translates to:
-  /// **'Removed {title} from history'**
+  /// In ar, this message translates to:
+  /// **'تمت إزالة {title} من السجل'**
   String removedFromHistory(String title);
 
   /// No description provided for @custom.
   ///
-  /// In en, this message translates to:
-  /// **'Custom'**
+  /// In ar, this message translates to:
+  /// **'مخصص'**
   String get custom;
 
   /// No description provided for @refreshingLiveStream.
   ///
-  /// In en, this message translates to:
-  /// **'Refreshing live stream...'**
+  /// In ar, this message translates to:
+  /// **'جارٍ تحديث البث المباشر...'**
   String get refreshingLiveStream;
 
   /// No description provided for @removeFromHistory.
   ///
-  /// In en, this message translates to:
-  /// **'Remove from History'**
+  /// In ar, this message translates to:
+  /// **'إزالة من السجل'**
   String get removeFromHistory;
 
   /// No description provided for @live.
   ///
-  /// In en, this message translates to:
-  /// **'LIVE'**
+  /// In ar, this message translates to:
+  /// **'مباشر'**
   String get live;
 
   /// No description provided for @volume.
   ///
-  /// In en, this message translates to:
-  /// **'Volume'**
+  /// In ar, this message translates to:
+  /// **'الصوت'**
   String get volume;
 
   /// No description provided for @brightness.
   ///
-  /// In en, this message translates to:
-  /// **'Brightness'**
+  /// In ar, this message translates to:
+  /// **'السطوع'**
   String get brightness;
 
   /// No description provided for @fit.
   ///
-  /// In en, this message translates to:
-  /// **'Fit'**
+  /// In ar, this message translates to:
+  /// **'ملاءمة'**
   String get fit;
 
   /// No description provided for @zoom.
   ///
-  /// In en, this message translates to:
-  /// **'Zoom'**
+  /// In ar, this message translates to:
+  /// **'تغيير الحجم والتركيز'**
   String get zoom;
 
   /// No description provided for @stretch.
   ///
-  /// In en, this message translates to:
-  /// **'Stretch'**
+  /// In ar, this message translates to:
+  /// **'تمطيط'**
   String get stretch;
 
   /// No description provided for @titleWithParam.
   ///
-  /// In en, this message translates to:
-  /// **'Title: {title}'**
+  /// In ar, this message translates to:
+  /// **'العنوان: {title}'**
   String titleWithParam(String title);
 
   /// No description provided for @sourceWithParam.
   ///
-  /// In en, this message translates to:
-  /// **'Source: {source}'**
+  /// In ar, this message translates to:
+  /// **'المصدر: {source}'**
   String sourceWithParam(String source);
 
   /// No description provided for @sizeWithParam.
   ///
-  /// In en, this message translates to:
-  /// **'Size: {size}'**
+  /// In ar, this message translates to:
+  /// **'الحجم: {size}'**
   String sizeWithParam(String size);
 
   /// No description provided for @usingInternalPlayerError.
   ///
-  /// In en, this message translates to:
-  /// **'Error: {error}. Using internal player.'**
+  /// In ar, this message translates to:
+  /// **'خطأ: {error}. يتم استخدام المشغل الداخلي.'**
   String usingInternalPlayerError(String error);
 
   /// No description provided for @playerNotDetected.
   ///
-  /// In en, this message translates to:
-  /// **'{playerName} not detected. Starting internal player.'**
+  /// In ar, this message translates to:
+  /// **'لم يتم اكتشاف {playerName}. جارٍ بدء المشغل الداخلي.'**
   String playerNotDetected(String playerName);
 
   /// No description provided for @seasonWithEpisodes.
   ///
-  /// In en, this message translates to:
-  /// **'Season {number} ({count} Episodes)'**
+  /// In ar, this message translates to:
+  /// **'الموسم {number} ({count} حلقة)'**
   String seasonWithEpisodes(Object number, int count);
 
   /// No description provided for @cloudflare.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'Cloudflare'**
   String get cloudflare;
 
   /// No description provided for @google.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'Google'**
   String get google;
 
   /// No description provided for @adguard.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'AdGuard'**
   String get adguard;
 
   /// No description provided for @dnsWatch.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'DNS.Watch'**
   String get dnsWatch;
 
   /// No description provided for @quad9.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'Quad9'**
   String get quad9;
 
   /// No description provided for @dnsSb.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'DNS.SB'**
   String get dnsSb;
 
   /// No description provided for @canadianShield.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'Canadian Shield'**
   String get canadianShield;
 
   /// No description provided for @tmdb.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'TMDB'**
   String get tmdb;
 
   /// No description provided for @selectSourceForPlayer.
   ///
-  /// In en, this message translates to:
-  /// **'Select Source for {playerName}'**
+  /// In ar, this message translates to:
+  /// **'اختر المصدر لـ {playerName}'**
   String selectSourceForPlayer(String playerName);
 
   /// No description provided for @noPluginsInstalled.
   ///
-  /// In en, this message translates to:
-  /// **'No plugins installed'**
+  /// In ar, this message translates to:
+  /// **'لا توجد إضافات مثبتة'**
   String get noPluginsInstalled;
 
   /// No description provided for @availableSources.
   ///
-  /// In en, this message translates to:
-  /// **'Available Sources'**
+  /// In ar, this message translates to:
+  /// **'المصادر المتاحة'**
   String get availableSources;
 
   /// No description provided for @seasons.
   ///
-  /// In en, this message translates to:
-  /// **'Seasons'**
+  /// In ar, this message translates to:
+  /// **'المواسم'**
   String get seasons;
 
   /// No description provided for @episodes.
   ///
-  /// In en, this message translates to:
-  /// **'Episodes'**
+  /// In ar, this message translates to:
+  /// **'الحلقات'**
   String get episodes;
 
   /// No description provided for @selectSourceToPlay.
   ///
-  /// In en, this message translates to:
-  /// **'Please select a source from \'Available Sources\' above to play.'**
+  /// In ar, this message translates to:
+  /// **'يرجى اختيار مصدر من \'المصادر المتاحة\' أعلاه للتشغيل.'**
   String get selectSourceToPlay;
 
   /// No description provided for @episodeCountOnly.
   ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 Episode} other{{count} Episodes}}'**
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{حلقة واحدة} other{{count} حلقات}}'**
   String episodeCountOnly(num count);
 
   /// No description provided for @noEpisodesFound.
   ///
-  /// In en, this message translates to:
-  /// **'No episodes found'**
+  /// In ar, this message translates to:
+  /// **'لم يتم العثور على حلقات'**
   String get noEpisodesFound;
 
   /// No description provided for @local.
   ///
-  /// In en, this message translates to:
-  /// **'Local'**
+  /// In ar, this message translates to:
+  /// **'محلي'**
   String get local;
 
   /// No description provided for @remote.
   ///
-  /// In en, this message translates to:
-  /// **'Remote'**
+  /// In ar, this message translates to:
+  /// **'عن بعد'**
   String get remote;
 
   /// No description provided for @torrent.
   ///
-  /// In en, this message translates to:
-  /// **'Torrent'**
+  /// In ar, this message translates to:
+  /// **'تورنت'**
   String get torrent;
 
   /// No description provided for @unlock.
   ///
-  /// In en, this message translates to:
-  /// **'Unlock'**
+  /// In ar, this message translates to:
+  /// **'فتح القفل'**
   String get unlock;
 
   /// No description provided for @lock.
   ///
-  /// In en, this message translates to:
-  /// **'Lock'**
+  /// In ar, this message translates to:
+  /// **'قفل'**
   String get lock;
 
   /// No description provided for @sources.
   ///
-  /// In en, this message translates to:
-  /// **'Sources'**
+  /// In ar, this message translates to:
+  /// **'المصادر'**
   String get sources;
 
   /// No description provided for @tracks.
   ///
-  /// In en, this message translates to:
-  /// **'Tracks'**
+  /// In ar, this message translates to:
+  /// **'المسارات'**
   String get tracks;
 
   /// No description provided for @content.
   ///
-  /// In en, this message translates to:
-  /// **'Content'**
+  /// In ar, this message translates to:
+  /// **'المحتوى'**
   String get content;
 
   /// No description provided for @stats.
   ///
-  /// In en, this message translates to:
-  /// **'Stats'**
+  /// In ar, this message translates to:
+  /// **'الإحصائيات'**
   String get stats;
 
   /// No description provided for @resize.
   ///
-  /// In en, this message translates to:
-  /// **'Resize'**
+  /// In ar, this message translates to:
+  /// **'تغيير الحجم'**
   String get resize;
 
   /// No description provided for @next.
   ///
-  /// In en, this message translates to:
-  /// **'Next'**
+  /// In ar, this message translates to:
+  /// **'التالي'**
   String get next;
 
   /// No description provided for @pip.
   ///
-  /// In en, this message translates to:
-  /// **'PiP'**
+  /// In ar, this message translates to:
+  /// **'صورة داخل صورة'**
   String get pip;
 
   /// No description provided for @rotate.
   ///
-  /// In en, this message translates to:
-  /// **'Rotate'**
+  /// In ar, this message translates to:
+  /// **'تدوير'**
   String get rotate;
 
   /// No description provided for @windowed.
   ///
-  /// In en, this message translates to:
-  /// **'Windowed'**
+  /// In ar, this message translates to:
+  /// **'نوافذ'**
   String get windowed;
 
   /// No description provided for @fullscreen.
   ///
-  /// In en, this message translates to:
-  /// **'Fullscreen'**
+  /// In ar, this message translates to:
+  /// **'ملء الشاشة'**
   String get fullscreen;
 
   /// No description provided for @movieDetails.
   ///
-  /// In en, this message translates to:
-  /// **'Movie Details'**
+  /// In ar, this message translates to:
+  /// **'تفاصيل الفيلم'**
   String get movieDetails;
 
   /// No description provided for @showDetails.
   ///
-  /// In en, this message translates to:
-  /// **'Show Details'**
+  /// In ar, this message translates to:
+  /// **'عرض التفاصيل'**
   String get showDetails;
 
   /// No description provided for @tagline.
   ///
-  /// In en, this message translates to:
-  /// **'Tagline'**
+  /// In ar, this message translates to:
+  /// **'شعار'**
   String get tagline;
 
   /// No description provided for @status.
   ///
-  /// In en, this message translates to:
-  /// **'Status'**
+  /// In ar, this message translates to:
+  /// **'الحالة'**
   String get status;
 
   /// No description provided for @releaseDate.
   ///
-  /// In en, this message translates to:
-  /// **'Release Date'**
+  /// In ar, this message translates to:
+  /// **'تاريخ الإصدار'**
   String get releaseDate;
 
   /// No description provided for @firstAirDate.
   ///
-  /// In en, this message translates to:
-  /// **'First Air Date'**
+  /// In ar, this message translates to:
+  /// **'تاريخ أول عرض'**
   String get firstAirDate;
 
   /// No description provided for @originalLanguage.
   ///
-  /// In en, this message translates to:
-  /// **'Original Language'**
+  /// In ar, this message translates to:
+  /// **'اللغة الأصلية'**
   String get originalLanguage;
 
   /// No description provided for @originCountry.
   ///
-  /// In en, this message translates to:
-  /// **'Origin Country'**
+  /// In ar, this message translates to:
+  /// **'بلد المنشأ'**
   String get originCountry;
 
   /// No description provided for @budgetLabel.
   ///
-  /// In en, this message translates to:
-  /// **'Budget'**
+  /// In ar, this message translates to:
+  /// **'الميزانية'**
   String get budgetLabel;
 
   /// No description provided for @revenueLabel.
   ///
-  /// In en, this message translates to:
-  /// **'Revenue'**
+  /// In ar, this message translates to:
+  /// **'الإيرادات'**
   String get revenueLabel;
 
   /// No description provided for @paused.
   ///
-  /// In en, this message translates to:
-  /// **'Paused'**
+  /// In ar, this message translates to:
+  /// **'متوقف'**
   String get paused;
 
   /// No description provided for @watched.
   ///
-  /// In en, this message translates to:
-  /// **'Watched'**
+  /// In ar, this message translates to:
+  /// **'تمت مشاهدته'**
   String get watched;
 
   /// No description provided for @watching.
   ///
-  /// In en, this message translates to:
-  /// **'Watching'**
+  /// In ar, this message translates to:
+  /// **'مشاهدة الآن'**
   String get watching;
 
   /// No description provided for @lastWatched.
   ///
-  /// In en, this message translates to:
-  /// **'Last Watched'**
+  /// In ar, this message translates to:
+  /// **'آخر مشاهدة'**
   String get lastWatched;
 
   /// No description provided for @movie.
   ///
-  /// In en, this message translates to:
-  /// **'Movie'**
+  /// In ar, this message translates to:
+  /// **'فيلم'**
   String get movie;
 
   /// No description provided for @tvShow.
   ///
-  /// In en, this message translates to:
-  /// **'TV Show'**
+  /// In ar, this message translates to:
+  /// **'مسلسل تلفزيوني'**
   String get tvShow;
 
   /// No description provided for @failedToLoadContent.
   ///
-  /// In en, this message translates to:
-  /// **'Failed to load content'**
+  /// In ar, this message translates to:
+  /// **'فشل تحميل المحتوى'**
   String get failedToLoadContent;
 
   /// No description provided for @director.
   ///
-  /// In en, this message translates to:
-  /// **'Director'**
+  /// In ar, this message translates to:
+  /// **'المخرج'**
   String get director;
 
   /// No description provided for @creator.
   ///
-  /// In en, this message translates to:
-  /// **'Creator'**
+  /// In ar, this message translates to:
+  /// **'المبتكر'**
   String get creator;
 
   /// No description provided for @showMore.
   ///
-  /// In en, this message translates to:
-  /// **'Show More'**
+  /// In ar, this message translates to:
+  /// **'عرض المزيد'**
   String get showMore;
 
   /// No description provided for @showLess.
   ///
-  /// In en, this message translates to:
-  /// **'Show Less'**
+  /// In ar, this message translates to:
+  /// **'عرض أقل'**
   String get showLess;
 
   /// No description provided for @viewAll.
   ///
-  /// In en, this message translates to:
-  /// **'View All'**
+  /// In ar, this message translates to:
+  /// **'عرض الكل'**
   String get viewAll;
 
   /// No description provided for @seasonsCount.
   ///
-  /// In en, this message translates to:
-  /// **'{count} Seasons'**
+  /// In ar, this message translates to:
+  /// **'{count} مواسم'**
   String seasonsCount(int count);
 
   /// No description provided for @noInternetError.
   ///
-  /// In en, this message translates to:
-  /// **'No internet connection'**
+  /// In ar, this message translates to:
+  /// **'لا يوجد اتصال بالإنترنت'**
   String get noInternetError;
 
   /// No description provided for @timeoutError.
   ///
-  /// In en, this message translates to:
-  /// **'Request timed out. Please try again.'**
+  /// In ar, this message translates to:
+  /// **'انتهت مهلة الطلب. يرجى المحاولة مرة أخرى.'**
   String get timeoutError;
 
   /// No description provided for @serverError.
   ///
-  /// In en, this message translates to:
-  /// **'Server error. Please try again later.'**
+  /// In ar, this message translates to:
+  /// **'خطأ في الخادم. يرجى المحاولة مرة أخرى لاحقاً.'**
   String get serverError;
 
   /// No description provided for @contentNotFoundError.
   ///
-  /// In en, this message translates to:
-  /// **'Content not found.'**
+  /// In ar, this message translates to:
+  /// **'المحتوى غير موجود.'**
   String get contentNotFoundError;
 
   /// No description provided for @accessDeniedError.
   ///
-  /// In en, this message translates to:
-  /// **'Access denied. Check your credentials.'**
+  /// In ar, this message translates to:
+  /// **'تم رفض الوصول. تحقق من بيانات الاعتماد الخاصة بك.'**
   String get accessDeniedError;
 
   /// No description provided for @serviceUnavailableError.
   ///
-  /// In en, this message translates to:
-  /// **'Server is unavailable. Try again later.'**
+  /// In ar, this message translates to:
+  /// **'الخادم غير متاح. حاول مرة أخرى لاحقاً.'**
   String get serviceUnavailableError;
 
   /// No description provided for @generalError.
   ///
-  /// In en, this message translates to:
-  /// **'Something went wrong. Please try again.'**
+  /// In ar, this message translates to:
+  /// **'حدث خطأ ما. يرجى المحاولة مرة أخرى.'**
   String get generalError;
 
   /// No description provided for @skip.
   ///
-  /// In en, this message translates to:
-  /// **'Skip'**
+  /// In ar, this message translates to:
+  /// **'تخطي'**
   String get skip;
-
-  /// No description provided for @skipIntro.
-  ///
-  /// In en, this message translates to:
-  /// **'Skip Intro'**
-  String get skipIntro;
-
-  /// No description provided for @skipOutro.
-  ///
-  /// In en, this message translates to:
-  /// **'Skip Outro'**
-  String get skipOutro;
-
-  /// No description provided for @skipRecap.
-  ///
-  /// In en, this message translates to:
-  /// **'Skip Recap'**
-  String get skipRecap;
 
   /// No description provided for @goLive.
   ///
-  /// In en, this message translates to:
-  /// **'Go Live'**
+  /// In ar, this message translates to:
+  /// **'البث المباشر'**
   String get goLive;
 
   /// No description provided for @dismiss.
   ///
-  /// In en, this message translates to:
-  /// **'Dismiss'**
+  /// In ar, this message translates to:
+  /// **'إغلاق'**
   String get dismiss;
 
   /// No description provided for @nextUp.
   ///
-  /// In en, this message translates to:
-  /// **'Next Up'**
+  /// In ar, this message translates to:
+  /// **'التالي'**
   String get nextUp;
 
   /// No description provided for @sourceAttempt.
   ///
-  /// In en, this message translates to:
-  /// **'Source {index} of {total}'**
+  /// In ar, this message translates to:
+  /// **'المصدر {index} من {total}'**
   String sourceAttempt(int index, int total);
 
   /// No description provided for @trying.
   ///
-  /// In en, this message translates to:
-  /// **'Trying'**
+  /// In ar, this message translates to:
+  /// **'محاولة'**
   String get trying;
 
   /// No description provided for @failed.
   ///
-  /// In en, this message translates to:
-  /// **'Failed'**
+  /// In ar, this message translates to:
+  /// **'فشل'**
   String get failed;
 
   /// No description provided for @selected.
   ///
-  /// In en, this message translates to:
-  /// **'Selected'**
+  /// In ar, this message translates to:
+  /// **'مختار'**
   String get selected;
 
   /// No description provided for @playing.
   ///
-  /// In en, this message translates to:
-  /// **'Playing'**
+  /// In ar, this message translates to:
+  /// **'تشغيل'**
   String get playing;
 
   /// No description provided for @pending.
   ///
-  /// In en, this message translates to:
-  /// **'Pending'**
+  /// In ar, this message translates to:
+  /// **'قيد الانتظار'**
   String get pending;
+
+  /// No description provided for @discord.
+  ///
+  /// In ar, this message translates to:
+  /// **'Discord'**
+  String get discord;
+
+  /// No description provided for @discordSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'انضم إلى خادمنا'**
+  String get discordSubtitle;
+
+  /// No description provided for @telegram.
+  ///
+  /// In ar, this message translates to:
+  /// **'Telegram'**
+  String get telegram;
+
+  /// No description provided for @telegramSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'انضم إلى قناتنا'**
+  String get telegramSubtitle;
+
+  /// No description provided for @developedBy.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التطوير بواسطة {name}'**
+  String developedBy(String name);
+
+  /// No description provided for @playEpisodeOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'{label} حلقة {episode}'**
+  String playEpisodeOnly(String label, int episode);
+
+  /// No description provided for @wifiQualityPreference.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفضيل جودة الواي فاي'**
+  String get wifiQualityPreference;
+
+  /// No description provided for @mobileQualityPreference.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفضيل جودة الهاتف المحمول'**
+  String get mobileQualityPreference;
+
+  /// No description provided for @anyNoPreference.
+  ///
+  /// In ar, this message translates to:
+  /// **'أي نوع (لا يوجد تفضيل)'**
+  String get anyNoPreference;
+
+  /// No description provided for @subtitleAccounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسابات الترجمة'**
+  String get subtitleAccounts;
+
+  /// No description provided for @notLoggedIn.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مسجّل الدخول'**
+  String get notLoggedIn;
+
+  /// No description provided for @loggedInAs.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الدخول باسم {username}'**
+  String loggedInAs(String username);
+
+  /// No description provided for @apiKeyConfigured.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تكوين مفتاح API'**
+  String get apiKeyConfigured;
+
+  /// No description provided for @keyNotSet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم تعيين المفتاح'**
+  String get keyNotSet;
+
+  /// No description provided for @testConnection.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الاتصال'**
+  String get testConnection;
+
+  /// No description provided for @connectedSuccessfully.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الاتصال بنجاح'**
+  String get connectedSuccessfully;
+
+  /// No description provided for @connectionFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل الاتصال'**
+  String get connectionFailed;
+
+  /// No description provided for @username.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get username;
+
+  /// No description provided for @password.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get password;
+
+  /// No description provided for @noAccountRegister.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليس لديك حساب؟ سجل هنا'**
+  String get noAccountRegister;
+
+  /// No description provided for @apiKey.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتاح API'**
+  String get apiKey;
+
+  /// No description provided for @email.
+  ///
+  /// In ar, this message translates to:
+  /// **'البريد الإلكتروني'**
+  String get email;
+
+  /// No description provided for @fetchMyApiKey.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلب مفتاح API الخاص بي'**
+  String get fetchMyApiKey;
+
+  /// No description provided for @keyVerified.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التحقق من المفتاح'**
+  String get keyVerified;
+
+  /// No description provided for @invalidApiKey.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتاح API غير صالح'**
+  String get invalidApiKey;
+
+  /// No description provided for @openSubtitlesAuthSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل بيانات اعتماد حسابك للحصول على حدود أعلى وترجمات خالية من الإعلانات.'**
+  String get openSubtitlesAuthSubtitle;
+
+  /// No description provided for @subDlAuthSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مفتاح SubDL API الخاص بك مباشرة، أو احصل عليه باستخدام بيانات اعتماد حسابك أدناه.'**
+  String get subDlAuthSubtitle;
+
+  /// No description provided for @orFetchViaAccount.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو الجلب عبر الحساب'**
+  String get orFetchViaAccount;
+
+  /// No description provided for @subSourceAuthSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعمل SubSource تلقائياً، ولكن يمكنك إضافة مفتاح API رسمي شخصي لتجاوز الافتراضي للحصول على موثوقية أفضل.'**
+  String get subSourceAuthSubtitle;
+
+  /// No description provided for @apiKeyOptionalOverride.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتاح API (تجاوز اختياري)'**
+  String get apiKeyOptionalOverride;
+
+  /// No description provided for @enterKeyToOverrideDefault.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل المفتاح لتجاوز الافتراضي'**
+  String get enterKeyToOverrideDefault;
+
+  /// No description provided for @getApiKeyFromProfile.
+  ///
+  /// In ar, this message translates to:
+  /// **'احصل على مفتاح API الخاص بك من ملف SubSource الشخصي'**
+  String get getApiKeyFromProfile;
+
+  /// No description provided for @qualityNotGuaranteed.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجودة غير مضمونة. يتم فرز المصادر حسب التفضيل، ولكن التشغيل يعتمد على ما يقدمه المزود بالفعل.'**
+  String get qualityNotGuaranteed;
+
+  /// No description provided for @keepSourcesOriginalOrder.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحفاظ على المصادر في ترتيبها الأصلي'**
+  String get keepSourcesOriginalOrder;
+
+  /// No description provided for @openLink.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح الرابط'**
+  String get openLink;
 
   /// No description provided for @openSubtitles.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'OpenSubtitles'**
   String get openSubtitles;
 
   /// No description provided for @subDl.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'SubDL'**
   String get subDl;
 
   /// No description provided for @subSource.
   ///
-  /// In en, this message translates to:
+  /// In ar, this message translates to:
   /// **'SubSource'**
   String get subSource;
 
-  /// No description provided for @wifiQualityPreference.
-  ///
-  /// In en, this message translates to:
-  /// **'Wi-Fi Quality Preference'**
-  String get wifiQualityPreference;
-
-  /// No description provided for @mobileQualityPreference.
-  ///
-  /// In en, this message translates to:
-  /// **'Mobile Quality Preference'**
-  String get mobileQualityPreference;
-
-  /// No description provided for @anyNoPreference.
-  ///
-  /// In en, this message translates to:
-  /// **'Any (no preference)'**
-  String get anyNoPreference;
-
-  /// No description provided for @subtitleAccounts.
-  ///
-  /// In en, this message translates to:
-  /// **'Subtitle Accounts'**
-  String get subtitleAccounts;
-
-  /// No description provided for @accounts.
-  ///
-  /// In en, this message translates to:
-  /// **'Accounts'**
-  String get accounts;
-
-  /// No description provided for @notLoggedIn.
-  ///
-  /// In en, this message translates to:
-  /// **'Not logged in'**
-  String get notLoggedIn;
-
-  /// No description provided for @loggedInAs.
-  ///
-  /// In en, this message translates to:
-  /// **'Logged in as {username}'**
-  String loggedInAs(String username);
-
-  /// No description provided for @apiKeyConfigured.
-  ///
-  /// In en, this message translates to:
-  /// **'API Key configured'**
-  String get apiKeyConfigured;
-
-  /// No description provided for @keyNotSet.
-  ///
-  /// In en, this message translates to:
-  /// **'Key not set'**
-  String get keyNotSet;
-
-  /// No description provided for @testConnection.
-  ///
-  /// In en, this message translates to:
-  /// **'Test Connection'**
-  String get testConnection;
-
-  /// No description provided for @connectedSuccessfully.
-  ///
-  /// In en, this message translates to:
-  /// **'Connected Successfully'**
-  String get connectedSuccessfully;
-
-  /// No description provided for @connectionFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Connection Failed'**
-  String get connectionFailed;
-
-  /// No description provided for @username.
-  ///
-  /// In en, this message translates to:
-  /// **'Username'**
-  String get username;
-
-  /// No description provided for @password.
-  ///
-  /// In en, this message translates to:
-  /// **'Password'**
-  String get password;
-
-  /// No description provided for @noAccountRegister.
-  ///
-  /// In en, this message translates to:
-  /// **'Don\'t have an account? Register here'**
-  String get noAccountRegister;
-
-  /// No description provided for @apiKey.
-  ///
-  /// In en, this message translates to:
-  /// **'API Key'**
-  String get apiKey;
-
-  /// No description provided for @email.
-  ///
-  /// In en, this message translates to:
-  /// **'Email'**
-  String get email;
-
-  /// No description provided for @fetchMyApiKey.
-  ///
-  /// In en, this message translates to:
-  /// **'Fetch My API Key'**
-  String get fetchMyApiKey;
-
-  /// No description provided for @keyVerified.
-  ///
-  /// In en, this message translates to:
-  /// **'Key Verified'**
-  String get keyVerified;
-
-  /// No description provided for @invalidApiKey.
-  ///
-  /// In en, this message translates to:
-  /// **'Invalid API Key'**
-  String get invalidApiKey;
-
-  /// No description provided for @openSubtitlesAuthSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter your account credentials for higher limits and ad-free subtitles.'**
-  String get openSubtitlesAuthSubtitle;
-
-  /// No description provided for @subDlAuthSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter your SubDL API Key directly, or fetch it using your account credentials below.'**
-  String get subDlAuthSubtitle;
-
-  /// No description provided for @orFetchViaAccount.
-  ///
-  /// In en, this message translates to:
-  /// **'OR FETCH VIA ACCOUNT'**
-  String get orFetchViaAccount;
-
-  /// No description provided for @subSourceAuthSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'SubSource works out-of-the-box, but you can add a personal official API key to override the default for better reliability.'**
-  String get subSourceAuthSubtitle;
-
-  /// No description provided for @apiKeyOptionalOverride.
-  ///
-  /// In en, this message translates to:
-  /// **'API Key (Optional Override)'**
-  String get apiKeyOptionalOverride;
-
-  /// No description provided for @enterKeyToOverrideDefault.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter key to override default'**
-  String get enterKeyToOverrideDefault;
-
-  /// No description provided for @getApiKeyFromProfile.
-  ///
-  /// In en, this message translates to:
-  /// **'Get your API Key from SubSource Profile'**
-  String get getApiKeyFromProfile;
-
-  /// No description provided for @qualityNotGuaranteed.
-  ///
-  /// In en, this message translates to:
-  /// **'Quality is not guaranteed. Sources are sorted by preference, but playback depends on what the provider actually offers.'**
-  String get qualityNotGuaranteed;
-
-  /// No description provided for @keepSourcesOriginalOrder.
-  ///
-  /// In en, this message translates to:
-  /// **'Keep sources in original order'**
-  String get keepSourcesOriginalOrder;
-
-  /// No description provided for @openLink.
-  ///
-  /// In en, this message translates to:
-  /// **'Open link'**
-  String get openLink;
-
   /// No description provided for @diagnostics.
   ///
-  /// In en, this message translates to:
-  /// **'Diagnostics'**
+  /// In ar, this message translates to:
+  /// **'التشخيصات'**
   String get diagnostics;
 
   /// No description provided for @viewLogs.
   ///
-  /// In en, this message translates to:
-  /// **'View Logs'**
+  /// In ar, this message translates to:
+  /// **'عرض السجلات'**
   String get viewLogs;
 
   /// No description provided for @viewLogsSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'View application activity & errors'**
+  /// In ar, this message translates to:
+  /// **'عرض نشاط التطبيق والأخطاء'**
   String get viewLogsSubtitle;
 
   /// No description provided for @clearCache.
   ///
-  /// In en, this message translates to:
-  /// **'Clear image and video cache'**
+  /// In ar, this message translates to:
+  /// **'مسح ذاكرة الصور والفيديو المؤقتة'**
   String get clearCache;
 
   /// No description provided for @clearCacheSubtitle.
   ///
-  /// In en, this message translates to:
-  /// **'Frees up storage used by cached images and videos'**
+  /// In ar, this message translates to:
+  /// **'تحرير مساحة التخزين المستخدمة للصور وملفات الفيديو المؤقتة'**
   String get clearCacheSubtitle;
 
   /// No description provided for @clearCacheDialogTitle.
   ///
-  /// In en, this message translates to:
-  /// **'Clear cache?'**
+  /// In ar, this message translates to:
+  /// **'مسح الذاكرة المؤقتة؟'**
   String get clearCacheDialogTitle;
 
   /// No description provided for @clearCacheDialogContent.
   ///
-  /// In en, this message translates to:
-  /// **'This will delete cached images and video files. Your settings, history, and extensions will not be affected.'**
+  /// In ar, this message translates to:
+  /// **'سيؤدي هذا إلى حذف الصور وملفات الفيديو المؤقتة. لن تتأثر إعداداتك أو سجل المشاهدة أو الإضافات.'**
   String get clearCacheDialogContent;
 
   /// No description provided for @clearCacheNow.
   ///
-  /// In en, this message translates to:
-  /// **'Clear Cache'**
+  /// In ar, this message translates to:
+  /// **'مسح الذاكرة المؤقتة'**
   String get clearCacheNow;
 
   /// No description provided for @cacheCleared.
   ///
-  /// In en, this message translates to:
-  /// **'Cache cleared'**
+  /// In ar, this message translates to:
+  /// **'تم مسح الذاكرة المؤقتة'**
   String get cacheCleared;
 
   /// No description provided for @calculating.
   ///
-  /// In en, this message translates to:
-  /// **'Calculating…'**
+  /// In ar, this message translates to:
+  /// **'جارٍ الحساب…'**
   String get calculating;
 
   /// No description provided for @playerControls.
   ///
-  /// In en, this message translates to:
-  /// **'Player Controls'**
+  /// In ar, this message translates to:
+  /// **'عناصر تحكم المشغل'**
   String get playerControls;
-
-  /// No description provided for @playerControlsSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Show or hide player control buttons'**
-  String get playerControlsSubtitle;
 
   /// No description provided for @showPip.
   ///
-  /// In en, this message translates to:
-  /// **'Picture-in-Picture button'**
+  /// In ar, this message translates to:
+  /// **'زر صورة داخل صورة'**
   String get showPip;
 
   /// No description provided for @showResize.
   ///
-  /// In en, this message translates to:
-  /// **'Resize button'**
+  /// In ar, this message translates to:
+  /// **'زر تغيير الحجم'**
   String get showResize;
 
   /// No description provided for @showRotate.
   ///
-  /// In en, this message translates to:
-  /// **'Rotate button'**
+  /// In ar, this message translates to:
+  /// **'زر التدوير'**
   String get showRotate;
 
   /// No description provided for @showPlaybackSpeed.
   ///
-  /// In en, this message translates to:
-  /// **'Playback speed button'**
+  /// In ar, this message translates to:
+  /// **'زر سرعة التشغيل'**
   String get showPlaybackSpeed;
 
   /// No description provided for @showEpisodes.
   ///
-  /// In en, this message translates to:
-  /// **'Episodes button'**
+  /// In ar, this message translates to:
+  /// **'زر الحلقات'**
   String get showEpisodes;
+
+  /// No description provided for @playerControlsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار أزرار التحكم في المشغل أو إخفاؤها'**
+  String get playerControlsSubtitle;
 
   /// No description provided for @relatedAnime.
   ///
-  /// In en, this message translates to:
-  /// **'Related Anime'**
+  /// In ar, this message translates to:
+  /// **'ذات صلة'**
   String get relatedAnime;
+
+  /// No description provided for @accounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحسابات'**
+  String get accounts;
+
+  /// No description provided for @exploreAnime.
+  ///
+  /// In ar, this message translates to:
+  /// **'استكشاف الأنمي'**
+  String get exploreAnime;
+
+  /// No description provided for @exploreMovies.
+  ///
+  /// In ar, this message translates to:
+  /// **'استكشاف الأفلام'**
+  String get exploreMovies;
+
+  /// No description provided for @skipIntro.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخطي المقدمة'**
+  String get skipIntro;
+
+  /// No description provided for @skipOutro.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخطي النهاية'**
+  String get skipOutro;
+
+  /// No description provided for @skipRecap.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخطي الملخص السابق'**
+  String get skipRecap;
+
+  /// No description provided for @titlePosition.
+  ///
+  /// In ar, this message translates to:
+  /// **'موضع العنوان'**
+  String get titlePosition;
+
+  /// No description provided for @titlePositionBelowPoster.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسفل الملصق'**
+  String get titlePositionBelowPoster;
+
+  /// No description provided for @titlePositionInsidePoster.
+  ///
+  /// In ar, this message translates to:
+  /// **'داخل الملصق'**
+  String get titlePositionInsidePoster;
+
+  /// No description provided for @upNext.
+  ///
+  /// In ar, this message translates to:
+  /// **'التالي'**
+  String get upNext;
 }
 
 class _AppLocalizationsDelegate
@@ -2324,7 +2320,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['ar', 'en'].contains(locale.languageCode);
+      <String>['ar'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -2335,8 +2331,6 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   switch (locale.languageCode) {
     case 'ar':
       return AppLocalizationsAr();
-    case 'en':
-      return AppLocalizationsEn();
   }
 
   throw FlutterError(

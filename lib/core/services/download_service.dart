@@ -48,15 +48,15 @@ class DownloadProgressData {
   }) : progress = progress.clamp(0.0, 1.0);
 
   String get speedString {
-    if (status == TaskStatus.paused) return "Paused";
-    if (progress >= 1.0) return "Done";
-    if (networkSpeed < 0) return "Calculating...";
-    if (networkSpeed == 0) return "0 MB/s";
+    if (status == TaskStatus.paused) return 'متوقف';
+    if (progress >= 1.0) return 'اكتمل';
+    if (networkSpeed < 0) return 'جارٍ الحساب…';
+    if (networkSpeed == 0) return '0 MB/s';
 
     if (networkSpeed < 1.0) {
-      return "${(networkSpeed * 1024).toStringAsFixed(2)} KB/s";
+      return '${(networkSpeed * 1024).toStringAsFixed(2)} KB/s';
     }
-    return "${networkSpeed.toStringAsFixed(2)} MB/s";
+    return '${networkSpeed.toStringAsFixed(2)} MB/s';
   }
 }
 
@@ -132,7 +132,7 @@ class DownloadService {
     final notificationConfig = TaskNotification(
       '{displayName}',
       Platform.isIOS
-          ? 'Downloading...'
+          ? 'جارٍ التنزيل...'
           : '{progress} • {networkSpeed} • {timeRemaining}',
     );
 
@@ -144,10 +144,10 @@ class DownloadService {
           running: notificationConfig,
           complete: const TaskNotification(
             '{displayName}',
-            'Download finished',
+            'اكتمل التنزيل',
           ),
-          error: const TaskNotification('{displayName}', 'Download failed'),
-          paused: const TaskNotification('{displayName}', 'Download paused'),
+          error: const TaskNotification('{displayName}', 'فشل التنزيل'),
+          paused: const TaskNotification('{displayName}', 'التنزيل متوقف مؤقتاً'),
           progressBar: !Platform.isIOS,
         )
         .configureNotificationForGroup(
@@ -155,10 +155,10 @@ class DownloadService {
           running: notificationConfig,
           complete: const TaskNotification(
             '{displayName}',
-            'Download finished',
+            'اكتمل التنزيل',
           ),
-          error: const TaskNotification('{displayName}', 'Download failed'),
-          paused: const TaskNotification('{displayName}', 'Download paused'),
+          error: const TaskNotification('{displayName}', 'فشل التنزيل'),
+          paused: const TaskNotification('{displayName}', 'التنزيل متوقف مؤقتاً'),
           progressBar: !Platform.isIOS,
         );
 

@@ -472,7 +472,7 @@ class _DownloadItemTile extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          progressData!.speedString,
+                          formatDownloadSpeed(progressData!, l10n),
                           textDirection: TextDirection.ltr,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

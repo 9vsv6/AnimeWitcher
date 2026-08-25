@@ -438,7 +438,7 @@ class _SubtitleSyncDialogState extends ConsumerState<SubtitleSyncDialog> {
     } catch (e) {
       setState(() {
         _loadingCues = false;
-        _errorMessage = "Failed to load subtitle file cues: $e";
+        _errorMessage = 'تعذر تحميل نصوص الترجمة: $e';
       });
     }
   }
