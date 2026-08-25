@@ -1,16 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-/// Counts routes that temporarily own the full mobile canvas and therefore hide
-/// the root taskbar. A depth counter keeps nested pushes safe.
-final ValueNotifier<int> appTaskbarHiddenDepth = ValueNotifier<int>(0);
-
-Future<T?> pushWithTaskbarHidden<T>(BuildContext context, Route<T> route) async {
-  appTaskbarHiddenDepth.value += 1;
-  try {
-    return await Navigator.of(context).push<T>(route);
-  } finally {
-    appTaskbarHiddenDepth.value =
-        appTaskbarHiddenDepth.value > 0 ? appTaskbarHiddenDepth.value - 1 : 0;
-  }
+/// Pushes [route] on the root navigator so it covers [AppScaffold] and the
+/// bottom taskbar. This is the same stack used by [DetailsRoute] and
+/// [ViewAllRoute], and by More-tab screens.
+Future<T?> pushOverTaskbar<T>(BuildContext context, Route<T> route) {
+  return Navigator.of(context, rootNavigator: true).push<T>(route);
 }

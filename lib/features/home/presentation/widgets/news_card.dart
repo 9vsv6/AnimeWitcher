@@ -5,6 +5,7 @@ import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/utils/artwork_quality.dart';
 import '../../../../core/account/animewitcher_comment_models.dart';
 import '../../../comments/presentation/animewitcher_comments_screen.dart';
+import '../../../../shared/widgets/taskbar_visibility.dart';
 
 class NewsCard extends StatelessWidget {
   const NewsCard({
@@ -85,7 +86,8 @@ class NewsCard extends StatelessWidget {
                               final target = animeWitcherNewsCommentTarget(
                                 item,
                               );
-                              Navigator.of(context).push(
+                              pushOverTaskbar<void>(
+                                context,
                                 MaterialPageRoute<void>(
                                   builder: (_) => AnimeWitcherCommentsScreen(
                                     target: target,
