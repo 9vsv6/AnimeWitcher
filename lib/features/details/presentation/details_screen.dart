@@ -15,11 +15,11 @@ import '../../../core/utils/image_fallbacks.dart';
 import 'details_item_merge.dart';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:skystream/core/utils/layout_constants.dart';
-import 'package:skystream/core/utils/responsive_breakpoints.dart';
+import 'package:animewitcher/core/utils/layout_constants.dart';
+import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
 
-import 'package:skystream/shared/widgets/custom_widgets.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/custom_widgets.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 import '../../library/presentation/library_provider.dart';
 import '../../../core/storage/library_category.dart';
@@ -32,10 +32,10 @@ import "widgets/anime_information_section.dart";
 import "../../../shared/widgets/expandable_text.dart";
 import "../../../shared/widgets/loading_indicator.dart";
 import "../../../shared/widgets/underline_segment_tabs.dart";
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
-import 'package:skystream/core/services/notification_service.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
+import 'package:animewitcher/core/services/notification_service.dart';
 
 /// Keeps the native pull-to-stretch reaction while making it deliberately
 /// subtle on the details artwork.

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 class ExpandableText extends StatefulWidget {
   final String text;

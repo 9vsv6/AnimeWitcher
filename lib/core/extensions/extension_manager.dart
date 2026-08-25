@@ -12,8 +12,8 @@ part 'extension_manager.g.dart';
 @Riverpod(keepAlive: true)
 class ExtensionManager extends _$ExtensionManager {
   @override
-  List<SkyStreamProvider> build() {
-    return <SkyStreamProvider>[
+  List<AnimeWitcherProvider> build() {
+    return <AnimeWitcherProvider>[
       AnimeWitcherNativeProvider(
         ref.watch(dioClientProvider),
         ref.watch(settingsRepositoryProvider),
@@ -24,10 +24,10 @@ class ExtensionManager extends _$ExtensionManager {
     ];
   }
 
-  List<SkyStreamProvider> getAllProviders() =>
-      List<SkyStreamProvider>.unmodifiable(state);
+  List<AnimeWitcherProvider> getAllProviders() =>
+      List<AnimeWitcherProvider>.unmodifiable(state);
 
-  SkyStreamProvider? getProvider(String id) {
+  AnimeWitcherProvider? getProvider(String id) {
     final value = id.trim();
     if (value.isEmpty) return null;
     for (final provider in state) {
@@ -51,7 +51,7 @@ class ProviderResolutionLoading extends _$ProviderResolutionLoading {
 @Riverpod(keepAlive: true)
 class ActiveProvider extends _$ActiveProvider {
   @override
-  SkyStreamProvider? build() {
+  AnimeWitcherProvider? build() {
     final providers = ref.watch(extensionManagerProvider);
     if (providers.isEmpty) return null;
 
@@ -68,7 +68,7 @@ class ActiveProvider extends _$ActiveProvider {
     return selected;
   }
 
-  Future<void> set(SkyStreamProvider? provider) async {
+  Future<void> set(AnimeWitcherProvider? provider) async {
     final providers = ref.read(extensionManagerProvider);
     final next = provider ?? (providers.isEmpty ? null : providers.first);
     state = next;

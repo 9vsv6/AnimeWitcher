@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,8 +18,8 @@ import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../search/presentation/search_provider.dart';
 import '../widgets/provider_search_filter_dialog.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
-import 'package:skystream/core/services/notification_service.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
+import 'package:animewitcher/core/services/notification_service.dart';
 String homeSearchFieldLabel(
   BuildContext context,
   ProviderSearchFilters filters,

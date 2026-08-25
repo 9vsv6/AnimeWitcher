@@ -219,7 +219,7 @@ class CloudflareBypass {
     bool checking = false;
     InAppWebViewController? capturedController;
 
-    // SKYSTREAM_MEDIAFIRE_READY_V2
+    // ANIMEWITCHER_MEDIAFIRE_READY_V2
 // Do not serialize MediaFire while its post-challenge document is still
 // incomplete. The final CDN URL is placed in #downloadButton[href].
 // This function is also used by cached WebView navigations, so it must
@@ -306,7 +306,7 @@ Future<void> checkSolved(
       // ordinary #downloadButton[href] attribute.
       try {
         document.documentElement.setAttribute(
-          'data-skystream-mediafire-direct',
+          'data-animewitcher-mediafire-direct',
           href
         );
       } catch (_) {}

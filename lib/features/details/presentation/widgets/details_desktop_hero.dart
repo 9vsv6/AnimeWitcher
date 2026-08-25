@@ -10,8 +10,8 @@ import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import 'premium_details_widgets.dart';
 import 'details_layout_widgets.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
-import 'package:skystream/core/services/notification_service.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
+import 'package:animewitcher/core/services/notification_service.dart';
 
 /// Immersive desktop/TV hero for non-TMDB details.
 ///

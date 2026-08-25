@@ -11,10 +11,10 @@ import '../../../../core/utils/app_utils.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../player_settings_provider.dart';
 import '../general_settings_provider.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
 
-import 'package:skystream/core/services/notification_service.dart';
+import 'package:animewitcher/core/services/notification_service.dart';
 /// Returns a localized label for a resize mode string.
 String getResizeModeLabel(String mode, AppLocalizations l10n) {
   switch (mode.toLowerCase()) {

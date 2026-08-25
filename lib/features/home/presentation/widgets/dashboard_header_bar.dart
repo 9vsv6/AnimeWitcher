@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skystream/core/utils/layout_constants.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
-import 'package:skystream/features/home/presentation/home_provider.dart';
-import 'package:skystream/shared/widgets/cards_wrapper.dart';
+import 'package:animewitcher/core/utils/layout_constants.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/features/home/presentation/home_provider.dart';
+import 'package:animewitcher/shared/widgets/cards_wrapper.dart';
 
 /// A custom header bar for the widescreen dashboard layout.
 ///

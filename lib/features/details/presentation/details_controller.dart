@@ -9,8 +9,8 @@ import '../../../../core/utils/episode_label.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 
-import 'package:skystream/core/storage/episode_watch_repository.dart';
-import 'package:skystream/core/storage/storage_service.dart';
+import 'package:animewitcher/core/storage/episode_watch_repository.dart';
+import 'package:animewitcher/core/storage/storage_service.dart';
 import '../../library/presentation/history_provider.dart';
 import 'playback_launcher.dart';
 import '../../../core/services/download_service.dart';
@@ -117,7 +117,7 @@ class DetailsState {
 @riverpod
 class DetailsController extends _$DetailsController {
   Future<void>? _episodesLoadFuture;
-  SkyStreamProvider? _lastEpisodesProvider;
+  AnimeWitcherProvider? _lastEpisodesProvider;
   String? _lastEpisodesUrl;
   bool _episodesRequested = false;
   bool _episodesFetched = false;
@@ -355,7 +355,7 @@ class DetailsController extends _$DetailsController {
         return;
       }
 
-      SkyStreamProvider? provider;
+      AnimeWitcherProvider? provider;
       if (item.provider != null) {
         try {
           provider = manager.getAllProviders().firstWhere(
@@ -416,7 +416,7 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> _loadBasicDetails(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     MultimediaItem initialItem,
     int generation,
   ) async {
@@ -520,7 +520,7 @@ class DetailsController extends _$DetailsController {
   }
 
   void _applyEpisodes(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String url,
     MultimediaItem contextItem,
     List<Episode> fetchedEpisodes,
@@ -570,7 +570,7 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> _loadEpisodesInBackground(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String url,
     MultimediaItem contextItem,
     int generation,
@@ -654,7 +654,7 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> _loadCastInBackground(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String url,
     MultimediaItem contextItem,
     int generation,
@@ -675,7 +675,7 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> _loadTrailersInBackground(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String url,
     MultimediaItem contextItem,
     int generation,
@@ -698,7 +698,7 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> _loadRelatedInBackground(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String url,
     MultimediaItem contextItem,
     int generation,
@@ -722,7 +722,7 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> _loadNextAiringInBackground(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String url,
     MultimediaItem contextItem,
     int generation,
@@ -755,7 +755,7 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> _loadRecommendationsInBackground(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String url,
     MultimediaItem contextItem,
     int generation,
@@ -841,7 +841,7 @@ class DetailsController extends _$DetailsController {
   }
 
   Future<void> _loadEpisodeMetadataInBackground(
-    SkyStreamProvider provider,
+    AnimeWitcherProvider provider,
     String url,
     MultimediaItem contextItem,
     int generation,
@@ -972,7 +972,7 @@ class DetailsController extends _$DetailsController {
       return episodes;
     }
 
-    // SkyStream intentionally models every anime as a single season. Some
+    // AnimeWitcher intentionally models every anime as a single season. Some
     // upstream sources (and AniZip) expose real-world season numbers, but
     // those numbers are not compatible with the episode catalog we receive.
     // Normalize at the controller boundary so display, playback, downloads,

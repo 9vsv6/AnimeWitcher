@@ -1,8 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:skystream/core/providers/device_info_provider.dart';
-import 'package:skystream/core/services/notification_service.dart';
+import 'package:animewitcher/core/providers/device_info_provider.dart';
+import 'package:animewitcher/core/services/notification_service.dart';
 
 /// Exact Material 3 Expressive animation curves & timings.
 class ToastCurves {

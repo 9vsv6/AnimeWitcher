@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/domain/entity/multimedia_item.dart';
-import 'package:skystream/features/details/presentation/details_item_merge.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/features/details/presentation/details_item_merge.dart';
 
 void main() {
   group('mergeDetailsItem', () {

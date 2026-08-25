@@ -127,7 +127,7 @@ class MultimediaItem {
 
   /// Provider-defined text displayed over a media poster.
   ///
-  /// SkyStream renders this value unchanged. The extension decides
+  /// AnimeWitcher renders this value unchanged. The extension decides
   /// the language and format.
   final String? episodeBadge;
 
@@ -690,7 +690,7 @@ class StreamResult {
   final String? drmKey;
   final String? licenseUrl;
 
-  /// Opaque provider URL that [SkyStreamProvider.loadStreams] can extract
+  /// Opaque provider URL that [AnimeWitcherProvider.loadStreams] can extract
   /// again — used to mint a fresh signed CDN link after a long pause or a
   /// mid-playback 403. AnimeWitcher stores `animewitcher-source://…` here.
   final String? refreshUrl;

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/account/firestore_rest_client.dart';
+import 'package:animewitcher/core/account/firestore_rest_client.dart';
 
 void main() {
   group('FirestoreValueCodec', () {

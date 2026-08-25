@@ -22,8 +22,8 @@ UpdateService updateService(Ref ref) {
 
 class UpdateService {
   final Dio _dio;
-  static const String _owner = 'akashdh11';
-  static const String _repo = 'skystream';
+  static const String _owner = 'Fares669';
+  static const String _repo = 'AnimeWitcher';
 
   UpdateService(this._dio);
 

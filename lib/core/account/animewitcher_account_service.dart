@@ -2579,7 +2579,7 @@ class AnimeWitcherAccountService {
                 'anime_id': animeId,
                 'poster': episodePosterUrl ?? item.posterUrl,
                 'progress': progress,
-                // Additive SkyStream fields preserve exact resume state while
+                // Additive AnimeWitcher fields preserve exact resume state while
                 // remaining fully readable by the official app.
                 'position': position,
                 'duration': duration,

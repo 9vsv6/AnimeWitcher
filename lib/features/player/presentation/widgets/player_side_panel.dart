@@ -5,7 +5,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/history_repository.dart';
 import '../../../../core/storage/episode_watch_repository.dart';
@@ -16,9 +16,9 @@ import '../../../details/presentation/details_controller.dart';
 import '../../../details/presentation/playback_launcher.dart';
 import 'hotstar_player_style.dart';
 
-import 'package:skystream/core/utils/artwork_quality.dart';
-import 'package:skystream/core/utils/episode_label.dart';
-import 'package:skystream/core/utils/episode_order.dart';
+import 'package:animewitcher/core/utils/artwork_quality.dart';
+import 'package:animewitcher/core/utils/episode_label.dart';
+import 'package:animewitcher/core/utils/episode_order.dart';
 
 const List<Shadow> _kGlassTextShadow = [
   Shadow(color: Colors.black54, offset: Offset(0, 1.5), blurRadius: 3.0),

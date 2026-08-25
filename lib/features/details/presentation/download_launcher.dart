@@ -4,7 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:skystream/core/utils/episode_label.dart';
+import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
@@ -15,10 +15,10 @@ import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/loading_indicator.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
-import 'package:skystream/core/services/notification_service.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
+import 'package:animewitcher/core/services/notification_service.dart';
 import 'source_picker.dart';
 part 'download_launcher.g.dart';
 
@@ -43,7 +43,7 @@ class DownloadLauncher {
     if (resolveUrl.isEmpty) return;
 
     final manager = _ref.read(extensionManagerProvider.notifier);
-    SkyStreamProvider? provider;
+    AnimeWitcherProvider? provider;
     if (item.provider != null) {
       try {
         final val = item.provider!;

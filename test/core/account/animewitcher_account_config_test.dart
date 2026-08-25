@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/account/animewitcher_account_config.dart';
+import 'package:animewitcher/core/account/animewitcher_account_config.dart';
 
 void main() {
   group('AnimeWitcher registration email domains', () {

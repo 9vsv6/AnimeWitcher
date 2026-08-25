@@ -12,7 +12,7 @@ import 'package:flutter/services.dart';
 /// session. See:
 /// https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller
 class PlayerPip {
-  static const channelName = 'dev.akash.skystream.player/pip';
+  static const channelName = 'com.animewitcher.app.player/pip';
   static const channel = MethodChannel(channelName);
 
   /// Android rejects PiP aspect ratios outside `1:2.39` … `2.39:1`.

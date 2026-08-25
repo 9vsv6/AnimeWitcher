@@ -9,7 +9,7 @@ import '../player_controller.dart';
 import 'hotstar_player_style.dart';
 import 'player_ltr.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 class SubtitleCue {
   final int startTimeMs;
   final int durationMs;

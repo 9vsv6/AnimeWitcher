@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/utils/safe_uri.dart';
+import 'package:animewitcher/core/utils/safe_uri.dart';
 
 void main() {
   group('safe URI helpers', () {

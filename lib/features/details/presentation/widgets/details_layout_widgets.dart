@@ -4,19 +4,19 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import 'package:skystream/core/domain/entity/multimedia_item.dart';
-import 'package:skystream/core/storage/history_repository.dart';
-import 'package:skystream/core/utils/episode_label.dart';
-import 'package:skystream/core/utils/episode_order.dart';
-import 'package:skystream/core/utils/layout_constants.dart';
-import 'package:skystream/shared/widgets/custom_widgets.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/storage/history_repository.dart';
+import 'package:animewitcher/core/utils/episode_label.dart';
+import 'package:animewitcher/core/utils/episode_order.dart';
+import 'package:animewitcher/core/utils/layout_constants.dart';
+import 'package:animewitcher/shared/widgets/custom_widgets.dart';
 import '../details_controller.dart';
-import 'package:skystream/core/extensions/extension_manager.dart';
+import 'package:animewitcher/core/extensions/extension_manager.dart';
 import 'episode_card.dart';
-import 'package:skystream/core/providers/device_info_provider.dart';
-import 'package:skystream/core/utils/responsive_breakpoints.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
-import 'package:skystream/core/utils/localized_text.dart';
+import 'package:animewitcher/core/providers/device_info_provider.dart';
+import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 
 bool _shouldFilterEpisodesByDub(DetailsState detailsState, List<Episode> episodes) {
   if (detailsState.isMovie || detailsState.selectedDubStatus == DubStatus.none) {

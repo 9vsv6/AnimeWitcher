@@ -12,7 +12,7 @@ import '../player_controller.dart';
 import 'hotstar_player_style.dart';
 import 'player_ltr.dart';
 
-import 'package:skystream/core/utils/localized_text.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 // Unified settings card container that highlights border when any of its children are focused
 class DpadSettingCard extends StatelessWidget {
   final Widget child;

@@ -90,7 +90,7 @@ typedef AnimeWitcherMalIdResolver =
 /// It mirrors the current plugin's Firestore/Algolia metadata, independent
 /// detail sections, optional AniZip episode artwork, and MF/ST/PD playback
 /// paths while the JavaScript provider remains installed for verification.
-class AnimeWitcherNativeProvider extends SkyStreamProvider {
+class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   AnimeWitcherNativeProvider(
     this._dio,
     this._settings, {
@@ -497,7 +497,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
   Map<String, String> get _algoliaHeaders => <String, String>{
         'X-Algolia-Application-Id': _algoliaAppId,
         'X-Algolia-API-Key': _algoliaApiKey,
-        'X-Algolia-Agent': 'Algolia for JavaScript (4.x); SkyStream',
+        'X-Algolia-Agent': 'Algolia for JavaScript (4.x); AnimeWitcher',
         'User-Agent': 'Algolia for Android (3.27.0); Android (13)',
       };
 
@@ -1903,7 +1903,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
     final output = <String, List<MultimediaItem>>{};
     for (var i = 0; i < officialSections.length; i++) {
       final section = officialSections[i];
-      // SkyStream already treats "Trending" as the full-width hero carousel.
+      // AnimeWitcher already treats "Trending" as the full-width hero carousel.
       // AnimeWitcher's backend marks the equivalent row as type=carousel.
       final key = section.type == 'carousel' ? 'Trending' : section.title;
       output[key] = pages[i].items;
@@ -3560,7 +3560,7 @@ class AnimeWitcherNativeProvider extends SkyStreamProvider {
       }
 
       // AnimeWitcher's original generic GF path hands the extracted URL to
-      // the player directly. Do not attach the GF page as Referer: SkyStream
+      // the player directly. Do not attach the GF page as Referer: AnimeWitcher
       // forwards provider headers to both playback and downloads, and that
       // extra Referer can make otherwise valid GF links reject the request.
       if (rawName == 'GF') {

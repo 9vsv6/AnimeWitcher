@@ -16,7 +16,7 @@ import 'package:video_view/video_view.dart'
     show VideoController, SubtitleTrackConfig, VideoControllerPlaybackState;
 
 import '../../../../core/logger/app_logger.dart';
-import 'package:skystream/core/account/account_providers.dart';
+import 'package:animewitcher/core/account/account_providers.dart';
 import '../../../../core/services/download_service.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
@@ -2113,7 +2113,7 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
 
-  SkyStreamProvider? _resolveProvider() {
+  AnimeWitcherProvider? _resolveProvider() {
     final activeState = ref.read(activeProviderProvider);
     final manager = ref.read(extensionManagerProvider.notifier);
 

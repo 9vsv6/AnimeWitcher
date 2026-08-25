@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:skystream/core/extensions/providers/server_extraction_utils.dart';
+import 'package:animewitcher/core/extensions/providers/server_extraction_utils.dart';
 
 void main() {
   group('normalizePageEscapes', () {

@@ -123,7 +123,7 @@ String _multipartBoundary() {
   final suffix = List<int>.generate(12, (_) => random.nextInt(256))
       .map((value) => value.toRadixString(16).padLeft(2, '0'))
       .join();
-  return 'skystream-${DateTime.now().microsecondsSinceEpoch}-$suffix';
+  return 'animewitcher-${DateTime.now().microsecondsSinceEpoch}-$suffix';
 }
 
 String? _downloadToken(dynamic raw) {

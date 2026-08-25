@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:skystream/core/extensions/base_provider.dart';
-import 'package:skystream/core/extensions/providers/animewitcher_native_provider.dart';
-import 'package:skystream/core/storage/settings_repository.dart';
-import 'package:skystream/core/storage/storage_service.dart';
+import 'package:animewitcher/core/extensions/base_provider.dart';
+import 'package:animewitcher/core/extensions/providers/animewitcher_native_provider.dart';
+import 'package:animewitcher/core/storage/settings_repository.dart';
+import 'package:animewitcher/core/storage/storage_service.dart';
 
 const String _smallPoster = 'https://cdn.animewitcher.com/small/one_piece.jpg';
 const String _largePoster = 'https://cdn.animewitcher.com/large/one_piece.jpg';

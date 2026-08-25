@@ -4,9 +4,9 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:skystream/core/navigation/taskbar_destination.dart';
-import 'package:skystream/l10n/generated/app_localizations.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/core/navigation/taskbar_destination.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 class CustomBottomNavBar extends StatelessWidget {
   final int currentBranchIndex;
@@ -235,7 +235,7 @@ class _NavTabCellState extends State<_NavTabCell> {
   }
 }
 
-const _appleNativeTabBarViewType = 'dev.akash.skystream/native_tab_bar';
+const _appleNativeTabBarViewType = 'com.animewitcher.app/native_tab_bar';
 
 String _appleTabSymbol(TaskbarDestination destination, {required bool selected}) {
   return switch (destination) {
@@ -301,7 +301,7 @@ class _AppleNativeTabBarState extends State<_AppleNativeTabBar> {
   }
 
   void _onPlatformViewCreated(int id) {
-    final channel = MethodChannel('dev.akash.skystream/native_tab_bar/$id');
+    final channel = MethodChannel('com.animewitcher.app/native_tab_bar/$id');
     channel.setMethodCallHandler((call) async {
       if (call.method != 'selected') return;
       final selectedId = call.arguments as String?;

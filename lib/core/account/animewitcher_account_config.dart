@@ -49,7 +49,7 @@ class AnimeWitcherAccountConfig {
     'ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID',
   );
 
-  /// iOS requires an OAuth client registered for SkyStream's bundle ID.
+  /// iOS requires an OAuth client registered for AnimeWitcher's bundle ID.
   static const String googleIosClientId = String.fromEnvironment(
     'ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID',
   );

@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:skystream/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:skystream/core/account/account_providers.dart';
-import 'package:skystream/core/account/animewitcher_account_models.dart';
-import 'package:skystream/core/account/animewitcher_comment_models.dart';
-import 'package:skystream/core/account/firestore_rest_client.dart';
-import 'package:skystream/core/services/notification_service.dart';
+import 'package:animewitcher/core/account/account_providers.dart';
+import 'package:animewitcher/core/account/animewitcher_account_models.dart';
+import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
+import 'package:animewitcher/core/account/firestore_rest_client.dart';
+import 'package:animewitcher/core/services/notification_service.dart';
 
 import 'animewitcher_replies_screen.dart';
 
