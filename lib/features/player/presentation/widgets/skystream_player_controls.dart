@@ -1597,6 +1597,7 @@ class SkyStreamPlayerControlsState
       child: Stack(
         fit: StackFit.expand,
         children: [
+          const ColoredBox(color: Colors.black),
           Center(
             child: SizedBox(
               width: 34,
