@@ -10,25 +10,19 @@ void main() {
   group('PlayerPip.shouldShowButton', () {
     test('shows on Android phones when the settings toggle is on', () {
       expect(
-        PlayerPip.shouldShowButton(
-          showPip: true,
-          isAndroid: true,
-          isIos: false,
-          isTv: false,
-        ),
+        PlayerPip.shouldShowButton(showPip: true, isAndroid: true, isTv: false),
         isTrue,
       );
     });
 
-    test('shows on iOS when the settings toggle is on', () {
+    test('hides on iOS even when the settings toggle is on', () {
       expect(
         PlayerPip.shouldShowButton(
           showPip: true,
           isAndroid: false,
-          isIos: true,
           isTv: false,
         ),
-        isTrue,
+        isFalse,
       );
     });
 
@@ -37,7 +31,6 @@ void main() {
         PlayerPip.shouldShowButton(
           showPip: false,
           isAndroid: true,
-          isIos: true,
           isTv: false,
         ),
         isFalse,
@@ -46,19 +39,13 @@ void main() {
 
     test('hides on TV, desktop, and devices without system PiP', () {
       expect(
-        PlayerPip.shouldShowButton(
-          showPip: true,
-          isAndroid: true,
-          isIos: false,
-          isTv: true,
-        ),
+        PlayerPip.shouldShowButton(showPip: true, isAndroid: true, isTv: true),
         isFalse,
       );
       expect(
         PlayerPip.shouldShowButton(
           showPip: true,
           isAndroid: false,
-          isIos: false,
           isTv: false,
         ),
         isFalse,
@@ -67,7 +54,6 @@ void main() {
         PlayerPip.shouldShowButton(
           showPip: true,
           isAndroid: true,
-          isIos: false,
           isTv: false,
           pipAvailable: false,
         ),
@@ -92,17 +78,9 @@ void main() {
   });
 
   group('PlayerPip.modeFromNative', () {
-    test('reads Android bools and iOS restore payloads', () {
+    test('reads Android bool payloads', () {
       expect(PlayerPip.modeFromNative(true).active, isTrue);
       expect(PlayerPip.modeFromNative(false).active, isFalse);
-      expect(PlayerPip.modeFromNative(false).positionMs, isNull);
-
-      final restored = PlayerPip.modeFromNative({
-        'active': false,
-        'positionMs': 12500,
-      });
-      expect(restored.active, isFalse);
-      expect(restored.positionMs, 12500);
     });
   });
 
@@ -188,45 +166,20 @@ void main() {
           .setMockMethodCallHandler(channel, null);
     });
 
-    test(
-      'enterPip calls the official system method with video size',
-      () async {
-        final ok = await service.enterPip(
-          isPlaying: true,
-          width: 1920,
-          height: 1080,
-        );
-
-        expect(ok, isTrue);
-        expect(calls, hasLength(1));
-        expect(calls.single.method, 'enterPip');
-        expect(calls.single.arguments, {
-          'isPlaying': true,
-          'width': 1920,
-          'height': 1080,
-        });
-      },
-    );
-
-    test('enterPip forwards the iOS AVPlayer source payload', () async {
+    test('enterPip calls the official system method with video size', () async {
       final ok = await service.enterPip(
         isPlaying: true,
-        width: 1280,
-        height: 720,
-        url: 'https://example.com/episode.m3u8',
-        headers: const {'Referer': 'https://example.com'},
-        positionMs: 15000,
+        width: 1920,
+        height: 1080,
       );
 
       expect(ok, isTrue);
+      expect(calls, hasLength(1));
       expect(calls.single.method, 'enterPip');
       expect(calls.single.arguments, {
         'isPlaying': true,
-        'width': 1280,
-        'height': 720,
-        'url': 'https://example.com/episode.m3u8',
-        'positionMs': 15000,
-        'headers': {'Referer': 'https://example.com'},
+        'width': 1920,
+        'height': 1080,
       });
     });
 

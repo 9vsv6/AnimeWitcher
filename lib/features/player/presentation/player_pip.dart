@@ -7,10 +7,8 @@ import 'package:flutter/services.dart';
 /// Android 12. See:
 /// https://developer.android.com/develop/ui/views/picture-in-picture
 ///
-/// iOS: [AVPictureInPictureController] with an [AVPlayerLayer] in the
-/// view hierarchy, `UIBackgroundModes=audio`, and an `.playback` audio
-/// session. See:
-/// https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller
+/// iOS is not supported: Apple PiP requires a native `AVPlayerLayer`, which
+/// is a second video surface on top of the Flutter player.
 class PlayerPip {
   static const channelName = 'dev.akash.skystream.player/pip';
   static const channel = MethodChannel(channelName);
@@ -19,15 +17,14 @@ class PlayerPip {
   static const minAspectRatio = 1 / 2.39;
   static const maxAspectRatio = 2.39;
 
-  /// Phone/tablet only. TV uses a different shell.
+  /// Android phone/tablet only. TV uses a different shell. iOS has no PiP.
   static bool shouldShowButton({
     required bool showPip,
     required bool isAndroid,
-    required bool isIos,
     required bool isTv,
     bool pipAvailable = true,
   }) {
-    return showPip && (isAndroid || isIos) && !isTv && pipAvailable;
+    return showPip && isAndroid && !isTv && pipAvailable;
   }
 
   /// Clamp a video size into the ratio window Android accepts.
@@ -40,29 +37,14 @@ class PlayerPip {
     return (safeW, safeH);
   }
 
-  /// Android sends a bool. iOS sends `{active, positionMs}` so restore can
-  /// seek the Flutter engine back to the native clock.
+  /// Android sends a bool.
   static PlayerPipMode modeFromNative(dynamic arguments) {
-    if (arguments is bool) {
-      return PlayerPipMode(active: arguments);
-    }
-    if (arguments is Map) {
-      final active = arguments['active'] == true;
-      final raw = arguments['positionMs'];
-      final positionMs = switch (raw) {
-        final int value => value,
-        final num value => value.toInt(),
-        _ => null,
-      };
-      return PlayerPipMode(active: active, positionMs: positionMs);
-    }
-    return const PlayerPipMode(active: false);
+    return PlayerPipMode(active: arguments == true);
   }
 }
 
 class PlayerPipMode {
-  const PlayerPipMode({required this.active, this.positionMs});
+  const PlayerPipMode({required this.active});
 
   final bool active;
-  final int? positionMs;
 }

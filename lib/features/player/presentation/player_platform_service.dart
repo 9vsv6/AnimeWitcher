@@ -20,7 +20,7 @@ class PlayerPlatformService {
     if (_nativePip != null) return _nativePip;
     if (kIsWeb) return false;
     try {
-      return Platform.isAndroid || Platform.isIOS;
+      return Platform.isAndroid;
     } catch (e) {
       if (kDebugMode) debugPrint('PlayerPlatformService.nativePip: $e');
       return false;
@@ -33,9 +33,6 @@ class PlayerPlatformService {
     bool? enabled,
     int? width,
     int? height,
-    String? url,
-    Map<String, String>? headers,
-    int? positionMs,
   }) {
     final aspect = PlayerPip.clampAspectRatio(width ?? 16, height ?? 9);
     return <String, dynamic>{
@@ -44,34 +41,21 @@ class PlayerPlatformService {
       'height': aspect.$2,
       'active': ?active,
       'enabled': ?enabled,
-      'url': ?url,
-      'positionMs': ?positionMs,
-      'headers': ?headers,
     };
   }
 
-  /// Enters system Picture-in-Picture (Android Activity PiP or iOS
-  /// `AVPictureInPictureController`). Returns `false` when unavailable.
+  /// Enters Android system Picture-in-Picture.
+  /// Returns `false` when unavailable (including iOS).
   Future<bool> enterPip({
     required bool isPlaying,
     int? width,
     int? height,
-    String? url,
-    Map<String, String>? headers,
-    int? positionMs,
   }) async {
     if (!_usesNativePip) return false;
     try {
       final result = await _pipChannel.invokeMethod<bool>(
         'enterPip',
-        _pipPayload(
-          isPlaying: isPlaying,
-          width: width,
-          height: height,
-          url: url,
-          headers: headers,
-          positionMs: positionMs,
-        ),
+        _pipPayload(isPlaying: isPlaying, width: width, height: height),
       );
       return result ?? false;
     } catch (e) {
