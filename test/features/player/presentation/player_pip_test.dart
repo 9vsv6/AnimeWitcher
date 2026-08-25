@@ -91,6 +91,21 @@ void main() {
     });
   });
 
+  group('PlayerPip.modeFromNative', () {
+    test('reads Android bools and iOS restore payloads', () {
+      expect(PlayerPip.modeFromNative(true).active, isTrue);
+      expect(PlayerPip.modeFromNative(false).active, isFalse);
+      expect(PlayerPip.modeFromNative(false).positionMs, isNull);
+
+      final restored = PlayerPip.modeFromNative({
+        'active': false,
+        'positionMs': 12500,
+      });
+      expect(restored.active, isFalse);
+      expect(restored.positionMs, 12500);
+    });
+  });
+
   group('PlayerChromeActions', () {
     test('places PiP immediately left of rotate', () {
       final actions = PlayerChromeActions.visible(

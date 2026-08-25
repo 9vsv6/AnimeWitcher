@@ -52,6 +52,7 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   final VoidCallback? onRequestRootFocus;
   final String? backdropUrl;
   final String? logoUrl;
+  final ValueChanged<bool>? onIosPipSurfaceChanged;
 
   const SkyStreamPlayerControls({
     super.key,
@@ -69,6 +70,7 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
     this.backdropUrl,
     this.logoUrl,
     this.isLoading = false,
+    this.onIosPipSurfaceChanged,
   });
 
   final bool isLoading;
@@ -270,12 +272,35 @@ class SkyStreamPlayerControlsState
       PlayerPip.channel.setMethodCallHandler((call) async {
         switch (call.method) {
           case 'pipModeChanged':
-            final inPip = call.arguments as bool;
-            ref.read(playerControllerProvider.notifier).setInPip(inPip);
+            final mode = PlayerPip.modeFromNative(call.arguments);
+            final controller = ref.read(playerControllerProvider.notifier);
+            final wasInPip = _isInPip;
+            controller.setInPip(mode.active);
             if (mounted) {
               setState(() {
-                _isInPip = inPip;
+                _isInPip = mode.active;
               });
+            }
+            if (wasInPip && !mode.active) {
+              final positionMs = mode.positionMs;
+              if (positionMs != null && positionMs > 0) {
+                unawaited(
+                  controller.seekTo(Duration(milliseconds: positionMs)),
+                );
+              }
+              unawaited(controller.play());
+            }
+            break;
+          case 'pipSurfaceActive':
+            final active = call.arguments == true;
+            widget.onIosPipSurfaceChanged?.call(active);
+            if (active) {
+              final useExo = ref.read(playerControllerProvider).useExoPlayer;
+              if (!useExo) {
+                unawaited(
+                  ref.read(playerControllerProvider.notifier).pause(),
+                );
+              }
             }
             break;
           case 'play':
@@ -473,28 +498,33 @@ class SkyStreamPlayerControlsState
 
   Future<void> _enterPip() async {
     final controller = ref.read(playerControllerProvider.notifier);
-    controller.setInPip(true);
-    if (Platform.isIOS) {
-      final prepared = await controller.prepareIosPictureInPicture();
-      if (!prepared) {
-        controller.setInPip(false);
-        if (mounted) {
-          final l10n = AppLocalizations.of(context);
-          if (l10n != null) {
-            ref.read(notificationServiceProvider).showError(l10n.pipUnavailable);
-          }
-        }
-        return;
-      }
-    }
     final size = _videoSize();
+
+    if (Platform.isIOS) {
+      // Call the platform channel on the tap turn. Waiting to switch engines
+      // first drops the user-gesture and iOS then only starts PiP after Home.
+      final ok = await _platformService.enterPip(
+        isPlaying: true,
+        width: size?.$1,
+        height: size?.$2,
+        url: controller.resolvedPlayUrl,
+        headers: controller.currentPlaybackHeaders,
+        positionMs: controller.currentPosition.inMilliseconds,
+      );
+      if (!ok && mounted) {
+        final l10n = AppLocalizations.of(context);
+        if (l10n != null) {
+          ref.read(notificationServiceProvider).showError(l10n.pipUnavailable);
+        }
+      }
+      return;
+    }
+
+    controller.setInPip(true);
     final ok = await _platformService.enterPip(
       isPlaying: _isPlaying,
       width: size?.$1,
       height: size?.$2,
-      url: controller.resolvedPlayUrl,
-      headers: controller.currentPlaybackHeaders,
-      positionMs: controller.currentPosition.inMilliseconds,
     );
     if (!ok) {
       controller.setInPip(false);
