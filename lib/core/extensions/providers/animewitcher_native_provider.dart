@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:html_unescape/html_unescape.dart';
 
 import '../../domain/entity/multimedia_item.dart';
@@ -1832,6 +1833,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     if (officialSections.isEmpty) {
       return const <String, List<MultimediaItem>>{};
     }
+    var failedSections = 0;
+    Object? firstError;
+    StackTrace? firstStackTrace;
     final pages = await BoundedBatchScheduler.mapOrdered<
       _OfficialHomeSection,
       ProviderMediaPage
@@ -1842,14 +1846,37 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
         section.title,
         limit: section.hitsPerPage.clamp(1, _previewSize).toInt(),
       ),
+      onError: (section, error, stackTrace) {
+        failedSections++;
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+        if (kDebugMode) {
+          debugPrint(
+            '[AnimeWitcher] Home section "${section.title}" failed: $error',
+          );
+        }
+        return const ProviderMediaPage(
+          items: <MultimediaItem>[],
+          nextOffset: 0,
+          hasMore: false,
+        );
+      },
+    );
+    BoundedBatchScheduler.throwIfBatchFailed(
+      itemCount: officialSections.length,
+      failureCount: failedSections,
+      error: firstError,
+      stackTrace: firstStackTrace,
     );
     final output = <String, List<MultimediaItem>>{};
     for (var i = 0; i < officialSections.length; i++) {
+      final items = pages[i].items;
+      if (items.isEmpty) continue;
       final section = officialSections[i];
       // AnimeWitcher already treats "Trending" as the full-width hero carousel.
       // AnimeWitcher's backend marks the equivalent row as type=carousel.
       final key = section.type == 'carousel' ? 'Trending' : section.title;
-      output[key] = pages[i].items;
+      output[key] = items;
     }
     return output;
   }

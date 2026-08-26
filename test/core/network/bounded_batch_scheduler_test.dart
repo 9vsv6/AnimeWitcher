@@ -58,4 +58,69 @@ void main() {
     expect(results, isEmpty);
     expect(invocations, 0);
   });
+
+  test('propagates mapper errors when onError is omitted', () async {
+    final started = <int>[];
+
+    await expectLater(
+      BoundedBatchScheduler.mapOrdered<int, int>(
+        <int>[1, 2, 3],
+        maxConcurrent: 2,
+        mapper: (value) async {
+          started.add(value);
+          if (value == 2) throw StateError('section-2');
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+          return value;
+        },
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'section-2',
+        ),
+      ),
+    );
+    expect(started, contains(2));
+  });
+
+  test('onError keeps remaining items and preserves input order', () async {
+    final results = await BoundedBatchScheduler.mapOrdered<int, String>(
+      <int>[0, 1, 2, 3],
+      maxConcurrent: 2,
+      mapper: (value) async {
+        if (value == 1) throw StateError('section-1');
+        await Future<void>.delayed(Duration(milliseconds: value == 0 ? 20 : 1));
+        return 'ok-$value';
+      },
+      onError: (value, error, stackTrace) => 'fail-$value',
+    );
+
+    expect(results, <String>['ok-0', 'fail-1', 'ok-2', 'ok-3']);
+  });
+
+  test('throwIfBatchFailed is a no-op when any item succeeded', () {
+    BoundedBatchScheduler.throwIfBatchFailed(
+      itemCount: 3,
+      failureCount: 1,
+      error: StateError('section-1'),
+    );
+  });
+
+  test('throwIfBatchFailed rethrows when every item failed', () {
+    expect(
+      () => BoundedBatchScheduler.throwIfBatchFailed(
+        itemCount: 2,
+        failureCount: 2,
+        error: StateError('offline'),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'offline',
+        ),
+      ),
+    );
+  });
 }
