@@ -1,9 +1,11 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:html_unescape/html_unescape.dart';
 
 import '../../domain/entity/multimedia_item.dart';
+import '../../network/bounded_batch_scheduler.dart';
 import '../../storage/settings_repository.dart';
 import '../../utils/episode_label.dart';
 import '../../utils/safe_uri.dart';
@@ -161,6 +163,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   static const Duration _relatedDataTtl = Duration(minutes: 5);
   static const Duration _posterFieldsTtl = Duration(hours: 6);
   static const int _posterBatchSize = 30;
+  // Home sections are independent Algolia requests. Bound their fan-out so a
+  // remotely configured home layout cannot monopolize sockets or UI parsing.
+  static const int _homeSectionConcurrency = 3;
   static const int _previewSize = 10;
   static const int _maxRelatedItems = 10;
   static const int _maxRecommendations = 10;
@@ -1011,29 +1016,25 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     List<String> animeIds,
   ) async {
     if (animeIds.isEmpty) return const <String, Map<String, dynamic>>{};
-    try {
-      final response = await _dio.post<dynamic>(
-        _firestoreBatchGetUrl(),
-        data: <String, dynamic>{
-          'documents': <String>[
-            for (final id in animeIds) _firestoreDocumentName('anime_list/$id'),
-          ],
-          'mask': const <String, dynamic>{'fieldPaths': _posterFieldPaths},
-        },
-        options: _jsonOptions(timeout: _serverTimeout),
-      );
-      final output = <String, Map<String, dynamic>>{};
-      for (final rowRaw in _list(response.data)) {
-        final found = _map(_map(rowRaw)['found']);
-        if (found.isEmpty) continue;
-        final id = _lastPathSegment(_text(found['name']));
-        if (id.isEmpty) continue;
-        output[id] = _firestoreFields(found['fields']);
-      }
-      return output;
-    } on DioException {
-      return const <String, Map<String, dynamic>>{};
+    final response = await _dio.post<dynamic>(
+      _firestoreBatchGetUrl(),
+      data: <String, dynamic>{
+        'documents': <String>[
+          for (final id in animeIds) _firestoreDocumentName('anime_list/$id'),
+        ],
+        'mask': const <String, dynamic>{'fieldPaths': _posterFieldPaths},
+      },
+      options: _jsonOptions(timeout: _serverTimeout),
+    );
+    final output = <String, Map<String, dynamic>>{};
+    for (final rowRaw in _list(response.data)) {
+      final found = _map(_map(rowRaw)['found']);
+      if (found.isEmpty) continue;
+      final id = _lastPathSegment(_text(found['name']));
+      if (id.isEmpty) continue;
+      output[id] = _firestoreFields(found['fields']);
     }
+    return output;
   }
 
   /// Gives every hit the poster the details page would show.
@@ -1067,11 +1068,29 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
               : start + _posterBatchSize,
         ),
     ];
-    final results = await Future.wait(chunks.map(_fetchPosterFields));
+    final results = await BoundedBatchScheduler.mapOrdered<
+      List<String>,
+      Map<String, Map<String, dynamic>>?
+    >(
+      chunks,
+      maxConcurrent: _homeSectionConcurrency,
+      mapper: _fetchPosterFields,
+      onError: (chunk, error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint(
+            '[AnimeWitcher] Poster batch failed (${chunk.length} ids): $error',
+          );
+        }
+        return null;
+      },
+    );
 
     final expiresAt = DateTime.now().add(_posterFieldsTtl);
     for (var index = 0; index < chunks.length; index++) {
       final fetched = results[index];
+      // A failed batch must not be cached as "no large poster" or cards stay
+      // soft for the full poster TTL.
+      if (fetched == null) continue;
       for (final id in chunks[index]) {
         final fields = fetched[id] ?? const <String, dynamic>{};
         // Cache misses too: a title without a stored large poster should not be
@@ -1828,19 +1847,48 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     if (officialSections.isEmpty) {
       return const <String, List<MultimediaItem>>{};
     }
-    final pages = await Future.wait(
-      officialSections.map(
-        (section) => _loadHomePage(
-          section.title,
-          limit: section.hitsPerPage.clamp(1, _previewSize).toInt(),
-        ),
+    var failedSections = 0;
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    final pages = await BoundedBatchScheduler.mapOrdered<
+      _OfficialHomeSection,
+      ProviderMediaPage
+    >(
+      officialSections,
+      maxConcurrent: _homeSectionConcurrency,
+      mapper: (section) => _loadHomePage(
+        section.title,
+        limit: section.hitsPerPage.clamp(1, _previewSize).toInt(),
       ),
+      onError: (section, error, stackTrace) {
+        failedSections++;
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+        if (kDebugMode) {
+          debugPrint(
+            '[AnimeWitcher] Home section "${section.title}" failed: $error',
+          );
+        }
+        return const ProviderMediaPage(
+          items: <MultimediaItem>[],
+          nextOffset: 0,
+          hasMore: false,
+        );
+      },
+    );
+    BoundedBatchScheduler.throwIfBatchFailed(
+      itemCount: officialSections.length,
+      failureCount: failedSections,
+      error: firstError,
+      stackTrace: firstStackTrace,
     );
     final output = <String, List<MultimediaItem>>{};
     for (var i = 0; i < officialSections.length; i++) {
       final section = officialSections[i];
       // AnimeWitcher already treats "Trending" as the full-width hero carousel.
       // AnimeWitcher's backend marks the equivalent row as type=carousel.
+      // Keep empty keys so a failed carousel does not promote another row into
+      // the hero slot (home would then show that row twice).
       final key = section.type == 'carousel' ? 'Trending' : section.title;
       output[key] = pages[i].items;
     }
