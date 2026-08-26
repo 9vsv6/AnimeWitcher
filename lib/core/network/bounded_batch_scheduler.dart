@@ -36,6 +36,7 @@ class BoundedBatchScheduler {
 
     await Future.wait<void>(
       List<Future<void>>.generate(workerCount, (_) => worker()),
+      eagerError: onError == null,
     );
     return <R>[for (final result in results) result as R];
   }

@@ -1072,7 +1072,22 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
               : start + _posterBatchSize,
         ),
     ];
-    final results = await Future.wait(chunks.map(_fetchPosterFields));
+    final results = await BoundedBatchScheduler.mapOrdered<
+      List<String>,
+      Map<String, Map<String, dynamic>>
+    >(
+      chunks,
+      maxConcurrent: _homeSectionConcurrency,
+      mapper: _fetchPosterFields,
+      onError: (chunk, error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint(
+            '[AnimeWitcher] Poster batch failed (${chunk.length} ids): $error',
+          );
+        }
+        return const <String, Map<String, dynamic>>{};
+      },
+    );
 
     final expiresAt = DateTime.now().add(_posterFieldsTtl);
     for (var index = 0; index < chunks.length; index++) {
@@ -1870,13 +1885,13 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     );
     final output = <String, List<MultimediaItem>>{};
     for (var i = 0; i < officialSections.length; i++) {
-      final items = pages[i].items;
-      if (items.isEmpty) continue;
       final section = officialSections[i];
       // AnimeWitcher already treats "Trending" as the full-width hero carousel.
       // AnimeWitcher's backend marks the equivalent row as type=carousel.
+      // Keep empty keys so a failed carousel does not promote another row into
+      // the hero slot (home would then show that row twice).
       final key = section.type == 'carousel' ? 'Trending' : section.title;
-      output[key] = items;
+      output[key] = pages[i].items;
     }
     return output;
   }

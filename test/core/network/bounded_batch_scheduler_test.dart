@@ -123,4 +123,12 @@ void main() {
       ),
     );
   });
+
+  test('throwIfBatchFailed is a no-op for an empty batch', () {
+    BoundedBatchScheduler.throwIfBatchFailed(
+      itemCount: 0,
+      failureCount: 0,
+      error: StateError('unused'),
+    );
+  });
 }
