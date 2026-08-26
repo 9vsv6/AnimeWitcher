@@ -1016,29 +1016,25 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     List<String> animeIds,
   ) async {
     if (animeIds.isEmpty) return const <String, Map<String, dynamic>>{};
-    try {
-      final response = await _dio.post<dynamic>(
-        _firestoreBatchGetUrl(),
-        data: <String, dynamic>{
-          'documents': <String>[
-            for (final id in animeIds) _firestoreDocumentName('anime_list/$id'),
-          ],
-          'mask': const <String, dynamic>{'fieldPaths': _posterFieldPaths},
-        },
-        options: _jsonOptions(timeout: _serverTimeout),
-      );
-      final output = <String, Map<String, dynamic>>{};
-      for (final rowRaw in _list(response.data)) {
-        final found = _map(_map(rowRaw)['found']);
-        if (found.isEmpty) continue;
-        final id = _lastPathSegment(_text(found['name']));
-        if (id.isEmpty) continue;
-        output[id] = _firestoreFields(found['fields']);
-      }
-      return output;
-    } on DioException {
-      return const <String, Map<String, dynamic>>{};
+    final response = await _dio.post<dynamic>(
+      _firestoreBatchGetUrl(),
+      data: <String, dynamic>{
+        'documents': <String>[
+          for (final id in animeIds) _firestoreDocumentName('anime_list/$id'),
+        ],
+        'mask': const <String, dynamic>{'fieldPaths': _posterFieldPaths},
+      },
+      options: _jsonOptions(timeout: _serverTimeout),
+    );
+    final output = <String, Map<String, dynamic>>{};
+    for (final rowRaw in _list(response.data)) {
+      final found = _map(_map(rowRaw)['found']);
+      if (found.isEmpty) continue;
+      final id = _lastPathSegment(_text(found['name']));
+      if (id.isEmpty) continue;
+      output[id] = _firestoreFields(found['fields']);
     }
+    return output;
   }
 
   /// Gives every hit the poster the details page would show.
@@ -1074,7 +1070,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     ];
     final results = await BoundedBatchScheduler.mapOrdered<
       List<String>,
-      Map<String, Map<String, dynamic>>
+      Map<String, Map<String, dynamic>>?
     >(
       chunks,
       maxConcurrent: _homeSectionConcurrency,
@@ -1085,13 +1081,16 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
             '[AnimeWitcher] Poster batch failed (${chunk.length} ids): $error',
           );
         }
-        return const <String, Map<String, dynamic>>{};
+        return null;
       },
     );
 
     final expiresAt = DateTime.now().add(_posterFieldsTtl);
     for (var index = 0; index < chunks.length; index++) {
       final fetched = results[index];
+      // A failed batch must not be cached as "no large poster" or cards stay
+      // soft for the full poster TTL.
+      if (fetched == null) continue;
       for (final id in chunks[index]) {
         final fields = fetched[id] ?? const <String, dynamic>{};
         // Cache misses too: a title without a stored large poster should not be

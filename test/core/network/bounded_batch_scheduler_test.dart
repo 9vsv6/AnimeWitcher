@@ -99,6 +99,20 @@ void main() {
     expect(results, <String>['ok-0', 'fail-1', 'ok-2', 'ok-3']);
   });
 
+  test('onError can return null without dropping later items', () async {
+    final results = await BoundedBatchScheduler.mapOrdered<int, String?>(
+      <int>[0, 1, 2],
+      maxConcurrent: 2,
+      mapper: (value) async {
+        if (value == 1) throw StateError('section-1');
+        return 'ok-$value';
+      },
+      onError: (value, error, stackTrace) => null,
+    );
+
+    expect(results, <String?>['ok-0', null, 'ok-2']);
+  });
+
   test('throwIfBatchFailed is a no-op when any item succeeded', () {
     BoundedBatchScheduler.throwIfBatchFailed(
       itemCount: 3,
