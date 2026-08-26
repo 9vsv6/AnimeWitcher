@@ -64,9 +64,43 @@ void main() {
 
     expect(find.byKey(const ValueKey('countdown-days')), findsOneWidget);
     expect(find.byKey(const ValueKey('countdown-hours')), findsOneWidget);
-    expect(find.text('00'), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('countdown-hours')),
+        matching: find.text('0'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('00'), findsNothing);
     expect(find.byKey(const ValueKey('countdown-minutes')), findsOneWidget);
     expect(find.byKey(const ValueKey('countdown-seconds')), findsOneWidget);
+
+    await _disposeCountdown(tester);
+  });
+
+  testWidgets('renders unit values without a leading zero', (tester) async {
+    await _pumpCountdown(
+      tester,
+      const Duration(hours: 5, minutes: 7, seconds: 14),
+    );
+
+    expect(find.text('05'), findsNothing);
+    expect(find.text('07'), findsNothing);
+    expect(find.text('04'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('countdown-hours')),
+        matching: find.text('5'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('countdown-minutes')),
+        matching: find.text('7'),
+      ),
+      findsOneWidget,
+    );
 
     await _disposeCountdown(tester);
   });

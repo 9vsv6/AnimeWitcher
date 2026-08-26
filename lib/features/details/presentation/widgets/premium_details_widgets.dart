@@ -407,15 +407,9 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
     final isArabic = _isArabicDetailsLocale(context);
     final visibility = CountdownUnitVisibility.fromRemaining(_remaining);
     final days = _remaining.inDays.toString();
-    final hours = _remaining.inHours.remainder(24).toString().padLeft(2, '0');
-    final minutes = _remaining.inMinutes
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
-    final seconds = _remaining.inSeconds
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
+    final hours = _remaining.inHours.remainder(24).toString();
+    final minutes = _remaining.inMinutes.remainder(60).toString();
+    final seconds = _remaining.inSeconds.remainder(60).toString();
 
     final cards = <Widget>[
       if (visibility.showDays)
