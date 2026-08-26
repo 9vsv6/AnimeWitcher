@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:animewitcher/shared/widgets/thumbnail_error_placeholder.dart';
 import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'countdown_unit_visibility.dart';
 import 'details_layout_widgets.dart';
 
 bool _isArabicDetailsLocale(BuildContext context) => true;
@@ -357,47 +358,115 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
 
   Widget _buildCountdownCard(
     BuildContext context, {
+    Key? key,
     required String value,
     required String label,
   }) {
     final colors = Theme.of(context).colorScheme;
-    return Expanded(
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 72),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: colors.outlineVariant.withValues(alpha: 0.45),
+    return Container(
+      key: key,
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            textDirection: TextDirection.ltr,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
           ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              value,
-              textDirection: TextDirection.ltr,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCountdownRow(BuildContext context) {
+    final isArabic = _isArabicDetailsLocale(context);
+    final visibility = CountdownUnitVisibility.fromRemaining(_remaining);
+    final days = _remaining.inDays.toString();
+    final hours = _remaining.inHours.remainder(24).toString().padLeft(2, '0');
+    final minutes = _remaining.inMinutes
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+    final seconds = _remaining.inSeconds
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    final cards = <Widget>[
+      if (visibility.showDays)
+        _buildCountdownCard(
+          context,
+          key: const ValueKey('countdown-days'),
+          value: days,
+          label: isArabic ? 'يوم' : 'Days',
         ),
+      if (visibility.showHours)
+        _buildCountdownCard(
+          context,
+          key: const ValueKey('countdown-hours'),
+          value: hours,
+          label: isArabic ? 'ساعة' : 'Hours',
+        ),
+      if (visibility.showMinutes)
+        _buildCountdownCard(
+          context,
+          key: const ValueKey('countdown-minutes'),
+          value: minutes,
+          label: isArabic ? 'دقيقة' : 'Minutes',
+        ),
+      if (visibility.showSeconds)
+        _buildCountdownCard(
+          context,
+          key: const ValueKey('countdown-seconds'),
+          value: seconds,
+          label: isArabic ? 'ثانية' : 'Seconds',
+        ),
+    ];
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = 8.0;
+          const maxSlots = 4;
+          final slotWidth =
+              (constraints.maxWidth - gap * (maxSlots - 1)) / maxSlots;
+
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: gap),
+                SizedBox(width: slotWidth, child: cards[i]),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -410,17 +479,6 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
 
     final isArabic = _isArabicDetailsLocale(context);
     final heading = isArabic ? 'الحلقة القادمة بعد' : 'Next episode in';
-
-    final days = _remaining.inDays.toString();
-    final hours = _remaining.inHours.remainder(24).toString().padLeft(2, '0');
-    final minutes = _remaining.inMinutes
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
-    final seconds = _remaining.inSeconds
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
 
     return Container(
       width: double.infinity,
@@ -453,36 +511,7 @@ class _NextAiringWidgetState extends State<NextAiringWidget> {
               ),
             )
           else
-            Directionality(
-              textDirection: TextDirection.ltr,
-              child: Row(
-                children: [
-                  _buildCountdownCard(
-                    context,
-                    value: days,
-                    label: isArabic ? 'يوم' : 'Days',
-                  ),
-                  const SizedBox(width: 8),
-                  _buildCountdownCard(
-                    context,
-                    value: hours,
-                    label: isArabic ? 'ساعة' : 'Hours',
-                  ),
-                  const SizedBox(width: 8),
-                  _buildCountdownCard(
-                    context,
-                    value: minutes,
-                    label: isArabic ? 'دقيقة' : 'Minutes',
-                  ),
-                  const SizedBox(width: 8),
-                  _buildCountdownCard(
-                    context,
-                    value: seconds,
-                    label: isArabic ? 'ثانية' : 'Seconds',
-                  ),
-                ],
-              ),
-            ),
+            _buildCountdownRow(context),
         ],
       ),
     );
