@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:html_unescape/html_unescape.dart';
 
 import '../../domain/entity/multimedia_item.dart';
+import '../../network/bounded_batch_scheduler.dart';
 import '../../storage/settings_repository.dart';
 import '../../utils/episode_label.dart';
 import '../../utils/safe_uri.dart';
@@ -161,6 +162,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   static const Duration _relatedDataTtl = Duration(minutes: 5);
   static const Duration _posterFieldsTtl = Duration(hours: 6);
   static const int _posterBatchSize = 30;
+  // Home sections are independent Algolia requests. Bound their fan-out so a
+  // remotely configured home layout cannot monopolize sockets or UI parsing.
+  static const int _homeSectionConcurrency = 3;
   static const int _previewSize = 10;
   static const int _maxRelatedItems = 10;
   static const int _maxRecommendations = 10;
@@ -1828,12 +1832,15 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     if (officialSections.isEmpty) {
       return const <String, List<MultimediaItem>>{};
     }
-    final pages = await Future.wait(
-      officialSections.map(
-        (section) => _loadHomePage(
-          section.title,
-          limit: section.hitsPerPage.clamp(1, _previewSize).toInt(),
-        ),
+    final pages = await BoundedBatchScheduler.mapOrdered<
+      _OfficialHomeSection,
+      ProviderMediaPage
+    >(
+      officialSections,
+      maxConcurrent: _homeSectionConcurrency,
+      mapper: (section) => _loadHomePage(
+        section.title,
+        limit: section.hitsPerPage.clamp(1, _previewSize).toInt(),
       ),
     );
     final output = <String, List<MultimediaItem>>{};
