@@ -404,7 +404,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return hit;
   }
 
-  Future<List<dynamic>> _firestoreRestRunQuery(
+  Future<List<dynamic>?> _firestoreRestRunQueryIfOk(
     Map<String, dynamic> structuredQuery, {
     String parent = '',
     Duration timeout = _httpTimeout,
@@ -417,13 +417,30 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
         cancelToken: cancelToken,
         options: _jsonOptions(timeout: timeout),
       );
-      if ((response.statusCode ?? 0) < 200 || (response.statusCode ?? 0) >= 300) {
-        return const <dynamic>[];
+      if ((response.statusCode ?? 0) < 200 ||
+          (response.statusCode ?? 0) >= 300) {
+        return null;
       }
       return _list(response.data);
-    } on DioException {
-      return const <dynamic>[];
+    } on DioException catch (error) {
+      if (CancelToken.isCancel(error)) rethrow;
+      return null;
     }
+  }
+
+  Future<List<dynamic>> _firestoreRestRunQuery(
+    Map<String, dynamic> structuredQuery, {
+    String parent = '',
+    Duration timeout = _httpTimeout,
+    CancelToken? cancelToken,
+  }) async {
+    return await _firestoreRestRunQueryIfOk(
+          structuredQuery,
+          parent: parent,
+          timeout: timeout,
+          cancelToken: cancelToken,
+        ) ??
+        const <dynamic>[];
   }
 
   Future<Map<String, dynamic>> _firestoreDocumentFields(
@@ -1423,7 +1440,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     }
     final safeOffset = offset < 0 ? 0 : offset;
     final safeLimit = limit.clamp(1, 100).toInt();
-    final raw = await _firestoreRestRunQuery(
+    final raw = await _firestoreRestRunQueryIfOk(
       <String, dynamic>{
         'from': const <Map<String, dynamic>>[
           <String, dynamic>{'collectionId': 'anime_list'},
@@ -1446,14 +1463,21 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       },
       cancelToken: cancelToken,
     );
-    final hits = <Map<String, dynamic>>[];
-    for (final rowRaw in raw) {
-      final document = _map(_map(rowRaw)['document']);
-      if (document.isEmpty) continue;
-      final hit = _firestoreDocumentHit(document);
-      if (hit.isNotEmpty) hits.add(hit);
-    }
-    if (hits.isNotEmpty) {
+    if (raw != null) {
+      final hits = <Map<String, dynamic>>[];
+      for (final rowRaw in raw) {
+        final document = _map(_map(rowRaw)['document']);
+        if (document.isEmpty) continue;
+        final hit = _firestoreDocumentHit(document);
+        if (hit.isNotEmpty) hits.add(hit);
+      }
+      if (hits.isEmpty) {
+        return ProviderMediaPage(
+          items: const <MultimediaItem>[],
+          nextOffset: safeOffset,
+          hasMore: false,
+        );
+      }
       final items = await _dedupeHits(hits);
       final visible = items.take(safeLimit).toList(growable: false);
       final hasMore = hits.length > safeLimit;
@@ -1473,6 +1497,13 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       );
     }
     final fallback = await getBroadcastSchedule(refresh: refresh);
+    if (cancelToken?.isCancelled == true) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
     final items = fallback[normalizedDay] ?? const <MultimediaItem>[];
     final end = safeLimit.clamp(0, items.length).toInt();
     return ProviderMediaPage(
