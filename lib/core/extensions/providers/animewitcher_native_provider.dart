@@ -146,6 +146,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   String _seasonNext = '';
   List<String>? _allSeasonsCache;
   DateTime _allSeasonsExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Map<String, List<MultimediaItem>>? _broadcastScheduleCache;
+  DateTime _broadcastScheduleExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Future<Map<String, List<MultimediaItem>>>? _broadcastScheduleRequest;
   static const String _userAgent =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
       'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -159,6 +162,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   static const Duration _remoteConstantsTtl = Duration(hours: 6);
   static const Duration _homeSectionsTtl = Duration(minutes: 30);
   static const Duration _detailDataTtl = Duration(minutes: 2);
+  static const Duration _broadcastScheduleTtl = Duration(minutes: 2);
   static const Duration _episodeDataTtl = Duration(minutes: 1);
   static const Duration _relatedDataTtl = Duration(minutes: 5);
   static const Duration _posterFieldsTtl = Duration(hours: 6);
@@ -400,24 +404,43 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return hit;
   }
 
-  Future<List<dynamic>> _firestoreRestRunQuery(
+  Future<List<dynamic>?> _firestoreRestRunQueryIfOk(
     Map<String, dynamic> structuredQuery, {
     String parent = '',
     Duration timeout = _httpTimeout,
+    CancelToken? cancelToken,
   }) async {
     try {
       final response = await _dio.post<dynamic>(
         _firestoreRunQueryUrl(parent),
         data: <String, dynamic>{'structuredQuery': structuredQuery},
+        cancelToken: cancelToken,
         options: _jsonOptions(timeout: timeout),
       );
-      if ((response.statusCode ?? 0) < 200 || (response.statusCode ?? 0) >= 300) {
-        return const <dynamic>[];
+      if ((response.statusCode ?? 0) < 200 ||
+          (response.statusCode ?? 0) >= 300) {
+        return null;
       }
       return _list(response.data);
-    } on DioException {
-      return const <dynamic>[];
+    } on DioException catch (error) {
+      if (CancelToken.isCancel(error)) rethrow;
+      return null;
     }
+  }
+
+  Future<List<dynamic>> _firestoreRestRunQuery(
+    Map<String, dynamic> structuredQuery, {
+    String parent = '',
+    Duration timeout = _httpTimeout,
+    CancelToken? cancelToken,
+  }) async {
+    return await _firestoreRestRunQueryIfOk(
+          structuredQuery,
+          parent: parent,
+          timeout: timeout,
+          cancelToken: cancelToken,
+        ) ??
+        const <dynamic>[];
   }
 
   Future<Map<String, dynamic>> _firestoreDocumentFields(
@@ -1283,7 +1306,37 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     );
   }
 
-  Future<Map<String, List<MultimediaItem>>> getBroadcastSchedule() async {
+  /// Loads the complete weekly map for existing callers. The page-based UI
+  /// normally avoids this path, but this bounded cache preserves the original
+  /// Algolia fallback without repeating it for every tab or pagination step.
+  Future<Map<String, List<MultimediaItem>>> getBroadcastSchedule({
+    bool refresh = false,
+  }) async {
+    final now = DateTime.now();
+    final cached = _broadcastScheduleCache;
+    if (!refresh &&
+        cached != null &&
+        _broadcastScheduleExpiresAt.isAfter(now)) {
+      return cached;
+    }
+    final inFlight = _broadcastScheduleRequest;
+    if (!refresh && inFlight != null) return inFlight;
+
+    final request = _loadBroadcastSchedule();
+    _broadcastScheduleRequest = request;
+    try {
+      final schedule = await request;
+      _broadcastScheduleCache = schedule;
+      _broadcastScheduleExpiresAt = DateTime.now().add(_broadcastScheduleTtl);
+      return schedule;
+    } finally {
+      if (identical(_broadcastScheduleRequest, request)) {
+        _broadcastScheduleRequest = null;
+      }
+    }
+  }
+
+  Future<Map<String, List<MultimediaItem>>> _loadBroadcastSchedule() async {
     final grouped = <String, List<Map<String, dynamic>>>{
       for (final day in animeWitcherBroadcastDays)
         day: <Map<String, dynamic>>[],
@@ -1361,6 +1414,103 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       for (var i = 0; i < animeWitcherBroadcastDays.length; i++)
         animeWitcherBroadcastDays[i]: lists[i],
     };
+  }
+
+  /// V1.4.8 parity: load one broadcast day at a time so the schedule screen
+  /// can page lazily, refresh safely, and cancel a stale tab request.
+  ///
+  /// The existing [getBroadcastSchedule] API remains intact for any caller
+  /// that needs the complete weekly map. Firestore is authoritative when it
+  /// returns rows; the legacy weekly loader is only used as a first-page
+  /// fallback when Firestore yields no schedule anywhere.
+  Future<ProviderMediaPage> getBroadcastSchedulePage(
+    String day, {
+    int offset = 0,
+    int limit = 30,
+    bool refresh = false,
+    CancelToken? cancelToken,
+  }) async {
+    final normalizedDay = day.trim();
+    if (!animeWitcherBroadcastDays.contains(normalizedDay)) {
+      return const ProviderMediaPage(
+        items: <MultimediaItem>[],
+        nextOffset: 0,
+        hasMore: false,
+      );
+    }
+    final safeOffset = offset < 0 ? 0 : offset;
+    final safeLimit = limit.clamp(1, 100).toInt();
+    final raw = await _firestoreRestRunQueryIfOk(
+      <String, dynamic>{
+        'from': const <Map<String, dynamic>>[
+          <String, dynamic>{'collectionId': 'anime_list'},
+        ],
+        'where': <String, dynamic>{
+          'fieldFilter': <String, dynamic>{
+            'field': const <String, dynamic>{'fieldPath': 'show_time'},
+            'op': 'EQUAL',
+            'value': <String, dynamic>{'stringValue': normalizedDay},
+          },
+        },
+        'orderBy': const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'field': <String, dynamic>{'fieldPath': '__name__'},
+            'direction': 'ASCENDING',
+          },
+        ],
+        'offset': safeOffset,
+        'limit': safeLimit + 1,
+      },
+      cancelToken: cancelToken,
+    );
+    if (raw != null) {
+      final hits = <Map<String, dynamic>>[];
+      for (final rowRaw in raw) {
+        final document = _map(_map(rowRaw)['document']);
+        if (document.isEmpty) continue;
+        final hit = _firestoreDocumentHit(document);
+        if (hit.isNotEmpty) hits.add(hit);
+      }
+      if (hits.isEmpty) {
+        return ProviderMediaPage(
+          items: const <MultimediaItem>[],
+          nextOffset: safeOffset,
+          hasMore: false,
+        );
+      }
+      final items = await _dedupeHits(hits);
+      final visible = items.take(safeLimit).toList(growable: false);
+      final hasMore = hits.length > safeLimit;
+      final consumedRows = hasMore ? safeLimit : hits.length;
+      return ProviderMediaPage(
+        items: visible,
+        nextOffset: safeOffset + consumedRows,
+        hasMore: hasMore,
+      );
+    }
+
+    if (safeOffset > 0 || cancelToken?.isCancelled == true) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
+    final fallback = await getBroadcastSchedule(refresh: refresh);
+    if (cancelToken?.isCancelled == true) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
+    final items = fallback[normalizedDay] ?? const <MultimediaItem>[];
+    final end = safeLimit.clamp(0, items.length).toInt();
+    return ProviderMediaPage(
+      items: items.sublist(0, end),
+      nextOffset: end,
+      hasMore: end < items.length,
+    );
   }
 
   @override
