@@ -356,6 +356,25 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
                 SettingsTile(
+                  icon: Icons.email_outlined,
+                  title: appText(
+                    context,
+                    english: 'Email Support',
+                    arabic: 'التواصل عبر البريد',
+                  ),
+                  subtitle: 'animewitcher1@gmail.com',
+                  onTap: () => launchUrl(
+                    Uri(
+                      scheme: 'mailto',
+                      path: 'animewitcher1@gmail.com',
+                      queryParameters: const <String, String>{
+                        'subject': 'AnimeWitcher Support',
+                      },
+                    ),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                ),
+                SettingsTile(
                   icon: Icons.send_rounded,
                   title: appText(
                     context,
