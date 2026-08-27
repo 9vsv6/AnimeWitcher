@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/services/download_service.dart';
-import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:animewitcher/shared/widgets/custom_widgets.dart';
 import 'package:collection/collection.dart';
 import '../../../library/presentation/downloads_provider.dart';
 import '../playback_launcher.dart';
+import '../source_picker.dart';
 import '../details_controller.dart';
 import '../downloaded_file_provider.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
@@ -44,14 +44,7 @@ class DownloadManagementDialog extends HookConsumerWidget {
     final detailsState = ref.watch(detailsControllerProvider(item.url));
     final currentItem = detailsState.item ?? item;
 
-    final episodeLabel = episode == null
-        ? ''
-        : formatEpisodePrimaryLabel(
-            episode: episode!.episode,
-            isArabic: true,
-            isFinal: episode!.isFinal,
-            serverName: episode!.serverName,
-          );
+    final episodeLabel = episodePickerTitle(episode) ?? '';
     final title = episodeLabel.isEmpty
         ? currentItem.title
         : '${currentItem.title} - $episodeLabel';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/utils/episode_label.dart';
 
 Future<StreamResult?> showStreamSourcePicker(
   BuildContext context,
@@ -8,8 +9,6 @@ Future<StreamResult?> showStreamSourcePicker(
   required bool forDownload,
   String? episodeLabel,
 }) {
-  final isArabic =
-      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
   final rows = _buildSourcePickerRows(sources);
 
   return showModalBottomSheet<StreamResult>(
@@ -27,7 +26,7 @@ Future<StreamResult?> showStreamSourcePicker(
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
               child: Text(
-                sourcePickerHeader(episodeLabel, isArabic: isArabic),
+                sourcePickerHeader(episodeLabel, isArabic: true),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -78,6 +77,18 @@ String sourcePickerHeader(String? episodeLabel, {required bool isArabic}) {
   final label = episodeLabel?.trim() ?? '';
   if (label.isNotEmpty) return label;
   return isArabic ? 'اختر المصدر' : 'Choose source';
+}
+
+/// Primary server label for the source picker, or null when there is no episode.
+String? episodePickerTitle(Episode? episode) {
+  if (episode == null) return null;
+  final label = formatEpisodePrimaryLabel(
+    episode: episode.episode,
+    isArabic: true,
+    isFinal: episode.isFinal,
+    serverName: episode.serverName,
+  );
+  return label.isEmpty ? null : label;
 }
 
 List<_SourcePickerRow> _buildSourcePickerRows(List<StreamResult> sources) {

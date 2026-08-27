@@ -94,14 +94,7 @@ class DownloadLauncher {
         context,
         sources,
         forDownload: true,
-        episodeLabel: resolvedEpisode == null
-            ? null
-            : formatEpisodePrimaryLabel(
-                episode: resolvedEpisode.episode,
-                isArabic: true,
-                isFinal: resolvedEpisode.isFinal,
-                serverName: resolvedEpisode.serverName,
-              ),
+        episodeLabel: episodePickerTitle(resolvedEpisode),
       );
       if (selected == null || !context.mounted) return;
 

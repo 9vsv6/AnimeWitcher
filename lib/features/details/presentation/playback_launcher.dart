@@ -16,7 +16,6 @@ import 'source_picker.dart';
 import '../../../core/services/download_service.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../core/utils/app_utils.dart';
-import '../../../core/utils/episode_label.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../../core/services/notification_service.dart';
 import '../../library/presentation/history_provider.dart';
@@ -85,7 +84,7 @@ class PlaybackLauncher {
         context,
         sources,
         forDownload: false,
-        episodeLabel: _episodeSourceLabel(episode),
+        episodeLabel: episodePickerTitle(episode),
       );
     } catch (e) {
       if (context.mounted && !isCanceled && !dialogDismissed) {
@@ -133,17 +132,6 @@ class PlaybackLauncher {
     }
 
     return _chooseSource(context, provider, episodeDataUrl, episode: episode);
-  }
-
-  String? _episodeSourceLabel(Episode? episode) {
-    if (episode == null) return null;
-    final label = formatEpisodePrimaryLabel(
-      episode: episode.episode,
-      isArabic: true,
-      isFinal: episode.isFinal,
-      serverName: episode.serverName,
-    );
-    return label.isEmpty ? null : label;
   }
 
   Future<StreamResult?> _resolveSelectedSource(

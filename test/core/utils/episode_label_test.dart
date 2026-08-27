@@ -80,6 +80,22 @@ void main() {
     });
   });
 
+  group('playerHeaderSubtitle', () {
+    test('shows a creative title under the server label', () {
+      expect(playerHeaderSubtitle('نهاية الرحلة'), 'نهاية الرحلة');
+      expect(playerHeaderSubtitle('رفقاء جدد'), 'رفقاء جدد');
+    });
+
+    test('hides placeholders and standalone catalog labels', () {
+      expect(playerHeaderSubtitle(null), isNull);
+      expect(playerHeaderSubtitle(''), isNull);
+      expect(playerHeaderSubtitle('الحلقة 10'), isNull);
+      expect(playerHeaderSubtitle('الحلقة 12 والأخيرة'), isNull);
+      expect(playerHeaderSubtitle('مترجم'), isNull);
+      expect(playerHeaderSubtitle('مدبلج'), isNull);
+    });
+  });
+
   group('latest-episodes poster badges', () {
     test('shows the server episode name unchanged', () {
       expect(latestEpisodesPosterBadge('الفيلم'), 'الفيلم');
