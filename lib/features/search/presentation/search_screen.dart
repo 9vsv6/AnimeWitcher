@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import '../../../core/utils/layout_constants.dart';
-import '../../../core/utils/responsive_breakpoints.dart';
-import '../../../core/providers/device_info_provider.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../home/presentation/widgets/provider_search_filter_dialog.dart';
@@ -834,36 +832,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       );
     }
-    final nativeFont = Theme.of(context).textTheme.bodyLarge?.fontFamily;
-    final profile = ref.watch(deviceProfileProvider).asData?.value;
-    final isTv = profile?.isTv == true || context.isTv;
-    final isWidescreen = isTv || context.isTabletOrLarger;
-    final imageWidth = isWidescreen ? 320.0 : 200.0;
-
-    // No search results found: display No Results Found text and the image grouped vertically
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
-            style: TextStyle(
-              fontFamily: nativeFont,
-              fontSize: 16.0,
-              fontWeight: FontWeight.w400,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Image.asset(
-            'assets/images/no_results.png',
-            fit: BoxFit.contain,
-            width: imageWidth,
-            errorBuilder: (context, error, stackTrace) =>
-                const SizedBox.shrink(),
-          ),
-        ],
+      child: Text(
+        appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }
