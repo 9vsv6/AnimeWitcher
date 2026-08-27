@@ -259,7 +259,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return raw is List ? raw : const <dynamic>[];
   }
 
-  Future<Map<String, dynamic>?> _getJson(
+  Future<({bool reachedServer, Map<String, dynamic> json})> _getJsonResult(
     String url, {
     CancelToken? cancelToken,
     Duration timeout = _httpTimeout,
@@ -271,14 +271,30 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
         cancelToken: cancelToken,
         options: _jsonOptions(headers: headers, timeout: timeout),
       );
-      if ((response.statusCode ?? 0) < 200 || (response.statusCode ?? 0) >= 300) {
-        return null;
+      if ((response.statusCode ?? 0) < 200 ||
+          (response.statusCode ?? 0) >= 300) {
+        return (reachedServer: false, json: <String, dynamic>{});
       }
-      final value = _map(response.data);
-      return value.isEmpty ? null : value;
+      return (reachedServer: true, json: _map(response.data));
     } on DioException {
-      return null;
+      return (reachedServer: false, json: <String, dynamic>{});
     }
+  }
+
+  Future<Map<String, dynamic>?> _getJson(
+    String url, {
+    CancelToken? cancelToken,
+    Duration timeout = _httpTimeout,
+    Map<String, String>? headers,
+  }) async {
+    final result = await _getJsonResult(
+      url,
+      cancelToken: cancelToken,
+      timeout: timeout,
+      headers: headers,
+    );
+    if (!result.reachedServer || result.json.isEmpty) return null;
+    return result.json;
   }
 
   Future<Map<String, dynamic>?> _postJson(
@@ -2165,11 +2181,16 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     if (inFlight != null) return inFlight;
 
     final request = () async {
-      final value = await _firestoreDocumentFields('anime_list/$key');
-      if (value.isNotEmpty) {
-        _animeDocumentCache[key] = value;
-        _animeDocumentExpiresAt[key] = DateTime.now().add(_detailDataTtl);
+      final result = await _getJsonResult(_firestoreUrl('anime_list/$key'));
+      if (!result.reachedServer) {
+        throw StateError('AnimeWitcher details request failed.');
       }
+      final value = _firestoreFields(result.json['fields']);
+      if (value.isEmpty) {
+        throw StateError('AnimeWitcher anime was not found.');
+      }
+      _animeDocumentCache[key] = value;
+      _animeDocumentExpiresAt[key] = DateTime.now().add(_detailDataTtl);
       return value;
     }();
     _animeDocumentRequests[key] = request;
@@ -2957,9 +2978,13 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return 0;
   }
 
-    Future<List<_EpisodeRecord>> _fetchEpisodeSummary(String animeId) async {
+  Future<List<_EpisodeRecord>> _fetchEpisodeSummary(String animeId) async {
     final path = 'anime_list/$animeId/episodes_summery/summery';
-    final fields = await _firestoreDocumentFields(path);
+    final result = await _getJsonResult(_firestoreUrl(path));
+    if (!result.reachedServer) {
+      throw StateError('AnimeWitcher episode summary request failed.');
+    }
+    final fields = _firestoreFields(result.json['fields']);
     if (fields.isEmpty) return const <_EpisodeRecord>[];
     final rawEpisodes = _list(fields['episodes']);
     if (rawEpisodes.isEmpty) return const <_EpisodeRecord>[];
@@ -2977,19 +3002,21 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return output;
   }
 
-  Future<List<_EpisodeRecord>> _fetchEpisodeCollection(String animeId) async {
-
+  Future<({List<_EpisodeRecord> records, bool reachedServer})>
+      _fetchEpisodeCollection(String animeId) async {
     final output = <_EpisodeRecord>[];
     String nextToken = '';
     final seenTokens = <String>{};
+    var reachedServer = false;
     for (var page = 0; page < 20; page++) {
       var url = '${_firestoreUrl('anime_list/$animeId/episodes')}?pageSize=1000';
       if (nextToken.isNotEmpty) {
         url += '&pageToken=${Uri.encodeQueryComponent(nextToken)}';
       }
-      final payload = await _getJson(url);
-      if (payload == null) break;
-      final documents = _list(payload['documents']);
+      final result = await _getJsonResult(url);
+      if (!result.reachedServer) break;
+      reachedServer = true;
+      final documents = _list(result.json['documents']);
       for (final rawDocument in documents) {
         final document = _map(rawDocument);
         final fields = _firestoreFields(document['fields']);
@@ -3008,11 +3035,11 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
           ),
         );
       }
-      final token = _text(payload['nextPageToken']);
+      final token = _text(result.json['nextPageToken']);
       if (token.isEmpty || !seenTokens.add(token)) break;
       nextToken = token;
     }
-    return output;
+    return (records: output, reachedServer: reachedServer);
   }
 
   Future<List<_EpisodeRecord>> _episodeRecords(String animeId) async {
@@ -3032,8 +3059,15 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       // AnimeWitcher uses the canonical episode collection as the source of
       // truth. The summary document is only a compatibility fallback because
       // it can contain stale or locally reset number values.
-      var records = await _fetchEpisodeCollection(key);
-      if (records.isEmpty) records = await _fetchEpisodeSummary(key);
+      final collection = await _fetchEpisodeCollection(key);
+      var records = collection.records;
+      if (records.isEmpty) {
+        try {
+          records = await _fetchEpisodeSummary(key);
+        } catch (_) {
+          if (!collection.reachedServer) rethrow;
+        }
+      }
       // Keep one record per AnimeWitcher identity: anime id + episode number.
       // This prevents a malformed duplicate document from producing two cards
       // for the same episode while preserving the first source record.

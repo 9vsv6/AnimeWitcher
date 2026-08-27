@@ -61,6 +61,99 @@ class _KeepAliveDetailsTabState extends State<_KeepAliveDetailsTab>
   }
 }
 
+class _DetailsLoadFailure extends StatefulWidget {
+  const _DetailsLoadFailure({
+    required this.onRetry,
+    required this.title,
+    required this.message,
+  });
+
+  final Future<void> Function() onRetry;
+  final String title;
+  final String message;
+
+  @override
+  State<_DetailsLoadFailure> createState() => _DetailsLoadFailureState();
+}
+
+class _DetailsLoadFailureState extends State<_DetailsLoadFailure> {
+  bool _isRetrying = false;
+
+  Future<void> _retry() async {
+    if (_isRetrying) return;
+    setState(() => _isRetrying = true);
+    try {
+      await widget.onRetry();
+    } finally {
+      if (mounted) setState(() => _isRetrying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.wifi_off_rounded,
+            size: 68,
+            color: theme.colorScheme.error,
+          ),
+          const SizedBox(height: 18),
+          Text(
+            widget.title,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.message,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: _isRetrying ? null : _retry,
+                icon: _isRetrying
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded),
+                label: Text(
+                  appText(context, english: 'Retry', arabic: 'إعادة المحاولة'),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  if (GoRouter.maybeOf(context) == null) return;
+                  const DownloadsRoute().go(context);
+                },
+                icon: const Icon(Icons.download_for_offline_rounded),
+                label: Text(
+                  appText(context, english: 'Downloads', arabic: 'التنزيلات'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DeferredDetailSection extends StatefulWidget {
   const _DeferredDetailSection({
     required this.enabled,
@@ -1660,25 +1753,16 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     }
 
     if (episodesState.hasError) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            isArabic ? 'تعذر تحميل الحلقات' : 'Could not load episodes',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-          const SizedBox(height: 10),
-          FilledButton.icon(
-            onPressed: () {
-              ref
-                  .read(detailsControllerProvider(widget.item.url).notifier)
-                  .retryEpisodes();
-            },
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text(isArabic ? 'إعادة المحاولة' : 'Retry'),
-          ),
-        ],
+      return _DetailsLoadFailure(
+        onRetry: () => ref
+            .read(detailsControllerProvider(widget.item.url).notifier)
+            .retryEpisodes(),
+        title: appText(
+          context,
+          english: 'Unable to load episodes',
+          arabic: 'تعذر تحميل الحلقات',
+        ),
+        message: _detailsRecoveryMessage(context),
       );
     }
 
@@ -1691,6 +1775,16 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     }
 
     return const SizedBox.shrink();
+  }
+
+  String _detailsRecoveryMessage(BuildContext context) {
+    return appText(
+      context,
+      english:
+          'Check your connection, then retry or continue with downloaded episodes.',
+      arabic:
+          'تحقق من اتصالك ثم أعد المحاولة، أو تابع الحلقات التي نزّلتها مسبقًا.',
+    );
   }
 
   List<String> _normalizedGenres(MultimediaItem item) {
@@ -1738,7 +1832,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Widget _buildSynopsisAndGenres(
     BuildContext context,
     MultimediaItem item,
-    AsyncValue<MultimediaItem?> detailsState,
     AppLocalizations l10n,
   ) {
     final theme = Theme.of(context);
@@ -1768,13 +1861,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   height: 1.55,
                 ),
               ),
-              if (detailsState.hasError) ...[
-                const SizedBox(height: 12),
-                Text(
-                  l10n.errorPrefix(detailsState.error.toString()),
-                  style: TextStyle(color: colors.error),
-                ),
-              ],
               if (genres.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Wrap(
@@ -1827,20 +1913,38 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AppLocalizations l10n,
   ) {
     final tabContent = _selectedDetailsTab == 0
-        ? <Widget>[
-            _buildSynopsisAndGenres(context, item, detailsState, l10n),
-            const SizedBox(height: 28),
-            AnimeInformationSection(item: item),
-            ..._buildIndependentDetailSections(
-              context,
-              item,
-              l10n,
-              castState,
-              trailersState,
-              relatedState,
-              recommendationsState,
-            ),
-          ]
+        ? detailsState.hasError
+              ? <Widget>[
+                  SizedBox(
+                    height: 360,
+                    width: double.infinity,
+                    child: Center(
+                      child: _DetailsLoadFailure(
+                        onRetry: _refreshDetails,
+                        title: appText(
+                          context,
+                          english: 'Unable to load this anime',
+                          arabic: 'تعذر تحميل بيانات الأنمي',
+                        ),
+                        message: _detailsRecoveryMessage(context),
+                      ),
+                    ),
+                  ),
+                ]
+              : <Widget>[
+                  _buildSynopsisAndGenres(context, item, l10n),
+                  const SizedBox(height: 28),
+                  AnimeInformationSection(item: item),
+                  ..._buildIndependentDetailSections(
+                    context,
+                    item,
+                    l10n,
+                    castState,
+                    trailersState,
+                    relatedState,
+                    recommendationsState,
+                  ),
+                ]
         : <Widget>[
             if (episodesState.hasValue &&
                 (episodesState.value?.isNotEmpty ?? false)) ...[
@@ -1889,6 +1993,41 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AppLocalizations l10n,
     double headerHeight,
   ) {
+    if (detailsState.hasError) {
+      return [
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: headerHeight,
+            width: double.infinity,
+            child: ClipRect(
+              child: _buildAnimeWitcherMobileHeader(
+                context,
+                item,
+                detailsState,
+              ),
+            ),
+          ),
+        ),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Center(
+              child: _DetailsLoadFailure(
+                onRetry: _refreshDetails,
+                title: appText(
+                  context,
+                  english: 'Unable to load this anime',
+                  arabic: 'تعذر تحميل بيانات الأنمي',
+                ),
+                message: _detailsRecoveryMessage(context),
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
+
     return [
       SliverToBoxAdapter(
         child: SizedBox(
@@ -1909,7 +2048,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 NextAiringWidget(nextAiring: item.nextAiring!),
                 const SizedBox(height: 8),
               ],
-              _buildSynopsisAndGenres(context, item, detailsState, l10n),
+              _buildSynopsisAndGenres(context, item, l10n),
               const SizedBox(height: 28),
               AnimeInformationSection(item: item),
               ..._buildIndependentDetailSections(
