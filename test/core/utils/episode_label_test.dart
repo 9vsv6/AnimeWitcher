@@ -213,6 +213,43 @@ void main() {
       );
     });
 
+    test('keeps server labels and creative titles for player headers', () {
+      expect(
+        formatEpisodeLabel(
+          episode: 9,
+          isArabic: true,
+          serverName: 'الحلقة 9',
+          title: 'Tsuihou sareta Tensei',
+        ),
+        'الحلقة 9: Tsuihou sareta Tensei',
+      );
+      expect(
+        formatEpisodeLabel(
+          episode: 1,
+          isArabic: true,
+          serverName: 'الفيلم',
+          title: 'بداية المغامرة',
+        ),
+        'الفيلم: بداية المغامرة',
+      );
+      expect(
+        formatEpisodeLabel(
+          episode: 0,
+          isArabic: true,
+          serverName: 'مترجم',
+        ),
+        'مترجم',
+      );
+      expect(
+        formatEpisodeLabel(
+          episode: 0,
+          isArabic: true,
+          serverName: 'مدبلج',
+        ),
+        'مدبلج',
+      );
+    });
+
     test('adds quality only when present', () {
       expect(
         formatEpisodeFileName(
