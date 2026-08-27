@@ -7,6 +7,7 @@ import 'package:animewitcher/shared/widgets/custom_widgets.dart';
 import 'package:collection/collection.dart';
 import '../../../library/presentation/downloads_provider.dart';
 import '../playback_launcher.dart';
+import '../source_picker.dart';
 import '../details_controller.dart';
 import '../downloaded_file_provider.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
@@ -43,9 +44,10 @@ class DownloadManagementDialog extends HookConsumerWidget {
     final detailsState = ref.watch(detailsControllerProvider(item.url));
     final currentItem = detailsState.item ?? item;
 
-    final title = episode != null
-        ? '${currentItem.title} - ${episode!.name}'
-        : currentItem.title;
+    final episodeLabel = episodePickerTitle(episode) ?? '';
+    final title = episodeLabel.isEmpty
+        ? currentItem.title
+        : '${currentItem.title} - $episodeLabel';
 
     final downloads = ref.watch(downloadsProvider).value ?? [];
     final matchingItem = downloads.firstWhereOrNull(
@@ -56,6 +58,8 @@ class DownloadManagementDialog extends HookConsumerWidget {
       surfaceTintColor: Colors.transparent,
       title: Text(title),
       content: Text(l10n.videoAlreadyDownloadedPrompt),
+      actionsAlignment: MainAxisAlignment.start,
+      actionsOverflowAlignment: OverflowBarAlignment.start,
       actions: [
         CustomButton(
           isPrimary: false,

@@ -192,6 +192,12 @@ String formatEpisodePrimaryLabel({
   ).primary;
 }
 
+/// Second player-header line: the creative title only, never the server label.
+String? playerHeaderSubtitle(String? episodeName) {
+  final title = realEpisodeTitle(episodeName);
+  return title.isEmpty ? null : title;
+}
+
 /// Full display name: primary line plus the creative title when there is one.
 String formatEpisodeLabel({
   required int episode,

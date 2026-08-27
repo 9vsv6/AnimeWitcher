@@ -914,20 +914,6 @@ class AnimeWitcherPlayerControlsState
     return "$minutes:${twoDigits(seconds)}";
   }
 
-  String? _buildEpisodeLine(BuildContext context, Episode? episode) {
-    if (episode == null) return null;
-    // Specials, OVAs and مترجم/مدبلج rows have no number but still have a name.
-    final label = formatEpisodeLabel(
-      episode: episode.episode,
-      isArabic:
-          Localizations.localeOf(context).languageCode.toLowerCase() == 'ar',
-      title: episode.name,
-      isFinal: episode.isFinal,
-      serverName: episode.serverName,
-    );
-    return label.isEmpty ? null : label;
-  }
-
   Widget _buildKickAnimation() {
     final seconds =
         ref.watch(playerSettingsProvider).asData?.value.seekDuration ?? 10;
@@ -980,9 +966,9 @@ class AnimeWitcherPlayerControlsState
     final controllerTitle = ref.watch(
       playerControllerProvider.select((s) => s.playerTitle),
     );
-    final title =
-        playerNotifier.multimediaItem?.title ??
-        (controllerTitle.isEmpty ? (widget.title ?? "") : controllerTitle);
+    final title = controllerTitle.isEmpty
+        ? (playerNotifier.multimediaItem?.title ?? (widget.title ?? ''))
+        : controllerTitle;
 
     final streams = ref.watch(
       playerControllerProvider.select((s) => s.streams),
@@ -1039,10 +1025,9 @@ class AnimeWitcherPlayerControlsState
     final previousEpisode = playerNotifier.previousEpisode;
     final nextEpisode = playerNotifier.nextEpisode;
     final hasEpisodePicker = playerNotifier.hasEpisodePicker;
-    // Movie variants (مترجم / مدبلج) and specials also have a name to show.
-    final episodeLabel = _buildEpisodeLine(
-      context,
-      playerNotifier.currentEpisode,
+    // Creative title only. The primary server label already lives in [title].
+    final episodeLabel = playerHeaderSubtitle(
+      playerNotifier.currentEpisode?.name,
     );
     final skipSegments = ref.watch(
       playerControllerProvider.select((s) => s.skipSegments),
