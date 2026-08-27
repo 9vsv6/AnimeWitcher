@@ -33,6 +33,7 @@ class SearchAggregateState {
   final bool isLoadingMore;
   final bool hasMore;
   final int nextOffset;
+  final String? errorMessage;
 
   const SearchAggregateState({
     this.results = const [],
@@ -40,6 +41,7 @@ class SearchAggregateState {
     this.isLoadingMore = false,
     this.hasMore = false,
     this.nextOffset = 0,
+    this.errorMessage,
   });
 
   SearchAggregateState copyWith({
@@ -48,6 +50,8 @@ class SearchAggregateState {
     bool? isLoadingMore,
     bool? hasMore,
     int? nextOffset,
+    String? errorMessage,
+    bool clearError = false,
   }) {
     return SearchAggregateState(
       results: results ?? this.results,
@@ -55,6 +59,7 @@ class SearchAggregateState {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       hasMore: hasMore ?? this.hasMore,
       nextOffset: nextOffset ?? this.nextOffset,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
 }
@@ -411,7 +416,6 @@ final searchClearRequestProvider =
       SearchClearRequestNotifier.new,
     );
 
-
 class PagedSearchNotifier extends Notifier<SearchAggregateState> {
   int _generation = 0;
   String _query = '';
@@ -439,7 +443,8 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
         .read(extensionManagerProvider.notifier)
         .getAllProviders()
         .where((provider) {
-          final liveOnly = provider.supportedTypes.isNotEmpty &&
+          final liveOnly =
+              provider.supportedTypes.isNotEmpty &&
               provider.supportedTypes.every(
                 (type) => type == ProviderType.livestream,
               );
@@ -476,6 +481,7 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
       isLoadingMore: false,
       hasMore: false,
       nextOffset: 0,
+      clearError: true,
     );
     final provider = _provider();
     if (provider == null) {
@@ -505,11 +511,15 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
     } catch (e) {
       debugPrint('[SEARCH PAGE] initial load failed: $e');
       if (generation == _generation) {
-        // Keep the last rendered cards on transient network failures.
+        // Keep the last rendered cards on transient network failures. Show the
+        // recoverable empty state only when there is nothing left to display.
+        final hasCards = state.results.any((entry) => entry.results.isNotEmpty);
         state = state.copyWith(
           isLoading: false,
           isLoadingMore: false,
           hasMore: false,
+          errorMessage: hasCards ? null : 'Unable to load search results.',
+          clearError: hasCards,
         );
       }
     }
@@ -558,6 +568,8 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
       }
     }
   }
+
+  Future<void> retry() => _reload();
 }
 
 final searchPagedResultsProvider =

@@ -14,11 +14,13 @@ import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
+import '../../../../shared/widgets/recoverable_network_state.dart';
 import '../../../search/presentation/search_provider.dart';
 import '../widgets/provider_search_filter_dialog.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+
 String homeSearchFieldLabel(
   BuildContext context,
   ProviderSearchFilters filters,
@@ -30,9 +32,7 @@ String homeSearchFieldLabel(
         ? 'ابحث ضمن النتائج المفلترة...'
         : 'Search within filtered results...';
   }
-  return isArabic
-      ? 'ابحث عن أفلام ومسلسلات...'
-      : 'Search movies, series...';
+  return isArabic ? 'ابحث عن أفلام ومسلسلات...' : 'Search movies, series...';
 }
 
 class HomeSearchDelegate extends SearchDelegate<void> {
@@ -431,7 +431,11 @@ class _HomeSearchSuggestionsState
     if (suggestions.isEmpty) {
       return Center(
         child: Text(
-          appText(context, english: 'No results found', arabic: 'لم يتم العثور على نتائج'),
+          appText(
+            context,
+            english: 'No results found',
+            arabic: 'لم يتم العثور على نتائج',
+          ),
           style: TextStyle(
             color: Theme.of(
               context,
@@ -451,7 +455,11 @@ class _HomeSearchSuggestionsState
             leading: const Icon(Icons.search_rounded),
             title: Text(suggestion),
             trailing: IconButton(
-              tooltip: appText(context, english: 'Fill query', arabic: 'إدخال عبارة البحث'),
+              tooltip: appText(
+                context,
+                english: 'Fill query',
+                arabic: 'إدخال عبارة البحث',
+              ),
               icon: const Icon(Icons.north_west_rounded),
               onPressed: () => widget.onSelect(suggestion),
             ),
@@ -484,6 +492,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
   int _offset = 0;
   int _generation = 0;
   String? _providerId;
+  bool _hasLoadError = false;
   Timer? _searchDebounce;
   CancelToken? _pageCancelToken;
 
@@ -523,7 +532,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
     }
   }
 
-  void _resetAndLoad() {
+  Future<void> _resetAndLoad({bool debounce = true}) async {
     _generation += 1;
     _searchDebounce?.cancel();
     _pageCancelToken?.cancel('Search query changed');
@@ -536,7 +545,12 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       _isInitialLoading = true;
       _isLoadingMore = false;
       _providerId = null;
+      _hasLoadError = false;
     });
+    if (!debounce) {
+      await _loadNextPage();
+      return;
+    }
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       if (mounted) _loadNextPage();
     });
@@ -581,7 +595,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
         cancelToken: requestToken,
       );
 
-      if (!mounted || generation != _generation || requestToken.isCancelled) return;
+      if (!mounted || generation != _generation || requestToken.isCancelled)
+        return;
       if (identical(_pageCancelToken, requestToken)) _pageCancelToken = null;
 
       for (final item in page.items) {
@@ -597,20 +612,24 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
 
       setState(() {
         _offset = nextOffset;
-        _hasMore = page.hasMore &&
+        _hasMore =
+            page.hasMore &&
             (page.nextOffset > requestedOffset || page.items.isNotEmpty);
         _isInitialLoading = false;
         _isLoadingMore = false;
+        _hasLoadError = false;
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) => _ensureFilled());
     } catch (_) {
-      if (!mounted || generation != _generation || requestToken.isCancelled) return;
+      if (!mounted || generation != _generation || requestToken.isCancelled)
+        return;
       if (identical(_pageCancelToken, requestToken)) _pageCancelToken = null;
       setState(() {
         _isInitialLoading = false;
         _isLoadingMore = false;
         _hasMore = false;
+        _hasLoadError = true;
       });
     }
   }
@@ -631,9 +650,19 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
     }
 
     if (_items.isEmpty && !_hasMore) {
+      if (_hasLoadError) {
+        return RecoverableNetworkState(
+          onRetry: () => _resetAndLoad(debounce: false),
+          onOpenDownloads: () => const DownloadsRoute().go(context),
+        );
+      }
       return Center(
         child: Text(
-          appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
+          appText(
+            context,
+            english: 'No Results Found',
+            arabic: 'لم يتم العثور على نتائج',
+          ),
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
