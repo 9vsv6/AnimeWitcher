@@ -16,6 +16,7 @@ import 'source_picker.dart';
 import '../../../core/services/download_service.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../core/utils/app_utils.dart';
+import '../../../core/utils/episode_label.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../../core/services/notification_service.dart';
 import '../../library/presentation/history_provider.dart';
