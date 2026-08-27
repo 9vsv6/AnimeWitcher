@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../core/utils/artwork_quality.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import 'cards_wrapper.dart';
@@ -88,19 +89,30 @@ class MultimediaCard extends StatelessWidget {
       ],
     );
 
-    return RepaintBoundary(
-      child: CardsWrapper(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        focusNode: focusNode,
-        scaleFactor: 1.05,
-        child: SizedBox(
-          width: cardWidth,
-          child: _buildInsideMode(
-            context,
-            imageWidget,
-            titleTextStyle,
-            badgeText,
+    final semanticLabel = badgeText == null ? title : '$title، $badgeText';
+
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      hint: AppLocalizations.of(context)?.viewDetails ?? 'عرض التفاصيل',
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: ExcludeSemantics(
+        child: RepaintBoundary(
+          child: CardsWrapper(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            focusNode: focusNode,
+            scaleFactor: 1.05,
+            child: SizedBox(
+              width: cardWidth,
+              child: _buildInsideMode(
+                context,
+                imageWidget,
+                titleTextStyle,
+                badgeText,
+              ),
+            ),
           ),
         ),
       ),
