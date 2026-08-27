@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
 import '../../core/utils/localized_text.dart';
@@ -105,7 +106,10 @@ class _RecoverableNetworkStateState extends State<RecoverableNetworkState> {
                             ),
                           ),
                           OutlinedButton.icon(
-                            onPressed: () => const DownloadsRoute().go(context),
+                            onPressed: () {
+                              if (GoRouter.maybeOf(context) == null) return;
+                              const DownloadsRoute().go(context);
+                            },
                             icon: const Icon(Icons.download_for_offline_rounded),
                             label: Text(
                               appText(

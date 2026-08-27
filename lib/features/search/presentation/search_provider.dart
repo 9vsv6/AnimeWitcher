@@ -511,12 +511,17 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
     } catch (e) {
       debugPrint('[SEARCH PAGE] initial load failed: $e');
       if (generation == _generation) {
-        // Keep the last rendered cards on transient network failures.
+        // Keep the last rendered cards on transient network failures. Show the
+        // recoverable empty state only when there is nothing left to display.
+        final hasCards = state.results.any(
+          (entry) => entry.results.isNotEmpty,
+        );
         state = state.copyWith(
           isLoading: false,
           isLoadingMore: false,
           hasMore: false,
-          errorMessage: 'Unable to load search results.',
+          errorMessage: hasCards ? null : 'Unable to load search results.',
+          clearError: hasCards,
         );
       }
     }

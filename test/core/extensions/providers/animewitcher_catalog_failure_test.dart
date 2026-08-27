@@ -13,11 +13,41 @@ class _TestStorageService extends StorageService {
   bool isEpisodeImagesFromAniZipEnabled() => false;
 }
 
-AnimeWitcherNativeProvider _providerWithUnavailableCatalog() {
+AnimeWitcherNativeProvider _provider(Dio dio) => AnimeWitcherNativeProvider(
+      dio,
+      SettingsRepository(_TestStorageService()),
+    );
+
+Dio _catalogDio({
+  required int Function() homeSectionStatus,
+  Map<String, dynamic>? homeSections,
+  Map<String, dynamic>? algoliaPayload,
+}) {
   final dio = Dio();
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) {
+        final path = options.uri.path;
+        if (path.contains('Settings/home_sections')) {
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              statusCode: homeSectionStatus(),
+              data: homeSections ?? const <String, dynamic>{},
+            ),
+          );
+          return;
+        }
+        if (options.uri.host.contains('algolia.net')) {
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              statusCode: algoliaPayload == null ? 503 : 200,
+              data: algoliaPayload ?? const <String, dynamic>{},
+            ),
+          );
+          return;
+        }
         handler.resolve(
           Response<dynamic>(
             requestOptions: options,
@@ -28,17 +58,58 @@ AnimeWitcherNativeProvider _providerWithUnavailableCatalog() {
       },
     ),
   );
-  return AnimeWitcherNativeProvider(
-    dio,
-    SettingsRepository(_TestStorageService()),
-  );
+  return dio;
+}
+
+Map<String, dynamic> _homeSectionsDocument() {
+  return <String, dynamic>{
+    'name':
+        'projects/animewitcher-1c66d/databases/(default)/documents/Settings/home_sections',
+    'fields': <String, dynamic>{
+      'sections': <String, dynamic>{
+        'arrayValue': <String, dynamic>{
+          'values': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'mapValue': <String, dynamic>{
+                'fields': <String, dynamic>{
+                  'title': const <String, dynamic>{'stringValue': 'Latest'},
+                  'type': const <String, dynamic>{'stringValue': 'list'},
+                  'index_name': const <String, dynamic>{
+                    'stringValue': 'series',
+                  },
+                  'enabled': const <String, dynamic>{'booleanValue': true},
+                  'order': const <String, dynamic>{'integerValue': '1'},
+                  'hits_per_page': const <String, dynamic>{
+                    'integerValue': '10',
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  };
+}
+
+Map<String, dynamic> _algoliaHits() {
+  return <String, dynamic>{
+    'hits': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'objectID': 'offline-retry',
+        'anime_id': 'offline-retry',
+        'name': 'Retry Anime',
+      },
+    ],
+    'nbPages': 1,
+  };
 }
 
 void main() {
   test('search page reports catalog transport failure instead of empty results',
       () async {
     await expectLater(
-      _providerWithUnavailableCatalog().searchPage(
+      _provider(_catalogDio(homeSectionStatus: () => 200)).searchPage(
         'test',
         const ProviderSearchFilters(),
       ),
@@ -49,8 +120,29 @@ void main() {
   test('home reports unavailable section configuration instead of blank success',
       () async {
     await expectLater(
-      _providerWithUnavailableCatalog().getHome(),
+      _provider(_catalogDio(homeSectionStatus: () => 200)).getHome(),
       throwsA(isA<StateError>()),
     );
+  });
+
+  test('failed home configuration is not cached so retry can succeed', () async {
+    var homeSectionRequests = 0;
+    final provider = _provider(
+      _catalogDio(
+        homeSectionStatus: () {
+          homeSectionRequests += 1;
+          return homeSectionRequests == 1 ? 503 : 200;
+        },
+        homeSections: _homeSectionsDocument(),
+        algoliaPayload: _algoliaHits(),
+      ),
+    );
+
+    await expectLater(provider.getHome(), throwsA(isA<StateError>()));
+
+    final home = await provider.getHome();
+    expect(homeSectionRequests, 2);
+    expect(home['Latest'], isNotNull);
+    expect(home['Latest']!.first.title, 'Retry Anime');
   });
 }

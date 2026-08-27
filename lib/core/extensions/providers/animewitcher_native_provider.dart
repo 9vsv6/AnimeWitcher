@@ -1690,6 +1690,12 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
 
     final request = () async {
       final fields = await _firestoreDocumentFields('Settings/home_sections');
+      // `_firestoreDocumentFields` collapses HTTP/transport failures into an
+      // empty map. Do not cache that result: retry and pull-to-refresh must
+      // hit Firestore again as soon as connectivity is restored.
+      if (fields.isEmpty) {
+        throw StateError('AnimeWitcher home sections are unavailable.');
+      }
       final sections = _list(fields['sections'])
           .map<_OfficialHomeSection>(_officialHomeSection)
           .where((section) =>
@@ -1698,10 +1704,6 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
               section.indexName.isNotEmpty)
           .toList();
       sections.sort((a, b) => a.order.compareTo(b.order));
-      // A failed Firestore request is represented by empty fields in this
-      // compatibility helper. Never cache that empty result: retry and
-      // pull-to-refresh must issue a fresh request as soon as connectivity is
-      // restored.
       if (sections.isNotEmpty) {
         _officialHomeSectionsCache = sections;
         _officialHomeSectionsExpiresAt = now.add(_homeSectionsTtl);

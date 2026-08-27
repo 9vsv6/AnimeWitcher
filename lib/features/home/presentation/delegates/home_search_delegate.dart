@@ -485,7 +485,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
   int _offset = 0;
   int _generation = 0;
   String? _providerId;
-  String? _errorMessage;
+  bool _hasLoadError = false;
   Timer? _searchDebounce;
   CancelToken? _pageCancelToken;
 
@@ -525,7 +525,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
     }
   }
 
-  void _resetAndLoad() {
+  Future<void> _resetAndLoad({bool debounce = true}) async {
     _generation += 1;
     _searchDebounce?.cancel();
     _pageCancelToken?.cancel('Search query changed');
@@ -538,8 +538,12 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       _isInitialLoading = true;
       _isLoadingMore = false;
       _providerId = null;
-      _errorMessage = null;
+      _hasLoadError = false;
     });
+    if (!debounce) {
+      await _loadNextPage();
+      return;
+    }
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       if (mounted) _loadNextPage();
     });
@@ -604,17 +608,18 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
             (page.nextOffset > requestedOffset || page.items.isNotEmpty);
         _isInitialLoading = false;
         _isLoadingMore = false;
+        _hasLoadError = false;
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) => _ensureFilled());
-    } catch (error) {
+    } catch (_) {
       if (!mounted || generation != _generation || requestToken.isCancelled) return;
       if (identical(_pageCancelToken, requestToken)) _pageCancelToken = null;
       setState(() {
         _isInitialLoading = false;
         _isLoadingMore = false;
         _hasMore = false;
-        _errorMessage = error.toString();
+        _hasLoadError = true;
       });
     }
   }
@@ -635,9 +640,9 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
     }
 
     if (_items.isEmpty && !_hasMore) {
-      if (_errorMessage != null) {
+      if (_hasLoadError) {
         return RecoverableNetworkState(
-          onRetry: () async => _resetAndLoad(),
+          onRetry: () => _resetAndLoad(debounce: false),
         );
       }
       return Center(
