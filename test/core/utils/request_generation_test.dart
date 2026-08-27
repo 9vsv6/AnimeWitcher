@@ -13,4 +13,16 @@ void main() {
     expect(requests.current, second);
     expect(requests.isCurrent(second), isTrue);
   });
+
+  test('pagination can reuse the current generation until the next refresh', () {
+    final requests = RequestGeneration();
+    final refresh = requests.begin();
+    final nextPage = requests.current;
+
+    expect(nextPage, refresh);
+    expect(requests.isCurrent(nextPage), isTrue);
+
+    requests.begin();
+    expect(requests.isCurrent(nextPage), isFalse);
+  });
 }
