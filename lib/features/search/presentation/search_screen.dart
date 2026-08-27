@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 import '../../../core/utils/layout_constants.dart';
+import '../../../core/providers/device_info_provider.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../home/presentation/widgets/provider_search_filter_dialog.dart';
@@ -21,6 +24,7 @@ import '../../../shared/widgets/recoverable_network_state.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -44,25 +48,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     super.initState();
     // Restore any previously committed query into the text field.
     _controller.text = ref.read(searchQueryProvider);
-    _clearRequestSub = ref.listenManual<int>(
-      searchClearRequestProvider,
-      (previous, next) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _controller.clear();
-        });
-      },
-    );
-    _focusRequestSub = ref.listenManual<int>(
-      searchFocusRequestProvider,
-      (previous, next) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _requestSearchFocus();
-          final textLength = _controller.text.length;
-          _controller.selection = TextSelection.collapsed(offset: textLength);
-        });
-      },
-    );
+    _clearRequestSub = ref.listenManual<int>(searchClearRequestProvider, (
+      previous,
+      next,
+    ) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _controller.clear();
+      });
+    });
+    _focusRequestSub = ref.listenManual<int>(searchFocusRequestProvider, (
+      previous,
+      next,
+    ) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _requestSearchFocus();
+        final textLength = _controller.text.length;
+        _controller.selection = TextSelection.collapsed(offset: textLength);
+      });
+    });
     _controller.addListener(_onTextChanged);
     _resultsScrollController.addListener(_onResultsScroll);
     ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
@@ -78,8 +82,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
           final suggestionState = ref.read(searchSuggestionControllerProvider);
-          final hasSuggestions = suggestionState.query.trim().length >= 2 &&
-              (suggestionState.isLoading || suggestionState.suggestions.isNotEmpty);
+          final hasSuggestions =
+              suggestionState.query.trim().length >= 2 &&
+              (suggestionState.isLoading ||
+                  suggestionState.suggestions.isNotEmpty);
           if (hasSuggestions) {
             _firstSuggestionFocusNode.requestFocus();
           } else {
@@ -99,8 +105,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
           final suggestionState = ref.read(searchSuggestionControllerProvider);
-          final hasSuggestions = suggestionState.query.trim().length >= 2 &&
-              (suggestionState.isLoading || suggestionState.suggestions.isNotEmpty);
+          final hasSuggestions =
+              suggestionState.query.trim().length >= 2 &&
+              (suggestionState.isLoading ||
+                  suggestionState.suggestions.isNotEmpty);
           if (hasSuggestions) {
             _firstSuggestionFocusNode.requestFocus();
           } else {
@@ -111,10 +119,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       }
       return KeyEventResult.ignored;
     };
-
-
-
-
 
     _firstResultFocusNode.onKeyEvent = (node, event) {
       if (event is KeyDownEvent &&
@@ -133,7 +137,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   void _requestSearchFocus() {
     _focusNode.requestFocus();
   }
-
 
   void _onResultsScroll() {
     if (!_resultsScrollController.hasClients) return;
@@ -170,11 +173,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       final options = await providers.first.getSearchFilterOptions();
       if (!mounted) return;
       if (options.isEmpty) {
-        ref.read(notificationServiceProvider).showInfo(
-          Localizations.localeOf(context).languageCode == 'ar'
-              ? 'لا توجد فلاتر متاحة'
-              : 'No filters available',
-        );
+        ref
+            .read(notificationServiceProvider)
+            .showInfo(
+              Localizations.localeOf(context).languageCode == 'ar'
+                  ? 'لا توجد فلاتر متاحة'
+                  : 'No filters available',
+            );
         return;
       }
 
@@ -201,23 +206,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final current = ref.read(searchProviderFiltersProvider);
     final updated = switch (group) {
       'statuses' => current.copyWith(
-          statuses: {...current.statuses}..remove(value),
-        ),
-      'types' => current.copyWith(
-          types: {...current.types}..remove(value),
-        ),
+        statuses: {...current.statuses}..remove(value),
+      ),
+      'types' => current.copyWith(types: {...current.types}..remove(value)),
       'ageRatings' => current.copyWith(
-          ageRatings: {...current.ageRatings}..remove(value),
-        ),
-      'years' => current.copyWith(
-          years: {...current.years}..remove(value),
-        ),
+        ageRatings: {...current.ageRatings}..remove(value),
+      ),
+      'years' => current.copyWith(years: {...current.years}..remove(value)),
       'seasons' => current.copyWith(
-          seasons: {...current.seasons}..remove(value),
-        ),
-      'genres' => current.copyWith(
-          genres: {...current.genres}..remove(value),
-        ),
+        seasons: {...current.seasons}..remove(value),
+      ),
+      'genres' => current.copyWith(genres: {...current.genres}..remove(value)),
       _ => current,
     };
 
@@ -478,7 +477,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     sortTooltip:
                         '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: '
                         '${SearchSortOption.fromValue(ref.watch(searchProviderFiltersProvider).sort).label(context)}',
-                    activeFilterCount: ref.watch(searchProviderFiltersProvider).count,
+                    activeFilterCount: ref
+                        .watch(searchProviderFiltersProvider)
+                        .count,
                     isFilterLoading: _isLoadingProviderFilters,
                     onSubmitted: _submitSearch,
                     onChanged: (val) {
@@ -524,11 +525,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       sortSystemImage: _searchSortSystemImage(sortOption),
       sortTooltip:
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
-      filterTooltip: appText(
-        context,
-        english: 'Filters',
-        arabic: 'الفلاتر',
-      ),
+      filterTooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
       tintColor: Theme.of(context).colorScheme.primary,
       height: 42,
       onFilterPressed: _showSearchFilters,
@@ -576,9 +573,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
                 onPressed: () {
                   _controller.clear();
-                  ref
-                      .read(searchSuggestionControllerProvider.notifier)
-                      .clear();
+                  ref.read(searchSuggestionControllerProvider.notifier).clear();
                   ref.read(searchQueryProvider.notifier).set('');
                 },
               );
@@ -633,8 +628,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.92),
+                fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.92,
+                ),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                 hintStyle: TextStyle(
@@ -719,6 +715,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: scaffold,
     );
   }
+
   Widget _buildBody(BuildContext context) {
     final state = ref.watch(searchPagedResultsProvider);
     final suggestionState = ref.watch(searchSuggestionControllerProvider);
@@ -736,7 +733,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       return _buildLoadingIndicator(context);
     }
     if (allResults.isEmpty && state.errorMessage != null) {
-      return RecoverableNetworkState(onRetry: _retrySearch);
+      return RecoverableNetworkState(
+        onRetry: _retrySearch,
+        onOpenDownloads: () => const DownloadsRoute().go(context),
+      );
     }
     if (allResults.isEmpty) {
       return _buildEmptyState(context);
@@ -778,7 +778,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (suggestionState.suggestions.isEmpty) {
       return Center(
         child: Text(
-          appText(context, english: 'No results found', arabic: 'لم يتم العثور على نتائج'),
+          appText(
+            context,
+            english: 'No results found',
+            arabic: 'لم يتم العثور على نتائج',
+          ),
           style: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -843,7 +847,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
     return Center(
       child: Text(
-        appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
+        appText(
+          context,
+          english: 'No Results Found',
+          arabic: 'لم يتم العثور على نتائج',
+        ),
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
@@ -862,13 +870,13 @@ class _ActiveSearchFilterChips extends StatelessWidget {
   });
 
   List<(String, String)> get _items => [
-        ...filters.genres.map((value) => ('genres', value)),
-        ...filters.years.map((value) => ('years', value)),
-        ...filters.seasons.map((value) => ('seasons', value)),
-        ...filters.ageRatings.map((value) => ('ageRatings', value)),
-        ...filters.types.map((value) => ('types', value)),
-        ...filters.statuses.map((value) => ('statuses', value)),
-      ];
+    ...filters.genres.map((value) => ('genres', value)),
+    ...filters.years.map((value) => ('years', value)),
+    ...filters.seasons.map((value) => ('seasons', value)),
+    ...filters.ageRatings.map((value) => ('ageRatings', value)),
+    ...filters.types.map((value) => ('types', value)),
+    ...filters.statuses.map((value) => ('statuses', value)),
+  ];
 
   @override
   Widget build(BuildContext context) {

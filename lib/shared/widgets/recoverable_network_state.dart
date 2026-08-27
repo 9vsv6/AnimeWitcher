@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../core/router/app_router.dart';
 import '../../core/utils/localized_text.dart';
 
 /// Recoverable full-page state for catalog requests that could not reach the
@@ -11,12 +9,15 @@ class RecoverableNetworkState extends StatefulWidget {
   const RecoverableNetworkState({
     super.key,
     required this.onRetry,
+    this.onOpenDownloads,
   });
 
   final Future<void> Function() onRetry;
+  final VoidCallback? onOpenDownloads;
 
   @override
-  State<RecoverableNetworkState> createState() => _RecoverableNetworkStateState();
+  State<RecoverableNetworkState> createState() =>
+      _RecoverableNetworkStateState();
 }
 
 class _RecoverableNetworkStateState extends State<RecoverableNetworkState> {
@@ -106,11 +107,10 @@ class _RecoverableNetworkStateState extends State<RecoverableNetworkState> {
                             ),
                           ),
                           OutlinedButton.icon(
-                            onPressed: () {
-                              if (GoRouter.maybeOf(context) == null) return;
-                              const DownloadsRoute().go(context);
-                            },
-                            icon: const Icon(Icons.download_for_offline_rounded),
+                            onPressed: widget.onOpenDownloads,
+                            icon: const Icon(
+                              Icons.download_for_offline_rounded,
+                            ),
                             label: Text(
                               appText(
                                 context,

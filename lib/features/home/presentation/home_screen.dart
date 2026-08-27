@@ -33,6 +33,7 @@ import 'package:animewitcher/features/news/presentation/news_utils.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -99,7 +100,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Skip all work to avoid per-frame overhead that
     // can stall the rendering pipeline during bounce / direction-change.
     if (_isWidescreenForScroll()) return;
-
   }
 
   @override
@@ -158,10 +158,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  void _openSearchPage({
-    bool focusKeyboard = false,
-    bool clearQuery = false,
-  }) {
+  void _openSearchPage({bool focusKeyboard = false, bool clearQuery = false}) {
     if (clearQuery) {
       ref.read(searchQueryProvider.notifier).set('');
       ref.read(searchSuggestionControllerProvider.notifier).clear();
@@ -178,7 +175,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       }
     });
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -243,11 +239,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final persistentButtons = <AppleLiquidGlassToolbarButton>[
       AppleLiquidGlassToolbarButton(
         width: 42,
-        tooltip: appText(
-          context,
-          english: 'Search',
-          arabic: 'بحث',
-        ),
+        tooltip: appText(context, english: 'Search', arabic: 'بحث'),
         icon: Icons.search_rounded,
         color: Theme.of(context).colorScheme.primary,
         onPressed: () => _openSearchPage(focusKeyboard: true),
@@ -291,7 +283,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             ),
                             icon: Icons.search_rounded,
                             color: Theme.of(context).colorScheme.primary,
-                            onPressed: () => _openSearchPage(focusKeyboard: true),
+                            onPressed: () =>
+                                _openSearchPage(focusKeyboard: true),
                           ),
                         ),
                       ),
@@ -300,11 +293,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
       ),
-      body: _buildBody(
-        context,
-        homeDataAsync,
-        continueWatching,
-      ),
+      body: _buildBody(context, homeDataAsync, continueWatching),
     );
 
     if (!usePersistentGlass) return mobileScaffold;
@@ -339,10 +328,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         .replaceAll(RegExp(r' +'), ' ')
         .trim();
 
-    final isAnimation = normalized.contains('انميشن') ||
+    final isAnimation =
+        normalized.contains('انميشن') ||
         normalized.contains('انيميشن') ||
         normalized.contains('animation');
-    final isMostWatched = normalized.contains('الاكثر مشاهده') ||
+    final isMostWatched =
+        normalized.contains('الاكثر مشاهده') ||
         normalized.contains('most watched') ||
         normalized.contains('most viewed');
     return isAnimation && isMostWatched;
@@ -422,8 +413,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildBody(
     BuildContext context,
     HomeState state,
-    List<HistoryItem> continueWatching,
-    {
+    List<HistoryItem> continueWatching, {
     bool isWidescreen = false,
   }) {
     final l10n = AppLocalizations.of(context)!;
@@ -629,10 +619,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildErrorState(BuildContext context, WidgetRef ref) {
     return RecoverableNetworkState(
       onRetry: () => ref.read(homeDataProvider.notifier).fetch(),
+      onOpenDownloads: () => const DownloadsRoute().go(context),
     );
   }
-
-
 
   Widget _buildCarouselShimmer(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -691,53 +680,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       textDirection: TextDirection.ltr,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Title Placeholder
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            isDesktop
-                ? LayoutConstants.dashboardContentPadding
-                : LayoutConstants.spacingMd,
-            LayoutConstants.spacingLg,
-            isDesktop
-                ? LayoutConstants.dashboardContentPadding
-                : LayoutConstants.spacingMd,
-            LayoutConstants.spacingSm,
-          ),
-          child: ShimmerPlaceholder.rectangular(
-            width: 150,
-            height: 24,
-            borderRadius: 4,
-          ),
-        ),
-        const SizedBox(height: LayoutConstants.spacingMd),
-        // List Placeholder
-        SizedBox(
-          height: listHeight,
-          child: ListView.separated(
-            padding: EdgeInsets.symmetric(
-              horizontal: isDesktop
+        children: [
+          // Title Placeholder
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              isDesktop
                   ? LayoutConstants.dashboardContentPadding
                   : LayoutConstants.spacingMd,
+              LayoutConstants.spacingLg,
+              isDesktop
+                  ? LayoutConstants.dashboardContentPadding
+                  : LayoutConstants.spacingMd,
+              LayoutConstants.spacingSm,
             ),
-            scrollDirection: Axis.horizontal,
-            itemCount: 10,
-            separatorBuilder: (_, _) => SizedBox(width: spacing),
-            itemBuilder: (context, index) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ShimmerPlaceholder.rectangular(
-                    width: cardWidth,
-                    height: imageHeight,
-                    borderRadius: 12,
-                  ),
-                ],
-              );
-            },
+            child: ShimmerPlaceholder.rectangular(
+              width: 150,
+              height: 24,
+              borderRadius: 4,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: LayoutConstants.spacingMd),
+          // List Placeholder
+          SizedBox(
+            height: listHeight,
+            child: ListView.separated(
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop
+                    ? LayoutConstants.dashboardContentPadding
+                    : LayoutConstants.spacingMd,
+              ),
+              scrollDirection: Axis.horizontal,
+              itemCount: 10,
+              separatorBuilder: (_, _) => SizedBox(width: spacing),
+              itemBuilder: (context, index) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ShimmerPlaceholder.rectangular(
+                      width: cardWidth,
+                      height: imageHeight,
+                      borderRadius: 12,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

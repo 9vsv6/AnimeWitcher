@@ -20,6 +20,7 @@ import '../widgets/provider_search_filter_dialog.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+
 String homeSearchFieldLabel(
   BuildContext context,
   ProviderSearchFilters filters,
@@ -31,9 +32,7 @@ String homeSearchFieldLabel(
         ? 'ابحث ضمن النتائج المفلترة...'
         : 'Search within filtered results...';
   }
-  return isArabic
-      ? 'ابحث عن أفلام ومسلسلات...'
-      : 'Search movies, series...';
+  return isArabic ? 'ابحث عن أفلام ومسلسلات...' : 'Search movies, series...';
 }
 
 class HomeSearchDelegate extends SearchDelegate<void> {
@@ -432,7 +431,11 @@ class _HomeSearchSuggestionsState
     if (suggestions.isEmpty) {
       return Center(
         child: Text(
-          appText(context, english: 'No results found', arabic: 'لم يتم العثور على نتائج'),
+          appText(
+            context,
+            english: 'No results found',
+            arabic: 'لم يتم العثور على نتائج',
+          ),
           style: TextStyle(
             color: Theme.of(
               context,
@@ -452,7 +455,11 @@ class _HomeSearchSuggestionsState
             leading: const Icon(Icons.search_rounded),
             title: Text(suggestion),
             trailing: IconButton(
-              tooltip: appText(context, english: 'Fill query', arabic: 'إدخال عبارة البحث'),
+              tooltip: appText(
+                context,
+                english: 'Fill query',
+                arabic: 'إدخال عبارة البحث',
+              ),
               icon: const Icon(Icons.north_west_rounded),
               onPressed: () => widget.onSelect(suggestion),
             ),
@@ -588,7 +595,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
         cancelToken: requestToken,
       );
 
-      if (!mounted || generation != _generation || requestToken.isCancelled) return;
+      if (!mounted || generation != _generation || requestToken.isCancelled)
+        return;
       if (identical(_pageCancelToken, requestToken)) _pageCancelToken = null;
 
       for (final item in page.items) {
@@ -604,7 +612,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
 
       setState(() {
         _offset = nextOffset;
-        _hasMore = page.hasMore &&
+        _hasMore =
+            page.hasMore &&
             (page.nextOffset > requestedOffset || page.items.isNotEmpty);
         _isInitialLoading = false;
         _isLoadingMore = false;
@@ -613,7 +622,8 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
 
       WidgetsBinding.instance.addPostFrameCallback((_) => _ensureFilled());
     } catch (_) {
-      if (!mounted || generation != _generation || requestToken.isCancelled) return;
+      if (!mounted || generation != _generation || requestToken.isCancelled)
+        return;
       if (identical(_pageCancelToken, requestToken)) _pageCancelToken = null;
       setState(() {
         _isInitialLoading = false;
@@ -643,11 +653,16 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       if (_hasLoadError) {
         return RecoverableNetworkState(
           onRetry: () => _resetAndLoad(debounce: false),
+          onOpenDownloads: () => const DownloadsRoute().go(context),
         );
       }
       return Center(
         child: Text(
-          appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
+          appText(
+            context,
+            english: 'No Results Found',
+            arabic: 'لم يتم العثور على نتائج',
+          ),
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
