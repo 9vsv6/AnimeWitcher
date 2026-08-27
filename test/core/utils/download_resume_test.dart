@@ -60,6 +60,22 @@ void main() {
     expect(restartCalls, 1);
   });
 
+  test('restarts when a native resume attempt throws', () async {
+    var restartCalls = 0;
+
+    final result = await resumeOrRestartDownload(
+      canResume: () async => true,
+      resume: () async => throw StateError('stale resume data'),
+      restart: () async {
+        restartCalls++;
+        return true;
+      },
+    );
+
+    expect(result, isTrue);
+    expect(restartCalls, 1);
+  });
+
   test('restarts when checking resumability throws for a stale task', () async {
     var restartCalls = 0;
 

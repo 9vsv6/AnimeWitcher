@@ -516,19 +516,23 @@ class DownloadService {
     }
     if (downloadTask == null) return;
 
+    final task = downloadTask;
     final record = await FileDownloader().database.recordForId(taskId);
     await _continuedProcessing.start(
       taskId: taskId,
-      displayName: downloadTask.displayName,
+      displayName: task.displayName,
       progress: (record?.progress ?? 0.0).clamp(0.0, 1.0),
       totalBytes: record?.expectedFileSize ?? -1,
     );
 
-    await resumeOrRestartDownload(
-      canResume: () => FileDownloader().taskCanResume(downloadTask!),
-      resume: () => FileDownloader().resume(downloadTask!),
-      restart: () => FileDownloader().enqueue(downloadTask!),
+    final resumedOrRestarted = await resumeOrRestartDownload(
+      canResume: () => FileDownloader().taskCanResume(task),
+      resume: () => FileDownloader().resume(task),
+      restart: () => FileDownloader().enqueue(task),
     );
+    if (!resumedOrRestarted) {
+      await _continuedProcessing.stop(taskId: taskId);
+    }
   }
 
   Future<DownloadMetadata?> getMetadata(
