@@ -89,10 +89,12 @@ class MultimediaCard extends StatelessWidget {
       ],
     );
 
+    final semanticLabel = badgeText == null ? title : '$title، $badgeText';
+
     return Semantics(
       button: true,
-      label: title,
-      hint: AppLocalizations.of(context)!.viewDetails,
+      label: semanticLabel,
+      hint: AppLocalizations.of(context)?.viewDetails ?? 'عرض التفاصيل',
       onTap: onTap,
       onLongPress: onLongPress,
       child: ExcludeSemantics(
