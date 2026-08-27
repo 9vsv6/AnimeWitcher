@@ -23,16 +23,6 @@
 -dontwarn com.alexmercerind.**
 
 # ─────────────────────────────────────────────────────────────────────────
-# flutter_inappwebview — reflection for JS<->Dart bridges + WebView
-# clients/chrome client subclasses.
-# ─────────────────────────────────────────────────────────────────────────
--keep class com.pichillilorenzo.flutter_inappwebview.** { *; }
--keep class com.pichillilorenzo.** { *; }
--keepclassmembers class * extends android.webkit.WebViewClient { *; }
--keepclassmembers class * extends android.webkit.WebChromeClient { *; }
--dontwarn com.pichillilorenzo.**
-
-# ─────────────────────────────────────────────────────────────────────────
 # flutter_js_ng (forked QuickJS bindings) — JNI surface for the JS engine.
 # ─────────────────────────────────────────────────────────────────────────
 -keep class com.abedalkareem.flutter_js.** { *; }
