@@ -548,6 +548,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       _hasLoadError = false;
     });
     if (!debounce) {
+      ref.read(activeProviderProvider)?.prepareForNetworkRetry();
       await _loadNextPage();
       return;
     }

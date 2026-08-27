@@ -20,6 +20,7 @@ Dio _catalogDio({
   required int Function() homeSectionStatus,
   Map<String, dynamic>? homeSections,
   Map<String, dynamic>? algoliaPayload,
+  int Function()? algoliaStatus,
 }) {
   final dio = Dio();
   dio.interceptors.add(
@@ -40,7 +41,8 @@ Dio _catalogDio({
           handler.resolve(
             Response<dynamic>(
               requestOptions: options,
-              statusCode: algoliaPayload == null ? 503 : 200,
+              statusCode:
+                  algoliaStatus?.call() ?? (algoliaPayload == null ? 503 : 200),
               data: algoliaPayload ?? const <String, dynamic>{},
             ),
           );
@@ -149,4 +151,32 @@ void main() {
       expect(home['Latest']!.first.title, 'Retry Anime');
     },
   );
+
+  test('failed search is not sticky so retry can succeed', () async {
+    var algoliaCalls = 0;
+    final provider = _provider(
+      _catalogDio(
+        homeSectionStatus: () => 200,
+        algoliaPayload: _algoliaHits(),
+        algoliaStatus: () {
+          algoliaCalls += 1;
+          return algoliaCalls == 1 ? 503 : 200;
+        },
+      ),
+    );
+
+    await expectLater(
+      provider.searchPage('test', const ProviderSearchFilters()),
+      throwsA(isA<StateError>()),
+    );
+
+    provider.prepareForNetworkRetry();
+    final page = await provider.searchPage(
+      'test',
+      const ProviderSearchFilters(),
+    );
+    expect(algoliaCalls, 2);
+    expect(page.items, isNotEmpty);
+    expect(page.items.first.title, 'Retry Anime');
+  });
 }

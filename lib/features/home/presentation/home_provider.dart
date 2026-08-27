@@ -35,6 +35,8 @@ class HomeData extends _$HomeData {
       return;
     }
 
+    activeProvider.prepareForNetworkRetry();
+
     try {
       final results = await Future.wait<dynamic>([
         activeProvider.getHome(),

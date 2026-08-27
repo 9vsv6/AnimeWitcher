@@ -453,6 +453,7 @@ class DetailsController extends _$DetailsController {
     provider ??= _lastEpisodesProvider ?? ref.read(activeProviderProvider);
     if (provider == null) return;
 
+    provider.prepareForNetworkRetry();
     provider.invalidateDetailCaches(item.url);
 
     _episodesLoadFuture = null;
@@ -1059,7 +1060,10 @@ class DetailsController extends _$DetailsController {
     await _episodesLoadFuture;
   }
 
-  Future<void> retryEpisodes() => loadEpisodesOnDemand(forceReload: true);
+  Future<void> retryEpisodes() {
+    _lastEpisodesProvider?.prepareForNetworkRetry();
+    return loadEpisodesOnDemand(forceReload: true);
+  }
 
   List<Episode>? _processEpisodes(
     List<Episode>? episodes,
