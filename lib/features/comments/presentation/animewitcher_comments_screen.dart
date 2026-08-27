@@ -10,6 +10,7 @@ import 'package:animewitcher/core/account/animewitcher_account_models.dart';
 import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
 import 'package:animewitcher/core/account/firestore_rest_client.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+import 'package:animewitcher/core/utils/request_generation.dart';
 
 import 'animewitcher_replies_screen.dart';
 
@@ -45,6 +46,7 @@ class _AnimeWitcherCommentsScreenState
   bool _hasMore = true;
   bool _spoiler = false;
   bool _publishing = false;
+  final RequestGeneration _loadGeneration = RequestGeneration();
 
   @override
   void initState() {
@@ -79,6 +81,8 @@ class _AnimeWitcherCommentsScreenState
 
   Future<void> _loadInitial() async {
     if (!mounted) return;
+    final generation = _loadGeneration.begin();
+    final sort = _sort;
     setState(() {
       _loadingInitial = true;
       _loadingMore = false;
@@ -91,11 +95,11 @@ class _AnimeWitcherCommentsScreenState
           .read(animeWitcherAccountServiceProvider)
           .loadComments(
             widget.target,
-            sort: _sort,
+            sort: sort,
             cursor: null,
             limit: _pageSize,
           );
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _comments = page.items;
         _cursor = page.cursor;
@@ -103,7 +107,7 @@ class _AnimeWitcherCommentsScreenState
         _loadingInitial = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _loadError = error;
         _loadingInitial = false;
@@ -113,17 +117,20 @@ class _AnimeWitcherCommentsScreenState
 
   Future<void> _loadMore() async {
     if (_loadingInitial || _loadingMore || !_hasMore) return;
+    final generation = _loadGeneration.current;
+    final sort = _sort;
+    final cursor = _cursor;
     setState(() => _loadingMore = true);
     try {
       final page = await ref
           .read(animeWitcherAccountServiceProvider)
           .loadComments(
             widget.target,
-            sort: _sort,
-            cursor: _cursor,
+            sort: sort,
+            cursor: cursor,
             limit: _pageSize,
           );
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       final existing = _comments.map((item) => item.path).toSet();
       final additions = page.items
           .where((item) => existing.add(item.path))
@@ -135,7 +142,7 @@ class _AnimeWitcherCommentsScreenState
         _loadingMore = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _loadingMore = false;
         _loadError = error;

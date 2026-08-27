@@ -8,6 +8,7 @@ import 'package:animewitcher/core/account/animewitcher_account_models.dart';
 import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
 import 'package:animewitcher/core/account/firestore_rest_client.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+import 'package:animewitcher/core/utils/request_generation.dart';
 
 class AnimeWitcherRepliesScreen extends ConsumerStatefulWidget {
   const AnimeWitcherRepliesScreen({
@@ -38,6 +39,7 @@ class _AnimeWitcherRepliesScreenState
   bool _loadingMore = false;
   bool _hasMore = true;
   bool _publishing = false;
+  final RequestGeneration _loadGeneration = RequestGeneration();
 
   @override
   void initState() {
@@ -75,6 +77,8 @@ class _AnimeWitcherRepliesScreenState
 
   Future<void> _loadInitial() async {
     if (!mounted) return;
+    final generation = _loadGeneration.begin();
+    final sort = _sort;
     setState(() {
       _loadingInitial = true;
       _loadingMore = false;
@@ -87,11 +91,11 @@ class _AnimeWitcherRepliesScreenState
           .read(animeWitcherAccountServiceProvider)
           .loadReplies(
             widget.parentComment,
-            sort: _sort,
+            sort: sort,
             cursor: null,
             limit: _pageSize,
           );
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _replies = page.items;
         _cursor = page.cursor;
@@ -99,7 +103,7 @@ class _AnimeWitcherRepliesScreenState
         _loadingInitial = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _loadError = error;
         _loadingInitial = false;
@@ -109,17 +113,20 @@ class _AnimeWitcherRepliesScreenState
 
   Future<void> _loadMore() async {
     if (_loadingInitial || _loadingMore || !_hasMore) return;
+    final generation = _loadGeneration.current;
+    final sort = _sort;
+    final cursor = _cursor;
     setState(() => _loadingMore = true);
     try {
       final page = await ref
           .read(animeWitcherAccountServiceProvider)
           .loadReplies(
             widget.parentComment,
-            sort: _sort,
-            cursor: _cursor,
+            sort: sort,
+            cursor: cursor,
             limit: _pageSize,
           );
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       final existing = _replies.map((item) => item.path).toSet();
       final additions = page.items
           .where((item) => existing.add(item.path))
@@ -131,8 +138,11 @@ class _AnimeWitcherRepliesScreenState
         _loadingMore = false;
       });
     } catch (error) {
-      if (!mounted) return;
-      setState(() => _loadingMore = false);
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
+      setState(() {
+        _loadError = error;
+        _loadingMore = false;
+      });
       _showMessage(_replyErrorText(error, _isArabic(context)), isError: true);
     }
   }
