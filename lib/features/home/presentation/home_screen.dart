@@ -21,6 +21,7 @@ import '../../../shared/widgets/cards_wrapper.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
+import '../../../shared/widgets/recoverable_network_state.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
@@ -458,8 +459,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         l10n,
         isWidescreen: isWidescreen,
       ),
-      HomeOffline() => _buildErrorState(context, l10n.noInternetError, ref),
-      HomeError(:final message) => _buildErrorState(context, message, ref),
+      HomeOffline() => _buildErrorState(context, ref),
+      HomeError() => _buildErrorState(context, ref),
       HomeSuccess(:final data, :final news) => _withGradientEdgeHint(
         RefreshIndicator(
           onRefresh: () async {
@@ -625,85 +626,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  Widget _buildErrorState(BuildContext context, String error, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-    final bool isOffline = error == l10n.noInternetError;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isOffline ? Icons.wifi_off_rounded : Icons.cloud_off_rounded,
-              size: 80,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              isOffline ? l10n.noInternetConnection : l10n.siteNotReachable,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              isOffline
-                  ? l10n.checkConnectionOrDownloads
-                  : l10n.tryVpnOrConnection,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (!isOffline) ...[
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: SelectableText(
-                  l10n.errorDetails(error),
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 32),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              alignment: WrapAlignment.center,
-              children: [
-                FilledButton.icon(
-                  onPressed: () => ref.invalidate(homeDataProvider),
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(l10n.retry),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => const LibraryRoute().push<void>(context),
-                  icon: const Icon(Icons.download_for_offline_rounded),
-                  label: Text(l10n.goToDownloads),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.secondaryContainer,
-                    foregroundColor: Theme.of(
-                      context,
-                    ).colorScheme.onSecondaryContainer,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+  Widget _buildErrorState(BuildContext context, WidgetRef ref) {
+    return RecoverableNetworkState(
+      onRetry: () => ref.read(homeDataProvider.notifier).fetch(),
     );
   }
 

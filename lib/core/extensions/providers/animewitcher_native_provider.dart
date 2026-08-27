@@ -543,6 +543,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     String filters = '',
     List<String>? attributes,
     CancelToken? cancelToken,
+    bool throwOnFailure = false,
   }) async {
     await _refreshRemoteConstants();
     final params = <String>[];
@@ -569,6 +570,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       headers: _algoliaHeaders,
     );
     if (payload == null || payload['hits'] is! List) {
+      if (throwOnFailure) {
+        throw StateError('AnimeWitcher catalog request failed.');
+      }
       return <String, dynamic>{
         'hits': const <dynamic>[],
         'page': 0,
@@ -1644,6 +1648,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       filters: expression,
       attributes: _searchAttributes,
       cancelToken: cancelToken,
+      throwOnFailure: true,
     );
     final rawHits = _list(payload['hits']);
     final items = await _dedupeHits(rawHits);
@@ -1693,8 +1698,14 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
               section.indexName.isNotEmpty)
           .toList();
       sections.sort((a, b) => a.order.compareTo(b.order));
-      _officialHomeSectionsCache = sections;
-      _officialHomeSectionsExpiresAt = now.add(_homeSectionsTtl);
+      // A failed Firestore request is represented by empty fields in this
+      // compatibility helper. Never cache that empty result: retry and
+      // pull-to-refresh must issue a fresh request as soon as connectivity is
+      // restored.
+      if (sections.isNotEmpty) {
+        _officialHomeSectionsCache = sections;
+        _officialHomeSectionsExpiresAt = now.add(_homeSectionsTtl);
+      }
       return sections;
     }();
     _officialHomeSectionsRequest = request;
@@ -1745,6 +1756,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     String sectionName, {
     int offset = 0,
     int limit = 30,
+    bool throwOnFailure = false,
   }) async {
     await _refreshRemoteConstants();
     final sections = await _fetchOfficialHomeSections();
@@ -1769,6 +1781,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
           hitsPerPage: safeLimit,
           filters: plan.filters,
           attributes: plan.recent ? _recentAttributes : _searchAttributes,
+          throwOnFailure: throwOnFailure,
         );
 
     final payload = await load(plan.index);
@@ -2038,6 +2051,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   @override
   Future<Map<String, List<MultimediaItem>>> getHome() async {
     final configured = await _fetchOfficialHomeSections();
+    if (configured.isEmpty) {
+      throw StateError('AnimeWitcher home sections are unavailable.');
+    }
     final officialSections = configured
         .where((section) =>
             !_isNewsHomeSection(section) &&
@@ -2058,6 +2074,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       mapper: (section) => _loadHomePage(
         section.title,
         limit: section.hitsPerPage.clamp(1, _previewSize).toInt(),
+        throwOnFailure: true,
       ),
       onError: (section, error, stackTrace) {
         failedSections++;

@@ -33,6 +33,7 @@ class SearchAggregateState {
   final bool isLoadingMore;
   final bool hasMore;
   final int nextOffset;
+  final String? errorMessage;
 
   const SearchAggregateState({
     this.results = const [],
@@ -40,6 +41,7 @@ class SearchAggregateState {
     this.isLoadingMore = false,
     this.hasMore = false,
     this.nextOffset = 0,
+    this.errorMessage,
   });
 
   SearchAggregateState copyWith({
@@ -48,6 +50,8 @@ class SearchAggregateState {
     bool? isLoadingMore,
     bool? hasMore,
     int? nextOffset,
+    String? errorMessage,
+    bool clearError = false,
   }) {
     return SearchAggregateState(
       results: results ?? this.results,
@@ -55,6 +59,7 @@ class SearchAggregateState {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       hasMore: hasMore ?? this.hasMore,
       nextOffset: nextOffset ?? this.nextOffset,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
 }
@@ -476,6 +481,7 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
       isLoadingMore: false,
       hasMore: false,
       nextOffset: 0,
+      clearError: true,
     );
     final provider = _provider();
     if (provider == null) {
@@ -510,6 +516,7 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
           isLoading: false,
           isLoadingMore: false,
           hasMore: false,
+          errorMessage: 'Unable to load search results.',
         );
       }
     }
@@ -558,6 +565,8 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
       }
     }
   }
+
+  Future<void> retry() => _reload();
 }
 
 final searchPagedResultsProvider =

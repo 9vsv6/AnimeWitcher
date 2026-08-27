@@ -14,6 +14,7 @@ import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
+import '../../../../shared/widgets/recoverable_network_state.dart';
 import '../../../search/presentation/search_provider.dart';
 import '../widgets/provider_search_filter_dialog.dart';
 
@@ -484,6 +485,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
   int _offset = 0;
   int _generation = 0;
   String? _providerId;
+  String? _errorMessage;
   Timer? _searchDebounce;
   CancelToken? _pageCancelToken;
 
@@ -536,6 +538,7 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       _isInitialLoading = true;
       _isLoadingMore = false;
       _providerId = null;
+      _errorMessage = null;
     });
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       if (mounted) _loadNextPage();
@@ -604,13 +607,14 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) => _ensureFilled());
-    } catch (_) {
+    } catch (error) {
       if (!mounted || generation != _generation || requestToken.isCancelled) return;
       if (identical(_pageCancelToken, requestToken)) _pageCancelToken = null;
       setState(() {
         _isInitialLoading = false;
         _isLoadingMore = false;
         _hasMore = false;
+        _errorMessage = error.toString();
       });
     }
   }
@@ -631,6 +635,11 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
     }
 
     if (_items.isEmpty && !_hasMore) {
+      if (_errorMessage != null) {
+        return RecoverableNetworkState(
+          onRetry: () async => _resetAndLoad(),
+        );
+      }
       return Center(
         child: Text(
           appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),

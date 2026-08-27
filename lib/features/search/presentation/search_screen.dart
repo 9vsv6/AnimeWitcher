@@ -17,6 +17,7 @@ import 'widgets/bouncy_entry_animation.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
+import '../../../shared/widgets/recoverable_network_state.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
@@ -285,6 +286,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ref.read(searchQueryProvider.notifier).set(trimmed);
     // Keep the field focused after Search/Enter. The app-wide scroll behavior
     // dismisses the keyboard only when the user starts dragging a scroll view.
+  }
+
+  Future<void> _retrySearch() async {
+    _resetResultsScrollPosition();
+    await ref.read(searchPagedResultsProvider.notifier).retry();
   }
 
   void _fillSuggestion(String suggestion) {
@@ -728,6 +734,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final allResults = state.results.expand((entry) => entry.results).toList();
     if (allResults.isEmpty && state.isLoading) {
       return _buildLoadingIndicator(context);
+    }
+    if (allResults.isEmpty && state.errorMessage != null) {
+      return RecoverableNetworkState(onRetry: _retrySearch);
     }
     if (allResults.isEmpty) {
       return _buildEmptyState(context);
