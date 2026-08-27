@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import '../../../../core/account/account_providers.dart';
+import '../../../../core/storage/secure_token_storage.dart';
 import '../../../../core/services/external_player_service.dart';
 import '../../../../core/navigation/taskbar_destination.dart';
 import '../../../../core/storage/settings_repository.dart';
@@ -470,6 +471,8 @@ void showFactoryResetDialog(BuildContext context, WidgetRef ref) {
               clearAccountSession: () => ref
                   .read(animeWitcherAccountControllerProvider.notifier)
                   .signOut(),
+              clearSecureTokens: () =>
+                  ref.read(secureTokenStorageProvider).clearAll(),
               // Deep clean extensions, preferences, and Hive databases.
               clearLocalData: () =>
                   ref.read(settingsRepositoryProvider).deleteAllData(),
