@@ -16,6 +16,7 @@ import 'core/storage/storage_service.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'core/utils/app_utils.dart';
 import 'core/utils/artwork_quality.dart';
+import 'core/utils/factory_reset.dart';
 import 'core/utils/localized_text.dart';
 import 'core/providers/update_provider.dart';
 import 'core/widgets/update_dialog.dart';
@@ -675,7 +676,10 @@ class LaunchErrorApp extends StatelessWidget {
                       icon: const Icon(Icons.delete_forever),
                       label: Text(l10n?.factoryReset ?? 'إعادة ضبط المصنع'),
                       onPressed: () async {
-                        await storageService.deleteAllData();
+                        await runFactoryReset(
+                          clearAccountSession: () async {},
+                          clearLocalData: storageService.deleteAllData,
+                        );
                         if (context.mounted) await AppUtils.restartApp(context);
                       },
                     ),

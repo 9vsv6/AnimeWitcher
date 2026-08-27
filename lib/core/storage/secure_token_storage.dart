@@ -72,6 +72,17 @@ class SecureTokenStorage {
     }
     await _legacy.remove(key);
   }
+
+  /// Removes every credential stored for this app in the platform-secure
+  /// backend. Used by factory reset so a failed sign-out cannot restore the
+  /// previous session after restart.
+  Future<void> clearAll() async {
+    try {
+      await _secure.deleteAll();
+    } catch (e) {
+      talker.error('SecureTokenStorage.clearAll failed', e);
+    }
+  }
 }
 
 @Riverpod(keepAlive: true)
