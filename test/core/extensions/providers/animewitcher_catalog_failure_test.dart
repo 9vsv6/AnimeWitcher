@@ -13,10 +13,8 @@ class _TestStorageService extends StorageService {
   bool isEpisodeImagesFromAniZipEnabled() => false;
 }
 
-AnimeWitcherNativeProvider _provider(Dio dio) => AnimeWitcherNativeProvider(
-      dio,
-      SettingsRepository(_TestStorageService()),
-    );
+AnimeWitcherNativeProvider _provider(Dio dio) =>
+    AnimeWitcherNativeProvider(dio, SettingsRepository(_TestStorageService()));
 
 Dio _catalogDio({
   required int Function() homeSectionStatus,
@@ -106,43 +104,49 @@ Map<String, dynamic> _algoliaHits() {
 }
 
 void main() {
-  test('search page reports catalog transport failure instead of empty results',
-      () async {
-    await expectLater(
-      _provider(_catalogDio(homeSectionStatus: () => 200)).searchPage(
-        'test',
-        const ProviderSearchFilters(),
-      ),
-      throwsA(isA<StateError>()),
-    );
-  });
+  test(
+    'search page reports catalog transport failure instead of empty results',
+    () async {
+      await expectLater(
+        _provider(
+          _catalogDio(homeSectionStatus: () => 200),
+        ).searchPage('test', const ProviderSearchFilters()),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
 
-  test('home reports unavailable section configuration instead of blank success',
-      () async {
-    await expectLater(
-      _provider(_catalogDio(homeSectionStatus: () => 200)).getHome(),
-      throwsA(isA<StateError>()),
-    );
-  });
+  test(
+    'home reports unavailable section configuration instead of blank success',
+    () async {
+      await expectLater(
+        _provider(_catalogDio(homeSectionStatus: () => 200)).getHome(),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
 
-  test('failed home configuration is not cached so retry can succeed', () async {
-    var homeSectionRequests = 0;
-    final provider = _provider(
-      _catalogDio(
-        homeSectionStatus: () {
-          homeSectionRequests += 1;
-          return homeSectionRequests == 1 ? 503 : 200;
-        },
-        homeSections: _homeSectionsDocument(),
-        algoliaPayload: _algoliaHits(),
-      ),
-    );
+  test(
+    'failed home configuration is not cached so retry can succeed',
+    () async {
+      var homeSectionRequests = 0;
+      final provider = _provider(
+        _catalogDio(
+          homeSectionStatus: () {
+            homeSectionRequests += 1;
+            return homeSectionRequests == 1 ? 503 : 200;
+          },
+          homeSections: _homeSectionsDocument(),
+          algoliaPayload: _algoliaHits(),
+        ),
+      );
 
-    await expectLater(provider.getHome(), throwsA(isA<StateError>()));
+      await expectLater(provider.getHome(), throwsA(isA<StateError>()));
 
-    final home = await provider.getHome();
-    expect(homeSectionRequests, 2);
-    expect(home['Latest'], isNotNull);
-    expect(home['Latest']!.first.title, 'Retry Anime');
-  });
+      final home = await provider.getHome();
+      expect(homeSectionRequests, 2);
+      expect(home['Latest'], isNotNull);
+      expect(home['Latest']!.first.title, 'Retry Anime');
+    },
+  );
 }

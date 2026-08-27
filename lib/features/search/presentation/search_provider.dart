@@ -416,7 +416,6 @@ final searchClearRequestProvider =
       SearchClearRequestNotifier.new,
     );
 
-
 class PagedSearchNotifier extends Notifier<SearchAggregateState> {
   int _generation = 0;
   String _query = '';
@@ -444,7 +443,8 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
         .read(extensionManagerProvider.notifier)
         .getAllProviders()
         .where((provider) {
-          final liveOnly = provider.supportedTypes.isNotEmpty &&
+          final liveOnly =
+              provider.supportedTypes.isNotEmpty &&
               provider.supportedTypes.every(
                 (type) => type == ProviderType.livestream,
               );
@@ -513,9 +513,7 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
       if (generation == _generation) {
         // Keep the last rendered cards on transient network failures. Show the
         // recoverable empty state only when there is nothing left to display.
-        final hasCards = state.results.any(
-          (entry) => entry.results.isNotEmpty,
-        );
+        final hasCards = state.results.any((entry) => entry.results.isNotEmpty);
         state = state.copyWith(
           isLoading: false,
           isLoadingMore: false,
