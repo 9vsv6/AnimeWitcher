@@ -13,14 +13,17 @@ Episode? adjacentEpisode({
 }) {
   if (episodes == null || episodes.isEmpty || offset == 0) return null;
 
-  final sequence = currentEpisode != null &&
-          currentEpisode.dubStatus != DubStatus.none
+  final sequence =
+      currentEpisode != null && currentEpisode.dubStatus != DubStatus.none
       ? episodes
-          .where((episode) => episode.dubStatus == currentEpisode.dubStatus)
-          .toList(growable: false)
+            .where((episode) => episode.dubStatus == currentEpisode.dubStatus)
+            .toList(growable: false)
       : episodes;
   final currentUrl = currentEpisode?.url ?? currentEpisodeUrl;
-  final currentIndex = sequence.indexWhere((episode) => episode.url == currentUrl);
+  if (currentUrl.isEmpty) return null;
+  final currentIndex = sequence.indexWhere(
+    (episode) => episode.url == currentUrl,
+  );
   final adjacentIndex = currentIndex + offset;
   if (currentIndex < 0 ||
       adjacentIndex < 0 ||

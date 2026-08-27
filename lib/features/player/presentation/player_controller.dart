@@ -3072,6 +3072,7 @@ class PlayerController extends Notifier<PlayerState> {
     state = state.copyWith(
       playerTitle: _titleWithEpisode(episode),
       activeEpisodeUrl: episode.url,
+      showNextEpisodeOverlay: false,
     );
 
     if (useDirectSelectedSource) {

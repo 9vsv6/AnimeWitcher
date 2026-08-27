@@ -502,9 +502,15 @@ class AnimeWitcherPlayerControlsState
     _platformService.toggleOrientation(context);
   }
 
-  Future<void> _playNextEpisodeWithSourcePicker() async {
+  Future<void> _playNextEpisodeWithSourcePicker() =>
+      _playAdjacentEpisodeWithSourcePicker(next: true);
+
+  Future<void> _playPreviousEpisodeWithSourcePicker() =>
+      _playAdjacentEpisodeWithSourcePicker(next: false);
+
+  Future<void> _playAdjacentEpisodeWithSourcePicker({required bool next}) async {
     final controller = ref.read(playerControllerProvider.notifier);
-    final episode = controller.nextEpisode;
+    final episode = next ? controller.nextEpisode : controller.previousEpisode;
     final item = controller.multimediaItem;
     if (episode == null || item == null) return;
 
@@ -513,21 +519,11 @@ class AnimeWitcherPlayerControlsState
         .chooseSourceForItem(context, item, episode.url, episode: episode);
     if (selected == null || !mounted) return;
 
-    await controller.playNextEpisode(selectedSource: selected);
-  }
-
-  Future<void> _playPreviousEpisodeWithSourcePicker() async {
-    final controller = ref.read(playerControllerProvider.notifier);
-    final episode = controller.previousEpisode;
-    final item = controller.multimediaItem;
-    if (episode == null || item == null) return;
-
-    final selected = await ref
-        .read(playbackLauncherProvider)
-        .chooseSourceForItem(context, item, episode.url, episode: episode);
-    if (selected == null || !mounted) return;
-
-    await controller.loadEpisode(episode, selectedSource: selected);
+    if (next) {
+      await controller.playNextEpisode(selectedSource: selected);
+    } else {
+      await controller.loadEpisode(episode, selectedSource: selected);
+    }
   }
 
   Future<void> toggleFullscreen() async {
