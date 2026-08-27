@@ -27,8 +27,7 @@ class AnimeWitcherPrivacySettings {
     bool? hideEcchiAnime,
   }) {
     return AnimeWitcherPrivacySettings(
-      showFavoritesToUsers:
-          showFavoritesToUsers ?? this.showFavoritesToUsers,
+      showFavoritesToUsers: showFavoritesToUsers ?? this.showFavoritesToUsers,
       showCommentsToUsers: showCommentsToUsers ?? this.showCommentsToUsers,
       showReviewsToUsers: showReviewsToUsers ?? this.showReviewsToUsers,
       hideEcchiAnime: hideEcchiAnime ?? this.hideEcchiAnime,
@@ -37,11 +36,11 @@ class AnimeWitcherPrivacySettings {
 
   /// Keys match the public AnimeWitcher Firestore profile schema exactly.
   Map<String, dynamic> toFirestoreJson() => <String, dynamic>{
-        'show_fav_to_users': showFavoritesToUsers,
-        'show_comments_to_users': showCommentsToUsers,
-        'show_reviews_to_users': showReviewsToUsers,
-        'hide_ecchi_anime': hideEcchiAnime,
-      };
+    'show_fav_to_users': showFavoritesToUsers,
+    'show_comments_to_users': showCommentsToUsers,
+    'show_reviews_to_users': showReviewsToUsers,
+    'hide_ecchi_anime': hideEcchiAnime,
+  };
 
   Map<String, dynamic> toJson() => toFirestoreJson();
 
@@ -51,9 +50,9 @@ class AnimeWitcherPrivacySettings {
       (key, value) => MapEntry(key.toString(), value),
     );
     bool read(String key, bool fallback) {
-      final value = values[key];
-      return value is bool ? value : fallback;
+      return _readBool(values[key], fallback);
     }
+
     return AnimeWitcherPrivacySettings(
       showFavoritesToUsers: read('show_fav_to_users', true),
       showCommentsToUsers: read('show_comments_to_users', true),
@@ -222,9 +221,9 @@ class AnimeWitcherProfile {
     'coverUrl': coverUrl,
     'bio': bio,
     'country': country,
-      'birthYear': birthYear,
-      'providerIds': providerIds,
-      'privacySettings': privacySettings.toJson(),
+    'birthYear': birthYear,
+    'providerIds': providerIds,
+    'privacySettings': privacySettings.toJson(),
   };
 
   factory AnimeWitcherProfile.fromJson(Map<String, dynamic> json) {
@@ -251,10 +250,7 @@ class AnimeWitcherProfile {
 }
 
 class AnimeWitcherAccountSnapshot {
-  const AnimeWitcherAccountSnapshot({
-    this.profile,
-    this.lastSyncAt,
-  });
+  const AnimeWitcherAccountSnapshot({this.profile, this.lastSyncAt});
 
   final AnimeWitcherProfile? profile;
   final DateTime? lastSyncAt;
@@ -286,6 +282,17 @@ class AnimeWitcherAccountException implements Exception {
 String? _optionalString(dynamic raw) {
   final value = raw?.toString().trim() ?? '';
   return value.isEmpty ? null : value;
+}
+
+bool _readBool(dynamic raw, bool fallback) {
+  if (raw is bool) return raw;
+  if (raw is num) return raw != 0;
+  if (raw is String) {
+    final normalized = raw.trim().toLowerCase();
+    if (normalized == 'true' || normalized == '1') return true;
+    if (normalized == 'false' || normalized == '0') return false;
+  }
+  return fallback;
 }
 
 List<String> _stringList(dynamic raw) {

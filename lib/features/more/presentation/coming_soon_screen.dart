@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
+import '../../../core/account/account_providers.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/providers/animewitcher_native_provider.dart';
@@ -72,7 +75,9 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
       if (!mounted) return;
       setState(() {
         for (final item in page.items) {
-          final key = item.url.trim().isEmpty ? '${item.id}|${item.title}' : item.url;
+          final key = item.url.trim().isEmpty
+              ? '${item.id}|${item.title}'
+              : item.url;
           if (_seen.add(key)) _items.add(item);
         }
         _offset = page.nextOffset;
@@ -110,6 +115,10 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(accountDataRevisionProvider, (previous, next) {
+      if (previous == next) return;
+      unawaited(_refresh());
+    });
     final isArabic = _isArabic(context);
     return Scaffold(
       appBar: PreferredSize(
@@ -124,9 +133,13 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
               child: Align(
-                alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                alignment: isArabic
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
                 child: Directionality(
-                  textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  textDirection: isArabic
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
                   child: Text(isArabic ? 'القادم قريبًا' : 'Coming soon'),
                 ),
               ),
@@ -158,7 +171,9 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
     }
     if (_items.isEmpty) {
       return Center(
-        child: Text(isArabic ? 'لا توجد أعمال قادمة حاليًا' : 'No upcoming titles'),
+        child: Text(
+          isArabic ? 'لا توجد أعمال قادمة حاليًا' : 'No upcoming titles',
+        ),
       );
     }
 

@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:collection/collection.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/utils/episode_label.dart';
+import '../../../core/account/account_providers.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 
@@ -168,6 +169,10 @@ class DetailsController extends _$DetailsController {
       }
     });
 
+    ref.listen(accountDataRevisionProvider, (_, __) {
+      unawaited(_reloadFilteredCatalogLists());
+    });
+
     ref.listen(watchHistoryProvider, (prev, next) {
       final details = state.details.asData?.value;
       if (details != null) {
@@ -272,9 +277,7 @@ class DetailsController extends _$DetailsController {
         .read(episodeWatchRepositoryProvider)
         .setManyWatched(mainUrl, selectedEpisodes, watched);
 
-    await ref
-        .read(continueWatchingProvider.notifier)
-        .remove(mainUrl);
+    await ref.read(continueWatchingProvider.notifier).remove(mainUrl);
 
     if (!ref.mounted) {
       return;
@@ -286,11 +289,7 @@ class DetailsController extends _$DetailsController {
     if (currentDetails != null) {
       final currentEpisodes =
           state.episodes.asData?.value ?? currentDetails.episodes;
-      _processEpisodes(
-        currentEpisodes,
-        currentDetails,
-        isInitial: false,
-      );
+      _processEpisodes(currentEpisodes, currentDetails, isInitial: false);
     }
   }
 
@@ -398,12 +397,7 @@ class DetailsController extends _$DetailsController {
           _loadTrailersInBackground(provider, item.url, item, generation),
         );
         unawaited(
-          _loadNextAiringInBackground(
-            provider,
-            item.url,
-            item,
-            generation,
-          ),
+          _loadNextAiringInBackground(provider, item.url, item, generation),
         );
       }
     } catch (error, stackTrace) {
@@ -553,9 +547,7 @@ class DetailsController extends _$DetailsController {
         details: AsyncData(rendered),
         basicDetailsResolved: true,
         item: rendered,
-        cast: independent
-            ? null
-            : AsyncData(rendered.cast ?? const <Actor>[]),
+        cast: independent ? null : AsyncData(rendered.cast ?? const <Actor>[]),
         trailers: independent
             ? null
             : AsyncData(rendered.trailers ?? const <Trailer>[]),
@@ -564,9 +556,7 @@ class DetailsController extends _$DetailsController {
             : AsyncData(rendered.related ?? const <MultimediaItem>[]),
         recommendations: independent
             ? null
-            : AsyncData(
-                rendered.recommendations ?? const <MultimediaItem>[],
-              ),
+            : AsyncData(rendered.recommendations ?? const <MultimediaItem>[]),
       );
 
       final inlineEpisodes = fetchedItem.episodes ?? const <Episode>[];
@@ -581,7 +571,6 @@ class DetailsController extends _$DetailsController {
           generation,
         );
       }
-
     } catch (error, stackTrace) {
       if (!ref.mounted || generation != _loadGeneration) return;
       state = state.copyWith(
@@ -638,19 +627,9 @@ class DetailsController extends _$DetailsController {
           }),
     );
     unawaited(
-      _loadEpisodeMetadataInBackground(
-        provider,
-        url,
-        merged,
-        generation,
-      ),
+      _loadEpisodeMetadataInBackground(provider, url, merged, generation),
     );
-    unawaited(
-      _enrichEpisodesWithAniZip(
-        merged,
-        generation,
-      ),
-    );
+    unawaited(_enrichEpisodesWithAniZip(merged, generation));
   }
 
   Future<void> _loadEpisodesInBackground(
@@ -663,13 +642,7 @@ class DetailsController extends _$DetailsController {
       final fetchedEpisodes = await provider.getEpisodes(url);
       if (!ref.mounted || generation != _loadGeneration) return;
       _episodesFetched = true;
-      _applyEpisodes(
-        provider,
-        url,
-        contextItem,
-        fetchedEpisodes,
-        generation,
-      );
+      _applyEpisodes(provider, url, contextItem, fetchedEpisodes, generation);
     } catch (error, stackTrace) {
       if (!ref.mounted || generation != _loadGeneration) return;
       state = state.copyWith(
@@ -735,6 +708,36 @@ class DetailsController extends _$DetailsController {
       currentItem,
       _loadGeneration,
     );
+  }
+
+  Future<void> _reloadFilteredCatalogLists() async {
+    final provider = _lastEpisodesProvider;
+    final url = _lastEpisodesUrl;
+    final currentItem = state.item;
+    if (provider == null ||
+        url == null ||
+        currentItem == null ||
+        !provider.supportsIndependentDetailSections) {
+      return;
+    }
+    final generation = _loadGeneration;
+    final tasks = <Future<void>>[];
+    if (_relatedLoadStarted || state.related.hasValue) {
+      tasks.add(
+        _loadRelatedInBackground(provider, url, currentItem, generation),
+      );
+    }
+    if (_recommendationsLoadStarted || state.recommendations.hasValue) {
+      tasks.add(
+        _loadRecommendationsInBackground(
+          provider,
+          url,
+          currentItem,
+          generation,
+        ),
+      );
+    }
+    if (tasks.isNotEmpty) await Future.wait(tasks);
   }
 
   Future<void> _loadCastInBackground(
@@ -915,12 +918,15 @@ class DetailsController extends _$DetailsController {
             .reconcileWithCloud(contextItem.url, enriched)
             .catchError((Object error) {
               if (kDebugMode) {
-                debugPrint('[DetailsController] AniZip watch sync deferred: $error');
+                debugPrint(
+                  '[DetailsController] AniZip watch sync deferred: $error',
+                );
               }
             }),
       );
     } catch (error) {
-      if (kDebugMode) debugPrint('[DetailsController] AniZip enrichment skipped: $error');
+      if (kDebugMode)
+        debugPrint('[DetailsController] AniZip enrichment skipped: $error');
     }
   }
 
@@ -953,15 +959,17 @@ class DetailsController extends _$DetailsController {
       }
 
       var changed = false;
-      final enriched = currentEpisodes.map((episode) {
-        final match = byUrl[episode.url];
-        if (match == null) return episode;
-        final merged = _mergeEpisodeMetadata(episode, match);
-        if (merged.posterUrl != episode.posterUrl) {
-          changed = true;
-        }
-        return merged;
-      }).toList(growable: false);
+      final enriched = currentEpisodes
+          .map((episode) {
+            final match = byUrl[episode.url];
+            if (match == null) return episode;
+            final merged = _mergeEpisodeMetadata(episode, match);
+            if (merged.posterUrl != episode.posterUrl) {
+              changed = true;
+            }
+            return merged;
+          })
+          .toList(growable: false);
       if (!changed || !ref.mounted) return;
 
       final canPreserveSelectedSeason = enriched.any(
@@ -1008,8 +1016,7 @@ class DetailsController extends _$DetailsController {
     if (provider == null || url == null || currentItem == null) return;
 
     final keepExistingEpisodes =
-        forceReload &&
-        (state.episodes.asData?.value.isNotEmpty ?? false);
+        forceReload && (state.episodes.asData?.value.isNotEmpty ?? false);
     if (!keepExistingEpisodes) {
       state = state.copyWith(episodes: const AsyncLoading());
     }
@@ -1066,11 +1073,13 @@ class DetailsController extends _$DetailsController {
     // Normalize at the controller boundary so display, playback, downloads,
     // watch history, and selection all use the same Season 1 identity.
     var normalizedEpisodesChanged = false;
-    final normalizedEpisodes = episodes.map((episode) {
-      if (episode.season == 1) return episode;
-      normalizedEpisodesChanged = true;
-      return episode.copyWith(season: 1);
-    }).toList(growable: false);
+    final normalizedEpisodes = episodes
+        .map((episode) {
+          if (episode.season == 1) return episode;
+          normalizedEpisodesChanged = true;
+          return episode.copyWith(season: 1);
+        })
+        .toList(growable: false);
 
     final Map<int, List<Episode>> seasonMap = {1: normalizedEpisodes};
     Episode? targetEpisode;
@@ -1106,10 +1115,12 @@ class DetailsController extends _$DetailsController {
         for (final episode in normalizedEpisodes)
           (serverName: episode.serverName, name: episode.name),
       ]);
-      final hasSub =
-          normalizedEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
-      final hasDub =
-          normalizedEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
+      final hasSub = normalizedEpisodes.any(
+        (e) => e.dubStatus == DubStatus.subbed,
+      );
+      final hasDub = normalizedEpisodes.any(
+        (e) => e.dubStatus == DubStatus.dubbed,
+      );
       // Keep مترجم/مدبلج movie-style catalogs unfiltered so both rows show.
       if (hasSub && hasDub && !isStandaloneCatalog) {
         selectedDubStatus = DubStatus.subbed;
@@ -1137,10 +1148,9 @@ class DetailsController extends _$DetailsController {
       return true;
     }
     final episode = specificEpisode ?? state.targetEpisode;
-    final file = await ref.read(downloadServiceProvider).getDownloadedFile(
-      details,
-      episode: episode,
-    );
+    final file = await ref
+        .read(downloadServiceProvider)
+        .getDownloadedFile(details, episode: episode);
     return file != null;
   }
 

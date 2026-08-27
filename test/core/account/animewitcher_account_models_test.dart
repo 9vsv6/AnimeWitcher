@@ -57,27 +57,30 @@ void main() {
     expect(restored.hasPasswordProvider, isTrue);
   });
 
-  test('privacy settings preserve documented values through profile storage', () {
-    const privacy = AnimeWitcherPrivacySettings(
-      showFavoritesToUsers: false,
-      showCommentsToUsers: false,
-      showReviewsToUsers: false,
-      hideEcchiAnime: true,
-    );
-    const profile = AnimeWitcherProfile(
-      documentId: 'profile-1',
-      uid: 'uid-1',
-      signInMethod: AnimeWitcherSignInMethod.email,
-      privacySettings: privacy,
-    );
+  test(
+    'privacy settings preserve documented values through profile storage',
+    () {
+      const privacy = AnimeWitcherPrivacySettings(
+        showFavoritesToUsers: false,
+        showCommentsToUsers: false,
+        showReviewsToUsers: false,
+        hideEcchiAnime: true,
+      );
+      const profile = AnimeWitcherProfile(
+        documentId: 'profile-1',
+        uid: 'uid-1',
+        signInMethod: AnimeWitcherSignInMethod.email,
+        privacySettings: privacy,
+      );
 
-    final restored = AnimeWitcherProfile.fromJson(profile.toJson());
+      final restored = AnimeWitcherProfile.fromJson(profile.toJson());
 
-    expect(restored.privacySettings.showFavoritesToUsers, isFalse);
-    expect(restored.privacySettings.showCommentsToUsers, isFalse);
-    expect(restored.privacySettings.showReviewsToUsers, isFalse);
-    expect(restored.privacySettings.hideEcchiAnime, isTrue);
-  });
+      expect(restored.privacySettings.showFavoritesToUsers, isFalse);
+      expect(restored.privacySettings.showCommentsToUsers, isFalse);
+      expect(restored.privacySettings.showReviewsToUsers, isFalse);
+      expect(restored.privacySettings.hideEcchiAnime, isTrue);
+    },
+  );
 
   test('legacy profiles keep AnimeWitcher privacy defaults', () {
     final profile = AnimeWitcherProfile.fromJson(<String, dynamic>{
@@ -90,5 +93,19 @@ void main() {
     expect(profile.privacySettings.showCommentsToUsers, isTrue);
     expect(profile.privacySettings.showReviewsToUsers, isTrue);
     expect(profile.privacySettings.hideEcchiAnime, isFalse);
+  });
+
+  test('privacy settings accept Firestore-like boolean encodings', () {
+    final settings = AnimeWitcherPrivacySettings.fromJson(<String, dynamic>{
+      'show_fav_to_users': 0,
+      'show_comments_to_users': 'false',
+      'show_reviews_to_users': '1',
+      'hide_ecchi_anime': 'true',
+    });
+
+    expect(settings.showFavoritesToUsers, isFalse);
+    expect(settings.showCommentsToUsers, isFalse);
+    expect(settings.showReviewsToUsers, isTrue);
+    expect(settings.hideEcchiAnime, isTrue);
   });
 }

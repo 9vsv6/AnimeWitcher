@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/account/account_providers.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/providers/animewitcher_native_provider.dart';
@@ -204,6 +205,21 @@ class _BroadcastScheduleScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(accountDataRevisionProvider, (previous, next) {
+      if (previous == next) return;
+      for (final token in List<CancelToken>.from(_requestTokens.values)) {
+        token.cancel('Account content preference changed');
+      }
+      _requestTokens.clear();
+      setState(() {
+        for (final day in animeWitcherBroadcastDays) {
+          _dayStates[day] = const _BroadcastScheduleDayState();
+        }
+      });
+      unawaited(
+        _loadDay(animeWitcherBroadcastDays[_selectedDay], refresh: true),
+      );
+    });
     final isArabic = _isArabic(context);
     return Scaffold(
       appBar: PreferredSize(
