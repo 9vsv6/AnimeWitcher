@@ -15,6 +15,7 @@ import '../domain/entity/multimedia_item.dart';
 import '../router/app_router.dart';
 import '../storage/storage_service.dart';
 import '../network/dio_client_provider.dart';
+import '../utils/download_resume.dart';
 import '../utils/episode_label.dart';
 import 'download_continued_processing_service.dart';
 
@@ -523,15 +524,11 @@ class DownloadService {
       totalBytes: record?.expectedFileSize ?? -1,
     );
 
-    // Prefer true resume when the downloader still has resume data.
-    final canResume = await FileDownloader().taskCanResume(downloadTask);
-    if (canResume && await FileDownloader().resume(downloadTask)) {
-      return;
-    }
-
-    // Otherwise re-enqueue so the user can continue from the downloads list
-    // (same behaviour as restarting a paused item after a failure).
-    await FileDownloader().enqueue(downloadTask);
+    await resumeOrRestartDownload(
+      canResume: () => FileDownloader().taskCanResume(downloadTask!),
+      resume: () => FileDownloader().resume(downloadTask!),
+      restart: () => FileDownloader().enqueue(downloadTask!),
+    );
   }
 
   Future<DownloadMetadata?> getMetadata(
@@ -680,13 +677,26 @@ class DownloadService {
         totalBytes: existingRecord.expectedFileSize,
       );
 
-      // If it was paused, resume it!
+      // If it was paused, resume it. Some hosts/tasks have no resumable
+      // transfer data after an interruption. In that case enqueue the existing
+      // task again rather than reporting a false success to the details page.
       if (existingRecord.status == TaskStatus.paused) {
         if (kDebugMode) {
           debugPrint('[DownloadService] Auto-resuming paused task.');
         }
-        if (existingRecord.task is DownloadTask) {
-          await FileDownloader().resume(existingRecord.task as DownloadTask);
+        if (existingRecord.task is! DownloadTask) {
+          await _continuedProcessing.stop(taskId: existingRecord.task.taskId);
+          return false;
+        }
+        final task = existingRecord.task as DownloadTask;
+        final resumedOrRestarted = await resumeOrRestartDownload(
+          canResume: () => FileDownloader().taskCanResume(task),
+          resume: () => FileDownloader().resume(task),
+          restart: () => FileDownloader().enqueue(task),
+        );
+        if (!resumedOrRestarted) {
+          await _continuedProcessing.stop(taskId: task.taskId);
+          return false;
         }
       }
 

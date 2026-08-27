@@ -334,8 +334,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     unawaited(ScreenBrightness().resetApplicationScreenBrightness());
     _spaceHoldTimer?.cancel();
     if (_spaceHeldForSpeed) {
-      final previousSpeed = _speedBeforeSpaceHold ?? 1.0;
-      unawaited(_playerController.setPlaybackSpeed(previousSpeed));
+      // The long-press boost is intentionally non-persistent. Both engines
+      // were disposed above, so a late rate change can only fail while the
+      // screen is leaving and must not be scheduled.
+      _spaceHeldForSpeed = false;
+      _speedBeforeSpaceHold = null;
     }
     if (!Platform.isAndroid && !Platform.isIOS) {
       try {
