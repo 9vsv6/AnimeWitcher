@@ -798,6 +798,7 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
       padding: const EdgeInsets.only(bottom: LayoutConstants.spacingXs),
       child: Text(
         title.toUpperCase(),
+        textDirection: TextDirection.ltr,
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
         maxLines: compactLandscape ? 2 : (isDesktop ? 2 : 3),
         overflow: TextOverflow.ellipsis,

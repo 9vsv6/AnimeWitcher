@@ -787,12 +787,16 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                                 memCacheWidth: decodeWidth,
                                 placeholder: (_, _) => Text(
                                   item.title,
+                                  textDirection: TextDirection.ltr,
+                                  textAlign: TextAlign.start,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: titleStyle,
                                 ),
                                 errorWidget: (_, _, _) => Text(
                                   item.title,
+                                  textDirection: TextDirection.ltr,
+                                  textAlign: TextAlign.start,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: titleStyle,
@@ -801,6 +805,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                         )
                       : Text(
                           item.title,
+                          textDirection: TextDirection.ltr,
+                          textAlign: TextAlign.start,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: titleStyle,

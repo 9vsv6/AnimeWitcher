@@ -554,6 +554,7 @@ class CastCarousel extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       actor.name,
+                      textDirection: TextDirection.ltr,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
@@ -939,6 +940,7 @@ class RecommendationsCarousel extends StatelessWidget {
                           bottom: 8,
                           child: Text(
                             item.title,
+                            textDirection: TextDirection.ltr,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.start,

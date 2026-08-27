@@ -215,7 +215,12 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  item.title,
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.start,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 8),
                 ListTile(
                   leading: const Icon(Icons.info_outline),
@@ -354,6 +359,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                         if (hasEpisodes || isLivestream) ...[
                           Text(
                             item.title,
+                            textDirection: TextDirection.ltr,
+                            textAlign: TextAlign.start,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -418,6 +425,8 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
                         ] else
                           Text(
                             item.title,
+                            textDirection: TextDirection.ltr,
+                            textAlign: TextAlign.start,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
