@@ -25,7 +25,7 @@ Map<String, dynamic> _hit(
     'name': 'Anime $id',
     'tags': tags,
     'isAdult': isAdult,
-    if (malId != null) 'mal_id': malId,
+    'mal_id': ?malId,
     'poster': <String, dynamic>{'large': 'https://cdn.example.test/$id.jpg'},
   };
 }

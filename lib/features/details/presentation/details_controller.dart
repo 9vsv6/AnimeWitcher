@@ -169,7 +169,8 @@ class DetailsController extends _$DetailsController {
       }
     });
 
-    ref.listen(accountDataRevisionProvider, (_, __) {
+    ref.listen<int>(accountDataRevisionProvider, (previous, next) {
+      if (previous == next) return;
       unawaited(_reloadFilteredCatalogLists());
     });
 
