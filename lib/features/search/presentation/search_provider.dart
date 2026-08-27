@@ -569,7 +569,10 @@ class PagedSearchNotifier extends Notifier<SearchAggregateState> {
     }
   }
 
-  Future<void> retry() => _reload();
+  Future<void> retry() {
+    _provider()?.prepareForNetworkRetry();
+    return _reload();
+  }
 }
 
 final searchPagedResultsProvider =

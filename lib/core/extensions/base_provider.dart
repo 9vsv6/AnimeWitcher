@@ -271,6 +271,10 @@ abstract class AnimeWitcherProvider {
   /// the server. Used by pull-to-refresh on the anime details page.
   void invalidateDetailCaches(String url) {}
 
+  /// Drops stale HTTP sockets and failed catalog TTL so Retry after reconnect
+  /// issues a real request instead of reusing the offline failure.
+  void prepareForNetworkRetry() {}
+
   /// Whether this provider exposes optional detail sections through separate
   /// requests. Controllers can then render every section as soon as it arrives.
   bool get supportsIndependentDetailSections => false;

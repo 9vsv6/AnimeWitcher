@@ -7,6 +7,7 @@ import 'package:html_unescape/html_unescape.dart';
 import '../../domain/entity/multimedia_item.dart';
 import '../../network/bounded_batch_scheduler.dart';
 import '../../network/next_airing_timeout.dart';
+import '../../network/stale_connection_retry.dart';
 import '../../storage/settings_repository.dart';
 import '../../utils/episode_label.dart';
 import '../../utils/safe_uri.dart';
@@ -527,6 +528,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       if (current.isNotEmpty) _seasonCurrent = current;
       if (next.isNotEmpty) _seasonNext = next;
 
+      if (fields.isEmpty) return;
       _remoteConstantsExpiresAt = now.add(_remoteConstantsTtl);
     }();
     _remoteConstantsRequest = request;
@@ -2254,6 +2256,14 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     _episodeRecordCache.remove(key);
     _episodeRecordExpiresAt.remove(key);
     _episodeRecordRequests.remove(key);
+  }
+
+  @override
+  void prepareForNetworkRetry() {
+    _remoteConstantsExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _remoteConstantsRequest = null;
+    _officialHomeSectionsRequest = null;
+    resetStaleHttpClient(_dio);
   }
 
   double? _scoreFromHit(Map<String, dynamic> source) {
