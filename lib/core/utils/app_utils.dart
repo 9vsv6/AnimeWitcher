@@ -48,6 +48,18 @@ class AppUtils {
     return false;
   }
 
+  /// Prefer an already-local request URL so downloaded playback can open
+  /// without a second disk lookup (or any network source discovery).
+  static String resolvePlayableUrl({
+    required String requestedUrl,
+    String? downloadedPath,
+  }) {
+    if (isLocalFile(requestedUrl)) return normalizeUrl(requestedUrl);
+    final downloaded = downloadedPath?.trim() ?? '';
+    if (downloaded.isNotEmpty) return normalizeUrl(downloaded);
+    return normalizeUrl(requestedUrl);
+  }
+
   static String normalizeUrl(String url) {
     if (url.isEmpty) return url;
     if (Platform.isAndroid) return url;

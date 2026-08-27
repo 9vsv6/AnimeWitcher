@@ -773,7 +773,7 @@ class PlayerController extends Notifier<PlayerState> {
     );
 
     _isInitialized = true;
-    unawaited(_fetchAndLogSkipSegments());
+    _maybeFetchSkipSegments();
 
     if (selectedSource != null && !selectedSource.requiresResolution) {
       final sourceSessionId = _beginSourceSession(resetAttempts: true);
@@ -803,6 +803,11 @@ class PlayerController extends Notifier<PlayerState> {
     if (defaultSpeed != 1.0 && !state.isLive) {
       await setPlaybackSpeed(defaultSpeed);
     }
+  }
+
+  void _maybeFetchSkipSegments() {
+    if (AppUtils.isLocalFile(_videoUrl)) return;
+    unawaited(_fetchAndLogSkipSegments());
   }
 
   Future<void> _fetchAndLogSkipSegments() async {
@@ -2538,7 +2543,7 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<bool> _isStreamCandidateHealthy(StreamResult stream) async {
-    if (stream.url.startsWith('/')) {
+    if (AppUtils.isLocalFile(stream.url)) {
       return true;
     }
 
@@ -2990,7 +2995,7 @@ class PlayerController extends Notifier<PlayerState> {
     await _recordEpisodeOpened(nextEpisode);
     _userAddedExternalSubtitles.clear();
     _resetPerEpisodeState();
-    unawaited(_fetchAndLogSkipSegments());
+    _maybeFetchSkipSegments();
 
     state = state.copyWith(
       playerTitle: _titleWithEpisode(nextEpisode),
@@ -3061,7 +3066,7 @@ class PlayerController extends Notifier<PlayerState> {
     _suppressNextEpisodeDetection = true;
     _userAddedExternalSubtitles.clear();
     _resetPerEpisodeState();
-    unawaited(_fetchAndLogSkipSegments());
+    _maybeFetchSkipSegments();
 
     state = state.copyWith(
       playerTitle: _titleWithEpisode(episode),
@@ -4140,50 +4145,48 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     final local = localPosition();
-    if (PlaybackResume.shouldHoldUntilSeeked(local)) {
-      if (!_hasRefreshedCloudProgress) {
-        _hasRefreshedCloudProgress = true;
-        unawaited(_syncContinueWatchingInBackground());
-      }
+    final isLocalPlayback = AppUtils.isLocalFile(_videoUrl);
+    if (isLocalPlayback) {
       return local;
     }
-
-    if (!_hasRefreshedCloudProgress) {
+    if (!_hasRefreshedCloudProgress &&
+        PlaybackResume.shouldHoldUntilSeeked(local)) {
       _hasRefreshedCloudProgress = true;
-      try {
-        await ref
-            .read(animeWitcherAccountServiceProvider)
-            .syncContinueWatchingItem(_item.url);
-      } catch (error) {
-        if (kDebugMode) {
-          debugPrint('[Player] Cloud progress sync deferred: $error');
-        }
-      }
-      final afterSync = localPosition();
-      if (PlaybackResume.shouldHoldUntilSeeked(afterSync)) {
-        return afterSync;
-      }
+      unawaited(_syncContinueWatchingInBackground());
     }
-
-    if (isSeries) {
-      final ep = _resolveCurrentEpisode();
-      if (ep != null) {
+    return PlaybackResume.resolveStartupPosition(
+      localPositionMs: local,
+      isLocalPlayback: false,
+      cloudPositionMs: () async {
+        _hasRefreshedCloudProgress = true;
         try {
-          return await ref
+          await ref
               .read(animeWitcherAccountServiceProvider)
-              .remoteEpisodePosition(
-                mainUrl: _item.url,
-                episodeUrl: _currentProgressUrl,
-                refresh: true,
-              );
+              .syncContinueWatchingItem(_item.url);
         } catch (error) {
           if (kDebugMode) {
-            debugPrint('[Player] Cloud resume lookup deferred: $error');
+            debugPrint('[Player] Cloud progress sync deferred: $error');
           }
         }
-      }
-    }
-    return 0;
+        final afterSync = localPosition();
+        if (PlaybackResume.shouldHoldUntilSeeked(afterSync)) {
+          return afterSync;
+        }
+        if (isSeries) {
+          final ep = _resolveCurrentEpisode();
+          if (ep != null) {
+            return ref
+                .read(animeWitcherAccountServiceProvider)
+                .remoteEpisodePosition(
+                  mainUrl: _item.url,
+                  episodeUrl: _currentProgressUrl,
+                  refresh: true,
+                );
+          }
+        }
+        return afterSync;
+      },
+    );
   }
 
   Future<void> _syncContinueWatchingInBackground() async {

@@ -214,14 +214,20 @@ class PlaybackLauncher {
     final resolvedEpisodeUrl = resolvedEpisode?.url.trim() ?? '';
     final canonicalProgressUrl =
         resolvedEpisodeUrl.isNotEmpty ? resolvedEpisodeUrl : url;
-    final downloadService = _ref.read(downloadServiceProvider);
-    final localFile = await downloadService.getDownloadedFile(
-      item,
-      episode: resolvedEpisode,
-    );
-    if (!context.mounted) return;
+    String? downloadedPath;
+    if (!AppUtils.isLocalFile(url)) {
+      downloadedPath = (await _ref.read(downloadServiceProvider).getDownloadedFile(
+        item,
+        episode: resolvedEpisode,
+      ))
+          ?.path;
+      if (!context.mounted) return;
+    }
 
-    final localOrEpisodeUrl = AppUtils.normalizeUrl(localFile?.path ?? url);
+    final localOrEpisodeUrl = AppUtils.resolvePlayableUrl(
+      requestedUrl: url,
+      downloadedPath: downloadedPath,
+    );
 
     // Downloaded files are already playable and do not need a source list.
     if (AppUtils.isLocalFile(localOrEpisodeUrl)) {
