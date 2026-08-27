@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/account/account_providers.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/providers/animewitcher_native_provider.dart';
@@ -88,6 +91,10 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(accountDataRevisionProvider, (previous, next) {
+      if (previous == next) return;
+      unawaited(_refreshSeasons());
+    });
     final isArabic = _isArabic(context);
     return Scaffold(
       appBar: PreferredSize(

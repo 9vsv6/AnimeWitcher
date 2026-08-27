@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:collection/collection.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/utils/episode_label.dart';
+import '../../../core/account/account_providers.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
 
@@ -166,6 +167,11 @@ class DetailsController extends _$DetailsController {
           }
         }
       }
+    });
+
+    ref.listen<int>(accountDataRevisionProvider, (previous, next) {
+      if (previous == next) return;
+      unawaited(_reloadFilteredCatalogLists());
     });
 
     ref.listen(watchHistoryProvider, (prev, next) {
@@ -735,6 +741,36 @@ class DetailsController extends _$DetailsController {
       currentItem,
       _loadGeneration,
     );
+  }
+
+  Future<void> _reloadFilteredCatalogLists() async {
+    final provider = _lastEpisodesProvider;
+    final url = _lastEpisodesUrl;
+    final currentItem = state.item;
+    if (provider == null ||
+        url == null ||
+        currentItem == null ||
+        !provider.supportsIndependentDetailSections) {
+      return;
+    }
+    final generation = _loadGeneration;
+    final tasks = <Future<void>>[];
+    if (_relatedLoadStarted || state.related.hasValue) {
+      tasks.add(
+        _loadRelatedInBackground(provider, url, currentItem, generation),
+      );
+    }
+    if (_recommendationsLoadStarted || state.recommendations.hasValue) {
+      tasks.add(
+        _loadRecommendationsInBackground(
+          provider,
+          url,
+          currentItem,
+          generation,
+        ),
+      );
+    }
+    if (tasks.isNotEmpty) await Future.wait(tasks);
   }
 
   Future<void> _loadCastInBackground(

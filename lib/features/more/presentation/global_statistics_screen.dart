@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
 
+import '../../../core/account/account_providers.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
 import '../../../core/extensions/extension_manager.dart';
@@ -80,6 +81,7 @@ class _GlobalStatisticsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final accountRevision = ref.watch(accountDataRevisionProvider);
     final isArabic = _isArabic(context);
     return Scaffold(
       appBar: PreferredSize(
@@ -133,8 +135,8 @@ class _GlobalStatisticsScreenState
                     builder: (context) {
                       final ranking = AnimeWitcherGlobalRanking.values[index];
                       return _RankingPage(
-                        key: PageStorageKey<String>(
-                          'global-ranking-page-${ranking.queryType}',
+                        key: ValueKey<String>(
+                          'global-ranking-page-${ranking.queryType}-$accountRevision',
                         ),
                         ranking: ranking,
                         isArabic: isArabic,
