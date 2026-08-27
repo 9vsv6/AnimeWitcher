@@ -1660,25 +1660,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     }
 
     if (episodesState.hasError) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            isArabic ? 'تعذر تحميل الحلقات' : 'Could not load episodes',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-          const SizedBox(height: 10),
-          FilledButton.icon(
-            onPressed: () {
-              ref
-                  .read(detailsControllerProvider(widget.item.url).notifier)
-                  .retryEpisodes();
-            },
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text(isArabic ? 'إعادة المحاولة' : 'Retry'),
-          ),
-        ],
+      return _buildDetailsLoadFailure(
+        context,
+        onRetry: () => ref
+            .read(detailsControllerProvider(widget.item.url).notifier)
+            .retryEpisodes(),
       );
     }
 
@@ -1691,6 +1677,79 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     }
 
     return const SizedBox.shrink();
+  }
+
+  /// Clear recovery state for failed detail or episode requests. The parent
+  /// tabs already use always-scrollable refresh containers, so this preserves
+  /// pull-to-refresh while giving the user explicit actions as well.
+  Widget _buildDetailsLoadFailure(
+    BuildContext context, {
+    required Future<void> Function() onRetry,
+  }) {
+    final theme = Theme.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.wifi_off_rounded,
+            size: 68,
+            color: theme.colorScheme.error,
+          ),
+          const SizedBox(height: 18),
+          Text(
+            appText(
+              context,
+              english: 'Unable to load this anime',
+              arabic: 'تعذر تحميل بيانات الأنمي',
+            ),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            appText(
+              context,
+              english:
+                  'Check your connection, then retry or continue with downloaded episodes.',
+              arabic:
+                  'تحقق من اتصالك ثم أعد المحاولة، أو تابع الحلقات التي نزّلتها مسبقًا.',
+            ),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: () {
+                  onRetry();
+                },
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(
+                  appText(context, english: 'Retry', arabic: 'إعادة المحاولة'),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => const DownloadsRoute().go(context),
+                icon: const Icon(Icons.download_for_offline_rounded),
+                label: Text(
+                  appText(context, english: 'Downloads', arabic: 'التنزيلات'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   List<String> _normalizedGenres(MultimediaItem item) {
@@ -1738,7 +1797,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   Widget _buildSynopsisAndGenres(
     BuildContext context,
     MultimediaItem item,
-    AsyncValue<MultimediaItem?> detailsState,
     AppLocalizations l10n,
   ) {
     final theme = Theme.of(context);
@@ -1768,13 +1826,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   height: 1.55,
                 ),
               ),
-              if (detailsState.hasError) ...[
-                const SizedBox(height: 12),
-                Text(
-                  l10n.errorPrefix(detailsState.error.toString()),
-                  style: TextStyle(color: colors.error),
-                ),
-              ],
               if (genres.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Wrap(
@@ -1827,8 +1878,21 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AppLocalizations l10n,
   ) {
     final tabContent = _selectedDetailsTab == 0
-        ? <Widget>[
-            _buildSynopsisAndGenres(context, item, detailsState, l10n),
+        ? detailsState.hasError
+            ? <Widget>[
+                SizedBox(
+                  height: 360,
+                  width: double.infinity,
+                  child: Center(
+                    child: _buildDetailsLoadFailure(
+                      context,
+                      onRetry: _refreshDetails,
+                    ),
+                  ),
+                ),
+              ]
+            : <Widget>[
+            _buildSynopsisAndGenres(context, item, l10n),
             const SizedBox(height: 28),
             AnimeInformationSection(item: item),
             ..._buildIndependentDetailSections(
@@ -1889,6 +1953,23 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AppLocalizations l10n,
     double headerHeight,
   ) {
+    if (detailsState.hasError) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Center(
+              child: _buildDetailsLoadFailure(
+                context,
+                onRetry: _refreshDetails,
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
+
     return [
       SliverToBoxAdapter(
         child: SizedBox(
@@ -1909,7 +1990,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 NextAiringWidget(nextAiring: item.nextAiring!),
                 const SizedBox(height: 8),
               ],
-              _buildSynopsisAndGenres(context, item, detailsState, l10n),
+              _buildSynopsisAndGenres(context, item, l10n),
               const SizedBox(height: 28),
               AnimeInformationSection(item: item),
               ..._buildIndependentDetailSections(
