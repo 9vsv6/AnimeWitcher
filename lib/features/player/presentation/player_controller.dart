@@ -4145,10 +4145,6 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     final local = localPosition();
-    final isLocalPlayback = AppUtils.isLocalFile(_videoUrl);
-    if (isLocalPlayback) {
-      return local;
-    }
     if (!_hasRefreshedCloudProgress &&
         PlaybackResume.shouldHoldUntilSeeked(local)) {
       _hasRefreshedCloudProgress = true;
@@ -4156,7 +4152,6 @@ class PlayerController extends Notifier<PlayerState> {
     }
     return PlaybackResume.resolveStartupPosition(
       localPositionMs: local,
-      isLocalPlayback: false,
       cloudPositionMs: () async {
         _hasRefreshedCloudProgress = true;
         try {

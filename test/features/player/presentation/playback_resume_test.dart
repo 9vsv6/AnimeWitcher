@@ -74,52 +74,24 @@ void main() {
   });
 
   group('PlaybackResume.shouldAwaitCloudResume', () {
-    test('never waits on the network for a local downloaded file', () {
-      expect(
-        PlaybackResume.shouldAwaitCloudResume(
-          isLocalPlayback: true,
-          localPositionMs: 0,
-        ),
-        isFalse,
-      );
-      expect(
-        PlaybackResume.shouldAwaitCloudResume(
-          isLocalPlayback: true,
-          localPositionMs: 180000,
-        ),
-        isFalse,
-      );
-    });
-
     test('skips the cloud when a local bookmark is already usable', () {
-      expect(
-        PlaybackResume.shouldAwaitCloudResume(
-          isLocalPlayback: false,
-          localPositionMs: 15000,
-        ),
-        isFalse,
-      );
+      expect(PlaybackResume.shouldAwaitCloudResume(15000), isFalse);
+      expect(PlaybackResume.shouldAwaitCloudResume(180000), isFalse);
     });
 
-    test('asks the cloud only when streaming with no local bookmark', () {
-      expect(
-        PlaybackResume.shouldAwaitCloudResume(
-          isLocalPlayback: false,
-          localPositionMs: 0,
-        ),
-        isTrue,
-      );
+    test('asks the cloud for downloaded and streaming starts with no bookmark',
+        () {
+      expect(PlaybackResume.shouldAwaitCloudResume(0), isTrue);
+      expect(PlaybackResume.shouldAwaitCloudResume(500), isTrue);
     });
   });
 
   group('PlaybackResume.resolveStartupPosition', () {
-    test('opens a downloaded file immediately even if cloud resume hangs',
-        () async {
+    test('opens immediately when a local bookmark already exists', () async {
       final never = Completer<int>();
       final stopwatch = Stopwatch()..start();
       final position = await PlaybackResume.resolveStartupPosition(
         localPositionMs: 12000,
-        isLocalPlayback: true,
         cloudPositionMs: () => never.future,
         cloudTimeout: const Duration(seconds: 5),
       );
@@ -129,30 +101,25 @@ void main() {
       expect(stopwatch.elapsedMilliseconds, lessThan(200));
     });
 
-    test('starts a downloaded file from zero without waiting for Firestore',
+    test('uses a fast cloud bookmark for downloaded and streaming starts',
         () async {
-      final never = Completer<int>();
-      final stopwatch = Stopwatch()..start();
-      final position = await PlaybackResume.resolveStartupPosition(
+      final downloaded = await PlaybackResume.resolveStartupPosition(
         localPositionMs: 0,
-        isLocalPlayback: true,
-        cloudPositionMs: () => never.future,
-        cloudTimeout: const Duration(seconds: 5),
-      );
-      stopwatch.stop();
-
-      expect(position, 0);
-      expect(stopwatch.elapsedMilliseconds, lessThan(200));
-    });
-
-    test('uses a fast cloud bookmark when streaming has no local progress',
-        () async {
-      final position = await PlaybackResume.resolveStartupPosition(
-        localPositionMs: 0,
-        isLocalPlayback: false,
         cloudPositionMs: () async => 90000,
       );
-      expect(position, 90000);
+      final streamed = await PlaybackResume.resolveStartupPosition(
+        localPositionMs: 0,
+        cloudPositionMs: () async => 45000,
+      );
+      expect(downloaded, 90000);
+      expect(streamed, 45000);
+    });
+
+    test('caps downloaded and streaming cloud resume at two seconds', () {
+      expect(
+        PlaybackResume.cloudResumeTimeout,
+        const Duration(seconds: 2),
+      );
     });
 
     test('fails open to local progress when cloud resume times out', () async {
@@ -160,7 +127,6 @@ void main() {
       final stopwatch = Stopwatch()..start();
       final position = await PlaybackResume.resolveStartupPosition(
         localPositionMs: 0,
-        isLocalPlayback: false,
         cloudPositionMs: () => never.future,
         cloudTimeout: const Duration(milliseconds: 40),
       );
@@ -168,6 +134,7 @@ void main() {
 
       expect(position, 0);
       expect(stopwatch.elapsedMilliseconds, lessThan(1000));
+      expect(stopwatch.elapsedMilliseconds, greaterThanOrEqualTo(40));
     });
   });
 }

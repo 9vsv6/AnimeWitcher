@@ -19,37 +19,30 @@ class PlaybackResume {
   /// How long to wait for the engine to report the seeked position.
   static const Duration seekSettleTimeout = Duration(seconds: 8);
 
-  /// Cloud resume must not block opening a file that is already on disk.
-  /// Offline, Firestore/Auth can sit until connect timeout or longer, so a
-  /// downloaded episode would never start.
+  /// How long downloaded and streaming playback may wait for a cloud bookmark.
+  /// Offline, Firestore/Auth can sit until connect timeout or longer; two
+  /// seconds is enough when the server is reachable and fails fast when not.
   static const Duration cloudResumeTimeout = Duration(seconds: 2);
 
   static bool shouldHoldUntilSeeked(int savedPositionMs) =>
       savedPositionMs >= minPositionMs;
 
-  /// Downloaded playback and a usable local bookmark must start immediately.
-  static bool shouldAwaitCloudResume({
-    required bool isLocalPlayback,
-    required int localPositionMs,
-  }) {
-    if (isLocalPlayback) return false;
-    return !shouldHoldUntilSeeked(localPositionMs);
-  }
+  /// A usable local bookmark can start immediately. Otherwise downloaded and
+  /// streaming playback both wait up to [cloudResumeTimeout] for the cloud.
+  static bool shouldAwaitCloudResume(int localPositionMs) =>
+      !shouldHoldUntilSeeked(localPositionMs);
 
   /// Returns the local bookmark, or a cloud bookmark when it arrives quickly.
   ///
-  /// A hanging [cloudPositionMs] fails open to [localPositionMs] so startup
-  /// never waits on Auth/Firestore timeouts.
+  /// Downloaded files and remote streams share the same 2s ceiling. A hanging
+  /// [cloudPositionMs] fails open to [localPositionMs] so startup never waits
+  /// on Auth/Firestore timeouts.
   static Future<int> resolveStartupPosition({
     required int localPositionMs,
-    required bool isLocalPlayback,
     required Future<int> Function() cloudPositionMs,
     Duration cloudTimeout = cloudResumeTimeout,
   }) async {
-    if (!shouldAwaitCloudResume(
-      isLocalPlayback: isLocalPlayback,
-      localPositionMs: localPositionMs,
-    )) {
+    if (!shouldAwaitCloudResume(localPositionMs)) {
       return localPositionMs;
     }
     try {
