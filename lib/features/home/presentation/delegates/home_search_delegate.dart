@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
 import '../../../../core/extensions/extension_manager.dart';
-import '../../../../core/providers/device_info_provider.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
@@ -632,35 +631,12 @@ class _HomeSearchResultsState extends ConsumerState<_HomeSearchResults> {
     }
 
     if (_items.isEmpty && !_hasMore) {
-      final profile = ref.watch(deviceProfileProvider).asData?.value;
-      final isTv = profile?.isTv == true || context.isTv;
-      final isWidescreen = isTv || context.isTabletOrLarger;
-      final imageWidth = isWidescreen ? 320.0 : 200.0;
-      final nativeFont = Theme.of(context).textTheme.bodyLarge?.fontFamily;
-
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
-              style: TextStyle(
-                fontFamily: nativeFont,
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Image.asset(
-              'assets/images/no_results.png',
-              fit: BoxFit.contain,
-              width: imageWidth,
-              errorBuilder: (context, error, stackTrace) =>
-                  const SizedBox.shrink(),
-            ),
-          ],
+        child: Text(
+          appText(context, english: 'No Results Found', arabic: 'لم يتم العثور على نتائج'),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       );
     }
