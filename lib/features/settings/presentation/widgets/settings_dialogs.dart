@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
+import '../../../../core/account/account_providers.dart';
 import '../../../../core/services/external_player_service.dart';
 import '../../../../core/navigation/taskbar_destination.dart';
 import '../../../../core/storage/settings_repository.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/utils/app_utils.dart';
+import '../../../../core/utils/factory_reset.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../player_settings_provider.dart';
 import '../general_settings_provider.dart';
@@ -461,8 +463,17 @@ void showFactoryResetDialog(BuildContext context, WidgetRef ref) {
         TextButton(
           onPressed: () async {
             Navigator.pop<void>(dialogContext);
-            // Deep Clean (Extensions, Prefs, Hive)
-            await ref.read(settingsRepositoryProvider).deleteAllData();
+            await runFactoryReset(
+              // Clear OAuth credentials (including platform-secure storage)
+              // before wiping Hive and preferences. A factory reset must not
+              // restore a prior account after the app restarts.
+              clearAccountSession: () => ref
+                  .read(animeWitcherAccountControllerProvider.notifier)
+                  .signOut(),
+              // Deep clean extensions, preferences, and Hive databases.
+              clearLocalData: () =>
+                  ref.read(settingsRepositoryProvider).deleteAllData(),
+            );
 
             // Restart App - use caller's context; dialog context may be disposed after pop
             if (callerContext.mounted) {
