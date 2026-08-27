@@ -41,6 +41,14 @@ void main() {
     expect(isStaleNetworkError(error), isTrue);
   });
 
+  test('cancelled requests are not retried as stale sockets', () {
+    final error = DioException(
+      requestOptions: RequestOptions(path: '/'),
+      type: DioExceptionType.cancel,
+    );
+    expect(isStaleNetworkError(error), isFalse);
+  });
+
   test('HTTP 503 is not treated as a stale socket', () {
     final error = DioException(
       requestOptions: RequestOptions(path: '/'),

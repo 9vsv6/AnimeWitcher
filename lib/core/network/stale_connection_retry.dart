@@ -15,6 +15,8 @@ const String kStaleConnectionRetriedExtra = 'staleConnectionRetried';
 /// immediately and the catalog stays on the offline screen.
 bool isStaleNetworkError(DioException error) {
   switch (error.type) {
+    case DioExceptionType.cancel:
+      return false;
     case DioExceptionType.connectionError:
     case DioExceptionType.connectionTimeout:
       return true;

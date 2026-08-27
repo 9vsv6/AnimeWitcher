@@ -26,6 +26,13 @@ class HomeData extends _$HomeData {
     return const HomeLoading();
   }
 
+  /// Retry after an offline/error screen. Drops stale HTTP sockets first so
+  /// the following request is not served from a dead connection pool.
+  Future<void> retry() async {
+    ref.read(activeProviderProvider)?.prepareForNetworkRetry();
+    await fetch();
+  }
+
   Future<void> fetch() async {
     state = const HomeLoading();
 
@@ -34,8 +41,6 @@ class HomeData extends _$HomeData {
       state = const HomeNoProvider();
       return;
     }
-
-    activeProvider.prepareForNetworkRetry();
 
     try {
       final results = await Future.wait<dynamic>([
