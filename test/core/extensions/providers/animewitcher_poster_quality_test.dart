@@ -8,6 +8,13 @@ import 'package:animewitcher/core/storage/storage_service.dart';
 const String _smallPoster = 'https://cdn.animewitcher.com/small/one_piece.jpg';
 const String _largePoster = 'https://cdn.animewitcher.com/large/one_piece.jpg';
 
+class _PosterQualitySettingsRepository extends SettingsRepository {
+  _PosterQualitySettingsRepository() : super(StorageService());
+
+  @override
+  bool isHighQualityPostersEnabled() => true;
+}
+
 Map<String, dynamic> _algoliaHit({Map<String, dynamic>? poster}) {
   return <String, dynamic>{
     'hits': <Map<String, dynamic>>[
@@ -75,7 +82,7 @@ List<Map<String, dynamic>> get _batchGetResponse => <Map<String, dynamic>>[
 }
 
 AnimeWitcherNativeProvider _provider(Dio dio) =>
-    AnimeWitcherNativeProvider(dio, SettingsRepository(StorageService()));
+    AnimeWitcherNativeProvider(dio, _PosterQualitySettingsRepository());
 
 Iterable<RequestOptions> _batchGets(List<RequestOptions> requests) =>
     requests.where((r) => r.uri.toString().contains('documents:batchGet'));

@@ -16,14 +16,14 @@ void main() {
     test('matches the values shown by the iOS download task', () {
       expect(
         formatDownloadSizePair(totalBytes: 542900000, progress: 72.7 / 542.9),
-        '72.7 / 542.9 MB',
+        '72.7 MB / 542.9 MB',
       );
     });
 
     test('clamps invalid progress values', () {
       expect(
         formatDownloadSizePair(totalBytes: 500000000, progress: 2),
-        '500.0 / 500.0 MB',
+        '500.0 MB / 500.0 MB',
       );
     });
 
