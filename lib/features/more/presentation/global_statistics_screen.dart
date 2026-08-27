@@ -15,12 +15,11 @@ import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../details/presentation/details_screen.dart';
 
-typedef _RankingPageLoader =
-    Future<ProviderMediaPage> Function(
-      AnimeWitcherGlobalRanking ranking, {
-      required int offset,
-      required int limit,
-    });
+typedef _RankingPageLoader = Future<ProviderMediaPage> Function(
+  AnimeWitcherGlobalRanking ranking, {
+  required int offset,
+  required int limit,
+});
 
 class GlobalStatisticsScreen extends ConsumerStatefulWidget {
   const GlobalStatisticsScreen({super.key});
@@ -30,7 +29,8 @@ class GlobalStatisticsScreen extends ConsumerStatefulWidget {
       _GlobalStatisticsScreenState();
 }
 
-class _GlobalStatisticsScreenState extends ConsumerState<GlobalStatisticsScreen>
+class _GlobalStatisticsScreenState
+    extends ConsumerState<GlobalStatisticsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
@@ -69,7 +69,11 @@ class _GlobalStatisticsScreenState extends ConsumerState<GlobalStatisticsScreen>
         StateError('AnimeWitcher Native provider is unavailable'),
       );
     }
-    return provider.getGlobalRankingPage(ranking, offset: offset, limit: limit);
+    return provider.getGlobalRankingPage(
+      ranking,
+      offset: offset,
+      limit: limit,
+    );
   }
 
   bool _isArabic(BuildContext context) =>
@@ -92,13 +96,11 @@ class _GlobalStatisticsScreenState extends ConsumerState<GlobalStatisticsScreen>
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
               child: Align(
-                alignment: isArabic
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
+                alignment:
+                    isArabic ? Alignment.centerRight : Alignment.centerLeft,
                 child: Directionality(
-                  textDirection: isArabic
-                      ? TextDirection.rtl
-                      : TextDirection.ltr,
+                  textDirection:
+                      isArabic ? TextDirection.rtl : TextDirection.ltr,
                   child: Text(
                     isArabic ? 'الإحصائيات العالمية' : 'Global statistics',
                   ),
@@ -116,16 +118,17 @@ class _GlobalStatisticsScreenState extends ConsumerState<GlobalStatisticsScreen>
       ),
       body: Column(
         children: [
-          _RankingTabs(controller: _tabController, isArabic: isArabic),
+          _RankingTabs(
+            controller: _tabController,
+            isArabic: isArabic,
+          ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                for (
-                  var index = 0;
-                  index < AnimeWitcherGlobalRanking.values.length;
-                  index++
-                )
+                for (var index = 0;
+                    index < AnimeWitcherGlobalRanking.values.length;
+                    index++)
                   LazyTabChild(
                     controller: _tabController,
                     index: index,
@@ -310,7 +313,10 @@ class _RankingPageState extends State<_RankingPage>
       return const AnimeCatalogShimmer();
     }
     if (_initialError != null && _items.isEmpty) {
-      return _RankingError(isArabic: widget.isArabic, onRetry: _loadInitial);
+      return _RankingError(
+        isArabic: widget.isArabic,
+        onRetry: _loadInitial,
+      );
     }
     if (_items.isEmpty) {
       return RefreshIndicator(
@@ -347,7 +353,10 @@ class _RankingPageState extends State<_RankingPage>
 }
 
 class _RankingTabs extends StatelessWidget {
-  const _RankingTabs({required this.controller, required this.isArabic});
+  const _RankingTabs({
+    required this.controller,
+    required this.isArabic,
+  });
 
   final TabController controller;
   final bool isArabic;

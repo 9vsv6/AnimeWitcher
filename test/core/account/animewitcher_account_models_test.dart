@@ -57,30 +57,27 @@ void main() {
     expect(restored.hasPasswordProvider, isTrue);
   });
 
-  test(
-    'privacy settings preserve documented values through profile storage',
-    () {
-      const privacy = AnimeWitcherPrivacySettings(
-        showFavoritesToUsers: false,
-        showCommentsToUsers: false,
-        showReviewsToUsers: false,
-        hideEcchiAnime: true,
-      );
-      const profile = AnimeWitcherProfile(
-        documentId: 'profile-1',
-        uid: 'uid-1',
-        signInMethod: AnimeWitcherSignInMethod.email,
-        privacySettings: privacy,
-      );
+  test('privacy settings preserve documented values through profile storage', () {
+    const privacy = AnimeWitcherPrivacySettings(
+      showFavoritesToUsers: false,
+      showCommentsToUsers: false,
+      showReviewsToUsers: false,
+      hideEcchiAnime: true,
+    );
+    const profile = AnimeWitcherProfile(
+      documentId: 'profile-1',
+      uid: 'uid-1',
+      signInMethod: AnimeWitcherSignInMethod.email,
+      privacySettings: privacy,
+    );
 
-      final restored = AnimeWitcherProfile.fromJson(profile.toJson());
+    final restored = AnimeWitcherProfile.fromJson(profile.toJson());
 
-      expect(restored.privacySettings.showFavoritesToUsers, isFalse);
-      expect(restored.privacySettings.showCommentsToUsers, isFalse);
-      expect(restored.privacySettings.showReviewsToUsers, isFalse);
-      expect(restored.privacySettings.hideEcchiAnime, isTrue);
-    },
-  );
+    expect(restored.privacySettings.showFavoritesToUsers, isFalse);
+    expect(restored.privacySettings.showCommentsToUsers, isFalse);
+    expect(restored.privacySettings.showReviewsToUsers, isFalse);
+    expect(restored.privacySettings.hideEcchiAnime, isTrue);
+  });
 
   test('legacy profiles keep AnimeWitcher privacy defaults', () {
     final profile = AnimeWitcherProfile.fromJson(<String, dynamic>{

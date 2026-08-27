@@ -75,9 +75,7 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
       if (!mounted) return;
       setState(() {
         for (final item in page.items) {
-          final key = item.url.trim().isEmpty
-              ? '${item.id}|${item.title}'
-              : item.url;
+          final key = item.url.trim().isEmpty ? '${item.id}|${item.title}' : item.url;
           if (_seen.add(key)) _items.add(item);
         }
         _offset = page.nextOffset;
@@ -133,13 +131,9 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
               child: Align(
-                alignment: isArabic
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
+                alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
                 child: Directionality(
-                  textDirection: isArabic
-                      ? TextDirection.rtl
-                      : TextDirection.ltr,
+                  textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
                   child: Text(isArabic ? 'القادم قريبًا' : 'Coming soon'),
                 ),
               ),
@@ -171,9 +165,7 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
     }
     if (_items.isEmpty) {
       return Center(
-        child: Text(
-          isArabic ? 'لا توجد أعمال قادمة حاليًا' : 'No upcoming titles',
-        ),
+        child: Text(isArabic ? 'لا توجد أعمال قادمة حاليًا' : 'No upcoming titles'),
       );
     }
 
