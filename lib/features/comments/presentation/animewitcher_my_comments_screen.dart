@@ -10,6 +10,7 @@ import '../../../core/account/animewitcher_sync_ids.dart';
 import '../../../core/account/firestore_rest_client.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/utils/request_generation.dart';
 import '../../details/presentation/details_screen.dart';
 import 'animewitcher_replies_screen.dart';
 
@@ -35,6 +36,7 @@ class _AnimeWitcherMyCommentsScreenState
   bool _loadingInitial = true;
   bool _loadingMore = false;
   bool _hasMore = true;
+  final RequestGeneration _loadGeneration = RequestGeneration();
 
   bool get _isArabic =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
@@ -70,6 +72,8 @@ class _AnimeWitcherMyCommentsScreenState
 
   Future<void> _loadInitial() async {
     if (!mounted) return;
+    final generation = _loadGeneration.begin();
+    final sort = _sort;
     setState(() {
       _loadingInitial = true;
       _loadingMore = false;
@@ -80,8 +84,8 @@ class _AnimeWitcherMyCommentsScreenState
     try {
       final page = await ref
           .read(animeWitcherAccountServiceProvider)
-          .loadMyComments(sort: _sort, limit: _pageSize);
-      if (!mounted) return;
+          .loadMyComments(sort: sort, limit: _pageSize);
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _comments = page.items;
         _cursor = page.cursor;
@@ -89,7 +93,7 @@ class _AnimeWitcherMyCommentsScreenState
         _loadingInitial = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _loadError = error;
         _loadingInitial = false;
@@ -99,16 +103,19 @@ class _AnimeWitcherMyCommentsScreenState
 
   Future<void> _loadMore() async {
     if (_loadingInitial || _loadingMore || !_hasMore) return;
+    final generation = _loadGeneration.current;
+    final sort = _sort;
+    final cursor = _cursor;
     setState(() => _loadingMore = true);
     try {
       final page = await ref
           .read(animeWitcherAccountServiceProvider)
           .loadMyComments(
-            sort: _sort,
-            cursor: _cursor,
+            sort: sort,
+            cursor: cursor,
             limit: _pageSize,
           );
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       final paths = _comments.map((comment) => comment.path).toSet();
       final additions = page.items
           .where((comment) => paths.add(comment.path))
@@ -120,7 +127,7 @@ class _AnimeWitcherMyCommentsScreenState
         _loadingMore = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _loadError = error;
         _loadingMore = false;
