@@ -5,6 +5,7 @@ import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/extensions/base_provider.dart';
 import 'package:animewitcher/features/details/presentation/details_screen.dart';
 import '../../../core/utils/image_utils.dart';
+import '../../../core/utils/localized_text.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
@@ -60,6 +61,7 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
   bool _isPortrait = true;
   bool _providerLoading = false;
   bool _providerHasMore = true;
+  Object? _providerLoadError;
   int _providerOffset = 0;
   late final int? _persistentHeaderBranchIndex;
 
@@ -106,15 +108,18 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
 
   Future<void> _loadNextProviderPage() async {
     final loader = widget.loadPage;
-    if (!_isProvider ||
-        loader == null ||
-        _providerLoading ||
-        !_providerHasMore) {
+    if (!_isProvider || loader == null || _providerLoading) {
+      return;
+    }
+    if (!_providerHasMore && _providerLoadError == null) {
       return;
     }
 
     final requestedOffset = _providerOffset;
-    setState(() => _providerLoading = true);
+    setState(() {
+      _providerLoading = true;
+      _providerLoadError = null;
+    });
 
     try {
       final page = await loader(requestedOffset);
@@ -134,16 +139,17 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
         _providerHasMore = page.hasMore &&
             (page.nextOffset > requestedOffset || page.items.isNotEmpty);
         _providerLoading = false;
+        _providerLoadError = null;
       });
 
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _ensureProviderFill(),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _providerLoading = false;
-        _providerHasMore = false;
+        _providerLoadError = error;
       });
     }
   }
@@ -189,6 +195,7 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
   Widget build(BuildContext context) {
     final items = _isProvider ? _providerItems : widget.initialMediaList;
     final isLoading = _isProvider && _providerLoading;
+    final hasProviderLoadError = _isProvider && _providerLoadError != null;
 
     final isDesktop = context.isDesktop;
     final maxExtent = isDesktop
@@ -253,7 +260,21 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
             stops: const [0, 0.3],
           ),
         ),
-        child: GridView.builder(
+        child: hasProviderLoadError && items.isEmpty
+            ? RefreshIndicator(
+                onRefresh: _loadNextProviderPage,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    SizedBox(height: MediaQuery.sizeOf(context).height * 0.2),
+                    _ProviderPageLoadError(
+                      isEmptyCatalog: true,
+                      onRetry: _loadNextProviderPage,
+                    ),
+                  ],
+                ),
+              )
+            : GridView.builder(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
@@ -264,9 +285,18 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
           ),
-          itemCount: items.length + (isLoading ? crossAxisCount : 0),
+          itemCount: items.length +
+              (isLoading
+                  ? crossAxisCount
+                  : (hasProviderLoadError ? 1 : 0)),
           itemBuilder: (context, index) {
             if (index >= items.length) {
+              if (hasProviderLoadError) {
+                return _ProviderPageLoadError(
+                  compact: true,
+                  onRetry: _loadNextProviderPage,
+                );
+              }
               return ShimmerPlaceholder(borderRadius: 12);
             }
 
@@ -298,5 +328,56 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
         ),
       ),
     );
+  }
+}
+
+class _ProviderPageLoadError extends StatelessWidget {
+  const _ProviderPageLoadError({
+    required this.onRetry,
+    this.compact = false,
+    this.isEmptyCatalog = false,
+  });
+
+  final Future<void> Function() onRetry;
+  final bool compact;
+  final bool isEmptyCatalog;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.cloud_off_rounded, size: 40),
+        const SizedBox(height: 10),
+        Text(
+          appText(
+            context,
+            english: isEmptyCatalog
+                ? 'Could not load results.'
+                : 'Could not load more results.',
+            arabic: isEmptyCatalog
+                ? 'تعذر تحميل النتائج.'
+                : 'تعذر تحميل المزيد من النتائج.',
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+        FilledButton.tonalIcon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(
+            appText(context, english: 'Retry', arabic: 'إعادة المحاولة'),
+          ),
+        ),
+      ],
+    );
+
+    return compact
+        ? Center(
+            child: Padding(padding: const EdgeInsets.all(8), child: content),
+          )
+        : Center(
+            child: Padding(padding: const EdgeInsets.all(24), child: content),
+          );
   }
 }
