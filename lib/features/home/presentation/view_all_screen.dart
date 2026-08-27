@@ -60,6 +60,7 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
   bool _isPortrait = true;
   bool _providerLoading = false;
   bool _providerHasMore = true;
+  Object? _providerLoadError;
   int _providerOffset = 0;
   late final int? _persistentHeaderBranchIndex;
 
@@ -114,7 +115,10 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
     }
 
     final requestedOffset = _providerOffset;
-    setState(() => _providerLoading = true);
+    setState(() {
+      _providerLoading = true;
+      _providerLoadError = null;
+    });
 
     try {
       final page = await loader(requestedOffset);
@@ -134,16 +138,17 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
         _providerHasMore = page.hasMore &&
             (page.nextOffset > requestedOffset || page.items.isNotEmpty);
         _providerLoading = false;
+        _providerLoadError = null;
       });
 
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _ensureProviderFill(),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _providerLoading = false;
-        _providerHasMore = false;
+        _providerLoadError = error;
       });
     }
   }
@@ -189,6 +194,7 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
   Widget build(BuildContext context) {
     final items = _isProvider ? _providerItems : widget.initialMediaList;
     final isLoading = _isProvider && _providerLoading;
+    final hasProviderLoadError = _isProvider && _providerLoadError != null;
 
     final isDesktop = context.isDesktop;
     final maxExtent = isDesktop
@@ -253,7 +259,12 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
             stops: const [0, 0.3],
           ),
         ),
-        child: GridView.builder(
+        child: hasProviderLoadError && items.isEmpty
+            ? _ProviderPageLoadError(
+                isArabic: isArabic,
+                onRetry: _loadNextProviderPage,
+              )
+            : GridView.builder(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
@@ -264,9 +275,19 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
           ),
-          itemCount: items.length + (isLoading ? crossAxisCount : 0),
+          itemCount: items.length +
+              (isLoading
+                  ? crossAxisCount
+                  : (hasProviderLoadError ? 1 : 0)),
           itemBuilder: (context, index) {
             if (index >= items.length) {
+              if (hasProviderLoadError) {
+                return _ProviderPageLoadError(
+                  isArabic: isArabic,
+                  compact: true,
+                  onRetry: _loadNextProviderPage,
+                );
+              }
               return ShimmerPlaceholder(borderRadius: 12);
             }
 
@@ -298,5 +319,42 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
         ),
       ),
     );
+  }
+}
+
+class _ProviderPageLoadError extends StatelessWidget {
+  const _ProviderPageLoadError({
+    required this.isArabic,
+    required this.onRetry,
+    this.compact = false,
+  });
+
+  final bool isArabic;
+  final Future<void> Function() onRetry;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.cloud_off_rounded, size: 40),
+        const SizedBox(height: 10),
+        Text(
+          isArabic ? 'تعذر تحميل المزيد من النتائج.' : 'Could not load more results.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+        FilledButton.tonalIcon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(isArabic ? 'إعادة المحاولة' : 'Retry'),
+        ),
+      ],
+    );
+
+    return compact
+        ? Center(child: Padding(padding: const EdgeInsets.all(8), child: content))
+        : Center(child: Padding(padding: const EdgeInsets.all(24), child: content));
   }
 }
