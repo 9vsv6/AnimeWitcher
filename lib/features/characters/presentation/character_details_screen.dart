@@ -387,7 +387,7 @@ class _CharacterDetailsScreenState
                         children: [
                           _CharacterActionButton(
                             icon: Icons.chat_bubble_outline_rounded,
-                            label: isArabic ? 'تعليقات' : 'Comments',
+                            label: isArabic ? 'التعليقات' : 'Comments',
                             onPressed: _openComments,
                           ),
                           _CharacterActionButton(
