@@ -1854,60 +1854,39 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   }
 
 
-  int _upcomingHomeSectionScore(_OfficialHomeSection section) {
-    final text = '${section.title} ${section.type} ${section.indexName} ${section.searchText}'
-        .toLowerCase();
-    final title = section.title.toLowerCase();
-    final type = section.type.toLowerCase();
-    var score = 0;
-    if (RegExp(r'الموسم القادم|الموسم التالي|next season|upcoming season|season[._ ]?next|next[._ ]?season')
-        .hasMatch(text)) {
-      score += 1000;
-    }
-    if (RegExp(r'next|upcoming|season_next|next_season').hasMatch(type)) {
-      score += 1000;
-    }
-    if (RegExp(r'قادم قريب[اأ]?|القادم|التالي|upcoming').hasMatch(title)) {
-      score += 450;
-    }
-    return score;
-  }
-
-  _OfficialHomeSection? _officialUpcomingSection(
-    List<_OfficialHomeSection> sections,
-  ) {
-    _OfficialHomeSection? best;
-    var bestScore = 0;
-    for (final section in sections) {
-      final score = _upcomingHomeSectionScore(section);
-      if (score > bestScore) {
-        best = section;
-        bestScore = score;
-      }
-    }
-    return best;
-  }
-
+  /// Coming soon lists titles whose AnimeWitcher status is "not yet aired",
+  /// not the next-season catalog used by the Seasons screen.
   Future<ProviderMediaPage> getUpcomingPage({
     int offset = 0,
     int limit = 30,
   }) async {
-    await _refreshRemoteConstants();
-    final sections = await _fetchOfficialHomeSections();
-    final official = _officialUpcomingSection(sections);
-    if (official != null) {
-      return _loadHomePage(
-        official.title,
-        offset: offset,
-        limit: limit,
-      );
-    }
-
-    final config = await getSeasonConfig();
-    return getSeasonPage(
-      config.next,
-      offset: offset,
-      limit: limit,
+    const unairedStatus = 'لم يتم بثه بعد';
+    final safeOffset = offset < 0 ? 0 : offset;
+    final safeLimit = limit.clamp(10, 50).toInt();
+    final pageNumber = safeOffset ~/ safeLimit;
+    final payload = await _algoliaQuery(
+      'series',
+      query: '',
+      page: pageNumber,
+      hitsPerPage: safeLimit,
+      filters: _filterGroup(
+        'details.state',
+        const <String>[unairedStatus],
+        'OR',
+      ),
+      attributes: _searchAttributes,
+      throwOnFailure: true,
+    );
+    final rawHits = _list(payload['hits']);
+    final items = await _dedupeHits(rawHits);
+    final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
+    final hasMore = nbPages > 0
+        ? pageNumber + 1 < nbPages
+        : rawHits.length >= safeLimit;
+    return ProviderMediaPage(
+      items: items,
+      nextOffset: (pageNumber + 1) * safeLimit,
+      hasMore: hasMore,
     );
   }
 
