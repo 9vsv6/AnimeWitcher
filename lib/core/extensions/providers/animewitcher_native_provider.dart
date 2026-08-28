@@ -38,6 +38,10 @@ const List<String> animeWitcherBroadcastDays = <String>[
   'الجمعة',
 ];
 
+/// APK `AnimeListFragment.getQuery` page size. Firestore security rules
+/// reject `anime_list` ranking list queries with `limit > 24` (HTTP 403).
+const int animeWitcherRankingPageSize = 24;
+
 enum AnimeWitcherGlobalRanking { all, continuing, movies, series, ova, ona }
 
 extension AnimeWitcherGlobalRankingInfo on AnimeWitcherGlobalRanking {
@@ -2471,10 +2475,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   Future<ProviderMediaPage> getGlobalRankingPage(
     AnimeWitcherGlobalRanking ranking, {
     int offset = 0,
-    int limit = 30,
+    int limit = animeWitcherRankingPageSize,
   }) async {
     final safeOffset = offset < 0 ? 0 : offset;
-    final safeLimit = limit.clamp(1, 100).toInt();
+    final safeLimit = limit.clamp(1, animeWitcherRankingPageSize).toInt();
     final filterField = ranking.filterField;
     final filterValue = ranking.filterValue;
 
@@ -2499,7 +2503,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       if (safeOffset > 0) 'offset': safeOffset,
       'limit': safeLimit,
     };
-    final raw = await _firestoreRestRunQuery(structuredQuery);
+    final raw = await _firestoreRestRunQueryIfOk(structuredQuery);
+    if (raw == null) {
+      throw StateError('AnimeWitcher ranking request failed.');
+    }
     final firestoreHits = <Map<String, dynamic>>[];
     for (final rowRaw in raw) {
       final document = _map(_map(rowRaw)['document']);
