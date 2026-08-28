@@ -388,7 +388,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           mediaList: entry.value,
           category: ViewAllCategory.providerContent,
           showViewAll: true,
-          fixedPhysicalDirection: true,
           loadViewAllPage: (offset) => provider.getHomeSectionPage(
             entry.key,
             offset: offset,
@@ -674,15 +673,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             spacing: spacing,
           )
         : (isDesktop ? 200.0 : 130.0);
-    final imageHeight = cardWidth /
-        MultimediaCardLayout.posterAspectRatio(isPortrait: true);
+    final imageHeight =
+        cardWidth / MultimediaCardLayout.posterAspectRatio(isPortrait: true);
     final listHeight = MultimediaCardLayout.listHeight(
       cardWidth,
       isPortrait: true,
     );
 
     return Directionality(
-      textDirection: TextDirection.ltr,
+      textDirection: TextDirection.rtl,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
