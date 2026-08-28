@@ -1528,23 +1528,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           isArabic ? 'طاقم الشخصيات' : 'Cast',
         );
       }
-      if (castState.hasError) {
-        return const SizedBox.shrink();
-      }
-      if (!isAnimeWitcherCommentItem(item)) {
-        return const SizedBox.shrink();
-      }
-      return Padding(
-        padding: const EdgeInsets.only(top: 32),
-        child: Text(
-          isArabic
-              ? 'لم يتم اضافة الشخصيات حتي الان'
-              : 'No characters have been added yet',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     Widget recommendationsSection() {
