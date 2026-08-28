@@ -2,7 +2,6 @@ import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import '../../../../core/router/app_router.dart';
-import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 
@@ -12,6 +11,7 @@ import '../view_all_screen.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
 import '../../../../core/utils/image_utils.dart';
+import 'home_section_header.dart';
 
 class MediaHorizontalList extends StatefulWidget {
   final String title;
@@ -19,7 +19,6 @@ class MediaHorizontalList extends StatefulWidget {
   final ViewAllCategory category;
   final void Function(MultimediaItem)? onTap;
   final bool showViewAll;
-  final bool fixedPhysicalDirection;
   final String? heroTagPrefix;
   final Future<ProviderMediaPage> Function(int offset)? loadViewAllPage;
   final bool forcePortrait;
@@ -31,7 +30,6 @@ class MediaHorizontalList extends StatefulWidget {
     required this.category,
     this.onTap,
     this.showViewAll = true,
-    this.fixedPhysicalDirection = true,
     this.heroTagPrefix,
     this.loadViewAllPage,
     this.forcePortrait = false,
@@ -145,12 +143,6 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
   @override
   Widget build(BuildContext context) {
     if (widget.mediaList.isEmpty) return const SizedBox.shrink();
-    final l10n = AppLocalizations.of(context)!;
-    final localeDirection = Directionality.of(context);
-    final layoutDirection = widget.fixedPhysicalDirection
-        ? TextDirection.ltr
-        : localeDirection;
-
     final isHandsetLandscape = context.isHandsetLandscape;
     final isDesktopLandscape = context.isDesktopLandscape;
     final isDesktop = context.isDesktop;
@@ -180,179 +172,85 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     );
 
     return Directionality(
-      textDirection: layoutDirection,
+      textDirection: TextDirection.rtl,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header Row
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            isDesktop
-                ? LayoutConstants.dashboardContentPadding
-                : LayoutConstants.spacingMd,
-            LayoutConstants.spacingLg,
-            isDesktop
-                ? LayoutConstants.dashboardContentPadding
-                : LayoutConstants.spacingMd,
-            LayoutConstants.spacingSm,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HomeSectionHeader(
+            title: widget.title,
+            middle: isDesktop
+                ? <Widget>[
+                    const SizedBox(width: 8),
+                    _HeaderArrowButton(
+                      icon: Icons.arrow_back_ios_new,
+                      onTap: () => _scrollBy(400),
+                    ),
+                    const SizedBox(width: 4),
+                    _HeaderArrowButton(
+                      icon: Icons.arrow_forward_ios,
+                      onTap: () => _scrollBy(-400),
+                    ),
+                  ]
+                : null,
+            action: widget.showViewAll
+                ? HomeViewAllButton(
+                    onTap: () {
+                      ViewAllRoute(
+                        $extra: ViewAllRouteExtra(
+                          title: widget.title,
+                          initialMediaList: widget.mediaList,
+                          category: widget.category,
+                          onTap: widget.onTap,
+                          loadPage: widget.loadViewAllPage,
+                          forcePortrait: widget.forcePortrait,
+                        ),
+                      ).push<void>(context);
+                    },
+                  )
+                : null,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Title with Blue Underline Accent
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      widget.title,
-                      textDirection: localeDirection,
-                      textAlign: TextAlign.left,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: isDesktop ? 24 : 20,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: isDesktop ? 30 : 20, // Accent width
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ],
-                ),
+          SizedBox(
+            height: listHeight,
+            child: ListView.builder(
+              controller: _scrollController,
+              clipBehavior: Clip.none,
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop
+                    ? LayoutConstants.dashboardContentPadding
+                    : LayoutConstants.spacingMd,
               ),
+              scrollDirection: Axis.horizontal,
+              itemCount: widget.mediaList.length,
+              itemExtent: cardWidth + spacing,
+              itemBuilder: (context, index) {
+                final item = widget.mediaList[index];
+                final itemTitle = item.title;
+                final prefix = widget.heroTagPrefix ?? 'list';
+                final uniqueTag =
+                    '${prefix}_${widget.title}_${item.id}_${itemTitle.hashCode}_$index';
 
-              // Desktop arrow buttons — before the View All chip
-              if (isDesktop) ...[
-                const SizedBox(width: 8),
-                _HeaderArrowButton(
-                  icon: Icons.arrow_back_ios_new,
-                  onTap: () => _scrollBy(-400),
-                ),
-                const SizedBox(width: 4),
-                _HeaderArrowButton(
-                  icon: Icons.arrow_forward_ios,
-                  onTap: () => _scrollBy(400),
-                ),
-              ],
-
-              if (widget.showViewAll)
-                const SizedBox(width: LayoutConstants.spacingXs),
-
-              if (widget.showViewAll)
-                CardsWrapper(
-                  onTap: () {
-                    // Push on the root GoRouter stack (same as DetailsRoute) so
-                    // View All covers AppScaffold and the bottom taskbar.
-                    ViewAllRoute(
-                      $extra: ViewAllRouteExtra(
-                        title: widget.title,
-                        initialMediaList: widget.mediaList,
-                        category: widget.category,
-                        onTap: widget.onTap,
-                        loadPage: widget.loadViewAllPage,
-                        forcePortrait: widget.forcePortrait,
-                      ),
-                    ).push<void>(context);
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: LayoutConstants.spacingSm,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          l10n.viewAll,
-                          textDirection: localeDirection,
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 10,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
-                      ],
-                    ),
+                return Padding(
+                  key: ValueKey('${widget.title}-rail-$index'),
+                  padding: EdgeInsetsDirectional.only(end: spacing),
+                  child: MultimediaCard.fromItem(
+                    item: item,
+                    heroTag: uniqueTag,
+                    isPortrait: isPortrait,
+                    onTap: () {
+                      if (widget.onTap != null) {
+                        widget.onTap!(item);
+                      } else {
+                        DetailsRoute(
+                          $extra: DetailsRouteExtra(item: item),
+                        ).push<void>(context);
+                      }
+                    },
                   ),
-                ),
-            ],
+                );
+              },
+            ),
           ),
-        ),
-
-        // List — no DesktopScrollWrapper overlay; arrows are in the header
-        SizedBox(
-          height: listHeight, // Adjusted for 2:3 ratio within list
-          child: Builder(
-            builder: (context) {
-              return ListView.builder(
-                controller: _scrollController,
-                clipBehavior: Clip.none,
-                padding: EdgeInsets.symmetric(
-                  horizontal: isDesktop
-                      ? LayoutConstants.dashboardContentPadding
-                      : LayoutConstants.spacingMd,
-                ),
-                scrollDirection: Axis.horizontal,
-                itemCount: widget.mediaList.length,
-                itemExtent: cardWidth + spacing,
-                itemBuilder: (context, index) {
-                  final item = widget.mediaList[index];
-                  final itemTitle = item.title;
-                  final prefix = widget.heroTagPrefix ?? 'list';
-                  final uniqueTag =
-                      '${prefix}_${widget.title}_${item.id}_${itemTitle.hashCode}_$index';
-
-                  return Directionality(
-                    textDirection: localeDirection,
-                    child: Padding(
-                      padding: EdgeInsets.only(right: spacing),
-                      child: MultimediaCard.fromItem(
-                        item: item,
-                        heroTag: uniqueTag,
-                        isPortrait: isPortrait,
-                        onTap: () {
-                          if (widget.onTap != null) {
-                            widget.onTap!(item);
-                          } else {
-                            DetailsRoute(
-                              $extra: DetailsRouteExtra(item: item),
-                            ).push<void>(context);
-                          }
-                        },
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
+        ],
       ),
     );
   }

@@ -388,7 +388,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           mediaList: entry.value,
           category: ViewAllCategory.providerContent,
           showViewAll: true,
-          fixedPhysicalDirection: true,
           loadViewAllPage: (offset) => provider.getHomeSectionPage(
             entry.key,
             offset: offset,
@@ -457,7 +456,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           onRefresh: () async {
             await Future.wait<void>([
               ref.read(continueWatchingProvider.notifier).refreshFromServer(),
-              ref.read(homeDataProvider.notifier).fetch(),
+              ref.read(homeDataProvider.notifier).fetch(keepCurrent: true),
             ]);
           },
           child: CustomScrollView(
@@ -674,15 +673,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             spacing: spacing,
           )
         : (isDesktop ? 200.0 : 130.0);
-    final imageHeight = cardWidth /
-        MultimediaCardLayout.posterAspectRatio(isPortrait: true);
+    final imageHeight =
+        cardWidth / MultimediaCardLayout.posterAspectRatio(isPortrait: true);
     final listHeight = MultimediaCardLayout.listHeight(
       cardWidth,
       isPortrait: true,
     );
 
     return Directionality(
-      textDirection: TextDirection.ltr,
+      textDirection: TextDirection.rtl,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
