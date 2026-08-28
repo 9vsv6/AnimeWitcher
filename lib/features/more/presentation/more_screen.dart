@@ -96,8 +96,8 @@ class MoreScreen extends ConsumerWidget {
             icon: Icons.upcoming_rounded,
             title: isArabic ? 'القادم قريبًا' : 'Coming soon',
             subtitle: isArabic
-                ? 'الأعمال القادمة حسب بيانات AnimeWitcher'
-                : 'Upcoming titles from AnimeWitcher',
+                ? 'أنميات لم يتم بثها بعد حسب بيانات AnimeWitcher'
+                : 'Anime that has not aired yet, from AnimeWitcher',
             onTap: () => Navigator.of(context, rootNavigator: true).push(
               MaterialPageRoute<void>(
                 builder: (_) => const ComingSoonScreen(),
