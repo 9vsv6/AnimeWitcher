@@ -133,7 +133,8 @@ class DashboardHeaderBar extends ConsumerWidget {
           // Refresh button
           CardsWrapper(
             scaleFactor: 1.01,
-            onTap: () => ref.read(homeDataProvider.notifier).fetch(),
+            onTap: () =>
+                ref.read(homeDataProvider.notifier).fetch(keepCurrent: true),
             borderRadius: BorderRadius.circular(50),
             child: Container(
               width: 36,

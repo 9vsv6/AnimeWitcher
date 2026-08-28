@@ -118,7 +118,12 @@ class HomeViewAllButton extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(Icons.arrow_back_ios_new, size: 10, color: color),
+              Icon(
+                Icons.arrow_back_ios_new,
+                size: 10,
+                color: color,
+                textDirection: TextDirection.ltr,
+              ),
             ],
           ),
         ),

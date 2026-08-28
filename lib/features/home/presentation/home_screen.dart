@@ -456,7 +456,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           onRefresh: () async {
             await Future.wait<void>([
               ref.read(continueWatchingProvider.notifier).refreshFromServer(),
-              ref.read(homeDataProvider.notifier).fetch(),
+              ref.read(homeDataProvider.notifier).fetch(keepCurrent: true),
             ]);
           },
           child: CustomScrollView(
