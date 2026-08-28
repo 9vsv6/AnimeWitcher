@@ -174,8 +174,10 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
         ? (isPortrait ? 200.0 : 300.0)
         : (isPortrait ? 130.0 : 200.0);
 
-    final double imageHeight = cardWidth / (isPortrait ? (2 / 3) : (16 / 9));
-    final double listHeight = imageHeight + 40.0;
+    final double listHeight = MultimediaCardLayout.listHeight(
+      cardWidth,
+      isPortrait: isPortrait,
+    );
 
     return Directionality(
       textDirection: layoutDirection,
@@ -320,7 +322,6 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                 itemExtent: cardWidth + spacing,
                 itemBuilder: (context, index) {
                   final item = widget.mediaList[index];
-                  final imageUrl = item.posterImageUrl;
                   final itemTitle = item.title;
                   final prefix = widget.heroTagPrefix ?? 'list';
                   final uniqueTag =
@@ -330,10 +331,8 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                     textDirection: localeDirection,
                     child: Padding(
                       padding: EdgeInsets.only(right: spacing),
-                      child: MultimediaCard(
-                        imageUrl: imageUrl,
-                        title: itemTitle,
-                        episodeBadge: item.episodeBadge,
+                      child: MultimediaCard.fromItem(
+                        item: item,
                         heroTag: uniqueTag,
                         isPortrait: isPortrait,
                         onTap: () {

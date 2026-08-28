@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/utils/responsive_breakpoints.dart';
+import 'multimedia_card.dart';
 import 'shimmer_placeholder.dart';
 
 /// Skeleton poster matching home-page card loading.
@@ -36,7 +37,10 @@ class AnimeCatalogShimmer extends StatelessWidget {
       gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
         context,
         maxCrossAxisExtent: isDesktop ? 240 : 150,
-        childAspectRatio: isDesktop ? 0.58 : 0.55,
+        childAspectRatio: MultimediaCardLayout.gridAspectRatio(
+          isPortrait: true,
+          isDesktop: isDesktop,
+        ),
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),

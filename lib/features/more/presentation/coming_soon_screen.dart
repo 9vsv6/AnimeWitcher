@@ -180,7 +180,10 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
         gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
           context,
           maxCrossAxisExtent: isDesktop ? 240 : 150,
-          childAspectRatio: isDesktop ? 0.58 : 0.55,
+          childAspectRatio: MultimediaCardLayout.gridAspectRatio(
+            isPortrait: true,
+            isDesktop: isDesktop,
+          ),
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
         ),
@@ -197,10 +200,9 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
             return const AnimePosterShimmer();
           }
           final item = _items[index];
-          return MultimediaCard(
+          return MultimediaCard.fromItem(
             key: ValueKey('coming-${item.url}'),
-            imageUrl: item.posterImageUrl,
-            title: item.title,
+            item: item,
             heroTag: 'coming-${item.id}-$index',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(

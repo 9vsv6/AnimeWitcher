@@ -207,7 +207,10 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
         : context.isHandsetLandscape
         ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
         : (screenWidth / maxExtent).ceil().clamp(1, 20);
-    final childAspectRatio = _isPortrait ? 0.55 : 1.35;
+    final childAspectRatio = MultimediaCardLayout.gridAspectRatio(
+      isPortrait: _isPortrait,
+      isDesktop: isDesktop,
+    );
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
@@ -301,15 +304,12 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
             }
 
             final item = items[index];
-            final imageUrl = item.posterImageUrl;
             final uniqueTag =
                 'view_all_${widget.category.name}_${item.id}_$index';
 
-            return MultimediaCard(
+            return MultimediaCard.fromItem(
               key: ValueKey(_itemKey(item)),
-              imageUrl: imageUrl,
-              title: item.title,
-              episodeBadge: item.episodeBadge,
+              item: item,
               heroTag: uniqueTag,
               isPortrait: _isPortrait,
               onTap: () {

@@ -2979,6 +2979,7 @@ class AnimeWitcherAccountService {
           isMovie ? MultimediaContentType.movie : MultimediaContentType.anime,
       provider: animeWitcherProvider,
       year: _yearValue(details['year'] ?? source['year']),
+      catalogType: rawType.isEmpty ? null : rawType,
       score: _doubleValue(details['mal_mean'] ?? details['mal_score']),
     );
   }
@@ -2990,9 +2991,11 @@ class AnimeWitcherAccountService {
     'bannerUrl': item.bannerUrl,
     'description': item.description,
     'type': item.contentType.name,
+    'catalogType': item.catalogType,
     'provider': item.provider ?? animeWitcherProvider,
     'status': item.status.name,
     'year': item.year,
+    'isDubbed': item.isDubbed,
     'score': item.score,
     'tmdbId': item.tmdbId,
     'imdbId': item.imdbId,
@@ -3022,6 +3025,9 @@ class AnimeWitcherAccountService {
       contentType: MultimediaItem.parseContentType(
         (raw['contentType'] ?? raw['type']).toString(),
       ),
+      catalogType: _optionalString(raw['catalogType']),
+      year: _nullableInt(raw['year']),
+      isDubbed: raw['isDubbed'] == true,
       provider: _optionalString(raw['provider']) ?? animeWitcherProvider,
       tmdbId: _nullableInt(raw['tmdbId']),
       imdbId: _optionalString(raw['imdbId']),

@@ -131,6 +131,15 @@ class MultimediaItem {
   /// the language and format.
   final String? episodeBadge;
 
+  /// Catalog type as the server sent it (`مسلسل`, `فيلم`, `خاصة`, `اونا`).
+  final String? catalogType;
+
+  /// When a latest-episode row was published, for "منذ ساعتين" captions.
+  final DateTime? publishedAt;
+
+  /// True when the catalog marks this title as a dubbed version.
+  final bool isDubbed;
+
   MultimediaItem({
     required this.title,
     required this.url,
@@ -163,6 +172,9 @@ class MultimediaItem {
     this.imdbId,
     this.source,
     this.episodeBadge,
+    this.catalogType,
+    this.publishedAt,
+    this.isDubbed = false,
   }) : episodes = episodes != null
            ? (List<Episode>.from(episodes)..sort((a, b) {
                if (a.season != b.season) return a.season.compareTo(b.season);
@@ -290,7 +302,50 @@ class MultimediaItem {
             json['badgeText'] ??
             json['badge_text'],
       ),
+      catalogType: _catalogTypeFromJson(json, typeStr),
+      publishedAt: _parseDateTime(
+        json['publishedAt'] ?? json['published_at'] ?? json['date'],
+      ),
+      isDubbed:
+          json['isDubbed'] == true ||
+          json['dubbed'] == true ||
+          json['is_dubbed'] == true,
     );
+  }
+
+  static String? _catalogTypeFromJson(
+    Map<String, dynamic> json,
+    String? typeStr,
+  ) {
+    final explicit = _parseOptionalString(
+      json['catalogType'] ?? json['catalog_type'],
+    );
+    if (explicit != null) return explicit;
+    if (typeStr == null || typeStr.trim().isEmpty) return null;
+    const enumNames = <String>{
+      'movie',
+      'series',
+      'tvseries',
+      'tv',
+      'anime',
+      'livestream',
+      'live',
+      'iptv',
+      'other',
+    };
+    if (enumNames.contains(typeStr.trim().toLowerCase())) return null;
+    return typeStr.trim();
+  }
+
+  static DateTime? _parseDateTime(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is DateTime) return raw;
+    final number = raw is num ? raw.toInt() : int.tryParse(raw.toString());
+    if (number != null) {
+      final timestamp = number.abs() < 100000000000 ? number * 1000 : number;
+      return DateTime.fromMillisecondsSinceEpoch(timestamp);
+    }
+    return DateTime.tryParse(raw.toString());
   }
 
   static ShowStatus _parseShowStatus(dynamic raw) {
@@ -305,8 +360,10 @@ class MultimediaItem {
 
   static MultimediaContentType parseContentType(String? raw) {
     if (raw == null) return MultimediaContentType.movie;
-    switch (raw.toLowerCase()) {
+    final value = raw.trim().toLowerCase();
+    switch (value) {
       case 'movie':
+      case 'film':
         return MultimediaContentType.movie;
       case 'series':
       case 'tvseries':
@@ -319,6 +376,23 @@ class MultimediaItem {
       case 'iptv':
         return MultimediaContentType.livestream;
       default:
+        if (value.contains('فيلم') || value.contains('فلم')) {
+          return MultimediaContentType.movie;
+        }
+        if (value.contains('بث') || value.contains('live')) {
+          return MultimediaContentType.livestream;
+        }
+        if (value.contains('مسلسل') ||
+            value.contains('انمي') ||
+            value.contains('أنمي') ||
+            value.contains('اونا') ||
+            value.contains('اوفا') ||
+            value.contains('خاصة') ||
+            value.contains('ova') ||
+            value.contains('ona') ||
+            value.contains('special')) {
+          return MultimediaContentType.anime;
+        }
         return MultimediaContentType.other;
     }
   }
@@ -378,6 +452,9 @@ class MultimediaItem {
     String? imdbId,
     String? source,
     String? episodeBadge,
+    String? catalogType,
+    DateTime? publishedAt,
+    bool? isDubbed,
   }) {
     return MultimediaItem(
       title: title ?? this.title,
@@ -411,6 +488,9 @@ class MultimediaItem {
       imdbId: imdbId ?? this.imdbId,
       source: source ?? this.source,
       episodeBadge: episodeBadge ?? this.episodeBadge,
+      catalogType: catalogType ?? this.catalogType,
+      publishedAt: publishedAt ?? this.publishedAt,
+      isDubbed: isDubbed ?? this.isDubbed,
     );
   }
 
@@ -447,6 +527,9 @@ class MultimediaItem {
       'streams': streams?.map((s) => s.toJson()).toList(),
       'source': source,
       'episodeBadge': episodeBadge,
+      'catalogType': catalogType,
+      'publishedAt': publishedAt?.millisecondsSinceEpoch,
+      'isDubbed': isDubbed,
     };
   }
 
