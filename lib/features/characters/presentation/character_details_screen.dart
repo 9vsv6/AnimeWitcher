@@ -19,8 +19,8 @@ import '../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../comments/presentation/animewitcher_comments_screen.dart';
 import '../../details/presentation/details_screen.dart';
-import '../../details/presentation/widgets/premium_details_widgets.dart';
 import '../../settings/presentation/account_screen.dart';
+import 'character_animes_grid.dart';
 
 class CharacterDetailsScreen extends ConsumerStatefulWidget {
   const CharacterDetailsScreen({
@@ -484,9 +484,8 @@ class _CharacterDetailsScreenState
                           ],
                         )
                       else
-                        RecommendationsCarousel(
+                        CharacterAnimesGrid(
                           title: isArabic ? 'الأنميات' : 'Anime',
-                          showRelationBadge: true,
                           items: [
                             for (final show in _animes)
                               show.item.copyWith(
