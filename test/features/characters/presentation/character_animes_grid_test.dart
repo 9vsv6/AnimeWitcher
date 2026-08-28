@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/features/characters/presentation/character_animes_grid.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -59,9 +58,6 @@ Future<void> _loadWalkthroughFonts() async {
 
 void main() {
   testWidgets('character animes use a wrapping 3-column grid', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.runAsync(_loadWalkthroughFonts);
