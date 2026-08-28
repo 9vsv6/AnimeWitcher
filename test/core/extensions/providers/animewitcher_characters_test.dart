@@ -422,6 +422,11 @@ void main() {
 
     expect(cast, isNotEmpty);
     expect(cast.first.id, '417');
+    expect(
+      cast.map((actor) => actor.role),
+      containsAll(<String>['شخصية رئيسية', 'شخصية ثانوية']),
+    );
+    expect(cast.map((actor) => actor.role), isNot(contains('شخصية مساندة')));
     final queries = stub.requests.where(
       (request) => request.uri.path.contains('anime_list/code-geass:runQuery'),
     );

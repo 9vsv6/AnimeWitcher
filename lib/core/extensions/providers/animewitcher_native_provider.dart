@@ -2996,16 +2996,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   }
 
   String _characterRole(dynamic raw) {
-    switch (_text(raw).toUpperCase()) {
-      case 'MAIN':
-        return 'شخصية رئيسية';
-      case 'SUPPORTING':
-        return 'شخصية مساندة';
-      case 'BACKGROUND':
-        return 'شخصية ثانوية';
-      default:
-        return 'شخصية';
+    if (_text(raw).toUpperCase() == 'BACKGROUND') {
+      return 'شخصية ثانوية';
     }
+    return animeWitcherCharacterRoleLabel(raw);
   }
 
   Future<List<_AnimeWitcherCharacterRef>>
