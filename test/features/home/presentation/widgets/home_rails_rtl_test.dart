@@ -132,17 +132,51 @@ void main() {
       final titleBox = tester.getRect(find.text('الحلقات الجديدة'));
       final viewAllBox = tester.getRect(find.text('عرض الكل'));
       expect(titleBox.left, greaterThan(viewAllBox.left));
-      expect(find.byIcon(Icons.arrow_back_ios_new), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_forward_ios), findsOneWidget);
 
-      final labelRight = tester.getTopRight(find.text('عرض الكل')).dx;
-      final chevronLeft = tester
-          .getTopLeft(find.byIcon(Icons.arrow_back_ios_new))
+      final chevronRight = tester
+          .getTopRight(find.byIcon(Icons.arrow_forward_ios))
           .dx;
+      final labelLeft = tester.getTopLeft(find.text('عرض الكل')).dx;
       expect(
-        chevronLeft,
-        greaterThan(labelRight - 1),
-        reason: 'chevron comes after عرض الكل and points left',
+        chevronRight,
+        lessThan(labelLeft + 1),
+        reason: 'chevron sits to the left of عرض الكل',
       );
+
+      final artifacts = Directory('/opt/cursor/artifacts');
+      if (artifacts.existsSync()) {
+        await tester.runAsync(_loadWalkthroughFonts);
+        await tester.pumpWidget(
+          _rtlApp(
+            theme: _homeTheme(),
+            child: ColoredBox(
+              color: Colors.black,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: RepaintBoundary(
+                    key: const ValueKey('view-all-closeup'),
+                    child: HomeViewAllButton(onTap: () {}),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.runAsync(() async {
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(const ValueKey('view-all-closeup')),
+          );
+          final image = await boundary.toImage(pixelRatio: 4);
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          File(
+            '${artifacts.path}/view_all_button_closeup.png',
+          ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        });
+      }
     },
   );
 
@@ -302,7 +336,7 @@ void main() {
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       File(
-        '${artifacts.path}/home_rails_rtl_all_sections.png',
+        '${artifacts.path}/view_all_chevron_left_of_label.png',
       ).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
