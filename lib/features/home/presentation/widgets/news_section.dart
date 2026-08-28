@@ -43,28 +43,32 @@ class NewsSection extends StatelessWidget {
             ),
             SizedBox(
               height: 172,
-              child: ListView.separated(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
                 padding: EdgeInsets.symmetric(
                   horizontal: isDesktop
                       ? LayoutConstants.dashboardContentPadding
                       : LayoutConstants.spacingMd,
                 ),
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return NewsCard(
-                    key: ValueKey('news-rail-${item.id}'),
-                    item: item,
-                    compact: true,
-                    onOpen: onOpen == null ? null : () => onOpen!(item),
-                    onAnimeTap: onAnimeTap == null
-                        ? null
-                        : () => onAnimeTap!(item),
-                  );
-                },
+                child: Row(
+                  children: [
+                    for (var index = 0; index < items.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 10),
+                      NewsCard(
+                        key: ValueKey('news-rail-${items[index].id}'),
+                        item: items[index],
+                        compact: true,
+                        onOpen: onOpen == null
+                            ? null
+                            : () => onOpen!(items[index]),
+                        onAnimeTap: onAnimeTap == null
+                            ? null
+                            : () => onAnimeTap!(items[index]),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],

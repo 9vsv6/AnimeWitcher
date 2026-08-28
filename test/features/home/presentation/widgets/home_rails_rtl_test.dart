@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
@@ -9,6 +10,7 @@ import 'package:animewitcher/features/home/presentation/widgets/news_section.dar
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 MultimediaItem _anime(String title, String id) {
@@ -23,20 +25,69 @@ NewsItem _news(String title, String id) {
   return NewsItem(id: id, title: title, imageUrl: '');
 }
 
-Widget _rtlApp({required Widget child, Size? size}) {
+Future<ByteData> _fontBytes(String path) async {
+  return ByteData.sublistView(await File(path).readAsBytes());
+}
+
+Future<void> _loadWalkthroughFonts() async {
+  const arabicRegular =
+      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf';
+  if (!File(arabicRegular).existsSync()) return;
+  await (FontLoader('NotoSansArabic')
+        ..addFont(_fontBytes(arabicRegular))
+        ..addFont(
+          _fontBytes('/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf'),
+        ))
+      .load();
+  await (FontLoader('Roboto')
+        ..addFont(
+          _fontBytes(
+            '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
+          ),
+        )
+        ..addFont(
+          _fontBytes(
+            '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Bold.ttf',
+          ),
+        ))
+      .load();
+  await (FontLoader('MaterialIcons')..addFont(
+        _fontBytes(
+          '/opt/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+        ),
+      ))
+      .load();
+}
+
+ThemeData _homeTheme() {
+  return ThemeData(
+    brightness: Brightness.dark,
+    fontFamily: 'NotoSansArabic',
+    scaffoldBackgroundColor: Colors.black,
+    colorScheme: const ColorScheme.dark(
+      primary: Color(0xFFEEC60A),
+      surface: Color(0xFF000000),
+      onSurface: Color(0xFFE5E7EB),
+    ),
+  );
+}
+
+Widget _rtlApp({required Widget child, Size? size, ThemeData? theme}) {
   return MaterialApp(
     locale: const Locale('ar'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    theme: ThemeData(
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black,
-      colorScheme: const ColorScheme.dark(
-        primary: Color(0xFFEEC60A),
-        surface: Color(0xFF000000),
-        onSurface: Color(0xFFE5E7EB),
-      ),
-    ),
+    theme:
+        theme ??
+        ThemeData(
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: Colors.black,
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFFEEC60A),
+            surface: Color(0xFF000000),
+            onSurface: Color(0xFFE5E7EB),
+          ),
+        ),
     home: Scaffold(
       backgroundColor: Colors.black,
       body: Align(
@@ -185,13 +236,16 @@ void main() {
   });
 
   testWidgets('home rails screenshot for walkthrough', (tester) async {
-    const size = Size(390, 844);
+    await tester.runAsync(_loadWalkthroughFonts);
+
+    const size = Size(390, 1680);
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
       _rtlApp(
         size: size,
+        theme: _homeTheme(),
         child: RepaintBoundary(
           key: const ValueKey('home-rails-shot'),
           child: ColoredBox(
@@ -201,26 +255,22 @@ void main() {
               children: [
                 _rail(
                   title: 'الحلقات الجديدة',
-                  ids: const [
-                    'Bai Ri Cheng Wang',
-                    'Shiguang Dailiren III',
-                    'Otome Kaijuu',
-                  ],
+                  ids: const ['1 FIRST', '2 SECOND', '3 THIRD'],
                 ),
                 _rail(
                   title: 'آخر الأعمال المضافة',
-                  ids: const ['The Mighty B!', 'Evangelion Movie', 'Lupin III'],
+                  ids: const ['1 ADDED', '2 ADDED', '3 ADDED'],
                 ),
                 _rail(
                   title: 'الانميشن الاكثر مشاهدة',
-                  ids: const ['Most One', 'Most Two', 'Most Three'],
+                  ids: const ['1 WATCHED', '2 WATCHED', '3 WATCHED'],
                 ),
                 NewsSection(
                   title: 'الأخبار',
                   items: [
-                    _news('خبر الأنمي الأول', 'shot-n1'),
-                    _news('خبر الأنمي الثاني', 'shot-n2'),
-                    _news('خبر الأنمي الثالث', 'shot-n3'),
+                    _news('1 خبر أول', 'shot-n1'),
+                    _news('2 خبر ثان', 'shot-n2'),
+                    _news('3 خبر ثالث', 'shot-n3'),
                   ],
                   onViewAll: () {},
                 ),
@@ -231,6 +281,14 @@ void main() {
       ),
     );
     await tester.pump();
+
+    final first = tester.getTopLeft(
+      find.byKey(const ValueKey('الحلقات الجديدة-rail-0')),
+    );
+    final last = tester.getTopLeft(
+      find.byKey(const ValueKey('الحلقات الجديدة-rail-2')),
+    );
+    expect(first.dx, greaterThan(last.dx));
 
     final artifacts = Directory('/opt/cursor/artifacts');
     if (!artifacts.existsSync()) {
@@ -244,7 +302,7 @@ void main() {
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       File(
-        '${artifacts.path}/home_rails_rtl_phone.png',
+        '${artifacts.path}/home_rails_rtl_all_sections.png',
       ).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
