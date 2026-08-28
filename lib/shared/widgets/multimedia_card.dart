@@ -63,8 +63,8 @@ class MultimediaCard extends StatelessWidget {
   final FocusNode? focusNode;
   final bool compact;
 
-  /// Shows a stable card surface while the poster is still loading.
-  /// Search results disable the shimmer so the card is visible immediately.
+  /// Shows the same poster shimmer used on home, view-all, and library
+  /// while artwork is still downloading.
   final bool showImageLoadingShimmer;
 
   /// Fully formatted text supplied by the provider.

@@ -1,4 +1,5 @@
 import 'package:animewitcher/shared/widgets/multimedia_card.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/theme/app_theme.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -213,5 +214,19 @@ void main() {
     final type = tester.widget<Text>(find.text('خاصة'));
     expect(title.style?.color, Colors.white.withValues(alpha: 0.92));
     expect(type.style?.color, Colors.white.withValues(alpha: 0.45));
+  });
+
+  test('catalog cards shimmer posters by default while artwork loads', () {
+    final card = MultimediaCard.fromItem(
+      item: MultimediaItem(
+        title: 'Bleach',
+        url: 'https://example.test/bleach',
+        posterUrl: 'https://example.test/poster.png',
+      ),
+      heroTag: 'default-shimmer',
+      onTap: () {},
+    );
+
+    expect(card.showImageLoadingShimmer, isTrue);
   });
 }
