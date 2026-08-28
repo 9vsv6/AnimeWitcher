@@ -71,6 +71,8 @@ class PlayerTopBar extends StatelessWidget {
                   children: [
                     Text(
                       title,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.start,
                       style: TextStyle(
                         color: HotstarPlayerStyle.primaryText,
                         fontSize: isTv ? 22 : 18,

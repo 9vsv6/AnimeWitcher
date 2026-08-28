@@ -63,4 +63,30 @@ void main() {
       ),
     );
   });
+
+  testWidgets('renders the content title left-to-right in an Arabic app', (
+    tester,
+  ) async {
+    const title = 'Ore dake Level Up na Ken';
+    await tester.pumpWidget(
+      _cardApp(
+        card: MultimediaCard(
+          imageUrl: null,
+          title: title,
+          heroTag: 'ltr-title-card',
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            widget.data == title &&
+            widget.textDirection == TextDirection.ltr,
+      ),
+      findsOneWidget,
+    );
+  });
 }

@@ -356,6 +356,8 @@ class PlayerMetadataScrimState extends State<PlayerMetadataScrim>
   Widget _titleText(String title) {
     return Text(
       title,
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.start,
       style: TextStyle(
         color: HotstarPlayerStyle.primaryText,
         fontSize: widget.isTv ? 32 : 28,
