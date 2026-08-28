@@ -119,6 +119,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   String _algoliaAppId = _defaultAlgoliaAppId;
   String _algoliaApiKey = _defaultAlgoliaApiKey;
   String _algoliaBrowseApiKey = '';
+  /// From `Settings/constants.search_settings.is_search_active`. Defaults to
+  /// true so a missing field keeps the production Algolia catalogs working.
+  bool _isSearchActive = true;
   Map<String, dynamic> _searchSettings2 = <String, dynamic>{};
   String _serverLoadType = '';
   final Map<String, Map<String, dynamic>> _animeDocumentCache =
@@ -166,6 +169,13 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   static const Duration _algoliaConnectTimeout = Duration(milliseconds: 2000);
   static const Duration _algoliaReadTimeout = Duration(milliseconds: 5000);
   static const int _comingSoonHitsPerPage = 100;
+  static const int _mainListBrowseHitsPerPage = 100;
+  static const int _scheduleHitsPerPage = 12;
+  static const int _homeViewMoreHitsPerPage = 200;
+  static const int _newsListHitsPerPage = 1000;
+  static const int _newsFirestoreLimit = 5;
+  static const int _similarHitsPerPage = 11;
+  static const int _firestoreMainQueryLimit = 24;
   static const Duration _serverTimeout = Duration(seconds: 6);
   static const Duration _streamTimeout = Duration(seconds: 12);
   static const Duration _mediaFireTimeout = Duration(seconds: 30);
@@ -216,7 +226,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       };
 
   @override
-  int get viewAllPageSize => 30;
+  int get viewAllPageSize => _homeViewMoreHitsPerPage;
 
   @override
   int get searchPageSize => 30;
@@ -572,6 +582,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     if (appId.isNotEmpty) _algoliaAppId = appId;
     if (apiKey.isNotEmpty) _algoliaApiKey = apiKey;
     if (browseKey.isNotEmpty) _algoliaBrowseApiKey = browseKey;
+    final searchActive = settings['is_search_active'] ?? settings['isSearchActive'];
+    if (searchActive != null) {
+      _isSearchActive = _flag(searchActive, fallback: true);
+    }
     if (settings2.isNotEmpty) {
       _searchSettings2 = Map<String, dynamic>.from(settings2);
     }
@@ -630,6 +644,37 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     ];
   }
 
+  bool _flag(dynamic raw, {bool fallback = false}) {
+    if (raw is bool) return raw;
+    if (raw is num) return raw != 0;
+    final normalized = _text(raw).toLowerCase();
+    if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+      return false;
+    }
+    return fallback;
+  }
+
+  Options _algoliaHttpOptions(Map<String, String> headers) {
+    return Options(
+      headers: <String, String>{
+        'Accept': 'application/json',
+        ...headers,
+      },
+      sendTimeout: _algoliaConnectTimeout,
+      receiveTimeout: _algoliaReadTimeout,
+      connectTimeout: _algoliaConnectTimeout,
+      validateStatus: (status) => status != null && status >= 200 && status < 500,
+    );
+  }
+
+  bool _algoliaStatusOk(int status) => status >= 200 && status < 300;
+
+  bool _algoliaGiveUp(int status) =>
+      status >= 400 && status < 500 && status != 429;
+
   /// GET helper matching Algolia Android SDK host fallback and timeouts.
   Future<Map<String, dynamic>?> _algoliaSdkGet({
     required String appId,
@@ -643,31 +688,122 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
         final response = await _dio.get<dynamic>(
           'https://$host$path',
           queryParameters: queryParameters,
-          options: Options(
-            headers: <String, String>{
-              'Accept': 'application/json',
-              ...headers,
-            },
-            sendTimeout: _algoliaConnectTimeout,
-            receiveTimeout: _algoliaReadTimeout,
-            connectTimeout: _algoliaConnectTimeout,
-            validateStatus: (status) =>
-                status != null && status >= 200 && status < 500,
-          ),
+          options: _algoliaHttpOptions(headers),
         );
         final status = response.statusCode ?? 0;
-        if (status >= 200 && status < 300) {
+        if (_algoliaStatusOk(status)) {
           final json = _map(response.data);
           return json.isEmpty ? null : json;
         }
-        if (status >= 400 && status < 500 && status != 429) {
-          return null;
-        }
+        if (_algoliaGiveUp(status)) return null;
       } on DioException {
         continue;
       }
     }
     return null;
+  }
+
+  /// POST helper matching Algolia Android SDK host fallback and timeouts.
+  Future<Map<String, dynamic>?> _algoliaSdkPost({
+    required String appId,
+    required String apiKey,
+    required String path,
+    required Map<String, dynamic> body,
+    CancelToken? cancelToken,
+  }) async {
+    final headers = _algoliaAuthHeaders(appId, apiKey);
+    for (final host in _algoliaHosts(appId)) {
+      try {
+        final response = await _dio.post<dynamic>(
+          'https://$host$path',
+          data: body,
+          cancelToken: cancelToken,
+          options: _algoliaHttpOptions(headers).copyWith(
+            headers: <String, String>{
+              'Accept': 'application/json',
+              'Content-Type': 'application/json; charset=UTF-8',
+              ...headers,
+            },
+          ),
+        );
+        final status = response.statusCode ?? 0;
+        if (_algoliaStatusOk(status)) {
+          final json = _map(response.data);
+          return json.isEmpty ? null : json;
+        }
+        if (_algoliaGiveUp(status)) return null;
+      } on DioException catch (error) {
+        if (CancelToken.isCancel(error)) rethrow;
+        continue;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _emptyAlgoliaHits() => <String, dynamic>{
+        'hits': const <dynamic>[],
+        'page': 0,
+        'nbPages': 0,
+      };
+
+  Map<String, dynamic> _requireAlgoliaHits(
+    Map<String, dynamic>? payload, {
+    required bool throwOnFailure,
+  }) {
+    if (payload == null || payload['hits'] is! List) {
+      if (throwOnFailure) {
+        throw StateError('AnimeWitcher catalog request failed.');
+      }
+      return _emptyAlgoliaHits();
+    }
+    return payload;
+  }
+
+  Map<String, dynamic> _algoliaParams({
+    String query = '',
+    int page = 0,
+    int hitsPerPage = 30,
+    int maxHitsPerPage = 100,
+    String filters = '',
+    List<String>? attributes,
+  }) {
+    return <String, dynamic>{
+      if (query.isNotEmpty) 'query': query,
+      'hitsPerPage': '${hitsPerPage.clamp(1, maxHitsPerPage)}',
+      'page': '${page < 0 ? 0 : page}',
+      if (attributes != null && attributes.isNotEmpty)
+        'attributesToRetrieve': jsonEncode(attributes),
+      if (filters.isNotEmpty) 'filters': filters,
+    };
+  }
+
+  /// APK `Index.browse` = GET `/1/indexes/{index}/browse`.
+  Future<Map<String, dynamic>> _algoliaBrowseGet({
+    required String index,
+    required String appId,
+    required String apiKey,
+    String query = '',
+    int page = 0,
+    int hitsPerPage = 100,
+    int maxHitsPerPage = 100,
+    String filters = '',
+    List<String>? attributes,
+    bool throwOnFailure = false,
+  }) async {
+    final payload = await _algoliaSdkGet(
+      appId: appId,
+      apiKey: apiKey,
+      path: '/1/indexes/${Uri.encodeComponent(index)}/browse',
+      queryParameters: _algoliaParams(
+        query: query,
+        page: page,
+        hitsPerPage: hitsPerPage,
+        maxHitsPerPage: maxHitsPerPage,
+        filters: filters,
+        attributes: attributes,
+      ),
+    );
+    return _requireAlgoliaHits(payload, throwOnFailure: throwOnFailure);
   }
 
   Future<Map<String, dynamic>> _algoliaQuery(
@@ -678,6 +814,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     int maxHitsPerPage = 100,
     String filters = '',
     List<String>? attributes,
+    String? apiKey,
     CancelToken? cancelToken,
     bool throwOnFailure = false,
   }) async {
@@ -686,7 +823,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       index: index,
       operation: 'query',
       appId: _algoliaAppId,
-      apiKey: _algoliaApiKey,
+      apiKey: apiKey ?? _algoliaApiKey,
       query: query,
       page: page,
       hitsPerPage: hitsPerPage,
@@ -721,7 +858,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       );
     }
 
-    append('query', query);
+    // Algolia Android searchAsync always encodes `query`, including "".
+    params.add('query=${Uri.encodeQueryComponent(query)}');
     append('hitsPerPage', hitsPerPage.clamp(1, maxHitsPerPage));
     append('page', page < 0 ? 0 : page);
     if (attributes != null && attributes.isNotEmpty) {
@@ -729,31 +867,14 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     }
     if (filters.isNotEmpty) append('filters', filters);
 
-    final url =
-        'https://$appId-dsn.algolia.net/1/indexes/'
-        '${Uri.encodeComponent(index)}/$operation';
-    final payload = await _postJson(
-      url,
-      <String, dynamic>{'params': params.join('&')},
+    final payload = await _algoliaSdkPost(
+      appId: appId,
+      apiKey: apiKey,
+      path: '/1/indexes/${Uri.encodeComponent(index)}/$operation',
+      body: <String, dynamic>{'params': params.join('&')},
       cancelToken: cancelToken,
-      headers: <String, String>{
-        'X-Algolia-Application-Id': appId,
-        'X-Algolia-API-Key': apiKey,
-        'X-Algolia-Agent': 'Algolia for JavaScript (4.x); AnimeWitcher',
-        'User-Agent': 'Algolia for Android (3.27.0); Android (13)',
-      },
     );
-    if (payload == null || payload['hits'] is! List) {
-      if (throwOnFailure) {
-        throw StateError('AnimeWitcher catalog request failed.');
-      }
-      return <String, dynamic>{
-        'hits': const <dynamic>[],
-        'page': 0,
-        'nbPages': 0,
-      };
-    }
-    return payload;
+    return _requireAlgoliaHits(payload, throwOnFailure: throwOnFailure);
   }
 
   Future<AnimeWitcherSearchServiceSettings> _loadSearchService() async {
@@ -775,9 +896,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       throw StateError('AnimeWitcher catalog request failed.');
     }
     final safePage = page < 0 ? 0 : page;
-    final payload = await _algoliaIndexRequest(
+    final payload = await _algoliaBrowseGet(
       index: animeWitcherCharactersAlgoliaIndex,
-      operation: 'browse',
       appId: settings.appId,
       apiKey: settings.browseApiKey,
       page: safePage,
@@ -794,14 +914,14 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     if (text.isEmpty) {
       return getCharactersPage();
     }
-    final settings = await _loadSearchService();
-    if (!settings.isSearchActive) {
-      throw AnimeWitcherSearchDisabledException(
-        settings.errorMessage.isEmpty ? 'لا يوجد بيانات' : settings.errorMessage,
-      );
+    await _refreshRemoteConstants();
+    if (!_isSearchActive) {
+      throw const AnimeWitcherSearchDisabledException('لا يوجد بيانات');
     }
-    final payload = await _algoliaQuery(
-      animeWitcherCharactersAlgoliaIndex,
+    final payload = await _algoliaBrowseGet(
+      index: animeWitcherCharactersAlgoliaIndex,
+      appId: _algoliaAppId,
+      apiKey: _algoliaApiKey,
       query: text,
       page: 0,
       hitsPerPage: animeWitcherCharacterSearchHitsPerPage,
@@ -1011,21 +1131,24 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
 
   static const List<String> _similarAttributes = <String>[
     'objectID',
-    'anime_id',
     'name',
-    'english_title',
     'poster_uri',
     'order',
     'path',
     'type',
     'poster',
+    'tags',
+  ];
+
+  static const List<String> _carouselAttributes = <String>[
+    'objectID',
+    'name',
+    'poster_uri',
+    'type',
+    'poster',
+    'details',
     'cover_uri',
     'tags',
-    'mal_id',
-    'malId',
-    'details',
-    'dubbed',
-    'year',
   ];
 
   static const List<String> _recentAttributes = <String>[
@@ -1585,7 +1708,6 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     bool applyEcchiFilter = true,
   }) async {
     final maps = hits.map(_map).where((hit) => hit.isNotEmpty).toList();
-    await _fillLargePosters(maps);
     final seen = <String>{};
     final output = <MultimediaItem>[];
     for (final hit in maps) {
@@ -1760,7 +1882,6 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
   }) async {
     final value = season.trim();
     final safeOffset = offset < 0 ? 0 : offset;
-    final safeLimit = limit.clamp(10, 50).toInt();
     if (value.isEmpty) {
       return ProviderMediaPage(
         items: const <MultimediaItem>[],
@@ -1769,24 +1890,101 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       );
     }
 
-    final pageNumber = safeOffset ~/ safeLimit;
-    final payload = await _algoliaQuery(
-      'series',
-      query: '',
-      page: pageNumber,
-      hitsPerPage: safeLimit,
-      filters: _filterGroup('details.season', <String>[value], 'OR'),
-      attributes: _searchAttributes,
+    await _refreshRemoteConstants();
+    if (_isSearchActive) {
+      if (_algoliaBrowseApiKey.isEmpty) {
+        throw StateError('AnimeWitcher catalog request failed.');
+      }
+      const hitsPerPage = _mainListBrowseHitsPerPage;
+      final pageNumber = safeOffset ~/ hitsPerPage;
+      final payload = await _algoliaBrowseGet(
+        index: 'series',
+        appId: _algoliaAppId,
+        apiKey: _algoliaBrowseApiKey,
+        page: pageNumber,
+        hitsPerPage: hitsPerPage,
+        filters: _filterGroup('details.season', <String>[value], 'OR'),
+        attributes: _comingSoonBrowseAttributes,
+        throwOnFailure: true,
+      );
+      return _mediaPageFromAlgolia(
+        payload,
+        pageNumber: pageNumber,
+        hitsPerPage: hitsPerPage,
+      );
+    }
+
+    final safeLimit = limit.clamp(1, _firestoreMainQueryLimit).toInt();
+    return _firestoreAnimeListPage(
+      fieldPath: 'details.season',
+      equalTo: value,
+      offset: safeOffset,
+      limit: safeLimit,
     );
+  }
+
+  Future<ProviderMediaPage> _mediaPageFromAlgolia(
+    Map<String, dynamic> payload, {
+    required int pageNumber,
+    required int hitsPerPage,
+    bool recent = false,
+  }) async {
     final rawHits = _list(payload['hits']);
-    final items = await _dedupeHits(rawHits);
+    final items = await _dedupeHits(rawHits, recent: recent);
     final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
     final hasMore = nbPages > 0
         ? pageNumber + 1 < nbPages
-        : rawHits.length >= safeLimit;
+        : rawHits.length >= hitsPerPage;
     return ProviderMediaPage(
       items: items,
-      nextOffset: (pageNumber + 1) * safeLimit,
+      nextOffset: (pageNumber + 1) * hitsPerPage,
+      hasMore: hasMore,
+    );
+  }
+
+  Future<ProviderMediaPage> _firestoreAnimeListPage({
+    required String fieldPath,
+    required String equalTo,
+    required int offset,
+    required int limit,
+  }) async {
+    final raw = await _firestoreRestRunQueryIfOk(<String, dynamic>{
+      'from': const <Map<String, dynamic>>[
+        <String, dynamic>{'collectionId': 'anime_list'},
+      ],
+      'where': <String, dynamic>{
+        'fieldFilter': <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': fieldPath},
+          'op': 'EQUAL',
+          'value': <String, dynamic>{'stringValue': equalTo},
+        },
+      },
+      'orderBy': const <Map<String, dynamic>>[
+        <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': '__name__'},
+          'direction': 'ASCENDING',
+        },
+      ],
+      if (offset > 0) 'offset': offset,
+      'limit': limit + 1,
+    });
+    if (raw == null) {
+      throw StateError('AnimeWitcher catalog request failed.');
+    }
+    final hits = <Map<String, dynamic>>[];
+    for (final rowRaw in raw) {
+      final document = _map(_map(rowRaw)['document']);
+      if (document.isEmpty) continue;
+      final hit = _firestoreDocumentHit(document);
+      if (hit.isNotEmpty) hits.add(hit);
+    }
+    final items = await _dedupeHits(hits);
+    final hasMore = hits.length > limit;
+    final visible = items.take(limit).toList(growable: false);
+    final consumed = hasMore ? limit : hits.length;
+    return ProviderMediaPage(
+      items: visible,
+      nextOffset: offset + consumed,
       hasMore: hasMore,
     );
   }
@@ -1910,13 +2108,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     };
   }
 
-  /// V1.4.8 parity: load one broadcast day at a time so the schedule screen
-  /// can page lazily, refresh safely, and cancel a stale tab request.
-  ///
-  /// The existing [getBroadcastSchedule] API remains intact for any caller
-  /// that needs the complete weekly map. Firestore is authoritative when it
-  /// returns rows; the legacy weekly loader is only used as a first-page
-  /// fallback when Firestore yields no schedule anywhere.
+  /// APK ShowsTime: Algolia `series` searchAsync with `show_time`, then
+  /// Firestore `anime_list` on request failure. No `is_search_active` gate.
   Future<ProviderMediaPage> getBroadcastSchedulePage(
     String day, {
     int offset = 0,
@@ -1933,77 +2126,45 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       );
     }
     final safeOffset = offset < 0 ? 0 : offset;
-    final safeLimit = limit.clamp(1, 100).toInt();
-    final raw = await _firestoreRestRunQueryIfOk(
-      <String, dynamic>{
-        'from': const <Map<String, dynamic>>[
-          <String, dynamic>{'collectionId': 'anime_list'},
-        ],
-        'where': <String, dynamic>{
-          'fieldFilter': <String, dynamic>{
-            'field': const <String, dynamic>{'fieldPath': 'show_time'},
-            'op': 'EQUAL',
-            'value': <String, dynamic>{'stringValue': normalizedDay},
-          },
-        },
-        'orderBy': const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'field': <String, dynamic>{'fieldPath': '__name__'},
-            'direction': 'ASCENDING',
-          },
-        ],
-        'offset': safeOffset,
-        'limit': safeLimit + 1,
-      },
-      cancelToken: cancelToken,
+    const safeLimit = _scheduleHitsPerPage;
+    final filters = _filterGroup(
+      'show_time',
+      <String>[normalizedDay],
+      'OR',
     );
-    if (raw != null) {
-      final hits = <Map<String, dynamic>>[];
-      for (final rowRaw in raw) {
-        final document = _map(_map(rowRaw)['document']);
-        if (document.isEmpty) continue;
-        final hit = _firestoreDocumentHit(document);
-        if (hit.isNotEmpty) hits.add(hit);
+    try {
+      await _refreshRemoteConstants();
+      if (_algoliaApiKey.isEmpty) {
+        throw StateError('AnimeWitcher catalog request failed.');
       }
-      if (hits.isEmpty) {
-        return ProviderMediaPage(
-          items: const <MultimediaItem>[],
-          nextOffset: safeOffset,
-          hasMore: false,
-        );
-      }
-      final items = await _dedupeHits(hits);
-      final visible = items.take(safeLimit).toList(growable: false);
-      final hasMore = hits.length > safeLimit;
-      final consumedRows = hasMore ? safeLimit : hits.length;
-      return ProviderMediaPage(
-        items: visible,
-        nextOffset: safeOffset + consumedRows,
-        hasMore: hasMore,
+      final pageNumber = safeOffset ~/ safeLimit;
+      final payload = await _algoliaQuery(
+        'series',
+        query: '',
+        page: pageNumber,
+        hitsPerPage: safeLimit,
+        maxHitsPerPage: safeLimit,
+        filters: filters,
+        attributes: _searchAttributes,
+        cancelToken: cancelToken,
+        throwOnFailure: true,
       );
+      return _mediaPageFromAlgolia(
+        payload,
+        pageNumber: pageNumber,
+        hitsPerPage: safeLimit,
+      );
+    } on DioException catch (error) {
+      if (CancelToken.isCancel(error)) rethrow;
+    } catch (_) {
+      if (cancelToken?.isCancelled == true) rethrow;
     }
 
-    if (safeOffset > 0 || cancelToken?.isCancelled == true) {
-      return ProviderMediaPage(
-        items: const <MultimediaItem>[],
-        nextOffset: safeOffset,
-        hasMore: false,
-      );
-    }
-    final fallback = await getBroadcastSchedule(refresh: refresh);
-    if (cancelToken?.isCancelled == true) {
-      return ProviderMediaPage(
-        items: const <MultimediaItem>[],
-        nextOffset: safeOffset,
-        hasMore: false,
-      );
-    }
-    final items = fallback[normalizedDay] ?? const <MultimediaItem>[];
-    final end = safeLimit.clamp(0, items.length).toInt();
-    return ProviderMediaPage(
-      items: items.sublist(0, end),
-      nextOffset: end,
-      hasMore: end < items.length,
+    return _firestoreAnimeListPage(
+      fieldPath: 'show_time',
+      equalTo: normalizedDay,
+      offset: safeOffset,
+      limit: safeLimit,
     );
   }
 
@@ -2069,18 +2230,19 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     int limit = 30,
     CancelToken? cancelToken,
   }) async {
+    await _refreshRemoteConstants();
+    if (!_isSearchActive) {
+      throw const AnimeWitcherSearchDisabledException('لا يوجد بيانات');
+    }
     final text = query.trim();
     final expression = _buildFilters(filters);
     final safeLimit = limit.clamp(10, 50).toInt();
     final safeOffset = offset < 0 ? 0 : offset;
     final pageNumber = safeOffset ~/ safeLimit;
-    // AnimeWitcher's MainAnimeListFragment initializes its catalog with
-    // series_name_asc. Keep typed searches on the normal `series` index and
-    // use the main-list index for an empty landing page unless the user
-    // explicitly selects another sort mode.
-    final searchIndex = text.isEmpty && filters.sort.trim().isEmpty
-        ? 'series_name_asc'
-        : _searchIndexForSort(filters.sort);
+    // SearchActivity uses searchAsync on the selected sort index. The APK
+    // drawer "قائمة الأنمي" browses `series_name_asc` instead; this app has
+    // no equivalent drawer screen, so an empty search stays on `series`.
+    final searchIndex = _searchIndexForSort(filters.sort);
     final payload = await _algoliaQuery(
       searchIndex,
       query: text,
@@ -2211,19 +2373,33 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       }
     }
     final safeOffset = offset < 0 ? 0 : offset;
-    final safeLimit = limit.clamp(1, 50).toInt();
+    final safeLimit = limit.clamp(1, _homeViewMoreHitsPerPage).toInt();
     if (official == null) {
       return ProviderMediaPage(items: const [], nextOffset: safeOffset, hasMore: false);
     }
+    await _refreshRemoteConstants();
+    if (!_isSearchActive) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
     final plan = _homePlanFromOfficial(official);
     final pageNumber = safeOffset ~/ safeLimit;
+    final attributes = official.type == 'carousel'
+        ? _carouselAttributes
+        : plan.recent
+            ? _recentAttributes
+            : _searchAttributes;
     Future<Map<String, dynamic>> load(String index) => _algoliaQuery(
           index,
           query: plan.query,
           page: pageNumber,
           hitsPerPage: safeLimit,
+          maxHitsPerPage: _homeViewMoreHitsPerPage,
           filters: plan.filters,
-          attributes: plan.recent ? _recentAttributes : _searchAttributes,
+          attributes: attributes,
           throwOnFailure: throwOnFailure,
         );
 
@@ -2263,30 +2439,20 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       const <String>[unairedStatus],
       'OR',
     );
-    final payload = await _algoliaSdkGet(
+    final payload = await _algoliaBrowseGet(
+      index: 'series',
       appId: _algoliaAppId,
       apiKey: _algoliaBrowseApiKey,
-      path: '/1/indexes/series/browse',
-      queryParameters: <String, dynamic>{
-        'filters': filters,
-        'hitsPerPage': '$hitsPerPage',
-        'page': '$pageNumber',
-        'attributesToRetrieve': jsonEncode(_comingSoonBrowseAttributes),
-      },
+      page: pageNumber,
+      hitsPerPage: hitsPerPage,
+      filters: filters,
+      attributes: _comingSoonBrowseAttributes,
+      throwOnFailure: true,
     );
-    if (payload == null || payload['hits'] is! List) {
-      throw StateError('AnimeWitcher catalog request failed.');
-    }
-    final rawHits = _list(payload['hits']);
-    final items = await _dedupeHits(rawHits);
-    final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
-    final hasMore = nbPages > 0
-        ? pageNumber + 1 < nbPages
-        : rawHits.length >= hitsPerPage;
-    return ProviderMediaPage(
-      items: items,
-      nextOffset: (pageNumber + 1) * hitsPerPage,
-      hasMore: hasMore,
+    return _mediaPageFromAlgolia(
+      payload,
+      pageNumber: pageNumber,
+      hitsPerPage: hitsPerPage,
     );
   }
 
@@ -2341,100 +2507,26 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       final hit = _firestoreDocumentHit(document);
       if (hit.isNotEmpty) firestoreHits.add(hit);
     }
-    if (firestoreHits.isNotEmpty) {
-      return ProviderMediaPage(
-        items: await _dedupeHits(firestoreHits),
-        nextOffset: safeOffset + firestoreHits.length,
-        hasMore: firestoreHits.length >= safeLimit,
-      );
-    }
-
-    final pageNumber = safeOffset ~/ safeLimit;
-    ProviderMediaPage pageFromAlgolia(Map<String, dynamic> payload) {
-      final rawHits = _list(payload['hits']);
-      final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
-      return ProviderMediaPage(
-        items: const <MultimediaItem>[],
-        nextOffset: (pageNumber + 1) * safeLimit,
-        hasMore: nbPages > 0
-            ? pageNumber + 1 < nbPages
-            : rawHits.length >= safeLimit,
-      );
-    }
-
-    final rankingPayload = await _algoliaQuery(
-      ranking.queryType,
-      query: '',
-      page: pageNumber,
-      hitsPerPage: safeLimit,
-      attributes: _searchAttributes,
-    );
-    final rankingHits = _list(rankingPayload['hits']);
-    if (rankingHits.isNotEmpty) {
-      final pagination = pageFromAlgolia(rankingPayload);
-      return ProviderMediaPage(
-        items: await _dedupeHits(rankingHits),
-        nextOffset: pagination.nextOffset,
-        hasMore: pagination.hasMore,
-      );
-    }
-
-    final filters = filterField != null && filterValue != null
-        ? _filterGroup(filterField, <String>[filterValue], 'OR')
-        : '';
-    if (ranking.queryType != 'series_ranking_mal' || filters.isNotEmpty) {
-      final legacyPayload = await _algoliaQuery(
-        'series_ranking_mal',
-        query: '',
-        page: pageNumber,
-        hitsPerPage: safeLimit,
-        filters: filters,
-        attributes: _searchAttributes,
-      );
-      final legacyHits = _list(legacyPayload['hits']);
-      if (legacyHits.isNotEmpty) {
-        final pagination = pageFromAlgolia(legacyPayload);
-        return ProviderMediaPage(
-          items: await _dedupeHits(legacyHits),
-          nextOffset: pagination.nextOffset,
-          hasMore: pagination.hasMore,
-        );
-      }
-    }
-
-    final fallbackPayload = await _algoliaQuery(
-      'series',
-      query: '',
-      page: pageNumber,
-      hitsPerPage: safeLimit,
-      filters: filters,
-      attributes: _searchAttributes,
-    );
-    final fallbackHits = _list(fallbackPayload['hits'])
-        .map<Map<String, dynamic>>(_map)
-        .where((hit) => hit.isNotEmpty)
-        .toList(growable: false)
-      ..sort((a, b) {
-        int rank(Map<String, dynamic> hit) {
-          final details = _map(hit['details']);
-          final value = int.tryParse(_text(details['mal_rank'])) ?? (1 << 30);
-          return value > 0 ? value : (1 << 30);
-        }
-        return rank(a).compareTo(rank(b));
-      });
-    final pagination = pageFromAlgolia(fallbackPayload);
+    final items = await _dedupeHits(firestoreHits);
     return ProviderMediaPage(
-      items: await _dedupeHits(fallbackHits),
-      nextOffset: pagination.nextOffset,
-      hasMore: pagination.hasMore,
+      items: items,
+      nextOffset: safeOffset + firestoreHits.length,
+      hasMore: firestoreHits.length >= safeLimit,
     );
   }
 
-  Future<ProviderNewsPage> _loadNewsPage({
+  Future<ProviderNewsPage> _loadHomeNewsRail({
     int offset = 0,
-    int limit = 20,
+    int limit = 10,
   }) async {
     await _refreshRemoteConstants();
+    if (!_isSearchActive) {
+      return const ProviderNewsPage(
+        items: <NewsItem>[],
+        nextOffset: 0,
+        hasMore: false,
+      );
+    }
     final sections = await _fetchOfficialHomeSections();
     final official = _officialNewsSection(sections);
     final index = official?.indexName.trim().isNotEmpty == true
@@ -2452,7 +2544,6 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       attributes: _newsAttributes,
     );
     final rawHits = _list(payload['hits']);
-
     final items = _dedupeNews(rawHits);
     final nbPages = int.tryParse(_text(payload['nbPages'])) ?? 0;
     final hasMore = nbPages > 0
@@ -2465,27 +2556,91 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     );
   }
 
+  Future<ProviderNewsPage> _loadNewsList() async {
+    await _refreshRemoteConstants();
+    if (!_isSearchActive) {
+      return _loadNewsFromFirestore(limit: _newsFirestoreLimit);
+    }
+    if (_algoliaBrowseApiKey.isEmpty) {
+      throw StateError('AnimeWitcher catalog request failed.');
+    }
+    final payload = await _algoliaQuery(
+      'news',
+      query: '',
+      page: 0,
+      hitsPerPage: _newsListHitsPerPage,
+      maxHitsPerPage: _newsListHitsPerPage,
+      attributes: _newsAttributes,
+      apiKey: _algoliaBrowseApiKey,
+      throwOnFailure: true,
+    );
+    final items = _dedupeNews(_list(payload['hits']));
+    return ProviderNewsPage(
+      items: items,
+      nextOffset: items.length,
+      hasMore: false,
+    );
+  }
+
+  Future<ProviderNewsPage> _loadNewsFromFirestore({required int limit}) async {
+    final raw = await _firestoreRestRunQuery(<String, dynamic>{
+      'from': const <Map<String, dynamic>>[
+        <String, dynamic>{'collectionId': 'news'},
+      ],
+      'orderBy': const <Map<String, dynamic>>[
+        <String, dynamic>{
+          'field': <String, dynamic>{'fieldPath': 'date_created'},
+          'direction': 'DESCENDING',
+        },
+      ],
+      'limit': limit,
+    });
+    final hits = <Map<String, dynamic>>[];
+    for (final rowRaw in raw) {
+      final document = _map(_map(rowRaw)['document']);
+      if (document.isEmpty) continue;
+      final hit = _firestoreDocumentHit(document);
+      if (hit.isNotEmpty) hits.add(hit);
+    }
+    return ProviderNewsPage(
+      items: _dedupeNews(hits),
+      nextOffset: hits.length,
+      hasMore: false,
+    );
+  }
+
   @override
   Future<ProviderNewsPage> getHomeNewsPage({
     int offset = 0,
     int limit = 10,
   }) {
-    return _loadNewsPage(offset: offset, limit: limit);
+    return _loadHomeNewsRail(offset: offset, limit: limit);
   }
 
   @override
   Future<ProviderNewsPage> getNewsPage({
     int offset = 0,
     int limit = 20,
-  }) {
-    return _loadNewsPage(offset: offset, limit: limit);
+  }) async {
+    if (offset > 0) {
+      return ProviderNewsPage(
+        items: const <NewsItem>[],
+        nextOffset: offset,
+        hasMore: false,
+      );
+    }
+    return _loadNewsList();
   }
 
   @override
   Future<Map<String, List<MultimediaItem>>> getHome() async {
+    await _refreshRemoteConstants();
     final configured = await _fetchOfficialHomeSections();
     if (configured.isEmpty) {
       throw StateError('AnimeWitcher home sections are unavailable.');
+    }
+    if (!_isSearchActive) {
+      return const <String, List<MultimediaItem>>{};
     }
     final officialSections = configured
         .where((section) =>
@@ -2555,10 +2710,19 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     int offset = 0,
     int limit = 30,
   }) {
+    if (offset > 0) {
+      return Future<ProviderMediaPage>.value(
+        ProviderMediaPage(
+          items: const <MultimediaItem>[],
+          nextOffset: offset,
+          hasMore: false,
+        ),
+      );
+    }
     return _loadHomePage(
       sectionName,
-      offset: offset,
-      limit: limit,
+      offset: 0,
+      limit: _homeViewMoreHitsPerPage,
     );
   }
 
@@ -2580,6 +2744,13 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       }
     }
     return result;
+  }
+
+  bool _isAlgoliaSeriesObject(Map<String, dynamic>? json) {
+    if (json == null || json.isEmpty) return false;
+    if (json['hits'] is List) return false;
+    if (json['fields'] is Map) return false;
+    return _text(json['objectID'] ?? json['name'] ?? json['anime_id']).isNotEmpty;
   }
 
   Future<Map<String, dynamic>> _fetchAnimeDocument(String animeId) async {
@@ -2636,6 +2807,18 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     if (inFlight != null) return inFlight;
 
     final request = () async {
+      await _refreshRemoteConstants();
+      final algolia = await _algoliaSdkGet(
+        appId: _algoliaAppId,
+        apiKey: _algoliaApiKey,
+        path: '/1/indexes/series/${Uri.encodeComponent(key)}',
+      );
+      if (_isAlgoliaSeriesObject(algolia)) {
+        final source = _mergeMaps(route.hit, algolia!);
+        _detailSourceCache[key] = source;
+        _detailSourceExpiresAt[key] = DateTime.now().add(_detailDataTtl);
+        return source;
+      }
       final document = await _fetchAnimeDocument(key);
       final source = _mergeMaps(route.hit, document);
       if (source.isEmpty) {
@@ -3188,12 +3371,15 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
         : _animeIdFromHit(source).trim().toLowerCase();
     final tags = _stringList(source['tags']);
     if (tags.isEmpty) return const <MultimediaItem>[];
+    await _refreshRemoteConstants();
+    if (!_isSearchActive) return const <MultimediaItem>[];
     final hideEcchi = _isEcchiHidden();
     final payload = await _algoliaQuery(
       'series_similar',
       query: tags.join(' '),
       page: 0,
-      hitsPerPage: hideEcchi ? 30 : 11,
+      hitsPerPage: _similarHitsPerPage,
+      maxHitsPerPage: _similarHitsPerPage,
       attributes: _similarAttributes,
     );
     final hits = <Map<String, dynamic>>[];

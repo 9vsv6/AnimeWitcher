@@ -94,28 +94,22 @@ Iterable<RequestOptions> _batchGets(List<RequestOptions> requests) =>
     requests.where((r) => r.uri.toString().contains('documents:batchGet'));
 
 void main() {
-  test('list hits pick up the large poster from anime_list', () async {
+  test('list hits render Algolia posters without Firestore hydrate', () async {
     final stub = _stubDio(_algoliaHit());
     final page = await _provider(
       stub.dio,
     ).searchPage('one piece', const ProviderSearchFilters());
 
-    expect(page.items.single.posterUrl, _largePoster);
-    expect(page.items.single.fullPosterUrl, _largePoster);
-    expect(page.items.single.posterViewerUrl, _largePoster);
-
-    final batch = _batchGets(stub.requests).single;
-    expect(batch.method, 'POST');
-    final payload = Map<String, dynamic>.from(batch.data as Map);
-    expect(payload['documents'], <String>[
-      'projects/animewitcher-1c66d/databases/(default)'
-          '/documents/anime_list/one_piece',
-    ]);
-    final mask = Map<String, dynamic>.from(payload['mask'] as Map);
-    expect(mask['fieldPaths'], <String>['poster', 'poster_uri', 'cover_uri']);
+    expect(page.items.single.posterUrl, _smallPoster);
+    expect(page.items.single.fullPosterUrl, _smallPoster);
+    expect(_batchGets(stub.requests), isEmpty);
+    expect(
+      stub.requests.any((r) => r.uri.path.contains(':runQuery')),
+      isFalse,
+    );
   });
 
-  test('a hit that already carries a large poster is not looked up', () async {
+  test('a hit that already carries a large poster is used as-is', () async {
     final stub = _stubDio(
       _algoliaHit(poster: <String, dynamic>{'large': _largePoster}),
     );
@@ -129,7 +123,7 @@ void main() {
     expect(_batchGets(stub.requests), isEmpty);
   });
 
-  test('the poster lookup is cached across pages', () async {
+  test('catalog pages do not batchGet anime_list posters', () async {
     final stub = _stubDio(_algoliaHit());
     final provider = _provider(stub.dio);
 
@@ -140,10 +134,10 @@ void main() {
       offset: 30,
     );
 
-    expect(_batchGets(stub.requests), hasLength(1));
+    expect(_batchGets(stub.requests), isEmpty);
   });
 
-  test('items keep their own poster when the lookup fails', () async {
+  test('items keep their Algolia poster when Firestore is down', () async {
     final requests = <RequestOptions>[];
     final dio = Dio();
     dio.interceptors.add(
@@ -175,12 +169,15 @@ void main() {
     ).searchPage('one piece', const ProviderSearchFilters());
 
     expect(page.items.single.posterUrl, _smallPoster);
+    expect(_batchGets(requests), isEmpty);
   });
 
   test(
     'cards stay on the standard poster while the viewer keeps the large one',
     () async {
-      final stub = _stubDio(_algoliaHit());
+      final stub = _stubDio(
+        _algoliaHit(poster: <String, dynamic>{'large': _largePoster}),
+      );
       final page = await _provider(
         stub.dio,
         highQuality: false,
@@ -190,7 +187,7 @@ void main() {
       expect(item.posterUrl, _smallPoster);
       expect(item.fullPosterUrl, _largePoster);
       expect(item.posterViewerUrl, _largePoster);
-      expect(_batchGets(stub.requests), hasLength(1));
+      expect(_batchGets(stub.requests), isEmpty);
     },
   );
 

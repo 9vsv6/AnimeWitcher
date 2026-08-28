@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:animewitcher/core/account/animewitcher_character_models.dart';
 import 'package:animewitcher/core/extensions/providers/animewitcher_native_provider.dart';
 import 'package:animewitcher/core/storage/settings_repository.dart';
@@ -330,14 +328,6 @@ _RecordedDio _stubDio({
   return _RecordedDio(dio, requests);
 }
 
-String _paramsOf(RequestOptions options) {
-  final data = options.data;
-  if (data is Map) {
-    return data['params']?.toString() ?? '';
-  }
-  return data?.toString() ?? '';
-}
-
 void main() {
   test('character catalog browses the characters index with the browse key',
       () async {
@@ -352,28 +342,31 @@ void main() {
     final browse = stub.requests.singleWhere(
       (request) => request.uri.host.contains('algolia.net'),
     );
+    expect(browse.method, 'GET');
     expect(browse.uri.path, endsWith('/indexes/characters/browse'));
     expect(browse.uri.host, startsWith('testappid-dsn.algolia.net'));
     expect(browse.headers['X-Algolia-API-Key'], 'browse-key');
-    final params = Uri.splitQueryString(_paramsOf(browse), encoding: utf8);
+    final params = browse.uri.queryParameters;
     expect(params['hitsPerPage'], '20');
     expect(params['page'], '0');
     expect(params['attributesToRetrieve'], contains('main_picture'));
     expect(params['attributesToRetrieve'], contains('objectID'));
   });
 
-  test('typed character search uses prefs keys and 500 hits per page', () async {
+  test('typed character search uses prefs keys and GET browse at 500 hits', () async {
     final stub = _stubDio();
     await _provider(stub.dio).searchCharacters('lelouch');
 
     final search = stub.requests.singleWhere(
       (request) =>
           request.uri.host.contains('algolia.net') &&
-          request.uri.path.endsWith('/indexes/characters/query'),
+          request.uri.path.endsWith('/indexes/characters/browse') &&
+          request.headers['X-Algolia-API-Key'] == 'search-key',
     );
+    expect(search.method, 'GET');
     expect(search.uri.host, startsWith('searchapp-dsn.algolia.net'));
     expect(search.headers['X-Algolia-API-Key'], 'search-key');
-    final params = Uri.splitQueryString(_paramsOf(search), encoding: utf8);
+    final params = search.uri.queryParameters;
     expect(params['query'], 'lelouch');
     expect(params['hitsPerPage'], '500');
   });

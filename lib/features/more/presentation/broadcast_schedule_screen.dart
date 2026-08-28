@@ -47,7 +47,7 @@ class _BroadcastScheduleDayState {
 class _BroadcastScheduleScreenState
     extends ConsumerState<BroadcastScheduleScreen>
     with SingleTickerProviderStateMixin {
-  static const int _pageSize = 30;
+  static const int _pageSize = 12;
 
   late final TabController _tabController;
   late int _selectedDay;
