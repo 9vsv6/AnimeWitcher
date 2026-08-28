@@ -877,23 +877,31 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return _AnimeRoute(animeId: animeId, hit: hit);
   }
 
-  String _posterFromHit(Map<String, dynamic> source) {
+  String _highestQualityPosterFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
-    // AnimeWitcher exposes a dedicated large poster next to the standard one.
-    // The high-quality setting decides which of the two is asked for first.
-    final candidates = _useHighQualityPosters
-        ? <dynamic>[
-            poster['large'],
-            source['poster_uri'],
-            poster['medium'],
-            source['cover_uri'],
-          ]
-        : <dynamic>[
-            source['poster_uri'],
-            poster['medium'],
-            poster['large'],
-            source['cover_uri'],
-          ];
+    final candidates = <dynamic>[
+      for (final key in _largePosterKeys) poster[key],
+      source['poster_uri'],
+      poster['medium'],
+      source['cover_uri'],
+    ];
+    for (final candidate in candidates) {
+      final value = _text(candidate);
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  String _posterFromHit(Map<String, dynamic> source) {
+    if (_useHighQualityPosters) return _highestQualityPosterFromHit(source);
+    final poster = _map(source['poster']);
+    // Catalog cards keep the lighter artwork when the setting is off.
+    final candidates = <dynamic>[
+      source['poster_uri'],
+      poster['medium'],
+      poster['large'],
+      source['cover_uri'],
+    ];
     for (final candidate in candidates) {
       final value = _text(candidate);
       if (value.isNotEmpty) return value;
@@ -1018,6 +1026,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       title: title.isEmpty ? 'AnimeWitcher' : title,
       url: _makeAnimeUrl(source),
       posterUrl: _posterFromHit(source),
+      fullPosterUrl: _highestQualityPosterFromHit(source),
       description: description.isEmpty ? null : description,
       contentType:
           _isMovieType(source['type']) ? MultimediaContentType.movie : MultimediaContentType.anime,
@@ -2392,6 +2401,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       title: title.isEmpty ? route.animeId : title,
       url: url,
       posterUrl: poster,
+      fullPosterUrl: _highestQualityPosterFromHit(source),
       bannerUrl: banner.isEmpty ? null : banner,
       description: description.isEmpty ? null : description,
       contentType:
@@ -2738,6 +2748,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       title: item.title,
       url: item.url,
       posterUrl: item.posterUrl,
+      fullPosterUrl: item.fullPosterUrl,
       bannerUrl: item.bannerUrl,
       description: item.description,
       contentType: item.contentType,

@@ -83,5 +83,73 @@ void main() {
       expect(result.posterUrl, card.posterUrl);
       expect(result.bannerUrl, card.posterUrl);
     });
+
+    test(
+      'keeps the card large poster when details only repeat the catalog artwork',
+      () {
+        final card = MultimediaItem(
+          title: 'Title',
+          url: 'anime://title',
+          posterUrl: 'https://images.example/medium.jpg',
+          fullPosterUrl: 'https://images.example/large.jpg',
+        );
+        final details = MultimediaItem(
+          title: 'Title',
+          url: card.url,
+          posterUrl: 'https://images.example/medium.jpg',
+          fullPosterUrl: 'https://images.example/medium.jpg',
+        );
+
+        final result = mergeDetailsItem(fallback: card, incoming: details);
+
+        expect(result.posterUrl, card.posterUrl);
+        expect(result.fullPosterUrl, card.fullPosterUrl);
+        expect(result.posterViewerUrl, card.fullPosterUrl);
+      },
+    );
+
+    test('prefers a larger details poster over the opening card', () {
+      final card = MultimediaItem(
+        title: 'Title',
+        url: 'anime://title',
+        posterUrl: 'https://images.example/medium.jpg',
+        fullPosterUrl: 'https://images.example/large.jpg',
+      );
+      final details = MultimediaItem(
+        title: 'Title',
+        url: card.url,
+        posterUrl: 'https://images.example/medium.jpg',
+        fullPosterUrl: 'https://images.example/original.jpg',
+      );
+
+      final result = mergeDetailsItem(fallback: card, incoming: details);
+
+      expect(result.posterUrl, details.posterUrl);
+      expect(result.fullPosterUrl, details.fullPosterUrl);
+      expect(result.posterViewerUrl, details.fullPosterUrl);
+    });
+
+    test(
+      'keeps a high-quality details poster when it matches fullPosterUrl',
+      () {
+        final card = MultimediaItem(
+          title: 'Title',
+          url: 'anime://title',
+          posterUrl: 'https://images.example/medium.jpg',
+        );
+        final details = MultimediaItem(
+          title: 'Title',
+          url: card.url,
+          posterUrl: 'https://images.example/large.jpg',
+          fullPosterUrl: 'https://images.example/large.jpg',
+        );
+
+        final result = mergeDetailsItem(fallback: card, incoming: details);
+
+        expect(result.posterUrl, details.posterUrl);
+        expect(result.fullPosterUrl, details.fullPosterUrl);
+        expect(result.posterViewerUrl, details.fullPosterUrl);
+      },
+    );
   });
 }

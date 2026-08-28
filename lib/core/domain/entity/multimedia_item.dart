@@ -81,6 +81,10 @@ class MultimediaItem {
   final String title;
   final String url;
   final String posterUrl;
+
+  /// Largest available poster, used by the zoom viewer even when catalog
+  /// cards keep the lighter standard artwork.
+  final String? fullPosterUrl;
   final String? bannerUrl;
   final String? logoUrl;
   final String? description;
@@ -144,6 +148,7 @@ class MultimediaItem {
     required this.title,
     required this.url,
     required this.posterUrl,
+    this.fullPosterUrl,
     this.bannerUrl,
     this.logoUrl,
     this.description,
@@ -220,6 +225,11 @@ class MultimediaItem {
       title: title,
       url: (json['url'] as String?) ?? '',
       posterUrl: (json['posterUrl'] as String?) ?? '',
+      fullPosterUrl: _parseOptionalString(
+        json['fullPosterUrl'] ??
+            json['full_poster_url'] ??
+            json['originalPosterUrl'],
+      ),
       bannerUrl:
           (json['backgroundPosterUrl'] as String?) ??
           (json['bannerUrl'] as String?),
@@ -415,6 +425,17 @@ class MultimediaItem {
 
   String get posterImageUrl => posterUrl;
   String get thumbnailImageUrl => posterUrl;
+
+  /// Poster loaded by the fullscreen zoom viewer.
+  ///
+  /// Prefers [fullPosterUrl] so tapping a poster still requests the largest
+  /// artwork when the high-quality catalog setting is off.
+  String get posterViewerUrl {
+    final full = fullPosterUrl?.trim();
+    if (full != null && full.isNotEmpty) return full;
+    return posterUrl;
+  }
+
   String get releaseDate => year?.toString() ?? '';
   String get overview => description ?? '';
   double get voteAverage => score ?? 0.0;
@@ -424,6 +445,7 @@ class MultimediaItem {
     String? title,
     String? url,
     String? posterUrl,
+    String? fullPosterUrl,
     String? bannerUrl,
     String? logoUrl,
     String? description,
@@ -460,6 +482,7 @@ class MultimediaItem {
       title: title ?? this.title,
       url: url ?? this.url,
       posterUrl: posterUrl ?? this.posterUrl,
+      fullPosterUrl: fullPosterUrl ?? this.fullPosterUrl,
       bannerUrl: bannerUrl ?? this.bannerUrl,
       logoUrl: logoUrl ?? this.logoUrl,
       description: description ?? this.description,
@@ -499,6 +522,7 @@ class MultimediaItem {
       'title': title,
       'url': url,
       'posterUrl': posterUrl,
+      'fullPosterUrl': fullPosterUrl,
       'bannerUrl': bannerUrl,
       'logoUrl': logoUrl,
       'description': description,

@@ -29,6 +29,7 @@ class DetailsDesktopHero extends ConsumerWidget {
     required this.itemUrl,
     required this.child,
     required this.onRefresh,
+    this.onPosterTap,
   });
 
   /// The resolved item for display (details ?? widget.item).
@@ -51,6 +52,9 @@ class DetailsDesktopHero extends ConsumerWidget {
 
   /// Pull-to-refresh, matching Home and the other catalog lists.
   final Future<void> Function() onRefresh;
+
+  /// Opens the fullscreen poster viewer at the largest available artwork.
+  final VoidCallback? onPosterTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -189,32 +193,36 @@ class DetailsDesktopHero extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (posterUrl != null && posterUrl.isNotEmpty) ...[
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: SizedBox(
-                                width: 180,
-                                height: 270,
-                                child: ArtworkDecode(
-                                  paintedWidth: 180,
-                                  builder:
-                                      (
-                                        BuildContext context,
-                                        int? decodeWidth,
-                                      ) => CachedNetworkImage(
-                                        imageUrl: posterUrl,
-                                        fit: BoxFit.cover,
-                                        memCacheWidth: decodeWidth,
-                                        filterQuality: FilterQuality.medium,
-                                        placeholder: (_, _) => ColoredBox(
-                                          color: theme
-                                              .colorScheme
-                                              .surfaceContainerHighest,
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: onPosterTap,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: SizedBox(
+                                  width: 180,
+                                  height: 270,
+                                  child: ArtworkDecode(
+                                    paintedWidth: 180,
+                                    builder:
+                                        (
+                                          BuildContext context,
+                                          int? decodeWidth,
+                                        ) => CachedNetworkImage(
+                                          imageUrl: posterUrl,
+                                          fit: BoxFit.cover,
+                                          memCacheWidth: decodeWidth,
+                                          filterQuality: FilterQuality.medium,
+                                          placeholder: (_, _) => ColoredBox(
+                                            color: theme
+                                                .colorScheme
+                                                .surfaceContainerHighest,
+                                          ),
+                                          errorWidget: (_, _, _) =>
+                                              ThumbnailErrorPlaceholder(
+                                                label: displayItem.title,
+                                              ),
                                         ),
-                                        errorWidget: (_, _, _) =>
-                                            ThumbnailErrorPlaceholder(
-                                              label: displayItem.title,
-                                            ),
-                                      ),
+                                  ),
                                 ),
                               ),
                             ),

@@ -586,10 +586,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     MultimediaItem item,
   ) async {
     final posterUrl = AppImageFallbacks.poster(
-      item.posterUrl,
+      item.posterViewerUrl,
       label: item.title,
     );
     if (posterUrl == null || posterUrl.isEmpty) return;
+    final previewUrl = AppImageFallbacks.poster(
+      item.posterUrl,
+      label: item.title,
+    );
 
     await showGeneralDialog<void>(
       context: context,
@@ -611,14 +615,30 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               child: SizedBox(
                 width: size.width,
                 height: size.height,
-                // Zoomable viewer: always decode at source resolution, that is
-                // the point of opening it.
+                // Always fetch and decode the largest poster, even when the
+                // catalog high-quality setting is off.
                 child: CachedNetworkImage(
                   imageUrl: posterUrl,
                   fit: BoxFit.contain,
-                  filterQuality: FilterQuality.medium,
-                  placeholder: (_, _) =>
-                      const Center(child: CircularProgressIndicator()),
+                  filterQuality: FilterQuality.high,
+                  placeholder: (_, _) {
+                    if (previewUrl != null &&
+                        previewUrl.isNotEmpty &&
+                        previewUrl != posterUrl) {
+                      return CachedNetworkImage(
+                        imageUrl: previewUrl,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.medium,
+                        placeholder: (_, _) => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                        errorWidget: (_, _, _) => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+                    return const Center(child: CircularProgressIndicator());
+                  },
                   errorWidget: (_, _, _) => const Center(
                     child: Icon(
                       Icons.broken_image_outlined,
@@ -1717,6 +1737,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           isMovie: isMovie,
           itemUrl: widget.item.url,
           onRefresh: _refreshDetails,
+          onPosterTap: () => _showPosterViewer(context, item),
           child: _buildDesktopContentBelow(
             context,
             item,

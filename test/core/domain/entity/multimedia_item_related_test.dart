@@ -85,4 +85,51 @@ void main() {
     expect(item.related, hasLength(1));
     expect(item.related!.single.title, 'Valid');
   });
+
+  test('posterViewerUrl prefers the stored full-size poster', () {
+    final item = MultimediaItem(
+      title: 'ون بيس',
+      url: 'anime://one-piece',
+      posterUrl: 'https://cdn.example/medium.jpg',
+      fullPosterUrl: 'https://cdn.example/large.jpg',
+    );
+
+    expect(item.posterViewerUrl, 'https://cdn.example/large.jpg');
+  });
+
+  test('posterViewerUrl falls back to the catalog poster', () {
+    final item = MultimediaItem(
+      title: 'ون بيس',
+      url: 'anime://one-piece',
+      posterUrl: 'https://cdn.example/medium.jpg',
+    );
+
+    expect(item.posterViewerUrl, 'https://cdn.example/medium.jpg');
+  });
+
+  test('posterViewerUrl ignores a blank full-size poster', () {
+    final item = MultimediaItem(
+      title: 'ون بيس',
+      url: 'anime://one-piece',
+      posterUrl: 'https://cdn.example/medium.jpg',
+      fullPosterUrl: '   ',
+    );
+
+    expect(item.posterViewerUrl, 'https://cdn.example/medium.jpg');
+  });
+
+  test('round-trips fullPosterUrl through json', () {
+    final item = MultimediaItem.fromJson({
+      'title': 'ون بيس',
+      'url': 'anime://one-piece',
+      'posterUrl': 'https://cdn.example/medium.jpg',
+      'fullPosterUrl': 'https://cdn.example/large.jpg',
+    });
+
+    expect(item.fullPosterUrl, 'https://cdn.example/large.jpg');
+    expect(
+      MultimediaItem.fromJson(item.toJson()).fullPosterUrl,
+      'https://cdn.example/large.jpg',
+    );
+  });
 }
