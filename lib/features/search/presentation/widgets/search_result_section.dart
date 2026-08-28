@@ -46,7 +46,6 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
       heroTag: 'search_${widget.providerId}_${item.url}_$rIndex',
       compact: compact,
       focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
-      showImageLoadingShimmer: false,
       onTap: () => DetailsRoute(
         $extra: DetailsRouteExtra(item: item),
       ).push<void>(context),
@@ -84,7 +83,9 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           delegate: SliverChildBuilderDelegate(
             (context, rIndex) {
               if (rIndex >= widget.results.length) {
-                return ShimmerPlaceholder(borderRadius: 12);
+                return ShimmerPlaceholder(
+                  borderRadius: MultimediaCardLayout.posterRadius,
+                );
               }
               return _resultCard(widget.results[rIndex], rIndex);
             },
@@ -111,7 +112,9 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           delegate: SliverChildBuilderDelegate(
             (context, rIndex) {
               if (rIndex >= widget.results.length) {
-                return ShimmerPlaceholder(borderRadius: 12);
+                return ShimmerPlaceholder(
+                  borderRadius: MultimediaCardLayout.posterRadius,
+                );
               }
               return _resultCard(
                 widget.results[rIndex],
@@ -145,7 +148,9 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
               if (rIndex >= widget.results.length) {
                 return Padding(
                   padding: const EdgeInsets.only(right: spacing),
-                  child: ShimmerPlaceholder(borderRadius: 12),
+                  child: ShimmerPlaceholder(
+                    borderRadius: MultimediaCardLayout.posterRadius,
+                  ),
                 );
               }
 

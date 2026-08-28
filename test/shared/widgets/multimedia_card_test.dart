@@ -1,4 +1,5 @@
 import 'package:animewitcher/shared/widgets/multimedia_card.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -145,5 +146,19 @@ void main() {
     expect(find.text('الحلقة 9'), findsOneWidget);
     expect(find.text('منذ ساعتين'), findsOneWidget);
     expect(find.text('2012'), findsNothing);
+  });
+
+  test('catalog cards shimmer posters by default while artwork loads', () {
+    final card = MultimediaCard.fromItem(
+      item: MultimediaItem(
+        title: 'Bleach',
+        url: 'https://example.test/bleach',
+        posterUrl: 'https://example.test/poster.png',
+      ),
+      heroTag: 'default-shimmer',
+      onTap: () {},
+    );
+
+    expect(card.showImageLoadingShimmer, isTrue);
   });
 }
