@@ -273,6 +273,7 @@ Stream<SearchAggregateState> searchAllProviders(
                   title: item.title,
                   url: item.url,
                   posterUrl: item.posterUrl,
+                  fullPosterUrl: item.fullPosterUrl,
                   bannerUrl: item.bannerUrl,
                   description: item.description,
                   contentType: item.contentType,
