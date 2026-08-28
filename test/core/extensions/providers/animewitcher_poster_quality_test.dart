@@ -9,10 +9,13 @@ const String _smallPoster = 'https://cdn.animewitcher.com/small/one_piece.jpg';
 const String _largePoster = 'https://cdn.animewitcher.com/large/one_piece.jpg';
 
 class _PosterQualitySettingsRepository extends SettingsRepository {
-  _PosterQualitySettingsRepository() : super(StorageService());
+  _PosterQualitySettingsRepository({this.highQuality = true})
+    : super(StorageService());
+
+  final bool highQuality;
 
   @override
-  bool isHighQualityPostersEnabled() => true;
+  bool isHighQualityPostersEnabled() => highQuality;
 }
 
 Map<String, dynamic> _algoliaHit({Map<String, dynamic>? poster}) {
@@ -81,8 +84,11 @@ List<Map<String, dynamic>> get _batchGetResponse => <Map<String, dynamic>>[
   return (dio: dio, requests: requests);
 }
 
-AnimeWitcherNativeProvider _provider(Dio dio) =>
-    AnimeWitcherNativeProvider(dio, _PosterQualitySettingsRepository());
+AnimeWitcherNativeProvider _provider(Dio dio, {bool highQuality = true}) =>
+    AnimeWitcherNativeProvider(
+      dio,
+      _PosterQualitySettingsRepository(highQuality: highQuality),
+    );
 
 Iterable<RequestOptions> _batchGets(List<RequestOptions> requests) =>
     requests.where((r) => r.uri.toString().contains('documents:batchGet'));
@@ -90,12 +96,13 @@ Iterable<RequestOptions> _batchGets(List<RequestOptions> requests) =>
 void main() {
   test('list hits pick up the large poster from anime_list', () async {
     final stub = _stubDio(_algoliaHit());
-    final page = await _provider(stub.dio).searchPage(
-      'one piece',
-      const ProviderSearchFilters(),
-    );
+    final page = await _provider(
+      stub.dio,
+    ).searchPage('one piece', const ProviderSearchFilters());
 
     expect(page.items.single.posterUrl, _largePoster);
+    expect(page.items.single.fullPosterUrl, _largePoster);
+    expect(page.items.single.posterViewerUrl, _largePoster);
 
     final batch = _batchGets(stub.requests).single;
     expect(batch.method, 'POST');
@@ -112,12 +119,13 @@ void main() {
     final stub = _stubDio(
       _algoliaHit(poster: <String, dynamic>{'large': _largePoster}),
     );
-    final page = await _provider(stub.dio).searchPage(
-      'one piece',
-      const ProviderSearchFilters(),
-    );
+    final page = await _provider(
+      stub.dio,
+    ).searchPage('one piece', const ProviderSearchFilters());
 
     expect(page.items.single.posterUrl, _largePoster);
+    expect(page.items.single.fullPosterUrl, _largePoster);
+    expect(page.items.single.posterViewerUrl, _largePoster);
     expect(_batchGets(stub.requests), isEmpty);
   });
 
@@ -168,4 +176,114 @@ void main() {
 
     expect(page.items.single.posterUrl, _smallPoster);
   });
+
+  test(
+    'cards stay on the standard poster while the viewer keeps the large one',
+    () async {
+      final stub = _stubDio(_algoliaHit());
+      final page = await _provider(
+        stub.dio,
+        highQuality: false,
+      ).searchPage('one piece', const ProviderSearchFilters());
+
+      final item = page.items.single;
+      expect(item.posterUrl, _smallPoster);
+      expect(item.fullPosterUrl, _largePoster);
+      expect(item.posterViewerUrl, _largePoster);
+      expect(_batchGets(stub.requests), hasLength(1));
+    },
+  );
+
+  test(
+    'a hit that already carries a large poster still keeps cards standard',
+    () async {
+      final stub = _stubDio(
+        _algoliaHit(poster: <String, dynamic>{'large': _largePoster}),
+      );
+      final page = await _provider(
+        stub.dio,
+        highQuality: false,
+      ).searchPage('one piece', const ProviderSearchFilters());
+
+      final item = page.items.single;
+      expect(item.posterUrl, _smallPoster);
+      expect(item.fullPosterUrl, _largePoster);
+      expect(item.posterViewerUrl, _largePoster);
+      expect(_batchGets(stub.requests), isEmpty);
+    },
+  );
+
+  test(
+    'the viewer prefers original artwork over large when both exist',
+    () async {
+      const originalPoster =
+          'https://cdn.animewitcher.com/original/one_piece.jpg';
+      final stub = _stubDio(
+        _algoliaHit(
+          poster: <String, dynamic>{
+            'original': originalPoster,
+            'large': _largePoster,
+          },
+        ),
+      );
+      final page = await _provider(
+        stub.dio,
+        highQuality: false,
+      ).searchPage('one piece', const ProviderSearchFilters());
+
+      final item = page.items.single;
+      expect(item.posterUrl, _smallPoster);
+      expect(item.fullPosterUrl, originalPoster);
+      expect(item.posterViewerUrl, originalPoster);
+    },
+  );
+
+  test(
+    'details request the large poster for the viewer when cards are standard',
+    () async {
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final path = options.uri.path;
+            dynamic data = <String, dynamic>{'fields': <String, dynamic>{}};
+            if (path.contains('anime_list/one_piece')) {
+              data = <String, dynamic>{
+                'fields': <String, dynamic>{
+                  'name': <String, dynamic>{'stringValue': 'ون بيس'},
+                  'poster_uri': <String, dynamic>{'stringValue': _smallPoster},
+                  'poster': <String, dynamic>{
+                    'mapValue': <String, dynamic>{
+                      'fields': <String, dynamic>{
+                        'large': <String, dynamic>{'stringValue': _largePoster},
+                        'medium': <String, dynamic>{
+                          'stringValue': _smallPoster,
+                        },
+                      },
+                    },
+                  },
+                },
+              };
+            }
+            handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 200,
+                data: data,
+              ),
+            );
+          },
+        ),
+      );
+
+      final item = await _provider(
+        dio,
+        highQuality: false,
+      ).getDetails('https://animewitcher.com/anime/one_piece');
+
+      expect(item.posterUrl, _smallPoster);
+      expect(item.fullPosterUrl, _largePoster);
+      expect(item.posterViewerUrl, _largePoster);
+    },
+  );
 }

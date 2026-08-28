@@ -23,6 +23,8 @@ MultimediaItem mergeDetailsItem({
   final fallbackPoster = AppImageFallbacks.poster(fallback.posterUrl);
   final incomingBanner = AppImageFallbacks.optional(incoming.bannerUrl);
   final fallbackBanner = AppImageFallbacks.optional(fallback.bannerUrl);
+  final incomingFullPoster = AppImageFallbacks.poster(incoming.fullPosterUrl);
+  final fallbackFullPoster = AppImageFallbacks.poster(fallback.fullPosterUrl);
 
   final poster =
       incomingPoster ??
@@ -32,6 +34,12 @@ MultimediaItem mergeDetailsItem({
       fallbackBanner ??
       '';
   final banner = incomingBanner ?? fallbackBanner ?? poster;
+  final fullPoster =
+      _distinctFullPoster(incomingFullPoster, incomingPoster) ??
+      _distinctFullPoster(fallbackFullPoster, fallbackPoster) ??
+      incomingFullPoster ??
+      fallbackFullPoster ??
+      poster;
 
   final incomingTitle = incoming.title.trim();
   final incomingDescription = incoming.description?.trim();
@@ -40,6 +48,7 @@ MultimediaItem mergeDetailsItem({
   return incoming.copyWith(
     title: incomingTitle.isNotEmpty ? incoming.title : fallback.title,
     posterUrl: poster,
+    fullPosterUrl: fullPoster,
     bannerUrl: banner,
     logoUrl:
         AppImageFallbacks.optional(incoming.logoUrl) ??
@@ -52,4 +61,12 @@ MultimediaItem mergeDetailsItem({
         : null,
     episodes: resolvedEpisodes,
   );
+}
+
+/// A full-size URL only counts when it is actually larger than the catalog
+/// poster. Otherwise the opening card's stored large artwork is kept.
+String? _distinctFullPoster(String? fullPoster, String? displayPoster) {
+  if (fullPoster == null || fullPoster.isEmpty) return null;
+  if (displayPoster != null && fullPoster == displayPoster) return null;
+  return fullPoster;
 }
