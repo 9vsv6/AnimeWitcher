@@ -58,6 +58,9 @@ class HistoryItem {
               (map['contentType'] as String?) ??
               'movie',
         ),
+        catalogType: map['catalogType'] as String?,
+        year: (map['year'] as num?)?.toInt(),
+        isDubbed: map['isDubbed'] == true,
         provider: map['provider'] as String?,
         tmdbId: map['tmdbId'] as int?,
         imdbId: map['imdbId'] as String?,

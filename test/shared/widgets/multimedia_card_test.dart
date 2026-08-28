@@ -89,4 +89,61 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('places the title under the poster with a gray caption', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _cardApp(
+        card: MultimediaCard(
+          imageUrl: null,
+          title: 'عمل تجريبي',
+          subtitle: 'مسلسل',
+          year: 2012,
+          heroTag: 'caption-card',
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            widget.data == 'عمل تجريبي' &&
+            widget.textAlign == TextAlign.end,
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('مسلسل'), findsOneWidget);
+    expect(find.text('2012'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('عمل تجريبي، 2012، مسلسل')),
+      matchesSemantics(
+        label: 'عمل تجريبي، 2012، مسلسل',
+        hint: 'عرض التفاصيل',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
+  });
+
+  testWidgets('shows the latest-episode badge on the poster', (tester) async {
+    await tester.pumpWidget(
+      _cardApp(
+        card: MultimediaCard(
+          imageUrl: null,
+          title: 'عمل تجريبي',
+          episodeBadge: 'الحلقة 9',
+          subtitle: 'منذ ساعتين',
+          heroTag: 'latest-card',
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('الحلقة 9'), findsOneWidget);
+    expect(find.text('منذ ساعتين'), findsOneWidget);
+    expect(find.text('2012'), findsNothing);
+  });
 }

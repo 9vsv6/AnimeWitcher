@@ -634,6 +634,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     'tags',
     'mal_id',
     'malId',
+    'details',
+    'dubbed',
+    'year',
   ];
 
   static const List<String> _recentAttributes = <String>[
@@ -654,6 +657,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     'type',
     'tags',
     'thumb_uri',
+    'year',
+    'dubbed',
     'comments_closed',
     'is_final',
     'isFinal',
@@ -918,6 +923,23 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
         value.contains('movie');
   }
 
+  String? _catalogTypeFromHit(Map<String, dynamic> source) {
+    final details = _map(source['details']);
+    final raw = _text(source['type'] ?? details['type']);
+    return raw.isEmpty ? null : raw;
+  }
+
+  bool _isDubbedHit(Map<String, dynamic> source) {
+    final details = _map(source['details']);
+    final raw = source['dubbed'] ?? details['dubbed'];
+    if (raw == true || raw == 1) return true;
+    final value = _text(raw).toLowerCase();
+    return value == 'true' ||
+        value == '1' ||
+        value.contains('مدبلج') ||
+        value.contains('dub');
+  }
+
   ShowStatus _statusFromHit(Map<String, dynamic> source) {
     final details = _map(source['details']);
     final raw = _text(
@@ -1005,6 +1027,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       tags: _stringList(source['tags']),
       source: 'AnimeWitcher Native',
       episodeBadge: episodeBadge,
+      catalogType: _catalogTypeFromHit(source),
+      publishedAt: recent ? _newsDate(source['date'] ?? source['created_at']) : null,
+      isDubbed: _isDubbedHit(source),
     );
   }
 
@@ -2380,6 +2405,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       contentRating: age.isEmpty ? null : age,
       syncData: syncData.isEmpty ? null : syncData,
       source: 'AnimeWitcher',
+      catalogType: _catalogTypeFromHit(source),
+      isDubbed: _isDubbedHit(source),
     );
   }
 
@@ -2721,6 +2748,8 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       relationType: relationType,
       relationLabel: relationLabel,
       source: 'AnimeWitcher',
+      catalogType: item.catalogType,
+      isDubbed: item.isDubbed,
     );
   }
 

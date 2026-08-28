@@ -20,6 +20,7 @@ import 'package:animewitcher/core/router/app_router.dart';
 import '../../../shared/widgets/cards_wrapper.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
+import '../../../shared/widgets/multimedia_card.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../shared/widgets/recoverable_network_state.dart';
 import '../../../../core/utils/layout_constants.dart';
@@ -673,8 +674,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             spacing: spacing,
           )
         : (isDesktop ? 200.0 : 130.0);
-    final imageHeight = cardWidth / (2 / 3);
-    final listHeight = imageHeight + 40.0;
+    final imageHeight = cardWidth /
+        MultimediaCardLayout.posterAspectRatio(isPortrait: true);
+    final listHeight = MultimediaCardLayout.listHeight(
+      cardWidth,
+      isPortrait: true,
+    );
 
     return Directionality(
       textDirection: TextDirection.ltr,

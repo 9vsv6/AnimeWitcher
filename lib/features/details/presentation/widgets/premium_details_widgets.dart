@@ -4,15 +4,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/utils/artwork_quality.dart';
-import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/shared/widgets/cards_wrapper.dart';
 import 'package:animewitcher/shared/widgets/shimmer_placeholder.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:animewitcher/shared/widgets/thumbnail_error_placeholder.dart';
-import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
+import 'package:animewitcher/shared/widgets/multimedia_card.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'countdown_unit_visibility.dart';
-import 'details_layout_widgets.dart';
 
 bool _isArabicDetailsLocale(BuildContext context) => true;
 
@@ -738,87 +735,12 @@ class RecommendationsCarousel extends StatelessWidget {
     this.showRelationBadge = false,
   });
 
-  String? _relationBadgeLabel(BuildContext context, MultimediaItem item) {
-    final explicit = item.relationLabel?.trim();
-    if (explicit != null && explicit.isNotEmpty) {
-      return explicit;
-    }
-
-    // Compatibility with the current WitAnime extension version,
-    // which stores the relation label in description.
-    final legacy = item.description?.trim();
-    const knownLegacyLabels = <String>{
-      'previous',
-      'next',
-      'movie',
-      'ova',
-      'ona',
-      'special',
-      'side story',
-      'spin-off',
-      'alternative',
-      'summary',
-      'parent',
-      'compilation',
-      'adaptation',
-      'related',
-      'السابق',
-      'التالي',
-      'فيلم',
-      'أوفا',
-      'قصة جانبية',
-      'عمل مشتق',
-      'نسخة بديلة',
-      'ملخص',
-      'العمل الأصلي',
-      'تجميعة',
-      'اقتباس مرتبط',
-      'عمل مرتبط',
-      'عمل مرتبط بالشخصيات',
-      'موسم سابق',
-      'موسم لاحق',
-    };
-    if (legacy != null && knownLegacyLabels.contains(legacy.toLowerCase())) {
-      return legacy;
-    }
-
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-    final relation = item.relationType?.trim().toUpperCase();
-
-    switch (relation) {
-      case 'PREQUEL':
-        return isArabic ? 'السابق' : 'Previous';
-      case 'SEQUEL':
-        return isArabic ? 'التالي' : 'Next';
-      case 'SIDE_STORY':
-        return isArabic ? 'قصة جانبية' : 'Side Story';
-      case 'SPIN_OFF':
-        return isArabic ? 'عمل مشتق' : 'Spin-off';
-      case 'ALTERNATIVE':
-        return isArabic ? 'نسخة بديلة' : 'Alternative';
-      case 'SUMMARY':
-        return isArabic ? 'ملخص' : 'Summary';
-      case 'PARENT':
-        return isArabic ? 'العمل الأصلي' : 'Parent';
-      case 'COMPILATION':
-        return isArabic ? 'تجميعة' : 'Compilation';
-      case 'ADAPTATION':
-        return isArabic ? 'اقتباس' : 'Adaptation';
-    }
-
-    if (item.contentType == MultimediaContentType.movie) {
-      return isArabic ? 'فيلم' : 'Movie';
-    }
-
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isLarge = context.isDesktop || context.isTv;
-    final cardWidth = isLarge ? 180.0 : 110.0;
-    final listHeight = isLarge ? 310.0 : 180.0;
+    final cardWidth = MultimediaCardLayout.cardWidth(
+      context,
+      isPortrait: true,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -838,132 +760,21 @@ class RecommendationsCarousel extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: listHeight,
+          height: MultimediaCardLayout.listHeight(
+            cardWidth,
+            isPortrait: true,
+          ),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final item = items[index];
-              final relationBadge = showRelationBadge
-                  ? _relationBadgeLabel(context, item)
-                  : null;
-
-              return CardsWrapper(
+              return MultimediaCard.fromItem(
+                item: item,
+                heroTag: 'related_${item.url}_$index',
+                showRelationBadge: showRelationBadge,
                 onTap: () => onItemTap(item),
-                child: SizedBox(
-                  width: cardWidth,
-                  height: listHeight,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ArtworkDecode(
-                          paintedWidth: cardWidth,
-                          builder: (BuildContext context, int? decodeWidth) =>
-                              CachedNetworkImage(
-                                imageUrl:
-                                    AppImageFallbacks.poster(
-                                      item.posterUrl,
-                                      label: item.title,
-                                    ) ??
-                                    '',
-                                fit: BoxFit.cover,
-                                width: cardWidth,
-                                memCacheWidth: decodeWidth,
-                                filterQuality: FilterQuality.medium,
-                                errorWidget: (_, _, _) =>
-                                    ThumbnailErrorPlaceholder(
-                                      label: item.title,
-                                    ),
-                              ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          height: isLarge ? 106 : 78,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.82),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (relationBadge != null)
-                          Positioned(
-                            top: 8,
-                            left: 8,
-                            child: Container(
-                              constraints: BoxConstraints(
-                                maxWidth: cardWidth - 16,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
-                                borderRadius: BorderRadius.circular(6),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black38,
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Text(
-                                relationBadge,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimary,
-                                  fontSize: isLarge ? 12 : 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        Positioned(
-                          left: 8,
-                          right: 8,
-                          bottom: 8,
-                          child: Text(
-                            item.title,
-                            textDirection: TextDirection.ltr,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.start,
-                            style:
-                                (isLarge
-                                        ? Theme.of(context).textTheme.bodyMedium
-                                        : Theme.of(context).textTheme.bodySmall)
-                                    ?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      shadows: const [
-                                        Shadow(
-                                          color: Colors.black,
-                                          blurRadius: 4,
-                                        ),
-                                      ],
-                                    ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               );
             },
           ),

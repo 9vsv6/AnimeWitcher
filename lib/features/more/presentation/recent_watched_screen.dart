@@ -140,7 +140,10 @@ class _RecentWatchedGrid extends StatelessWidget {
       gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
         context,
         maxCrossAxisExtent: isDesktop ? 240 : 150,
-        childAspectRatio: isDesktop ? 0.58 : 0.55,
+        childAspectRatio: MultimediaCardLayout.gridAspectRatio(
+          isPortrait: true,
+          isDesktop: isDesktop,
+        ),
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
@@ -148,10 +151,9 @@ class _RecentWatchedGrid extends StatelessWidget {
       itemBuilder: (context, index) {
         final history = items[index];
         final item = history.item;
-        return MultimediaCard(
+        return MultimediaCard.fromItem(
           key: ValueKey('recent-${item.url}'),
-          imageUrl: item.posterImageUrl,
-          title: item.title,
+          item: item,
           heroTag: 'recent-${item.id}-$index',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(

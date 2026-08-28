@@ -1,11 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import '../../core/domain/entity/multimedia_item.dart';
 import '../../core/utils/artwork_quality.dart';
+import '../../core/utils/catalog_label.dart';
+import '../../core/utils/image_fallbacks.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import 'cards_wrapper.dart';
 import 'shimmer_placeholder.dart';
 import 'thumbnail_error_placeholder.dart';
+
+/// Shared poster + caption metrics so rails and grids reserve the same space.
+class MultimediaCardLayout {
+  static const double captionHeight = 46;
+  static const double posterRadius = 12;
+  static const double portraitGridAspectRatio = 0.52;
+  static const double landscapeGridAspectRatio = 1.12;
+  static const double desktopPortraitGridAspectRatio = 0.54;
+
+  static double cardWidth(
+    BuildContext context, {
+    required bool isPortrait,
+  }) {
+    if (context.isHandsetLandscape) {
+      return ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(context);
+    }
+    if (context.isDesktopLandscape) {
+      return ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(context);
+    }
+    if (context.isDesktop) {
+      return isPortrait ? 200.0 : 300.0;
+    }
+    return isPortrait ? 130.0 : 200.0;
+  }
+
+  static double posterAspectRatio({required bool isPortrait}) =>
+      isPortrait ? 2 / 3 : 16 / 9;
+
+  static double listHeight(double cardWidth, {required bool isPortrait}) {
+    return cardWidth / posterAspectRatio(isPortrait: isPortrait) +
+        captionHeight;
+  }
+
+  static double gridAspectRatio({
+    required bool isPortrait,
+    bool isDesktop = false,
+  }) {
+    if (!isPortrait) return landscapeGridAspectRatio;
+    return isDesktop
+        ? desktopPortraitGridAspectRatio
+        : portraitGridAspectRatio;
+  }
+}
 
 class MultimediaCard extends StatelessWidget {
   final String? imageUrl;
@@ -26,6 +72,15 @@ class MultimediaCard extends StatelessWidget {
   /// This widget displays the string unchanged.
   final String? episodeBadge;
 
+  /// Smaller gray line under the title: episode time or catalog type.
+  final String? subtitle;
+
+  /// Release year drawn on the bottom-right of the poster.
+  final int? year;
+
+  /// Optional yellow badge at the top-right (`مدبلج`, relation, …).
+  final String? posterBadge;
+
   const MultimediaCard({
     super.key,
     required this.imageUrl,
@@ -38,26 +93,57 @@ class MultimediaCard extends StatelessWidget {
     this.compact = false,
     this.episodeBadge,
     this.showImageLoadingShimmer = true,
+    this.subtitle,
+    this.year,
+    this.posterBadge,
   });
+
+  MultimediaCard.fromItem({
+    super.key,
+    required MultimediaItem item,
+    required this.heroTag,
+    required this.onTap,
+    this.onLongPress,
+    this.focusNode,
+    this.compact = false,
+    this.isPortrait = true,
+    this.showImageLoadingShimmer = true,
+    bool showRelationBadge = false,
+  }) : imageUrl = AppImageFallbacks.poster(item.posterUrl, label: item.title),
+       title = item.title,
+       episodeBadge = item.episodeBadge,
+       subtitle = multimediaCardSubtitle(item),
+       year = multimediaCardYear(item),
+       posterBadge = multimediaCardPosterBadge(
+         item,
+         showRelationBadge: showRelationBadge,
+       );
 
   @override
   Widget build(BuildContext context) {
-    final isHandsetLandscape = context.isHandsetLandscape;
     final isDesktopLandscape = context.isDesktopLandscape;
     final isDesktop = context.isDesktop;
     final effectiveCompact = compact || isDesktopLandscape;
-    final cardWidth = isHandsetLandscape
-        ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(context)
-        : isDesktopLandscape
-        ? ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(context)
-        : isDesktop
-        ? (isPortrait ? 200.0 : 300.0)
-        : (isPortrait ? 130.0 : 200.0);
+    final cardWidth = MultimediaCardLayout.cardWidth(
+      context,
+      isPortrait: isPortrait,
+    );
     final normalizedEpisodeBadge = episodeBadge?.trim();
     final badgeText =
         normalizedEpisodeBadge == null || normalizedEpisodeBadge.isEmpty
         ? null
         : normalizedEpisodeBadge;
+    final normalizedPosterBadge = posterBadge?.trim();
+    final cornerBadge =
+        normalizedPosterBadge == null || normalizedPosterBadge.isEmpty
+        ? null
+        : normalizedPosterBadge;
+    final normalizedSubtitle = subtitle?.trim();
+    final caption =
+        normalizedSubtitle == null || normalizedSubtitle.isEmpty
+        ? null
+        : normalizedSubtitle;
+    final yearText = year == null || year! <= 0 ? null : '$year';
 
     final normalizedImageUrl = imageUrl?.trim();
     final hasImageUrl =
@@ -65,7 +151,7 @@ class MultimediaCard extends StatelessWidget {
     final imageWidget = Hero(
       tag: heroTag,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(MultimediaCardLayout.posterRadius),
         child: hasImageUrl
             ? ArtworkDecode(
                 paintedWidth: cardWidth,
@@ -80,16 +166,27 @@ class MultimediaCard extends StatelessWidget {
       ),
     );
 
+    final titleSize = effectiveCompact ? 12.0 : (isDesktop ? 15.0 : 13.0);
+    final subtitleSize = effectiveCompact ? 10.0 : (isDesktop ? 12.0 : 11.0);
     final titleTextStyle = TextStyle(
-      color: Colors.white,
-      fontSize: effectiveCompact ? 14 : (isDesktop ? 22 : 14),
+      color: Colors.white.withValues(alpha: 0.92),
+      fontSize: titleSize,
+      fontWeight: FontWeight.w600,
+      height: 1.2,
+    );
+    final subtitleTextStyle = TextStyle(
+      color: Colors.white.withValues(alpha: 0.45),
+      fontSize: subtitleSize,
       fontWeight: FontWeight.w500,
-      shadows: const [
-        Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
-      ],
+      height: 1.2,
     );
 
-    final semanticLabel = badgeText == null ? title : '$title، $badgeText';
+    final semanticParts = <String>[title];
+    if (badgeText != null) semanticParts.add(badgeText);
+    if (cornerBadge != null) semanticParts.add(cornerBadge);
+    if (yearText != null) semanticParts.add(yearText);
+    if (caption != null) semanticParts.add(caption);
+    final semanticLabel = semanticParts.join('، ');
 
     return Semantics(
       button: true,
@@ -106,11 +203,15 @@ class MultimediaCard extends StatelessWidget {
             scaleFactor: 1.05,
             child: SizedBox(
               width: cardWidth,
-              child: _buildInsideMode(
+              child: _buildCard(
                 context,
-                imageWidget,
-                titleTextStyle,
-                badgeText,
+                imageWidget: imageWidget,
+                titleTextStyle: titleTextStyle,
+                subtitleTextStyle: subtitleTextStyle,
+                badgeText: badgeText,
+                cornerBadge: cornerBadge,
+                yearText: yearText,
+                caption: caption,
               ),
             ),
           ),
@@ -119,8 +220,6 @@ class MultimediaCard extends StatelessWidget {
     );
   }
 
-  /// Drawn with mipmapped filtering so the poster stays sharp at any card size.
-  /// A null [decodeWidth] decodes the artwork at source resolution.
   Widget _buildPoster(
     BuildContext context,
     String imageUrl, {
@@ -130,10 +229,11 @@ class MultimediaCard extends StatelessWidget {
       imageUrl: imageUrl,
       fit: BoxFit.cover,
       width: double.infinity,
+      height: double.infinity,
       memCacheWidth: decodeWidth,
       filterQuality: FilterQuality.medium,
       placeholder: (context, url) => showImageLoadingShimmer
-          ? ShimmerPlaceholder(borderRadius: 12)
+          ? ShimmerPlaceholder(borderRadius: MultimediaCardLayout.posterRadius)
           : _buildImageLoadingCard(context),
       errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(label: title),
       fadeOutDuration: Duration.zero,
@@ -162,27 +262,14 @@ class MultimediaCard extends StatelessWidget {
     );
   }
 
-  Widget _buildEpisodeBadge(BuildContext context, String text) {
-    // Episode badge UI v2: use the active theme and pin to the right.
+  Widget _buildYellowBadge(BuildContext context, String text) {
     final colors = Theme.of(context).colorScheme;
-
     return Container(
       constraints: const BoxConstraints(maxWidth: 108),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: colors.primary.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(
-          color: colors.primaryContainer.withValues(alpha: 0.85),
-          width: 0.8,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: colors.shadow.withValues(alpha: 0.28),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: colors.primary,
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         text,
@@ -190,58 +277,148 @@ class MultimediaCard extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: colors.onPrimary,
-          fontSize: 12,
-          height: 1,
-          fontWeight: FontWeight.w700,
+          fontSize: 11,
+          height: 1.1,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
   }
 
-  Widget _buildInsideMode(
-    BuildContext context,
-    Widget imageWidget,
-    TextStyle titleTextStyle,
-    String? badgeText,
-  ) {
-    return Stack(
+  Widget _buildPosterStack(
+    BuildContext context, {
+    required Widget imageWidget,
+    required String? badgeText,
+    required String? cornerBadge,
+    required String? yearText,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(MultimediaCardLayout.posterRadius),
+      child: Stack(
+      fit: StackFit.expand,
       children: [
-        Positioned.fill(child: imageWidget),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: Container(
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(12),
-                bottomRight: Radius.circular(12),
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black87],
-                stops: [0.0, 1.0],
-              ),
-            ),
-            padding: const EdgeInsets.fromLTRB(10, 24, 10, 10),
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textDirection: TextDirection.ltr,
-              textAlign: TextAlign.center,
-              style: titleTextStyle,
-            ),
+        imageWidget,
+        if (cornerBadge != null)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: _buildYellowBadge(context, cornerBadge),
           ),
-        ),
         if (badgeText != null)
           Positioned(
-            right: 8,
-            bottom: (titleTextStyle.fontSize ?? 14) + 30,
-            child: _buildEpisodeBadge(context, badgeText),
+            right: 6,
+            bottom: 6,
+            child: _buildYellowBadge(context, badgeText),
+          )
+        else if (yearText != null)
+          Positioned(
+            right: 7,
+            bottom: 6,
+            child: Text(
+              yearText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                shadows: [
+                  Shadow(
+                    color: Colors.black87,
+                    blurRadius: 6,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
           ),
       ],
+      ),
+    );
+  }
+
+  Widget _buildCaption({
+    required TextStyle titleTextStyle,
+    required TextStyle subtitleTextStyle,
+    required String? caption,
+  }) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(top: 6, start: 2, end: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textDirection: TextDirection.ltr,
+            textAlign: TextAlign.end,
+            style: titleTextStyle,
+          ),
+          if (caption != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.start,
+              style: subtitleTextStyle,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard(
+    BuildContext context, {
+    required Widget imageWidget,
+    required TextStyle titleTextStyle,
+    required TextStyle subtitleTextStyle,
+    required String? badgeText,
+    required String? cornerBadge,
+    required String? yearText,
+    required String? caption,
+  }) {
+    final poster = _buildPosterStack(
+      context,
+      imageWidget: imageWidget,
+      badgeText: badgeText,
+      cornerBadge: cornerBadge,
+      yearText: yearText,
+    );
+    final captionBlock = _buildCaption(
+      titleTextStyle: titleTextStyle,
+      subtitleTextStyle: subtitleTextStyle,
+      caption: caption,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final boundedHeight =
+            constraints.maxHeight.isFinite &&
+            constraints.maxHeight < double.infinity;
+        if (boundedHeight) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: poster),
+              captionBlock,
+            ],
+          );
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: MultimediaCardLayout.posterAspectRatio(
+                isPortrait: isPortrait,
+              ),
+              child: poster,
+            ),
+            captionBlock,
+          ],
+        );
+      },
     );
   }
 }

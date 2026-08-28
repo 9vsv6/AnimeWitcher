@@ -5,7 +5,6 @@ import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/router/app_router.dart';
-import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/shared/widgets/desktop_scroll_wrapper.dart';
 import 'package:animewitcher/shared/widgets/multimedia_card.dart';
 import 'package:animewitcher/shared/widgets/shimmer_placeholder.dart';
@@ -41,16 +40,13 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
   }
 
   Widget _resultCard(MultimediaItem item, int rIndex, {bool compact = false}) {
-    return MultimediaCard(
+    return MultimediaCard.fromItem(
       key: ValueKey(item.url),
-      imageUrl: AppImageFallbacks.poster(
-        item.posterUrl,
-        label: item.title,
-      ),
-      title: item.title,
+      item: item,
       heroTag: 'search_${widget.providerId}_${item.url}_$rIndex',
       compact: compact,
       focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
+      showImageLoadingShimmer: false,
       onTap: () => DetailsRoute(
         $extra: DetailsRouteExtra(item: item),
       ).push<void>(context),
@@ -83,7 +79,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
             crossAxisCount: mobileColumns,
             crossAxisSpacing: 10,
             mainAxisSpacing: 14,
-            childAspectRatio: 0.56,
+            childAspectRatio: MultimediaCardLayout.portraitGridAspectRatio,
           ),
           delegate: SliverChildBuilderDelegate(
             (context, rIndex) {
@@ -110,7 +106,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
             crossAxisCount: desktopColumns,
             crossAxisSpacing: 12,
             mainAxisSpacing: 14,
-            childAspectRatio: 0.56,
+            childAspectRatio: MultimediaCardLayout.portraitGridAspectRatio,
           ),
           delegate: SliverChildBuilderDelegate(
             (context, rIndex) {

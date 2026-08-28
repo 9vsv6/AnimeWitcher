@@ -421,7 +421,10 @@ class _ScheduleGrid extends StatelessWidget {
         gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
           context,
           maxCrossAxisExtent: isDesktop ? 240 : 150,
-          childAspectRatio: isDesktop ? 0.58 : 0.55,
+          childAspectRatio: MultimediaCardLayout.gridAspectRatio(
+            isPortrait: true,
+            isDesktop: isDesktop,
+          ),
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
         ),
@@ -431,10 +434,9 @@ class _ScheduleGrid extends StatelessWidget {
             return const Center(child: CircularProgressIndicator.adaptive());
           }
           final item = items[index];
-          return MultimediaCard(
+          return MultimediaCard.fromItem(
             key: ValueKey('broadcast-$day-${item.url}'),
-            imageUrl: item.posterImageUrl,
-            title: item.title,
+            item: item,
             heroTag: 'broadcast-$day-${item.id}-$index',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(

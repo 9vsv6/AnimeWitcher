@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/utils/localized_text.dart';
 import '../../../../core/router/app_router.dart';
-import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
@@ -44,19 +43,16 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
         gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
           context,
           maxCrossAxisExtent: totalHeight,
-          childAspectRatio: 2 / 3.4,
+          childAspectRatio: MultimediaCardLayout.portraitGridAspectRatio,
           crossAxisSpacing: LayoutConstants.spacingMd,
           mainAxisSpacing: LayoutConstants.spacingMd,
         ),
         itemCount: items.length,
         itemBuilder: (context, index) {
           final item = items[index];
-          return MultimediaCard(
+          return MultimediaCard.fromItem(
             key: ValueKey(item.url),
-            imageUrl:
-                AppImageFallbacks.poster(item.posterUrl, label: item.title) ??
-                '',
-            title: item.title,
+            item: item,
             heroTag: 'lib_bookmark_${item.url}_$index',
             onTap: () => DetailsRoute(
               $extra: DetailsRouteExtra(item: item),
