@@ -169,7 +169,7 @@ class _RankingPage extends StatefulWidget {
 
 class _RankingPageState extends State<_RankingPage>
     with AutomaticKeepAliveClientMixin<_RankingPage> {
-  static const int _pageSize = 30;
+  static const int _pageSize = animeWitcherRankingPageSize;
   static const double _loadMoreThreshold = 900;
 
   final ScrollController _scrollController = ScrollController();

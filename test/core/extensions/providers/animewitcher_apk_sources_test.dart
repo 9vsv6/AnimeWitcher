@@ -199,10 +199,11 @@ void main() {
     );
   });
 
-  test('rankings query Firestore mal_rank and never Algolia', () async {
+  test('rankings query Firestore mal_rank at APK page size 24', () async {
     final stub = _stubDio();
     final page = await _provider(stub.dio).getGlobalRankingPage(
       AnimeWitcherGlobalRanking.all,
+      limit: 30,
     );
 
     expect(page.items, isNotEmpty);
@@ -220,8 +221,50 @@ void main() {
     expect(structured['from'], <Map<String, dynamic>>[
       <String, dynamic>{'collectionId': 'anime_list'},
     ]);
+    expect(structured['limit'], animeWitcherRankingPageSize);
+    expect(structured.containsKey('where'), isFalse);
     final order = (structured['orderBy'] as List).first as Map;
     expect(order['field'], <String, dynamic>{'fieldPath': 'details.mal_rank'});
+    expect(order['direction'], 'ASCENDING');
+  });
+
+  test('continuing ranking filters details.state and still uses mal_rank',
+      () async {
+    final stub = _stubDio();
+    await _provider(stub.dio).getGlobalRankingPage(
+      AnimeWitcherGlobalRanking.continuing,
+    );
+
+    final query = stub.requests.singleWhere(
+      (request) => request.uri.path.contains(':runQuery'),
+    );
+    final structured = Map<String, dynamic>.from(
+      Map<String, dynamic>.from(query.data as Map)['structuredQuery'] as Map,
+    );
+    expect(structured['limit'], 24);
+    final where = Map<String, dynamic>.from(structured['where'] as Map);
+    final filter = Map<String, dynamic>.from(where['fieldFilter'] as Map);
+    expect(filter['field'], <String, dynamic>{'fieldPath': 'details.state'});
+    expect(filter['op'], 'EQUAL');
+    expect(filter['value'], <String, dynamic>{'stringValue': 'مستمر'});
+  });
+
+  test('ranking Firestore 403 is a failure, not an empty category', () async {
+    final stub = _stubDio(
+      statusFor: (options) {
+        if (options.uri.path.contains(':runQuery')) return 403;
+        return 200;
+      },
+    );
+
+    await expectLater(
+      _provider(stub.dio).getGlobalRankingPage(AnimeWitcherGlobalRanking.all),
+      throwsA(isA<StateError>()),
+    );
+    expect(
+      stub.requests.any((request) => _isAlgolia(request.uri)),
+      isFalse,
+    );
   });
 
   test('anime details load Algolia series object then skip Firestore', () async {
