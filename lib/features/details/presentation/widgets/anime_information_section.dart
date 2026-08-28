@@ -2,28 +2,54 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
 
+/// Trims empty, unknown, and "?" placeholders out of details metadata.
+String? cleanAnimeInfoValue(dynamic raw) {
+  if (raw == null) return null;
+  final value = raw.toString().trim();
+  if (value.isEmpty) return null;
+  final lower = value.toLowerCase();
+  if (lower == 'null' ||
+      lower == 'n/a' ||
+      lower == 'none' ||
+      lower == 'unknown' ||
+      value == '?' ||
+      value == '؟') {
+    return null;
+  }
+  return value;
+}
+
+/// True when [value] is the app/provider name rather than a real source.
+bool isPlaceholderAnimeSource(String value) {
+  final compact = value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  return compact == 'animewitcher' || compact == 'animewitchernative';
+}
+
+/// Real manga/light-novel source only — never the app name.
+String? displayableAnimeSource({String? syncSource, String? itemSource}) {
+  for (final raw in <String?>[syncSource, itemSource]) {
+    final cleaned = cleanAnimeInfoValue(raw);
+    if (cleaned == null || isPlaceholderAnimeSource(cleaned)) continue;
+    return cleaned;
+  }
+  return null;
+}
+
 class AnimeInformationSection extends StatelessWidget {
   final MultimediaItem item;
 
   const AnimeInformationSection({super.key, required this.item});
 
-  String? _clean(dynamic raw) {
-    if (raw == null) return null;
-    final value = raw.toString().trim();
-    if (value.isEmpty || value.toLowerCase() == 'null') return null;
-    return value;
-  }
-
   String? _read(Map<String, String> data, List<String> keys) {
     for (final key in keys) {
-      final value = _clean(data[key]);
+      final value = cleanAnimeInfoValue(data[key]);
       if (value != null) return value;
     }
     return null;
   }
 
   String? _durationLabel(BuildContext context, Map<String, String> data) {
-    final raw = _clean(data['awDuration']);
+    final raw = cleanAnimeInfoValue(data['awDuration']);
     int? minutes;
     if (raw != null) {
       final match = RegExp(r'[0-9]+').firstMatch(raw);
@@ -49,7 +75,7 @@ class AnimeInformationSection extends StatelessWidget {
       dynamic value, {
       bool showFullValue = false,
     }) {
-      final cleaned = _clean(value);
+      final cleaned = cleanAnimeInfoValue(value);
       if (cleaned == null) return null;
       return _AnimeInfoEntry(
         label: isArabic ? ar : en,
@@ -58,11 +84,26 @@ class AnimeInformationSection extends StatelessWidget {
       );
     }
 
+    final source = displayableAnimeSource(
+      syncSource: _read(data, const ['awSource']),
+      itemSource: item.source,
+    );
+    final startDate = _read(data, const ['awStartDate']);
+    final endDate = _read(data, const ['awEndDate']);
+
     final entries = <_AnimeInfoEntry?>[
-      entry('المصدر', 'Source', _read(data, const ['awSource']) ?? item.source),
+      entry('المصدر', 'Source', source),
       entry('مدة الحلقة', 'Episode duration', _durationLabel(context, data)),
-      entry('بداية العرض', 'Start date', _read(data, const ['awStartDate']) ?? '?'),
-      entry('نهاية العرض', 'End date', _read(data, const ['awEndDate']) ?? '?'),
+      if (startDate != null || endDate != null) ...[
+        _AnimeInfoEntry(
+          label: isArabic ? 'بداية العرض' : 'Start date',
+          value: startDate ?? '?',
+        ),
+        _AnimeInfoEntry(
+          label: isArabic ? 'نهاية العرض' : 'End date',
+          value: endDate ?? '?',
+        ),
+      ],
       entry('الاستديو', 'Studio', _read(data, const ['awStudio'])),
       entry(
         'العنوان الإنجليزي',
@@ -143,7 +184,9 @@ class _AnimeInfoValue extends StatelessWidget {
         Text(
           entry.value,
           maxLines: entry.showFullValue ? null : 2,
-          overflow: entry.showFullValue ? TextOverflow.visible : TextOverflow.ellipsis,
+          overflow: entry.showFullValue
+              ? TextOverflow.visible
+              : TextOverflow.ellipsis,
           style: textTheme.bodyMedium?.copyWith(
             color: colors.onSurfaceVariant,
             height: 1.25,
