@@ -1166,6 +1166,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     'episode_name',
     'title',
     'poster_uri',
+    'poster_url_aniList',
     'poster',
     'cover_uri',
     'mal_id',
@@ -1393,10 +1394,21 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return _AnimeRoute(animeId: animeId, hit: hit);
   }
 
+  /// AniList artwork stored on the recent index. APK treats this as medium:
+  /// never prefer it over `poster.large` when high-quality posters are on,
+  /// and never use it instead of `poster_uri` when they are off.
+  String _aniListPosterFromHit(Map<String, dynamic> source) {
+    return _firstText(source, const <String>[
+      'poster_url_aniList',
+      'posterUrlAniList',
+    ]);
+  }
+
   String _highestQualityPosterFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
     final candidates = <dynamic>[
       for (final key in _largePosterKeys) poster[key],
+      _aniListPosterFromHit(source),
       source['poster_uri'],
       poster['medium'],
       source['cover_uri'],
@@ -1412,10 +1424,13 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     if (_useHighQualityPosters) return _highestQualityPosterFromHit(source);
     final poster = _map(source['poster']);
     // Catalog cards keep the lighter artwork when the setting is off.
+    // `poster_url_aniList` sits below `poster.large` so it cannot replace a
+    // stored large URL, and it never precedes `poster_uri`.
     final candidates = <dynamic>[
       source['poster_uri'],
       poster['medium'],
       poster['large'],
+      _aniListPosterFromHit(source),
       source['cover_uri'],
     ];
     for (final candidate in candidates) {
@@ -1638,17 +1653,41 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     return output;
   }
 
-  /// Gives every hit the poster the details page would show.
+  /// Series id used to hydrate `anime_list` posters.
   ///
-  /// Some Algolia indexes only store the small `poster_uri`, so cards stayed
-  /// soft until the anime page fetched the full document. One masked batch read
-  /// per page — cached per title, and skipped entirely when the hits already
-  /// carry a large poster — lets search, home and the rest open at full quality.
+  /// The recent Algolia index stores the episode document on `objectID` /
+  /// `doc_ref`. The APK puts the series id on `anime_id`; using objectID here
+  /// would batchGet the wrong document.
+  String _seriesIdForPosterFill(Map<String, dynamic> source) {
+    final fromAnimeId = _text(source['anime_id'] ?? source['animeId']);
+    if (fromAnimeId.isNotEmpty) return fromAnimeId;
+    final parent = _text(
+      source['parent_anime_id'] ?? source['parentAnimeId'],
+    );
+    if (parent.isNotEmpty) return parent;
+    final anime = _map(source['anime']);
+    final nested = _text(
+      anime['anime_id'] ?? anime['animeId'] ?? anime['id'] ?? anime['name'],
+    );
+    if (nested.isNotEmpty) return nested;
+    final series = _map(source['series']);
+    return _text(
+      series['anime_id'] ?? series['id'] ?? series['name'],
+    );
+  }
+
+  /// Gives recent/latest-episode hits the poster the details page would show.
+  ///
+  /// The recent Algolia index often stores only the small `poster_uri` (and
+  /// optional `poster_url_aniList`). One masked `anime_list` batch read per
+  /// page — cached per title, and skipped when the hits already carry
+  /// `poster.large` — fills cards at full quality. Search/catalog indexes
+  /// already include `poster.large`, so they must not call this.
   Future<void> _fillLargePosters(List<Map<String, dynamic>> hits) async {
     final pending = <String, List<Map<String, dynamic>>>{};
     for (final hit in hits) {
       if (_hasLargePoster(hit)) continue;
-      final animeId = _animeIdFromHit(hit);
+      final animeId = _seriesIdForPosterFill(hit);
       if (animeId.isEmpty) continue;
       final cached = _cachedPosterFields(animeId);
       if (cached != null) {
@@ -1712,6 +1751,9 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     bool applyEcchiFilter = true,
   }) async {
     final maps = hits.map(_map).where((hit) => hit.isNotEmpty).toList();
+    if (recent && _useHighQualityPosters) {
+      await _fillLargePosters(maps);
+    }
     final seen = <String>{};
     final output = <MultimediaItem>[];
     for (final hit in maps) {

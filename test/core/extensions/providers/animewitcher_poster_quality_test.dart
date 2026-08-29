@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
@@ -7,6 +9,11 @@ import 'package:animewitcher/core/storage/storage_service.dart';
 
 const String _smallPoster = 'https://cdn.animewitcher.com/small/one_piece.jpg';
 const String _largePoster = 'https://cdn.animewitcher.com/large/one_piece.jpg';
+const String _aniListPoster =
+    'https://cdn.animewitcher.com/anilist/one_piece.jpg';
+const String _episodeStill =
+    'https://cdn.animewitcher.com/thumbs/one_piece_1100.jpg';
+const String _latestSectionTitle = 'الحلقات الجديدة';
 
 class _PosterQualitySettingsRepository extends SettingsRepository {
   _PosterQualitySettingsRepository({this.highQuality = true})
@@ -53,11 +60,85 @@ List<Map<String, dynamic>> get _batchGetResponse => <Map<String, dynamic>>[
   },
 ];
 
+Map<String, dynamic> _recentAlgoliaHit({
+  String objectId = 'episode_doc_1100',
+  String animeId = 'one_piece',
+  String? aniListPoster = _aniListPoster,
+}) {
+  return <String, dynamic>{
+    'hits': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'objectID': objectId,
+        'anime_id': animeId,
+        'name': 'ون بيس',
+        'episode_name': 'حلقة 1100',
+        'poster_uri': _smallPoster,
+        if (aniListPoster != null) 'poster_url_aniList': aniListPoster,
+        'thumb_uri': _episodeStill,
+        'doc_ref': 'episodes/$objectId',
+      },
+    ],
+    'nbPages': 1,
+  };
+}
+
+Map<String, dynamic> _recentHomeSectionsDocument({
+  String title = _latestSectionTitle,
+  String type = 'recent',
+  String indexName = 'recent',
+}) {
+  return <String, dynamic>{
+    'name':
+        'projects/animewitcher-1c66d/databases/(default)'
+        '/documents/Settings/home_sections',
+    'fields': <String, dynamic>{
+      'sections': <String, dynamic>{
+        'arrayValue': <String, dynamic>{
+          'values': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'mapValue': <String, dynamic>{
+                'fields': <String, dynamic>{
+                  'title': <String, dynamic>{'stringValue': title},
+                  'type': <String, dynamic>{'stringValue': type},
+                  'index_name': <String, dynamic>{'stringValue': indexName},
+                  'enabled': const <String, dynamic>{'booleanValue': true},
+                  'order': const <String, dynamic>{'integerValue': '1'},
+                  'hits_per_page': const <String, dynamic>{
+                    'integerValue': '10',
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  };
+}
+
+Map<String, String> _algoliaQueryParams(RequestOptions options) {
+  final data = options.data;
+  if (data is Map && data['params'] is String) {
+    return Uri.splitQueryString(data['params'] as String, encoding: utf8);
+  }
+  return options.uri.queryParameters;
+}
+
+List<String> _batchGetDocumentIds(RequestOptions request) {
+  final data = request.data;
+  if (data is! Map) return const <String>[];
+  final documents = data['documents'];
+  if (documents is! List) return const <String>[];
+  return documents.map((raw) => raw.toString()).toList(growable: false);
+}
+
 /// Dio that answers Algolia queries with [algoliaPayload] and Firestore
 /// `batchGet` calls with the poster document, recording every request.
 ({Dio dio, List<RequestOptions> requests}) _stubDio(
-  Map<String, dynamic> algoliaPayload,
-) {
+  Map<String, dynamic> algoliaPayload, {
+  Map<String, dynamic>? homeSections,
+  List<Map<String, dynamic>>? batchGetResponse,
+}) {
   final requests = <RequestOptions>[];
   final dio = Dio();
   dio.interceptors.add(
@@ -65,9 +146,12 @@ List<Map<String, dynamic>> get _batchGetResponse => <Map<String, dynamic>>[
       onRequest: (options, handler) {
         requests.add(options);
         final url = options.uri.toString();
+        final path = options.uri.path;
         dynamic data = <String, dynamic>{};
         if (url.contains('documents:batchGet')) {
-          data = _batchGetResponse;
+          data = batchGetResponse ?? _batchGetResponse;
+        } else if (path.contains('Settings/home_sections')) {
+          data = homeSections ?? const <String, dynamic>{};
         } else if (url.contains('algolia.net')) {
           data = algoliaPayload;
         }
@@ -281,6 +365,146 @@ void main() {
       expect(item.posterUrl, _smallPoster);
       expect(item.fullPosterUrl, _largePoster);
       expect(item.posterViewerUrl, _largePoster);
+    },
+  );
+
+  test(
+    'latest-episode pages batchGet anime_list posters when HQ is on',
+    () async {
+      final stub = _stubDio(
+        _recentAlgoliaHit(),
+        homeSections: _recentHomeSectionsDocument(),
+      );
+      final page = await _provider(stub.dio).getHomeSectionPage(
+        _latestSectionTitle,
+      );
+
+      expect(page.items.single.posterUrl, _largePoster);
+      expect(page.items.single.fullPosterUrl, _largePoster);
+      expect(page.items.single.posterUrl, isNot(_episodeStill));
+      expect(page.items.single.posterUrl, isNot(_aniListPoster));
+      expect(page.items.single.posterUrl, isNot(_smallPoster));
+
+      final batchGets = _batchGets(stub.requests).toList();
+      expect(batchGets, isNotEmpty);
+      final documents = _batchGetDocumentIds(batchGets.first);
+      expect(
+        documents.single,
+        endsWith('/documents/anime_list/one_piece'),
+      );
+      expect(
+        documents.join(),
+        isNot(contains('episode_doc_1100')),
+      );
+
+      final query = stub.requests.singleWhere(
+        (request) => request.uri.toString().contains('algolia.net'),
+      );
+      final attrs = jsonDecode(
+        _algoliaQueryParams(query)['attributesToRetrieve'] ?? '[]',
+      ) as List<dynamic>;
+      expect(attrs, contains('poster_url_aniList'));
+      expect(attrs, contains('poster_uri'));
+      expect(attrs, contains('anime_id'));
+    },
+  );
+
+  test(
+    'latest-episode cards stay on poster_uri when HQ is off',
+    () async {
+      final stub = _stubDio(
+        _recentAlgoliaHit(),
+        homeSections: _recentHomeSectionsDocument(),
+      );
+      final page = await _provider(
+        stub.dio,
+        highQuality: false,
+      ).getHomeSectionPage(_latestSectionTitle);
+
+      expect(page.items.single.posterUrl, _smallPoster);
+      expect(page.items.single.posterUrl, isNot(_episodeStill));
+      expect(page.items.single.posterUrl, isNot(_aniListPoster));
+      expect(_batchGets(stub.requests), isEmpty);
+    },
+  );
+
+  test(
+    'latest-episode HQ fill uses anime_id, not the episode objectID',
+    () async {
+      final stub = _stubDio(
+        _recentAlgoliaHit(objectId: 'ep-still-id', animeId: 'one_piece'),
+        homeSections: _recentHomeSectionsDocument(),
+      );
+      await _provider(stub.dio).getHomeSectionPage(_latestSectionTitle);
+
+      final documents = _batchGetDocumentIds(
+        _batchGets(stub.requests).single,
+      );
+      expect(documents, <String>[
+        'projects/animewitcher-1c66d/databases/(default)'
+            '/documents/anime_list/one_piece',
+      ]);
+    },
+  );
+
+  test(
+    'latest-episode HQ prefers poster.large over poster_url_aniList',
+    () async {
+      final stub = _stubDio(
+        _recentAlgoliaHit(),
+        homeSections: _recentHomeSectionsDocument(),
+      );
+      final page = await _provider(stub.dio).getHomeSectionPage(
+        _latestSectionTitle,
+      );
+
+      expect(page.items.single.posterUrl, _largePoster);
+      expect(page.items.single.fullPosterUrl, _largePoster);
+    },
+  );
+
+  test(
+    'latest-episode HQ falls back to poster_url_aniList when large is missing',
+    () async {
+      final stub = _stubDio(
+        _recentAlgoliaHit(),
+        homeSections: _recentHomeSectionsDocument(),
+        batchGetResponse: <Map<String, dynamic>>[
+          <String, dynamic>{'missing': <String, dynamic>{}},
+        ],
+      );
+      final page = await _provider(stub.dio).getHomeSectionPage(
+        _latestSectionTitle,
+      );
+
+      expect(page.items.single.posterUrl, _aniListPoster);
+      expect(page.items.single.posterUrl, isNot(_smallPoster));
+      expect(page.items.single.posterUrl, isNot(_episodeStill));
+    },
+  );
+
+  test(
+    'latest-episode cards never use thumb_uri as the catalog poster',
+    () async {
+      final stub = _stubDio(
+        _recentAlgoliaHit(aniListPoster: null),
+        homeSections: _recentHomeSectionsDocument(),
+        batchGetResponse: <Map<String, dynamic>>[
+          <String, dynamic>{'missing': <String, dynamic>{}},
+        ],
+      );
+      final hq = await _provider(stub.dio).getHomeSectionPage(
+        _latestSectionTitle,
+      );
+      final standard = await _provider(
+        stub.dio,
+        highQuality: false,
+      ).getHomeSectionPage(_latestSectionTitle);
+
+      expect(hq.items.single.posterUrl, _smallPoster);
+      expect(standard.items.single.posterUrl, _smallPoster);
+      expect(hq.items.single.posterUrl, isNot(_episodeStill));
+      expect(standard.items.single.posterUrl, isNot(_episodeStill));
     },
   );
 }
