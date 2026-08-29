@@ -16,6 +16,7 @@ import '../router/app_router.dart';
 import '../storage/storage_service.dart';
 import '../network/dio_client_provider.dart';
 import '../utils/download_resume.dart';
+import '../utils/download_cleanup.dart';
 import '../utils/episode_label.dart';
 import 'download_continued_processing_service.dart';
 
@@ -708,6 +709,15 @@ class DownloadService {
       return true;
     }
 
+    final completeRecordsToReplace = await _completeRecordsForEpisode(
+      records,
+      trackingUrl: trackingUrl ?? url,
+      item: item,
+      episode: episode,
+      filename: filename,
+      directory: directory,
+    );
+
     // Path Logic:
     // Android/Desktop: use BaseDirectory.root with absolute path.
     // iOS: use BaseDirectory.applicationDocuments with relative path for sandbox safety.
@@ -779,6 +789,9 @@ class DownloadService {
         await _ref
             .read(storageServiceProvider)
             .saveDownloadMetadata(task.taskId, item, episode: episode);
+        // Drop leftover complete rows for this episode/file so re-download
+        // does not create a second UI entry. Do not delete the video.
+        await _dropCompleteRecords(completeRecordsToReplace);
       } else {
         await _continuedProcessing.stop(taskId: task.taskId);
       }
@@ -794,6 +807,60 @@ class DownloadService {
         debugPrint('[DownloadService] Failed to enqueue download: $error');
       }
       return false;
+    }
+  }
+
+  Future<List<TaskRecord>> _completeRecordsForEpisode(
+    List<TaskRecord> records, {
+    required String trackingUrl,
+    required MultimediaItem item,
+    Episode? episode,
+    required String filename,
+    required String directory,
+  }) async {
+    final storage = _ref.read(storageServiceProvider);
+    final matches = <TaskRecord>[];
+    for (final record in records) {
+      if (record.status != TaskStatus.complete) continue;
+      final recordUrl = record.task.metaData.isNotEmpty
+          ? record.task.metaData
+          : record.task.url;
+      var matched = recordUrl == trackingUrl ||
+          taskMatchesDownloadFile(
+            task: record.task,
+            filename: filename,
+            directory: directory,
+          );
+      if (!matched) {
+        final metadata = await storage.getDownloadMetadata(record.task.taskId);
+        if (metadata != null) {
+          final metaItem = MultimediaItem.fromJson(
+            Map<String, dynamic>.from(metadata['item'] as Map),
+          );
+          final metaEpisode = metadata['episode'] != null
+              ? Episode.fromJson(
+                  Map<String, dynamic>.from(metadata['episode'] as Map),
+                )
+              : null;
+          matched = metadataMatchesDownload(
+            item: item,
+            episode: episode,
+            candidateItem: metaItem,
+            candidateEpisode: metaEpisode,
+          );
+        }
+      }
+      if (matched) matches.add(record);
+    }
+    return matches;
+  }
+
+  /// Drop complete DB+Hive rows only. Never deletes the video file.
+  Future<void> _dropCompleteRecords(List<TaskRecord> records) async {
+    final storage = _ref.read(storageServiceProvider);
+    for (final record in records) {
+      await FileDownloader().database.deleteRecordWithId(record.task.taskId);
+      await storage.removeDownloadMetadata(record.task.taskId);
     }
   }
 
@@ -913,18 +980,35 @@ class DownloadService {
   ///
   /// Uses the task's own filename/path first so playback does not depend on
   /// reconstructing labels that may differ by Unicode form or quality suffix.
-  Future<File?> getDownloadedFileForTask(Task task) async {
+  Future<File?> getDownloadedFileForTask(
+    Task task, {
+    bool requireNonEmpty = true,
+  }) async {
     try {
       final path = await task.filePath();
       if (path.isEmpty) return null;
       final file = File(path);
-      if (await file.exists() && await file.length() > 0) return file;
+      if (!await file.exists()) return null;
+      if (requireNonEmpty && await file.length() <= 0) return null;
+      return file;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[DownloadService] task.filePath failed: $e');
       }
     }
     return null;
+  }
+
+  /// Task path first, then reconstructed AnimeWitcher/Downloads labels.
+  Future<File?> resolveDownloadedFile(
+    Task task,
+    MultimediaItem item, {
+    Episode? episode,
+  }) async {
+    return resolveDownloadFileToDelete(
+      fromTask: () => getDownloadedFileForTask(task, requireNonEmpty: false),
+      fromLabels: () => getDownloadedFile(item, episode: episode),
+    );
   }
 
   // Request user to disable battery optimizations for persistent downloads
@@ -942,61 +1026,13 @@ class DownloadService {
 
   Future<bool> deleteDownloadedFile(File file) async {
     try {
-      if (await file.exists()) {
-        final parentDir = file.parent;
-        await file.delete();
-        // Recursively cleanup empty parent folders
-        await _deleteEmptyParentDirectories(parentDir);
-        return true;
-      }
+      return await deleteDownloadedVideo(file);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[DownloadService] Error deleting file: $e');
       }
     }
     return false;
-  }
-
-  Future<void> _deleteEmptyParentDirectories(Directory directory) async {
-    try {
-      final rootMarker = p.join('AnimeWitcher', 'Downloads');
-      // 1. Safety check: Only delete inside AnimeWitcher/Downloads
-      if (!directory.path.contains(rootMarker) &&
-          !directory.path.contains('AnimeWitcher/Downloads') &&
-          !directory.path.contains(r'AnimeWitcher\Downloads')) {
-        return;
-      }
-
-      // 2. Stop at the AnimeWitcher/Downloads root
-      final normalized = directory.path.replaceAll('\\', '/');
-      if (normalized.endsWith('AnimeWitcher/Downloads') ||
-          normalized.endsWith('AnimeWitcher/Downloads/')) {
-        return;
-      }
-
-      if (await directory.exists()) {
-        // 3. Get non-hidden entities
-        final List<FileSystemEntity> entities = await directory
-            .list()
-            .where(
-              (entity) => !entity.path
-                  .split(Platform.pathSeparator)
-                  .last
-                  .startsWith('.'),
-            )
-            .toList();
-
-        if (entities.isEmpty) {
-          await directory.delete();
-          // 4. Recurse to parent
-          await _deleteEmptyParentDirectories(directory.parent);
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[DownloadService] Error deleting empty folder: $e');
-      }
-    }
   }
 
   Future<String> _getPublicDownloadsPath() async {
