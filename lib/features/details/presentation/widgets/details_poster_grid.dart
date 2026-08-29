@@ -6,6 +6,51 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 
+const int detailsExtraTabGridColumns = 3;
+const double detailsExtraTabCrossAxisSpacing = 12;
+const double detailsExtraTabMainAxisSpacing = 14;
+
+/// Height of two 3-column poster-card rows in the extra-tabs body.
+double detailsExtraTabBodyHeight(BuildContext context, double width) {
+  final isDesktop = context.isDesktop;
+  final childWidth =
+      (width - detailsExtraTabCrossAxisSpacing * (detailsExtraTabGridColumns - 1)) /
+      detailsExtraTabGridColumns;
+  final childHeight =
+      childWidth /
+      MultimediaCardLayout.gridAspectRatio(
+        isPortrait: true,
+        isDesktop: isDesktop,
+      );
+  return childHeight * 2 + detailsExtraTabMainAxisSpacing;
+}
+
+class ExtraTabGridPreview {
+  const ExtraTabGridPreview({required this.items, required this.showMore});
+
+  final List<MultimediaItem> items;
+  final bool showMore;
+}
+
+/// Caps similar/related extra-tab grids at 6 slots: 5 posters + المزيد
+/// when there are more than 6 works.
+ExtraTabGridPreview extraTabGridPreview(
+  List<MultimediaItem> items, {
+  required bool hasMore,
+}) {
+  final showMore =
+      hasMore || items.length > animeWitcherExtraTabPreviewSlots;
+  if (!showMore) {
+    return ExtraTabGridPreview(items: items, showMore: false);
+  }
+  return ExtraTabGridPreview(
+    items: items
+        .take(animeWitcherExtraTabPreviewItemsWhenMore)
+        .toList(growable: false),
+    showMore: true,
+  );
+}
+
 class DetailsPosterGrid extends StatelessWidget {
   const DetailsPosterGrid({
     super.key,
@@ -42,9 +87,9 @@ class DetailsPosterGrid extends StatelessWidget {
             isPortrait: true,
             isDesktop: isDesktop,
           ),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 14,
-          handsetPortraitCrossAxisCount: 3,
+          crossAxisSpacing: detailsExtraTabCrossAxisSpacing,
+          mainAxisSpacing: detailsExtraTabMainAxisSpacing,
+          handsetPortraitCrossAxisCount: detailsExtraTabGridColumns,
         ),
         itemCount: items.length + extra,
         itemBuilder: (context, index) {

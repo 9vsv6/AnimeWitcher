@@ -300,12 +300,23 @@ abstract class AnimeWitcherProvider {
   /// Related titles plus whether a المزيد tile should open the full list.
   ///
   /// [includeAll] resolves every `related_anime_ids` entry; the details tab
-  /// preview only hydrates the first 10 Firestore IN values.
+  /// preview hydrates at most five titles when more than six exist.
   Future<RelatedAnimePage> getRelatedPage(
     String url, {
     bool includeAll = false,
   }) async {
     return RelatedAnimePage(items: await getRelated(url));
+  }
+
+  /// Similar titles plus whether a المزيد tile should open the full list.
+  ///
+  /// [includeAll] pages Algolia `series_similar` until the complete hit list
+  /// is collected. The details tab preview uses `hitsPerPage` 11.
+  Future<SimilarAnimePage> getRecommendationsPage(
+    String url, {
+    bool includeAll = false,
+  }) async {
+    return SimilarAnimePage(items: await getRecommendations(url));
   }
 
   /// Loads similar recommendations independently.

@@ -23,6 +23,25 @@ const int animeWitcherCharacterSearchHitsPerPage = 500;
 const int animeWitcherFavoriteCharactersPageSize = 12;
 const int animeWitcherAnimeCastStripLimit = 10;
 
+/// Fetch one extra so the rail can tell 10 characters from 11+.
+const int animeWitcherAnimeCastStripFetchLimit = 11;
+
+/// Visible cards in a details rail. An 11th fetched hit becomes المزيد.
+int animeWitcherCastStripVisibleCount(int fetchedCount) {
+  if (fetchedCount > animeWitcherAnimeCastStripLimit) {
+    return animeWitcherAnimeCastStripLimit;
+  }
+  return fetchedCount < 0 ? 0 : fetchedCount;
+}
+
+bool animeWitcherCastStripShowsMore(int fetchedCount) =>
+    fetchedCount > animeWitcherAnimeCastStripLimit;
+
+/// Extra-tab body is always 2 rows × 3 poster cards. More than this count
+/// shows five posters plus a المزيد tile.
+const int animeWitcherExtraTabPreviewSlots = 6;
+const int animeWitcherExtraTabPreviewItemsWhenMore = 5;
+
 /// APK `AnimeDetailsActivity.setUpViewPager` extra-tab labels.
 const String animeWitcherSimilarTabLabel = 'أنميات مشابهة';
 const String animeWitcherRelatedTabLabel = 'ذات صلة';

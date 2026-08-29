@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/account/animewitcher_character_models.dart';
@@ -63,7 +65,7 @@ class DetailsCharacterRails extends StatelessWidget {
   }
 }
 
-class _CharacterRoleRail extends StatelessWidget {
+class _CharacterRoleRail extends StatefulWidget {
   const _CharacterRoleRail({
     required this.title,
     required this.characters,
@@ -79,10 +81,70 @@ class _CharacterRoleRail extends StatelessWidget {
   final void Function(String role)? onShowMore;
 
   @override
+  State<_CharacterRoleRail> createState() => _CharacterRoleRailState();
+}
+
+class _CharacterRoleRailState extends State<_CharacterRoleRail> {
+  static const _nestedTabLock = Duration(milliseconds: 350);
+
+  late final ScrollController _controller;
+  var _acceptScroll = false;
+  Timer? _unlockTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ScrollController(
+      initialScrollOffset: 0,
+      keepScrollOffset: false,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _lockThenPinToStart());
+  }
+
+  @override
+  void didUpdateWidget(covariant _CharacterRoleRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.characters.length != widget.characters.length ||
+        oldWidget.role != widget.role) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _pinToRtlStart());
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlockTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Offset 0 is the RTL start (right). Nested extra-tab animation can fling
+  /// the rail to maxScrollExtent; keep physics locked until that settles.
+  void _lockThenPinToStart() {
+    _pinToRtlStart();
+    _unlockTimer?.cancel();
+    _unlockTimer = Timer(_nestedTabLock, () {
+      if (!mounted) return;
+      _pinToRtlStart();
+      setState(() => _acceptScroll = true);
+    });
+  }
+
+  void _pinToRtlStart() {
+    if (!mounted || !_controller.hasClients) return;
+    final position = _controller.position;
+    if (position.pixels != position.minScrollExtent) {
+      _controller.jumpTo(position.minScrollExtent);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final showMore =
-        characters.length >= animeWitcherAnimeCastStripLimit &&
-        onShowMore != null;
+        animeWitcherCastStripShowsMore(widget.characters.length) &&
+        widget.onShowMore != null;
+    final visibleCount = animeWitcherCastStripVisibleCount(
+      widget.characters.length,
+    );
     const cardWidth = 110.0;
     const rowHeight = 198.0;
 
@@ -92,7 +154,7 @@ class _CharacterRoleRail extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
-            title,
+            widget.title,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w800,
             ),
@@ -103,19 +165,28 @@ class _CharacterRoleRail extends StatelessWidget {
           child: Directionality(
             textDirection: TextDirection.rtl,
             child: ListView.separated(
-              key: ValueKey('details-character-rail-$role'),
+              key: ValueKey('details-character-rail-${widget.role}'),
+              controller: _controller,
+              primary: false,
+              reverse: false,
+              physics: _acceptScroll
+                  ? const BouncingScrollPhysics()
+                  : const NeverScrollableScrollPhysics(),
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.zero,
-              itemCount: characters.length + (showMore ? 1 : 0),
+              itemCount: visibleCount + (showMore ? 1 : 0),
               separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, index) {
-                if (showMore && index >= characters.length) {
+                if (showMore && index >= visibleCount) {
                   return SizedBox(
+                    key: ValueKey(
+                      'details-character-${widget.role}-more',
+                    ),
                     width: cardWidth,
                     height: rowHeight,
                     child: DetailsShowMoreTile(
                       compact: true,
-                      onTap: () => onShowMore!(role),
+                      onTap: () => widget.onShowMore!(widget.role),
                     ),
                   );
                 }
@@ -123,16 +194,18 @@ class _CharacterRoleRail extends StatelessWidget {
                   width: cardWidth,
                   height: rowHeight,
                   child: CharacterPosterCard(
-                    key: ValueKey('details-character-$role-$index'),
-                    character: AnimeWitcherCharacterHit(
-                      id: characters[index].id?.trim() ?? '',
-                      name: characters[index].name,
-                      imageUrl: characters[index].image,
-                      likes: characters[index].likes,
+                    key: ValueKey(
+                      'details-character-${widget.role}-$index',
                     ),
-                    onTap: (characters[index].id?.trim() ?? '').isEmpty
+                    character: AnimeWitcherCharacterHit(
+                      id: widget.characters[index].id?.trim() ?? '',
+                      name: widget.characters[index].name,
+                      imageUrl: widget.characters[index].image,
+                      likes: widget.characters[index].likes,
+                    ),
+                    onTap: (widget.characters[index].id?.trim() ?? '').isEmpty
                         ? () {}
-                        : () => onCharacterTap(characters[index]),
+                        : () => widget.onCharacterTap(widget.characters[index]),
                   ),
                 );
               },

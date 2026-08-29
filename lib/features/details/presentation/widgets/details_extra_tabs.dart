@@ -23,6 +23,8 @@ class DetailsExtraTabs extends StatefulWidget {
     required this.onTabBecameVisible,
     required this.onAnimeTap,
     required this.onCharacterTap,
+    this.similarHasMore = false,
+    this.onShowMoreSimilar,
     this.onShowMoreRelated,
     this.onShowMoreCharacters,
     this.onRetrySimilar,
@@ -34,10 +36,12 @@ class DetailsExtraTabs extends StatefulWidget {
   final AsyncValue<List<MultimediaItem>> similar;
   final AsyncValue<List<MultimediaItem>> related;
   final bool relatedHasMore;
+  final bool similarHasMore;
   final AsyncValue<List<Actor>> cast;
   final ValueChanged<int> onTabBecameVisible;
   final void Function(MultimediaItem item) onAnimeTap;
   final void Function(Actor actor) onCharacterTap;
+  final VoidCallback? onShowMoreSimilar;
   final VoidCallback? onShowMoreRelated;
   final void Function(String role)? onShowMoreCharacters;
   final VoidCallback? onRetrySimilar;
@@ -79,22 +83,29 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
   void _handleTabTick() {
     if (_tabController.indexIsChanging) return;
     final index = _tabController.index;
-    final isNew = _visited.add(index);
-    if (isNew) {
+    if (_visited.add(index)) {
       widget.onTabBecameVisible(index);
     }
-    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final tabWidth = constraints.maxWidth / 3;
-            return FilterStyleTabBar(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tabWidth = constraints.maxWidth / 3;
+        final padding = widget.contentPadding.resolve(
+          Directionality.of(context),
+        );
+        final bodyWidth = (constraints.maxWidth - padding.horizontal).clamp(
+          0.0,
+          double.infinity,
+        );
+        final bodyHeight = detailsExtraTabBodyHeight(context, bodyWidth);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FilterStyleTabBar(
               controller: _tabController,
               isScrollable: false,
               padding: EdgeInsets.zero,
@@ -114,54 +125,80 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
                   maxWidth: tabWidth,
                 ),
               ],
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: widget.contentPadding,
-          child: _buildBody(),
-        ),
-      ],
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: widget.contentPadding,
+              child: SizedBox(
+                height: bodyHeight,
+                child: _NestedExtraTabPager(
+                  child: TabBarView(
+                    key: const ValueKey('details-extra-tab-view'),
+                    controller: _tabController,
+                    children: [
+                      _CharactersTab(
+                        state: widget.cast,
+                        onCharacterTap: widget.onCharacterTap,
+                        onShowMore: widget.onShowMoreCharacters,
+                        onRetry: widget.onRetryCast,
+                      ),
+                      _RelatedTab(
+                        state: widget.related,
+                        hasMore: widget.relatedHasMore,
+                        onItemTap: widget.onAnimeTap,
+                        onShowMore: widget.onShowMoreRelated,
+                        onRetry: widget.onRetryRelated,
+                      ),
+                      _SimilarTab(
+                        state: widget.similar,
+                        hasMore: widget.similarHasMore,
+                        onItemTap: widget.onAnimeTap,
+                        onShowMore: widget.onShowMoreSimilar,
+                        onRetry: widget.onRetrySimilar,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
+}
 
-  Widget _buildBody() {
-    switch (_tabController.index) {
-      case detailsExtraCharactersTabIndex:
-        return _CharactersTab(
-          state: widget.cast,
-          onCharacterTap: widget.onCharacterTap,
-          onShowMore: widget.onShowMoreCharacters,
-          onRetry: widget.onRetryCast,
-        );
-      case detailsExtraRelatedTabIndex:
-        return _RelatedTab(
-          state: widget.related,
-          hasMore: widget.relatedHasMore,
-          onItemTap: widget.onAnimeTap,
-          onShowMore: widget.onShowMoreRelated,
-          onRetry: widget.onRetryRelated,
-        );
-      default:
-        return _SimilarTab(
-          state: widget.similar,
-          onItemTap: widget.onAnimeTap,
-          onRetry: widget.onRetrySimilar,
-        );
-    }
+/// Absorbs horizontal overscroll so a nested extra-tabs [TabBarView]
+/// does not hand the gesture to the parent details/episodes pager.
+class _NestedExtraTabPager extends StatelessWidget {
+  const _NestedExtraTabPager({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        return notification.metrics.axis == Axis.horizontal;
+      },
+      child: child,
+    );
   }
 }
 
 class _SimilarTab extends StatelessWidget {
   const _SimilarTab({
     required this.state,
+    required this.hasMore,
     required this.onItemTap,
+    this.onShowMore,
     this.onRetry,
   });
 
   final AsyncValue<List<MultimediaItem>> state;
+  final bool hasMore;
   final void Function(MultimediaItem item) onItemTap;
+  final VoidCallback? onShowMore;
   final VoidCallback? onRetry;
 
   @override
@@ -181,10 +218,16 @@ class _SimilarTab extends StatelessWidget {
     if (items.isEmpty) {
       return const _ExtraTabMessage(message: animeWitcherSimilarEmptyMessage);
     }
-    return DetailsPosterGrid(
-      keyPrefix: 'similar',
-      items: items,
-      onItemTap: onItemTap,
+    final preview = extraTabGridPreview(items, hasMore: hasMore);
+    return Align(
+      alignment: Alignment.topCenter,
+      child: DetailsPosterGrid(
+        keyPrefix: 'similar',
+        items: preview.items,
+        hasMore: preview.showMore,
+        onShowMore: onShowMore,
+        onItemTap: onItemTap,
+      ),
     );
   }
 }
@@ -217,13 +260,17 @@ class _RelatedTab extends StatelessWidget {
     if (items.isEmpty) {
       return const _ExtraTabMessage(message: animeWitcherRelatedEmptyMessage);
     }
-    return DetailsPosterGrid(
-      keyPrefix: 'related',
-      items: items,
-      showRelationBadge: true,
-      hasMore: hasMore,
-      onShowMore: onShowMore,
-      onItemTap: onItemTap,
+    final preview = extraTabGridPreview(items, hasMore: hasMore);
+    return Align(
+      alignment: Alignment.topCenter,
+      child: DetailsPosterGrid(
+        keyPrefix: 'related',
+        items: preview.items,
+        showRelationBadge: true,
+        hasMore: preview.showMore,
+        onShowMore: onShowMore,
+        onItemTap: onItemTap,
+      ),
     );
   }
 }
@@ -256,10 +303,14 @@ class _CharactersTab extends StatelessWidget {
         message: animeWitcherCharactersEmptyMessage,
       );
     }
-    return DetailsCharacterRails(
-      cast: cast,
-      onCharacterTap: onCharacterTap,
-      onShowMore: onShowMore,
+    return ClipRect(
+      child: SingleChildScrollView(
+        child: DetailsCharacterRails(
+          cast: cast,
+          onCharacterTap: onCharacterTap,
+          onShowMore: onShowMore,
+        ),
+      ),
     );
   }
 }
@@ -269,8 +320,7 @@ class _ExtraTabLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 36),
+    return const SizedBox.expand(
       child: Center(child: AppLoadingIndicator()),
     );
   }
@@ -284,26 +334,31 @@ class _ExtraTabMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 12),
-      child: Column(
-        children: [
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+    return SizedBox.expand(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (onRetry != null) ...[
+                const SizedBox(height: 12),
+                FilledButton.tonalIcon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ],
           ),
-          if (onRetry != null) ...[
-            const SizedBox(height: 12),
-            FilledButton.tonalIcon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('إعادة المحاولة'),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

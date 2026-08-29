@@ -440,7 +440,7 @@ void main() {
       expect(query['from'], <Map<String, dynamic>>[
         <String, dynamic>{'collectionId': 'characters'},
       ]);
-      expect(query['limit'], 10);
+      expect(query['limit'], animeWitcherAnimeCastStripFetchLimit);
     }
   });
 
