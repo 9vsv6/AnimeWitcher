@@ -65,6 +65,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
+
+  /// Drives the AppBar background fade: 0.0 = fully transparent (over the
+  /// hero carousel), 1.0 = solid black (after a short scroll distance).
+  /// Fades in within the first [_kHeaderFadeTriggerDistance] pixels so the
+  /// title row gains a solid backdrop before reaching the next content
+  /// section below the hero.
+  final ValueNotifier<double> _headerFadeOpacity = ValueNotifier(0.0);
+
+  /// Scroll distance (px) over which the AppBar background transitions
+  /// from transparent to solid black.
+  static const double _kHeaderFadeTriggerDistance = 80.0;
+
   final FocusNode _firstActionFocusNode = FocusNode();
 
   /// Carousel controller exposed by HomeHeroCarousel via [onControllerReady].
@@ -97,10 +109,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _showBottomFade.value = showFade;
     }
 
-    // On widescreen there is no mobile AppBar (opacity notifier).
-    // Skip all work to avoid per-frame overhead that
-    // can stall the rendering pipeline during bounce / direction-change.
-    if (_isWidescreenForScroll()) return;
+    // On widescreen there is no mobile AppBar that uses this fade value.
+    // Update any other scroll-driven UI (e.g. dashboard widgets) here.
+    if (_isWidescreenForScroll()) {
+      // Keep the AppBar fade pinned to 0 when there is no AppBar so that
+      // re-expanding the window back to mobile doesn't briefly show black.
+      if (_headerFadeOpacity.value != 0.0) {
+        _headerFadeOpacity.value = 0.0;
+      }
+      return;
+    }
+
+    // Drive the AppBar background fade-in. The AppBar sits over the hero
+    // carousel, so a short scroll transition (default 80px) is enough to
+    // take it from fully transparent to solid black.
+    final target = (currentScroll / _kHeaderFadeTriggerDistance).clamp(
+      0.0,
+      1.0,
+    );
+    if (target != _headerFadeOpacity.value) {
+      _headerFadeOpacity.value = target;
+    }
   }
 
   @override
@@ -108,6 +137,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _showBottomFade.dispose();
+    _headerFadeOpacity.dispose();
     _firstActionFocusNode.dispose();
     super.dispose();
   }
@@ -252,45 +282,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: Directionality(
           textDirection: TextDirection.ltr,
-          child: AppBar(
-            systemOverlayStyle: overlayStyle,
-            forceMaterialTransparency: true,
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            title: Text(
-              l10n.appTitle,
-              style: TextStyle(color: Theme.of(context).colorScheme.primary),
-            ),
-            actions: usePersistentGlass
-                ? const <Widget>[SizedBox(width: 58)]
-                : [
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        right: LayoutConstants.spacingSm,
-                      ),
-                      child: Focus(
-                        focusNode: _firstActionFocusNode,
-                        child: SizedBox.square(
-                          dimension: 42,
-                          child: AppleLiquidGlassToolbarButton(
-                            width: 42,
-                            tooltip: appText(
-                              context,
-                              english: 'Search',
-                              arabic: 'بحث',
-                            ),
-                            icon: Icons.search_rounded,
-                            color: Theme.of(context).colorScheme.primary,
-                            onPressed: () =>
-                                _openSearchPage(focusKeyboard: true),
-                          ),
-                        ),
+          child: ValueListenableBuilder<double>(
+            valueListenable: _headerFadeOpacity,
+            builder: (context, fadeOpacity, _) {
+              return Stack(
+                children: [
+                  // Scroll-driven fade-to-black backdrop: fully transparent
+                  // when over the hero carousel, solid black once the user
+                  // scrolls even slightly. This is what tints the area
+                  // behind the "AnimeWitcher" title and the search button
+                  // as the user scrolls down.
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Container(
+                        color: Colors.black.withValues(alpha: fadeOpacity),
                       ),
                     ),
-                  ],
+                  ),
+                  AppBar(
+                    systemOverlayStyle: overlayStyle,
+                    forceMaterialTransparency: true,
+                    backgroundColor: Colors.transparent,
+                    surfaceTintColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    elevation: 0,
+                    scrolledUnderElevation: 0,
+                    title: Text(
+                      l10n.appTitle,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    actions: usePersistentGlass
+                        ? const <Widget>[SizedBox(width: 58)]
+                        : [
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                right: LayoutConstants.spacingSm,
+                              ),
+                              child: Focus(
+                                focusNode: _firstActionFocusNode,
+                                child: SizedBox.square(
+                                  dimension: 42,
+                                  child: AppleLiquidGlassToolbarButton(
+                                    width: 42,
+                                    tooltip: appText(
+                                      context,
+                                      english: 'Search',
+                                      arabic: 'بحث',
+                                    ),
+                                    icon: Icons.search_rounded,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                    onPressed: () =>
+                                        _openSearchPage(focusKeyboard: true),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
