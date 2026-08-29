@@ -3006,7 +3006,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       _animeWitcherCharacterRefsForRole(
     String animeId,
     String role, {
-    int? limit = animeWitcherAnimeCastStripLimit,
+    int? limit = animeWitcherAnimeCastStripFetchLimit,
   }) async {
 
     final raw = await _firestoreRestRunQuery(
@@ -3038,7 +3038,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
 
   Future<List<_AnimeWitcherCharacterRef>> _animeWitcherCharacterRefs(
     String animeId, {
-    int limit = animeWitcherAnimeCastStripLimit,
+    int limit = animeWitcherAnimeCastStripFetchLimit,
   }) async {
     final cleanId = animeId.trim();
     if (cleanId.isEmpty) return const <_AnimeWitcherCharacterRef>[];
@@ -3090,7 +3090,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
 
   Future<List<Actor>> _animeWitcherServerCast(
     String animeId, {
-    int limit = animeWitcherAnimeCastStripLimit,
+    int limit = animeWitcherAnimeCastStripFetchLimit,
   }) async {
     final references = await _animeWitcherCharacterRefs(
       animeId,

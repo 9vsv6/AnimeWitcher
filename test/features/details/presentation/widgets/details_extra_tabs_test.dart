@@ -54,6 +54,51 @@ Future<void> _loadWalkthroughFonts() async {
   }
 }
 
+Future<void> _settleCharacterRails(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+ScrollableState _railScrollable(WidgetTester tester, String role) {
+  return tester.state<ScrollableState>(
+    find.descendant(
+      of: find.byKey(ValueKey('details-character-rail-$role')),
+      matching: find.byType(Scrollable),
+    ),
+  );
+}
+
+Future<void> _writeShot(
+  WidgetTester tester,
+  String filename,
+  Key key,
+) async {
+  final artifacts = Directory('/opt/cursor/artifacts');
+  if (!artifacts.existsSync()) return;
+  await tester.runAsync(() async {
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(key),
+    );
+    final image = await boundary.toImage(pixelRatio: 2);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    File('${artifacts.path}/$filename').writeAsBytesSync(
+      bytes!.buffer.asUint8List(),
+    );
+  });
+}
+
+List<Actor> _mainActors(int count) {
+  return <Actor>[
+    for (var index = 0; index < count; index++)
+      _actor(
+        id: 'm$index',
+        name: 'Main $index',
+        role: 'شخصية رئيسية',
+        likes: 100 - index,
+      ),
+  ];
+}
+
 Widget _app(Widget child) {
   return ProviderScope(
     child: MaterialApp(
@@ -82,6 +127,14 @@ Widget _app(Widget child) {
 }
 
 void main() {
+  test('cast strip shows المزيد only when more than 10 characters are fetched', () {
+    expect(animeWitcherCastStripShowsMore(10), isFalse);
+    expect(animeWitcherCastStripShowsMore(11), isTrue);
+    expect(animeWitcherCastStripVisibleCount(10), 10);
+    expect(animeWitcherCastStripVisibleCount(11), 10);
+    expect(animeWitcherCastStripVisibleCount(3), 3);
+  });
+
   testWidgets('details extra tabs use APK names and a 3-column similar grid', (
     tester,
   ) async {
@@ -267,35 +320,31 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.runAsync(_loadWalkthroughFonts);
 
-    final main = <Actor>[
-      for (var index = 0; index < 10; index++)
-        _actor(
-          id: 'm$index',
-          name: 'Main $index',
-          role: 'شخصية رئيسية',
-          likes: 100 - index,
-        ),
-    ];
+    final main = _mainActors(11);
     final supporting = <Actor>[
       _actor(id: 's1', name: 'Support One', role: 'شخصية ثانوية', likes: 9),
       _actor(id: 's2', name: 'Support Two', role: 'شخصية ثانوية', likes: 4),
     ];
+    final openedRoles = <String>[];
 
     await tester.pumpWidget(
       _app(
-        ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          children: [
-            DetailsCharacterRails(
-              cast: <Actor>[...main, ...supporting],
-              onCharacterTap: (_) {},
-              onShowMore: (_) {},
-            ),
-          ],
+        RepaintBoundary(
+          key: const ValueKey('details-character-rails-shot'),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            children: [
+              DetailsCharacterRails(
+                cast: <Actor>[...main, ...supporting],
+                onCharacterTap: (_) {},
+                onShowMore: openedRoles.add,
+              ),
+            ],
+          ),
         ),
       ),
     );
-    await tester.pump();
+    await _settleCharacterRails(tester);
 
     expect(find.text(animeWitcherMainCharactersHeader), findsOneWidget);
     expect(find.text(animeWitcherSupportingCharactersHeader), findsOneWidget);
@@ -313,7 +362,19 @@ void main() {
       findsNWidgets(2),
     );
     expect(find.byType(GridView), findsNothing);
+    expect(find.byKey(const ValueKey('details-character-Main-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
 
+    final mainScrollable = _railScrollable(tester, 'Main');
+    expect(mainScrollable.position.pixels, mainScrollable.position.minScrollExtent);
+    expect(
+      _railScrollable(tester, 'Supporting').position.pixels,
+      _railScrollable(tester, 'Supporting').position.minScrollExtent,
+    );
+
+    final rail = tester.getRect(
+      find.byKey(const ValueKey('details-character-rail-Main')),
+    );
     final mainFirst = tester.getRect(
       find.byKey(const ValueKey('details-character-Main-0')),
     );
@@ -321,6 +382,8 @@ void main() {
       find.byKey(const ValueKey('details-character-Main-1')),
     );
     expect(mainFirst.left, greaterThan(mainSecond.left));
+    expect(mainFirst.right, closeTo(rail.right, 1.5));
+    expect(find.byKey(const ValueKey('details-character-Main-more')), findsNothing);
 
     final directionality = tester.widget<Directionality>(
       find
@@ -331,46 +394,131 @@ void main() {
           .first,
     );
     expect(directionality.textDirection, TextDirection.rtl);
+    expect(
+      tester.widget<ListView>(
+        find.byKey(const ValueKey('details-character-rail-Main')),
+      ).reverse,
+      isFalse,
+    );
+
+    await _writeShot(
+      tester,
+      'details_character_rails_rtl_start.png',
+      const ValueKey('details-character-rails-shot'),
+    );
 
     await tester.scrollUntilVisible(
-      find.text(animeWitcherShowMoreLabel),
+      find.byKey(const ValueKey('details-character-Main-more')),
       120,
       scrollable: find.descendant(
         of: find.byKey(const ValueKey('details-character-rail-Main')),
         matching: find.byType(Scrollable),
       ),
     );
-    expect(find.text(animeWitcherShowMoreLabel), findsOneWidget);
+    expect(find.byKey(const ValueKey('details-character-Main-more')), findsOneWidget);
+    expect(find.byKey(const ValueKey('details-character-Main-9')), findsOneWidget);
+    expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
+    expect(find.byKey(const ValueKey('details-character-Supporting-more')), findsNothing);
 
-    final artifacts = Directory('/opt/cursor/artifacts');
-    if (!artifacts.existsSync()) return;
+    await _writeShot(
+      tester,
+      'details_character_rails_more_at_end.png',
+      const ValueKey('details-character-rails-shot'),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('details-character-Main-more')));
+    expect(openedRoles, <String>['Main']);
+  });
+
+  testWidgets('exactly 10 main characters skip المزيد', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 920));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.runAsync(_loadWalkthroughFonts);
+
     await tester.pumpWidget(
       _app(
         RepaintBoundary(
-          key: const ValueKey('details-character-rails-shot'),
+          key: const ValueKey('details-character-ten-shot'),
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
               DetailsCharacterRails(
-                cast: <Actor>[...main.take(3), ...supporting],
+                cast: _mainActors(10),
                 onCharacterTap: (_) {},
+                onShowMore: (_) {},
               ),
             ],
           ),
         ),
       ),
     );
+    await _settleCharacterRails(tester);
+
+    expect(find.byKey(const ValueKey('details-character-Main-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
+    expect(find.byKey(const ValueKey('details-character-Main-more')), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('details-character-Main-9')),
+      120,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('details-character-rail-Main')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.byKey(const ValueKey('details-character-Main-9')), findsOneWidget);
+    expect(find.byKey(const ValueKey('details-character-Main-more')), findsNothing);
+    expect(find.text(animeWitcherShowMoreLabel), findsNothing);
+
+    await _writeShot(
+      tester,
+      'details_character_rails_ten_no_more.png',
+      const ValueKey('details-character-ten-shot'),
+    );
+  });
+
+  testWidgets('opening the characters extra tab keeps rails at the RTL start', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 920));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _app(
+        ListView(
+          children: [
+            DetailsExtraTabs(
+              similar: AsyncData(<MultimediaItem>[_item('SimilarOne', 's1')]),
+              related: const AsyncData(<MultimediaItem>[]),
+              relatedHasMore: false,
+              cast: AsyncData(_mainActors(11)),
+              onTabBecameVisible: (_) {},
+              onAnimeTap: (_) {},
+              onCharacterTap: (_) {},
+              onShowMoreCharacters: (_) {},
+            ),
+          ],
+        ),
+      ),
+    );
     await tester.pump();
-    await tester.runAsync(() async {
-      final boundary = tester.renderObject<RenderRepaintBoundary>(
-        find.byKey(const ValueKey('details-character-rails-shot')),
-      );
-      final image = await boundary.toImage(pixelRatio: 2);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/details_character_rails.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
-    });
+    expect(find.text('SimilarOne'), findsOneWidget);
+
+    await tester.tap(find.text(animeWitcherCharactersTabLabel));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final mainScrollable = _railScrollable(tester, 'Main');
+    expect(mainScrollable.position.pixels, mainScrollable.position.minScrollExtent);
+    final rail = tester.getRect(
+      find.byKey(const ValueKey('details-character-rail-Main')),
+    );
+    final mainFirst = tester.getRect(
+      find.byKey(const ValueKey('details-character-Main-0')),
+    );
+    expect(mainFirst.right, closeTo(rail.right, 2));
+    expect(find.byKey(const ValueKey('details-character-Main-more')), findsNothing);
+    expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
   });
 
   testWidgets('similar search-disabled message matches the APK', (tester) async {
