@@ -32,10 +32,14 @@ class DownloadItem {
 
 bool downloadsPointAtSameTarget(DownloadItem a, DownloadItem b) {
   if (identical(a, b) || a.id == b.id) return true;
-  if (downloadIdentityKey(a.item, a.episode) ==
-      downloadIdentityKey(b.item, b.episode)) {
-    return true;
-  }
+  final trackA = downloadTrackingUrl(a.task);
+  final trackB = downloadTrackingUrl(b.task);
+  if (trackA.isNotEmpty && trackA == trackB) return true;
+  final episodeA = a.episode?.url.trim() ?? '';
+  final episodeB = b.episode?.url.trim() ?? '';
+  if (episodeA.isNotEmpty && episodeA == episodeB) return true;
+  if (trackA.isNotEmpty && trackA == episodeB) return true;
+  if (trackB.isNotEmpty && trackB == episodeA) return true;
   final fileA = downloadTaskFileKey(a.task);
   final fileB = downloadTaskFileKey(b.task);
   return fileA.isNotEmpty && fileA == fileB;
@@ -84,24 +88,22 @@ List<List<DownloadItem>> groupDownloadsByEpisodeOrFile(
     if (rootA != rootB) parent[rootA] = rootB;
   }
 
-  final byIdentity = <String, int>{};
+  final byTracking = <String, int>{};
   final byFile = <String, int>{};
+  void unionKey(Map<String, int> map, String key, int i) {
+    if (key.isEmpty) return;
+    final previous = map[key];
+    if (previous != null) {
+      union(i, previous);
+    } else {
+      map[key] = i;
+    }
+  }
+
   for (var i = 0; i < items.length; i++) {
-    final identity = downloadIdentityKey(items[i].item, items[i].episode);
-    final previousIdentity = byIdentity[identity];
-    if (previousIdentity != null) {
-      union(i, previousIdentity);
-    } else {
-      byIdentity[identity] = i;
-    }
-    final fileKey = downloadTaskFileKey(items[i].task);
-    if (fileKey.isEmpty) continue;
-    final previousFile = byFile[fileKey];
-    if (previousFile != null) {
-      union(i, previousFile);
-    } else {
-      byFile[fileKey] = i;
-    }
+    unionKey(byTracking, downloadTrackingUrl(items[i].task), i);
+    unionKey(byTracking, items[i].episode?.url.trim() ?? '', i);
+    unionKey(byFile, downloadTaskFileKey(items[i].task), i);
   }
 
   final groups = <int, List<DownloadItem>>{};
@@ -324,49 +326,63 @@ class DownloadsNotifier extends _$DownloadsNotifier {
 
     final toRemove = <String, DownloadItem>{};
     for (final requested in items) {
-      final requestedPath = (await resolveFile(requested))?.path;
+      final requestedFile = await resolveFile(requested);
+      String? requestedTaskPath;
+      try {
+        requestedTaskPath = await requested.task.filePath();
+      } catch (_) {}
       for (final candidate in current) {
         if (toRemove.containsKey(candidate.id)) continue;
         if (downloadsPointAtSameTarget(requested, candidate)) {
           toRemove[candidate.id] = candidate;
           continue;
         }
-        if (requestedPath == null) continue;
         try {
           final candidatePath = await candidate.task.filePath();
-          if (candidatePath == requestedPath) {
+          if (candidatePath.isNotEmpty &&
+              (candidatePath == requestedFile?.path ||
+                  candidatePath == requestedTaskPath)) {
             toRemove[candidate.id] = candidate;
           }
         } catch (_) {}
       }
     }
 
+    for (final item in toRemove.values) {
+      await resolveFile(item);
+    }
+
     final deletedPaths = <String>{};
-    Future<void> deleteResolved(File file) async {
-      if (!deletedPaths.add(file.path)) return;
+    for (final file in resolvedById.values) {
+      if (!deletedPaths.add(file.path)) continue;
       await downloadService.deleteDownloadedFile(file);
     }
 
-    for (final file in resolvedById.values) {
-      await deleteResolved(file);
-    }
+    final droppedIds = <String>{};
     for (final item in toRemove.values) {
-      final file = await resolveFile(item);
-      if (file != null) await deleteResolved(file);
-    }
+      final file = resolvedById[item.id];
+      var stillExists = false;
+      if (file != null) {
+        try {
+          stillExists = await file.exists();
+        } catch (_) {
+          stillExists = true;
+        }
+      }
+      if (stillExists) continue;
 
-    for (final item in toRemove.values) {
-      final trackingUrl =
-          item.task.metaData.isNotEmpty ? item.task.metaData : item.task.url;
-      await downloadService.cancelDownload(item.task.taskId, trackingUrl);
+      if (shouldCancelDownload(item.status)) {
+        final trackingUrl = downloadTrackingUrl(item.task);
+        await downloadService.cancelDownload(item.task.taskId, trackingUrl);
+      }
       await FileDownloader().database.deleteRecordWithId(item.task.taskId);
       await storage.removeDownloadMetadata(item.task.taskId);
+      droppedIds.add(item.id);
     }
 
-    if (state.value != null) {
-      final idsToRemove = toRemove.keys.toSet();
+    if (state.value != null && droppedIds.isNotEmpty) {
       state = AsyncData(
-        state.value!.where((i) => !idsToRemove.contains(i.id)).toList(),
+        state.value!.where((i) => !droppedIds.contains(i.id)).toList(),
       );
     }
   }

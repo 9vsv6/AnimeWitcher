@@ -280,6 +280,7 @@ class DownloadService {
                   status: 'completed',
                 ),
               );
+              unawaited(_persistCompletedFilePath(update.task));
             case TaskStatus.paused:
               unawaited(_continuedProcessing.stop(taskId: update.task.taskId));
             case TaskStatus.running:
@@ -709,14 +710,49 @@ class DownloadService {
       return true;
     }
 
-    final completeRecordsToReplace = await _completeRecordsForEpisode(
+    final tracking = trackingUrl ?? url;
+    final completeRecords = await _completeRecordsForEpisode(
       records,
-      trackingUrl: trackingUrl ?? url,
+      trackingUrl: tracking,
       item: item,
       episode: episode,
       filename: filename,
       directory: directory,
     );
+    File? completeFile;
+    for (final record in completeRecords) {
+      completeFile = await getDownloadedFileForTask(record.task);
+      if (completeFile != null) break;
+      try {
+        final path = await record.task.filePath();
+        if (path.isNotEmpty) {
+          final file = File(path);
+          if (await file.exists() && await file.length() > 0) {
+            completeFile = file;
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+    completeFile ??= await getDownloadedFile(item, episode: episode);
+
+    switch (decideCompleteDownloadAction(
+      hasCompleteRecord: completeRecords.isNotEmpty,
+      fileExists: completeFile != null,
+    )) {
+      case CompleteDownloadAction.reuse:
+        if (kDebugMode) {
+          debugPrint(
+            '[DownloadService] Complete record already has a file for $tracking',
+          );
+        }
+        return true;
+      case CompleteDownloadAction.dropAndEnqueue:
+        await _dropCompleteRecords(completeRecords);
+        break;
+      case CompleteDownloadAction.enqueue:
+        break;
+    }
 
     // Path Logic:
     // Android/Desktop: use BaseDirectory.root with absolute path.
@@ -785,13 +821,19 @@ class DownloadService {
 
       if (success) {
         _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
-        // Save metadata for offline support
+        String? path;
+        try {
+          path = await task.filePath();
+        } catch (_) {}
         await _ref
             .read(storageServiceProvider)
-            .saveDownloadMetadata(task.taskId, item, episode: episode);
-        // Drop leftover complete rows for this episode/file so re-download
-        // does not create a second UI entry. Do not delete the video.
-        await _dropCompleteRecords(completeRecordsToReplace);
+            .saveDownloadMetadata(
+              task.taskId,
+              item,
+              episode: episode,
+              trackingUrl: trackingUrl ?? url,
+              filePath: path,
+            );
       } else {
         await _continuedProcessing.stop(taskId: task.taskId);
       }
@@ -822,10 +864,10 @@ class DownloadService {
     final matches = <TaskRecord>[];
     for (final record in records) {
       if (record.status != TaskStatus.complete) continue;
-      final recordUrl = record.task.metaData.isNotEmpty
-          ? record.task.metaData
-          : record.task.url;
+      final recordUrl = downloadTrackingUrl(record.task);
       var matched = recordUrl == trackingUrl ||
+          (episode?.url.trim().isNotEmpty == true &&
+              recordUrl == episode!.url.trim()) ||
           taskMatchesDownloadFile(
             task: record.task,
             filename: filename,
@@ -834,20 +876,23 @@ class DownloadService {
       if (!matched) {
         final metadata = await storage.getDownloadMetadata(record.task.taskId);
         if (metadata != null) {
-          final metaItem = MultimediaItem.fromJson(
-            Map<String, dynamic>.from(metadata['item'] as Map),
-          );
-          final metaEpisode = metadata['episode'] != null
-              ? Episode.fromJson(
-                  Map<String, dynamic>.from(metadata['episode'] as Map),
-                )
-              : null;
-          matched = metadataMatchesDownload(
-            item: item,
-            episode: episode,
-            candidateItem: metaItem,
-            candidateEpisode: metaEpisode,
-          );
+          final storedTracking = (metadata['trackingUrl'] as String?)?.trim();
+          matched =
+              (storedTracking != null && storedTracking == trackingUrl) ||
+              metadataMatchesDownload(
+                item: item,
+                episode: episode,
+                candidateItem: MultimediaItem.fromJson(
+                  Map<String, dynamic>.from(metadata['item'] as Map),
+                ),
+                candidateEpisode: metadata['episode'] != null
+                    ? Episode.fromJson(
+                        Map<String, dynamic>.from(
+                          metadata['episode'] as Map,
+                        ),
+                      )
+                    : null,
+              );
         }
       }
       if (matched) matches.add(record);
@@ -861,6 +906,23 @@ class DownloadService {
     for (final record in records) {
       await FileDownloader().database.deleteRecordWithId(record.task.taskId);
       await storage.removeDownloadMetadata(record.task.taskId);
+    }
+  }
+
+  Future<void> _persistCompletedFilePath(Task task) async {
+    try {
+      final path = await task.filePath();
+      await _ref
+          .read(storageServiceProvider)
+          .patchDownloadMetadata(
+            task.taskId,
+            trackingUrl: downloadTrackingUrl(task),
+            filePath: path,
+          );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[DownloadService] persist filePath failed: $e');
+      }
     }
   }
 
@@ -1007,8 +1069,66 @@ class DownloadService {
   }) async {
     return resolveDownloadFileToDelete(
       fromTask: () => getDownloadedFileForTask(task, requireNonEmpty: false),
-      fromLabels: () => getDownloadedFile(item, episode: episode),
+      taskFilePath: () async {
+        try {
+          final path = await task.filePath();
+          return path.isEmpty ? null : path;
+        } catch (_) {
+          return null;
+        }
+      },
+      fromLabels: () async {
+        final stored = await _storedDownloadFile(task.taskId);
+        if (stored != null) return stored;
+        return getDownloadedFile(item, episode: episode);
+      },
     );
+  }
+
+  Future<File?> _storedDownloadFile(String taskId) async {
+    final metadata = await _ref
+        .read(storageServiceProvider)
+        .getDownloadMetadata(taskId);
+    final stored = metadata?['filePath'] as String?;
+    if (stored == null || stored.isEmpty) return null;
+    final file = File(stored);
+    if (await file.exists()) return file;
+    return null;
+  }
+
+  /// Complete FileDownloader record with `metaData == trackingUrl`, even when
+  /// label reconstruction misses. Used by the episode download icon.
+  Future<File?> getFileForTrackingUrl(
+    String trackingUrl, {
+    MultimediaItem? item,
+    Episode? episode,
+  }) async {
+    final key = trackingUrl.trim();
+    if (key.isEmpty) {
+      if (item == null) return null;
+      return getDownloadedFile(item, episode: episode);
+    }
+
+    final records = await FileDownloader().database.allRecords();
+    for (final record in records) {
+      if (record.status != TaskStatus.complete) continue;
+      if (downloadTrackingUrl(record.task) != key) continue;
+
+      final fromTask = await getDownloadedFileForTask(record.task);
+      if (fromTask != null) return fromTask;
+      try {
+        final path = await record.task.filePath();
+        if (path.isNotEmpty) {
+          final file = File(path);
+          if (await file.exists()) return file;
+        }
+      } catch (_) {}
+      final stored = await _storedDownloadFile(record.task.taskId);
+      if (stored != null) return stored;
+    }
+
+    if (item == null) return null;
+    return getDownloadedFile(item, episode: episode);
   }
 
   // Request user to disable battery optimizations for persistent downloads

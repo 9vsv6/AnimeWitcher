@@ -1284,13 +1284,35 @@ class StorageService {
     String taskId,
     MultimediaItem item, {
     Episode? episode,
+    String? trackingUrl,
+    String? filePath,
   }) async {
     final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
     await box.put(taskId, {
       'item': item.toJson(),
       'episode': episode?.toJson(),
       'timestamp': DateTime.now().millisecondsSinceEpoch,
+      if (trackingUrl != null && trackingUrl.isNotEmpty) 'trackingUrl': trackingUrl,
+      if (filePath != null && filePath.isNotEmpty) 'filePath': filePath,
     });
+  }
+
+  Future<void> patchDownloadMetadata(
+    String taskId, {
+    String? trackingUrl,
+    String? filePath,
+  }) async {
+    final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
+    final data = box.get(taskId);
+    if (data == null) return;
+    final map = Map<String, dynamic>.from(data as Map);
+    if (trackingUrl != null && trackingUrl.isNotEmpty) {
+      map['trackingUrl'] = trackingUrl;
+    }
+    if (filePath != null && filePath.isNotEmpty) {
+      map['filePath'] = filePath;
+    }
+    await box.put(taskId, map);
   }
 
   Future<Map<String, dynamic>?> getDownloadMetadata(String taskId) async {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/services/download_service.dart';
+import 'package:animewitcher/core/utils/download_cleanup.dart';
 import 'package:animewitcher/shared/widgets/custom_widgets.dart';
 import '../../../library/presentation/downloads_provider.dart';
 import '../playback_launcher.dart';
@@ -49,9 +50,14 @@ class DownloadManagementDialog extends HookConsumerWidget {
         : '${currentItem.title} - $episodeLabel';
 
     final downloads = ref.watch(downloadsProvider).value ?? [];
+    final tracking = episode?.url.trim().isNotEmpty == true
+        ? episode!.url.trim()
+        : item.url.trim();
     final matchingItems = downloads
         .where(
-          (d) => d.item.url == item.url && d.episode?.url == episode?.url,
+          (d) =>
+              downloadTrackingUrl(d.task) == tracking ||
+              (d.episode?.url.trim() ?? '') == tracking,
         )
         .toList();
 

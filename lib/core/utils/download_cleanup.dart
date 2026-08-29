@@ -15,19 +15,24 @@ const Set<String> kDownloadVideoExtensions = {
 
 const String kAppDownloadsRootMarker = 'AnimeWitcher/Downloads';
 
+const List<String> kDownloadTempSuffixes = ['.part', '.tmp', '.download'];
+
+/// Canonical episode identity: [DownloadTask.metaData], which is set to
+/// `episode.url` (not `taskId`).
+String downloadTrackingUrl(Task task) {
+  final meta = task.metaData.trim();
+  if (meta.isNotEmpty) return meta;
+  return task.url.trim();
+}
+
 /// Identity for one downloaded episode (or a movie with no episode).
 ///
-/// Prefers [Episode.url] when present; otherwise item URL + episode number +
-/// server name. Used to collapse duplicate FileDownloader rows that point at
-/// the same episode.
+/// Canonical key is `episode.url`, which is stored on the task as
+/// [Task.metaData]. `taskId` is not an identity.
 String downloadIdentityKey(MultimediaItem item, Episode? episode) {
-  final itemUrl = item.url.trim();
-  if (episode == null) return itemUrl;
-  final episodeUrl = episode.url.trim();
-  if (episodeUrl.isNotEmpty) {
-    return '$itemUrl|epurl:$episodeUrl';
-  }
-  return '$itemUrl|ep:${episode.episode}|srv:${episode.serverName}';
+  final episodeUrl = episode?.url.trim() ?? '';
+  if (episodeUrl.isNotEmpty) return episodeUrl;
+  return item.url.trim();
 }
 
 /// Directory + filename as stored on the task, independent of Unicode form.
@@ -62,14 +67,58 @@ bool taskMatchesDownloadFile({
   return p.normalize(a) == p.normalize(b) || a.endsWith(b) || b.endsWith(a);
 }
 
+bool shouldCancelDownload(TaskStatus status) {
+  switch (status) {
+    case TaskStatus.running:
+    case TaskStatus.enqueued:
+    case TaskStatus.paused:
+    case TaskStatus.waitingToRetry:
+      return true;
+    case TaskStatus.complete:
+    case TaskStatus.canceled:
+    case TaskStatus.failed:
+    case TaskStatus.notFound:
+      return false;
+  }
+}
+
+enum CompleteDownloadAction { reuse, dropAndEnqueue, enqueue }
+
+/// How [DownloadService.startDownload] should treat an existing complete record.
+CompleteDownloadAction decideCompleteDownloadAction({
+  required bool hasCompleteRecord,
+  required bool fileExists,
+}) {
+  if (!hasCompleteRecord) return CompleteDownloadAction.enqueue;
+  if (fileExists) return CompleteDownloadAction.reuse;
+  return CompleteDownloadAction.dropAndEnqueue;
+}
+
 /// Prefer the task's own path; fall back to label reconstruction.
+///
+/// Order: existing task file, then [File] from `task.filePath()` when that
+/// path exists (or `exists()` throws), then reconstructed labels, then the
+/// path [File] even if `exists()` was false so delete can still retry.
 Future<File?> resolveDownloadFileToDelete({
   required Future<File?> Function() fromTask,
+  required Future<String?> Function() taskFilePath,
   required Future<File?> Function() fromLabels,
 }) async {
   final taskFile = await fromTask();
   if (taskFile != null) return taskFile;
-  return fromLabels();
+  final path = await taskFilePath();
+  File? pathFile;
+  if (path != null && path.isNotEmpty) {
+    pathFile = File(path);
+    try {
+      if (await pathFile.exists()) return pathFile;
+    } catch (_) {
+      return pathFile;
+    }
+  }
+  final labels = await fromLabels();
+  if (labels != null) return labels;
+  return pathFile;
 }
 
 bool pathIsInsideAppDownloads(String path) {
@@ -159,14 +208,45 @@ Future<void> deleteSeriesFolderIfNoVideosRemain(File deletedFile) async {
   await seriesDir.delete(recursive: true);
 }
 
-/// Delete [file] then remove the series folder when it has no videos left.
+Future<void> deleteSiblingTempFiles(File file) async {
+  final dir = file.parent;
+  final name = p.basename(file.path);
+  for (final suffix in kDownloadTempSuffixes) {
+    final temp = File(p.join(dir.path, '$name$suffix'));
+    try {
+      if (await temp.exists()) await temp.delete();
+    } catch (_) {}
+  }
+}
+
+/// Retry `file.delete()` — Android public Downloads can fail once on
+/// permission or a still-open handle, then succeed.
+Future<bool> deleteFileWithRetry(File file, {int attempts = 3}) async {
+  for (var i = 0; i < attempts; i++) {
+    try {
+      if (!await file.exists()) return true;
+      await file.delete();
+      if (!await file.exists()) return true;
+    } catch (_) {}
+    if (i < attempts - 1) {
+      await Future<void>.delayed(Duration(milliseconds: 40 * (i + 1)));
+    }
+  }
+  try {
+    return !await file.exists();
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Delete [file] (any status), sibling temps, then the series folder when
+/// no videos remain.
 Future<bool> deleteDownloadedVideo(File file) async {
   try {
-    if (await file.exists()) {
-      await file.delete();
-    }
+    await deleteSiblingTempFiles(file);
+    final deleted = await deleteFileWithRetry(file);
     await deleteSeriesFolderIfNoVideosRemain(file);
-    return true;
+    return deleted;
   } catch (_) {
     return false;
   }

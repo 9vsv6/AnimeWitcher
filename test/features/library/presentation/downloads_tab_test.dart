@@ -33,13 +33,14 @@ DownloadTask _task({
   required String taskId,
   required String filename,
   String directory = 'AnimeWitcher/Downloads/Black Torch',
+  String metaData = 'https://animewitcher.test/black-torch/9',
 }) {
   return DownloadTask(
     taskId: taskId,
     url: 'https://cdn.test/black-torch-9.mp4',
     filename: filename,
     directory: directory,
-    metaData: 'https://animewitcher.test/black-torch/9',
+    metaData: metaData,
   );
 }
 
@@ -48,9 +49,10 @@ DownloadItem _item({
   required int timestamp,
   String filename = 'الحلقة 9.mp4',
   TaskStatus status = TaskStatus.complete,
+  String metaData = 'https://animewitcher.test/black-torch/9',
 }) {
   return DownloadItem(
-    task: _task(taskId: taskId, filename: filename),
+    task: _task(taskId: taskId, filename: filename, metaData: metaData),
     status: status,
     progress: status == TaskStatus.complete ? 1.0 : 0.4,
     item: _blackTorch(),
@@ -104,11 +106,16 @@ void main() {
       await reconstructed.writeAsBytes(List<int>.filled(32, 2));
 
       var usedTaskPath = false;
+      var usedRawPath = false;
       var usedLabels = false;
       final resolved = await resolveDownloadFileToDelete(
         fromTask: () async {
           usedTaskPath = true;
           return taskFile;
+        },
+        taskFilePath: () async {
+          usedRawPath = true;
+          return reconstructed.path;
         },
         fromLabels: () async {
           usedLabels = true;
@@ -118,6 +125,7 @@ void main() {
 
       expect(resolved!.path, taskFile.path);
       expect(usedTaskPath, isTrue);
+      expect(usedRawPath, isFalse);
       expect(usedLabels, isFalse);
 
       await deleteDownloadedVideo(resolved);
@@ -127,6 +135,43 @@ void main() {
       expect(await series.exists(), isTrue);
     });
   });
+
+  testWidgets(
+    'resolve falls back to task.filePath then reconstructed labels',
+    (tester) async {
+      await tester.runAsync(() async {
+        final root = await Directory.systemTemp.createTemp('aw_dl_resolve_');
+        addTearDown(() => root.delete(recursive: true));
+        final series = Directory(
+          p.join(root.path, 'AnimeWitcher', 'Downloads', 'Black Torch'),
+        );
+        await series.create(recursive: true);
+        final pathFile = File(p.join(series.path, 'الحلقة 9 (1080p).mp4'));
+        await pathFile.writeAsBytes(List<int>.filled(8, 1));
+        final reconstructed = File(p.join(series.path, 'الحلقة 9.mp4'));
+        await reconstructed.writeAsBytes(List<int>.filled(8, 2));
+
+        var usedLabels = false;
+        final fromPath = await resolveDownloadFileToDelete(
+          fromTask: () async => null,
+          taskFilePath: () async => pathFile.path,
+          fromLabels: () async {
+            usedLabels = true;
+            return reconstructed;
+          },
+        );
+        expect(fromPath!.path, pathFile.path);
+        expect(usedLabels, isFalse);
+
+        final fromLabels = await resolveDownloadFileToDelete(
+          fromTask: () async => null,
+          taskFilePath: () async => null,
+          fromLabels: () async => reconstructed,
+        );
+        expect(fromLabels!.path, reconstructed.path);
+      });
+    },
+  );
 
   testWidgets(
     'deleting the last episode removes the series folder leftover files and all',
@@ -144,8 +189,13 @@ void main() {
 
         final video = File(p.join(season.path, 'الحلقة 9.mp4'));
         await video.writeAsBytes(List<int>.filled(32, 1));
+        await File(p.join(season.path, '${p.basename(video.path)}.part'))
+            .writeAsBytes([1]);
+        await File(p.join(season.path, '${p.basename(video.path)}.tmp'))
+            .writeAsBytes([1]);
+        await File(p.join(season.path, '${p.basename(video.path)}.download'))
+            .writeAsBytes([1]);
         await File(p.join(season.path, 'thumb.jpg')).writeAsBytes([1]);
-        await File(p.join(series.path, 'episode.part')).writeAsBytes([1]);
         await Directory(p.join(series.path, 'Season 2')).create();
 
         final otherSeries = Directory(p.join(downloadsRoot.path, 'Bleach'));
@@ -164,11 +214,46 @@ void main() {
     },
   );
 
+  testWidgets('delete also removes sibling .part .tmp .download temps', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final root = await Directory.systemTemp.createTemp('aw_dl_temps_');
+      addTearDown(() => root.delete(recursive: true));
+      final series = Directory(
+        p.join(root.path, 'AnimeWitcher', 'Downloads', 'Keep Me'),
+      );
+      await series.create(recursive: true);
+      final video = File(p.join(series.path, 'keep.mp4'));
+      await video.writeAsBytes(List<int>.filled(32, 1));
+      final other = File(p.join(series.path, 'other.mp4'));
+      await other.writeAsBytes(List<int>.filled(32, 2));
+      final part = File(p.join(series.path, 'keep.mp4.part'));
+      final tmp = File(p.join(series.path, 'keep.mp4.tmp'));
+      final download = File(p.join(series.path, 'keep.mp4.download'));
+      await part.writeAsBytes([1]);
+      await tmp.writeAsBytes([1]);
+      await download.writeAsBytes([1]);
+
+      await deleteDownloadedVideo(video);
+
+      expect(await video.exists(), isFalse);
+      expect(await part.exists(), isFalse);
+      expect(await tmp.exists(), isFalse);
+      expect(await download.exists(), isFalse);
+      expect(await other.exists(), isTrue);
+      expect(await series.exists(), isTrue);
+    });
+  });
+
   testWidgets(
     'two complete records for the same episode collapse to one UI row',
     (tester) async {
       final older = _item(taskId: 'old-complete', timestamp: 100);
       final newer = _item(taskId: 'new-complete', timestamp: 200);
+      expect(older.task.taskId, isNot(newer.task.taskId));
+      expect(downloadTrackingUrl(older.task), downloadTrackingUrl(newer.task));
+      expect(downloadsPointAtSameTarget(older, newer), isTrue);
       expect(collapseDuplicateDownloads([older, newer]).visible, hasLength(1));
       expect(
         collapseDuplicateDownloads([older, newer]).visible.single.id,
@@ -194,22 +279,52 @@ void main() {
     },
   );
 
-  testWidgets('resolveDownloadFileToDelete falls back to reconstructed labels', (
-    tester,
-  ) async {
-    final reconstructed = File(
-      p.join(
-        Directory.systemTemp.path,
-        'AnimeWitcher',
-        'Downloads',
-        'Black Torch',
-        'الحلقة 9.mp4',
+  test('canonical identity is task metaData / episode.url, not taskId', () {
+    final a = _item(taskId: 'task-a', timestamp: 1);
+    final b = _item(taskId: 'task-b', timestamp: 2);
+    expect(downloadTrackingUrl(a.task), 'https://animewitcher.test/black-torch/9');
+    expect(downloadIdentityKey(a.item, a.episode), a.episode!.url);
+    expect(downloadsPointAtSameTarget(a, b), isTrue);
+
+    final other = DownloadItem(
+      task: _task(
+        taskId: 'task-c',
+        filename: 'الحلقة 10.mp4',
+        metaData: 'https://animewitcher.test/black-torch/10',
       ),
+      status: TaskStatus.complete,
+      progress: 1.0,
+      item: _blackTorch(),
+      episode: Episode(
+        name: 'الحلقة 10',
+        url: 'https://animewitcher.test/black-torch/10',
+        episode: 10,
+        serverName: 'الحلقة 10',
+      ),
+      timestamp: 3,
     );
-    final resolved = await resolveDownloadFileToDelete(
-      fromTask: () async => null,
-      fromLabels: () async => reconstructed,
+    expect(downloadsPointAtSameTarget(a, other), isFalse);
+  });
+
+  test('complete records skip cancel; in-progress records cancel', () {
+    expect(shouldCancelDownload(TaskStatus.complete), isFalse);
+    expect(shouldCancelDownload(TaskStatus.running), isTrue);
+    expect(shouldCancelDownload(TaskStatus.enqueued), isTrue);
+    expect(shouldCancelDownload(TaskStatus.paused), isTrue);
+  });
+
+  test('startDownload reuses a complete record when the file exists', () {
+    expect(
+      decideCompleteDownloadAction(hasCompleteRecord: true, fileExists: true),
+      CompleteDownloadAction.reuse,
     );
-    expect(resolved!.path, reconstructed.path);
+    expect(
+      decideCompleteDownloadAction(hasCompleteRecord: true, fileExists: false),
+      CompleteDownloadAction.dropAndEnqueue,
+    );
+    expect(
+      decideCompleteDownloadAction(hasCompleteRecord: false, fileExists: false),
+      CompleteDownloadAction.enqueue,
+    );
   });
 }
