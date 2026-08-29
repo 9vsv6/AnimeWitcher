@@ -56,6 +56,7 @@ Future<void> _loadWalkthroughFonts() async {
 
 Future<void> _settleCharacterRails(WidgetTester tester) async {
   await tester.pump();
+  await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
 }
 
@@ -415,6 +416,9 @@ void main() {
         matching: find.byType(Scrollable),
       ),
     );
+    final moreScrollable = _railScrollable(tester, 'Main');
+    moreScrollable.position.jumpTo(moreScrollable.position.maxScrollExtent);
+    await tester.pump();
     expect(find.byKey(const ValueKey('details-character-Main-more')), findsOneWidget);
     expect(find.byKey(const ValueKey('details-character-Main-9')), findsOneWidget);
     expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
@@ -422,7 +426,7 @@ void main() {
 
     await _writeShot(
       tester,
-      'details_character_rails_more_at_end.png',
+      'details_character_rails_more_left_end.png',
       const ValueKey('details-character-rails-shot'),
     );
 
@@ -502,11 +506,12 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('SimilarOne'), findsOneWidget);
+    expect(find.byKey(const ValueKey('similar-0')), findsOneWidget);
 
     await tester.tap(find.text(animeWitcherCharactersTabLabel));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 350));
+    await _settleCharacterRails(tester);
 
     final mainScrollable = _railScrollable(tester, 'Main');
     expect(mainScrollable.position.pixels, mainScrollable.position.minScrollExtent);
