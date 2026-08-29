@@ -17,8 +17,11 @@ class DownloadedFiles extends _$DownloadedFiles {
   Future<void> checkFile(MultimediaItem item, {Episode? episode}) async {
     final key = episode?.url ?? item.url;
     final downloadService = ref.read(downloadServiceProvider);
-    final file = await downloadService.getDownloadedFile(
-      item,
+    // Prefer a complete FileDownloader record keyed by episode.url (metaData)
+    // so the download icon stays in sync when path reconstruction misses.
+    final file = await downloadService.getFileForTrackingUrl(
+      key,
+      item: item,
       episode: episode,
     );
 

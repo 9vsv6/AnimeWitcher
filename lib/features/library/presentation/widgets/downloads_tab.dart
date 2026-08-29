@@ -59,11 +59,13 @@ class _DownloadsTabState extends ConsumerState<DownloadsTab>
           );
         }
 
-        // Grouping logic
+        // Grouping logic. Collapse leftover complete records for the same
+        // episode/file so a re-download cannot render الحلقة 9 twice.
+        final visibleDownloads = collapseDuplicateDownloads(downloads).visible;
         final Map<String, List<DownloadItem>> grouped = {};
         final List<String> keys = [];
 
-        for (final item in downloads) {
+        for (final item in visibleDownloads) {
           final String key = item.item.tmdbId?.toString() ?? item.item.title;
           if (!grouped.containsKey(key)) {
             keys.add(key);

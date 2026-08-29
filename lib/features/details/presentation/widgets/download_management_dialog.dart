@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/services/download_service.dart';
+import 'package:animewitcher/core/utils/download_cleanup.dart';
 import 'package:animewitcher/shared/widgets/custom_widgets.dart';
-import 'package:collection/collection.dart';
 import '../../../library/presentation/downloads_provider.dart';
 import '../playback_launcher.dart';
 import '../source_picker.dart';
@@ -50,9 +50,16 @@ class DownloadManagementDialog extends HookConsumerWidget {
         : '${currentItem.title} - $episodeLabel';
 
     final downloads = ref.watch(downloadsProvider).value ?? [];
-    final matchingItem = downloads.firstWhereOrNull(
-      (d) => d.item.url == item.url && d.episode?.url == episode?.url,
-    );
+    final tracking = episode?.url.trim().isNotEmpty == true
+        ? episode!.url.trim()
+        : item.url.trim();
+    final matchingItems = downloads
+        .where(
+          (d) =>
+              downloadTrackingUrl(d.task) == tracking ||
+              (d.episode?.url.trim() ?? '') == tracking,
+        )
+        .toList();
 
     return AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -72,7 +79,8 @@ class DownloadManagementDialog extends HookConsumerWidget {
         CustomButton(
           isPrimary: false,
           isOutlined: true,
-          onPressed: () => _showDeleteConfirmation(context, ref, matchingItem),
+          onPressed: () =>
+              _showDeleteConfirmation(context, ref, matchingItems),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -114,7 +122,7 @@ class DownloadManagementDialog extends HookConsumerWidget {
   Future<void> _showDeleteConfirmation(
     BuildContext context,
     WidgetRef ref,
-    DownloadItem? matchingItem,
+    List<DownloadItem> matchingItems,
   ) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
@@ -149,8 +157,8 @@ class DownloadManagementDialog extends HookConsumerWidget {
     );
 
     if (confirmed == true) {
-      if (matchingItem != null) {
-        await ref.read(downloadsProvider.notifier).removeDownload(matchingItem);
+      if (matchingItems.isNotEmpty) {
+        await ref.read(downloadsProvider.notifier).removeDownloads(matchingItems);
       } else {
         await ref.read(downloadServiceProvider).deleteDownloadedFile(file);
       }
