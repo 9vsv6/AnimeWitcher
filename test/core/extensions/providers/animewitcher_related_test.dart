@@ -108,7 +108,7 @@ AnimeWitcherNativeProvider _provider({
 }
 
 void main() {
-  test('related preview hydrates 10 mal_ids and keeps a المزيد page', () async {
+  test('related preview hydrates 5 mal_ids and keeps a المزيد page', () async {
     final requested = <List<int>>[];
     Future<List<Map<String, dynamic>>> resolve(Iterable<int> ids) async {
       requested.add(ids.toList());
@@ -134,10 +134,10 @@ void main() {
       dio: dio,
       resolveAnimeByMalIds: resolve,
     ).getRelatedPage('https://animewitcher.com/watch/source-anime');
-    expect(preview.items, hasLength(10));
+    expect(preview.items, hasLength(5));
     expect(preview.hasMore, isTrue);
     expect(requested, hasLength(1));
-    expect(requested.single, hasLength(10));
+    expect(requested.single, hasLength(5));
 
     requested.clear();
     final all = await _provider(
@@ -178,10 +178,13 @@ void main() {
       ),
     );
 
-    final items = await _provider(
+    final items = (await _provider(
       dio: dio,
       resolveAnimeByMalIds: resolve,
-    ).getRelated('https://animewitcher.com/watch/source-anime');
+    ).getRelatedPage(
+      'https://animewitcher.com/watch/source-anime',
+      includeAll: true,
+    )).items;
 
     expect(
       items.map((item) => item.relationLabel).toList(),

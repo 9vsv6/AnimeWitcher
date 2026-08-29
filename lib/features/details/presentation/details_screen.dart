@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -43,6 +44,19 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+
+class _DetailsEpisodesSwipeGestureRecognizer
+    extends HorizontalDragGestureRecognizer {
+  _DetailsEpisodesSwipeGestureRecognizer({required this.shouldIgnore});
+
+  final bool Function(Offset globalPosition) shouldIgnore;
+
+  @override
+  void addPointer(PointerDownEvent event) {
+    if (shouldIgnore(event.position)) return;
+    super.addPointer(event);
+  }
+}
 
 /// Keeps a details tab's scrollable (and its poster Image states) alive
 /// while the other tab is showing. This matches View All, which stays
@@ -191,6 +205,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   int _selectedDetailsTab = 0;
   double _tabSwipeDistance = 0;
   bool _tabSwipeStartedAtBackEdge = false;
+  final GlobalKey _extraTabsKey = GlobalKey();
   Offset _tabSlideFrom = Offset.zero;
   late final AnimationController _tabTransitionController;
   late final Animation<double> _tabTransitionAnimation;
@@ -442,53 +457,77 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
+  bool _isPointerInExtraTabs(Offset globalPosition) {
+    final extraContext = _extraTabsKey.currentContext;
+    if (extraContext == null) return false;
+    final box = extraContext.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return false;
+    final local = box.globalToLocal(globalPosition);
+    return local.dx >= 0 &&
+        local.dy >= 0 &&
+        local.dx <= box.size.width &&
+        local.dy <= box.size.height;
+  }
+
   Widget _buildDetailsTabSwipeRegion({
     required Widget child,
     required bool enabled,
   }) {
     if (!enabled) return child;
 
-    return GestureDetector(
+    return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
-      onHorizontalDragStart: (details) {
-        _tabSwipeDistance = 0;
-        // Preserve the native iOS back gesture from the physical left edge.
-        _tabSwipeStartedAtBackEdge = details.globalPosition.dx <= 24;
-      },
-      onHorizontalDragUpdate: (details) {
-        if (_tabSwipeStartedAtBackEdge) return;
-        _tabSwipeDistance += details.primaryDelta ?? 0;
-      },
-      onHorizontalDragCancel: () {
-        _tabSwipeDistance = 0;
-        _tabSwipeStartedAtBackEdge = false;
-      },
-      onHorizontalDragEnd: (details) {
-        final distance = _tabSwipeDistance;
-        final velocity = details.primaryVelocity ?? 0;
-        final ignored = _tabSwipeStartedAtBackEdge;
-        _tabSwipeDistance = 0;
-        _tabSwipeStartedAtBackEdge = false;
-        if (ignored) return;
+      gestures: <Type, GestureRecognizerFactory>{
+        _DetailsEpisodesSwipeGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<
+              _DetailsEpisodesSwipeGestureRecognizer
+            >(
+              () => _DetailsEpisodesSwipeGestureRecognizer(
+                shouldIgnore: _isPointerInExtraTabs,
+              ),
+              (_DetailsEpisodesSwipeGestureRecognizer instance) {
+                instance
+                  ..onStart = (details) {
+                    _tabSwipeDistance = 0;
+                    _tabSwipeStartedAtBackEdge =
+                        details.globalPosition.dx <= 24;
+                  }
+                  ..onUpdate = (details) {
+                    if (_tabSwipeStartedAtBackEdge) return;
+                    _tabSwipeDistance += details.primaryDelta ?? 0;
+                  }
+                  ..onCancel = () {
+                    _tabSwipeDistance = 0;
+                    _tabSwipeStartedAtBackEdge = false;
+                  }
+                  ..onEnd = (details) {
+                    final distance = _tabSwipeDistance;
+                    final velocity = details.primaryVelocity ?? 0;
+                    final ignored = _tabSwipeStartedAtBackEdge;
+                    _tabSwipeDistance = 0;
+                    _tabSwipeStartedAtBackEdge = false;
+                    if (ignored) return;
 
-        final swipeLeft =
-            distance <= -_tabSwipeDistanceThreshold ||
-            velocity <= -_tabSwipeVelocityThreshold;
-        final swipeRight =
-            distance >= _tabSwipeDistanceThreshold ||
-            velocity >= _tabSwipeVelocityThreshold;
+                    final swipeLeft =
+                        distance <= -_tabSwipeDistanceThreshold ||
+                        velocity <= -_tabSwipeVelocityThreshold;
+                    final swipeRight =
+                        distance >= _tabSwipeDistanceThreshold ||
+                        velocity >= _tabSwipeVelocityThreshold;
 
-        final isRtl = Directionality.of(context) == TextDirection.rtl;
-        // Arabic: details -> episodes by swiping right, and episodes ->
-        // details by swiping left. English uses the opposite directions.
-        final swipeTowardEpisodes = isRtl ? swipeRight : swipeLeft;
-        final swipeTowardDetails = isRtl ? swipeLeft : swipeRight;
+                    final isRtl =
+                        Directionality.of(context) == TextDirection.rtl;
+                    final swipeTowardEpisodes = isRtl ? swipeRight : swipeLeft;
+                    final swipeTowardDetails = isRtl ? swipeLeft : swipeRight;
 
-        if (swipeTowardEpisodes && _selectedDetailsTab != 1) {
-          _switchDetailsTab(1);
-        } else if (swipeTowardDetails && _selectedDetailsTab != 0) {
-          _switchDetailsTab(0);
-        }
+                    if (swipeTowardEpisodes && _selectedDetailsTab != 1) {
+                      _switchDetailsTab(1);
+                    } else if (swipeTowardDetails && _selectedDetailsTab != 0) {
+                      _switchDetailsTab(0);
+                    }
+                  };
+              },
+            ),
       },
       child: child,
     );
@@ -1083,9 +1122,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         children: [
           _buildDetailsPageTabs(context, episodesAsync),
           Expanded(
-            child: TabBarView(
-              controller: _detailsTabController,
-              children: [
+            child: _buildDetailsTabSwipeRegion(
+              enabled: true,
+              child: TabBarView(
+                controller: _detailsTabController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
                 _KeepAliveDetailsTab(
                   child: RefreshIndicator(
                     onRefresh: _refreshDetails,
@@ -1123,6 +1165,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               ],
             ),
           ),
+        ),
         ],
       ),
     );
@@ -1447,20 +1490,34 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         widget.item.url,
       ).select((state) => state.relatedHasMore),
     );
+    final similarHasMore = ref.watch(
+      detailsControllerProvider(
+        widget.item.url,
+      ).select((state) => state.similarHasMore),
+    );
     final controller = ref.read(
       detailsControllerProvider(widget.item.url).notifier,
     );
     return DetailsExtraTabs(
+      key: _extraTabsKey,
       similar: similarState,
       related: relatedState.hasValue
           ? AsyncData<List<MultimediaItem>>(related)
           : relatedState,
       relatedHasMore: relatedHasMore,
+      similarHasMore: similarHasMore,
       cast: castState,
       contentPadding: contentPadding,
       onTabBecameVisible: _onExtraTabBecameVisible,
       onAnimeTap: (child) => _openExtraAnime(item, child),
       onCharacterTap: _openCharacter,
+      onShowMoreSimilar: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => SimilarAnimeScreen(source: item),
+          ),
+        );
+      },
       onShowMoreRelated: () {
         Navigator.of(context).push(
           MaterialPageRoute<void>(

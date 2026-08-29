@@ -41,6 +41,7 @@ class DetailsState {
   final AsyncValue<List<MultimediaItem>> related;
   final bool relatedHasMore;
   final AsyncValue<List<MultimediaItem>> recommendations;
+  final bool similarHasMore;
   final Map<int, List<Episode>> seasonMap;
   final int selectedSeason;
   final bool isMovie;
@@ -62,6 +63,7 @@ class DetailsState {
     this.related = const AsyncLoading(),
     this.relatedHasMore = false,
     this.recommendations = const AsyncLoading(),
+    this.similarHasMore = false,
     this.seasonMap = const {},
     this.selectedSeason = 1,
     this.isMovie = false,
@@ -84,6 +86,7 @@ class DetailsState {
     AsyncValue<List<MultimediaItem>>? related,
     bool? relatedHasMore,
     AsyncValue<List<MultimediaItem>>? recommendations,
+    bool? similarHasMore,
     Map<int, List<Episode>>? seasonMap,
     int? selectedSeason,
     bool? isMovie,
@@ -105,6 +108,7 @@ class DetailsState {
       related: related ?? this.related,
       relatedHasMore: relatedHasMore ?? this.relatedHasMore,
       recommendations: recommendations ?? this.recommendations,
+      similarHasMore: similarHasMore ?? this.similarHasMore,
       seasonMap: seasonMap ?? this.seasonMap,
       selectedSeason: selectedSeason ?? this.selectedSeason,
       isMovie: isMovie ?? this.isMovie,
@@ -742,7 +746,10 @@ class DetailsController extends _$DetailsController {
       return;
     }
     _recommendationsLoadStarted = true;
-    state = state.copyWith(recommendations: const AsyncLoading());
+    state = state.copyWith(
+      recommendations: const AsyncLoading(),
+      similarHasMore: false,
+    );
     await _loadRecommendationsInBackground(
       provider,
       url,
@@ -893,13 +900,15 @@ class DetailsController extends _$DetailsController {
     int generation,
   ) async {
     try {
-      final value = await provider.getRecommendations(url);
+      final page = await provider.getRecommendationsPage(url);
       if (!ref.mounted || generation != _loadGeneration) return;
+      final value = page.items;
       final updated = (state.item ?? contextItem).copyWith(
         recommendations: value,
       );
       state = state.copyWith(
         recommendations: AsyncData(value),
+        similarHasMore: page.hasMore,
         details: state.details.hasValue ? AsyncData(updated) : null,
         item: updated,
       );
@@ -908,6 +917,7 @@ class DetailsController extends _$DetailsController {
       _recommendationsLoadStarted = false;
       state = state.copyWith(
         recommendations: AsyncError<List<MultimediaItem>>(error, stackTrace),
+        similarHasMore: false,
       );
     }
   }

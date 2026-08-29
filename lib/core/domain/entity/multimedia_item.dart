@@ -60,6 +60,17 @@ class RelatedAnimePage {
   final bool hasMore;
 }
 
+/// Similar-titles preview from Algolia `series_similar`.
+class SimilarAnimePage {
+  const SimilarAnimePage({
+    required this.items,
+    this.hasMore = false,
+  });
+
+  final List<MultimediaItem> items;
+  final bool hasMore;
+}
+
 class Trailer {
   final String url;
   final Map<String, String>? headers;

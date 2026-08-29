@@ -23,6 +23,11 @@ const int animeWitcherCharacterSearchHitsPerPage = 500;
 const int animeWitcherFavoriteCharactersPageSize = 12;
 const int animeWitcherAnimeCastStripLimit = 10;
 
+/// Extra-tab body is always 2 rows × 3 poster cards. More than this count
+/// shows five posters plus a المزيد tile.
+const int animeWitcherExtraTabPreviewSlots = 6;
+const int animeWitcherExtraTabPreviewItemsWhenMore = 5;
+
 /// APK `AnimeDetailsActivity.setUpViewPager` extra-tab labels.
 const String animeWitcherSimilarTabLabel = 'أنميات مشابهة';
 const String animeWitcherRelatedTabLabel = 'ذات صلة';
