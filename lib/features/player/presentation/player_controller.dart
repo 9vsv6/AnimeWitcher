@@ -40,9 +40,6 @@ import '../../../../core/storage/settings_repository.dart';
 import 'playback_recovery_policy.dart';
 import 'playback_resume.dart';
 
-// Sentinel so copyWith can distinguish "not passed" from "explicitly null".
-const Object _keep = Object();
-
 enum PlaybackUiPhaseKind {
   idle,
   bootstrapping,
@@ -70,10 +67,7 @@ class SourceAttemptEntry {
   });
 
   SourceAttemptEntry copyWith({SourceAttemptStatus? status}) {
-    return SourceAttemptEntry(
-      index: index,
-      status: status ?? this.status,
-    );
+    return SourceAttemptEntry(index: index, status: status ?? this.status);
   }
 }
 
@@ -81,10 +75,7 @@ class PlaybackUiPhase {
   final PlaybackUiPhaseKind kind;
   final bool fullscreenBlocking;
 
-  const PlaybackUiPhase({
-    required this.kind,
-    this.fullscreenBlocking = false,
-  });
+  const PlaybackUiPhase({required this.kind, this.fullscreenBlocking = false});
 
   const PlaybackUiPhase.idle() : this(kind: PlaybackUiPhaseKind.idle);
 
@@ -310,10 +301,7 @@ class PlayerController extends Notifier<PlayerState> {
     state = update(state);
   }
 
-  String _playerText({
-    required String english,
-    required String arabic,
-  }) {
+  String _playerText({required String english, required String arabic}) {
     return arabic;
   }
 
@@ -585,9 +573,7 @@ class PlayerController extends Notifier<PlayerState> {
               : SourceAttemptStatus.pending,
         ),
     ];
-    state = state.copyWith(
-      sourceAttempts: attempts,
-    );
+    state = state.copyWith(sourceAttempts: attempts);
   }
 
   void _markSourceAttempt(int index, SourceAttemptStatus status) {
@@ -1055,7 +1041,12 @@ class PlayerController extends Notifier<PlayerState> {
           if (_manualSelectionPending) {
             _manualSelectionPending = false;
             revertToPreviousStream(
-              _playerText(english: 'Selected source is not playable. Reverting back to previous source.', arabic: 'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.'),
+              _playerText(
+                english:
+                    'Selected source is not playable. Reverting back to previous source.',
+                arabic:
+                    'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.',
+              ),
             );
           } else {
             unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
@@ -1084,11 +1075,12 @@ class PlayerController extends Notifier<PlayerState> {
             state.currentStreamIndex,
             SourceAttemptStatus.failed,
           );
-          _revertMessage =
-              _playerText(
-                english: 'Current source stopped unexpectedly. Trying next available source...',
-                arabic: 'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
-              );
+          _revertMessage = _playerText(
+            english:
+                'Current source stopped unexpectedly. Trying next available source...',
+            arabic:
+                'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
+          );
           unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
         }
       }
@@ -1381,9 +1373,7 @@ class PlayerController extends Notifier<PlayerState> {
         debugPrint('Watchdog: buffering 25s — reopening source at $position');
       }
       _enterRuntimePhase(kind: PlaybackUiPhaseKind.bufferingRuntime);
-      _beginStallRecovery(
-        perform: changeStream(current, resetPosition: false),
-      );
+      _beginStallRecovery(perform: changeStream(current, resetPosition: false));
       return;
     }
 
@@ -1587,7 +1577,12 @@ class PlayerController extends Notifier<PlayerState> {
         );
         if (_manualSelectionPending) {
           _manualSelectionPending = false;
-          revertToPreviousStream(_playerText(english: 'Selected source failed. Reverting...', arabic: 'فشل المصدر المحدد. جارٍ الرجوع...'));
+          revertToPreviousStream(
+            _playerText(
+              english: 'Selected source failed. Reverting...',
+              arabic: 'فشل المصدر المحدد. جارٍ الرجوع...',
+            ),
+          );
         } else {
           retryNextStream(sourceSessionId: state.sourceSessionId);
         }
@@ -1628,11 +1623,12 @@ class PlayerController extends Notifier<PlayerState> {
           state.currentStreamIndex,
           SourceAttemptStatus.failed,
         );
-        _revertMessage =
-            _playerText(
-                english: 'Current source stopped unexpectedly. Trying next available source...',
-                arabic: 'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
-              );
+        _revertMessage = _playerText(
+          english:
+              'Current source stopped unexpectedly. Trying next available source...',
+          arabic:
+              'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
+        );
         retryNextStream(sourceSessionId: state.sourceSessionId);
       }
     });
@@ -1683,10 +1679,7 @@ class PlayerController extends Notifier<PlayerState> {
     _resetMidPlaybackReconnect();
     _resetBufferWatchdog();
     if (state.currentStream == null) return;
-    _markSourceAttempt(
-      state.currentStreamIndex,
-      SourceAttemptStatus.failed,
-    );
+    _markSourceAttempt(state.currentStreamIndex, SourceAttemptStatus.failed);
     _revertMessage = _playerText(
       english:
           'Current source stopped unexpectedly. Trying next available source...',
@@ -1817,7 +1810,7 @@ class PlayerController extends Notifier<PlayerState> {
     _playingSub = _player.stream.playing.listen((isPlaying) {
       if (!isPlaying) {
         saveProgress();
-          // Bug 2: clear any in-flight buffering overlay when the user
+        // Bug 2: clear any in-flight buffering overlay when the user
         // pauses. Without this, "seek → buffering starts → user pauses
         // before buffer fills" leaves the spinner stuck on top of a
         // paused video forever. The spinner is meaningful for an active
@@ -2022,10 +2015,12 @@ class PlayerController extends Notifier<PlayerState> {
 
     final activeProvider = _resolveProvider();
     if (activeProvider == null) {
-      state = state.copyWith(errorMessage: _playerText(
+      state = state.copyWith(
+        errorMessage: _playerText(
           english: 'No provider selected.',
           arabic: 'لم يتم اختيار مزوّد.',
-        ));
+        ),
+      );
       return;
     }
 
@@ -2037,12 +2032,14 @@ class PlayerController extends Notifier<PlayerState> {
         if (rawStreams.isNotEmpty) {
           // A source explicitly chosen in AnimeWitcher's picker must not be
           // replaced by saved-source or network quality preferences.
-          final explicitSelection =
-              activeProvider.isExplicitStreamSelection(_videoUrl);
+          final explicitSelection = activeProvider.isExplicitStreamSelection(
+            _videoUrl,
+          );
           final streams = rawStreams;
 
-          final initialIndex =
-              explicitSelection ? 0 : _findSavedStreamIndex(streams);
+          final initialIndex = explicitSelection
+              ? 0
+              : _findSavedStreamIndex(streams);
           state = state.copyWith(
             streams: streams,
             currentStreamIndex: initialIndex,
@@ -2062,15 +2059,11 @@ class PlayerController extends Notifier<PlayerState> {
             final updated = state.sourceAttempts
                 .map(
                   (e) => batchIndices.contains(e.index)
-                      ? e.copyWith(
-                          status: SourceAttemptStatus.trying,
-                        )
+                      ? e.copyWith(status: SourceAttemptStatus.trying)
                       : e,
                 )
                 .toList();
-            state = state.copyWith(
-              sourceAttempts: updated,
-            );
+            state = state.copyWith(sourceAttempts: updated);
           } else {
             _markSourceAttempt(initialIndex, SourceAttemptStatus.trying);
           }
@@ -2099,7 +2092,12 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     if (!_isCurrentSourceSession(sourceSessionId)) return;
-    state = state.copyWith(errorMessage: _playerText(english: 'No streams found.', arabic: 'لم يتم العثور على مصادر تشغيل.'));
+    state = state.copyWith(
+      errorMessage: _playerText(
+        english: 'No streams found.',
+        arabic: 'لم يتم العثور على مصادر تشغيل.',
+      ),
+    );
   }
 
   Future<bool> _handleSpecialProviders() async {
@@ -2111,14 +2109,16 @@ class PlayerController extends Notifier<PlayerState> {
         source: 'Video',
         headers: const <String, String>{},
       );
-      state = state.copyWith(streams: <StreamResult>[stream], currentStreamIndex: 0);
+      state = state.copyWith(
+        streams: <StreamResult>[stream],
+        currentStreamIndex: 0,
+      );
       _setSourceAttemptsFromStreams(<StreamResult>[stream], activeIndex: 0);
       await loadStreamAtIndex(0, sourceSessionId: state.sourceSessionId);
       return true;
     }
     return false;
   }
-
 
   AnimeWitcherProvider? _resolveProvider() {
     final activeState = ref.read(activeProviderProvider);
@@ -2282,12 +2282,8 @@ class PlayerController extends Notifier<PlayerState> {
           drmKid: stream.drmKid,
         );
       }
-      final isLivePlayback =
-          state.isLive || _detectResolvedLiveState(playUrl);
-      state = state.copyWith(
-        useExoPlayer: true,
-        isSeekable: !isLivePlayback,
-      );
+      final isLivePlayback = state.isLive || _detectResolvedLiveState(playUrl);
+      state = state.copyWith(useExoPlayer: true, isSeekable: !isLivePlayback);
       _scheduleAutoSubtitleSelection();
       return;
     }
@@ -2608,7 +2604,6 @@ class PlayerController extends Notifier<PlayerState> {
     );
     _manualSelectionPending = manualSelection;
 
-
     state = state.copyWith(
       currentStreamIndex: index,
       currentStream: stream,
@@ -2645,10 +2640,7 @@ class PlayerController extends Notifier<PlayerState> {
           !_isCurrentSourceSession(sourceSessionId)) {
         return;
       }
-      state = state.copyWith(
-        isLive: resolvedIsLive,
-        isSeekable: !useVideoView,
-      );
+      state = state.copyWith(isLive: resolvedIsLive, isSeekable: !useVideoView);
       if (state.useExoPlayer != useVideoView && _hasConfirmedPlaybackFrame) {
         _enterRuntimePhase(kind: PlaybackUiPhaseKind.switchingEngine);
       }
@@ -2698,7 +2690,12 @@ class PlayerController extends Notifier<PlayerState> {
         // Issue 2: Don't show "all sources failed" for a manual pick — revert
         // silently to the previously playing source instead.
         revertToPreviousStream(
-          _playerText(english: 'Selected source is not playable. Reverting back to previous source.', arabic: 'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.'),
+          _playerText(
+            english:
+                'Selected source is not playable. Reverting back to previous source.',
+            arabic:
+                'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.',
+          ),
         );
         return;
       }
@@ -2747,7 +2744,6 @@ class PlayerController extends Notifier<PlayerState> {
     if (manualSelection && !isRevert) {
       _manualSelectionPending = true;
     }
-
 
     // Capture current position before we switch engines/streams.
     // Read from whichever engine is currently active.
@@ -2802,10 +2798,20 @@ class PlayerController extends Notifier<PlayerState> {
       _manualSelectionPending = false;
       if (kDebugMode) debugPrint("Change stream failed: $e");
       if (isRevert) {
-        state = state.copyWith(errorMessage: _playerText(english: 'Revert failed: $e', arabic: 'فشل الرجوع: $e'));
+        state = state.copyWith(
+          errorMessage: _playerText(
+            english: 'Revert failed: $e',
+            arabic: 'فشل الرجوع: $e',
+          ),
+        );
       } else {
         revertToPreviousStream(
-          _playerText(english: 'Could not switch to selected source. Reverting back to previous source.', arabic: 'تعذر التبديل إلى المصدر المحدد. جارٍ الرجوع إلى المصدر السابق.'),
+          _playerText(
+            english:
+                'Could not switch to selected source. Reverting back to previous source.',
+            arabic:
+                'تعذر التبديل إلى المصدر المحدد. جارٍ الرجوع إلى المصدر السابق.',
+          ),
         );
       }
     }
@@ -2865,15 +2871,11 @@ class PlayerController extends Notifier<PlayerState> {
         final updatedAttempts = state.sourceAttempts
             .map(
               (e) => batchIndices.contains(e.index)
-                  ? e.copyWith(
-                      status: SourceAttemptStatus.trying,
-                    )
+                  ? e.copyWith(status: SourceAttemptStatus.trying)
                   : e,
             )
             .toList();
-        state = state.copyWith(
-          sourceAttempts: updatedAttempts,
-        );
+        state = state.copyWith(sourceAttempts: updatedAttempts);
         _enterStartupPhase(kind: PlaybackUiPhaseKind.checkingSources);
 
         targetIndex = await _findFirstWorkingStream(
@@ -2916,7 +2918,6 @@ class PlayerController extends Notifier<PlayerState> {
     return msg;
   }
 
-
   /// Reset per-episode playback state before an in-place episode swap.
   /// This prevents the previous episode's resume position and skip segments
   /// from leaking into the newly selected episode.
@@ -2939,20 +2940,22 @@ class PlayerController extends Notifier<PlayerState> {
         ref.read(activeProviderProvider)?.packageName ??
         'Unknown';
     final itemToSave = _item.copyWith(provider: pId);
-    await ref.read(watchHistoryProvider.notifier).recordOpened(
-      itemToSave,
-      lastEpisodeUrl: episode.url,
-      season: episode.season,
-      episode: episode.episode,
-      episodeTitle: episodeTitleForStorage(
-        episode: episode.episode,
-        title: episode.name,
-        isFinal: episode.isFinal,
-        serverName: episode.serverName,
-      ),
-      episodeServerName: episode.serverName,
-      episodePosterUrl: _episodeArtwork(episode),
-    );
+    await ref
+        .read(watchHistoryProvider.notifier)
+        .recordOpened(
+          itemToSave,
+          lastEpisodeUrl: episode.url,
+          season: episode.season,
+          episode: episode.episode,
+          episodeTitle: episodeTitleForStorage(
+            episode: episode.episode,
+            title: episode.name,
+            isFinal: episode.isFinal,
+            serverName: episode.serverName,
+          ),
+          episodeServerName: episode.serverName,
+          episodePosterUrl: _episodeArtwork(episode),
+        );
   }
 
   Future<void> playNextEpisode({StreamResult? selectedSource}) async {
@@ -2968,8 +2971,11 @@ class PlayerController extends Notifier<PlayerState> {
 
     final bool isLocal = localFile != null;
     final bool useDirectSelectedSource =
-        !isLocal && selectedSource != null && !selectedSource.requiresResolution;
-    final String finalUrl = localFile?.path ??
+        !isLocal &&
+        selectedSource != null &&
+        !selectedSource.requiresResolution;
+    final String finalUrl =
+        localFile?.path ??
         ((selectedSource?.requiresResolution ?? false)
             ? selectedSource!.url
             : nextEpisode.url);
@@ -2995,12 +3001,14 @@ class PlayerController extends Notifier<PlayerState> {
     );
 
     if (useDirectSelectedSource) {
+      // `selectedSource` is already promoted to non-null by the
+      // `useDirectSelectedSource` guard computed above, so no `!` is needed.
       final sourceSessionId = _beginSourceSession(resetAttempts: true);
       state = state.copyWith(
-        streams: <StreamResult>[selectedSource!],
+        streams: <StreamResult>[selectedSource],
         currentStreamIndex: 0,
       );
-      _setSourceAttemptsFromStreams(<StreamResult>[selectedSource!]);
+      _setSourceAttemptsFromStreams(<StreamResult>[selectedSource]);
       await loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
       return;
     }
@@ -3041,8 +3049,11 @@ class PlayerController extends Notifier<PlayerState> {
 
     final bool isLocal = localFile != null;
     final bool useDirectSelectedSource =
-        !isLocal && selectedSource != null && !selectedSource.requiresResolution;
-    final String finalUrl = localFile?.path ??
+        !isLocal &&
+        selectedSource != null &&
+        !selectedSource.requiresResolution;
+    final String finalUrl =
+        localFile?.path ??
         ((selectedSource?.requiresResolution ?? false)
             ? selectedSource!.url
             : episode.url);
@@ -3066,12 +3077,14 @@ class PlayerController extends Notifier<PlayerState> {
     );
 
     if (useDirectSelectedSource) {
+      // `selectedSource` is already promoted to non-null by the
+      // `useDirectSelectedSource` guard computed above, so no `!` is needed.
       final sourceSessionId = _beginSourceSession(resetAttempts: true);
       state = state.copyWith(
-        streams: <StreamResult>[selectedSource!],
+        streams: <StreamResult>[selectedSource],
         currentStreamIndex: 0,
       );
-      _setSourceAttemptsFromStreams(<StreamResult>[selectedSource!]);
+      _setSourceAttemptsFromStreams(<StreamResult>[selectedSource]);
       await loadStreamAtIndex(0, sourceSessionId: sourceSessionId);
       return;
     }
@@ -3232,8 +3245,6 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-
-
   void disposeController() {
     _isDisposed = true;
     _stallTimer?.cancel();
@@ -3341,10 +3352,7 @@ class PlayerController extends Notifier<PlayerState> {
               .then((isHealthy) {
                 if (completer.isCompleted) return;
                 if (!isHealthy) {
-                  _markSourceAttempt(
-                    idx,
-                    SourceAttemptStatus.failed,
-                  );
+                  _markSourceAttempt(idx, SourceAttemptStatus.failed);
                 }
                 results[idx] = isHealthy;
 
@@ -3371,10 +3379,7 @@ class PlayerController extends Notifier<PlayerState> {
               .catchError((_) {
                 if (completer.isCompleted) return;
                 results[idx] = false;
-                _markSourceAttempt(
-                  idx,
-                  SourceAttemptStatus.failed,
-                );
+                _markSourceAttempt(idx, SourceAttemptStatus.failed);
                 if (results.length == candidates.length) {
                   completer.complete(start);
                 }
@@ -4029,8 +4034,9 @@ class PlayerController extends Notifier<PlayerState> {
           }
           durationMs = controller.mediaInfo.value?.duration ?? 0;
         }
-        final targetMs =
-            durationMs > 0 ? position.clamp(0, durationMs) : position;
+        final targetMs = durationMs > 0
+            ? position.clamp(0, durationMs)
+            : position;
         controller.seekTo(targetMs);
       } catch (e) {
         if (kDebugMode) debugPrint("ExoPlayer seek failed: $e");

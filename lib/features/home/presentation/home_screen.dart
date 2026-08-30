@@ -712,26 +712,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Widget _buildListShimmer(BuildContext context) {
     final isDesktop = context.isDesktop;
-    final isDesktopLandscape = context.isDesktopLandscape;
     final isHandsetLandscape = context.isHandsetLandscape;
     final spacing = isDesktop
         ? LayoutConstants.spacingLg
         : isHandsetLandscape
         ? ResponsiveBreakpoints.handsetLandscapeGridMaxSpacing
         : LayoutConstants.spacingSm;
-    final cardWidth = isDesktopLandscape
-        ? ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(
-            context,
-            horizontalPadding: LayoutConstants.dashboardContentPadding,
-            spacing: spacing,
-          )
-        : isHandsetLandscape
-        ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
-            context,
-            horizontalPadding: LayoutConstants.spacingMd,
-            spacing: spacing,
-          )
-        : (isDesktop ? 200.0 : 130.0);
+    // Must match MediaHorizontalList exactly, otherwise the rail visibly
+    // resizes when the shimmer is replaced by the real cards.
+    final cardWidth = MultimediaCardLayout.cardWidth(
+      context,
+      isPortrait: true,
+      horizontalPadding: isDesktop
+          ? LayoutConstants.dashboardContentPadding
+          : LayoutConstants.spacingMd,
+      spacing: spacing,
+    );
     final imageHeight =
         cardWidth / MultimediaCardLayout.posterAspectRatio(isPortrait: true);
     final listHeight = MultimediaCardLayout.listHeight(

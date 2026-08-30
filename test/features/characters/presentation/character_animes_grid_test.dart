@@ -6,8 +6,9 @@ import 'package:animewitcher/features/characters/presentation/character_animes_g
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../support/test_fonts.dart';
 
 MultimediaItem _show({
   required String title,
@@ -26,35 +27,7 @@ MultimediaItem _show({
   );
 }
 
-Future<ByteData> _fontBytes(String path) async {
-  return ByteData.sublistView(await File(path).readAsBytes());
-}
-
-String? _firstExisting(List<String> paths) {
-  for (final path in paths) {
-    if (File(path).existsSync()) return path;
-  }
-  return null;
-}
-
-Future<void> _loadWalkthroughFonts() async {
-  const arabicRegular =
-      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf';
-  if (!File(arabicRegular).existsSync()) return;
-  await (FontLoader('NotoSansArabic')
-        ..addFont(_fontBytes(arabicRegular))
-        ..addFont(
-          _fontBytes('/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf'),
-        ))
-      .load();
-  final roboto = _firstExisting(const <String>[
-    '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
-    '/home/ubuntu/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
-  ]);
-  if (roboto != null) {
-    await (FontLoader('Roboto')..addFont(_fontBytes(roboto))).load();
-  }
-}
+Future<void> _loadWalkthroughFonts() => TestFonts.loadWalkthroughFonts();
 
 void main() {
   testWidgets('character animes wrap in a 3-column RTL grid', (tester) async {
@@ -64,10 +37,34 @@ void main() {
 
     final items = <MultimediaItem>[
       _show(title: 'One Piece', id: 'op1', role: 'شخصية رئيسية', year: 1999),
-      _show(title: 'One Piece Film Z', id: 'opz', role: 'شخصية رئيسية', year: 2012, type: 'فيلم'),
-      _show(title: 'One Piece Film Gold', id: 'opg', role: 'شخصية رئيسية', year: 2016, type: 'فيلم'),
-      _show(title: 'One Piece Stampede', id: 'ops', role: 'شخصية رئيسية', year: 2019, type: 'فيلم'),
-      _show(title: 'One Piece Red', id: 'opr', role: 'شخصية رئيسية', year: 2022, type: 'فيلم'),
+      _show(
+        title: 'One Piece Film Z',
+        id: 'opz',
+        role: 'شخصية رئيسية',
+        year: 2012,
+        type: 'فيلم',
+      ),
+      _show(
+        title: 'One Piece Film Gold',
+        id: 'opg',
+        role: 'شخصية رئيسية',
+        year: 2016,
+        type: 'فيلم',
+      ),
+      _show(
+        title: 'One Piece Stampede',
+        id: 'ops',
+        role: 'شخصية رئيسية',
+        year: 2019,
+        type: 'فيلم',
+      ),
+      _show(
+        title: 'One Piece Red',
+        id: 'opr',
+        role: 'شخصية رئيسية',
+        year: 2022,
+        type: 'فيلم',
+      ),
       _show(
         title: 'Chopper Special',
         id: 'opc',
@@ -121,16 +118,23 @@ void main() {
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is ListView &&
-            widget.scrollDirection == Axis.horizontal,
+            widget is ListView && widget.scrollDirection == Axis.horizontal,
       ),
       findsNothing,
     );
 
-    final first = tester.getRect(find.byKey(const ValueKey('character-animes-grid-0')));
-    final second = tester.getRect(find.byKey(const ValueKey('character-animes-grid-1')));
-    final third = tester.getRect(find.byKey(const ValueKey('character-animes-grid-2')));
-    final fourth = tester.getRect(find.byKey(const ValueKey('character-animes-grid-3')));
+    final first = tester.getRect(
+      find.byKey(const ValueKey('character-animes-grid-0')),
+    );
+    final second = tester.getRect(
+      find.byKey(const ValueKey('character-animes-grid-1')),
+    );
+    final third = tester.getRect(
+      find.byKey(const ValueKey('character-animes-grid-2')),
+    );
+    final fourth = tester.getRect(
+      find.byKey(const ValueKey('character-animes-grid-3')),
+    );
 
     expect((first.top - second.top).abs(), lessThan(1));
     expect((second.top - third.top).abs(), lessThan(1));

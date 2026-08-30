@@ -145,30 +145,24 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
   @override
   Widget build(BuildContext context) {
     if (widget.mediaList.isEmpty) return const SizedBox.shrink();
-    final isHandsetLandscape = context.isHandsetLandscape;
-    final isDesktopLandscape = context.isDesktopLandscape;
     final isDesktop = context.isDesktop;
+    final isHandsetLandscape = context.isHandsetLandscape;
     final isPortrait = widget.forcePortrait || _isPortrait;
     final double spacing = isDesktop
         ? LayoutConstants.spacingLg
         : isHandsetLandscape
         ? ResponsiveBreakpoints.handsetLandscapeGridMaxSpacing
         : LayoutConstants.spacingSm;
-    final double cardWidth = isHandsetLandscape
-        ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
-            context,
-            horizontalPadding: LayoutConstants.spacingMd,
-            spacing: spacing,
-          )
-        : isDesktopLandscape
-        ? ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(
-            context,
-            horizontalPadding: LayoutConstants.dashboardContentPadding,
-            spacing: spacing,
-          )
-        : isDesktop
-        ? (isPortrait ? 200.0 : 300.0)
-        : (isPortrait ? 130.0 : 200.0);
+    // Shared helper: rail, shimmer and grid all derive their poster width
+    // from MultimediaCardLayout so the reserved height always matches.
+    final double cardWidth = MultimediaCardLayout.cardWidth(
+      context,
+      isPortrait: isPortrait,
+      horizontalPadding: isDesktop
+          ? LayoutConstants.dashboardContentPadding
+          : LayoutConstants.spacingMd,
+      spacing: spacing,
+    );
 
     final double listHeight = MultimediaCardLayout.listHeight(
       cardWidth,

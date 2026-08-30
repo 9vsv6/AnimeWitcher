@@ -30,8 +30,12 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
   Widget build(BuildContext context) {
     super.build(context);
     final libraryState = ref.watch(libraryProvider);
-    final isLarge = context.isTabletOrLarger;
-    final double totalHeight = isLarge ? 180.0 : 150.0;
+    final isDesktop = context.isDesktop;
+    // Poster *width* budget per column. The previous value was named
+    // "totalHeight" and fed into maxCrossAxisExtent, so the library grid
+    // sized its columns from a height and ended up denser than every other
+    // catalog page. Use the same width budget the other grids use.
+    final double maxCardWidth = isDesktop ? 240.0 : 150.0;
 
     return switch (libraryState) {
       LibraryLoading() => const Center(child: AppLoadingIndicator()),
@@ -47,10 +51,14 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
           ),
           gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
             context,
-            maxCrossAxisExtent: totalHeight,
-            childAspectRatio: MultimediaCardLayout.portraitGridAspectRatio,
+            maxCrossAxisExtent: maxCardWidth,
+            childAspectRatio: MultimediaCardLayout.gridAspectRatio(
+              isPortrait: true,
+              isDesktop: isDesktop,
+            ),
             crossAxisSpacing: LayoutConstants.spacingMd,
             mainAxisSpacing: LayoutConstants.spacingMd,
+            horizontalPadding: LayoutConstants.spacingMd,
           ),
           itemCount: items.length,
           itemBuilder: (context, index) {

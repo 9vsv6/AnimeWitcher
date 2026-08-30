@@ -18,15 +18,32 @@ class MultimediaCardLayout {
   static const double landscapeGridAspectRatio = 1.12;
   static const double desktopPortraitGridAspectRatio = 0.54;
 
+  /// Single source of truth for the poster width used by horizontal rails.
+  ///
+  /// Rails, their shimmer placeholders and the cards themselves must all
+  /// agree on this number, otherwise the reserved row height does not match
+  /// the painted card and the rail jitters as posters load. Pass the same
+  /// [horizontalPadding] / [spacing] the rail uses for its own padding and
+  /// inter-card gap.
   static double cardWidth(
     BuildContext context, {
     required bool isPortrait,
+    double? horizontalPadding,
+    double? spacing,
   }) {
     if (context.isHandsetLandscape) {
-      return ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(context);
+      return ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
+        context,
+        horizontalPadding: horizontalPadding ?? 16,
+        spacing: spacing ?? 8,
+      );
     }
     if (context.isDesktopLandscape) {
-      return ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(context);
+      return ResponsiveBreakpoints.desktopLandscapeAnimeCardWidth(
+        context,
+        horizontalPadding: horizontalPadding ?? 16,
+        spacing: spacing ?? 16,
+      );
     }
     if (context.isDesktop) {
       return isPortrait ? 200.0 : 300.0;
@@ -47,9 +64,7 @@ class MultimediaCardLayout {
     bool isDesktop = false,
   }) {
     if (!isPortrait) return landscapeGridAspectRatio;
-    return isDesktop
-        ? desktopPortraitGridAspectRatio
-        : portraitGridAspectRatio;
+    return isDesktop ? desktopPortraitGridAspectRatio : portraitGridAspectRatio;
   }
 }
 
@@ -139,8 +154,7 @@ class MultimediaCard extends StatelessWidget {
         ? null
         : normalizedPosterBadge;
     final normalizedSubtitle = subtitle?.trim();
-    final caption =
-        normalizedSubtitle == null || normalizedSubtitle.isEmpty
+    final caption = normalizedSubtitle == null || normalizedSubtitle.isEmpty
         ? null
         : normalizedSubtitle;
     final yearText = year == null || year! <= 0 ? null : '$year';
@@ -300,42 +314,42 @@ class MultimediaCard extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(MultimediaCardLayout.posterRadius),
       child: Stack(
-      fit: StackFit.expand,
-      children: [
-        imageWidget,
-        if (cornerBadge != null)
-          Positioned(
-            top: 6,
-            right: 6,
-            child: _buildYellowBadge(context, cornerBadge),
-          ),
-        if (badgeText != null)
-          Positioned(
-            right: 6,
-            bottom: 6,
-            child: _buildYellowBadge(context, badgeText),
-          )
-        else if (yearText != null)
-          Positioned(
-            right: 7,
-            bottom: 6,
-            child: Text(
-              yearText,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                shadows: [
-                  Shadow(
-                    color: Colors.black87,
-                    blurRadius: 6,
-                    offset: Offset(0, 1),
-                  ),
-                ],
+        fit: StackFit.expand,
+        children: [
+          imageWidget,
+          if (cornerBadge != null)
+            Positioned(
+              top: 6,
+              right: 6,
+              child: _buildYellowBadge(context, cornerBadge),
+            ),
+          if (badgeText != null)
+            Positioned(
+              right: 6,
+              bottom: 6,
+              child: _buildYellowBadge(context, badgeText),
+            )
+          else if (yearText != null)
+            Positioned(
+              right: 7,
+              bottom: 6,
+              child: Text(
+                yearText,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black87,
+                      blurRadius: 6,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-      ],
+        ],
       ),
     );
   }

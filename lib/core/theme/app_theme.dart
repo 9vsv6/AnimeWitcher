@@ -2,8 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class _FixedLtrCupertinoPageTransitionsBuilder
-    extends PageTransitionsBuilder {
+class _FixedLtrCupertinoPageTransitionsBuilder extends PageTransitionsBuilder {
   const _FixedLtrCupertinoPageTransitionsBuilder();
 
   @override
@@ -19,16 +18,13 @@ class _FixedLtrCupertinoPageTransitionsBuilder
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Builder(
-        builder: (ltrContext) => CupertinoPageTransitionsBuilder()
-            .buildTransitions<T>(
+        builder: (ltrContext) =>
+            CupertinoPageTransitionsBuilder().buildTransitions<T>(
               route,
               ltrContext,
               animation,
               secondaryAnimation,
-              Directionality(
-                textDirection: contentDirection,
-                child: child,
-              ),
+              Directionality(textDirection: contentDirection, child: child),
             ),
       ),
     );
@@ -40,8 +36,7 @@ class AppTheme {
       PageTransitionsTheme(
         builders: <TargetPlatform, PageTransitionsBuilder>{
           ...const PageTransitionsTheme().builders,
-          TargetPlatform.iOS:
-              const _FixedLtrCupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: const _FixedLtrCupertinoPageTransitionsBuilder(),
         },
       );
   // AnimeWitcher palette. The official Android app uses #EEC60A as
@@ -240,6 +235,68 @@ class AppTheme {
           horizontal: 20,
           vertical: 16,
         ),
+      ),
+
+      // Chip Theme — the light theme styles chips explicitly, so the dark
+      // theme has to as well or filter chips fall back to Material's default
+      // grey and stop reading as part of the gold accent language.
+      chipTheme: ChipThemeData(
+        backgroundColor: const Color(0xFF18181F),
+        disabledColor: colorScheme.onSurface.withValues(alpha: 0.12),
+        selectedColor: colorScheme.primary.withValues(alpha: 0.18),
+        secondarySelectedColor: colorScheme.primary.withValues(alpha: 0.18),
+        labelStyle: TextStyle(color: colorScheme.onSurface),
+        secondaryLabelStyle: TextStyle(color: colorScheme.primary),
+        checkmarkColor: colorScheme.primary,
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide.none,
+        ),
+      ),
+
+      // Switch Theme
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return colorScheme.primary;
+          }
+          return null;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return colorScheme.primary.withValues(alpha: 0.5);
+          }
+          return null;
+        }),
+      ),
+
+      // Slider Theme — used by the player's seek/volume bars.
+      sliderTheme: SliderThemeData(
+        activeTrackColor: colorScheme.primary,
+        inactiveTrackColor: colorScheme.primary.withValues(alpha: 0.24),
+        thumbColor: colorScheme.primary,
+        overlayColor: colorScheme.primary.withValues(alpha: 0.12),
+      ),
+
+      // Floating Action Button Theme
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
+      ),
+
+      // Ripple / Splash / Highlights — pointer feedback matters far more on
+      // desktop, where hover is the primary affordance for "this is tappable".
+      splashColor: colorScheme.primary.withValues(alpha: 0.1),
+      hoverColor: colorScheme.primary.withValues(alpha: 0.06),
+      highlightColor: colorScheme.primary.withValues(alpha: 0.05),
+
+      // Selection Text Theme — keeps the caret/selection gold instead of the
+      // default blue that Material picks for dark schemes.
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: colorScheme.primary,
+        selectionColor: colorScheme.primary.withValues(alpha: 0.3),
+        selectionHandleColor: colorScheme.primary,
       ),
 
       dividerColor: const Color(0xFF22222E),

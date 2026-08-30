@@ -203,12 +203,14 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
     final maxExtent = isDesktop
         ? (_isPortrait ? 240.0 : 340.0)
         : (_isPortrait ? 150.0 : 220.0);
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final crossAxisCount = context.isDesktopLandscape
-        ? ResponsiveBreakpoints.desktopLandscapeAnimeColumns
-        : context.isHandsetLandscape
-        ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
-        : (screenWidth / maxExtent).ceil().clamp(1, 20);
+    // Derived from the same helper the grid delegate uses, so the trailing
+    // shimmer tiles always complete the last row instead of guessing.
+    final crossAxisCount = ResponsiveBreakpoints.animeGridCrossAxisCount(
+      context,
+      maxCrossAxisExtent: maxExtent,
+      crossAxisSpacing: 16,
+      horizontalPadding: 16,
+    );
     final childAspectRatio = MultimediaCardLayout.gridAspectRatio(
       isPortrait: _isPortrait,
       isDesktop: isDesktop,
@@ -294,6 +296,7 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
                     childAspectRatio: childAspectRatio,
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
+                    horizontalPadding: 16,
                   ),
                   itemCount:
                       items.length +

@@ -10,9 +10,10 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/paged_rail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../../support/test_fonts.dart';
 
 MultimediaItem _item(String title, String id, {String? relation}) {
   return MultimediaItem(
@@ -34,26 +35,7 @@ Actor _actor({
   return Actor(id: id, name: name, role: role, likes: likes);
 }
 
-Future<ByteData> _fontBytes(String path) async {
-  return ByteData.sublistView(await File(path).readAsBytes());
-}
-
-Future<void> _loadWalkthroughFonts() async {
-  const arabicRegular =
-      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf';
-  if (!File(arabicRegular).existsSync()) return;
-  await (FontLoader('NotoSansArabic')
-        ..addFont(_fontBytes(arabicRegular))
-        ..addFont(
-          _fontBytes('/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf'),
-        ))
-      .load();
-  const roboto =
-      '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf';
-  if (File(roboto).existsSync()) {
-    await (FontLoader('Roboto')..addFont(_fontBytes(roboto))).load();
-  }
-}
+Future<void> _loadWalkthroughFonts() => TestFonts.loadWalkthroughFonts();
 
 Future<void> _settleCharacterRails(WidgetTester tester) async {
   await tester.pump();
@@ -70,11 +52,7 @@ ScrollableState _railScrollable(WidgetTester tester, String role) {
   );
 }
 
-Future<void> _writeShot(
-  WidgetTester tester,
-  String filename,
-  Key key,
-) async {
+Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
   final artifacts = Directory('/opt/cursor/artifacts');
   if (!artifacts.existsSync()) return;
   await tester.runAsync(() async {
@@ -83,9 +61,8 @@ Future<void> _writeShot(
     );
     final image = await boundary.toImage(pixelRatio: 2);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    File('${artifacts.path}/$filename').writeAsBytesSync(
-      bytes!.buffer.asUint8List(),
-    );
+    File('${artifacts.path}/$filename')
+        .writeAsBytesSync(bytes!.buffer.asUint8List());
   });
 }
 
@@ -119,23 +96,23 @@ Widget _app(Widget child) {
       ),
       home: Scaffold(
         backgroundColor: Colors.black,
-        body: Directionality(
-          textDirection: TextDirection.rtl,
-          child: child,
-        ),
+        body: Directionality(textDirection: TextDirection.rtl, child: child),
       ),
     ),
   );
 }
 
 void main() {
-  test('cast strip shows المزيد only when more than 10 characters are fetched', () {
-    expect(animeWitcherCastStripShowsMore(10), isFalse);
-    expect(animeWitcherCastStripShowsMore(11), isTrue);
-    expect(animeWitcherCastStripVisibleCount(10), 10);
-    expect(animeWitcherCastStripVisibleCount(11), 10);
-    expect(animeWitcherCastStripVisibleCount(3), 3);
-  });
+  test(
+    'cast strip shows المزيد only when more than 10 characters are fetched',
+    () {
+      expect(animeWitcherCastStripShowsMore(10), isFalse);
+      expect(animeWitcherCastStripShowsMore(11), isTrue);
+      expect(animeWitcherCastStripVisibleCount(10), 10);
+      expect(animeWitcherCastStripVisibleCount(11), 10);
+      expect(animeWitcherCastStripVisibleCount(3), 3);
+    },
+  );
 
   testWidgets('details extra tabs use APK names and a 3-column similar grid', (
     tester,
@@ -255,9 +232,8 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/details_extra_tabs_similar_grid.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/details_extra_tabs_similar_grid.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
 
@@ -277,7 +253,11 @@ void main() {
               similar: const AsyncData(<MultimediaItem>[]),
               related: AsyncData(<MultimediaItem>[
                 for (var index = 1; index <= 7; index++)
-                  _item('Related$index', 'r$index', relation: index == 1 ? 'السابق' : 'اخري'),
+                  _item(
+                    'Related$index',
+                    'r$index',
+                    relation: index == 1 ? 'السابق' : 'اخري',
+                  ),
               ]),
               relatedHasMore: true,
               cast: const AsyncLoading(),
@@ -352,23 +332,36 @@ void main() {
     expect(find.text(animeWitcherSupportingCharactersHeader), findsOneWidget);
     expect(find.text('طاقم الشخصيات'), findsNothing);
     expect(find.byType(CircleAvatar), findsNothing);
-    expect(find.byKey(const ValueKey('details-character-rail-Main')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('details-character-rail-Main')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('details-character-rail-Supporting')),
       findsOneWidget,
     );
     expect(
       find.byWidgetPredicate(
-        (widget) => widget is ListView && widget.scrollDirection == Axis.horizontal,
+        (widget) =>
+            widget is ListView && widget.scrollDirection == Axis.horizontal,
       ),
       findsNWidgets(2),
     );
     expect(find.byType(GridView), findsNothing);
-    expect(find.byKey(const ValueKey('details-character-Main-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('details-character-Main-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('details-character-Main-10')),
+      findsNothing,
+    );
 
     final mainScrollable = _railScrollable(tester, 'Main');
-    expect(mainScrollable.position.pixels, mainScrollable.position.minScrollExtent);
+    expect(
+      mainScrollable.position.pixels,
+      mainScrollable.position.minScrollExtent,
+    );
     expect(
       _railScrollable(tester, 'Supporting').position.pixels,
       _railScrollable(tester, 'Supporting').position.minScrollExtent,
@@ -385,7 +378,10 @@ void main() {
     );
     expect(mainFirst.left, greaterThan(mainSecond.left));
     expect(mainFirst.right, closeTo(rail.right, 1.5));
-    expect(find.byKey(const ValueKey('details-character-Main-more')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('details-character-Main-more')),
+      findsNothing,
+    );
 
     final directionality = tester.widget<Directionality>(
       find
@@ -397,9 +393,11 @@ void main() {
     );
     expect(directionality.textDirection, TextDirection.rtl);
     expect(
-      tester.widget<PagedRail>(
-        find.byKey(const ValueKey('details-character-rail-Main')),
-      ).reverse,
+      tester
+          .widget<PagedRail>(
+            find.byKey(const ValueKey('details-character-rail-Main')),
+          )
+          .reverse,
       isFalse,
     );
 
@@ -420,10 +418,22 @@ void main() {
     final moreScrollable = _railScrollable(tester, 'Main');
     moreScrollable.position.jumpTo(moreScrollable.position.maxScrollExtent);
     await tester.pump();
-    expect(find.byKey(const ValueKey('details-character-Main-more')), findsOneWidget);
-    expect(find.byKey(const ValueKey('details-character-Main-9')), findsOneWidget);
-    expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
-    expect(find.byKey(const ValueKey('details-character-Supporting-more')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('details-character-Main-more')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('details-character-Main-9')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('details-character-Main-10')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('details-character-Supporting-more')),
+      findsNothing,
+    );
 
     await _writeShot(
       tester,
@@ -459,9 +469,18 @@ void main() {
     );
     await _settleCharacterRails(tester);
 
-    expect(find.byKey(const ValueKey('details-character-Main-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
-    expect(find.byKey(const ValueKey('details-character-Main-more')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('details-character-Main-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('details-character-Main-10')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('details-character-Main-more')),
+      findsNothing,
+    );
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('details-character-Main-9')),
@@ -471,8 +490,14 @@ void main() {
         matching: find.byType(Scrollable),
       ),
     );
-    expect(find.byKey(const ValueKey('details-character-Main-9')), findsOneWidget);
-    expect(find.byKey(const ValueKey('details-character-Main-more')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('details-character-Main-9')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('details-character-Main-more')),
+      findsNothing,
+    );
     expect(find.text(animeWitcherShowMoreLabel), findsNothing);
 
     await _writeShot(
@@ -515,7 +540,10 @@ void main() {
     await _settleCharacterRails(tester);
 
     final mainScrollable = _railScrollable(tester, 'Main');
-    expect(mainScrollable.position.pixels, mainScrollable.position.minScrollExtent);
+    expect(
+      mainScrollable.position.pixels,
+      mainScrollable.position.minScrollExtent,
+    );
     final rail = tester.getRect(
       find.byKey(const ValueKey('details-character-rail-Main')),
     );
@@ -523,19 +551,24 @@ void main() {
       find.byKey(const ValueKey('details-character-Main-0')),
     );
     expect(mainFirst.right, closeTo(rail.right, 2));
-    expect(find.byKey(const ValueKey('details-character-Main-more')), findsNothing);
-    expect(find.byKey(const ValueKey('details-character-Main-10')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('details-character-Main-more')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('details-character-Main-10')),
+      findsNothing,
+    );
   });
 
-  testWidgets('similar search-disabled message matches the APK', (tester) async {
+  testWidgets('similar search-disabled message matches the APK', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 920));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _app(
-        DetailsPosterGrid(
-          items: const <MultimediaItem>[],
-          onItemTap: (_) {},
-        ),
+        DetailsPosterGrid(items: const <MultimediaItem>[], onItemTap: (_) {}),
       ),
     );
     await tester.pumpWidget(
@@ -561,140 +594,143 @@ void main() {
     expect(find.text(animeWitcherSimilarEmptyMessage), findsNothing);
   });
 
-  testWidgets('empty and loading extra tabs keep the 6-card height and center', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 920));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.runAsync(_loadWalkthroughFonts);
+  testWidgets(
+    'empty and loading extra tabs keep the 6-card height and center',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 920));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.runAsync(_loadWalkthroughFonts);
 
-    Future<Size> pumpBody({
-      required AsyncValue<List<MultimediaItem>> similar,
-      required AsyncValue<List<MultimediaItem>> related,
-    }) async {
-      await tester.pumpWidget(
-        _app(
-          DetailsExtraTabs(
-            similar: similar,
-            related: related,
-            relatedHasMore: false,
-            cast: const AsyncLoading(),
-            onTabBecameVisible: (_) {},
-            onAnimeTap: (_) {},
-            onCharacterTap: (_) {},
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-      return tester.getSize(find.byKey(const ValueKey('details-extra-tab-view')));
-    }
-
-    final loadingSize = await pumpBody(
-      similar: const AsyncLoading(),
-      related: const AsyncLoading(),
-    );
-    final emptySize = await pumpBody(
-      similar: const AsyncData(<MultimediaItem>[]),
-      related: const AsyncData(<MultimediaItem>[]),
-    );
-    final filledSize = await pumpBody(
-      similar: AsyncData(<MultimediaItem>[
-        for (var index = 0; index < 6; index++) _item('S$index', 's$index'),
-      ]),
-      related: const AsyncData(<MultimediaItem>[]),
-    );
-
-    expect(loadingSize.height, closeTo(emptySize.height, 0.5));
-    expect(emptySize.height, closeTo(filledSize.height, 0.5));
-    expect(tester.takeException(), isNull);
-
-    await tester.tap(find.text(animeWitcherRelatedTabLabel));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
-    expect(find.text(animeWitcherRelatedEmptyMessage), findsOneWidget);
-    final box = tester.getRect(
-      find.byKey(const ValueKey('details-extra-tab-view')),
-    );
-    final message = tester.getCenter(
-      find.text(animeWitcherRelatedEmptyMessage),
-    );
-    expect((message.dx - box.center.dx).abs(), lessThan(24));
-    expect((message.dy - box.center.dy).abs(), lessThan(48));
-
-    final artifacts = Directory('/opt/cursor/artifacts');
-    if (!artifacts.existsSync()) return;
-    await tester.pumpWidget(
-      _app(
-        RepaintBoundary(
-          key: const ValueKey('details-extra-empty-shot'),
-          child: ColoredBox(
-            color: Colors.black,
-            child: DetailsExtraTabs(
-              similar: const AsyncData(<MultimediaItem>[]),
-              related: const AsyncData(<MultimediaItem>[]),
-              relatedHasMore: false,
-              cast: const AsyncData(<Actor>[]),
-              onTabBecameVisible: (_) {},
-              onAnimeTap: (_) {},
-              onCharacterTap: (_) {},
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text(animeWitcherRelatedTabLabel));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.runAsync(() async {
-      final boundary = tester.renderObject<RenderRepaintBoundary>(
-        find.byKey(const ValueKey('details-extra-empty-shot')),
-      );
-      final image = await boundary.toImage(pixelRatio: 2);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/details_extra_tabs_related_empty.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
-    });
-  });
-
-  testWidgets('similar tab shows five posters plus المزيد when count exceeds 6', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 920));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    var openedSimilar = 0;
-    await tester.pumpWidget(
-      _app(
-        ListView(
-          children: [
+      Future<Size> pumpBody({
+        required AsyncValue<List<MultimediaItem>> similar,
+        required AsyncValue<List<MultimediaItem>> related,
+      }) async {
+        await tester.pumpWidget(
+          _app(
             DetailsExtraTabs(
-              similar: AsyncData(<MultimediaItem>[
-                for (var index = 0; index < 7; index++)
-                  _item('Similar$index', 's$index'),
-              ]),
-              similarHasMore: true,
-              related: const AsyncData(<MultimediaItem>[]),
+              similar: similar,
+              related: related,
               relatedHasMore: false,
               cast: const AsyncLoading(),
               onTabBecameVisible: (_) {},
               onAnimeTap: (_) {},
               onCharacterTap: (_) {},
-              onShowMoreSimilar: () => openedSimilar++,
             ),
-          ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+        return tester.getSize(
+          find.byKey(const ValueKey('details-extra-tab-view')),
+        );
+      }
+
+      final loadingSize = await pumpBody(
+        similar: const AsyncLoading(),
+        related: const AsyncLoading(),
+      );
+      final emptySize = await pumpBody(
+        similar: const AsyncData(<MultimediaItem>[]),
+        related: const AsyncData(<MultimediaItem>[]),
+      );
+      final filledSize = await pumpBody(
+        similar: AsyncData(<MultimediaItem>[
+          for (var index = 0; index < 6; index++) _item('S$index', 's$index'),
+        ]),
+        related: const AsyncData(<MultimediaItem>[]),
+      );
+
+      expect(loadingSize.height, closeTo(emptySize.height, 0.5));
+      expect(emptySize.height, closeTo(filledSize.height, 0.5));
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text(animeWitcherRelatedTabLabel));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text(animeWitcherRelatedEmptyMessage), findsOneWidget);
+      final box = tester.getRect(
+        find.byKey(const ValueKey('details-extra-tab-view')),
+      );
+      final message = tester.getCenter(
+        find.text(animeWitcherRelatedEmptyMessage),
+      );
+      expect((message.dx - box.center.dx).abs(), lessThan(24));
+      expect((message.dy - box.center.dy).abs(), lessThan(48));
+
+      final artifacts = Directory('/opt/cursor/artifacts');
+      if (!artifacts.existsSync()) return;
+      await tester.pumpWidget(
+        _app(
+          RepaintBoundary(
+            key: const ValueKey('details-extra-empty-shot'),
+            child: ColoredBox(
+              color: Colors.black,
+              child: DetailsExtraTabs(
+                similar: const AsyncData(<MultimediaItem>[]),
+                related: const AsyncData(<MultimediaItem>[]),
+                relatedHasMore: false,
+                cast: const AsyncData(<Actor>[]),
+                onTabBecameVisible: (_) {},
+                onAnimeTap: (_) {},
+                onCharacterTap: (_) {},
+              ),
+            ),
+          ),
         ),
-      ),
-    );
-    await tester.pump();
-    expect(find.byKey(const ValueKey('similar-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('similar-4')), findsOneWidget);
-    expect(find.byKey(const ValueKey('similar-5')), findsNothing);
-    expect(find.byKey(const ValueKey('similar-more')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('similar-more')));
-    expect(openedSimilar, 1);
-  });
+      );
+      await tester.tap(find.text(animeWitcherRelatedTabLabel));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('details-extra-empty-shot')),
+        );
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File('${artifacts.path}/details_extra_tabs_related_empty.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    },
+  );
+
+  testWidgets(
+    'similar tab shows five posters plus المزيد when count exceeds 6',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 920));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      var openedSimilar = 0;
+      await tester.pumpWidget(
+        _app(
+          ListView(
+            children: [
+              DetailsExtraTabs(
+                similar: AsyncData(<MultimediaItem>[
+                  for (var index = 0; index < 7; index++)
+                    _item('Similar$index', 's$index'),
+                ]),
+                similarHasMore: true,
+                related: const AsyncData(<MultimediaItem>[]),
+                relatedHasMore: false,
+                cast: const AsyncLoading(),
+                onTabBecameVisible: (_) {},
+                onAnimeTap: (_) {},
+                onCharacterTap: (_) {},
+                onShowMoreSimilar: () => openedSimilar++,
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('similar-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('similar-4')), findsOneWidget);
+      expect(find.byKey(const ValueKey('similar-5')), findsNothing);
+      expect(find.byKey(const ValueKey('similar-more')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('similar-more')));
+      expect(openedSimilar, 1);
+    },
+  );
 
   testWidgets('six similar titles show all posters and skip المزيد', (
     tester,

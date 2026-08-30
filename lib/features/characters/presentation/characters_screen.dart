@@ -436,6 +436,7 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
             crossAxisSpacing: 12,
             mainAxisSpacing: 14,
             handsetPortraitCrossAxisCount: 3,
+            horizontalPadding: 16,
           ),
           itemCount: _catalog.length + extra,
           itemBuilder: (context, index) {
@@ -511,6 +512,7 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
             crossAxisSpacing: 12,
             mainAxisSpacing: 14,
             handsetPortraitCrossAxisCount: 3,
+            horizontalPadding: 16,
           ),
           itemCount: _favorites.length + extra,
           itemBuilder: (context, index) {

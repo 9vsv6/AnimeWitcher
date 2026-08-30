@@ -410,6 +410,7 @@ class _RankingGrid extends StatelessWidget {
             ),
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
+            horizontalPadding: 16,
           ),
           itemCount: items.length + (hasFooter ? 1 : 0),
           itemBuilder: (context, index) {

@@ -7,9 +7,10 @@ import 'package:animewitcher/features/more/presentation/more_screen.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../support/test_fonts.dart';
 
 class _SignedOutAccount extends AnimeWitcherAccountController {
   @override
@@ -18,34 +19,7 @@ class _SignedOutAccount extends AnimeWitcherAccountController {
   }
 }
 
-Future<ByteData> _fontBytes(String path) async {
-  return ByteData.sublistView(await File(path).readAsBytes());
-}
-
-Future<void> _loadWalkthroughFonts() async {
-  const arabicRegular =
-      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf';
-  if (!File(arabicRegular).existsSync()) return;
-  await (FontLoader('NotoSansArabic')
-        ..addFont(_fontBytes(arabicRegular))
-        ..addFont(
-          _fontBytes('/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf'),
-        ))
-      .load();
-  await (FontLoader('Roboto')
-        ..addFont(
-          _fontBytes(
-            '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
-          ),
-        ))
-      .load();
-  await (FontLoader('MaterialIcons')..addFont(
-        _fontBytes(
-          '/opt/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-        ),
-      ))
-      .load();
-}
+Future<void> _loadWalkthroughFonts() => TestFonts.loadWalkthroughFonts();
 
 void main() {
   testWidgets('more screen describes coming soon as unaired titles', (

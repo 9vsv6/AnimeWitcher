@@ -11,9 +11,10 @@ import 'package:animewitcher/features/more/presentation/more_screen.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../support/test_fonts.dart';
 
 class _SignedOutAccount extends AnimeWitcherAccountController {
   @override
@@ -22,44 +23,13 @@ class _SignedOutAccount extends AnimeWitcherAccountController {
   }
 }
 
-Future<ByteData> _fontBytes(String path) async {
-  return ByteData.sublistView(await File(path).readAsBytes());
-}
+Future<void> _loadWalkthroughFonts() => TestFonts.loadWalkthroughFonts();
 
-String? _firstExisting(List<String> paths) {
-  for (final path in paths) {
-    if (File(path).existsSync()) return path;
-  }
-  return null;
-}
-
-Future<void> _loadWalkthroughFonts() async {
-  const arabicRegular =
-      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf';
-  if (!File(arabicRegular).existsSync()) return;
-  await (FontLoader('NotoSansArabic')
-        ..addFont(_fontBytes(arabicRegular))
-        ..addFont(
-          _fontBytes('/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf'),
-        ))
-      .load();
-  final roboto = _firstExisting(const <String>[
-    '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
-    '/home/ubuntu/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
-  ]);
-  if (roboto != null) {
-    await (FontLoader('Roboto')..addFont(_fontBytes(roboto))).load();
-  }
-  final icons = _firstExisting(const <String>[
-    '/opt/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-    '/home/ubuntu/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-  ]);
-  if (icons != null) {
-    await (FontLoader('MaterialIcons')..addFont(_fontBytes(icons))).load();
-  }
-}
-
-Future<void> _writeShot(WidgetTester tester, String key, String filename) async {
+Future<void> _writeShot(
+  WidgetTester tester,
+  String key,
+  String filename,
+) async {
   final artifacts = Directory('/opt/cursor/artifacts');
   if (!artifacts.existsSync()) return;
   final boundary = tester.renderObject<RenderRepaintBoundary>(
@@ -67,16 +37,16 @@ Future<void> _writeShot(WidgetTester tester, String key, String filename) async 
   );
   final image = await boundary.toImage(pixelRatio: 2);
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-  File('${artifacts.path}/$filename').writeAsBytesSync(bytes!.buffer.asUint8List());
+  File(
+    '${artifacts.path}/$filename',
+  ).writeAsBytesSync(bytes!.buffer.asUint8List());
 }
 
 Widget _app({required Widget home, required Key shotKey}) {
   return ProviderScope(
     overrides: [
       storageServiceProvider.overrideWithValue(StorageService()),
-      animeWitcherAccountControllerProvider.overrideWith(
-        _SignedOutAccount.new,
-      ),
+      animeWitcherAccountControllerProvider.overrideWith(_SignedOutAccount.new),
       extensionManagerProvider.overrideWithValue(
         const <AnimeWitcherProvider>[],
       ),
@@ -116,10 +86,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('الشخصيات'), findsOneWidget);
-    expect(
-      find.text('تصفح الشخصيات وابحث عنها وأدر المفضلة'),
-      findsOneWidget,
-    );
+    expect(find.text('تصفح الشخصيات وابحث عنها وأدر المفضلة'), findsOneWidget);
 
     await tester.runAsync(
       () => _writeShot(
