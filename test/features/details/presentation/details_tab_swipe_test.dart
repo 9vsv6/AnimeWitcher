@@ -1,6 +1,12 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:animewitcher/features/details/presentation/widgets/details_tab_swipe.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../support/test_fonts.dart';
 
 class _KeepAlivePage extends StatefulWidget {
   const _KeepAlivePage({required this.child});
@@ -23,6 +29,21 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   }
 }
 
+Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
+  final artifacts = Directory('/opt/cursor/artifacts');
+  if (!artifacts.existsSync()) return;
+  await tester.runAsync(() async {
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(key),
+    );
+    final image = await boundary.toImage(pixelRatio: 2);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    File(
+      '${artifacts.path}/$filename',
+    ).writeAsBytesSync(bytes!.buffer.asUint8List());
+  });
+}
+
 Future<void> _pumpRtlDetailsPager(
   WidgetTester tester, {
   required TabController controller,
@@ -31,41 +52,54 @@ Future<void> _pumpRtlDetailsPager(
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('ar'),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        fontFamily: 'NotoSansArabic',
+        scaffoldBackgroundColor: Colors.black,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFEEC60A),
+          surface: Color(0xFF000000),
+          onSurface: Color(0xFFE5E7EB),
+        ),
+      ),
       home: Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
-          body: Column(
-            children: [
-              TabBar(
-                controller: controller,
-                isScrollable: false,
-                tabs: const [
-                  Tab(text: 'التفاصيل'),
-                  Tab(text: 'الحلقات'),
-                ],
-              ),
-              Expanded(
-                child: TabBarView(
+          body: RepaintBoundary(
+            key: const ValueKey('details-episodes-pager-shot'),
+            child: Column(
+              children: [
+                TabBar(
                   controller: controller,
-                  children: [
-                    _KeepAlivePage(
-                      child:
-                          detailsChild ??
-                          const ColoredBox(
-                            color: Colors.black,
-                            child: Center(child: Text('تفاصيل الأنمي')),
-                          ),
-                    ),
-                    const _KeepAlivePage(
-                      child: ColoredBox(
-                        color: Colors.black,
-                        child: Center(child: Text('قائمة الحلقات')),
-                      ),
-                    ),
+                  isScrollable: false,
+                  tabs: const [
+                    Tab(text: 'التفاصيل'),
+                    Tab(text: 'الحلقات'),
                   ],
                 ),
-              ),
-            ],
+                Expanded(
+                  child: TabBarView(
+                    controller: controller,
+                    children: [
+                      _KeepAlivePage(
+                        child:
+                            detailsChild ??
+                            const ColoredBox(
+                              color: Colors.black,
+                              child: Center(child: Text('تفاصيل الأنمي')),
+                            ),
+                      ),
+                      const _KeepAlivePage(
+                        child: ColoredBox(
+                          color: Colors.black,
+                          child: Center(child: Text('قائمة الحلقات')),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -104,6 +138,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.runAsync(TestFonts.loadWalkthroughFonts);
 
     final controller = TabController(length: 2, vsync: tester);
     addTearDown(controller.dispose);
@@ -114,6 +149,11 @@ void main() {
       greaterThan(tester.getCenter(find.text('الحلقات')).dx),
     );
     expect(controller.index, 0);
+    await _writeShot(
+      tester,
+      'details_episodes_rtl_order.png',
+      const ValueKey('details-episodes-pager-shot'),
+    );
   });
 
   testWidgets('details TabBarView follows the finger in both RTL directions', (
@@ -121,6 +161,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.runAsync(TestFonts.loadWalkthroughFonts);
 
     final controller = TabController(length: 2, vsync: tester);
     addTearDown(controller.dispose);
@@ -142,6 +183,13 @@ void main() {
     expect(find.text('تفاصيل الأنمي'), findsOneWidget);
     expect(find.text('قائمة الحلقات'), findsOneWidget);
 
+    await gesture.moveBy(const Offset(130, 0));
+    await tester.pump();
+    await _writeShot(
+      tester,
+      'details_tab_swipe_mid_drag.png',
+      const ValueKey('details-episodes-pager-shot'),
+    );
     await gesture.up();
     await tester.pumpAndSettle();
     expect(controller.index, 1);
@@ -155,6 +203,7 @@ void main() {
     expect(controller.animation!.value, greaterThan(0.05));
     expect(controller.animation!.value, lessThan(0.95));
 
+    await back.moveBy(const Offset(-130, 0));
     await back.up();
     await tester.pumpAndSettle();
     expect(controller.index, 0);

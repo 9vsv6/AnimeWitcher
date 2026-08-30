@@ -125,23 +125,29 @@ void main() {
     final visited = <int>[];
     await tester.pumpWidget(
       _app(
-        ListView(
-          children: [
-            DetailsExtraTabs(
-              similar: AsyncData(<MultimediaItem>[
-                _item('SimilarOne', 's1'),
-                _item('SimilarTwo', 's2'),
-                _item('SimilarThree', 's3'),
-                _item('SimilarFour', 's4'),
-              ]),
-              related: const AsyncLoading(),
-              relatedHasMore: false,
-              cast: const AsyncLoading(),
-              onTabBecameVisible: visited.add,
-              onAnimeTap: (_) {},
-              onCharacterTap: (_) {},
+        RepaintBoundary(
+          key: const ValueKey('details-extra-tabs-order-shot'),
+          child: ColoredBox(
+            color: Colors.black,
+            child: ListView(
+              children: [
+                DetailsExtraTabs(
+                  similar: AsyncData(<MultimediaItem>[
+                    _item('SimilarOne', 's1'),
+                    _item('SimilarTwo', 's2'),
+                    _item('SimilarThree', 's3'),
+                    _item('SimilarFour', 's4'),
+                  ]),
+                  related: const AsyncLoading(),
+                  relatedHasMore: false,
+                  cast: const AsyncLoading(),
+                  onTabBecameVisible: visited.add,
+                  onAnimeTap: (_) {},
+                  onCharacterTap: (_) {},
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -177,6 +183,11 @@ void main() {
       greaterThan(
         tester.getCenter(find.text(animeWitcherCharactersTabLabel)).dx,
       ),
+    );
+    await _writeShot(
+      tester,
+      'details_extra_tabs_rtl_order.png',
+      const ValueKey('details-extra-tabs-order-shot'),
     );
 
     final first = tester.getRect(find.byKey(const ValueKey('similar-0')));
