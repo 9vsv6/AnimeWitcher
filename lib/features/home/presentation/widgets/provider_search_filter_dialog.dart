@@ -267,10 +267,16 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
             ),
           Row(
             children: [
-              TextButton.icon(
-                onPressed: _value.isEmpty ? null : _clearAll,
-                icon: const Icon(Icons.restart_alt_rounded),
-                label: Text(_isArabic ? 'مسح الكل' : 'Clear all'),
+              Flexible(
+                child: TextButton.icon(
+                  onPressed: _value.isEmpty ? null : _clearAll,
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: Text(
+                    _isArabic ? 'مسح الكل' : 'Clear all',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -418,27 +424,30 @@ class _FilterTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tab(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Icon(icon, size: 20),
-              if (active)
-                const Positioned(
-                  right: -3,
-                  top: -3,
-                  child: CircleAvatar(
-                    radius: 4,
-                    backgroundColor: Colors.redAccent,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, size: 18),
+                if (active)
+                  const Positioned(
+                    right: -3,
+                    top: -3,
+                    child: CircleAvatar(
+                      radius: 4,
+                      backgroundColor: Colors.redAccent,
+                    ),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 7),
-          Text(label),
-        ],
+              ],
+            ),
+            const SizedBox(width: 5),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+        ),
       ),
     );
   }
