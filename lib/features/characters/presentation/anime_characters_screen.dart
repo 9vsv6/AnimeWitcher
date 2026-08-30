@@ -170,6 +170,7 @@ class _AnimeCharactersScreenState
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 14,
                             handsetPortraitCrossAxisCount: 3,
+                            horizontalPadding: 16,
                           ),
                           itemCount: _cast.length,
                           itemBuilder: (context, index) {

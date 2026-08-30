@@ -20,6 +20,7 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'cache_provider.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -108,7 +109,12 @@ class SettingsScreen extends ConsumerWidget {
 
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
+        // Settings rows are single-column text; letting them stretch across a
+        // 3440px ultrawide would put the label and its trailing control on
+        // opposite ends of the desk. Clamp to the shared reading measure.
+        constraints: const BoxConstraints(
+          maxWidth: LayoutConstants.contentMaxWidth,
+        ),
         child: ListView(
           padding: const EdgeInsets.only(bottom: 100),
           children: [
@@ -139,9 +145,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 SettingsTile(
                   icon: Icons.dashboard_customize_rounded,
-                  title: isArabic
-                      ? 'تخصيص شريط المهام'
-                      : 'Customize taskbar',
+                  title: isArabic ? 'تخصيص شريط المهام' : 'Customize taskbar',
                   subtitle: isArabic
                       ? 'ترتيب العناصر وإخفاؤها أو إظهارها'
                       : 'Reorder, hide, or show taskbar items',
@@ -239,11 +243,7 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: LayoutConstants.spacingLg),
 
             SettingsGroup(
-              title: appText(
-                context,
-                english: 'Images',
-                arabic: 'الصور',
-              ),
+              title: appText(context, english: 'Images', arabic: 'الصور'),
               children: [
                 SettingsTile(
                   icon: Icons.image_rounded,
@@ -412,7 +412,8 @@ String _formatBytes(int bytes) {
     size /= 1024;
     unitIndex++;
   }
-  final value =
-      unitIndex == 0 ? size.toStringAsFixed(0) : size.toStringAsFixed(1);
+  final value = unitIndex == 0
+      ? size.toStringAsFixed(0)
+      : size.toStringAsFixed(1);
   return '$value ${units[unitIndex]}';
 }

@@ -580,6 +580,7 @@ class _SeasonGridState extends State<_SeasonGrid>
           ),
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
+          horizontalPadding: 16,
         ),
         itemCount: _items.length + extra,
         itemBuilder: (context, index) {

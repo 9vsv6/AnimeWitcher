@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import '../../../../core/account/account_providers.dart';
@@ -532,41 +531,6 @@ void showClearCacheDialog(BuildContext context, WidgetRef ref) {
       ],
     ),
   );
-}
-
-class _SocialButton extends StatelessWidget {
-  final String svgUrl;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _SocialButton({
-    required this.svgUrl,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Material(
-      color: color.withValues(alpha: 0.15),
-      shape: const CircleBorder(),
-      child: IconButton(
-        icon: SvgPicture.network(
-          svgUrl,
-          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-          width: 24,
-          height: 24,
-          placeholderBuilder: (context) => AppLoadingIndicator(
-            color: color.withValues(alpha: 0.5),
-            constraints: BoxConstraints.tight(const Size(24, 24)),
-          ),
-        ),
-        onPressed: onTap,
-        tooltip: l10n.openLink,
-      ),
-    );
-  }
 }
 
 /// Shows a dialog to toggle the visibility of individual player control

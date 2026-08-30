@@ -429,6 +429,7 @@ class _ScheduleGrid extends StatelessWidget {
             ),
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
+            horizontalPadding: 16,
           ),
           itemCount: items.length + (isLoadingMore ? 1 : 0),
           itemBuilder: (context, index) {

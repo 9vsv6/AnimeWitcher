@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
@@ -10,8 +9,9 @@ import 'package:animewitcher/features/home/presentation/widgets/news_section.dar
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../../support/test_fonts.dart';
 
 MultimediaItem _anime(String title, String id) {
   return MultimediaItem(
@@ -25,39 +25,7 @@ NewsItem _news(String title, String id) {
   return NewsItem(id: id, title: title, imageUrl: '');
 }
 
-Future<ByteData> _fontBytes(String path) async {
-  return ByteData.sublistView(await File(path).readAsBytes());
-}
-
-Future<void> _loadWalkthroughFonts() async {
-  const arabicRegular =
-      '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf';
-  if (!File(arabicRegular).existsSync()) return;
-  await (FontLoader('NotoSansArabic')
-        ..addFont(_fontBytes(arabicRegular))
-        ..addFont(
-          _fontBytes('/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf'),
-        ))
-      .load();
-  await (FontLoader('Roboto')
-        ..addFont(
-          _fontBytes(
-            '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
-          ),
-        )
-        ..addFont(
-          _fontBytes(
-            '/opt/flutter/bin/cache/artifacts/material_fonts/Roboto-Bold.ttf',
-          ),
-        ))
-      .load();
-  await (FontLoader('MaterialIcons')..addFont(
-        _fontBytes(
-          '/opt/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-        ),
-      ))
-      .load();
-}
+Future<void> _loadWalkthroughFonts() => TestFonts.loadWalkthroughFonts();
 
 ThemeData _homeTheme() {
   return ThemeData(

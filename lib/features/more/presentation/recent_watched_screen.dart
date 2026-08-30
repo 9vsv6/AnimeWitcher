@@ -152,6 +152,7 @@ class _RecentWatchedGrid extends StatelessWidget {
           ),
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
+          horizontalPadding: 16,
         ),
         itemCount: items.length,
         itemBuilder: (context, index) {

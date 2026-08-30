@@ -18,6 +18,7 @@ import 'subtitle_appearance_dialog.dart';
 import 'player_ltr.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
+
 class PlayerBottomSheets {
   static void showSpeedSelection({
     required BuildContext context,
@@ -279,189 +280,6 @@ class PlayerBottomSheets {
     );
   }
 
-  static void _showSubtitleOptions(BuildContext context) {
-    final parentContext = context;
-    showPlayerDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return Consumer(
-          builder: (dialogContext, ref, child) {
-            final supportsExternalSubtitleLoading = ref.watch(
-              playerControllerProvider.select(
-                (s) => s.supportsExternalSubtitleLoading,
-              ),
-            );
-            final l10n = AppLocalizations.of(dialogContext)!;
-
-            Widget option({
-              required IconData icon,
-              required String label,
-              required VoidCallback? onTap,
-            }) {
-              return InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(4),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        icon,
-                        color: onTap == null
-                            ? HotstarPlayerStyle.mutedText
-                            : HotstarPlayerStyle.secondaryText,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 22),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          color: onTap == null
-                              ? HotstarPlayerStyle.mutedText
-                              : HotstarPlayerStyle.primaryText,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            return Dialog.fullscreen(
-              backgroundColor: HotstarPlayerStyle.background,
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(48, 18, 48, 22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              l10n.subtitleOptions,
-                              style: const TextStyle(
-                                color: HotstarPlayerStyle.primaryText,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            icon: const Icon(Icons.close),
-                            color: Colors.white,
-                            iconSize: 36,
-                            tooltip: l10n.cancel,
-                          ),
-                        ],
-                      ),
-                      const Divider(
-                        color: HotstarPlayerStyle.divider,
-                        height: 28,
-                      ),
-                      if (!supportsExternalSubtitleLoading)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 20),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.orange.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.info_outline,
-                                color: Colors.orange,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.hlsSubtitleWarning,
-                                  style: TextStyle(
-                                    color: Colors.orange.shade200,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      option(
-                        icon: Icons.file_open_outlined,
-                        label: l10n.loadFromDevice,
-                        onTap: !supportsExternalSubtitleLoading
-                            ? null
-                            : () {
-                                Navigator.pop(ctx);
-                                ref
-                                    .read(playerControllerProvider.notifier)
-                                    .loadExternalSubtitleFile();
-                              },
-                      ),
-                      option(
-                        icon: Icons.sync,
-                        label: l10n.syncDelay,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (parentContext.mounted) {
-                              _showSubtitleSync(parentContext);
-                            }
-                          });
-                        },
-                      ),
-                      option(
-                        icon: Icons.style,
-                        label: l10n.styleSettings,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (parentContext.mounted) {
-                              _showSubtitleStyles(parentContext);
-                            }
-                          });
-                        },
-                      ),
-                      option(
-                        icon: Icons.search,
-                        label: l10n.searchOnline,
-                        onTap: !supportsExternalSubtitleLoading
-                            ? null
-                            : () {
-                                Navigator.pop(ctx);
-                                WidgetsBinding.instance.addPostFrameCallback((
-                                  _,
-                                ) {
-                                  if (parentContext.mounted) {
-                                    _showSubtitleSearch(parentContext);
-                                  }
-                                });
-                              },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   static void _showSubtitleSync(BuildContext context) {
     Navigator.push<void>(
       context,
@@ -494,7 +312,6 @@ class PlayerBottomSheets {
   }
 
   static void _showSubtitleSearch(BuildContext context) {
-    final parentContext = context;
     final TextEditingController queryController = TextEditingController();
 
     final scrollController = ScrollController();

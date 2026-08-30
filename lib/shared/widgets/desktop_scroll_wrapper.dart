@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/responsive_breakpoints.dart';
@@ -114,8 +113,9 @@ class _DesktopScrollWrapperState extends ConsumerState<DesktopScrollWrapper> {
 
     // If explicitly set, use that value
     if (widget.showButtons != null) return widget.showButtons!;
-    // Default: show on desktop platforms only
-    return Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+    // Default: show on desktop platforms only. Uses the shared helper so it
+    // also resolves correctly on web (dart:io Platform throws there).
+    return ResponsiveBreakpoints.isDesktopPlatform();
   }
 
   @override
