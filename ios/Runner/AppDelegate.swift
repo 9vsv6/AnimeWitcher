@@ -33,6 +33,29 @@ import UserNotifications
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  /// URLSession wakes the process when a background download finishes. The
+  /// plugin's `HoldingQueue` then promotes the next file without Dart — as long
+  /// as that waiter was OS-enqueued. After a kill the in-memory queue is gone;
+  /// ask Dart to re-enqueue persisted `queueWaiting` / `enqueued` rows.
+  override func application(
+    _ application: UIApplication,
+    handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @escaping () -> Void
+  ) {
+    super.application(
+      application,
+      handleEventsForBackgroundURLSession: identifier,
+      completionHandler: completionHandler
+    )
+    downloadContinuedProcessingChannel?.invokeMethod(
+      "promoteWaitingAfterBackgroundSession",
+      arguments: [
+        "waitingTaskIds": DownloadWaitingQueueStore.taskIds(),
+        "maxConcurrent": DownloadWaitingQueueStore.maxConcurrent(),
+      ]
+    )
+  }
+
   // This is required to show notifications while the app is in the foreground
   override func userNotificationCenter(_ center: UNUserNotificationCenter,
                                        willPresent notification: UNNotification,
@@ -178,6 +201,19 @@ import UserNotifications
 
     channel.setMethodCallHandler { call, result in
 #if os(iOS)
+      if call.method == "persistWaitingQueue" {
+        let arguments = call.arguments as? [String: Any] ?? [:]
+        let taskIds = (arguments["waitingTaskIds"] as? [String]) ?? []
+        let maxConcurrent =
+          (arguments["maxConcurrent"] as? NSNumber)?.intValue ?? 1
+        DownloadWaitingQueueStore.persist(
+          taskIds: taskIds,
+          maxConcurrent: maxConcurrent
+        )
+        result(true)
+        return
+      }
+
       guard #available(iOS 26.0, *) else {
         result(false)
         return

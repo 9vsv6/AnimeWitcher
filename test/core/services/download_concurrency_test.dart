@@ -132,47 +132,78 @@ void main() {
       );
     });
 
-    test('Live Activity starts only when the OS will enqueue', () {
-      expect(shouldStartDownloadLiveActivity(willEnqueueWithOs: true), isTrue);
-      expect(
-        shouldStartDownloadLiveActivity(willEnqueueWithOs: false),
-        isFalse,
-      );
-      expect(
-        shouldStartDownloadLiveActivity(
-          willEnqueueWithOs:
-              admitDownload(occupiedSlots: 0, maxConcurrent: 1) ==
-              DownloadAdmission.enqueueNow,
-        ),
-        isTrue,
-      );
-      expect(
-        shouldStartDownloadLiveActivity(
-          willEnqueueWithOs:
-              admitDownload(occupiedSlots: 1, maxConcurrent: 1) ==
-              DownloadAdmission.enqueueNow,
-        ),
-        isFalse,
-      );
-    });
-
-    test('overflow parks instead of enqueueing when concurrency is 1', () {
-      expect(
-        admitDownload(occupiedSlots: 0, maxConcurrent: 1),
-        DownloadAdmission.enqueueNow,
-      );
-      expect(
-        admitDownload(occupiedSlots: 1, maxConcurrent: 1),
-        DownloadAdmission.parkAsWaiting,
-      );
-      expect(
-        admitDownload(occupiedSlots: 2, maxConcurrent: 3),
-        DownloadAdmission.enqueueNow,
-      );
+    test('Live Activity starts only while a file is transferring', () {
+      expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
+      expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
+      expect(shouldStartDownloadLiveActivity(TaskStatus.paused), isFalse);
+      expect(shouldStartDownloadLiveActivity(TaskStatus.complete), isFalse);
+      expect(waitingEpisodeMayStartLiveActivityWhileQueued(), isFalse);
     });
 
     test(
-      'completing the running download promotes the oldest waiting, not user-paused',
+      'overflow is always OS-enqueued so iOS HoldingQueue can promote in background',
+      () {
+        expect(shouldEnqueueOverflowToNativeHoldingQueue(), isTrue);
+        expect(
+          admitDownload(occupiedSlots: 0, maxConcurrent: 1),
+          DownloadAdmission.enqueueToNativeHoldingQueue,
+        );
+        expect(
+          admitDownload(occupiedSlots: 1, maxConcurrent: 1),
+          DownloadAdmission.enqueueToNativeHoldingQueue,
+        );
+        expect(
+          admitDownload(occupiedSlots: 2, maxConcurrent: 3),
+          DownloadAdmission.enqueueToNativeHoldingQueue,
+        );
+      },
+    );
+
+    test(
+      'iOS concurrency=1, two episodes: waiter has no Live Activity until running',
+      () {
+        final whileEp1Transfers = planDownloadQueue(
+          maxConcurrent: 1,
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep1',
+              status: TaskStatus.running,
+              timestamp: 1,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep2',
+              status: TaskStatus.enqueued,
+              timestamp: 2,
+            ),
+          ],
+        );
+        expect(whileEp1Transfers.occupiedCount, 2);
+        expect(whileEp1Transfers.idsToPark, isEmpty);
+        expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
+        expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
+
+        final afterEp1Finishes = planDownloadQueue(
+          maxConcurrent: 1,
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep1',
+              status: TaskStatus.complete,
+              timestamp: 1,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep2',
+              status: TaskStatus.running,
+              timestamp: 2,
+            ),
+          ],
+        );
+        expect(afterEp1Finishes.occupiedCount, 1);
+        expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
+      },
+    );
+
+    test(
+      'leftover Dart-parked waiters re-enqueue FIFO; user-paused stays paused',
       () {
         final planWhileRunning = planDownloadQueue(
           maxConcurrent: 1,
@@ -196,14 +227,10 @@ void main() {
           ],
         );
         expect(planWhileRunning.occupiedCount, 1);
-        expect(planWhileRunning.idsToPromote, isEmpty);
+        expect(planWhileRunning.idsToPark, isEmpty);
         expect(planWhileRunning.waitingFifoIds, ['ep4']);
-        expect(
-          shouldStartDownloadLiveActivity(
-            willEnqueueWithOs: planWhileRunning.idsToPromote.contains('ep4'),
-          ),
-          isFalse,
-        );
+        expect(planWhileRunning.idsToPromote, ['ep4']);
+        expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
 
         final afterComplete = planDownloadQueue(
           maxConcurrent: 1,
@@ -232,7 +259,7 @@ void main() {
       },
     );
 
-    test('lowering N parks the newest occupying download', () {
+    test('lowering N never detaches occupying URLSession tasks', () {
       final plan = planDownloadQueue(
         maxConcurrent: 1,
         entries: const [
@@ -248,8 +275,57 @@ void main() {
           ),
         ],
       );
-      expect(plan.idsToPark, ['newer']);
+      expect(plan.idsToPark, isEmpty);
       expect(plan.idsToPromote, isEmpty);
+      expect(plan.occupiedCount, 2);
+    });
+
+    test('kill recovery re-enqueues waiters, never user-paused rows', () {
+      expect(
+        shouldReenqueueWaitingAfterProcessKill(
+          persisted: TaskStatus.enqueued,
+          queueWaiting: false,
+          userPaused: false,
+          stillInNativeQueue: false,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldReenqueueWaitingAfterProcessKill(
+          persisted: TaskStatus.paused,
+          queueWaiting: true,
+          userPaused: false,
+          stillInNativeQueue: false,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldReenqueueWaitingAfterProcessKill(
+          persisted: TaskStatus.paused,
+          queueWaiting: false,
+          userPaused: true,
+          stillInNativeQueue: false,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldReenqueueWaitingAfterProcessKill(
+          persisted: TaskStatus.enqueued,
+          queueWaiting: false,
+          userPaused: false,
+          stillInNativeQueue: true,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldReenqueueWaitingAfterProcessKill(
+          persisted: TaskStatus.running,
+          queueWaiting: false,
+          userPaused: false,
+          stillInNativeQueue: false,
+        ),
+        isFalse,
+      );
     });
   });
 

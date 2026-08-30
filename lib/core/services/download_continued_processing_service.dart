@@ -14,9 +14,13 @@ class DownloadContinuedProcessingService {
   );
 
   final SystemDownloadCancellation onSystemCancel;
+  final Future<void> Function()? onPromoteWaitingAfterBackgroundSession;
   bool _handlerInstalled = false;
 
-  DownloadContinuedProcessingService({required this.onSystemCancel}) {
+  DownloadContinuedProcessingService({
+    required this.onSystemCancel,
+    this.onPromoteWaitingAfterBackgroundSession,
+  }) {
     if (_isAvailable) {
       _channel.setMethodCallHandler(_handleNativeCall);
       _handlerInstalled = true;
@@ -67,7 +71,24 @@ class DownloadContinuedProcessingService {
     await _invoke('stop', <String, Object>{'taskId': taskId});
   }
 
+  /// Persist holding-queue waiters so iOS can restore them after a kill when
+  /// `handleEventsForBackgroundURLSession` relaunches the process.
+  Future<void> persistWaitingQueue({
+    required int maxConcurrent,
+    required List<String> waitingTaskIds,
+  }) async {
+    await _invoke('persistWaitingQueue', <String, Object>{
+      'maxConcurrent': maxConcurrent,
+      'waitingTaskIds': waitingTaskIds,
+    });
+  }
+
   Future<dynamic> _handleNativeCall(MethodCall call) async {
+    if (call.method == 'promoteWaitingAfterBackgroundSession') {
+      await onPromoteWaitingAfterBackgroundSession?.call();
+      return true;
+    }
+
     if (call.method != 'cancel') return false;
 
     final arguments = call.arguments;

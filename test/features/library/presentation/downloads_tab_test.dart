@@ -360,6 +360,20 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
+    final runningItem = MultimediaItem(
+      title: 'Black Torch',
+      url: 'https://animewitcher.test/black-torch',
+      posterUrl: '',
+      contentType: MultimediaContentType.anime,
+      tmdbId: 3,
+    );
+    final waitingItem = MultimediaItem(
+      title: 'Black Torch',
+      url: 'https://animewitcher.test/black-torch',
+      posterUrl: '',
+      contentType: MultimediaContentType.anime,
+      tmdbId: 4,
+    );
     final running = DownloadItem(
       task: _task(
         taskId: 'ep3',
@@ -368,7 +382,7 @@ void main() {
       ),
       status: TaskStatus.running,
       progress: 0.18,
-      item: _blackTorch(),
+      item: runningItem,
       episode: Episode(
         name: 'الحلقة 3',
         url: 'https://animewitcher.test/black-torch/3',
@@ -385,7 +399,7 @@ void main() {
       ),
       status: TaskStatus.enqueued,
       progress: 0,
-      item: _blackTorch(),
+      item: waitingItem,
       episode: Episode(
         name: 'الحلقة 4',
         url: 'https://animewitcher.test/black-torch/4',
@@ -443,8 +457,6 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    await tester.tap(find.byType(ExpansionTile));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
