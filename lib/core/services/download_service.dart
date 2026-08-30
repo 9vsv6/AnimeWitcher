@@ -144,23 +144,23 @@ class DownloadService {
         )
         .configureNotification(
           running: notificationConfig,
-          complete: const TaskNotification(
-            '{displayName}',
-            'اكتمل التنزيل',
-          ),
+          complete: const TaskNotification('{displayName}', 'اكتمل التنزيل'),
           error: const TaskNotification('{displayName}', 'فشل التنزيل'),
-          paused: const TaskNotification('{displayName}', 'التنزيل متوقف مؤقتاً'),
+          paused: const TaskNotification(
+            '{displayName}',
+            'التنزيل متوقف مؤقتاً',
+          ),
           progressBar: !Platform.isIOS,
         )
         .configureNotificationForGroup(
           'downloads',
           running: notificationConfig,
-          complete: const TaskNotification(
-            '{displayName}',
-            'اكتمل التنزيل',
-          ),
+          complete: const TaskNotification('{displayName}', 'اكتمل التنزيل'),
           error: const TaskNotification('{displayName}', 'فشل التنزيل'),
-          paused: const TaskNotification('{displayName}', 'التنزيل متوقف مؤقتاً'),
+          paused: const TaskNotification(
+            '{displayName}',
+            'التنزيل متوقف مؤقتاً',
+          ),
           progressBar: !Platform.isIOS,
         );
 
@@ -302,30 +302,49 @@ class DownloadService {
       }
     });
 
-    // 5. Catch up on any running tasks and database tracking
-    await FileDownloader().trackTasks();
-    await FileDownloader().start();
+    // 5. Catch up on native tasks. Do not reschedule killed tasks with a
+    //    fresh enqueue — that restarts the file from byte 0. Interrupted
+    //    transfers are resumed from leftover bytes below.
+    await FileDownloader().start(doRescheduleKilledTasks: false);
 
-    // 6. Bridge Database Records to Riverpod (Persistence after restart)
+    // 6. Restore UI rows and continue any download that was running when
+    //    the process died, keeping already-written bytes.
+    await _recoverPersistedDownloads();
+
+    _isInitialized = true;
+  }
+
+  Future<void> _recoverPersistedDownloads() async {
     final records = await FileDownloader().database.allRecords();
+    final nativeIds = <String>{
+      for (final task in await FileDownloader().allTasks(allGroups: true))
+        task.taskId,
+    };
+
     for (final record in records) {
-      // Recover paused downloads, and migrate any leftover failed records to
-      // paused so they remain resumable after a crash/network failure.
-      final isFailed = record.status == TaskStatus.failed ||
+      if (record.task is! DownloadTask) continue;
+      if (record.status == TaskStatus.complete ||
+          record.status == TaskStatus.canceled) {
+        continue;
+      }
+      final task = record.task as DownloadTask;
+      final trackingUrl = downloadTrackingUrl(task);
+      final isFailed =
+          record.status == TaskStatus.failed ||
           record.status == TaskStatus.notFound;
-      if (record.status != TaskStatus.paused && !isFailed) continue;
-
-      final trackingUrl = record.task.metaData.isNotEmpty
-          ? record.task.metaData
-          : record.task.url;
-
       var progress = record.progress;
       if (progress < 0 || progress > 1) progress = 0.0;
+
+      final wasRunning =
+          record.status == TaskStatus.running ||
+          record.status == TaskStatus.enqueued ||
+          record.status == TaskStatus.waitingToRetry;
+      final stillNative = nativeIds.contains(task.taskId);
 
       if (isFailed) {
         await FileDownloader().database.updateRecord(
           TaskRecord(
-            record.task,
+            task,
             TaskStatus.paused,
             progress,
             record.expectedFileSize,
@@ -333,27 +352,48 @@ class DownloadService {
         );
       }
 
-      _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
-      _ref
-          .read(downloadProgressProvider.notifier)
-          .update(
-            trackingUrl,
-            DownloadProgressData(
-              taskId: record.task.taskId,
-              progress: progress,
-              networkSpeed: 0,
-              timeRemaining: Duration.zero,
-              status: TaskStatus.paused,
-              totalSize: record.expectedFileSize,
-            ),
-          );
-    }
+      final showAsRunning = wasRunning && stillNative;
+      _publishProgress(
+        trackingUrl: trackingUrl,
+        taskId: task.taskId,
+        progress: progress,
+        totalSize: record.expectedFileSize,
+        status: showAsRunning ? record.status : TaskStatus.paused,
+      );
 
-    if (Platform.isIOS) {
-      await FileDownloader().resumeFromBackground();
+      final shouldContinue = shouldAutoResumeInterruptedDownload(
+        wasRunningOrFailed: wasRunning || isFailed,
+        userPaused: record.status == TaskStatus.paused && !isFailed,
+        stillInNativeQueue: stillNative,
+      );
+      if (!shouldContinue) continue;
+      unawaited(_resumeDownloadTask(task));
     }
+  }
 
-    _isInitialized = true;
+  void _publishProgress({
+    required String trackingUrl,
+    required String taskId,
+    required double progress,
+    required int totalSize,
+    required TaskStatus status,
+    double networkSpeed = 0,
+    Duration timeRemaining = Duration.zero,
+  }) {
+    _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
+    _ref
+        .read(downloadProgressProvider.notifier)
+        .update(
+          trackingUrl,
+          DownloadProgressData(
+            taskId: taskId,
+            progress: progress,
+            networkSpeed: networkSpeed,
+            timeRemaining: timeRemaining,
+            status: status,
+            totalSize: totalSize,
+          ),
+        );
   }
 
   /// Process tapping on a notification
@@ -517,8 +557,11 @@ class DownloadService {
       }
     }
     if (downloadTask == null) return;
+    await _resumeDownloadTask(downloadTask);
+  }
 
-    final task = downloadTask;
+  Future<bool> _resumeDownloadTask(DownloadTask task) async {
+    final taskId = task.taskId;
     final record = await FileDownloader().database.recordForId(taskId);
     await _continuedProcessing.start(
       taskId: taskId,
@@ -530,10 +573,155 @@ class DownloadService {
     final resumedOrRestarted = await resumeOrRestartDownload(
       canResume: () => FileDownloader().taskCanResume(task),
       resume: () => FileDownloader().resume(task),
+      resumeFromPartial: () => _resumeUsingPartialFile(task),
       restart: () => FileDownloader().enqueue(task),
     );
     if (!resumedOrRestarted) {
       await _continuedProcessing.stop(taskId: taskId);
+    }
+    return resumedOrRestarted;
+  }
+
+  Future<bool> _resumeUsingPartialFile(DownloadTask task) async {
+    String destinationPath;
+    try {
+      destinationPath = await task.filePath();
+    } catch (_) {
+      return false;
+    }
+    if (destinationPath.isEmpty) return false;
+
+    final partial = await findPartialDownloadFile(
+      destinationPath: destinationPath,
+    );
+    if (partial == null) return false;
+    final existingBytes = await partial.length();
+    final record = await FileDownloader().database.recordForId(task.taskId);
+    final expectedBytes = record?.expectedFileSize ?? -1;
+    if (!shouldResumeFromPartialBytes(
+      existingPartialBytes: existingBytes,
+      expectedBytes: expectedBytes,
+    )) {
+      return false;
+    }
+
+    final dest = File(destinationPath);
+    if (partial.path != dest.path) {
+      await dest.parent.create(recursive: true);
+      await partial.copy(dest.path);
+    }
+
+    if (!Platform.isIOS) {
+      final tempPath = '$destinationPath.download';
+      if (p.normalize(dest.path) != p.normalize(tempPath)) {
+        await dest.copy(tempPath);
+      }
+      try {
+        // Plugin resume data is stored on BaseDownloader. After a kill the
+        // temp file is often still on disk even when native resume blobs are
+        // gone; reuse that prefix instead of downloading from byte 0.
+        // ignore: invalid_use_of_visible_for_testing_member
+        await FileDownloader().downloaderForTesting.setResumeData(
+          ResumeData(task, tempPath, existingBytes, null),
+        );
+        if (await FileDownloader().resume(task)) {
+          return true;
+        }
+      } catch (_) {
+        // Fall through to a Range append when native resume data is rejected.
+      }
+    }
+
+    return _appendRemainingWithDio(
+      task,
+      dest: dest,
+      existingBytes: existingBytes,
+      expectedBytes: expectedBytes,
+    );
+  }
+
+  Future<bool> _appendRemainingWithDio(
+    DownloadTask task, {
+    required File dest,
+    required int existingBytes,
+    required int expectedBytes,
+  }) async {
+    final trackingUrl = downloadTrackingUrl(task);
+    try {
+      final response = await _dio.get<ResponseBody>(
+        task.url,
+        options: Options(
+          headers: rangeResumeHeaders(
+            existing: task.headers,
+            existingBytes: existingBytes,
+          ),
+          followRedirects: true,
+          responseType: ResponseType.stream,
+          validateStatus: (status) =>
+              status != null && (status == 206 || status == 200),
+        ),
+      );
+
+      // A 200 means the host ignored Range and sent the whole file. Do not
+      // append that onto the prefix — fall back to a full restart.
+      if (response.statusCode != 206) return false;
+
+      final body = response.data;
+      if (body is! ResponseBody) return false;
+
+      var totalSize = expectedBytes;
+      final contentRange = response.headers.value('content-range');
+      if (contentRange != null) {
+        final total = contentRange.split('/').last;
+        totalSize = int.tryParse(total) ?? totalSize;
+      }
+
+      await dest.parent.create(recursive: true);
+      final written = await appendDownloadChunks(
+        dest: dest,
+        chunks: body.stream,
+        existingBytes: existingBytes,
+        onBytes: (written) {
+          final progress = totalSize > 0 ? written / totalSize : 0.0;
+          _publishProgress(
+            trackingUrl: trackingUrl,
+            taskId: task.taskId,
+            progress: progress,
+            totalSize: totalSize,
+            status: TaskStatus.running,
+          );
+          unawaited(
+            _continuedProcessing.update(
+              taskId: task.taskId,
+              progress: progress,
+              totalBytes: totalSize,
+            ),
+          );
+        },
+      );
+
+      await FileDownloader().database.updateRecord(
+        TaskRecord(task, TaskStatus.complete, 1.0, written),
+      );
+      unawaited(_persistCompletedFilePath(task));
+      unawaited(
+        _continuedProcessing.finish(
+          taskId: task.taskId,
+          success: true,
+          status: 'completed',
+        ),
+      );
+      _updatesController.add(TaskStatusUpdate(task, TaskStatus.complete));
+      _handleStatusUpdate(
+        TaskStatusUpdate(task, TaskStatus.complete),
+        trackingUrl,
+      );
+      return true;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[DownloadService] Range append failed: $error');
+      }
+      return false;
     }
   }
 
@@ -589,8 +777,7 @@ class DownloadService {
             // A compliant 200 response may still expose the full size. Do not
             // infer it from the streamed body; that would defeat the point of
             // this metadata-only request.
-            final contentLength =
-                getResponse.headers.value('content-length');
+            final contentLength = getResponse.headers.value('content-length');
             final parsedLength = int.tryParse(contentLength ?? '');
             if (parsedLength != null && parsedLength > 1) {
               size = parsedLength;
@@ -695,13 +882,8 @@ class DownloadService {
           return false;
         }
         final task = existingRecord.task as DownloadTask;
-        final resumedOrRestarted = await resumeOrRestartDownload(
-          canResume: () => FileDownloader().taskCanResume(task),
-          resume: () => FileDownloader().resume(task),
-          restart: () => FileDownloader().enqueue(task),
-        );
+        final resumedOrRestarted = await _resumeDownloadTask(task);
         if (!resumedOrRestarted) {
-          await _continuedProcessing.stop(taskId: task.taskId);
           return false;
         }
       }
@@ -865,7 +1047,8 @@ class DownloadService {
     for (final record in records) {
       if (record.status != TaskStatus.complete) continue;
       final recordUrl = downloadTrackingUrl(record.task);
-      var matched = recordUrl == trackingUrl ||
+      var matched =
+          recordUrl == trackingUrl ||
           (episode?.url.trim().isNotEmpty == true &&
               recordUrl == episode!.url.trim()) ||
           taskMatchesDownloadFile(
@@ -887,9 +1070,7 @@ class DownloadService {
                 ),
                 candidateEpisode: metadata['episode'] != null
                     ? Episode.fromJson(
-                        Map<String, dynamic>.from(
-                          metadata['episode'] as Map,
-                        ),
+                        Map<String, dynamic>.from(metadata['episode'] as Map),
                       )
                     : null,
               );
@@ -982,7 +1163,8 @@ class DownloadService {
       item.title.replaceAll(RegExp(r'[^\w\s-]'), '').trim(),
     );
     final episodeData = episode;
-    final useEpisodeName = episodeData != null &&
+    final useEpisodeName =
+        episodeData != null &&
         usesEpisodeDownloadFileName(
           episode: episodeData.episode,
           title: episodeData.name,
