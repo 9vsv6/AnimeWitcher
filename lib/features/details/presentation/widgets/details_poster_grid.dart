@@ -10,19 +10,32 @@ const int detailsExtraTabGridColumns = 3;
 const double detailsExtraTabCrossAxisSpacing = 12;
 const double detailsExtraTabMainAxisSpacing = 14;
 
-/// Height of two 3-column poster-card rows in the extra-tabs body.
+int detailsExtraTabCrossAxisCount(BuildContext context) {
+  return context.isHandsetLandscape
+      ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
+      : detailsExtraTabGridColumns;
+}
+
+/// Height of two poster-card rows in the extra-tabs body.
 double detailsExtraTabBodyHeight(BuildContext context, double width) {
   final isDesktop = context.isDesktop;
-  final childWidth =
-      (width - detailsExtraTabCrossAxisSpacing * (detailsExtraTabGridColumns - 1)) /
-      detailsExtraTabGridColumns;
+  final columns = detailsExtraTabCrossAxisCount(context);
+  final crossSpacing = ResponsiveBreakpoints.animeGridSpacing(
+    context,
+    detailsExtraTabCrossAxisSpacing,
+  );
+  final mainSpacing = ResponsiveBreakpoints.animeGridSpacing(
+    context,
+    detailsExtraTabMainAxisSpacing,
+  );
+  final childWidth = (width - crossSpacing * (columns - 1)) / columns;
   final childHeight =
       childWidth /
       MultimediaCardLayout.gridAspectRatio(
         isPortrait: true,
         isDesktop: isDesktop,
       );
-  return childHeight * 2 + detailsExtraTabMainAxisSpacing;
+  return childHeight * 2 + mainSpacing;
 }
 
 class ExtraTabGridPreview {
@@ -38,8 +51,7 @@ ExtraTabGridPreview extraTabGridPreview(
   List<MultimediaItem> items, {
   required bool hasMore,
 }) {
-  final showMore =
-      hasMore || items.length > animeWitcherExtraTabPreviewSlots;
+  final showMore = hasMore || items.length > animeWitcherExtraTabPreviewSlots;
   if (!showMore) {
     return ExtraTabGridPreview(items: items, showMore: false);
   }

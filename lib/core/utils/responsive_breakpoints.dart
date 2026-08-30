@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -9,8 +10,10 @@ class ResponsiveBreakpoints {
   static const double tabletBreakpoint = 600;
   static const double desktopBreakpoint = 900;
 
-  static const int handsetLandscapeAnimeColumns = 5;
+  static const int handsetLandscapeAnimeColumns = 7;
   static const int desktopLandscapeAnimeColumns = 8;
+  static const int handsetLandscapeEpisodeColumns = 2;
+  static const double handsetLandscapeGridMaxSpacing = 8;
 
   static bool isHandset(BuildContext context) {
     if (kIsWeb) return false;
@@ -38,6 +41,14 @@ class ResponsiveBreakpoints {
     return isDesktopPlatform() && size.width > size.height;
   }
 
+  static double animeGridSpacing(BuildContext context, double requested) {
+    if (isHandsetLandscape(context) &&
+        requested > handsetLandscapeGridMaxSpacing) {
+      return handsetLandscapeGridMaxSpacing;
+    }
+    return requested;
+  }
+
   static double handsetLandscapeAnimeCardWidth(
     BuildContext context, {
     double horizontalPadding = 16,
@@ -45,9 +56,10 @@ class ResponsiveBreakpoints {
   }) {
     final innerWidth =
         MediaQuery.sizeOf(context).width - (horizontalPadding * 2);
-    return ((innerWidth / handsetLandscapeAnimeColumns) - spacing)
-        .clamp(72.0, 200.0)
-        .toDouble();
+    final gap = animeGridSpacing(context, spacing);
+    final gaps = handsetLandscapeAnimeColumns - 1;
+    final raw = (innerWidth - gap * gaps) / handsetLandscapeAnimeColumns;
+    return raw.clamp(48.0, 200.0).toDouble();
   }
 
   static double desktopLandscapeAnimeCardWidth(
@@ -70,6 +82,8 @@ class ResponsiveBreakpoints {
     double mainAxisSpacing = 16,
     int? handsetPortraitCrossAxisCount,
   }) {
+    final resolvedCrossSpacing = animeGridSpacing(context, crossAxisSpacing);
+    final resolvedMainSpacing = animeGridSpacing(context, mainAxisSpacing);
     final fixedCount = isDesktopLandscape(context)
         ? desktopLandscapeAnimeColumns
         : isHandsetLandscape(context)
@@ -79,16 +93,20 @@ class ResponsiveBreakpoints {
       return SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: fixedCount,
         childAspectRatio: childAspectRatio,
-        crossAxisSpacing: crossAxisSpacing,
-        mainAxisSpacing: mainAxisSpacing,
+        crossAxisSpacing: resolvedCrossSpacing,
+        mainAxisSpacing: resolvedMainSpacing,
       );
     }
     return SliverGridDelegateWithMaxCrossAxisExtent(
       maxCrossAxisExtent: maxCrossAxisExtent,
       childAspectRatio: childAspectRatio,
-      crossAxisSpacing: crossAxisSpacing,
-      mainAxisSpacing: mainAxisSpacing,
+      crossAxisSpacing: resolvedCrossSpacing,
+      mainAxisSpacing: resolvedMainSpacing,
     );
+  }
+
+  static int episodeCrossAxisCount(BuildContext context) {
+    return isHandsetLandscape(context) ? handsetLandscapeEpisodeColumns : 1;
   }
 
   static DeviceScreenType getDeviceType(BuildContext context) {

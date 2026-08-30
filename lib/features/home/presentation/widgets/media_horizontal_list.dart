@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+
 import '../../../../core/router/app_router.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
@@ -150,6 +151,8 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     final isPortrait = widget.forcePortrait || _isPortrait;
     final double spacing = isDesktop
         ? LayoutConstants.spacingLg
+        : isHandsetLandscape
+        ? ResponsiveBreakpoints.handsetLandscapeGridMaxSpacing
         : LayoutConstants.spacingSm;
     final double cardWidth = isHandsetLandscape
         ? ResponsiveBreakpoints.handsetLandscapeAnimeCardWidth(
@@ -249,9 +252,8 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                       if (widget.onTap != null) {
                         widget.onTap!(item);
                       } else {
-                        DetailsRoute(
-                          $extra: DetailsRouteExtra(item: item),
-                        ).push<void>(context);
+                        DetailsRoute($extra: DetailsRouteExtra(item: item))
+                            .push<void>(context);
                       }
                     },
                   ),
