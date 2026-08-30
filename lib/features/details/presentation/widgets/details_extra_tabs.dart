@@ -115,7 +115,6 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final tabWidth = constraints.maxWidth / 3;
         final padding = widget.contentPadding.resolve(
           Directionality.of(context),
         );
@@ -138,21 +137,10 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
                 controller: _tabController,
                 isScrollable: false,
                 padding: EdgeInsets.zero,
-                labelPadding: EdgeInsets.zero,
-                indicatorSize: TabBarIndicatorSize.tab,
-                tabs: [
-                  FilterStyleTab(
-                    label: animeWitcherSimilarTabLabel,
-                    maxWidth: tabWidth,
-                  ),
-                  FilterStyleTab(
-                    label: animeWitcherRelatedTabLabel,
-                    maxWidth: tabWidth,
-                  ),
-                  FilterStyleTab(
-                    label: animeWitcherCharactersTabLabel,
-                    maxWidth: tabWidth,
-                  ),
+                tabs: const [
+                  FilterStyleTab(label: animeWitcherSimilarTabLabel),
+                  FilterStyleTab(label: animeWitcherRelatedTabLabel),
+                  FilterStyleTab(label: animeWitcherCharactersTabLabel),
                 ],
               ),
               const SizedBox(height: 16),
