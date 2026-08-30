@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:background_downloader/background_downloader.dart';
 
 /// Hive settings key used by official SkyStream and this fork.
@@ -37,12 +39,10 @@ List<(String, dynamic)> downloadHoldingQueueGlobalConfig(int maxConcurrent) =>
       (Config.holdingQueue, downloadHoldingQueueValue(maxConcurrent)),
     ];
 
-/// Persists [maxConcurrent] then reconfigures FileDownloader's holding queue.
-///
-/// Extra episode downloads wait FIFO in the **native** holding queue until a
-/// URLSession / WorkManager slot frees. Native `HoldingQueue.advanceQueue`
-/// runs from the iOS URLSession delegate even while the Flutter isolate is
-/// suspended — unlike a Dart `onComplete` listener.
+/// Persists [maxConcurrent] then reconfigures FileDownloader's holding queue
+/// (Android / in-app cap). iOS overflow waiters are **not** started by that
+/// queue: PR #115 showed `HoldingQueue.advanceQueue` did not run while Rivera
+/// was on the home screen. iOS starts waiters from Swift on URLSession complete.
 Future<int> applyDownloadQueueSettings({
   required int maxConcurrent,
   required Future<void> Function(int value) persist,
@@ -92,20 +92,55 @@ TaskStatus displayDownloadStatus({
 }
 
 /// iOS Live Activity / `BGContinuedProcessingTask` is only for a file that
-/// is actually transferring. Native holding-queue `enqueued` waiters must
-/// not call `start` — that overlay is what Rivera circled ("Downloading 0%").
+/// is actually transferring. Waiting **في الانتظار** rows must not call `start`.
 bool shouldStartDownloadLiveActivity(TaskStatus status) =>
     status == TaskStatus.running;
 
-/// Overflow episodes always go to the native holding queue (`FileDownloader`
-/// enqueue). Dart must not park-without-enqueue: the Flutter isolate is
-/// suspended in the iOS background, so a Dart `onComplete` promoter never
-/// runs until the user opens the app.
-bool shouldEnqueueOverflowToNativeHoldingQueue() => true;
+/// Plugin `HoldingQueue` did not advance ep2 while Rivera was on the home
+/// screen (PR #115 device test). Overflow is persisted as a full native waiter
+/// payload and started from Swift in the URLSession completion callback.
+bool shouldEnqueueOverflowToNativeHoldingQueue() => false;
+
+/// Device evidence: opening the app started ep2 immediately. Dart
+/// `onAppForegrounded` / Flutter `invokeMethod` must not be the start path.
+bool shouldPromoteWaitingOnAppForeground() => false;
+
+/// Full payload Swift needs to create the next `URLSessionDownloadTask`
+/// without Dart reconstructing the `DownloadTask`.
+Map<String, Object> nativeWaitingPayload(DownloadTask task) {
+  return <String, Object>{
+    'taskId': task.taskId,
+    'taskJson': jsonEncode(task.toJson()),
+    'displayName': task.displayName,
+    'url': task.url,
+    'headers': Map<String, String>.from(task.headers),
+    'filename': task.filename,
+    'directory': task.directory,
+    'httpRequestMethod': task.httpRequestMethod,
+    'group': task.group,
+    'metaData': task.metaData,
+  };
+}
+
+bool nativeWaiterPayloadIsComplete(Map<String, Object?> payload) {
+  final taskJson = payload['taskJson'] as String?;
+  final url = payload['url'] as String?;
+  final filename = payload['filename'] as String?;
+  final taskId = payload['taskId'] as String?;
+  return taskJson != null &&
+      taskJson.isNotEmpty &&
+      url != null &&
+      url.isNotEmpty &&
+      filename != null &&
+      filename.isNotEmpty &&
+      taskId != null &&
+      taskId.isNotEmpty;
+}
 
 /// After a process kill, iOS `HoldingQueue` memory is gone. URLSession tasks
 /// already submitted can continue; waiters that never reached URLSession must
-/// be re-enqueued. Never auto-resume a user-paused row.
+/// be restored into the Swift waiting store. Never auto-resume a user-paused
+/// row.
 bool shouldReenqueueWaitingAfterProcessKill({
   required TaskStatus persisted,
   required bool queueWaiting,
@@ -117,24 +152,22 @@ bool shouldReenqueueWaitingAfterProcessKill({
   return persisted == TaskStatus.enqueued;
 }
 
-/// iOS concurrency=1, two episodes, app backgrounded (home/lock/switch, not
-/// necessarily killed): ep1 is the only Live Activity; ep2 is native-enqueued
-/// (في الانتظار) until URLSession finishes ep1 and `HoldingQueue` promotes it.
+/// iOS concurrency=1, two episodes, app backgrounded: ep1 is the only Live
+/// Activity; ep2 stays **في الانتظار** until native URLSession completion
+/// starts it. Opening the app must not be what starts the file.
 bool waitingEpisodeMayStartLiveActivityWhileQueued() => false;
 
-enum DownloadAdmission { enqueueToNativeHoldingQueue }
+enum DownloadAdmission { enqueueNow, persistNativeWaitingQueue }
 
-/// Every user-started episode is OS-enqueued. Native holding queue owns the N
-/// cap; Dart does not park overflow out of the OS queue.
+/// Occupied slots get a live FileDownloader/URLSession task. Overflow is
+/// persisted for Swift to start when a native completion frees a slot.
 DownloadAdmission admitDownload({
   required int occupiedSlots,
   required int maxConcurrent,
 }) {
-  // Native HoldingQueue enforces N. occupiedSlots is kept so callers can log
-  // how many URLSession tasks are already in flight.
-  assert(occupiedSlots >= 0);
-  clampDownloadConcurrency(maxConcurrent);
-  return DownloadAdmission.enqueueToNativeHoldingQueue;
+  final n = clampDownloadConcurrency(maxConcurrent);
+  if (occupiedSlots < n) return DownloadAdmission.enqueueNow;
+  return DownloadAdmission.persistNativeWaitingQueue;
 }
 
 class DownloadQueueEntry {
@@ -189,8 +222,9 @@ DownloadQueuePlan planDownloadQueue({
     ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
   final waitingFifoIds = waiting.map((e) => e.taskId).toList();
-  // Enqueue every leftover parked waiter into the native holding queue.
-  // Native `maxConcurrent` keeps only N transferring; extras stay enqueued.
+  // iOS starts these from Swift on URLSession complete. Dart must not
+  // FileDownloader.enqueue them on foreground or they "start when he opens
+  // the app". idsToPromote is the FIFO Swift should already have persisted.
   final idsToPromote = List<String>.from(waitingFifoIds);
 
   return DownloadQueuePlan(

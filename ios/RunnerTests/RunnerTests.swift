@@ -3,10 +3,127 @@ import UIKit
 import XCTest
 
 class RunnerTests: XCTestCase {
-
-  func testExample() {
-    // If you add code to the Runner application, consider adding tests here.
-    // See https://developer.apple.com/documentation/xctest for more information about using XCTest.
+  override func tearDown() {
+    DownloadNativeWaitingQueue.resetForTests()
+    super.tearDown()
   }
 
+  func testPersistRequiresFullWaiterPayload() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: [
+      "maxConcurrent": 1,
+      "transferringTaskIds": ["ep1"],
+      "pausedTaskIds": [],
+      "waiters": [[
+        "taskId": "ep2",
+        "taskJson": "",
+        "url": "https://cdn.test/ep2.mp4",
+        "filename": "ep2.mp4",
+      ]],
+    ])
+    XCTAssertTrue(DownloadNativeWaitingQueue.load().waiters.isEmpty)
+  }
+
+  func testPersistStoresUrlHeadersFilenameAndTaskJson() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.maxConcurrent, 1)
+    XCTAssertEqual(state.transferringTaskIds, ["ep1"])
+    XCTAssertEqual(state.waiters.map(\.taskId), ["ep2"])
+    XCTAssertEqual(state.waiters[0].url, "https://127.0.0.1:1/ep2.mp4")
+    XCTAssertEqual(state.waiters[0].filename, "الحلقة 2.mp4")
+    XCTAssertEqual(state.waiters[0].headers["Authorization"], "Bearer x")
+    XCTAssertTrue(state.waiters[0].taskJson.contains("ep2"))
+  }
+
+  func testUserPausedWaiterIsNotPromoted() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: [
+      "maxConcurrent": 1,
+      "transferringTaskIds": ["ep1"],
+      "pausedTaskIds": ["ep2"],
+      "waiters": [ep2Waiter()],
+    ])
+    XCTAssertTrue(DownloadNativeWaitingQueue.load().waiters.isEmpty)
+
+    let session = URLSession(configuration: .ephemeral)
+    let ep1 = session.downloadTask(with: URL(string: "https://127.0.0.1:1/ep1.mp4")!)
+    ep1.taskDescription = "{\"taskId\":\"ep1\"}"
+    DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+      session: session,
+      task: ep1,
+      error: nil
+    )
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertFalse(state.transferringTaskIds.contains("ep2"))
+    XCTAssertEqual(state.pausedTaskIds, ["ep2"])
+  }
+
+  func testNativeCompletionStartsNextWaiterBeforeDartWakes() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())
+
+    let session = URLSession(configuration: .ephemeral)
+    let ep1 = session.downloadTask(with: URL(string: "https://127.0.0.1:1/ep1.mp4")!)
+    ep1.taskDescription = "{\"taskId\":\"ep1\"}"
+    DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+      session: session,
+      task: ep1,
+      error: nil
+    )
+
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.transferringTaskIds, ["ep2"])
+    XCTAssertTrue(state.waiters.isEmpty)
+    XCTAssertTrue(state.completedTaskIds.contains("ep1"))
+  }
+
+  func testStaleDartSnapshotCannotUnstartANativePromotion() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())
+
+    let session = URLSession(configuration: .ephemeral)
+    let ep1 = session.downloadTask(with: URL(string: "https://127.0.0.1:1/ep1.mp4")!)
+    ep1.taskDescription = "{\"taskId\":\"ep1\"}"
+    DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+      session: session,
+      task: ep1,
+      error: nil
+    )
+
+    DownloadNativeWaitingQueue.persist(from: [
+      "maxConcurrent": 1,
+      "transferringTaskIds": [],
+      "pausedTaskIds": [],
+      "waiters": [ep2Waiter()],
+    ])
+
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.transferringTaskIds, ["ep2"])
+    XCTAssertTrue(state.waiters.isEmpty)
+  }
+
+  private func ep1TransferringEp2Waiting() -> [String: Any] {
+    [
+      "maxConcurrent": 1,
+      "transferringTaskIds": ["ep1"],
+      "pausedTaskIds": [],
+      "waiters": [ep2Waiter()],
+    ]
+  }
+
+  private func ep2Waiter() -> [String: Any] {
+    [
+      "taskId": "ep2",
+      "taskJson": "{\"taskId\":\"ep2\",\"url\":\"https://127.0.0.1:1/ep2.mp4\",\"filename\":\"الحلقة 2.mp4\"}",
+      "url": "https://127.0.0.1:1/ep2.mp4",
+      "filename": "الحلقة 2.mp4",
+      "displayName": "الحلقة 2.mp4",
+      "headers": ["Authorization": "Bearer x"],
+      "directory": "AnimeWitcher/Downloads/Show",
+      "httpRequestMethod": "GET",
+      "group": "downloads",
+    ]
+  }
 }
