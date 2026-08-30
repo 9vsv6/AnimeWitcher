@@ -57,7 +57,7 @@ class ResponsiveBreakpoints {
     final innerWidth =
         MediaQuery.sizeOf(context).width - (horizontalPadding * 2);
     final gap = animeGridSpacing(context, spacing);
-    final gaps = handsetLandscapeAnimeColumns - 1;
+    const gaps = handsetLandscapeAnimeColumns - 1;
     final raw = (innerWidth - gap * gaps) / handsetLandscapeAnimeColumns;
     return raw.clamp(48.0, 200.0).toDouble();
   }

@@ -10,8 +10,8 @@ import 'package:animewitcher/features/home/presentation/widgets/media_horizontal
 import 'package:animewitcher/features/home/presentation/widgets/provider_search_filter_dialog.dart';
 import 'package:animewitcher/features/search/presentation/widgets/search_result_section.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/catalog_ltr.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -61,12 +61,10 @@ Future<void> _setPhoneSurface(WidgetTester tester, {required Size size}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   await tester.binding.setSurfaceSize(size);
-  debugDefaultTargetPlatformOverride = TargetPlatform.android;
   addTearDown(() {
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
     tester.binding.setSurfaceSize(null);
-    debugDefaultTargetPlatformOverride = null;
   });
 }
 
@@ -106,8 +104,9 @@ Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
     );
     final image = await boundary.toImage(pixelRatio: 2);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    File('${artifacts.path}/$filename')
-        .writeAsBytesSync(bytes!.buffer.asUint8List());
+    File(
+      '${artifacts.path}/$filename',
+    ).writeAsBytesSync(bytes!.buffer.asUint8List());
   });
 }
 
@@ -160,7 +159,7 @@ void main() {
 
     await _writeShot(
       tester,
-      'landscape_search_grid_7col.png',
+      'phone_landscape_search_7col.png',
       const ValueKey('search-landscape-grid-shot'),
     );
   });
@@ -250,9 +249,13 @@ void main() {
                 sliver: SliverEpisodeCardGrid(
                   children: [
                     for (var i = 0; i < 4; i++)
-                      ColoredBox(
+                      DecoratedBox(
                         key: ValueKey('episode-$i'),
-                        color: const Color(0xFF2A2A2A),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2A2A2A),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFEEC60A)),
+                        ),
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: Padding(
@@ -285,7 +288,7 @@ void main() {
 
     await _writeShot(
       tester,
-      'landscape_episodes_2col.png',
+      'phone_landscape_episodes_2col.png',
       const ValueKey('episodes-landscape-shot'),
     );
   });
@@ -386,19 +389,30 @@ void main() {
     expect(find.text('مسح الكل'), findsOneWidget);
     expect(find.byIcon(Icons.close_rounded), findsOneWidget);
     expect(find.text('التصنيفات'), findsOneWidget);
+    expect(find.text('السنة'), findsOneWidget);
+    expect(find.text('العمر'), findsOneWidget);
+    expect(find.text('النوع'), findsOneWidget);
+    expect(find.text('الحالة'), findsOneWidget);
     expect(find.text('اكشن'), findsOneWidget);
+    expect(find.text('غموض'), findsOneWidget);
+    expect(
+      tester.getRect(find.text('غموض')).bottom,
+      lessThan(tester.getRect(find.text('تطبيق')).top),
+    );
 
     final dialog = tester.getRect(find.byType(Dialog));
-    expect(dialog.height, lessThan(360));
-    expect(dialog.height, greaterThan(200));
-    expect(dialog.width, greaterThan(600));
+    final panel = tester.getRect(find.byType(AppleLiquidGlassSurface));
+    expect(dialog.height, lessThanOrEqualTo(360));
+    expect(panel.height, lessThan(300));
+    expect(panel.height, greaterThan(200));
+    expect(panel.width, greaterThan(600));
     expect(find.text('تطبيق'), findsOneWidget);
     expect(tester.getRect(find.text('تطبيق')).bottom, lessThan(360));
     expect(tester.getRect(find.text('مسح الكل')).bottom, lessThan(360));
 
     await _writeShot(
       tester,
-      'landscape_filters_dialog.png',
+      'phone_landscape_filters_fitted.png',
       const ValueKey('filter-landscape-shot'),
     );
 

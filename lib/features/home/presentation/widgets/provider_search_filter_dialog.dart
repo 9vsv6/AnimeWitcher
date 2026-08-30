@@ -143,7 +143,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
         selectedYears: _years,
         onSeasonToggle: _toggleSeason,
         onYearToggle: (value) => _toggle(_years, value),
-        crossAxisCount: compactLandscape ? 6 : 4,
+        crossAxisCount: compactLandscape ? 5 : 4,
         dense: compactLandscape,
       ),
       _MultiSelectGrid(
@@ -303,96 +303,20 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
     );
   }
 
-  Widget _horizontalTabs(BuildContext context) {
+  Widget _horizontalTabs(BuildContext context, {required bool spread}) {
     final colors = Theme.of(context).colorScheme;
     return TabBar(
       controller: _tabController,
-      isScrollable: true,
-      tabAlignment: TabAlignment.start,
+      isScrollable: !spread,
+      tabAlignment: spread ? TabAlignment.fill : TabAlignment.start,
       indicatorColor: colors.primary,
       labelColor: colors.primary,
       unselectedLabelColor: colors.onSurfaceVariant,
+      labelPadding: spread ? const EdgeInsets.symmetric(horizontal: 4) : null,
       tabs: [
         for (final tab in _tabs)
           _FilterTab(icon: tab.icon, label: tab.label, active: tab.active),
       ],
-    );
-  }
-
-  Widget _verticalTabs(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final selected = _tabController.index;
-    return SizedBox(
-      width: 132,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-        itemCount: _tabs.length,
-        itemBuilder: (context, index) {
-          final tab = _tabs[index];
-          final isSelected = selected == index;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Material(
-              color: isSelected
-                  ? colors.primary.withValues(alpha: 0.16)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => _tabController.animateTo(index),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Icon(
-                            tab.icon,
-                            size: 18,
-                            color: isSelected
-                                ? colors.primary
-                                : colors.onSurfaceVariant,
-                          ),
-                          if (tab.active)
-                            const Positioned(
-                              right: -3,
-                              top: -3,
-                              child: CircleAvatar(
-                                radius: 4,
-                                backgroundColor: Colors.redAccent,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          tab.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: isSelected
-                                ? colors.primary
-                                : colors.onSurfaceVariant,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -408,7 +332,7 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
         .clamp(160.0, 720.0)
         .toDouble();
     final dialogHeight = isHandsetLandscape
-        ? availableHeight
+        ? (viewport.height * 0.70).clamp(200.0, availableHeight).toDouble()
         : (viewport.height * 0.82).clamp(180.0, availableHeight).toDouble();
     final maxWidth = isHandsetLandscape
         ? (viewport.width - insetH * 2).clamp(280.0, 840.0)
@@ -445,34 +369,17 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
                     child: Column(
                       children: [
                         _header(context, compact: isHandsetLandscape),
-                        if (!isHandsetLandscape) _horizontalTabs(context),
+                        _horizontalTabs(context, spread: isHandsetLandscape),
                       ],
                     ),
                   ),
                   Expanded(
-                    child: isHandsetLandscape
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _verticalTabs(context),
-                              VerticalDivider(
-                                width: 1,
-                                color: theme.dividerColor,
-                              ),
-                              Expanded(
-                                child: TabBarView(
-                                  controller: _tabController,
-                                  children: _optionViews(
-                                    compactLandscape: true,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : TabBarView(
-                            controller: _tabController,
-                            children: _optionViews(compactLandscape: false),
-                          ),
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: _optionViews(
+                        compactLandscape: isHandsetLandscape,
+                      ),
+                    ),
                   ),
                   _footer(context, compact: isHandsetLandscape),
                 ],
@@ -567,7 +474,7 @@ class _SeasonYearGrid extends StatelessWidget {
       padding: EdgeInsets.all(dense ? 8 : LayoutConstants.spacingMd),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
-        childAspectRatio: dense ? 3.4 : 1.85,
+        childAspectRatio: dense ? 3.2 : 1.85,
         crossAxisSpacing: dense ? 6 : 8,
         mainAxisSpacing: dense ? 6 : 10,
       ),
@@ -659,7 +566,7 @@ class _MultiSelectGrid extends StatelessWidget {
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
         childAspectRatio: dense
-            ? (compact ? 3.6 : 4.0)
+            ? (compact ? 3.4 : 3.8)
             : (compact ? 2.05 : 2.5),
         crossAxisSpacing: dense ? 6 : 10,
         mainAxisSpacing: dense ? 6 : 10,
