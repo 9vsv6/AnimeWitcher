@@ -141,10 +141,11 @@ void main() {
     });
 
     test(
-      'overflow is persisted natively; Dart foreground must not start it',
+      'overflow is parked; Dart promotes when the isolate is alive and a slot is free',
       () {
         expect(shouldEnqueueOverflowToNativeHoldingQueue(), isFalse);
-        expect(shouldPromoteWaitingOnAppForeground(), isFalse);
+        expect(shouldPromoteWaitingWhenIsolateAlive(), isTrue);
+        expect(shouldPromoteWaitingOnAppForeground(), isTrue);
         expect(
           admitDownload(occupiedSlots: 0, maxConcurrent: 1),
           DownloadAdmission.enqueueNow,
@@ -209,6 +210,7 @@ void main() {
         );
         expect(whileEp1Transfers.occupiedCount, 1);
         expect(whileEp1Transfers.waitingFifoIds, ['ep2']);
+        expect(whileEp1Transfers.idsToPromote, isEmpty);
         expect(whileEp1Transfers.idsToPark, isEmpty);
         expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
         expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
@@ -223,13 +225,16 @@ void main() {
             ),
             DownloadQueueEntry(
               taskId: 'ep2',
-              status: TaskStatus.running,
+              status: TaskStatus.paused,
               timestamp: 2,
+              queueWaiting: true,
             ),
           ],
         );
-        expect(afterEp1Finishes.occupiedCount, 1);
+        expect(afterEp1Finishes.occupiedCount, 0);
+        expect(afterEp1Finishes.idsToPromote, ['ep2']);
         expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
+        expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
       },
     );
 
@@ -260,7 +265,7 @@ void main() {
         expect(planWhileRunning.occupiedCount, 1);
         expect(planWhileRunning.idsToPark, isEmpty);
         expect(planWhileRunning.waitingFifoIds, ['ep4']);
-        expect(planWhileRunning.idsToPromote, ['ep4']);
+        expect(planWhileRunning.idsToPromote, isEmpty);
         expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
 
         final afterComplete = planDownloadQueue(
@@ -287,6 +292,58 @@ void main() {
         expect(afterComplete.occupiedCount, 0);
         expect(afterComplete.idsToPromote, ['ep4']);
         expect(afterComplete.idsToPromote, isNot(contains('ep5-user-paused')));
+      },
+    );
+
+    test(
+      'in-app complete starts the oldest waiter; user-paused stays paused',
+      () {
+        expect(shouldPromoteWaitingWhenIsolateAlive(), isTrue);
+        final stuckLikeRivera = planDownloadQueue(
+          maxConcurrent: 1,
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep2',
+              status: TaskStatus.complete,
+              timestamp: 1,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep3',
+              status: TaskStatus.paused,
+              timestamp: 2,
+              queueWaiting: true,
+            ),
+          ],
+        );
+        expect(stuckLikeRivera.occupiedCount, 0);
+        expect(stuckLikeRivera.idsToPromote, ['ep3']);
+        expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
+        expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
+
+        final twoWaiters = planDownloadQueue(
+          maxConcurrent: 1,
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep2',
+              status: TaskStatus.complete,
+              timestamp: 1,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep3',
+              status: TaskStatus.paused,
+              timestamp: 2,
+              queueWaiting: true,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep4',
+              status: TaskStatus.paused,
+              timestamp: 3,
+              queueWaiting: true,
+            ),
+          ],
+        );
+        expect(twoWaiters.idsToPromote, ['ep3']);
+        expect(twoWaiters.waitingFifoIds, ['ep3', 'ep4']);
       },
     );
 

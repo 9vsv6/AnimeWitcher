@@ -362,10 +362,9 @@ class DownloadService {
   static Future<void> Function(List<(String, dynamic)> globalConfig)?
   configureHoldingQueueForTesting;
 
-  /// Persist [maxConcurrent] (clamped 1–5). Android extras wait in the
-  /// plugin holding queue. iOS extras are persisted as full native waiter
-  /// payloads and started from Swift on URLSession complete — not from
-  /// Dart foreground or a Flutter method channel.
+  /// Persist [maxConcurrent] (clamped 1–5). Overflow waiters stay
+  /// **في الانتظار** until Dart (isolate alive) or native URLSession complete
+  /// starts them with the same resume/enqueue path as user unpause.
   Future<void> applyQueueSettings({required int maxConcurrent}) async {
     await applyDownloadQueueSettings(
       maxConcurrent: maxConcurrent,
@@ -553,14 +552,19 @@ class DownloadService {
       entries: await _queueEntries(records),
     );
 
-    // iOS: Swift starts waiters on URLSession complete. Dart FileDownloader
-    // enqueue here is the "opens app, starts immediately" bug Rivera hit.
-    if (Platform.isIOS) {
+    // Dart starts waiters whenever the isolate is alive (in-app complete,
+    // fail, cancel, foreground, init). Native URLSession start is a backup
+    // for when he is outside the app — it must not be the only promoter.
+    if (!shouldPromoteWaitingWhenIsolateAlive()) {
       await _persistNativeWaitingSnapshot();
       return;
     }
 
     for (final taskId in plan.idsToPromote) {
+      if (_occupiedSlotCount(await FileDownloader().database.allRecords()) >=
+          max) {
+        break;
+      }
       final record = byId[taskId];
       if (record == null || record.task is! DownloadTask) continue;
       await _promoteWaitingTask(record.task as DownloadTask);
@@ -568,7 +572,9 @@ class DownloadService {
     await _persistNativeWaitingSnapshot();
   }
 
-  /// Live Activity attach only. Must not start waiters — that is Swift.
+  /// Attach Live Activities to running transfers. If a slot is free,
+  /// also start the oldest **في الانتظار** waiter (PR #116 left these
+  /// stranded when native start did not fire).
   Future<void> onAppForegrounded() async {
     if (!_isInitialized) return;
     if (shouldPromoteWaitingOnAppForeground()) {
@@ -772,6 +778,12 @@ class DownloadService {
       unawaited(_serializeQueue(_syncQueueToCapUnlocked));
       return;
     }
+    if (update.status == TaskStatus.failed ||
+        update.status == TaskStatus.canceled ||
+        update.status == TaskStatus.notFound) {
+      unawaited(_serializeQueue(_syncQueueToCapUnlocked));
+      return;
+    }
     if (update.status == TaskStatus.paused &&
         !_queueWaitingIds.contains(update.task.taskId)) {
       unawaited(_serializeQueue(_syncQueueToCapUnlocked));
@@ -951,7 +963,7 @@ class DownloadService {
       }
       await _stopLiveActivity(taskId);
       await _persistNativeWaitingSnapshot();
-      if (!wasWaiting && !Platform.isIOS) {
+      if (!wasWaiting) {
         await _syncQueueToCapUnlocked();
       }
     });

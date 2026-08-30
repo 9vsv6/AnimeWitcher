@@ -40,9 +40,10 @@ List<(String, dynamic)> downloadHoldingQueueGlobalConfig(int maxConcurrent) =>
     ];
 
 /// Persists [maxConcurrent] then reconfigures FileDownloader's holding queue
-/// (Android / in-app cap). iOS overflow waiters are **not** started by that
-/// queue: PR #115 showed `HoldingQueue.advanceQueue` did not run while Rivera
-/// was on the home screen. iOS starts waiters from Swift on URLSession complete.
+/// (Android / in-app cap). iOS overflow waiters are parked as **في الانتظار**
+/// and started by Dart whenever the isolate is alive (complete / fail /
+/// cancel / foreground / init). Native URLSession start remains a background
+/// backup; it must not be the only promoter (PR #116 device regression).
 Future<int> applyDownloadQueueSettings({
   required int maxConcurrent,
   required Future<void> Function(int value) persist,
@@ -96,14 +97,18 @@ TaskStatus displayDownloadStatus({
 bool shouldStartDownloadLiveActivity(TaskStatus status) =>
     status == TaskStatus.running;
 
-/// Plugin `HoldingQueue` did not advance ep2 while Rivera was on the home
-/// screen (PR #115 device test). Overflow is persisted as a full native waiter
-/// payload and started from Swift in the URLSession completion callback.
+/// Plugin `HoldingQueue` did not advance waiters on the home screen. Overflow
+/// is parked (no overlay) and persisted for Swift as a background backup.
 bool shouldEnqueueOverflowToNativeHoldingQueue() => false;
 
-/// Device evidence: opening the app started ep2 immediately. Dart
-/// `onAppForegrounded` / Flutter `invokeMethod` must not be the start path.
-bool shouldPromoteWaitingOnAppForeground() => false;
+/// When the Flutter isolate is alive, Dart must start the next waiter if a
+/// slot is free. PR #116 left waiters stranded in-app because native start
+/// never fired and this flag was false.
+bool shouldPromoteWaitingWhenIsolateAlive() => true;
+
+/// Opening the app must unstick a waiter if a slot is free (same path as
+/// in-app complete). Native start is still desired outside the app.
+bool shouldPromoteWaitingOnAppForeground() => true;
 
 /// Full payload Swift needs to create the next `URLSessionDownloadTask`
 /// without Dart reconstructing the `DownloadTask`.
@@ -152,15 +157,15 @@ bool shouldReenqueueWaitingAfterProcessKill({
   return persisted == TaskStatus.enqueued;
 }
 
-/// iOS concurrency=1, two episodes, app backgrounded: ep1 is the only Live
-/// Activity; ep2 stays **في الانتظار** until native URLSession completion
-/// starts it. Opening the app must not be what starts the file.
+/// iOS concurrency=1, two episodes: waiting rows stay **في الانتظار** with
+/// no Live Activity. When a slot frees, Dart (if awake) or Swift starts it.
 bool waitingEpisodeMayStartLiveActivityWhileQueued() => false;
 
 enum DownloadAdmission { enqueueNow, persistNativeWaitingQueue }
 
 /// Occupied slots get a live FileDownloader/URLSession task. Overflow is
-/// persisted for Swift to start when a native completion frees a slot.
+/// parked as **في الانتظار** until Dart (isolate alive) or Swift (background)
+/// starts it with the unpause/resume path.
 DownloadAdmission admitDownload({
   required int occupiedSlots,
   required int maxConcurrent,
@@ -222,14 +227,15 @@ DownloadQueuePlan planDownloadQueue({
     ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
   final waitingFifoIds = waiting.map((e) => e.taskId).toList();
-  // iOS starts these from Swift on URLSession complete. Dart must not
-  // FileDownloader.enqueue them on foreground or they "start when he opens
-  // the app". idsToPromote is the FIFO Swift should already have persisted.
-  final idsToPromote = List<String>.from(waitingFifoIds);
+  final occupiedCount = occupying.length;
+  final freeSlots = (n - occupiedCount).clamp(0, n);
+  // Only start as many waiters as there are free slots. Listing every waiter
+  // here was why iOS skipped Dart promotion entirely (#116).
+  final idsToPromote = waitingFifoIds.take(freeSlots).toList();
 
   return DownloadQueuePlan(
     maxConcurrent: n,
-    occupiedCount: occupying.length,
+    occupiedCount: occupiedCount,
     waitingFifoIds: waitingFifoIds,
     idsToPark: const [],
     idsToPromote: idsToPromote,
