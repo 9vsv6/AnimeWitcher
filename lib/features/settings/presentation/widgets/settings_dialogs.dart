@@ -16,6 +16,7 @@ import '../player_settings_provider.dart';
 import '../general_settings_provider.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../cache_provider.dart';
+import '../../../../core/services/download_concurrency.dart';
 
 import 'package:animewitcher/core/services/notification_service.dart';
 
@@ -193,6 +194,62 @@ void showResizeDialog(BuildContext context, WidgetRef ref, String current) {
                       .read(playerSettingsProvider.notifier)
                       .setDefaultResizeMode(e['value']!);
                   Navigator.pop<void>(ctx);
+                },
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Arabic label for the concurrent-download setting (app ships Arabic-only).
+String downloadConcurrencyTitle() => 'عدد التحميلات المتزامنة';
+
+/// Subtitle/value shown on the Settings tile, e.g. "1 في نفس الوقت".
+String downloadConcurrencySubtitle(int count) =>
+    '${clampDownloadConcurrency(count)} في نفس الوقت';
+
+/// Pick how many episode downloads may transfer at once (1–5). Applies live.
+void showDownloadConcurrencyDialog(
+  BuildContext context,
+  WidgetRef ref,
+  int current,
+) {
+  final selected = clampDownloadConcurrency(current);
+  final options = List<int>.generate(
+    kDownloadConcurrencyMax - kDownloadConcurrencyMin + 1,
+    (i) => kDownloadConcurrencyMin + i,
+  );
+
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      surfaceTintColor: Colors.transparent,
+      title: Text(downloadConcurrencyTitle()),
+      content: RadioGroup<int>(
+        groupValue: selected,
+        onChanged: (val) {
+          if (val == null) return;
+          ref
+              .read(generalSettingsProvider.notifier)
+              .setDownloadConcurrency(val);
+          Navigator.pop<void>(context);
+        },
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options.map((n) {
+              return ListTile(
+                title: Text('$n'),
+                subtitle: Text(downloadConcurrencySubtitle(n)),
+                leading: Radio<int>(value: n),
+                onTap: () {
+                  ref
+                      .read(generalSettingsProvider.notifier)
+                      .setDownloadConcurrency(n);
+                  Navigator.pop<void>(context);
                 },
               );
             }).toList(),

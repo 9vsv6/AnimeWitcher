@@ -243,6 +243,25 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: LayoutConstants.spacingLg),
 
             SettingsGroup(
+              title: l10n.downloads,
+              children: [
+                SettingsTile(
+                  icon: Icons.low_priority_rounded,
+                  title: downloadConcurrencyTitle(),
+                  subtitle: downloadConcurrencySubtitle(
+                    generalSettings.downloadConcurrency,
+                  ),
+                  isLast: true,
+                  onTap: () => showDownloadConcurrencyDialog(
+                    context,
+                    ref,
+                    generalSettings.downloadConcurrency,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: LayoutConstants.spacingLg),
+            SettingsGroup(
               title: appText(context, english: 'Images', arabic: 'الصور'),
               children: [
                 SettingsTile(

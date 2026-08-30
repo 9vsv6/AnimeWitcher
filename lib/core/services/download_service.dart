@@ -18,6 +18,7 @@ import '../network/dio_client_provider.dart';
 import '../utils/download_resume.dart';
 import '../utils/download_cleanup.dart';
 import '../utils/episode_label.dart';
+import 'download_concurrency.dart';
 import 'download_continued_processing_service.dart';
 
 part 'download_service.g.dart';
@@ -122,9 +123,15 @@ class DownloadService {
       return;
     }
     // 1. Configure the downloader (chainable API)
+    final concurrency = _ref
+        .read(storageServiceProvider)
+        .getDownloadConcurrency();
     await FileDownloader()
         .configure(
-          globalConfig: [(Config.requestTimeout, const Duration(seconds: 100))],
+          globalConfig: [
+            (Config.requestTimeout, const Duration(seconds: 100)),
+            ...downloadHoldingQueueGlobalConfig(concurrency),
+          ],
           androidConfig: [(Config.runInForeground, Config.always)],
           iOSConfig: [(Config.excludeFromCloudBackup, Config.always)],
         )
@@ -312,6 +319,30 @@ class DownloadService {
     await _recoverPersistedDownloads();
 
     _isInitialized = true;
+  }
+
+  /// Test hook that replaces [FileDownloader.configure] for the holding queue.
+  /// Production code leaves this null.
+  @visibleForTesting
+  static Future<void> Function(List<(String, dynamic)> globalConfig)?
+  configureHoldingQueueForTesting;
+
+  /// Persist [maxConcurrent] (clamped 1–5) and reconfigure the live holding
+  /// queue so extra episode downloads wait until a slot frees. Does not
+  /// require an app restart.
+  Future<void> applyQueueSettings({required int maxConcurrent}) async {
+    await applyDownloadQueueSettings(
+      maxConcurrent: maxConcurrent,
+      persist: _ref.read(storageServiceProvider).setDownloadConcurrency,
+      configure: (globalConfig) async {
+        final override = configureHoldingQueueForTesting;
+        if (override != null) {
+          await override(globalConfig);
+          return;
+        }
+        await FileDownloader().configure(globalConfig: globalConfig);
+      },
+    );
   }
 
   Future<void> _recoverPersistedDownloads() async {

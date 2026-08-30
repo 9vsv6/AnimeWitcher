@@ -50,6 +50,10 @@ class SettingsRepository {
   Set<String> getHiddenTaskbarItems() =>
       _storageService.getHiddenTaskbarItems();
 
+  Future<void> setDownloadConcurrency(int value) =>
+      _storageService.setDownloadConcurrency(value);
+
+  int getDownloadConcurrency() => _storageService.getDownloadConcurrency();
 
   Future<void> setDevLoadAssets(bool enabled) async {
     await _storageService.setDevLoadAssets(enabled);
