@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -9,7 +10,9 @@ class ResponsiveBreakpoints {
   static const double tabletBreakpoint = 600;
   static const double desktopBreakpoint = 900;
 
-  static const int handsetLandscapeAnimeColumns = 5;
+  /// Phone landscape poster grid. Kept at 7 regardless of window width —
+  /// the desktop adaptive algorithm must not run on handsets.
+  static const int handsetLandscapeAnimeColumns = 7;
 
   /// Column count used on a "reference" 1440pt-wide desktop window.
   ///
@@ -17,6 +20,8 @@ class ResponsiveBreakpoints {
   /// is derived from the available width so a poster keeps a comfortable
   /// physical size on every window. See [desktopLandscapeColumnsFor].
   static const int desktopLandscapeAnimeColumns = 8;
+  static const int handsetLandscapeEpisodeColumns = 2;
+  static const double handsetLandscapeGridMaxSpacing = 8;
 
   /// Poster width that reads best on a desktop / TV screen.
   ///
@@ -93,6 +98,14 @@ class ResponsiveBreakpoints {
     return isDesktopPlatform() && size.width > size.height;
   }
 
+  static double animeGridSpacing(BuildContext context, double requested) {
+    if (isHandsetLandscape(context) &&
+        requested > handsetLandscapeGridMaxSpacing) {
+      return handsetLandscapeGridMaxSpacing;
+    }
+    return requested;
+  }
+
   static double handsetLandscapeAnimeCardWidth(
     BuildContext context, {
     double horizontalPadding = 16,
@@ -100,9 +113,10 @@ class ResponsiveBreakpoints {
   }) {
     final innerWidth =
         MediaQuery.sizeOf(context).width - (horizontalPadding * 2);
-    return ((innerWidth / handsetLandscapeAnimeColumns) - spacing)
-        .clamp(72.0, 200.0)
-        .toDouble();
+    final gap = animeGridSpacing(context, spacing);
+    const gaps = handsetLandscapeAnimeColumns - 1;
+    final raw = (innerWidth - gap * gaps) / handsetLandscapeAnimeColumns;
+    return raw.clamp(48.0, 200.0).toDouble();
   }
 
   /// Poster width for horizontal rails on wide layouts.
@@ -168,6 +182,8 @@ class ResponsiveBreakpoints {
     /// column count is based on the width the cards really get.
     double horizontalPadding = 0,
   }) {
+    final resolvedCrossSpacing = animeGridSpacing(context, crossAxisSpacing);
+    final resolvedMainSpacing = animeGridSpacing(context, mainAxisSpacing);
     final fixedCount = isDesktopLandscape(context)
         ? desktopLandscapeColumnsFor(
             MediaQuery.sizeOf(context).width - (horizontalPadding * 2),
@@ -180,16 +196,20 @@ class ResponsiveBreakpoints {
       return SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: fixedCount,
         childAspectRatio: childAspectRatio,
-        crossAxisSpacing: crossAxisSpacing,
-        mainAxisSpacing: mainAxisSpacing,
+        crossAxisSpacing: resolvedCrossSpacing,
+        mainAxisSpacing: resolvedMainSpacing,
       );
     }
     return SliverGridDelegateWithMaxCrossAxisExtent(
       maxCrossAxisExtent: maxCrossAxisExtent,
       childAspectRatio: childAspectRatio,
-      crossAxisSpacing: crossAxisSpacing,
-      mainAxisSpacing: mainAxisSpacing,
+      crossAxisSpacing: resolvedCrossSpacing,
+      mainAxisSpacing: resolvedMainSpacing,
     );
+  }
+
+  static int episodeCrossAxisCount(BuildContext context) {
+    return isHandsetLandscape(context) ? handsetLandscapeEpisodeColumns : 1;
   }
 
   static DeviceScreenType getDeviceType(BuildContext context) {

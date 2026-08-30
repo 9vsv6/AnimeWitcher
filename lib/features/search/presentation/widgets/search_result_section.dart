@@ -46,9 +46,9 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
       heroTag: 'search_${widget.providerId}_${item.url}_$rIndex',
       compact: compact,
       focusNode: rIndex == 0 ? widget.firstCardFocusNode : null,
-      onTap: () => DetailsRoute(
-        $extra: DetailsRouteExtra(item: item),
-      ).push<void>(context),
+      onTap: () =>
+          DetailsRoute($extra: DetailsRouteExtra(item: item))
+              .push<void>(context),
     );
   }
 
@@ -64,16 +64,19 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
       final mobileColumns = context.isHandsetLandscape
           ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
           : 3;
+      final gridPadding = context.isHandsetLandscape ? 8.0 : 12.0;
+      final crossSpacing = ResponsiveBreakpoints.animeGridSpacing(context, 10);
+      final mainSpacing = ResponsiveBreakpoints.animeGridSpacing(context, 14);
       // Lazy sliver grid, same pattern as View All: only on-screen posters
       // exist, so returning from details remounts a handful of cache hits
       // instead of rebuilding the whole catalog at once.
       return SliverPadding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        padding: EdgeInsets.fromLTRB(gridPadding, 10, gridPadding, 24),
         sliver: SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: mobileColumns,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 14,
+            crossAxisSpacing: crossSpacing,
+            mainAxisSpacing: mainSpacing,
             childAspectRatio: MultimediaCardLayout.portraitGridAspectRatio,
           ),
           delegate: SliverChildBuilderDelegate(

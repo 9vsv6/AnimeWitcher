@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+
 import '../../../../core/router/app_router.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
@@ -145,9 +146,12 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
   Widget build(BuildContext context) {
     if (widget.mediaList.isEmpty) return const SizedBox.shrink();
     final isDesktop = context.isDesktop;
+    final isHandsetLandscape = context.isHandsetLandscape;
     final isPortrait = widget.forcePortrait || _isPortrait;
     final double spacing = isDesktop
         ? LayoutConstants.spacingLg
+        : isHandsetLandscape
+        ? ResponsiveBreakpoints.handsetLandscapeGridMaxSpacing
         : LayoutConstants.spacingSm;
     // Shared helper: rail, shimmer and grid all derive their poster width
     // from MultimediaCardLayout so the reserved height always matches.
@@ -242,9 +246,8 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                       if (widget.onTap != null) {
                         widget.onTap!(item);
                       } else {
-                        DetailsRoute(
-                          $extra: DetailsRouteExtra(item: item),
-                        ).push<void>(context);
+                        DetailsRoute($extra: DetailsRouteExtra(item: item))
+                            .push<void>(context);
                       }
                     },
                   ),

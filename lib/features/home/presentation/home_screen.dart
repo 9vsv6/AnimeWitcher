@@ -2,11 +2,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
+
 import 'home_provider.dart';
 import 'home_state.dart';
+
 import 'package:animewitcher/features/home/presentation/widgets/continue_watching_section.dart';
 import 'package:animewitcher/features/search/presentation/search_provider.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
+
 import 'widgets/home_hero_carousel.dart';
 import 'widgets/media_horizontal_list.dart';
 import 'view_all_screen.dart';
@@ -14,9 +17,11 @@ import '../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+
 import 'package:animewitcher/core/extensions/extension_manager.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/router/app_router.dart';
+
 import '../../../shared/widgets/cards_wrapper.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
@@ -29,6 +34,7 @@ import '../../../../core/providers/device_info_provider.dart';
 import 'widgets/dashboard_header_bar.dart';
 import 'widgets/news_section.dart';
 import '../../../shared/widgets/taskbar_visibility.dart';
+
 import 'package:animewitcher/features/news/presentation/news_list_screen.dart';
 import 'package:animewitcher/features/news/presentation/news_utils.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
@@ -160,9 +166,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         baseUrl + '/watch/' + Uri.encodeComponent(animeId),
       );
       if (!context.mounted) return;
-      DetailsRoute(
-        $extra: DetailsRouteExtra(item: details),
-      ).push<void>(context);
+      DetailsRoute($extra: DetailsRouteExtra(item: details))
+          .push<void>(context);
     } catch (_) {
       // The article remains usable even if its linked anime is unavailable.
     }
@@ -332,9 +337,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       arabic: 'بحث',
                                     ),
                                     icon: Icons.search_rounded,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
                                     onPressed: () =>
                                         _openSearchPage(focusKeyboard: true),
                                   ),
@@ -449,9 +454,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             limit: provider.viewAllPageSize,
           ),
           onTap: (item) {
-            DetailsRoute(
-              $extra: DetailsRouteExtra(item: item),
-            ).push<void>(context);
+            DetailsRoute($extra: DetailsRouteExtra(item: item))
+                .push<void>(context);
           },
           heroTagPrefix: 'home',
           forcePortrait: _isLatestAddedSectionTitle(entry.key),
@@ -526,9 +530,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     onControllerReady: (c) =>
                         setState(() => _carouselController = c),
                     onTap: (item) {
-                      DetailsRoute(
-                        $extra: DetailsRouteExtra(item: item),
-                      ).push<void>(context);
+                      DetailsRoute($extra: DetailsRouteExtra(item: item))
+                          .push<void>(context);
                     },
                   ),
                 )
@@ -541,9 +544,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     onControllerReady: (c) =>
                         setState(() => _carouselController = c),
                     onTap: (item) {
-                      DetailsRoute(
-                        $extra: DetailsRouteExtra(item: item),
-                      ).push<void>(context);
+                      DetailsRoute($extra: DetailsRouteExtra(item: item))
+                          .push<void>(context);
                     },
                   ),
                 )
@@ -710,8 +712,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Widget _buildListShimmer(BuildContext context) {
     final isDesktop = context.isDesktop;
+    final isHandsetLandscape = context.isHandsetLandscape;
     final spacing = isDesktop
         ? LayoutConstants.spacingLg
+        : isHandsetLandscape
+        ? ResponsiveBreakpoints.handsetLandscapeGridMaxSpacing
         : LayoutConstants.spacingSm;
     // Must match MediaHorizontalList exactly, otherwise the rail visibly
     // resizes when the shimmer is replaced by the real cards.

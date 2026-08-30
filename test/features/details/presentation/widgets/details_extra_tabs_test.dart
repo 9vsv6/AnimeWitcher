@@ -7,6 +7,7 @@ import 'package:animewitcher/features/details/presentation/widgets/details_chara
 import 'package:animewitcher/features/details/presentation/widgets/details_extra_tabs.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_poster_grid.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/shared/widgets/paged_rail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,9 +61,8 @@ Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
     );
     final image = await boundary.toImage(pixelRatio: 2);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    File(
-      '${artifacts.path}/$filename',
-    ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    File('${artifacts.path}/$filename')
+        .writeAsBytesSync(bytes!.buffer.asUint8List());
   });
 }
 
@@ -232,9 +232,8 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/details_extra_tabs_similar_grid.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/details_extra_tabs_similar_grid.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
 
@@ -395,7 +394,7 @@ void main() {
     expect(directionality.textDirection, TextDirection.rtl);
     expect(
       tester
-          .widget<ListView>(
+          .widget<PagedRail>(
             find.byKey(const ValueKey('details-character-rail-Main')),
           )
           .reverse,
@@ -688,9 +687,8 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/details_extra_tabs_related_empty.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/details_extra_tabs_related_empty.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     },
   );
