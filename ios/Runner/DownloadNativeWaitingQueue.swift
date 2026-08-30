@@ -184,6 +184,16 @@ enum DownloadNativeWaitingQueue {
   }
 
   static func promoteNext(on session: URLSession) {
+    // In-app, Dart + plugin HoldingQueue own promotion. Starting a second
+    // URLSession task here while the app is `.active` double-downloads.
+    // Background/suspended: HQ's async `taskFinished` often never runs
+    // (#115), so this callback must start the persisted waiter now.
+    let isActive = runOnMainActor {
+      UIApplication.shared.applicationState == .active
+    }
+    if isActive {
+      return
+    }
     while true {
       let waiter: Waiter?
       lock.lock()
