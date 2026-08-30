@@ -50,8 +50,9 @@ bool shouldAutoResumeInterruptedDownload({
   required bool wasRunningOrFailed,
   required bool userPaused,
   required bool stillInNativeQueue,
+  bool queueWaiting = false,
 }) {
-  if (stillInNativeQueue || userPaused) return false;
+  if (stillInNativeQueue || userPaused || queueWaiting) return false;
   return wasRunningOrFailed;
 }
 

@@ -86,6 +86,173 @@ void main() {
     );
   });
 
+  group('queue gate / overlay', () {
+    test('waiting metadata is only the queueWaiting flag', () {
+      expect(isQueueWaitingMetadata(null), isFalse);
+      expect(isQueueWaitingMetadata({'queueWaiting': false}), isFalse);
+      expect(
+        isQueueWaitingMetadata({kDownloadQueueWaitingMetadataKey: true}),
+        isTrue,
+      );
+    });
+
+    test('only running/enqueued/waitingToRetry occupy a slot', () {
+      expect(occupiesDownloadSlot(status: TaskStatus.running), isTrue);
+      expect(occupiesDownloadSlot(status: TaskStatus.enqueued), isTrue);
+      expect(occupiesDownloadSlot(status: TaskStatus.waitingToRetry), isTrue);
+      expect(occupiesDownloadSlot(status: TaskStatus.paused), isFalse);
+      expect(
+        occupiesDownloadSlot(status: TaskStatus.enqueued, queueWaiting: true),
+        isFalse,
+      );
+      expect(
+        occupiesDownloadSlot(status: TaskStatus.paused, queueWaiting: true),
+        isFalse,
+      );
+    });
+
+    test('queue-waiting paused rows display as enqueued (في الانتظار)', () {
+      expect(
+        displayDownloadStatus(persisted: TaskStatus.paused, queueWaiting: true),
+        TaskStatus.enqueued,
+      );
+      expect(
+        displayDownloadStatus(
+          persisted: TaskStatus.paused,
+          queueWaiting: false,
+        ),
+        TaskStatus.paused,
+      );
+      expect(
+        displayDownloadStatus(
+          persisted: TaskStatus.running,
+          queueWaiting: false,
+        ),
+        TaskStatus.running,
+      );
+    });
+
+    test('Live Activity starts only when the OS will enqueue', () {
+      expect(shouldStartDownloadLiveActivity(willEnqueueWithOs: true), isTrue);
+      expect(
+        shouldStartDownloadLiveActivity(willEnqueueWithOs: false),
+        isFalse,
+      );
+      expect(
+        shouldStartDownloadLiveActivity(
+          willEnqueueWithOs:
+              admitDownload(occupiedSlots: 0, maxConcurrent: 1) ==
+              DownloadAdmission.enqueueNow,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldStartDownloadLiveActivity(
+          willEnqueueWithOs:
+              admitDownload(occupiedSlots: 1, maxConcurrent: 1) ==
+              DownloadAdmission.enqueueNow,
+        ),
+        isFalse,
+      );
+    });
+
+    test('overflow parks instead of enqueueing when concurrency is 1', () {
+      expect(
+        admitDownload(occupiedSlots: 0, maxConcurrent: 1),
+        DownloadAdmission.enqueueNow,
+      );
+      expect(
+        admitDownload(occupiedSlots: 1, maxConcurrent: 1),
+        DownloadAdmission.parkAsWaiting,
+      );
+      expect(
+        admitDownload(occupiedSlots: 2, maxConcurrent: 3),
+        DownloadAdmission.enqueueNow,
+      );
+    });
+
+    test(
+      'completing the running download promotes the oldest waiting, not user-paused',
+      () {
+        final planWhileRunning = planDownloadQueue(
+          maxConcurrent: 1,
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep3',
+              status: TaskStatus.running,
+              timestamp: 1,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep4',
+              status: TaskStatus.paused,
+              timestamp: 2,
+              queueWaiting: true,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep5-user-paused',
+              status: TaskStatus.paused,
+              timestamp: 0,
+            ),
+          ],
+        );
+        expect(planWhileRunning.occupiedCount, 1);
+        expect(planWhileRunning.idsToPromote, isEmpty);
+        expect(planWhileRunning.waitingFifoIds, ['ep4']);
+        expect(
+          shouldStartDownloadLiveActivity(
+            willEnqueueWithOs: planWhileRunning.idsToPromote.contains('ep4'),
+          ),
+          isFalse,
+        );
+
+        final afterComplete = planDownloadQueue(
+          maxConcurrent: 1,
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep3',
+              status: TaskStatus.complete,
+              timestamp: 1,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep4',
+              status: TaskStatus.paused,
+              timestamp: 2,
+              queueWaiting: true,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep5-user-paused',
+              status: TaskStatus.paused,
+              timestamp: 0,
+            ),
+          ],
+        );
+        expect(afterComplete.occupiedCount, 0);
+        expect(afterComplete.idsToPromote, ['ep4']);
+        expect(afterComplete.idsToPromote, isNot(contains('ep5-user-paused')));
+      },
+    );
+
+    test('lowering N parks the newest occupying download', () {
+      final plan = planDownloadQueue(
+        maxConcurrent: 1,
+        entries: const [
+          DownloadQueueEntry(
+            taskId: 'older',
+            status: TaskStatus.running,
+            timestamp: 10,
+          ),
+          DownloadQueueEntry(
+            taskId: 'newer',
+            status: TaskStatus.running,
+            timestamp: 20,
+          ),
+        ],
+      );
+      expect(plan.idsToPark, ['newer']);
+      expect(plan.idsToPromote, isEmpty);
+    });
+  });
+
   group('SettingsRepository download concurrency', () {
     test('defaults to 1 and clamps writes', () async {
       final storage = MemoryStorageService();

@@ -180,9 +180,10 @@ void main() {
     );
     expect(
       shouldAutoResumeInterruptedDownload(
-        wasRunningOrFailed: false,
-        userPaused: true,
+        wasRunningOrFailed: true,
+        userPaused: false,
         stillInNativeQueue: false,
+        queueWaiting: true,
       ),
       isFalse,
     );
