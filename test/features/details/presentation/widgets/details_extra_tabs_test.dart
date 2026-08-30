@@ -125,23 +125,29 @@ void main() {
     final visited = <int>[];
     await tester.pumpWidget(
       _app(
-        ListView(
-          children: [
-            DetailsExtraTabs(
-              similar: AsyncData(<MultimediaItem>[
-                _item('SimilarOne', 's1'),
-                _item('SimilarTwo', 's2'),
-                _item('SimilarThree', 's3'),
-                _item('SimilarFour', 's4'),
-              ]),
-              related: const AsyncLoading(),
-              relatedHasMore: false,
-              cast: const AsyncLoading(),
-              onTabBecameVisible: visited.add,
-              onAnimeTap: (_) {},
-              onCharacterTap: (_) {},
+        RepaintBoundary(
+          key: const ValueKey('details-extra-tabs-order-shot'),
+          child: ColoredBox(
+            color: Colors.black,
+            child: ListView(
+              children: [
+                DetailsExtraTabs(
+                  similar: AsyncData(<MultimediaItem>[
+                    _item('SimilarOne', 's1'),
+                    _item('SimilarTwo', 's2'),
+                    _item('SimilarThree', 's3'),
+                    _item('SimilarFour', 's4'),
+                  ]),
+                  related: const AsyncLoading(),
+                  relatedHasMore: false,
+                  cast: const AsyncLoading(),
+                  onTabBecameVisible: visited.add,
+                  onAnimeTap: (_) {},
+                  onCharacterTap: (_) {},
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -169,12 +175,19 @@ void main() {
     expect(tabRects[0].center.dx, greaterThan(tabRects[1].center.dx));
     expect(tabRects[1].center.dx, greaterThan(tabRects[2].center.dx));
     expect(
-      tester.getCenter(find.text(animeWitcherCharactersTabLabel)).dx,
+      tester.getCenter(find.text(animeWitcherSimilarTabLabel)).dx,
       greaterThan(tester.getCenter(find.text(animeWitcherRelatedTabLabel)).dx),
     );
     expect(
       tester.getCenter(find.text(animeWitcherRelatedTabLabel)).dx,
-      greaterThan(tester.getCenter(find.text(animeWitcherSimilarTabLabel)).dx),
+      greaterThan(
+        tester.getCenter(find.text(animeWitcherCharactersTabLabel)).dx,
+      ),
+    );
+    await _writeShot(
+      tester,
+      'details_extra_tabs_rtl_order.png',
+      const ValueKey('details-extra-tabs-order-shot'),
     );
 
     final first = tester.getRect(find.byKey(const ValueKey('similar-0')));
@@ -880,7 +893,6 @@ void main() {
               child: TabBarView(
                 key: const ValueKey('parent-details-pager'),
                 controller: parentController,
-                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   ListView(
                     children: [
@@ -1069,6 +1081,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-      expect(parent.position.pixels, greaterThan(80));
+    expect(parent.position.pixels, greaterThan(80));
   });
 }
