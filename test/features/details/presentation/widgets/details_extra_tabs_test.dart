@@ -8,6 +8,7 @@ import 'package:animewitcher/features/details/presentation/widgets/details_extra
 import 'package:animewitcher/features/details/presentation/widgets/details_poster_grid.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/shared/widgets/paged_rail.dart';
+import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,6 +66,47 @@ Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
       '${artifacts.path}/$filename',
     ).writeAsBytesSync(bytes!.buffer.asUint8List());
   });
+}
+
+/// Horizontal span of the gold tab underline, in global logical pixels.
+Future<(double, double)> _goldUnderlineXSpan(
+  WidgetTester tester,
+  Key key,
+) async {
+  late List<int> pixels;
+  late int width;
+  late int height;
+  await tester.runAsync(() async {
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(key),
+    );
+    final image = await boundary.toImage(pixelRatio: 1);
+    width = image.width;
+    height = image.height;
+    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    pixels = data!.buffer.asUint8List();
+  });
+
+  final shot = tester.getRect(find.byKey(key));
+  final tabBar = tester.getRect(find.byType(TabBar));
+  final bottom = (tabBar.bottom - shot.top).round().clamp(1, height);
+  final top = (bottom - 8).clamp(0, bottom - 1);
+  int? minX;
+  int? maxX;
+  for (var y = top; y < bottom; y++) {
+    for (var x = 0; x < width; x++) {
+      final i = (y * width + x) * 4;
+      final r = pixels[i];
+      final g = pixels[i + 1];
+      final b = pixels[i + 2];
+      if (r > 170 && g > 130 && b < 90) {
+        minX = minX == null ? x : (x < minX ? x : minX);
+        maxX = maxX == null ? x : (x > maxX ? x : maxX);
+      }
+    }
+  }
+  expect(minX, isNotNull, reason: 'expected a gold tab underline');
+  return (shot.left + minX!, shot.left + maxX!);
 }
 
 List<Actor> _mainActors(int count) {
@@ -165,15 +207,37 @@ void main() {
     final tabBar = tester.getRect(find.byType(TabBar));
     expect(tabBar.left, closeTo(0, 0.5));
     expect(tabBar.width, closeTo(390, 0.5));
-    final tabRects = tester.widgetList<Tab>(find.byType(Tab)).map((tab) {
+    final tabBarWidget = tester.widget<TabBar>(find.byType(TabBar));
+    expect(tabBarWidget.indicatorSize, isNull);
+    expect(tabBarWidget.labelPadding, isNull);
+    expect(tabBarWidget.indicatorAnimation, isNull);
+    for (final styleTab in tester.widgetList<FilterStyleTab>(
+      find.byType(FilterStyleTab),
+    )) {
+      expect(styleTab.maxWidth, isNull);
+    }
+    final slotRects = tester
+        .widgetList<InkWell>(
+          find.descendant(
+            of: find.byType(TabBar),
+            matching: find.byType(InkWell),
+          ),
+        )
+        .map((ink) => tester.getRect(find.byWidget(ink)))
+        .toList();
+    expect(slotRects, hasLength(3));
+    expect((slotRects[0].width - slotRects[1].width).abs(), lessThan(1));
+    expect((slotRects[1].width - slotRects[2].width).abs(), lessThan(1));
+    expect(slotRects[0].width, closeTo(390 / 3, 1));
+    expect(slotRects[0].center.dx, greaterThan(slotRects[1].center.dx));
+    expect(slotRects[1].center.dx, greaterThan(slotRects[2].center.dx));
+    final labelRects = tester.widgetList<Tab>(find.byType(Tab)).map((tab) {
       return tester.getRect(find.byWidget(tab));
     }).toList();
-    expect(tabRects, hasLength(3));
-    expect((tabRects[0].width - tabRects[1].width).abs(), lessThan(1));
-    expect((tabRects[1].width - tabRects[2].width).abs(), lessThan(1));
-    expect(tabRects[0].width, closeTo(390 / 3, 1));
-    expect(tabRects[0].center.dx, greaterThan(tabRects[1].center.dx));
-    expect(tabRects[1].center.dx, greaterThan(tabRects[2].center.dx));
+    expect(labelRects, hasLength(3));
+    expect(labelRects[0].width, lessThan(slotRects[0].width * 0.85));
+    expect(labelRects[1].width, lessThan(slotRects[1].width * 0.85));
+    expect(labelRects[2].width, lessThan(slotRects[2].width * 0.85));
     expect(
       tester.getCenter(find.text(animeWitcherSimilarTabLabel)).dx,
       greaterThan(tester.getCenter(find.text(animeWitcherRelatedTabLabel)).dx),
@@ -251,6 +315,145 @@ void main() {
       ).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
+
+  testWidgets(
+    'extra-tab gold underline sizes to the label like Details/Episodes',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 920));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.runAsync(_loadWalkthroughFonts);
+
+      await tester.pumpWidget(
+        _app(
+          RepaintBoundary(
+            key: const ValueKey('details-extra-tabs-indicator-shot'),
+            child: ColoredBox(
+              color: Colors.black,
+              child: DetailsExtraTabs(
+                similar: AsyncData(<MultimediaItem>[_item('SimilarOne', 's1')]),
+                related: const AsyncData(<MultimediaItem>[]),
+                relatedHasMore: false,
+                cast: const AsyncData(<Actor>[]),
+                onTabBecameVisible: (_) {},
+                onAnimeTap: (_) {},
+                onCharacterTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      expect(tabBar.indicatorSize, isNull);
+      expect(tabBar.indicatorAnimation, isNull);
+
+      final similarLabel = tester.getRect(
+        find.text(animeWitcherSimilarTabLabel),
+      );
+      final similarTab = tester.widgetList<Tab>(find.byType(Tab)).first;
+      final similarLabelBox = tester.getRect(find.byWidget(similarTab));
+      final similarSlot = tester.getRect(
+        tester
+            .widgetList<InkWell>(
+              find.descendant(
+                of: find.byType(TabBar),
+                matching: find.byType(InkWell),
+              ),
+            )
+            .first,
+      );
+      expect(similarLabelBox.width, lessThan(similarSlot.width * 0.75));
+      expect(
+        (similarLabelBox.center.dx - similarLabel.center.dx).abs(),
+        lessThan(12),
+      );
+
+      final (goldLeft, goldRight) = await _goldUnderlineXSpan(
+        tester,
+        const ValueKey('details-extra-tabs-indicator-shot'),
+      );
+      final goldWidth = goldRight - goldLeft;
+      expect(goldWidth, greaterThan(12));
+      expect(goldWidth, lessThan(similarSlot.width * 0.8));
+      expect(
+        ((goldLeft + goldRight) / 2 - similarLabel.center.dx).abs(),
+        lessThan(18),
+      );
+
+      await _writeShot(
+        tester,
+        'details_extra_tabs_label_indicator.png',
+        const ValueKey('details-extra-tabs-indicator-shot'),
+      );
+    },
+  );
+
+  testWidgets(
+    'extra-tab underline follows the finger like Details/Episodes',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 920));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.runAsync(_loadWalkthroughFonts);
+
+      await tester.pumpWidget(
+        _app(
+          RepaintBoundary(
+            key: const ValueKey('details-extra-tabs-indicator-drag-shot'),
+            child: ColoredBox(
+              color: Colors.black,
+              child: DetailsExtraTabs(
+                similar: AsyncData(<MultimediaItem>[_item('SimilarOne', 's1')]),
+                related: const AsyncData(<MultimediaItem>[]),
+                relatedHasMore: false,
+                cast: const AsyncData(<Actor>[]),
+                onTabBecameVisible: (_) {},
+                onAnimeTap: (_) {},
+                onCharacterTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final controller = tester.widget<TabBar>(find.byType(TabBar)).controller!;
+      expect(controller.index, detailsExtraSimilarTabIndex);
+      expect(controller.offset, 0);
+
+      final extraRect = tester.getRect(
+        find.byKey(const ValueKey('details-extra-tab-view')),
+      );
+      final gesture = await tester.startGesture(extraRect.center);
+      await gesture.moveBy(const Offset(110, 0));
+      await tester.pump();
+
+      var value = controller.animation!.value;
+      if (value.abs() < 0.08) {
+        await gesture.moveBy(const Offset(-220, 0));
+        await tester.pump();
+        value = controller.animation!.value;
+      }
+      expect(value, greaterThan(0.08));
+      expect(value, lessThan(0.95));
+      expect(find.text(animeWitcherSimilarTabLabel), findsOneWidget);
+      expect(find.text(animeWitcherRelatedTabLabel), findsOneWidget);
+
+      await _writeShot(
+        tester,
+        'details_extra_tabs_indicator_mid_drag.png',
+        const ValueKey('details-extra-tabs-indicator-drag-shot'),
+      );
+
+      await gesture.moveBy(
+        controller.offset >= 0 ? const Offset(130, 0) : const Offset(-130, 0),
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(controller.index, detailsExtraRelatedTabIndex);
+    },
+  );
 
   testWidgets('related tab wraps 3 posters and appends المزيد after five', (
     tester,
