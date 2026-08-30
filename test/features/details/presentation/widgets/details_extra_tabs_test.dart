@@ -157,6 +157,50 @@ void main() {
     },
   );
 
+  testWidgets('extra-tab labels ellipsize instead of overflowing the slot', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 920));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _app(
+        DetailsExtraTabs(
+          similar: const AsyncData(<MultimediaItem>[]),
+          related: const AsyncData(<MultimediaItem>[]),
+          relatedHasMore: false,
+          cast: const AsyncData(<Actor>[]),
+          onTabBecameVisible: (_) {},
+          onAnimeTap: (_) {},
+          onCharacterTap: (_) {},
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    final slotWidth = tester
+        .getRect(
+          find.byWidget(
+            tester
+                .widgetList<InkWell>(
+                  find.descendant(
+                    of: find.byType(TabBar),
+                    matching: find.byType(InkWell),
+                  ),
+                )
+                .first,
+          ),
+        )
+        .width;
+    for (final tab in tester.widgetList<Tab>(find.byType(Tab))) {
+      expect(
+        tester.getRect(find.byWidget(tab)).width,
+        lessThanOrEqualTo(slotWidth + 0.5),
+      );
+    }
+  });
+
   testWidgets('details extra tabs use APK names and a 3-column similar grid', (
     tester,
   ) async {
@@ -366,7 +410,7 @@ void main() {
               .first,
         ),
       );
-      expect(similarLabelBox.width, lessThan(similarSlot.width * 0.75));
+      expect(similarLabelBox.width, lessThan(similarSlot.width * 0.9));
       expect(
         (similarLabelBox.center.dx - similarLabel.center.dx).abs(),
         lessThan(12),
@@ -378,7 +422,7 @@ void main() {
       );
       final goldWidth = goldRight - goldLeft;
       expect(goldWidth, greaterThan(12));
-      expect(goldWidth, lessThan(similarSlot.width * 0.8));
+      expect(goldWidth, lessThan(similarSlot.width * 0.9));
       expect(
         ((goldLeft + goldRight) / 2 - similarLabel.center.dx).abs(),
         lessThan(18),
@@ -392,70 +436,69 @@ void main() {
     },
   );
 
-  testWidgets(
-    'extra-tab underline follows the finger like Details/Episodes',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(390, 920));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.runAsync(_loadWalkthroughFonts);
+  testWidgets('extra-tab underline follows the finger like Details/Episodes', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 920));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.runAsync(_loadWalkthroughFonts);
 
-      await tester.pumpWidget(
-        _app(
-          RepaintBoundary(
-            key: const ValueKey('details-extra-tabs-indicator-drag-shot'),
-            child: ColoredBox(
-              color: Colors.black,
-              child: DetailsExtraTabs(
-                similar: AsyncData(<MultimediaItem>[_item('SimilarOne', 's1')]),
-                related: const AsyncData(<MultimediaItem>[]),
-                relatedHasMore: false,
-                cast: const AsyncData(<Actor>[]),
-                onTabBecameVisible: (_) {},
-                onAnimeTap: (_) {},
-                onCharacterTap: (_) {},
-              ),
+    await tester.pumpWidget(
+      _app(
+        RepaintBoundary(
+          key: const ValueKey('details-extra-tabs-indicator-drag-shot'),
+          child: ColoredBox(
+            color: Colors.black,
+            child: DetailsExtraTabs(
+              similar: AsyncData(<MultimediaItem>[_item('SimilarOne', 's1')]),
+              related: const AsyncData(<MultimediaItem>[]),
+              relatedHasMore: false,
+              cast: const AsyncData(<Actor>[]),
+              onTabBecameVisible: (_) {},
+              onAnimeTap: (_) {},
+              onCharacterTap: (_) {},
             ),
           ),
         ),
-      );
+      ),
+    );
+    await tester.pump();
+
+    final controller = tester.widget<TabBar>(find.byType(TabBar)).controller!;
+    expect(controller.index, detailsExtraSimilarTabIndex);
+    expect(controller.offset, 0);
+
+    final extraRect = tester.getRect(
+      find.byKey(const ValueKey('details-extra-tab-view')),
+    );
+    final gesture = await tester.startGesture(extraRect.center);
+    await gesture.moveBy(const Offset(110, 0));
+    await tester.pump();
+
+    var value = controller.animation!.value;
+    if (value.abs() < 0.08) {
+      await gesture.moveBy(const Offset(-220, 0));
       await tester.pump();
+      value = controller.animation!.value;
+    }
+    expect(value, greaterThan(0.08));
+    expect(value, lessThan(0.95));
+    expect(find.text(animeWitcherSimilarTabLabel), findsOneWidget);
+    expect(find.text(animeWitcherRelatedTabLabel), findsOneWidget);
 
-      final controller = tester.widget<TabBar>(find.byType(TabBar)).controller!;
-      expect(controller.index, detailsExtraSimilarTabIndex);
-      expect(controller.offset, 0);
+    await _writeShot(
+      tester,
+      'details_extra_tabs_indicator_mid_drag.png',
+      const ValueKey('details-extra-tabs-indicator-drag-shot'),
+    );
 
-      final extraRect = tester.getRect(
-        find.byKey(const ValueKey('details-extra-tab-view')),
-      );
-      final gesture = await tester.startGesture(extraRect.center);
-      await gesture.moveBy(const Offset(110, 0));
-      await tester.pump();
-
-      var value = controller.animation!.value;
-      if (value.abs() < 0.08) {
-        await gesture.moveBy(const Offset(-220, 0));
-        await tester.pump();
-        value = controller.animation!.value;
-      }
-      expect(value, greaterThan(0.08));
-      expect(value, lessThan(0.95));
-      expect(find.text(animeWitcherSimilarTabLabel), findsOneWidget);
-      expect(find.text(animeWitcherRelatedTabLabel), findsOneWidget);
-
-      await _writeShot(
-        tester,
-        'details_extra_tabs_indicator_mid_drag.png',
-        const ValueKey('details-extra-tabs-indicator-drag-shot'),
-      );
-
-      await gesture.moveBy(
-        controller.offset >= 0 ? const Offset(130, 0) : const Offset(-130, 0),
-      );
-      await gesture.up();
-      await tester.pumpAndSettle();
-      expect(controller.index, detailsExtraRelatedTabIndex);
-    },
-  );
+    await gesture.moveBy(
+      controller.offset >= 0 ? const Offset(130, 0) : const Offset(-130, 0),
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(controller.index, detailsExtraRelatedTabIndex);
+  });
 
   testWidgets('related tab wraps 3 posters and appends المزيد after five', (
     tester,

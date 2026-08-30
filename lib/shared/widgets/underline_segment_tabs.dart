@@ -22,40 +22,60 @@ class FilterStyleTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labelText = Text(
-      label,
-      maxLines: 1,
-      overflow: maxWidth == null ? TextOverflow.visible : TextOverflow.ellipsis,
-      textAlign: TextAlign.center,
-    );
-    final row = Row(
-      mainAxisSize: maxWidth == null ? MainAxisSize.min : MainAxisSize.max,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (leading != null || icon != null)
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              leading ?? Icon(icon, size: 20),
-              if (showDot)
-                const Positioned(
-                  right: -3,
-                  top: -3,
-                  child: CircleAvatar(
-                    radius: 4,
-                    backgroundColor: Colors.redAccent,
-                  ),
-                ),
-            ],
-          ),
-        if (leading != null || icon != null) const SizedBox(width: 7),
-        if (maxWidth == null) labelText else Flexible(child: labelText),
-      ],
-    );
     return Tab(
-      child: maxWidth == null
-          ? row
-          : SizedBox(width: maxWidth, child: row),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cap =
+              maxWidth ??
+              (constraints.maxWidth.isFinite ? constraints.maxWidth : null);
+          final labelText = Text(
+            label,
+            maxLines: 1,
+            overflow: cap == null
+                ? TextOverflow.visible
+                : TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          );
+          final row = Row(
+            mainAxisSize: maxWidth != null
+                ? MainAxisSize.max
+                : MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (leading != null || icon != null)
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    leading ?? Icon(icon, size: 20),
+                    if (showDot)
+                      const Positioned(
+                        right: -3,
+                        top: -3,
+                        child: CircleAvatar(
+                          radius: 4,
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      ),
+                  ],
+                ),
+              if (leading != null || icon != null) const SizedBox(width: 7),
+              if (cap == null) labelText else Flexible(child: labelText),
+            ],
+          );
+          if (maxWidth != null) {
+            return SizedBox(width: maxWidth, child: row);
+          }
+          if (cap == null) return row;
+          return Align(
+            alignment: Alignment.center,
+            widthFactor: 1,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: cap),
+              child: row,
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -145,7 +165,8 @@ class _LazyTabChildState extends State<LazyTabChild> {
   // page is not blank while the indicator animates.
   bool get _isReached {
     final value =
-        widget.controller.animation?.value ?? widget.controller.index.toDouble();
+        widget.controller.animation?.value ??
+        widget.controller.index.toDouble();
     return (value - widget.index).abs() < 0.999;
   }
 
