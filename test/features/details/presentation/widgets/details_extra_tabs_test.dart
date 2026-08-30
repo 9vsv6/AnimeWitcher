@@ -355,14 +355,16 @@ void main() {
       final similarTab = tester.widgetList<Tab>(find.byType(Tab)).first;
       final similarLabelBox = tester.getRect(find.byWidget(similarTab));
       final similarSlot = tester.getRect(
-        tester
-            .widgetList<InkWell>(
-              find.descendant(
-                of: find.byType(TabBar),
-                matching: find.byType(InkWell),
-              ),
-            )
-            .first,
+        find.byWidget(
+          tester
+              .widgetList<InkWell>(
+                find.descendant(
+                  of: find.byType(TabBar),
+                  matching: find.byType(InkWell),
+                ),
+              )
+              .first,
+        ),
       );
       expect(similarLabelBox.width, lessThan(similarSlot.width * 0.75));
       expect(
