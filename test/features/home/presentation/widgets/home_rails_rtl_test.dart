@@ -259,7 +259,7 @@ void main() {
       find.byKey(const ValueKey('news-rail-n1')),
     );
     final newsLast = tester.getTopLeft(
-      find.byKey(const ValueKey('news-rail-n3')),
+      find.byKey(const ValueKey('news-rail-n2')),
     );
     expect(newsFirst.dx, greaterThan(newsLast.dx));
 
