@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
+import '../../../../shared/widgets/paged_rail.dart';
 
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
@@ -183,12 +184,14 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                     const SizedBox(width: 8),
                     _HeaderArrowButton(
                       icon: Icons.arrow_back_ios_new,
-                      onTap: () => _scrollBy(400),
+                      // Stride-aligned (one card per click) so the rail's
+                      // snap logic doesn't re-animate after an arrow click.
+                      onTap: () => _scrollBy(cardWidth + spacing),
                     ),
                     const SizedBox(width: 4),
                     _HeaderArrowButton(
                       icon: Icons.arrow_forward_ios,
-                      onTap: () => _scrollBy(-400),
+                      onTap: () => _scrollBy(-(cardWidth + spacing)),
                     ),
                   ]
                 : null,
@@ -211,17 +214,16 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
           ),
           SizedBox(
             height: listHeight,
-            child: ListView.builder(
+            child: PagedRail(
               controller: _scrollController,
+              itemExtent: cardWidth + spacing,
               clipBehavior: Clip.none,
               padding: EdgeInsets.symmetric(
                 horizontal: isDesktop
                     ? LayoutConstants.dashboardContentPadding
                     : LayoutConstants.spacingMd,
               ),
-              scrollDirection: Axis.horizontal,
               itemCount: widget.mediaList.length,
-              itemExtent: cardWidth + spacing,
               itemBuilder: (context, index) {
                 final item = widget.mediaList[index];
                 final itemTitle = item.title;
@@ -229,6 +231,13 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                 final uniqueTag =
                     '${prefix}_${widget.title}_${item.id}_${itemTitle.hashCode}_$index';
 
+                // itemExtent hands children TIGHT width constraints, so a
+                // SizedBox(width:) would be overridden and the card would
+                // stretch across the whole stride (losing the inter-card
+                // gap). Padding deflates the constraints instead, keeping
+                // the card at [cardWidth] with [spacing] as the trailing
+                // gap. The ValueKey is load-bearing: home_rails_rtl_test
+                // locates rail items through it.
                 return Padding(
                   key: ValueKey('${widget.title}-rail-$index'),
                   padding: EdgeInsetsDirectional.only(end: spacing),

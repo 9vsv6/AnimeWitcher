@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/account/animewitcher_character_models.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../shared/widgets/paged_rail.dart';
 import '../../../characters/presentation/character_card.dart';
 import 'details_poster_grid.dart';
 
@@ -164,18 +165,16 @@ class _CharacterRoleRailState extends State<_CharacterRoleRail> {
           height: rowHeight,
           child: Directionality(
             textDirection: TextDirection.rtl,
-            child: ListView.separated(
+            child: PagedRail(
               key: ValueKey('details-character-rail-${widget.role}'),
               controller: _controller,
-              primary: false,
-              reverse: false,
               physics: _acceptScroll
                   ? const BouncingScrollPhysics()
                   : const NeverScrollableScrollPhysics(),
-              scrollDirection: Axis.horizontal,
+              itemExtent: cardWidth + 12,
               padding: EdgeInsets.zero,
-              itemCount: visibleCount + (showMore ? 1 : 0),
               separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemCount: visibleCount + (showMore ? 1 : 0),
               itemBuilder: (context, index) {
                 if (showMore && index >= visibleCount) {
                   return SizedBox(

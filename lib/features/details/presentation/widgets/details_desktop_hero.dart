@@ -8,21 +8,22 @@ import '../../../../core/utils/artwork_quality.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import 'premium_details_widgets.dart';
-import 'details_layout_widgets.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
 
 /// Immersive desktop/TV hero for non-TMDB details.
 ///
-/// Layout: full-viewport backdrop fading via gradients, with metadata
-/// overlaid on the left ~55% of the screen. [child] renders below the
-/// hero section (episodes, cast, trailers, recommendations).
+/// Layout: full-page banner-as-background extends across the entire
+/// details page (including the episodes / cast / recommendations
+/// sections), with title sitting above the poster-on-left row. Play /
+/// Resume action is intentionally omitted on desktop; on wide screens
+/// playback is driven from the episode grid below, matching the mobile
+/// app pattern. [child] renders below the hero section.
 class DetailsDesktopHero extends ConsumerWidget {
   const DetailsDesktopHero({
     super.key,
     required this.displayItem,
-    required this.baseItem,
     required this.details,
     required this.detailsState,
     required this.isMovie,
@@ -30,13 +31,19 @@ class DetailsDesktopHero extends ConsumerWidget {
     required this.child,
     required this.onRefresh,
     this.onPosterTap,
+    // Kept for backwards compatibility with callers that still pass it,
+    // but it's no longer used now that [DetailsActionButtons] is removed
+    // from the desktop layout.
+    this.baseItem,
   });
 
   /// The resolved item for display (details ?? widget.item).
   final MultimediaItem displayItem;
 
-  /// The original item — used by [DetailsActionButtons] for URL matching.
-  final MultimediaItem baseItem;
+  /// Original item, retained as an optional hook. No longer used by the
+  /// desktop hero now that the Play/Resume button is intentionally
+  /// excluded from wide screens.
+  final MultimediaItem? baseItem;
 
   /// Loaded details (nullable while loading).
   final MultimediaItem? details;
@@ -153,7 +160,13 @@ class DetailsDesktopHero extends ConsumerWidget {
           ),
         ),
 
-        // ── Layer 3: Bottom-to-top gradient (seamless transition) ──
+        // ── Layer 3: Bottom-to-top gradient (subtle — keeps banner visible
+        //    across the entire page, with a faint darken near the top for
+        //    text legibility). The banner is meant to read as the page's
+        //    full-bleed background, not a fixed hero zone, so this layer
+        //    fades over a much longer stretch than the previous variant.
+        //    Cards & panels painted on top of the scroll content still read
+        //    correctly thanks to their own opaque surfaces.
         Positioned.fill(
           child: Container(
             decoration: BoxDecoration(
@@ -161,14 +174,14 @@ class DetailsDesktopHero extends ConsumerWidget {
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
                 colors: [
-                  scaffoldColor,
-                  scaffoldColor.withValues(alpha: 0.85),
-                  scaffoldColor.withValues(alpha: 0.55),
+                  scaffoldColor.withValues(alpha: 0.35),
+                  scaffoldColor.withValues(alpha: 0.30),
                   scaffoldColor.withValues(alpha: 0.25),
-                  scaffoldColor.withValues(alpha: 0.08),
+                  scaffoldColor.withValues(alpha: 0.20),
+                  scaffoldColor.withValues(alpha: 0.10),
                   Colors.transparent,
                 ],
-                stops: const [0.0, 0.1, 0.2, 0.28, 0.35, 0.4],
+                stops: const [0.0, 0.20, 0.40, 0.60, 0.80, 1.0],
               ),
             ),
           ),
@@ -184,111 +197,100 @@ class DetailsDesktopHero extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Hero content: poster + metadata ──
+                  // ── Title block: sits ABOVE the poster row, aligned start so
+                  //    it visually clears the banner backdrop instead of
+                  //    hugging the poster. Title mirrors the mobile header
+                  //    where the logo sits on the banner before the poster
+                  //    overlaps the content below.
                   Directionality(
                     textDirection: TextDirection.ltr,
-                    child: SizedBox(
-                      width: MediaQuery.sizeOf(context).width * 0.68,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (posterUrl != null && posterUrl.isNotEmpty) ...[
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: onPosterTap,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: SizedBox(
-                                  width: 180,
-                                  height: 270,
-                                  child: ArtworkDecode(
-                                    paintedWidth: 180,
-                                    builder:
-                                        (
-                                          BuildContext context,
-                                          int? decodeWidth,
-                                        ) => CachedNetworkImage(
-                                          imageUrl: posterUrl,
-                                          fit: BoxFit.cover,
-                                          memCacheWidth: decodeWidth,
-                                          filterQuality: FilterQuality.medium,
-                                          placeholder: (_, _) => ColoredBox(
-                                            color: theme
-                                                .colorScheme
-                                                .surfaceContainerHighest,
-                                          ),
-                                          errorWidget: (_, _, _) =>
-                                              ThumbnailErrorPlaceholder(
-                                                label: displayItem.title,
-                                              ),
-                                        ),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress: () => _copyAnimeTitle(context),
+                      child: displayItem.logoUrl != null
+                          ? ArtworkDecode(
+                              paintedWidth: 400,
+                              builder:
+                                  (
+                                    BuildContext context,
+                                    int? decodeWidth,
+                                  ) => CachedNetworkImage(
+                                    imageUrl: displayItem.logoUrl!,
+                                    height: 200,
+                                    alignment: Alignment.centerLeft,
+                                    fit: BoxFit.contain,
+                                    memCacheWidth: decodeWidth,
+                                    placeholder: (_, _) =>
+                                        _buildTitle(textColor),
+                                    errorWidget: (_, _, _) =>
+                                        _buildTitle(textColor),
                                   ),
+                            )
+                          : _buildTitle(textColor),
+                    ),
+                  ),
+
+                  if (displayItem.nextAiring != null) ...[
+                    const SizedBox(height: 20),
+                    NextAiringWidget(nextAiring: displayItem.nextAiring!),
+                  ],
+
+                  const SizedBox(height: 36),
+
+                  // ── Poster on LEFT (mobile-style fixed-left anchor) +
+                  //    metadata + next-airing column to the right of it.
+                  //    Play/Resume ("آخر حلقة") action is intentionally
+                  //    omitted on desktop per the desktop layout pass — the
+                  //    user's media flow on wide screens is driven from
+                  //    the episode grid below, mirroring the mobile app.
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (posterUrl != null && posterUrl.isNotEmpty) ...[
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: onPosterTap,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: SizedBox(
+                                width: 200,
+                                height: 300,
+                                child: ArtworkDecode(
+                                  paintedWidth: 200,
+                                  builder:
+                                      (
+                                        BuildContext context,
+                                        int? decodeWidth,
+                                      ) => CachedNetworkImage(
+                                        imageUrl: posterUrl,
+                                        fit: BoxFit.cover,
+                                        memCacheWidth: decodeWidth,
+                                        filterQuality: FilterQuality.medium,
+                                        placeholder: (_, _) => ColoredBox(
+                                          color: theme
+                                              .colorScheme
+                                              .surfaceContainerHighest,
+                                        ),
+                                        errorWidget: (_, _, _) =>
+                                            ThumbnailErrorPlaceholder(
+                                              label: displayItem.title,
+                                            ),
+                                      ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 28),
-                          ],
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Logo or Title
-                                GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onLongPress: () => _copyAnimeTitle(context),
-                                  child: displayItem.logoUrl != null
-                                      ? ArtworkDecode(
-                                          paintedWidth: 400,
-                                          builder:
-                                              (
-                                                BuildContext context,
-                                                int? decodeWidth,
-                                              ) => CachedNetworkImage(
-                                                imageUrl: displayItem.logoUrl!,
-                                                height: 200,
-                                                alignment: Alignment.centerLeft,
-                                                fit: BoxFit.contain,
-                                                memCacheWidth: decodeWidth,
-                                                placeholder: (_, _) =>
-                                                    _buildTitle(textColor),
-                                                errorWidget: (_, _, _) =>
-                                                    _buildTitle(textColor),
-                                              ),
-                                        )
-                                      : _buildTitle(textColor),
-                                ),
-
-                                const SizedBox(height: 16),
-
-                                MetadataBar(
-                                  item: displayItem,
-                                  isLoading: detailsState is AsyncLoading,
-                                ),
-
-                                if (displayItem.nextAiring != null) ...[
-                                  const SizedBox(height: 20),
-                                  NextAiringWidget(
-                                    nextAiring: displayItem.nextAiring!,
-                                  ),
-                                ],
-
-                                const SizedBox(height: 32),
-
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 400,
-                                  ),
-                                  child: DetailsActionButtons(
-                                    item: baseItem,
-                                    details: details,
-                                    itemUrl: itemUrl,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
+                          const SizedBox(width: 32),
                         ],
-                      ),
+                        Expanded(
+                          child: MetadataBar(
+                            item: displayItem,
+                            isLoading: detailsState is AsyncLoading,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
