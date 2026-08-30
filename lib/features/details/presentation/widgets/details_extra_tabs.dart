@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -88,6 +90,27 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
     }
   }
 
+  /// Characters rails can be taller than the 6-poster similar/related grid.
+  /// Size the shared [TabBarView] to the taller tab so characters never get
+  /// their own vertical scroll inside the details page.
+  double _charactersTabBodyHeight(
+    BuildContext context,
+    double gridHeight, {
+    required double maxWidth,
+  }) {
+    final cast = widget.cast.asData?.value;
+    if (cast == null || cast.isEmpty) return gridHeight;
+    final hasMain = DetailsCharacterRails.mainCast(cast).isNotEmpty;
+    final hasSupporting = DetailsCharacterRails.supportingCast(cast).isNotEmpty;
+    if (!hasMain && !hasSupporting) return gridHeight;
+    return detailsCharacterRailsHeight(
+      context,
+      hasMain: hasMain,
+      hasSupporting: hasSupporting,
+      maxWidth: maxWidth,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -100,7 +123,11 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
           0.0,
           double.infinity,
         );
-        final bodyHeight = detailsExtraTabBodyHeight(context, bodyWidth);
+        final gridHeight = detailsExtraTabBodyHeight(context, bodyWidth);
+        final bodyHeight = math.max(
+          gridHeight,
+          _charactersTabBodyHeight(context, gridHeight, maxWidth: bodyWidth),
+        );
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -303,13 +330,12 @@ class _CharactersTab extends StatelessWidget {
         message: animeWitcherCharactersEmptyMessage,
       );
     }
-    return ClipRect(
-      child: SingleChildScrollView(
-        child: DetailsCharacterRails(
-          cast: cast,
-          onCharacterTap: onCharacterTap,
-          onShowMore: onShowMore,
-        ),
+    return Align(
+      alignment: Alignment.topCenter,
+      child: DetailsCharacterRails(
+        cast: cast,
+        onCharacterTap: onCharacterTap,
+        onShowMore: onShowMore,
       ),
     );
   }
@@ -320,9 +346,7 @@ class _ExtraTabLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.expand(
-      child: Center(child: AppLoadingIndicator()),
-    );
+    return const SizedBox.expand(child: Center(child: AppLoadingIndicator()));
   }
 }
 
