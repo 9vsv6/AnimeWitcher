@@ -342,7 +342,6 @@ class _AnimeWitcherMyCommentsScreenState
         builder: (_) => AnimeWitcherRepliesScreen(parentComment: comment),
       ),
     );
-    if (mounted) await _loadInitial();
   }
 
   void _openAnime(AnimeWitcherComment comment) {

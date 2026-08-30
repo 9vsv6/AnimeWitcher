@@ -1032,8 +1032,9 @@ class AnimeWitcherAccountService {
 
   Future<void> publishReply(
     AnimeWitcherComment parent,
-    String rawReply,
-  ) async {
+    String rawReply, {
+    String? userTagId,
+  }) async {
     final reply = rawReply.trim();
     if (reply.isEmpty) {
       throw const AnimeWitcherAccountException(
@@ -1100,11 +1101,11 @@ class AnimeWitcherAccountService {
       }
       await _firestore.createDocument(
         parent.repliesCollectionPath,
-        <String, dynamic>{
-          'comment': reply,
-          'likes': 0,
-          'user_id': profile.documentId,
-        },
+        animeWitcherReplyWriteFields(
+          comment: reply,
+          userId: profile.documentId,
+          userTagId: userTagId,
+        ),
         token,
       );
     });
