@@ -10,16 +10,24 @@ import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:animewitcher/core/utils/episode_order.dart';
 import 'package:animewitcher/core/utils/layout_constants.dart';
 import 'package:animewitcher/shared/widgets/custom_widgets.dart';
+
 import '../details_controller.dart';
+
 import 'package:animewitcher/core/extensions/extension_manager.dart';
+
 import 'episode_card.dart';
+
 import 'package:animewitcher/core/providers/device_info_provider.dart';
 import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/core/utils/localized_text.dart';
 
-bool _shouldFilterEpisodesByDub(DetailsState detailsState, List<Episode> episodes) {
-  if (detailsState.isMovie || detailsState.selectedDubStatus == DubStatus.none) {
+bool _shouldFilterEpisodesByDub(
+  DetailsState detailsState,
+  List<Episode> episodes,
+) {
+  if (detailsState.isMovie ||
+      detailsState.selectedDubStatus == DubStatus.none) {
     return false;
   }
   return !isStandaloneEpisodeCatalog([
@@ -213,9 +221,8 @@ class DetailsActionButtons extends HookConsumerWidget {
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 6,
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.1),
+                backgroundColor: Theme.of(context).colorScheme.onSurface
+                    .withValues(alpha: 0.1),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   Theme.of(context).colorScheme.primary,
                 ),
@@ -302,9 +309,8 @@ class SliverDetailsDesktopEpisodeGrid extends ConsumerWidget {
               children: [
                 Text(
                   AppLocalizations.of(context)!.episodes,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 DetailsEpisodeFilterBar(itemUrl: itemUrl),
               ],
@@ -363,6 +369,55 @@ class SliverDetailsDesktopEpisodeGrid extends ConsumerWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+/// One column in portrait; two side-by-side cards in phone landscape.
+class SliverEpisodeCardGrid extends StatelessWidget {
+  const SliverEpisodeCardGrid({
+    super.key,
+    required this.children,
+    this.mainAxisSpacing = 12,
+    this.crossAxisSpacing = 8,
+  });
+
+  final List<Widget> children;
+  final double mainAxisSpacing;
+  final double crossAxisSpacing;
+
+  @override
+  Widget build(BuildContext context) {
+    final crossAxisCount = ResponsiveBreakpoints.episodeCrossAxisCount(context);
+    final rowCount = children.isEmpty
+        ? 0
+        : (children.length / crossAxisCount).ceil();
+
+    return SliverList.separated(
+      itemCount: rowCount,
+      separatorBuilder: (_, _) => SizedBox(height: mainAxisSpacing),
+      itemBuilder: (context, rowIndex) {
+        final startIndex = rowIndex * crossAxisCount;
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < crossAxisCount; i++)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: i == 0 ? 0 : crossAxisSpacing / 2,
+                      right: i == crossAxisCount - 1 ? 0 : crossAxisSpacing / 2,
+                    ),
+                    child: startIndex + i < children.length
+                        ? children[startIndex + i]
+                        : const SizedBox.shrink(),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -436,24 +491,25 @@ class SliverDetailsEpisodeList extends ConsumerWidget {
               children: [
                 Text(
                   AppLocalizations.of(context)!.episodes,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 DetailsEpisodeFilterBar(itemUrl: itemUrl),
               ],
             ),
           ),
         ),
-        SliverList.separated(
-          itemCount: displayedEpisodes.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final ep = displayedEpisodes[index];
-            return _withTransition(
-              EpisodeCard(episode: ep, parentItem: parentItem) as Widget,
-            );
-          },
+        SliverEpisodeCardGrid(
+          children: [
+            for (final ep in displayedEpisodes)
+              _withTransition(
+                EpisodeCard(
+                  key: ValueKey(ep.url),
+                  episode: ep,
+                  parentItem: parentItem,
+                ),
+              ),
+          ],
         ),
       ],
     );
@@ -481,10 +537,8 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
     ]);
     final hasDub = allEpisodes.any((e) => e.dubStatus == DubStatus.dubbed);
     final hasSub = allEpisodes.any((e) => e.dubStatus == DubStatus.subbed);
-    final showLanguageToggle = !detailsState.isMovie &&
-        !isStandaloneCatalog &&
-        hasDub &&
-        hasSub;
+    final showLanguageToggle =
+        !detailsState.isMovie && !isStandaloneCatalog && hasDub && hasSub;
     final selectedDub = detailsState.selectedDubStatus;
 
     return SizedBox(
@@ -594,18 +648,16 @@ class _LanguageButtonState extends State<_LanguageButton> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: widget.isSelected
-                ? Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 40 / 255)
+                ? Theme.of(context).colorScheme.primary
+                      .withValues(alpha: 40 / 255)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: _isFocused
                   ? Colors.white
                   : (widget.isSelected
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 80 / 255)
+                        ? Theme.of(context).colorScheme.primary
+                              .withValues(alpha: 80 / 255)
                         : Colors.transparent),
               width: _isFocused ? 2 : 1,
             ),
@@ -643,9 +695,8 @@ class DetailsChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -816,9 +867,8 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
             children: [
               Text(
                 AppLocalizations.of(context)!.episodes,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               DetailsEpisodeFilterBar(itemUrl: itemUrl),
             ],
