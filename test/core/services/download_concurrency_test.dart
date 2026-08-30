@@ -96,10 +96,10 @@ void main() {
       );
     });
 
-    test('only running/enqueued/waitingToRetry occupy a slot', () {
+    test('only running/waitingToRetry occupy a transfer slot', () {
       expect(occupiesDownloadSlot(status: TaskStatus.running), isTrue);
-      expect(occupiesDownloadSlot(status: TaskStatus.enqueued), isTrue);
       expect(occupiesDownloadSlot(status: TaskStatus.waitingToRetry), isTrue);
+      expect(occupiesDownloadSlot(status: TaskStatus.enqueued), isFalse);
       expect(occupiesDownloadSlot(status: TaskStatus.paused), isFalse);
       expect(
         occupiesDownloadSlot(status: TaskStatus.enqueued, queueWaiting: true),
@@ -140,23 +140,60 @@ void main() {
       expect(waitingEpisodeMayStartLiveActivityWhileQueued(), isFalse);
     });
 
+    test('overflow is OS-enqueued; overlay starts only when running', () {
+      expect(shouldEnqueueOverflowToNativeHoldingQueue(), isTrue);
+      expect(shouldPromoteWaitingWhenIsolateAlive(), isTrue);
+      expect(shouldPromoteWaitingOnAppForeground(), isTrue);
+      expect(
+        admitDownload(occupiedSlots: 0, maxConcurrent: 1),
+        DownloadAdmission.enqueueToNativeHoldingQueue,
+      );
+      expect(
+        admitDownload(occupiedSlots: 1, maxConcurrent: 1),
+        DownloadAdmission.enqueueToNativeHoldingQueue,
+      );
+      expect(
+        admitDownload(occupiedSlots: 2, maxConcurrent: 3),
+        DownloadAdmission.enqueueToNativeHoldingQueue,
+      );
+      expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
+      expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
+    });
+
     test(
-      'overflow is parked; Dart promotes when the isolate is alive and a slot is free',
+      'native snapshot waiters are HQ enqueued + leftover parked, never user-paused',
       () {
-        expect(shouldEnqueueOverflowToNativeHoldingQueue(), isFalse);
-        expect(shouldPromoteWaitingWhenIsolateAlive(), isTrue);
-        expect(shouldPromoteWaitingOnAppForeground(), isTrue);
         expect(
-          admitDownload(occupiedSlots: 0, maxConcurrent: 1),
-          DownloadAdmission.enqueueNow,
+          isNativeWaitingSnapshotWaiter(
+            status: TaskStatus.enqueued,
+            queueWaiting: false,
+            userPaused: false,
+          ),
+          isTrue,
         );
         expect(
-          admitDownload(occupiedSlots: 1, maxConcurrent: 1),
-          DownloadAdmission.persistNativeWaitingQueue,
+          isNativeWaitingSnapshotWaiter(
+            status: TaskStatus.paused,
+            queueWaiting: true,
+            userPaused: false,
+          ),
+          isTrue,
         );
         expect(
-          admitDownload(occupiedSlots: 2, maxConcurrent: 3),
-          DownloadAdmission.enqueueNow,
+          isNativeWaitingSnapshotWaiter(
+            status: TaskStatus.paused,
+            queueWaiting: false,
+            userPaused: true,
+          ),
+          isFalse,
+        );
+        expect(
+          isNativeWaitingSnapshotWaiter(
+            status: TaskStatus.running,
+            queueWaiting: false,
+            userPaused: false,
+          ),
+          isFalse,
         );
       },
     );
@@ -190,7 +227,7 @@ void main() {
     );
 
     test(
-      'iOS concurrency=1, two episodes: waiter has no Live Activity until running',
+      'iOS concurrency=1, two episodes: waiter is enqueued, overlay only when running',
       () {
         final whileEp1Transfers = planDownloadQueue(
           maxConcurrent: 1,
@@ -202,9 +239,8 @@ void main() {
             ),
             DownloadQueueEntry(
               taskId: 'ep2',
-              status: TaskStatus.paused,
+              status: TaskStatus.enqueued,
               timestamp: 2,
-              queueWaiting: true,
             ),
           ],
         );
@@ -225,9 +261,8 @@ void main() {
             ),
             DownloadQueueEntry(
               taskId: 'ep2',
-              status: TaskStatus.paused,
+              status: TaskStatus.enqueued,
               timestamp: 2,
-              queueWaiting: true,
             ),
           ],
         );

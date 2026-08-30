@@ -40,10 +40,9 @@ List<(String, dynamic)> downloadHoldingQueueGlobalConfig(int maxConcurrent) =>
     ];
 
 /// Persists [maxConcurrent] then reconfigures FileDownloader's holding queue
-/// (Android / in-app cap). iOS overflow waiters are parked as **في الانتظار**
-/// and started by Dart whenever the isolate is alive (complete / fail /
-/// cancel / foreground / init). Native URLSession start remains a background
-/// backup; it must not be the only promoter (PR #116 device regression).
+/// `(N, null, null)`. Every user-started episode is OS-enqueued; extras wait
+/// natively as **في الانتظار**. Dart still promotes leftover waiters whenever
+/// the isolate is alive (complete / fail / cancel / foreground / init).
 Future<int> applyDownloadQueueSettings({
   required int maxConcurrent,
   required Future<void> Function(int value) persist,
@@ -60,8 +59,9 @@ Future<int> applyDownloadQueueSettings({
 bool isQueueWaitingMetadata(Map<String, dynamic>? metadata) =>
     metadata?[kDownloadQueueWaitingMetadataKey] == true;
 
-/// Occupied slots are native transfers and native holding-queue waiters.
-/// Leftover Dart-parked (`queueWaiting`) and user-paused rows must not count.
+/// Occupied slots are files actually transferring. Native holding-queue
+/// waiters (`enqueued`) and leftover Dart-parked (`queueWaiting`) rows wait
+/// as **في الانتظار** and must not count against N.
 bool occupiesDownloadSlot({
   required TaskStatus status,
   bool queueWaiting = false,
@@ -69,9 +69,9 @@ bool occupiesDownloadSlot({
   if (queueWaiting) return false;
   switch (status) {
     case TaskStatus.running:
-    case TaskStatus.enqueued:
     case TaskStatus.waitingToRetry:
       return true;
+    case TaskStatus.enqueued:
     case TaskStatus.paused:
     case TaskStatus.complete:
     case TaskStatus.canceled:
@@ -97,18 +97,27 @@ TaskStatus displayDownloadStatus({
 bool shouldStartDownloadLiveActivity(TaskStatus status) =>
     status == TaskStatus.running;
 
-/// Plugin `HoldingQueue` did not advance waiters on the home screen. Overflow
-/// is parked (no overlay) and persisted for Swift as a background backup.
-bool shouldEnqueueOverflowToNativeHoldingQueue() => false;
+/// Overflow episodes are always OS-enqueued into the native holding queue.
+/// Dart must not park-without-enqueue: that stranded ep3 on device (#116).
+bool shouldEnqueueOverflowToNativeHoldingQueue() => true;
 
-/// When the Flutter isolate is alive, Dart must start the next waiter if a
-/// slot is free. PR #116 left waiters stranded in-app because native start
-/// never fired and this flag was false.
+/// When the Flutter isolate is alive, Dart must start the next leftover
+/// waiter if a slot is free. Always true in production — do not gate this off.
 bool shouldPromoteWaitingWhenIsolateAlive() => true;
 
-/// Opening the app must unstick a waiter if a slot is free (same path as
-/// in-app complete). Native start is still desired outside the app.
+/// Opening the app must unstick a leftover waiter if a slot is free.
 bool shouldPromoteWaitingOnAppForeground() => true;
+
+/// Native UserDefaults snapshot: leftover parked rows and HQ `enqueued`
+/// waiters. User-paused stays paused and is never persisted as a waiter.
+bool isNativeWaitingSnapshotWaiter({
+  required TaskStatus status,
+  required bool queueWaiting,
+  required bool userPaused,
+}) {
+  if (userPaused) return false;
+  return queueWaiting || status == TaskStatus.enqueued;
+}
 
 /// Full payload Swift needs to create the next `URLSessionDownloadTask`
 /// without Dart reconstructing the `DownloadTask`.
@@ -158,21 +167,19 @@ bool shouldReenqueueWaitingAfterProcessKill({
 }
 
 /// iOS concurrency=1, two episodes: waiting rows stay **في الانتظار** with
-/// no Live Activity. When a slot frees, Dart (if awake) or Swift starts it.
+/// no Live Activity. Overlay starts only when the native task is `running`.
 bool waitingEpisodeMayStartLiveActivityWhileQueued() => false;
 
-enum DownloadAdmission { enqueueNow, persistNativeWaitingQueue }
+enum DownloadAdmission { enqueueToNativeHoldingQueue }
 
-/// Occupied slots get a live FileDownloader/URLSession task. Overflow is
-/// parked as **في الانتظار** until Dart (isolate alive) or Swift (background)
-/// starts it with the unpause/resume path.
+/// Every user-started episode is OS-enqueued. Native HoldingQueue owns N.
 DownloadAdmission admitDownload({
   required int occupiedSlots,
   required int maxConcurrent,
 }) {
-  final n = clampDownloadConcurrency(maxConcurrent);
-  if (occupiedSlots < n) return DownloadAdmission.enqueueNow;
-  return DownloadAdmission.persistNativeWaitingQueue;
+  assert(occupiedSlots >= 0);
+  clampDownloadConcurrency(maxConcurrent);
+  return DownloadAdmission.enqueueToNativeHoldingQueue;
 }
 
 class DownloadQueueEntry {
@@ -223,14 +230,18 @@ DownloadQueuePlan planDownloadQueue({
         ),
       )
       .toList();
-  final waiting = entries.where((entry) => entry.queueWaiting).toList()
-    ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  final waiting =
+      entries
+          .where(
+            (entry) =>
+                entry.queueWaiting || entry.status == TaskStatus.enqueued,
+          )
+          .toList()
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
   final waitingFifoIds = waiting.map((e) => e.taskId).toList();
   final occupiedCount = occupying.length;
   final freeSlots = (n - occupiedCount).clamp(0, n);
-  // Only start as many waiters as there are free slots. Listing every waiter
-  // here was why iOS skipped Dart promotion entirely (#116).
   final idsToPromote = waitingFifoIds.take(freeSlots).toList();
 
   return DownloadQueuePlan(
