@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/account/account_providers.dart';
 import 'package:animewitcher/core/account/animewitcher_account_models.dart';
 import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
+import 'package:animewitcher/core/account/animewitcher_reply_mention.dart';
 import 'package:animewitcher/core/account/firestore_rest_client.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
 import 'package:animewitcher/core/utils/request_generation.dart';
@@ -28,23 +29,26 @@ class _AnimeWitcherRepliesScreenState
   static const int _pageSize = 20;
 
   final TextEditingController _replyController = TextEditingController();
+  final FocusNode _replyFocusNode = FocusNode();
   final Set<String> _pendingLikes = <String>{};
   late final ScrollController _scrollController;
 
   List<AnimeWitcherComment> _replies = <AnimeWitcherComment>[];
-  AnimeWitcherCommentSort _sort = AnimeWitcherCommentSort.newest;
+  AnimeWitcherCommentSort _sort = AnimeWitcherCommentSort.repliesDefault;
   Object? _loadError;
   FirestoreDocument? _cursor;
   bool _loadingInitial = true;
   bool _loadingMore = false;
   bool _hasMore = true;
   bool _publishing = false;
+  String? _userTagId;
   final RequestGeneration _loadGeneration = RequestGeneration();
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_onScroll);
+    _replyController.addListener(_onReplyTextChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _loadInitial();
     });
@@ -56,7 +60,10 @@ class _AnimeWitcherRepliesScreenState
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
-    _replyController.dispose();
+    _replyController
+      ..removeListener(_onReplyTextChanged)
+      ..dispose();
+    _replyFocusNode.dispose();
     super.dispose();
   }
 
@@ -180,13 +187,17 @@ class _AnimeWitcherRepliesScreenState
     final text = _replyController.text.trim();
     if (text.isEmpty) return;
     final isArabic = _isArabic(context);
+    final userTagId = _userTagId;
     setState(() => _publishing = true);
     try {
-      await ref
-          .read(animeWitcherAccountServiceProvider)
-          .publishReply(widget.parentComment, text);
+      await ref.read(animeWitcherAccountServiceProvider).publishReply(
+            widget.parentComment,
+            text,
+            userTagId: userTagId,
+          );
       if (!mounted) return;
       _replyController.clear();
+      setState(() => _userTagId = null);
       _showMessage(isArabic ? 'تم إرسال الرد.' : 'Reply sent.');
       await _loadInitial();
     } catch (error) {
@@ -196,6 +207,106 @@ class _AnimeWitcherRepliesScreenState
     } finally {
       if (mounted) setState(() => _publishing = false);
     }
+  }
+
+  void _onReplyTextChanged() {
+    if (!mounted) return;
+    final nextTagId = animeWitcherReplyUserTagIdAfterTextChange(
+      text: _replyController.text,
+      currentUserTagId: _userTagId,
+    );
+    if (nextTagId == _userTagId) return;
+    setState(() => _userTagId = nextTagId);
+  }
+
+  void _mentionReply(AnimeWitcherComment reply) {
+    final service = ref.read(animeWitcherAccountServiceProvider);
+    final isArabic = _isArabic(context);
+    if (!service.isSignedIn) {
+      _showMessage(
+        isArabic ? 'يجب تسجيل الدخول' : 'Sign in to mention a reply.',
+        isInfo: true,
+      );
+      return;
+    }
+    if (widget.parentComment.repliesClosed) return;
+
+    final outcome = applyAnimeWitcherReplyMention(
+      currentText: _replyController.text,
+      currentUserTagId: _userTagId,
+      replyUserId: reply.userId,
+      replyUserName: reply.userName,
+      isOwnReply: service.ownsComment(reply),
+    );
+    switch (outcome.status) {
+      case AnimeWitcherReplyMentionStatus.ownReply:
+        return;
+      case AnimeWitcherReplyMentionStatus.alreadyTagged:
+        _showMessage(
+          animeWitcherReplyAlreadyTaggedMessage(isArabic: isArabic),
+          isInfo: true,
+        );
+        return;
+      case AnimeWitcherReplyMentionStatus.applied:
+        _replyController.value = TextEditingValue(
+          text: outcome.text,
+          selection: TextSelection.collapsed(offset: outcome.text.length),
+        );
+        setState(() => _userTagId = outcome.userTagId);
+        _replyFocusNode.requestFocus();
+    }
+  }
+
+  Future<void> _applyReplySort(AnimeWitcherCommentSort selected) async {
+    if (selected == _sort || !mounted) return;
+    setState(() => _sort = selected);
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+    await _loadInitial();
+  }
+
+  AnimeWitcherCommentSort _replySortFromValue(String value) {
+    for (final option in AnimeWitcherCommentSort.values) {
+      if (option.name == value) return option;
+    }
+    return _sort;
+  }
+
+  String _replySortSystemImage(AnimeWitcherCommentSort sort) {
+    return switch (sort) {
+      AnimeWitcherCommentSort.newest => 'clock',
+      AnimeWitcherCommentSort.oldest => 'clock.arrow.circlepath',
+      AnimeWitcherCommentSort.mostLiked => 'heart',
+    };
+  }
+
+  IconData _replySortFallbackIcon(AnimeWitcherCommentSort sort) {
+    return switch (sort) {
+      AnimeWitcherCommentSort.newest => Icons.schedule_rounded,
+      AnimeWitcherCommentSort.oldest => Icons.history_rounded,
+      AnimeWitcherCommentSort.mostLiked => Icons.favorite_border_rounded,
+    };
+  }
+
+  List<AppleNativeMenuItem> _replySortMenuItems(bool isArabic) {
+    return <AppleNativeMenuItem>[
+      AppleNativeMenuItem(
+        value: AnimeWitcherCommentSort.newest.name,
+        label: _replySortLabel(AnimeWitcherCommentSort.newest, isArabic),
+        systemImage: _replySortSystemImage(AnimeWitcherCommentSort.newest),
+      ),
+      AppleNativeMenuItem(
+        value: AnimeWitcherCommentSort.oldest.name,
+        label: _replySortLabel(AnimeWitcherCommentSort.oldest, isArabic),
+        systemImage: _replySortSystemImage(AnimeWitcherCommentSort.oldest),
+      ),
+      AppleNativeMenuItem(
+        value: AnimeWitcherCommentSort.mostLiked.name,
+        label: _replySortLabel(AnimeWitcherCommentSort.mostLiked, isArabic),
+        systemImage: _replySortSystemImage(AnimeWitcherCommentSort.mostLiked),
+      ),
+    ];
   }
 
   void _showMessage(
@@ -223,6 +334,23 @@ class _AnimeWitcherRepliesScreenState
 
     if (appleUsesPersistentLiquidGlassHeader) {
       final colors = Theme.of(context).colorScheme;
+      final trailingButtons = <AppleLiquidGlassToolbarButton>[
+        AppleLiquidGlassToolbarButton(
+          width: isArabic ? 150 : 140,
+          tooltip: isArabic ? 'ترتيب الردود' : 'Sort replies',
+          icon: _replySortFallbackIcon(_sort),
+          systemImage: _replySortSystemImage(_sort),
+          title: _replySortLabel(_sort, isArabic),
+          color: colors.primary,
+          menuTintColor: colors.primary,
+          onPressed: null,
+          selectedMenuValue: _sort.name,
+          menuItems: _replySortMenuItems(isArabic),
+          onMenuSelected: (value) {
+            _applyReplySort(_replySortFromValue(value));
+          },
+        ),
+      ];
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
         applePersistentGlassHeaderController.show(
@@ -232,7 +360,7 @@ class _AnimeWitcherRepliesScreenState
             onBack: () => Navigator.of(context).pop(),
             backForegroundColor: colors.onSurface,
             backFallbackColor: colors.surfaceContainerHigh,
-            trailing: null,
+            trailingButtons: trailingButtons,
           ),
         );
       });
@@ -244,19 +372,48 @@ class _AnimeWitcherRepliesScreenState
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: AppBar(
+            centerTitle: false,
+            titleSpacing: 16,
             automaticallyImplyLeading: false,
             leading: appleUsesPersistentLiquidGlassHeader
                 ? null
                 : AppleLiquidGlassBackButton(
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-            title: Align(
-              alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
-              child: Directionality(
-                textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-                child: Text(isArabic ? 'الردود' : 'Replies'),
+            title: Padding(
+              padding: EdgeInsets.only(
+                right: appleUsesPersistentLiquidGlassHeader && isArabic ? 92 : 0,
+                left: appleUsesPersistentLiquidGlassHeader && !isArabic ? 92 : 0,
+              ),
+              child: Align(
+                alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                child: Directionality(
+                  textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  child: Text(isArabic ? 'الردود' : 'Replies'),
+                ),
               ),
             ),
+            actions: appleUsesPersistentLiquidGlassHeader
+                ? const <Widget>[]
+                : [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: AppleNativeMenuButton(
+                        accessibilityLabel:
+                            isArabic ? 'ترتيب الردود' : 'Sort replies',
+                        systemImage: 'arrow.up.arrow.down',
+                        fallbackIcon: Icons.filter_list_rounded,
+                        size: 46,
+                        width: 72,
+                        tintColor: Theme.of(context).colorScheme.primary,
+                        selectedValue: _sort.name,
+                        items: _replySortMenuItems(isArabic),
+                        onSelected: (value) {
+                          _applyReplySort(_replySortFromValue(value));
+                        },
+                      ),
+                    ),
+                  ],
           ),
         ),
       ),
@@ -413,6 +570,26 @@ class _AnimeWitcherRepliesScreenState
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  Tooltip(
+                    message: isArabic ? 'رد' : 'Reply',
+                    child: InkWell(
+                      key: ValueKey<String>('reply-mention-${reply.path}'),
+                      onTap: () => _mentionReply(reply),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 5,
+                        ),
+                        child: Icon(
+                          Icons.reply_rounded,
+                          size: 19,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   InkWell(
                     onTap: pending ? null : () => _toggleLike(reply),
                     borderRadius: BorderRadius.circular(20),
@@ -501,13 +678,14 @@ class _AnimeWitcherRepliesScreenState
                   Expanded(
                     child: TextField(
                       controller: _replyController,
+                      focusNode: _replyFocusNode,
                       minLines: 1,
                       maxLines: 4,
                       maxLength: 500,
                       textDirection:
                           isArabic ? TextDirection.rtl : TextDirection.ltr,
                       decoration: InputDecoration(
-                        hintText: isArabic ? 'اكتب ردًا...' : 'Write a reply...',
+                        hintText: isArabic ? 'اكتب رداً...' : 'Write a reply...',
                         counterText: '',
                         filled: true,
                         fillColor: colors.surfaceContainerLow,
@@ -560,6 +738,15 @@ class _AnimeWitcherRepliesScreenState
       ),
     );
   }
+}
+
+String _replySortLabel(AnimeWitcherCommentSort sort, bool isArabic) {
+  return switch (sort) {
+    AnimeWitcherCommentSort.newest => isArabic ? 'الأحدث' : 'Newest',
+    AnimeWitcherCommentSort.oldest => isArabic ? 'الأقدم' : 'Oldest',
+    AnimeWitcherCommentSort.mostLiked =>
+      isArabic ? 'الأكثر اعجابا' : 'Most liked',
+  };
 }
 
 String _replyErrorText(Object error, bool isArabic) {

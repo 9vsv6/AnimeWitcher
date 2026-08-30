@@ -14,6 +14,28 @@ enum AnimeWitcherCommentSort {
   String get orderField => this == AnimeWitcherCommentSort.mostLiked ? 'likes' : 'date';
 
   bool get descending => this != AnimeWitcherCommentSort.oldest;
+
+  /// APK `getListingChoice` defaults comments to `POSTS_NEW`.
+  static const AnimeWitcherCommentSort commentsDefault = newest;
+
+  /// APK `getRepliesListingChoice` defaults to `REPLIES_OLD`.
+  static const AnimeWitcherCommentSort repliesDefault = oldest;
+}
+
+/// Firestore create-map for a reply. Matches APK `RepliesActivity.postReply`:
+/// `user_tag` is included only when a mention tag is set.
+Map<String, dynamic> animeWitcherReplyWriteFields({
+  required String comment,
+  required String userId,
+  String? userTagId,
+}) {
+  final tag = userTagId?.trim() ?? '';
+  return <String, dynamic>{
+    'comment': comment,
+    'likes': 0,
+    'user_id': userId,
+    if (tag.isNotEmpty) 'user_tag': tag,
+  };
 }
 
 class AnimeWitcherCommentPage {

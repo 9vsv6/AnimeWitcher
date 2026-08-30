@@ -38,7 +38,7 @@ class _AnimeWitcherCommentsScreenState
   late final ScrollController _scrollController;
 
   List<AnimeWitcherComment> _comments = <AnimeWitcherComment>[];
-  AnimeWitcherCommentSort _sort = AnimeWitcherCommentSort.newest;
+  AnimeWitcherCommentSort _sort = AnimeWitcherCommentSort.commentsDefault;
   Object? _loadError;
   FirestoreDocument? _cursor;
   bool _loadingInitial = true;
@@ -213,6 +213,9 @@ class _AnimeWitcherCommentsScreenState
   }
 
   Future<void> _openReplies(AnimeWitcherComment comment) async {
+    // Keep this route alive under the replies stack. The previous
+    // implementation refetched comments on pop, which rebuilt the list and
+    // jumped scroll position. Match APK: comments stay as they were.
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => AnimeWitcherRepliesScreen(
@@ -220,11 +223,6 @@ class _AnimeWitcherCommentsScreenState
         ),
       ),
     );
-    if (!mounted) return;
-    setState(() {});
-    // The AnimeWitcher backend owns the authoritative replies counter.
-    // Refresh the visible page after returning so it picks up server changes.
-    await _loadInitial();
   }
 
   Future<void> _applyCommentSort(AnimeWitcherCommentSort selected) async {
@@ -588,6 +586,7 @@ class _AnimeWitcherCommentsScreenState
                         systemImage: 'arrow.up.arrow.down',
                         fallbackIcon: Icons.filter_list_rounded,
                         size: 46,
+                        width: 72,
                         tintColor: Theme.of(context).colorScheme.primary,
                         selectedValue: _sort.name,
                         items: _commentSortMenuItems(isArabic),
