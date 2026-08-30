@@ -5,6 +5,7 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import '../../../core/domain/entity/multimedia_item.dart';
+import '../../../core/services/download_concurrency.dart';
 import '../../../core/services/download_service.dart';
 import '../../../core/utils/download_cleanup.dart';
 
@@ -221,7 +222,10 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       items.add(
         DownloadItem(
           task: record.task,
-          status: status,
+          status: displayDownloadStatus(
+            persisted: status,
+            queueWaiting: isQueueWaitingMetadata(metadata),
+          ),
           progress: progress,
           item: MultimediaItem.fromJson(
             Map<String, dynamic>.from(metadata['item'] as Map),

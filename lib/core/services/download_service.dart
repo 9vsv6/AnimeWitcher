@@ -100,6 +100,10 @@ class DownloadService {
   final _updatesController = StreamController<TaskUpdate>.broadcast();
   StreamSubscription<TaskUpdate>? _updatesSubscription;
   bool _isInitialized = false;
+  Future<void> _queueChain = Future<void>.value();
+  final Set<String> _queueWaitingIds = {};
+  final Set<String> _startingTaskIds = {};
+  final Set<String> _parkingTaskIds = {};
 
   DownloadService(this._ref) : _dio = _ref.read(dioClientProvider) {
     _continuedProcessing = DownloadContinuedProcessingService(
@@ -197,6 +201,16 @@ class DownloadService {
         return;
       }
 
+      // Detaching a 0% overflow task from the OS emits canceled; keep the
+      // in-app waiting row instead of treating that as a user delete.
+      if (_parkingTaskIds.contains(update.task.taskId) ||
+          (_queueWaitingIds.contains(update.task.taskId) &&
+              update is TaskStatusUpdate &&
+              (update.status == TaskStatus.canceled ||
+                  update.status == TaskStatus.failed))) {
+        return;
+      }
+
       // Network / system failures must never wipe the download. Convert to a
       // paused record first, then notify listeners with paused (not failed).
       if (update is TaskStatusUpdate &&
@@ -258,6 +272,10 @@ class DownloadService {
             );
           }
           final current = _ref.read(downloadProgressProvider)[trackingUrl];
+          final uiStatus = displayDownloadStatus(
+            persisted: update.status,
+            queueWaiting: _queueWaitingIds.contains(update.task.taskId),
+          );
           if (current != null) {
             _ref
                 .read(downloadProgressProvider.notifier)
@@ -266,14 +284,14 @@ class DownloadService {
                   DownloadProgressData(
                     taskId: current.taskId,
                     progress: current.progress.clamp(0.0, 1.0),
-                    networkSpeed: update.status == TaskStatus.running
+                    networkSpeed: uiStatus == TaskStatus.running
                         ? current.networkSpeed
                         : 0,
-                    timeRemaining: update.status == TaskStatus.running
+                    timeRemaining: uiStatus == TaskStatus.running
                         ? current.timeRemaining
                         : Duration.zero,
                     totalSize: current.totalSize,
-                    status: update.status,
+                    status: uiStatus,
                   ),
                 );
           }
@@ -291,8 +309,18 @@ class DownloadService {
             case TaskStatus.paused:
               unawaited(_continuedProcessing.stop(taskId: update.task.taskId));
             case TaskStatus.running:
-            case TaskStatus.enqueued:
               if (current != null) {
+                unawaited(
+                  _continuedProcessing.update(
+                    taskId: update.task.taskId,
+                    progress: current.progress,
+                    totalBytes: current.totalSize,
+                  ),
+                );
+              }
+            case TaskStatus.enqueued:
+              if (current != null &&
+                  !_queueWaitingIds.contains(update.task.taskId)) {
                 unawaited(
                   _continuedProcessing.update(
                     taskId: update.task.taskId,
@@ -305,7 +333,14 @@ class DownloadService {
               break;
           }
 
-          _handleStatusUpdate(update, trackingUrl);
+          if (uiStatus != update.status) {
+            _handleStatusUpdate(
+              TaskStatusUpdate(update.task, uiStatus),
+              trackingUrl,
+            );
+          } else {
+            _handleStatusUpdate(update, trackingUrl);
+          }
       }
     });
 
@@ -329,7 +364,8 @@ class DownloadService {
 
   /// Persist [maxConcurrent] (clamped 1–5) and reconfigure the live holding
   /// queue so extra episode downloads wait until a slot frees. Does not
-  /// require an app restart.
+  /// require an app restart. Also parks OS-enqueued overflow and promotes
+  /// في الانتظار items when N increases.
   Future<void> applyQueueSettings({required int maxConcurrent}) async {
     await applyDownloadQueueSettings(
       maxConcurrent: maxConcurrent,
@@ -343,6 +379,22 @@ class DownloadService {
         await FileDownloader().configure(globalConfig: globalConfig);
       },
     );
+    // Tests replace FileDownloader.configure; skip native record sync there.
+    if (configureHoldingQueueForTesting != null) return;
+    await _serializeQueue(_syncQueueToCapUnlocked);
+  }
+
+  Future<T> _serializeQueue<T>(Future<T> Function() action) {
+    final done = Completer<void>();
+    final previous = _queueChain;
+    _queueChain = previous.catchError((_) {}).whenComplete(() => done.future);
+    return previous.catchError((_) {}).then((_) async {
+      try {
+        return await action();
+      } finally {
+        if (!done.isCompleted) done.complete();
+      }
+    });
   }
 
   Future<void> _recoverPersistedDownloads() async {
@@ -351,6 +403,7 @@ class DownloadService {
       for (final task in await FileDownloader().allTasks(allGroups: true))
         task.taskId,
     };
+    final storage = _ref.read(storageServiceProvider);
 
     for (final record in records) {
       if (record.task is! DownloadTask) continue;
@@ -360,6 +413,10 @@ class DownloadService {
       }
       final task = record.task as DownloadTask;
       final trackingUrl = downloadTrackingUrl(task);
+      final metadata = await storage.getDownloadMetadata(task.taskId);
+      final queueWaiting = isQueueWaitingMetadata(metadata);
+      if (queueWaiting) _queueWaitingIds.add(task.taskId);
+
       final isFailed =
           record.status == TaskStatus.failed ||
           record.status == TaskStatus.notFound;
@@ -383,22 +440,179 @@ class DownloadService {
         );
       }
 
-      final showAsRunning = wasRunning && stillNative;
+      final shouldContinue = shouldAutoResumeInterruptedDownload(
+        wasRunningOrFailed: wasRunning || isFailed,
+        userPaused: record.status == TaskStatus.paused && !isFailed,
+        stillInNativeQueue: stillNative,
+        queueWaiting: queueWaiting,
+      );
+      if (shouldContinue) {
+        _queueWaitingIds.add(task.taskId);
+        await storage.patchDownloadMetadata(task.taskId, queueWaiting: true);
+      }
+
+      final showAsWaiting = _queueWaitingIds.contains(task.taskId);
+      final showAsRunning = wasRunning && stillNative && !showAsWaiting;
       _publishProgress(
         trackingUrl: trackingUrl,
         taskId: task.taskId,
         progress: progress,
         totalSize: record.expectedFileSize,
-        status: showAsRunning ? record.status : TaskStatus.paused,
+        status: showAsWaiting
+            ? TaskStatus.enqueued
+            : (showAsRunning ? record.status : TaskStatus.paused),
       );
+    }
 
-      final shouldContinue = shouldAutoResumeInterruptedDownload(
-        wasRunningOrFailed: wasRunning || isFailed,
-        userPaused: record.status == TaskStatus.paused && !isFailed,
-        stillInNativeQueue: stillNative,
+    await _syncQueueToCapUnlocked();
+  }
+
+  int _occupiedSlotCount(List<TaskRecord> records) {
+    final occupying = <String>{};
+    for (final record in records) {
+      if (occupiesDownloadSlot(
+        status: record.status,
+        queueWaiting: _queueWaitingIds.contains(record.task.taskId),
+      )) {
+        occupying.add(record.task.taskId);
+      }
+    }
+    occupying.addAll(_startingTaskIds);
+    return occupying.length;
+  }
+
+  Future<bool> _hasFreeSlot() async {
+    final max = clampDownloadConcurrency(
+      _ref.read(storageServiceProvider).getDownloadConcurrency(),
+    );
+    final records = await FileDownloader().database.allRecords();
+    return _occupiedSlotCount(records) < max;
+  }
+
+  Future<List<DownloadQueueEntry>> _queueEntries(
+    List<TaskRecord> records,
+  ) async {
+    final storage = _ref.read(storageServiceProvider);
+    final entries = <DownloadQueueEntry>[];
+    for (final record in records) {
+      if (record.task is! DownloadTask) continue;
+      if (record.status == TaskStatus.complete ||
+          record.status == TaskStatus.canceled) {
+        continue;
+      }
+      final metadata = await storage.getDownloadMetadata(record.task.taskId);
+      final queueWaiting =
+          _queueWaitingIds.contains(record.task.taskId) ||
+          isQueueWaitingMetadata(metadata);
+      entries.add(
+        DownloadQueueEntry(
+          taskId: record.task.taskId,
+          status: record.status,
+          timestamp: (metadata?['timestamp'] as int?) ?? 0,
+          queueWaiting: queueWaiting,
+        ),
       );
-      if (!shouldContinue) continue;
-      unawaited(_resumeDownloadTask(task));
+    }
+    return entries;
+  }
+
+  Future<void> _syncQueueToCapUnlocked() async {
+    final max = clampDownloadConcurrency(
+      _ref.read(storageServiceProvider).getDownloadConcurrency(),
+    );
+    final records = await FileDownloader().database.allRecords();
+    final byId = <String, TaskRecord>{
+      for (final record in records) record.task.taskId: record,
+    };
+    final plan = planDownloadQueue(
+      maxConcurrent: max,
+      entries: await _queueEntries(records),
+    );
+
+    for (final taskId in plan.idsToPark) {
+      final record = byId[taskId];
+      if (record == null || record.task is! DownloadTask) continue;
+      await _parkTaskAsWaiting(
+        record.task as DownloadTask,
+        progress: record.progress,
+        totalSize: record.expectedFileSize,
+        detachFromOs: true,
+      );
+    }
+
+    for (final taskId in plan.idsToPromote) {
+      final record = byId[taskId];
+      if (record == null || record.task is! DownloadTask) continue;
+      final started = await _promoteWaitingTask(record.task as DownloadTask);
+      if (!started) break;
+    }
+  }
+
+  Future<bool> _promoteWaitingTask(DownloadTask task) async {
+    _queueWaitingIds.remove(task.taskId);
+    await _ref
+        .read(storageServiceProvider)
+        .patchDownloadMetadata(task.taskId, queueWaiting: false);
+    _startingTaskIds.add(task.taskId);
+    try {
+      final started = await _resumeDownloadTask(task);
+      if (!started) {
+        final record = await FileDownloader().database.recordForId(task.taskId);
+        await _parkTaskAsWaiting(
+          task,
+          progress: record?.progress ?? 0,
+          totalSize: record?.expectedFileSize ?? -1,
+          detachFromOs: false,
+        );
+      }
+      return started;
+    } finally {
+      _startingTaskIds.remove(task.taskId);
+    }
+  }
+
+  Future<void> _parkTaskAsWaiting(
+    DownloadTask task, {
+    required double progress,
+    required int totalSize,
+    required bool detachFromOs,
+  }) async {
+    _parkingTaskIds.add(task.taskId);
+    try {
+      var storedProgress = progress;
+      if (storedProgress < 0 || storedProgress > 1) storedProgress = 0.0;
+      final trackingUrl = downloadTrackingUrl(task);
+
+      if (detachFromOs) {
+        final live = await FileDownloader().taskForId(task.taskId);
+        if (live is DownloadTask) {
+          if (storedProgress > 0) {
+            await FileDownloader().pause(live);
+          } else {
+            await FileDownloader().cancelTasksWithIds([task.taskId]);
+          }
+        }
+      }
+      await _continuedProcessing.stop(taskId: task.taskId);
+
+      _queueWaitingIds.add(task.taskId);
+      await FileDownloader().database.updateRecord(
+        TaskRecord(task, TaskStatus.paused, storedProgress, totalSize),
+      );
+      await _ref
+          .read(storageServiceProvider)
+          .patchDownloadMetadata(task.taskId, queueWaiting: true);
+
+      _publishProgress(
+        trackingUrl: trackingUrl,
+        taskId: task.taskId,
+        progress: storedProgress,
+        totalSize: totalSize,
+        status: TaskStatus.enqueued,
+      );
+      _updatesController.add(TaskStatusUpdate(task, TaskStatus.enqueued));
+    } finally {
+      _parkingTaskIds.remove(task.taskId);
     }
   }
 
@@ -445,6 +659,12 @@ class DownloadService {
     if (update.status == TaskStatus.complete) {
       _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
       _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
+      unawaited(_serializeQueue(_syncQueueToCapUnlocked));
+      return;
+    }
+    if (update.status == TaskStatus.paused &&
+        !_queueWaitingIds.contains(update.task.taskId)) {
+      unawaited(_serializeQueue(_syncQueueToCapUnlocked));
     }
   }
 
@@ -500,6 +720,7 @@ class DownloadService {
         '(${(progress * 100).toStringAsFixed(1)}%): $trackingUrl',
       );
     }
+    unawaited(_serializeQueue(_syncQueueToCapUnlocked));
   }
 
   /// iOS continued-processing expiration / system cancel — treat as pause,
@@ -546,20 +767,24 @@ class DownloadService {
   }) async {
     _cancellingUrls.add(trackingUrl);
     try {
-      await FileDownloader().cancelTasksWithIds([taskId]);
-      _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
-      _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
-      if (notifyContinuedProcessing) {
-        await _continuedProcessing.finish(
-          taskId: taskId,
-          success: false,
-          status: 'canceled',
-        );
-      }
+      await _serializeQueue(() async {
+        _queueWaitingIds.remove(taskId);
+        await FileDownloader().cancelTasksWithIds([taskId]);
+        _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
+        _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
+        if (notifyContinuedProcessing) {
+          await _continuedProcessing.finish(
+            taskId: taskId,
+            success: false,
+            status: 'canceled',
+          );
+        }
 
-      // Proactive cleanup
-      await FileDownloader().database.deleteRecordWithId(taskId);
-      await _ref.read(storageServiceProvider).removeDownloadMetadata(taskId);
+        // Proactive cleanup
+        await FileDownloader().database.deleteRecordWithId(taskId);
+        await _ref.read(storageServiceProvider).removeDownloadMetadata(taskId);
+        await _syncQueueToCapUnlocked();
+      });
     } finally {
       // Small delay to let final updates clear
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -569,26 +794,85 @@ class DownloadService {
   }
 
   Future<void> pauseDownload(String taskId) async {
-    final task = await FileDownloader().taskForId(taskId);
-    if (task is DownloadTask) {
-      await FileDownloader().pause(task);
+    await _serializeQueue(() async {
+      final wasWaiting = _queueWaitingIds.remove(taskId);
+      await _ref
+          .read(storageServiceProvider)
+          .patchDownloadMetadata(taskId, queueWaiting: false);
+
+      DownloadTask? downloadTask;
+      final liveTask = await FileDownloader().taskForId(taskId);
+      if (liveTask is DownloadTask) {
+        downloadTask = liveTask;
+      } else {
+        final record = await FileDownloader().database.recordForId(taskId);
+        if (record?.task is DownloadTask) {
+          downloadTask = record!.task as DownloadTask;
+        }
+      }
+
+      if (downloadTask != null) {
+        await FileDownloader().pause(downloadTask);
+        final trackingUrl = downloadTrackingUrl(downloadTask);
+        final current = _ref.read(downloadProgressProvider)[trackingUrl];
+        final record = await FileDownloader().database.recordForId(taskId);
+        var progress = current?.progress ?? record?.progress ?? 0.0;
+        if (progress < 0 || progress > 1) progress = 0.0;
+        await FileDownloader().database.updateRecord(
+          TaskRecord(
+            downloadTask,
+            TaskStatus.paused,
+            progress,
+            current?.totalSize ?? record?.expectedFileSize ?? -1,
+          ),
+        );
+        _publishProgress(
+          trackingUrl: trackingUrl,
+          taskId: taskId,
+          progress: progress,
+          totalSize: current?.totalSize ?? record?.expectedFileSize ?? -1,
+          status: TaskStatus.paused,
+        );
+        _updatesController.add(
+          TaskStatusUpdate(downloadTask, TaskStatus.paused),
+        );
+      }
       await _continuedProcessing.stop(taskId: taskId);
-    }
+      if (!wasWaiting) {
+        await _syncQueueToCapUnlocked();
+      }
+    });
   }
 
   Future<void> resumeDownload(String taskId) async {
-    DownloadTask? downloadTask;
-    final liveTask = await FileDownloader().taskForId(taskId);
-    if (liveTask is DownloadTask) {
-      downloadTask = liveTask;
-    } else {
-      final record = await FileDownloader().database.recordForId(taskId);
-      if (record?.task is DownloadTask) {
-        downloadTask = record!.task as DownloadTask;
+    await _serializeQueue(() async {
+      DownloadTask? downloadTask;
+      final liveTask = await FileDownloader().taskForId(taskId);
+      if (liveTask is DownloadTask) {
+        downloadTask = liveTask;
+      } else {
+        final record = await FileDownloader().database.recordForId(taskId);
+        if (record?.task is DownloadTask) {
+          downloadTask = record!.task as DownloadTask;
+        }
       }
-    }
-    if (downloadTask == null) return;
-    await _resumeDownloadTask(downloadTask);
+      if (downloadTask == null) return;
+      if (await _hasFreeSlot()) {
+        _queueWaitingIds.remove(taskId);
+        await _ref
+            .read(storageServiceProvider)
+            .patchDownloadMetadata(taskId, queueWaiting: false);
+        await _promoteWaitingTask(downloadTask);
+      } else {
+        final record = await FileDownloader().database.recordForId(taskId);
+        await _parkTaskAsWaiting(
+          downloadTask,
+          progress: record?.progress ?? 0,
+          totalSize: record?.expectedFileSize ?? -1,
+          detachFromOs: false,
+        );
+      }
+    });
   }
 
   Future<bool> _resumeDownloadTask(DownloadTask task) async {
@@ -874,195 +1158,223 @@ class DownloadService {
     final isAndroid = Platform.isAndroid;
     final isIOS = Platform.isIOS;
 
-    // Prevention: Check if task is ALREADY running (using database for robustness)
-    final records = await FileDownloader().database.allRecords();
-    final existingRecord = records.firstWhereOrNull(
-      (r) =>
-          (r.status == TaskStatus.enqueued ||
-              r.status == TaskStatus.running ||
-              r.status == TaskStatus.paused) &&
-          (r.task.metaData.isNotEmpty ? r.task.metaData : r.task.url) ==
-              (trackingUrl ?? url),
-    );
-
-    if (existingRecord != null) {
-      if (kDebugMode) {
-        debugPrint(
-          '[DownloadService] Task already exists in database with status: ${existingRecord.status}',
-        );
-      }
-
-      // Attach iOS 26 continued processing to the explicit user action before
-      // any resume call can yield back to the run loop.
-      await _continuedProcessing.start(
-        taskId: existingRecord.task.taskId,
-        displayName: filename,
-        progress: existingRecord.progress,
-        totalBytes: existingRecord.expectedFileSize,
+    return _serializeQueue(() async {
+      // Prevention: Check if task is ALREADY running (using database for robustness)
+      final records = await FileDownloader().database.allRecords();
+      final existingRecord = records.firstWhereOrNull(
+        (r) =>
+            (r.status == TaskStatus.enqueued ||
+                r.status == TaskStatus.running ||
+                r.status == TaskStatus.paused ||
+                r.status == TaskStatus.waitingToRetry) &&
+            (r.task.metaData.isNotEmpty ? r.task.metaData : r.task.url) ==
+                (trackingUrl ?? url),
       );
 
-      // If it was paused, resume it. Some hosts/tasks have no resumable
-      // transfer data after an interruption. In that case enqueue the existing
-      // task again rather than reporting a false success to the details page.
-      if (existingRecord.status == TaskStatus.paused) {
-        if (kDebugMode) {
-          debugPrint('[DownloadService] Auto-resuming paused task.');
-        }
-        if (existingRecord.task is! DownloadTask) {
-          await _continuedProcessing.stop(taskId: existingRecord.task.taskId);
-          return false;
-        }
-        final task = existingRecord.task as DownloadTask;
-        final resumedOrRestarted = await _resumeDownloadTask(task);
-        if (!resumedOrRestarted) {
-          return false;
-        }
-      }
-
-      _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
-      return true;
-    }
-
-    final tracking = trackingUrl ?? url;
-    final completeRecords = await _completeRecordsForEpisode(
-      records,
-      trackingUrl: tracking,
-      item: item,
-      episode: episode,
-      filename: filename,
-      directory: directory,
-    );
-    File? completeFile;
-    for (final record in completeRecords) {
-      completeFile = await getDownloadedFileForTask(record.task);
-      if (completeFile != null) break;
-      try {
-        final path = await record.task.filePath();
-        if (path.isNotEmpty) {
-          final file = File(path);
-          if (await file.exists() && await file.length() > 0) {
-            completeFile = file;
-            break;
-          }
-        }
-      } catch (_) {}
-    }
-    completeFile ??= await getDownloadedFile(item, episode: episode);
-
-    switch (decideCompleteDownloadAction(
-      hasCompleteRecord: completeRecords.isNotEmpty,
-      fileExists: completeFile != null,
-    )) {
-      case CompleteDownloadAction.reuse:
+      if (existingRecord != null) {
         if (kDebugMode) {
           debugPrint(
-            '[DownloadService] Complete record already has a file for $tracking',
+            '[DownloadService] Task already exists in database with status: ${existingRecord.status}',
           );
         }
-        return true;
-      case CompleteDownloadAction.dropAndEnqueue:
-        await _dropCompleteRecords(completeRecords);
-        break;
-      case CompleteDownloadAction.enqueue:
-        break;
-    }
 
-    // Path Logic:
-    // Android/Desktop: use BaseDirectory.root with absolute path.
-    // iOS: use BaseDirectory.applicationDocuments with relative path for sandbox safety.
-    BaseDirectory baseDir;
-    String taskDirectory;
+        final occupying = occupiesDownloadSlot(
+          status: existingRecord.status,
+          queueWaiting: _queueWaitingIds.contains(existingRecord.task.taskId),
+        );
+        if (occupying) {
+          _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
+          return true;
+        }
 
-    if (isIOS) {
-      baseDir = BaseDirectory.applicationDocuments;
-      // Relative: "AnimeWitcher/Downloads/Title"
-      taskDirectory = directory;
-    } else {
-      // Android, Windows, macOS, Linux: use absolute paths with BaseDirectory.root
-      baseDir = BaseDirectory.root;
-      if (isAndroid) {
-        taskDirectory = p.join(await _getPublicDownloadsPath(), directory);
-      } else {
-        // Desktop: directory is already absolute
-        // (e.g. /Users/…/Downloads/AnimeWitcher/Downloads/Title)
-        taskDirectory = directory;
-      }
-    }
+        if (existingRecord.task is! DownloadTask) {
+          return false;
+        }
+        final existingTask = existingRecord.task as DownloadTask;
+        if (await _hasFreeSlot()) {
+          _queueWaitingIds.remove(existingTask.taskId);
+          await _ref
+              .read(storageServiceProvider)
+              .patchDownloadMetadata(existingTask.taskId, queueWaiting: false);
+          final resumedOrRestarted = await _resumeDownloadTask(existingTask);
+          if (!resumedOrRestarted) {
+            return false;
+          }
+        } else {
+          await _parkTaskAsWaiting(
+            existingTask,
+            progress: existingRecord.progress,
+            totalSize: existingRecord.expectedFileSize,
+            detachFromOs: false,
+          );
+        }
 
-    final task = DownloadTask(
-      url: url,
-      filename: filename,
-      displayName: filename,
-      baseDirectory: baseDir,
-      directory: taskDirectory,
-      headers: headers ?? {},
-      updates: Updates.statusAndProgress,
-      retries: 3, // Align with example
-      allowPause: true,
-      metaData: trackingUrl ?? url,
-    );
-
-    // Submit the iOS 26 continued-processing request immediately after the
-    // download task exists. This keeps the request as close as possible to the
-    // user's tap and before directory I/O or URLSession enqueueing can yield.
-    await _continuedProcessing.start(
-      taskId: task.taskId,
-      displayName: filename,
-      totalBytes: totalBytes,
-    );
-
-    if (kDebugMode) debugPrint('[DownloadService] Enqueuing task...');
-
-    // Create the directory if it doesn't exist
-    final String fullDirPath;
-    if (isIOS) {
-      final docsDir = await getApplicationDocumentsDirectory();
-      fullDirPath = p.join(docsDir.path, taskDirectory);
-    } else {
-      // Android/Desktop: taskDirectory is already absolute
-      fullDirPath = taskDirectory;
-    }
-
-    try {
-      final dir = Directory(fullDirPath);
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
-
-      final success = await FileDownloader().enqueue(task);
-      if (kDebugMode) debugPrint('[DownloadService] Enqueue result: $success');
-
-      if (success) {
         _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
+        return true;
+      }
+
+      final tracking = trackingUrl ?? url;
+      final completeRecords = await _completeRecordsForEpisode(
+        records,
+        trackingUrl: tracking,
+        item: item,
+        episode: episode,
+        filename: filename,
+        directory: directory,
+      );
+      File? completeFile;
+      for (final record in completeRecords) {
+        completeFile = await getDownloadedFileForTask(record.task);
+        if (completeFile != null) break;
+        try {
+          final path = await record.task.filePath();
+          if (path.isNotEmpty) {
+            final file = File(path);
+            if (await file.exists() && await file.length() > 0) {
+              completeFile = file;
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+      completeFile ??= await getDownloadedFile(item, episode: episode);
+
+      switch (decideCompleteDownloadAction(
+        hasCompleteRecord: completeRecords.isNotEmpty,
+        fileExists: completeFile != null,
+      )) {
+        case CompleteDownloadAction.reuse:
+          if (kDebugMode) {
+            debugPrint(
+              '[DownloadService] Complete record already has a file for $tracking',
+            );
+          }
+          return true;
+        case CompleteDownloadAction.dropAndEnqueue:
+          await _dropCompleteRecords(completeRecords);
+          break;
+        case CompleteDownloadAction.enqueue:
+          break;
+      }
+
+      // Path Logic:
+      // Android/Desktop: use BaseDirectory.root with absolute path.
+      // iOS: use BaseDirectory.applicationDocuments with relative path for sandbox safety.
+      BaseDirectory baseDir;
+      String taskDirectory;
+
+      if (isIOS) {
+        baseDir = BaseDirectory.applicationDocuments;
+        // Relative: "AnimeWitcher/Downloads/Title"
+        taskDirectory = directory;
+      } else {
+        // Android, Windows, macOS, Linux: use absolute paths with BaseDirectory.root
+        baseDir = BaseDirectory.root;
+        if (isAndroid) {
+          taskDirectory = p.join(await _getPublicDownloadsPath(), directory);
+        } else {
+          // Desktop: directory is already absolute
+          // (e.g. /Users/…/Downloads/AnimeWitcher/Downloads/Title)
+          taskDirectory = directory;
+        }
+      }
+
+      final task = DownloadTask(
+        url: url,
+        filename: filename,
+        displayName: filename,
+        baseDirectory: baseDir,
+        directory: taskDirectory,
+        headers: headers ?? {},
+        updates: Updates.statusAndProgress,
+        retries: 3, // Align with example
+        allowPause: true,
+        metaData: trackingUrl ?? url,
+      );
+
+      if (kDebugMode) debugPrint('[DownloadService] Enqueuing task...');
+
+      // Create the directory if it doesn't exist
+      final String fullDirPath;
+      if (isIOS) {
+        final docsDir = await getApplicationDocumentsDirectory();
+        fullDirPath = p.join(docsDir.path, taskDirectory);
+      } else {
+        // Android/Desktop: taskDirectory is already absolute
+        fullDirPath = taskDirectory;
+      }
+
+      try {
+        final dir = Directory(fullDirPath);
+        if (!await dir.exists()) {
+          await dir.create(recursive: true);
+        }
+
         String? path;
         try {
           path = await task.filePath();
         } catch (_) {}
-        await _ref
-            .read(storageServiceProvider)
-            .saveDownloadMetadata(
-              task.taskId,
-              item,
-              episode: episode,
-              trackingUrl: trackingUrl ?? url,
-              filePath: path,
-            );
-      } else {
+
+        if (!await _hasFreeSlot()) {
+          await _ref
+              .read(storageServiceProvider)
+              .saveDownloadMetadata(
+                task.taskId,
+                item,
+                episode: episode,
+                trackingUrl: trackingUrl ?? url,
+                filePath: path,
+                queueWaiting: true,
+              );
+          await _parkTaskAsWaiting(
+            task,
+            progress: 0,
+            totalSize: totalBytes,
+            detachFromOs: false,
+          );
+          return true;
+        }
+
+        // Live Activity only after a slot is reserved — waiting overflow must
+        // never appear in the iOS continued-processing overlay.
+        _startingTaskIds.add(task.taskId);
+        await _continuedProcessing.start(
+          taskId: task.taskId,
+          displayName: filename,
+          totalBytes: totalBytes,
+        );
+
+        final success = await FileDownloader().enqueue(task);
+        if (kDebugMode) {
+          debugPrint('[DownloadService] Enqueue result: $success');
+        }
+
+        if (success) {
+          _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
+          await _ref
+              .read(storageServiceProvider)
+              .saveDownloadMetadata(
+                task.taskId,
+                item,
+                episode: episode,
+                trackingUrl: trackingUrl ?? url,
+                filePath: path,
+                queueWaiting: false,
+              );
+        } else {
+          await _continuedProcessing.stop(taskId: task.taskId);
+        }
+        return success;
+      } catch (error) {
         await _continuedProcessing.stop(taskId: task.taskId);
+        if (kDebugMode) {
+          debugPrint('[DownloadService] Failed to enqueue download: $error');
+        }
+        return false;
+      } finally {
+        _startingTaskIds.remove(task.taskId);
       }
-      return success;
-    } catch (error) {
-      // The iOS 26 continued-processing task is created before enqueueing so
-      // it is tied as closely as possible to the user's tap. If directory
-      // creation or enqueueing fails, explicitly tear down that system task;
-      // otherwise the Dynamic Island/Lock Screen progress can outlive a
-      // download that never actually started.
-      await _continuedProcessing.stop(taskId: task.taskId);
-      if (kDebugMode) {
-        debugPrint('[DownloadService] Failed to enqueue download: $error');
-      }
-      return false;
-    }
+    });
   }
 
   Future<List<TaskRecord>> _completeRecordsForEpisode(

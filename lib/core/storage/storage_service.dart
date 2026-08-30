@@ -1307,6 +1307,7 @@ class StorageService {
     Episode? episode,
     String? trackingUrl,
     String? filePath,
+    bool? queueWaiting,
   }) async {
     final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
     await box.put(taskId, {
@@ -1315,6 +1316,7 @@ class StorageService {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       if (trackingUrl != null && trackingUrl.isNotEmpty) 'trackingUrl': trackingUrl,
       if (filePath != null && filePath.isNotEmpty) 'filePath': filePath,
+      if (queueWaiting != null) kDownloadQueueWaitingMetadataKey: queueWaiting,
     });
   }
 
@@ -1322,6 +1324,7 @@ class StorageService {
     String taskId, {
     String? trackingUrl,
     String? filePath,
+    bool? queueWaiting,
   }) async {
     final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
     final data = box.get(taskId);
@@ -1332,6 +1335,9 @@ class StorageService {
     }
     if (filePath != null && filePath.isNotEmpty) {
       map['filePath'] = filePath;
+    }
+    if (queueWaiting != null) {
+      map[kDownloadQueueWaitingMetadataKey] = queueWaiting;
     }
     await box.put(taskId, map);
   }
