@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
-import '../../../shared/widgets/catalog_ltr.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 
-/// Character-details anime list: 3 posters per row, wrapping downward.
+/// Character-details anime list: 3 posters per row, first card on the right.
 class CharacterAnimesGrid extends StatelessWidget {
   const CharacterAnimesGrid({
     super.key,
@@ -28,12 +27,14 @@ class CharacterAnimesGrid extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
             title,
+            textAlign: TextAlign.start,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w800,
             ),
           ),
         ),
-        CatalogLtr(
+        Directionality(
+          textDirection: TextDirection.rtl,
           child: GridView.builder(
             key: const ValueKey('character-animes-grid'),
             shrinkWrap: true,
