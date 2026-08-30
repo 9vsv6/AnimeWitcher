@@ -1,9 +1,42 @@
 import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Width of one card once [availableWidth] is split into [columns] tracks.
 double _cardWidth(double availableWidth, int columns, double spacing) {
   return (availableWidth - spacing * (columns - 1)) / columns;
+}
+
+Future<BuildContext> _pumpContext(
+  WidgetTester tester, {
+  required Size size,
+  TargetPlatform? platform,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  await tester.binding.setSurfaceSize(size);
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+    tester.binding.setSurfaceSize(null);
+  });
+  if (platform != null) {
+    debugDefaultTargetPlatformOverride = platform;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+  }
+  late BuildContext captured;
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Builder(
+        builder: (context) {
+          captured = context;
+          return const SizedBox.shrink();
+        },
+      ),
+    ),
+  );
+  return captured;
 }
 
 void main() {
@@ -90,4 +123,103 @@ void main() {
       expect(loose, lessThanOrEqualTo(tight));
     });
   });
+
+  group(
+    'animeGridDelegate after merging phone landscape with desktop adaptive',
+    () {
+      testWidgets(
+        'phone landscape stays at 7 columns, not the desktop ~190pt algorithm',
+        (tester) async {
+          const size = Size(800, 360);
+          final context = await _pumpContext(tester, size: size);
+          // At 800pt the desktop helper would pick ~4 columns (~190pt cards).
+          // Handsets must ignore that and keep the 7-poster landscape grid.
+          expect(
+            ResponsiveBreakpoints.desktopLandscapeColumnsFor(size.width),
+            isNot(ResponsiveBreakpoints.handsetLandscapeAnimeColumns),
+          );
+
+          final delegate = ResponsiveBreakpoints.animeGridDelegate(
+            context,
+            maxCrossAxisExtent: 150,
+            childAspectRatio: 0.52,
+          );
+          expect(delegate, isA<SliverGridDelegateWithFixedCrossAxisCount>());
+          expect(
+            (delegate as SliverGridDelegateWithFixedCrossAxisCount)
+                .crossAxisCount,
+            ResponsiveBreakpoints.handsetLandscapeAnimeColumns,
+          );
+          expect(
+            ResponsiveBreakpoints.animeGridCrossAxisCount(
+              context,
+              maxCrossAxisExtent: 150,
+            ),
+            ResponsiveBreakpoints.handsetLandscapeAnimeColumns,
+          );
+        },
+      );
+
+      testWidgets('phone portrait keeps the caller portrait count', (
+        tester,
+      ) async {
+        final context = await _pumpContext(tester, size: const Size(390, 844));
+        final delegate = ResponsiveBreakpoints.animeGridDelegate(
+          context,
+          maxCrossAxisExtent: 150,
+          childAspectRatio: 0.52,
+          handsetPortraitCrossAxisCount: 3,
+        );
+        expect(
+          (delegate as SliverGridDelegateWithFixedCrossAxisCount)
+              .crossAxisCount,
+          3,
+        );
+        expect(
+          ResponsiveBreakpoints.animeGridCrossAxisCount(
+            context,
+            maxCrossAxisExtent: 150,
+            handsetPortraitCrossAxisCount: 3,
+          ),
+          3,
+        );
+      });
+
+      testWidgets('desktop landscape uses adaptive columns, not a frozen 8', (
+        tester,
+      ) async {
+        const size = Size(3440, 1440);
+        final context = await _pumpContext(
+          tester,
+          size: size,
+          platform: TargetPlatform.windows,
+        );
+        final expected = ResponsiveBreakpoints.desktopLandscapeColumnsFor(
+          size.width,
+        );
+        expect(
+          expected,
+          greaterThan(ResponsiveBreakpoints.desktopLandscapeAnimeColumns),
+        );
+
+        final delegate = ResponsiveBreakpoints.animeGridDelegate(
+          context,
+          maxCrossAxisExtent: 240,
+          childAspectRatio: 0.54,
+        );
+        expect(
+          (delegate as SliverGridDelegateWithFixedCrossAxisCount)
+              .crossAxisCount,
+          expected,
+        );
+        expect(
+          ResponsiveBreakpoints.animeGridCrossAxisCount(
+            context,
+            maxCrossAxisExtent: 240,
+          ),
+          expected,
+        );
+      });
+    },
+  );
 }
