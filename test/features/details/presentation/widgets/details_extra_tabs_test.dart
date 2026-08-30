@@ -7,6 +7,7 @@ import 'package:animewitcher/features/details/presentation/widgets/details_chara
 import 'package:animewitcher/features/details/presentation/widgets/details_extra_tabs.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_poster_grid.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/shared/widgets/paged_rail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -396,7 +397,7 @@ void main() {
     );
     expect(directionality.textDirection, TextDirection.rtl);
     expect(
-      tester.widget<ListView>(
+      tester.widget<PagedRail>(
         find.byKey(const ValueKey('details-character-rail-Main')),
       ).reverse,
       isFalse,
