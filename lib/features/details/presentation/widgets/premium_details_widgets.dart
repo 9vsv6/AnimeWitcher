@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/utils/artwork_quality.dart';
 import 'package:animewitcher/shared/widgets/cards_wrapper.dart';
+import 'package:animewitcher/shared/widgets/paged_rail.dart';
 import 'package:animewitcher/shared/widgets/shimmer_placeholder.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:animewitcher/shared/widgets/multimedia_card.dart';
@@ -538,8 +539,9 @@ class CastCarousel extends StatelessWidget {
         ),
         SizedBox(
           height: 160,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
+          child: PagedRail(
+            // 80 (cast card) + 16 (separator in [separatorBuilder]) = 96 stride.
+            itemExtent: 96,
             itemCount: cast.length + extra,
             separatorBuilder: (_, _) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
@@ -657,8 +659,10 @@ class TrailersSection extends StatelessWidget {
         ),
         SizedBox(
           height: 160,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
+          child: PagedRail(
+            // 240 (trailer card) + 16 (separator in [separatorBuilder]) = 256
+            // stride so the snap unit matches the on-screen card+gap pitch.
+            itemExtent: 256,
             itemCount: trailers.length,
             separatorBuilder: (_, _) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
@@ -819,9 +823,10 @@ class RecommendationsCarousel extends StatelessWidget {
           ),
           child: Directionality(
             textDirection: TextDirection.rtl,
-            child: ListView.separated(
-              cacheExtent: 2000,
-              scrollDirection: Axis.horizontal,
+            child: PagedRail(
+              // cardWidth + 12 (separator from [separatorBuilder]); the rail
+              // is rendered RTL so swiping right advances to the next card.
+              itemExtent: cardWidth + 12,
               itemCount: items.length,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, index) {

@@ -7,6 +7,7 @@ import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/router/app_router.dart';
 import 'package:animewitcher/shared/widgets/desktop_scroll_wrapper.dart';
 import 'package:animewitcher/shared/widgets/multimedia_card.dart';
+import 'package:animewitcher/shared/widgets/paged_rail.dart';
 import 'package:animewitcher/shared/widgets/shimmer_placeholder.dart';
 
 class SearchResultSection extends ConsumerStatefulWidget {
@@ -137,13 +138,13 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
         height: listHeight,
         child: DesktopScrollWrapper(
           controller: _scrollController,
-          child: ListView.builder(
+          child: PagedRail(
             controller: _scrollController,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            scrollDirection: Axis.horizontal,
-            itemCount: widget.results.length + (widget.isLoadingMore ? 3 : 0),
+            // 200 (card) + 24 (spacing) = 224 snap stride.
             itemExtent: cardWidth + spacing,
             clipBehavior: Clip.none,
+            itemCount: widget.results.length + (widget.isLoadingMore ? 3 : 0),
             itemBuilder: (context, rIndex) {
               if (rIndex >= widget.results.length) {
                 return Padding(

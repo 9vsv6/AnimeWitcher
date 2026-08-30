@@ -8,6 +8,7 @@ import 'package:animewitcher/features/home/presentation/widgets/continue_watchin
 import 'package:animewitcher/features/home/presentation/widgets/home_section_header.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
 import 'package:animewitcher/shared/widgets/desktop_scroll_wrapper.dart';
+import 'package:animewitcher/shared/widgets/paged_rail.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
 
@@ -127,22 +128,31 @@ class _ContinueWatchingSectionState
             child: DesktopScrollWrapper(
               controller: _scrollController,
               showButtons: isLarge, // Show nav buttons on desktop and TV
+              // Stride-aligned (one card per click) so the rail's snap
+              // logic doesn't re-animate after a button click.
+              scrollAmount: width + 16,
               child: Builder(
                 builder: (context) {
                   const double spacing = 16.0;
-                  return ListView.builder(
+                  return PagedRail(
                     controller: _scrollController,
+                    itemExtent: width + spacing,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
                     padding: EdgeInsets.symmetric(
                       horizontal: isLarge
                           ? LayoutConstants.dashboardContentPadding
                           : 16,
                       vertical: 8,
                     ),
-                    scrollDirection: Axis.horizontal,
                     itemCount: widget.items.length,
-                    itemExtent: width + spacing,
                     itemBuilder: (context, index) {
                       final historyItem = widget.items[index];
+                      // itemExtent hands children TIGHT width constraints, so
+                      // the SizedBox(width:) would be overridden and the card
+                      // would stretch across the whole stride (losing the
+                      // 16px gap). Padding deflates the constraints instead.
                       return Padding(
                         padding: const EdgeInsetsDirectional.only(end: spacing),
                         child: ContinueWatchingCard(

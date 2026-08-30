@@ -1912,9 +1912,60 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   ),
                 ]
               : <Widget>[
-                  _buildSynopsisAndGenres(context, item, l10n),
-                  const SizedBox(height: 28),
-                  AnimeInformationSection(item: item),
+                  // Wide screens have plenty of horizontal room, so place
+                  // anime info on the LEFT and the synopsis/genres block on
+                  // the RIGHT side-by-side. Narrow layouts still stack
+                  // naturally because the side-by-side block falls back to
+                  // vertical orientation when [maxWidth] < 900.
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 900;
+                      final infoColumn = [
+                        AnimeInformationSection(item: item),
+                      ];
+                      final synopsisColumn = [
+                        _buildSynopsisAndGenres(context, item, l10n),
+                      ];
+
+                      if (isWide) {
+                        return IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // LEFT: anime information table.
+                              Expanded(
+                                flex: 5,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: infoColumn,
+                                ),
+                              ),
+                              const SizedBox(width: 28),
+                              // RIGHT: synopsis + genres card.
+                              Expanded(
+                                flex: 6,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: synopsisColumn,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ...synopsisColumn,
+                          const SizedBox(height: 28),
+                          ...infoColumn,
+                        ],
+                      );
+                    },
+                  ),
                   ..._buildTrailerSections(context, item, trailersState),
                   const SizedBox(height: 24),
                   _buildDetailsExtraTabs(
