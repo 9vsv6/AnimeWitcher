@@ -15,6 +15,7 @@ import UserNotifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    DownloadNativeWaitingQueue.installUrlSessionHook()
     do {
       try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
       try AVAudioSession.sharedInstance().setActive(true)
@@ -33,26 +34,19 @@ import UserNotifications
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  /// URLSession wakes the process when a background download finishes. The
-  /// plugin's `HoldingQueue` then promotes the next file without Dart — as long
-  /// as that waiter was OS-enqueued. After a kill the in-memory queue is gone;
-  /// ask Dart to re-enqueue persisted `queueWaiting` / `enqueued` rows.
+  /// URLSession wakes the process when a background download finishes. Start the
+  /// next waiter on the plugin session (via the swizzled delegate) **before**
+  /// this completion handler runs. Flutter is never what starts the file.
   override func application(
     _ application: UIApplication,
     handleEventsForBackgroundURLSession identifier: String,
     completionHandler: @escaping () -> Void
   ) {
+    DownloadNativeWaitingQueue.installUrlSessionHook()
     super.application(
       application,
       handleEventsForBackgroundURLSession: identifier,
       completionHandler: completionHandler
-    )
-    downloadContinuedProcessingChannel?.invokeMethod(
-      "promoteWaitingAfterBackgroundSession",
-      arguments: [
-        "waitingTaskIds": DownloadWaitingQueueStore.taskIds(),
-        "maxConcurrent": DownloadWaitingQueueStore.maxConcurrent(),
-      ]
     )
   }
 
@@ -201,15 +195,9 @@ import UserNotifications
 
     channel.setMethodCallHandler { call, result in
 #if os(iOS)
-      if call.method == "persistWaitingQueue" {
+      if call.method == "persistNativeQueue" || call.method == "persistWaitingQueue" {
         let arguments = call.arguments as? [String: Any] ?? [:]
-        let taskIds = (arguments["waitingTaskIds"] as? [String]) ?? []
-        let maxConcurrent =
-          (arguments["maxConcurrent"] as? NSNumber)?.intValue ?? 1
-        DownloadWaitingQueueStore.persist(
-          taskIds: taskIds,
-          maxConcurrent: maxConcurrent
-        )
+        DownloadNativeWaitingQueue.persist(from: arguments)
         result(true)
         return
       }

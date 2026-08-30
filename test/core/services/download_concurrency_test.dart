@@ -141,20 +141,49 @@ void main() {
     });
 
     test(
-      'overflow is always OS-enqueued so iOS HoldingQueue can promote in background',
+      'overflow is persisted natively; Dart foreground must not start it',
       () {
-        expect(shouldEnqueueOverflowToNativeHoldingQueue(), isTrue);
+        expect(shouldEnqueueOverflowToNativeHoldingQueue(), isFalse);
+        expect(shouldPromoteWaitingOnAppForeground(), isFalse);
         expect(
           admitDownload(occupiedSlots: 0, maxConcurrent: 1),
-          DownloadAdmission.enqueueToNativeHoldingQueue,
+          DownloadAdmission.enqueueNow,
         );
         expect(
           admitDownload(occupiedSlots: 1, maxConcurrent: 1),
-          DownloadAdmission.enqueueToNativeHoldingQueue,
+          DownloadAdmission.persistNativeWaitingQueue,
         );
         expect(
           admitDownload(occupiedSlots: 2, maxConcurrent: 3),
-          DownloadAdmission.enqueueToNativeHoldingQueue,
+          DownloadAdmission.enqueueNow,
+        );
+      },
+    );
+
+    test(
+      'native waiter payload has url, headers, filename, directory, task JSON',
+      () {
+        final task = DownloadTask(
+          taskId: 'ep2',
+          url: 'https://cdn.test/ep2.mp4',
+          filename: 'الحلقة 2.mp4',
+          directory: 'AnimeWitcher/Downloads/Show',
+          headers: const {'Authorization': 'Bearer x'},
+          displayName: 'الحلقة 2.mp4',
+        );
+        final payload = nativeWaitingPayload(task);
+        expect(nativeWaiterPayloadIsComplete(payload), isTrue);
+        expect(payload['taskId'], 'ep2');
+        expect(payload['url'], 'https://cdn.test/ep2.mp4');
+        expect(payload['filename'], 'الحلقة 2.mp4');
+        expect(payload['directory'], 'AnimeWitcher/Downloads/Show');
+        expect(payload['headers'], containsPair('Authorization', 'Bearer x'));
+        expect(payload['headers'], isA<Map<String, String>>());
+        expect(payload['taskJson'], contains('https://cdn.test/ep2.mp4'));
+        expect(payload['taskJson'], contains('ep2'));
+        expect(
+          nativeWaiterPayloadIsComplete({'taskId': 'ep2', 'url': ''}),
+          isFalse,
         );
       },
     );
@@ -172,12 +201,14 @@ void main() {
             ),
             DownloadQueueEntry(
               taskId: 'ep2',
-              status: TaskStatus.enqueued,
+              status: TaskStatus.paused,
               timestamp: 2,
+              queueWaiting: true,
             ),
           ],
         );
-        expect(whileEp1Transfers.occupiedCount, 2);
+        expect(whileEp1Transfers.occupiedCount, 1);
+        expect(whileEp1Transfers.waitingFifoIds, ['ep2']);
         expect(whileEp1Transfers.idsToPark, isEmpty);
         expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
         expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);

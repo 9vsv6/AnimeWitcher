@@ -14,13 +14,9 @@ class DownloadContinuedProcessingService {
   );
 
   final SystemDownloadCancellation onSystemCancel;
-  final Future<void> Function()? onPromoteWaitingAfterBackgroundSession;
   bool _handlerInstalled = false;
 
-  DownloadContinuedProcessingService({
-    required this.onSystemCancel,
-    this.onPromoteWaitingAfterBackgroundSession,
-  }) {
+  DownloadContinuedProcessingService({required this.onSystemCancel}) {
     if (_isAvailable) {
       _channel.setMethodCallHandler(_handleNativeCall);
       _handlerInstalled = true;
@@ -71,21 +67,25 @@ class DownloadContinuedProcessingService {
     await _invoke('stop', <String, Object>{'taskId': taskId});
   }
 
-  /// Persist holding-queue waiters so iOS can restore them after a kill when
-  /// `handleEventsForBackgroundURLSession` relaunches the process.
-  Future<void> persistWaitingQueue({
+  /// Persist full waiter payloads (url, headers, filename, directory, task JSON)
+  /// so iOS can start the next file from Swift without Flutter.
+  Future<void> persistNativeQueue({
     required int maxConcurrent,
-    required List<String> waitingTaskIds,
+    required List<Map<String, Object>> waiters,
+    required List<String> transferringTaskIds,
+    required List<String> pausedTaskIds,
   }) async {
-    await _invoke('persistWaitingQueue', <String, Object>{
+    await _invoke('persistNativeQueue', <String, Object>{
       'maxConcurrent': maxConcurrent,
-      'waitingTaskIds': waitingTaskIds,
+      'waiters': waiters,
+      'transferringTaskIds': transferringTaskIds,
+      'pausedTaskIds': pausedTaskIds,
     });
   }
 
   Future<dynamic> _handleNativeCall(MethodCall call) async {
     if (call.method == 'promoteWaitingAfterBackgroundSession') {
-      await onPromoteWaitingAfterBackgroundSession?.call();
+      // Native Swift starts the file. This channel is bookkeeping only.
       return true;
     }
 
