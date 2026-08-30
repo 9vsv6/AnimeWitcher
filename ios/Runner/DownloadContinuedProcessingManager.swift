@@ -3,6 +3,29 @@ import BackgroundTasks
 import Foundation
 import UIKit
 
+/// Survives a process kill so waiters can be restored when iOS relaunches
+/// the app for `handleEventsForBackgroundURLSession`. The plugin's in-memory
+/// `HoldingQueue` is empty after a swipe-away; URLSession tasks already
+/// submitted continue, but extras that never reached URLSession do not.
+enum DownloadWaitingQueueStore {
+  static let taskIdsKey = "com.animewitcher.download.waitingTaskIds"
+  static let maxConcurrentKey = "com.animewitcher.download.waitingMaxConcurrent"
+
+  static func persist(taskIds: [String], maxConcurrent: Int) {
+    UserDefaults.standard.set(taskIds, forKey: taskIdsKey)
+    UserDefaults.standard.set(maxConcurrent, forKey: maxConcurrentKey)
+  }
+
+  static func taskIds() -> [String] {
+    UserDefaults.standard.stringArray(forKey: taskIdsKey) ?? []
+  }
+
+  static func maxConcurrent() -> Int {
+    let value = UserDefaults.standard.integer(forKey: maxConcurrentKey)
+    return value > 0 ? min(max(value, 1), 5) : 1
+  }
+}
+
 @available(iOS 26.0, *)
 private enum DownloadContinuedProcessingError: LocalizedError {
   case missingBundleIdentifier

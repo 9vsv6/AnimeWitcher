@@ -266,6 +266,9 @@ class _MyAppState extends ConsumerState<MyApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(downloadServiceProvider).onAppForegrounded());
+    }
     if (state != AppLifecycleState.resumed) return;
     final account = ref
         .read(animeWitcherAccountControllerProvider)

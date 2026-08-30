@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:animewitcher/core/services/download_concurrency.dart';
 import 'package:animewitcher/core/utils/download_resume.dart';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -188,6 +190,30 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'kill recovery re-enqueues native holding-queue waiters, not user-paused',
+    () {
+      expect(
+        shouldReenqueueWaitingAfterProcessKill(
+          persisted: TaskStatus.enqueued,
+          queueWaiting: false,
+          userPaused: false,
+          stillInNativeQueue: false,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldReenqueueWaitingAfterProcessKill(
+          persisted: TaskStatus.paused,
+          queueWaiting: false,
+          userPaused: true,
+          stillInNativeQueue: false,
+        ),
+        isFalse,
+      );
+    },
+  );
 
   test('range headers continue from the existing byte offset', () {
     expect(
