@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'dart:io';
 import '../domain/entity/multimedia_item.dart';
+import '../services/download_concurrency.dart';
 import '../utils/safe_uri.dart';
 
 part 'storage_service.g.dart';
@@ -628,6 +629,26 @@ class StorageService {
               defaultValue: true,
             ) as bool?) ??
         true;
+  }
+
+  // --- Download queue ---
+
+  Future<void> setDownloadConcurrency(int value) async {
+    await _settingsBox.put(
+      kDownloadConcurrencyStorageKey,
+      clampDownloadConcurrency(value),
+    );
+  }
+
+  int getDownloadConcurrency() {
+    return parseDownloadConcurrency(
+      _settingsBox.get(kDownloadConcurrencyStorageKey),
+    );
+  }
+
+  @visibleForTesting
+  void debugBindSettingsBox(Box<dynamic> box) {
+    _settingsBox = box;
   }
 
 
