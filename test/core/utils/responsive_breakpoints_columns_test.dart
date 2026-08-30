@@ -11,7 +11,6 @@ double _cardWidth(double availableWidth, int columns, double spacing) {
 Future<BuildContext> _pumpContext(
   WidgetTester tester, {
   required Size size,
-  TargetPlatform? platform,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -21,10 +20,6 @@ Future<BuildContext> _pumpContext(
     tester.view.resetDevicePixelRatio();
     tester.binding.setSurfaceSize(null);
   });
-  if (platform != null) {
-    debugDefaultTargetPlatformOverride = platform;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-  }
   late BuildContext captured;
   await tester.pumpWidget(
     MaterialApp(
@@ -189,36 +184,37 @@ void main() {
         tester,
       ) async {
         const size = Size(3440, 1440);
-        final context = await _pumpContext(
-          tester,
-          size: size,
-          platform: TargetPlatform.windows,
-        );
-        final expected = ResponsiveBreakpoints.desktopLandscapeColumnsFor(
-          size.width,
-        );
-        expect(
-          expected,
-          greaterThan(ResponsiveBreakpoints.desktopLandscapeAnimeColumns),
-        );
+        debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+        try {
+          final context = await _pumpContext(tester, size: size);
+          final expected = ResponsiveBreakpoints.desktopLandscapeColumnsFor(
+            size.width,
+          );
+          expect(
+            expected,
+            greaterThan(ResponsiveBreakpoints.desktopLandscapeAnimeColumns),
+          );
 
-        final delegate = ResponsiveBreakpoints.animeGridDelegate(
-          context,
-          maxCrossAxisExtent: 240,
-          childAspectRatio: 0.54,
-        );
-        expect(
-          (delegate as SliverGridDelegateWithFixedCrossAxisCount)
-              .crossAxisCount,
-          expected,
-        );
-        expect(
-          ResponsiveBreakpoints.animeGridCrossAxisCount(
+          final delegate = ResponsiveBreakpoints.animeGridDelegate(
             context,
             maxCrossAxisExtent: 240,
-          ),
-          expected,
-        );
+            childAspectRatio: 0.54,
+          );
+          expect(
+            (delegate as SliverGridDelegateWithFixedCrossAxisCount)
+                .crossAxisCount,
+            expected,
+          );
+          expect(
+            ResponsiveBreakpoints.animeGridCrossAxisCount(
+              context,
+              maxCrossAxisExtent: 240,
+            ),
+            expected,
+          );
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
       });
     },
   );
