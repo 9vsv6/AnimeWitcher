@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/services/download_concurrency.dart';
 import 'package:animewitcher/core/services/download_service.dart';
 import 'package:animewitcher/core/utils/download_cleanup.dart';
 import 'package:animewitcher/features/library/presentation/downloads_provider.dart';
@@ -733,8 +734,17 @@ void main() {
         serverName: 'الحلقة 10',
       ),
     );
-    final collapsed = collapseDuplicateDownloads([newer, older]).visible;
+    final collapsed = sortByDownloadQueueOrder(
+      collapseDuplicateDownloads([newer, older]).visible,
+      idOf: (item) => item.id,
+      order: const [],
+      fallbackTimestamp: (item) => item.timestamp,
+    );
     expect(collapsed.first.id, 'old-run');
     expect(collapsed.last.id, 'new-run');
+    expect(
+      collapseDuplicateDownloads([newer, older]).visible.map((item) => item.id),
+      ['new-run', 'old-run'],
+    );
   });
 }

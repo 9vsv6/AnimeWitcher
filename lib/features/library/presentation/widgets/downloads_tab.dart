@@ -153,43 +153,52 @@ class _ActiveDownloadsList extends ConsumerWidget {
       return _DownloadsEmptyState(message: emptyMessage);
     }
 
-    return ReorderableListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      buildDefaultDragHandles: false,
-      itemCount: items.length,
-      onReorder: (oldIndex, newIndex) {
-        unawaited(
-          ref
-              .read(downloadsProvider.notifier)
-              .reorderActive(oldIndex, newIndex),
-        );
-      },
-      proxyDecorator: (child, index, animation) {
-        return Material(color: Colors.transparent, elevation: 0, child: child);
-      },
-      itemBuilder: (context, index) {
-        final download = items[index];
-        final trackingUrl = download.task.metaData.isNotEmpty
-            ? download.task.metaData
-            : download.task.url;
-        final progressData = activeProgress[trackingUrl];
-        final double displayProgress =
-            progressData?.progress ?? download.progress;
-        final TaskStatus displayStatus =
-            progressData?.status ?? download.status;
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: ReorderableListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        buildDefaultDragHandles: false,
+        itemCount: items.length,
+        onReorder: (oldIndex, newIndex) {
+          unawaited(
+            ref
+                .read(downloadsProvider.notifier)
+                .reorderActive(oldIndex, newIndex),
+          );
+        },
+        proxyDecorator: (child, index, animation) {
+          return Material(
+            color: Colors.transparent,
+            elevation: 0,
+            child: child,
+          );
+        },
+        itemBuilder: (context, index) {
+          final download = items[index];
+          final trackingUrl = download.task.metaData.isNotEmpty
+              ? download.task.metaData
+              : download.task.url;
+          final progressData = activeProgress[trackingUrl];
+          final double displayProgress =
+              progressData?.progress ?? download.progress;
+          final TaskStatus displayStatus =
+              progressData?.status ?? download.status;
 
-        return Padding(
-          key: ValueKey(download.id),
-          padding: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 16),
-          child: _DownloadItemTile(
-            item: download,
-            progress: displayProgress,
-            status: displayStatus,
-            progressData: progressData,
-            dragIndex: index,
-          ),
-        );
-      },
+          return Padding(
+            key: ValueKey(download.id),
+            padding: EdgeInsets.only(
+              bottom: index == items.length - 1 ? 0 : 16,
+            ),
+            child: _DownloadItemTile(
+              item: download,
+              progress: displayProgress,
+              status: displayStatus,
+              progressData: progressData,
+              dragIndex: index,
+            ),
+          );
+        },
+      ),
     );
   }
 }

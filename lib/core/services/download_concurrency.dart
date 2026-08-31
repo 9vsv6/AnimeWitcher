@@ -733,3 +733,55 @@ DownloadQueuePlan planDownloadQueue({
     idsToPromote: idsToPromote,
   );
 }
+
+class DownloadReorderPlan {
+  const DownloadReorderPlan({
+    required this.idsToRun,
+    required this.idsToPark,
+    required this.idsToEnqueue,
+  });
+
+  /// First N rows — run these, even if the user just dragged a paused file here.
+  final List<String> idsToRun;
+
+  /// Occupying transfers that fell below N — pause and keep as waiters.
+  final List<String> idsToPark;
+
+  /// Visual order of HQ / leftover waiters after the live slots.
+  final List<String> idsToEnqueue;
+}
+
+/// After a user drag: top [maxConcurrent] run; displaced running files park;
+/// remaining active rows wait in the new order. User-paused rows that stay
+/// below N stay paused.
+DownloadReorderPlan planDownloadReorderSlots({
+  required int maxConcurrent,
+  required List<String> activeOrder,
+  required Map<String, TaskStatus> statusById,
+  required Set<String> userPausedIds,
+}) {
+  final n = clampDownloadConcurrency(maxConcurrent);
+  final idsToRun = activeOrder.take(n).toList();
+  final below = activeOrder.skip(n).toList();
+  final occupying = <String>{
+    for (final id in activeOrder)
+      if (occupiesDownloadSlot(
+        status: statusById[id] ?? TaskStatus.enqueued,
+        queueWaiting: false,
+      ))
+        id,
+  };
+  final idsToPark = [
+    for (final id in occupying)
+      if (!idsToRun.contains(id)) id,
+  ];
+  final idsToEnqueue = [
+    for (final id in below)
+      if (idsToPark.contains(id) || !userPausedIds.contains(id)) id,
+  ];
+  return DownloadReorderPlan(
+    idsToRun: idsToRun,
+    idsToPark: idsToPark,
+    idsToEnqueue: idsToEnqueue,
+  );
+}

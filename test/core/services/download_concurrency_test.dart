@@ -474,6 +474,50 @@ void main() {
       );
     });
 
+    test('dragging a paused row above a running file preempts the slot', () {
+      final plan = planDownloadReorderSlots(
+        maxConcurrent: 1,
+        activeOrder: const ['ep7', 'ep8', 'ep9'],
+        statusById: const {
+          'ep7': TaskStatus.paused,
+          'ep8': TaskStatus.running,
+          'ep9': TaskStatus.enqueued,
+        },
+        userPausedIds: const {'ep7'},
+      );
+      expect(plan.idsToRun, ['ep7']);
+      expect(plan.idsToPark, ['ep8']);
+      expect(plan.idsToEnqueue, ['ep8', 'ep9']);
+    });
+
+    test('waiting file dragged to the top parks the running transfer', () {
+      final plan = planDownloadReorderSlots(
+        maxConcurrent: 1,
+        activeOrder: const ['ep7', 'ep8', 'ep9'],
+        statusById: const {
+          'ep7': TaskStatus.enqueued,
+          'ep8': TaskStatus.running,
+          'ep9': TaskStatus.enqueued,
+        },
+        userPausedIds: const {},
+      );
+      expect(plan.idsToRun, ['ep7']);
+      expect(plan.idsToPark, ['ep8']);
+      expect(plan.idsToEnqueue, ['ep8', 'ep9']);
+    });
+
+    test('user-paused rows below N stay paused', () {
+      final plan = planDownloadReorderSlots(
+        maxConcurrent: 1,
+        activeOrder: const ['ep8', 'ep7'],
+        statusById: const {'ep8': TaskStatus.running, 'ep7': TaskStatus.paused},
+        userPausedIds: const {'ep7'},
+      );
+      expect(plan.idsToRun, ['ep8']);
+      expect(plan.idsToPark, isEmpty);
+      expect(plan.idsToEnqueue, isEmpty);
+    });
+
     test('applyActiveDownloadReorder keeps completed slots', () {
       expect(
         applyActiveDownloadReorder(

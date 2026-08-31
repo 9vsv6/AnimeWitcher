@@ -155,7 +155,15 @@ CollapsedDownloads collapseDuplicateDownloads(List<DownloadItem> items) {
     }
   }
 
-  visible.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  // Keep the caller's order (FIFO or the user's drag). Timestamp sort here
+  // made a drag snap back to oldest-first on the next rebuild.
+  final originalIndex = <String, int>{};
+  for (var i = 0; i < items.length; i++) {
+    originalIndex.putIfAbsent(items[i].id, () => i);
+  }
+  visible.sort(
+    (a, b) => (originalIndex[a.id] ?? 0).compareTo(originalIndex[b.id] ?? 0),
+  );
   return CollapsedDownloads(
     visible: visible,
     extraCompleteRecords: extraComplete
@@ -334,7 +342,13 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       }
 
       if (newStatus == TaskStatus.canceled) {
-        // Remove from list only on explicit user cancel.
+        // Reorder rewrite cancels HQ waiters then re-enqueues them. Dropping
+        // the row here is what snapped the dragged card back and looked like
+        // a delete. User delete already removes the row after cancel.
+        if (existing.status == TaskStatus.enqueued ||
+            existing.status == TaskStatus.paused) {
+          return;
+        }
         final newList = List<DownloadItem>.from(currentList)..removeAt(index);
         state = AsyncData(newList);
         unawaited(

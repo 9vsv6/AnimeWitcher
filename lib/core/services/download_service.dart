@@ -167,6 +167,7 @@ class DownloadService {
             '{displayName}',
             'التنزيل متوقف مؤقتاً',
           ),
+          canceled: const TaskNotification('{displayName}', 'تم إلغاء التنزيل'),
           progressBar: !Platform.isIOS,
         )
         .configureNotificationForGroup(
@@ -178,6 +179,7 @@ class DownloadService {
             '{displayName}',
             'التنزيل متوقف مؤقتاً',
           ),
+          canceled: const TaskNotification('{displayName}', 'تم إلغاء التنزيل'),
           progressBar: !Platform.isIOS,
         );
 
@@ -196,6 +198,10 @@ class DownloadService {
       final trackingUrl = update.task.metaData.isNotEmpty
           ? update.task.metaData
           : update.task.url;
+
+      if (_reorderingTaskIds.contains(update.task.taskId)) {
+        return;
+      }
 
       // User-initiated cancels are cleaned up in [cancelDownload]; ignore their
       // follow-up events so they cannot race with pause-on-failure handling.
@@ -685,7 +691,7 @@ class DownloadService {
           .read(storageServiceProvider)
           .setDownloadQueueOrder(activeTaskIds);
       if (rewriteHoldingQueue && _isInitialized) {
-        await _rewriteHoldingQueueWaiters(activeTaskIds, records);
+        await _applyReorderSlots(activeTaskIds, records);
       }
       if (_isInitialized) {
         await _persistNativeWaitingSnapshot();
@@ -700,32 +706,62 @@ class DownloadService {
     await _serializeQueue(apply);
   }
 
-  Future<void> _rewriteHoldingQueueWaiters(
+  Future<void> _applyReorderSlots(
     List<String> activeTaskIds,
     List<TaskRecord> records,
   ) async {
+    final max = clampDownloadConcurrency(
+      _ref.read(storageServiceProvider).getDownloadConcurrency(),
+    );
     final byId = {for (final record in records) record.task.taskId: record};
-    final waiterTasks = <DownloadTask>[];
-    for (final id in activeTaskIds) {
-      final record = byId[id];
-      if (record == null || record.task is! DownloadTask) continue;
-      if (occupiesDownloadSlot(status: record.status, queueWaiting: false)) {
-        continue;
-      }
-      final leftoverWaiting = _queueWaitingIds.contains(id);
-      if (record.status == TaskStatus.paused && !leftoverWaiting) continue;
-      if (record.status == TaskStatus.enqueued || leftoverWaiting) {
-        waiterTasks.add(record.task as DownloadTask);
-      }
-    }
-    if (waiterTasks.length < 2) return;
-    _reorderingTaskIds.addAll(waiterTasks.map((task) => task.taskId));
+    final statusById = {
+      for (final record in records) record.task.taskId: record.status,
+    };
+    final userPausedIds = <String>{
+      for (final record in records)
+        if (record.status == TaskStatus.paused &&
+            !_queueWaitingIds.contains(record.task.taskId))
+          record.task.taskId,
+    };
+    final plan = planDownloadReorderSlots(
+      maxConcurrent: max,
+      activeOrder: activeTaskIds,
+      statusById: statusById,
+      userPausedIds: userPausedIds,
+    );
+
+    final cancelIds = [
+      for (final id in activeTaskIds)
+        if (statusById[id] == TaskStatus.enqueued) id,
+    ];
+    _reorderingTaskIds.addAll(cancelIds);
+    _reorderingTaskIds.addAll(plan.idsToPark);
     try {
-      await FileDownloader().cancelTasksWithIds(
-        waiterTasks.map((task) => task.taskId).toList(),
-      );
+      if (cancelIds.isNotEmpty) {
+        await FileDownloader().cancelTasksWithIds(cancelIds);
+      }
+      for (final id in plan.idsToPark) {
+        final record = byId[id];
+        if (record?.task is! DownloadTask) continue;
+        await _parkOccupyingTaskUnlocked(record!.task as DownloadTask);
+      }
+      for (final id in plan.idsToRun) {
+        final record = byId[id];
+        if (record?.task is! DownloadTask) continue;
+        final occupying = occupiesDownloadSlot(
+          status: record!.status,
+          queueWaiting: false,
+        );
+        if (occupying && !cancelIds.contains(id)) continue;
+        await _promoteWaitingTask(record.task as DownloadTask);
+      }
       var index = 0;
-      for (final task in waiterTasks) {
+      for (final id in plan.idsToEnqueue) {
+        if (plan.idsToPark.contains(id)) continue;
+        if (userPausedIds.contains(id)) continue;
+        final record = byId[id];
+        if (record?.task is! DownloadTask) continue;
+        final task = record!.task as DownloadTask;
         final copy = task.copyWith(
           creationTime: DateTime.now().add(Duration(milliseconds: index++)),
         );
@@ -733,8 +769,39 @@ class DownloadService {
         await FileDownloader().enqueue(copy);
       }
     } finally {
-      _reorderingTaskIds.removeAll(waiterTasks.map((task) => task.taskId));
+      final ids = List<String>.from(cancelIds);
+      Future<void>.delayed(const Duration(seconds: 3), () {
+        _reorderingTaskIds.removeAll(ids);
+        _reorderingTaskIds.removeAll(plan.idsToPark);
+      });
     }
+  }
+
+  Future<void> _parkOccupyingTaskUnlocked(DownloadTask task) async {
+    final taskId = task.taskId;
+    await FileDownloader().pause(task);
+    final trackingUrl = downloadTrackingUrl(task);
+    final current = _ref.read(downloadProgressProvider)[trackingUrl];
+    final record = await FileDownloader().database.recordForId(taskId);
+    var progress = current?.progress ?? record?.progress ?? 0.0;
+    if (progress < 0 || progress > 1) progress = 0.0;
+    final totalSize = current?.totalSize ?? record?.expectedFileSize ?? -1;
+    await FileDownloader().database.updateRecord(
+      TaskRecord(task, TaskStatus.paused, progress, totalSize),
+    );
+    _queueWaitingIds.add(taskId);
+    _waitingPayloads[taskId] = _waitingPayloadFor(task);
+    await _ref
+        .read(storageServiceProvider)
+        .patchDownloadMetadata(taskId, queueWaiting: true);
+    _publishProgress(
+      trackingUrl: trackingUrl,
+      taskId: taskId,
+      progress: progress,
+      totalSize: totalSize,
+      status: TaskStatus.enqueued,
+    );
+    _updatesController.add(TaskStatusUpdate(task, TaskStatus.enqueued));
   }
 
   Future<DownloadOverlaySession> _planSessionOverlay({
