@@ -172,6 +172,37 @@ CollapsedDownloads collapseDuplicateDownloads(List<DownloadItem> items) {
   );
 }
 
+/// Build a Downloads row from Hive metadata so tapping تنزيل can show
+/// **في الانتظار** before FileDownloader's record exists.
+DownloadItem? downloadItemFromTaskMetadata({
+  required Task task,
+  required TaskStatus status,
+  required Map<String, dynamic> metadata,
+  double progress = 0,
+}) {
+  final rawItem = metadata['item'];
+  if (rawItem is! Map) return null;
+  var storedProgress = progress;
+  if (storedProgress < 0 || storedProgress > 1) {
+    storedProgress = status == TaskStatus.complete ? 1.0 : 0.0;
+  }
+  return DownloadItem(
+    task: task,
+    status: displayDownloadStatus(
+      persisted: status,
+      queueWaiting: isQueueWaitingMetadata(metadata),
+    ),
+    progress: storedProgress,
+    item: MultimediaItem.fromJson(Map<String, dynamic>.from(rawItem)),
+    episode: metadata['episode'] != null
+        ? Episode.fromJson(
+            Map<String, dynamic>.from(metadata['episode'] as Map),
+          )
+        : null,
+    timestamp: (metadata['timestamp'] as int?) ?? 0,
+  );
+}
+
 @Riverpod(keepAlive: true)
 class DownloadsNotifier extends _$DownloadsNotifier {
   @override
@@ -226,26 +257,14 @@ class DownloadsNotifier extends _$DownloadsNotifier {
 
       final metadata = await storage.getDownloadMetadata(record.task.taskId);
       if (metadata == null) continue;
-
-      items.add(
-        DownloadItem(
-          task: record.task,
-          status: displayDownloadStatus(
-            persisted: status,
-            queueWaiting: isQueueWaitingMetadata(metadata),
-          ),
-          progress: progress,
-          item: MultimediaItem.fromJson(
-            Map<String, dynamic>.from(metadata['item'] as Map),
-          ),
-          episode: metadata['episode'] != null
-              ? Episode.fromJson(
-                  Map<String, dynamic>.from(metadata['episode'] as Map),
-                )
-              : null,
-          timestamp: (metadata['timestamp'] as int?) ?? 0,
-        ),
+      final item = downloadItemFromTaskMetadata(
+        task: record.task,
+        status: status,
+        metadata: metadata,
+        progress: progress,
       );
+      if (item == null) continue;
+      items.add(item);
     }
 
     // FIFO: oldest first unless the user has a saved drag order.
@@ -345,8 +364,17 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         // Reorder rewrite cancels HQ waiters then re-enqueues them. Dropping
         // the row here is what snapped the dragged card back and looked like
         // a delete. User delete already removes the row after cancel.
+        // Enqueue rollback deletes metadata — those rows must disappear.
         if (existing.status == TaskStatus.enqueued ||
             existing.status == TaskStatus.paused) {
+          final metadata = await ref
+              .read(storageServiceProvider)
+              .getDownloadMetadata(existing.id);
+          if (metadata == null) {
+            final newList = List<DownloadItem>.from(currentList)
+              ..removeAt(index);
+            state = AsyncData(newList);
+          }
           return;
         }
         final newList = List<DownloadItem>.from(currentList)..removeAt(index);
@@ -390,7 +418,35 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         }
       }
     } else {
-      // If not in state, it might be a new download. Refresh to get metadata.
+      // New download: show the row as soon as Hive metadata exists, even if
+      // FileDownloader has not written the record yet (HQ overflow).
+      if (update is TaskStatusUpdate &&
+          update.task is DownloadTask &&
+          isActiveDownloadStatus(update.status)) {
+        final metadata = await ref
+            .read(storageServiceProvider)
+            .getDownloadMetadata(update.task.taskId);
+        final incoming = metadata == null
+            ? null
+            : downloadItemFromTaskMetadata(
+                task: update.task,
+                status: update.status,
+                metadata: metadata,
+              );
+        if (incoming != null) {
+          final collapsed = collapseDuplicateDownloads([
+            ...currentList,
+            incoming,
+          ]);
+          state = AsyncData(
+            _orderDownloads(
+              collapsed.visible,
+              ref.read(storageServiceProvider).getDownloadQueueOrder(),
+            ),
+          );
+          return;
+        }
+      }
       state = AsyncData(await _refreshList());
     }
   }

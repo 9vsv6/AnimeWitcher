@@ -165,6 +165,22 @@ void main() {
           shouldFinishDownloadSessionOverlay(runningCount: 0, waitingCount: 0),
           isTrue,
         );
+        expect(
+          downloadSessionHasRemainingWork(
+            runningCount: 0,
+            waitingCount: 0,
+            pendingWaiterPayloads: 3,
+          ),
+          isTrue,
+        );
+        expect(
+          downloadSessionHasRemainingWork(
+            runningCount: 0,
+            waitingCount: 0,
+            pendingWaiterPayloads: 0,
+          ),
+          isFalse,
+        );
       },
     );
 
@@ -309,6 +325,49 @@ void main() {
           batchTotal: afterEp1.batchTotal,
         ),
         '12MB/400MB • 2 of 5',
+      );
+
+      final afterEp1BeforeBytes = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep1',
+            status: TaskStatus.complete,
+            displayName: 'الحلقة 1',
+            progress: 1,
+            totalBytes: 10 * 1000 * 1000,
+            speedBytesPerSecond: 859 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep2',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 11 (480p).mp4',
+            totalBytes: 10 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep3',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 12',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep4',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 13',
+          ),
+        ],
+      );
+      expect(afterEp1BeforeBytes.currentTaskId, 'ep2');
+      expect(afterEp1BeforeBytes.currentIndex, 2);
+      expect(afterEp1BeforeBytes.transferredBytes, 0);
+      expect(afterEp1BeforeBytes.speedBytesPerSecond, 0);
+      expect(afterEp1BeforeBytes.shouldFinish, isFalse);
+      expect(
+        formatDownloadSessionSubtitle(
+          transferredBytes: afterEp1BeforeBytes.transferredBytes,
+          totalBytes: afterEp1BeforeBytes.totalBytes,
+          currentIndex: afterEp1BeforeBytes.currentIndex,
+          batchTotal: afterEp1BeforeBytes.batchTotal,
+        ),
+        '0B/10MB • 2 of 4',
       );
 
       final allDone = planDownloadOverlaySession(
@@ -572,6 +631,36 @@ void main() {
           status: TaskStatus.paused,
           incomingSpeed: 0,
           lastKnownSpeed: 0.64,
+        ),
+        0,
+      );
+    });
+
+    test('overlay speed resets on file switch, keeps hitch on same file', () {
+      expect(
+        overlayNativeSpeedUpdate(
+          currentTaskId: 'ep1',
+          previousTaskId: 'ep1',
+          runningCount: 1,
+          plannedSpeed: 0,
+        ),
+        -1,
+      );
+      expect(
+        overlayNativeSpeedUpdate(
+          currentTaskId: 'ep2',
+          previousTaskId: 'ep1',
+          runningCount: 0,
+          plannedSpeed: 859 * 1000,
+        ),
+        0,
+      );
+      expect(
+        overlayNativeSpeedUpdate(
+          currentTaskId: 'ep2',
+          previousTaskId: 'ep1',
+          runningCount: 1,
+          plannedSpeed: 0,
         ),
         0,
       );
