@@ -104,7 +104,10 @@ class DownloadService {
   Future<void> _queueChain = Future<void>.value();
   final Set<String> _queueWaitingIds = {};
   final Set<String> _startingTaskIds = {};
-  final Set<String> _liveActivityTaskIds = {};
+  final Set<String> _sessionTaskIds = {};
+  bool _sessionOverlayActive = false;
+  int _sessionCompletedCount = 0;
+  int _sessionBatchTotal = 0;
   final Map<String, Map<String, Object>> _waitingPayloads = {};
 
   DownloadService(this._ref) : _dio = _ref.read(dioClientProvider) {
@@ -258,20 +261,30 @@ class DownloadService {
               .read(downloadProgressProvider.notifier)
               .update(trackingUrl, progressData);
 
-          if (_liveActivityTaskIds.contains(update.task.taskId)) {
+          if (_sessionOverlayActive) {
+            _rememberSessionTask(update.task.taskId);
             unawaited(
               _continuedProcessing.update(
                 taskId: update.task.taskId,
                 progress: progressData.progress,
                 totalBytes: progressData.totalSize,
+                transferredBytes: overlayTransferredBytes(
+                  progress: progressData.progress,
+                  totalBytes: progressData.totalSize,
+                ),
+                completedCount: _sessionCompletedCount,
+                batchTotal: _sessionBatchTotal,
+                speedBytesPerSecond: progressData.networkSpeed * 1000 * 1000,
+                displayName: update.task.displayName,
               ),
             );
           } else if (progressMeansNativeTransfer(progressData.progress)) {
             unawaited(
-              _ensureLiveActivity(
-                update.task,
+              _syncSessionOverlay(
+                preferTaskId: update.task.taskId,
                 progress: progressData.progress,
                 totalBytes: progressData.totalSize,
+                speedBytesPerSecond: progressData.networkSpeed * 1000 * 1000,
               ),
             );
           }
@@ -323,42 +336,38 @@ class DownloadService {
 
           switch (update.status) {
             case TaskStatus.complete:
-              _liveActivityTaskIds.remove(update.task.taskId);
+              _rememberSessionTask(update.task.taskId);
               _queueWaitingIds.remove(update.task.taskId);
-              unawaited(
-                _continuedProcessing.finish(
-                  taskId: update.task.taskId,
-                  success: true,
-                  status: 'completed',
-                ),
-              );
+              // Do not finish the session overlay here. Finishing when ep1
+              // completes suspends the process before ep2 can start.
+              unawaited(_syncSessionOverlay(completedSuccess: true));
               unawaited(_persistCompletedFilePath(update.task));
-              unawaited(_persistNativeWaitingSnapshot());
             case TaskStatus.paused:
-              unawaited(_stopLiveActivity(update.task.taskId));
+              unawaited(_syncSessionOverlay());
             case TaskStatus.running:
               _queueWaitingIds.remove(update.task.taskId);
+              _rememberSessionTask(update.task.taskId);
               unawaited(
-                _ensureLiveActivity(
-                  update.task,
+                _syncSessionOverlay(
+                  preferTaskId: update.task.taskId,
                   progress: current?.progress ?? 0,
                   totalBytes: current?.totalSize ?? -1,
                 ),
               );
             case TaskStatus.enqueued:
-              // Waiting rows stay في الانتظار. Never create or keep a Live
-              // Activity / "Downloading 0%" system task.
+              // Waiting rows stay في الانتظار. Keep the session overlay if
+              // another episode is still running or waiting.
               if (update.task is DownloadTask) {
                 _waitingPayloads[update.task.taskId] = _waitingPayloadFor(
                   update.task as DownloadTask,
                 );
               }
-              unawaited(_stopLiveActivity(update.task.taskId));
-              unawaited(_persistNativeWaitingSnapshot());
+              _rememberSessionTask(update.task.taskId);
+              unawaited(_syncSessionOverlay());
             case TaskStatus.failed:
             case TaskStatus.canceled:
             case TaskStatus.notFound:
-              unawaited(_stopLiveActivity(update.task.taskId));
+              unawaited(_syncSessionOverlay(completedSuccess: false));
             default:
               break;
           }
@@ -447,6 +456,11 @@ class DownloadService {
       if (queueWaiting) {
         _queueWaitingIds.add(task.taskId);
         _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
+        _rememberSessionTask(task.taskId);
+      } else if (record.status == TaskStatus.running ||
+          record.status == TaskStatus.enqueued ||
+          record.status == TaskStatus.waitingToRetry) {
+        _rememberSessionTask(task.taskId);
       }
 
       final isFailed =
@@ -483,6 +497,7 @@ class DownloadService {
       if (shouldReenqueue) {
         _queueWaitingIds.add(task.taskId);
         _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
+        _rememberSessionTask(task.taskId);
         await storage.patchDownloadMetadata(task.taskId, queueWaiting: true);
       }
 
@@ -516,8 +531,7 @@ class DownloadService {
     }
 
     await _syncQueueToCapUnlocked();
-    await _attachLiveActivitiesToRunningTasks();
-    await _persistNativeWaitingSnapshot();
+    await _syncSessionOverlay();
   }
 
   int _occupiedSlotCount(List<TaskRecord> records) {
@@ -598,21 +612,133 @@ class DownloadService {
       await _attachUiToLiveNativeTasks();
       await _syncQueueToCapUnlocked();
     });
-    await _attachLiveActivitiesToRunningTasks();
+    await _syncSessionOverlay();
   }
 
-  Future<void> _attachLiveActivitiesToRunningTasks() async {
+  void _rememberSessionTask(String taskId) {
+    if (taskId.isEmpty) return;
+    _sessionTaskIds.add(taskId);
+  }
+
+  void _forgetSessionTask(String taskId) {
+    _sessionTaskIds.remove(taskId);
+  }
+
+  Future<DownloadOverlaySession> _planSessionOverlay({
+    String? preferTaskId,
+    double? progress,
+    int? totalBytes,
+    double? speedBytesPerSecond,
+  }) async {
     final records = await FileDownloader().database.allRecords();
+    final liveProgress = _ref.read(downloadProgressProvider);
+    final entries = <DownloadOverlayEntry>[];
     for (final record in records) {
       if (record.task is! DownloadTask) continue;
-      if (record.status != TaskStatus.running) continue;
-      if (_queueWaitingIds.contains(record.task.taskId)) continue;
-      await _ensureLiveActivity(
-        record.task,
-        progress: record.progress,
-        totalBytes: record.expectedFileSize,
+      final leftoverWaiting = _queueWaitingIds.contains(record.task.taskId);
+      final inSession =
+          _sessionTaskIds.contains(record.task.taskId) ||
+          occupiesDownloadSlot(
+            status: record.status,
+            queueWaiting: leftoverWaiting,
+          ) ||
+          leftoverWaiting ||
+          record.status == TaskStatus.enqueued;
+      if (!inSession) continue;
+      if (record.status == TaskStatus.complete) {
+        _rememberSessionTask(record.task.taskId);
+      }
+      if (occupiesDownloadSlot(
+            status: record.status,
+            queueWaiting: leftoverWaiting,
+          ) ||
+          leftoverWaiting ||
+          record.status == TaskStatus.enqueued) {
+        _rememberSessionTask(record.task.taskId);
+      }
+      final trackingUrl = downloadTrackingUrl(record.task);
+      final live = liveProgress[trackingUrl];
+      final isPreferred = preferTaskId == record.task.taskId;
+      var storedProgress = isPreferred
+          ? (progress ?? live?.progress ?? record.progress)
+          : (live?.progress ?? record.progress);
+      if (storedProgress < 0 || storedProgress > 1) storedProgress = 0.0;
+      final storedTotal = isPreferred
+          ? (totalBytes ?? live?.totalSize ?? record.expectedFileSize)
+          : (live?.totalSize ?? record.expectedFileSize);
+      final speed = isPreferred
+          ? (speedBytesPerSecond ?? (live?.networkSpeed ?? 0) * 1000 * 1000)
+          : (live?.networkSpeed ?? 0) * 1000 * 1000;
+      entries.add(
+        DownloadOverlayEntry(
+          taskId: record.task.taskId,
+          status: displayDownloadStatus(
+            persisted: record.status,
+            queueWaiting: leftoverWaiting,
+          ),
+          displayName: record.task.displayName,
+          queueWaiting: leftoverWaiting,
+          progress: storedProgress,
+          totalBytes: storedTotal,
+          speedBytesPerSecond: speed,
+        ),
       );
     }
+    return planDownloadOverlaySession(entries: entries);
+  }
+
+  Future<void> _syncSessionOverlay({
+    bool completedSuccess = true,
+    String? preferTaskId,
+    double? progress,
+    int? totalBytes,
+    double? speedBytesPerSecond,
+  }) async {
+    final session = await _planSessionOverlay(
+      preferTaskId: preferTaskId,
+      progress: progress,
+      totalBytes: totalBytes,
+      speedBytesPerSecond: speedBytesPerSecond,
+    );
+    _sessionCompletedCount = session.completedCount;
+    _sessionBatchTotal = session.batchTotal;
+
+    if (shouldFinishDownloadSessionOverlay(
+      runningCount: session.runningCount,
+      waitingCount: session.waitingCount,
+    )) {
+      if (_sessionOverlayActive) {
+        await _continuedProcessing.finish(
+          taskId: kDownloadSessionOverlayTaskId,
+          success: completedSuccess,
+          status: completedSuccess ? 'completed' : 'canceled',
+          endSession: true,
+        );
+      }
+      _sessionOverlayActive = false;
+      _sessionTaskIds.clear();
+      await _persistNativeWaitingSnapshot(overlay: session);
+      return;
+    }
+
+    final keepAlive = _sessionOverlayActive && session.waitingCount > 0;
+    if (session.runningCount == 0 && !keepAlive) {
+      await _persistNativeWaitingSnapshot(overlay: session);
+      return;
+    }
+
+    await _continuedProcessing.start(
+      taskId: session.currentTaskId,
+      displayName: session.displayName,
+      progress: session.progress,
+      totalBytes: session.totalBytes,
+      transferredBytes: session.transferredBytes,
+      completedCount: session.completedCount,
+      batchTotal: session.batchTotal < 1 ? 1 : session.batchTotal,
+      speedBytesPerSecond: session.speedBytesPerSecond,
+    );
+    _sessionOverlayActive = true;
+    await _persistNativeWaitingSnapshot(overlay: session);
   }
 
   Future<void> _ensureLiveActivity(
@@ -620,28 +746,25 @@ class DownloadService {
     required double progress,
     required int totalBytes,
   }) async {
-    if (!shouldStartDownloadLiveActivity(TaskStatus.running)) return;
+    _rememberSessionTask(task.taskId);
     if (_queueWaitingIds.contains(task.taskId)) {
       if (!progressMeansNativeTransfer(progress)) return;
       _queueWaitingIds.remove(task.taskId);
     }
-    var storedProgress = progress;
-    if (storedProgress < 0 || storedProgress > 1) storedProgress = 0.0;
-    await _continuedProcessing.start(
-      taskId: task.taskId,
-      displayName: task.displayName,
-      progress: storedProgress,
+    await _syncSessionOverlay(
+      preferTaskId: task.taskId,
+      progress: progress,
       totalBytes: totalBytes,
     );
-    _liveActivityTaskIds.add(task.taskId);
   }
 
   Future<void> _stopLiveActivity(String taskId) async {
-    _liveActivityTaskIds.remove(taskId);
-    await _continuedProcessing.stop(taskId: taskId);
+    await _syncSessionOverlay(completedSuccess: false);
   }
 
-  Future<void> _persistNativeWaitingSnapshot() async {
+  Future<void> _persistNativeWaitingSnapshot({
+    DownloadOverlaySession? overlay,
+  }) async {
     final max = clampDownloadConcurrency(
       _ref.read(storageServiceProvider).getDownloadConcurrency(),
     );
@@ -685,6 +808,15 @@ class DownloadService {
       waiters: waiters,
       transferringTaskIds: transferring,
       pausedTaskIds: paused,
+      sessionTaskIds: _sessionTaskIds.toList(),
+      sessionCompletedCount: overlay?.completedCount ?? _sessionCompletedCount,
+      sessionBatchTotal: overlay?.batchTotal ?? _sessionBatchTotal,
+      sessionCurrentTaskId: overlay?.currentTaskId ?? '',
+      sessionDisplayName: overlay?.displayName ?? '',
+      sessionProgress: overlay?.progress ?? 0,
+      sessionTotalBytes: overlay?.totalBytes ?? -1,
+      sessionTransferredBytes: overlay?.transferredBytes ?? 0,
+      sessionSpeedBytesPerSecond: overlay?.speedBytesPerSecond ?? 0,
     );
   }
 
@@ -1027,6 +1159,7 @@ class DownloadService {
       await _serializeQueue(() async {
         _queueWaitingIds.remove(taskId);
         _waitingPayloads.remove(taskId);
+        _forgetSessionTask(taskId);
         final ids = <String>{taskId};
         for (final task in await FileDownloader().allTasks(allGroups: true)) {
           if (task.taskId == taskId ||
@@ -1037,18 +1170,13 @@ class DownloadService {
         await FileDownloader().cancelTasksWithIds(ids.toList());
         _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
         _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
-        if (notifyContinuedProcessing) {
-          await _continuedProcessing.finish(
-            taskId: taskId,
-            success: false,
-            status: 'canceled',
-          );
-        }
-
         // Proactive cleanup
         await FileDownloader().database.deleteRecordWithId(taskId);
         await _ref.read(storageServiceProvider).removeDownloadMetadata(taskId);
         await _syncQueueToCapUnlocked();
+        if (notifyContinuedProcessing) {
+          await _syncSessionOverlay(completedSuccess: false);
+        }
       });
     } finally {
       // Small delay to let final updates clear
@@ -1273,6 +1401,12 @@ class DownloadService {
               taskId: task.taskId,
               progress: progress,
               totalBytes: totalSize,
+              transferredBytes: overlayTransferredBytes(
+                progress: progress,
+                totalBytes: totalSize,
+              ),
+              completedCount: _sessionCompletedCount,
+              batchTotal: _sessionBatchTotal,
             ),
           );
         },
@@ -1282,13 +1416,7 @@ class DownloadService {
         TaskRecord(task, TaskStatus.complete, 1.0, written),
       );
       unawaited(_persistCompletedFilePath(task));
-      unawaited(
-        _continuedProcessing.finish(
-          taskId: task.taskId,
-          success: true,
-          status: 'completed',
-        ),
-      );
+      unawaited(_syncSessionOverlay(completedSuccess: true));
       _updatesController.add(TaskStatusUpdate(task, TaskStatus.complete));
       _handleStatusUpdate(
         TaskStatusUpdate(task, TaskStatus.complete),
@@ -1590,6 +1718,7 @@ class DownloadService {
         if (success) {
           _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
           _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
+          _rememberSessionTask(task.taskId);
           await _ref
               .read(storageServiceProvider)
               .saveDownloadMetadata(

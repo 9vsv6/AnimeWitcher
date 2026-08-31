@@ -147,6 +147,168 @@ void main() {
       expect(waitingEpisodeMayStartLiveActivityWhileQueued(), isFalse);
     });
 
+    test(
+      'must not finish the session overlay while any episode is running or waiting',
+      () {
+        expect(
+          shouldFinishDownloadSessionOverlay(runningCount: 0, waitingCount: 1),
+          isFalse,
+        );
+        expect(
+          shouldFinishDownloadSessionOverlay(runningCount: 1, waitingCount: 4),
+          isFalse,
+        );
+        expect(
+          shouldFinishDownloadSessionOverlay(runningCount: 1, waitingCount: 0),
+          isFalse,
+        );
+        expect(
+          shouldFinishDownloadSessionOverlay(runningCount: 0, waitingCount: 0),
+          isTrue,
+        );
+        expect(
+          shouldStartSecondDownloadLiveActivity(sessionAlreadyActive: true),
+          isFalse,
+        );
+        expect(
+          shouldStartSecondDownloadLiveActivity(sessionAlreadyActive: false),
+          isTrue,
+        );
+      },
+    );
+
+    test('one session overlay: current-file bytes and completed of batch', () {
+      expect(kDownloadSessionOverlayTaskId, 'session');
+      expect(formatDownloadSessionTitle(progress: 0.4), 'Downloading... 40%');
+      expect(
+        formatDownloadSessionSubtitle(
+          transferredBytes: 40 * 1000 * 1000,
+          totalBytes: 400 * 1000 * 1000,
+          completedCount: 0,
+          batchTotal: 5,
+        ),
+        '40MB/400MB • 0 of 5',
+      );
+      expect(
+        formatDownloadSessionSubtitle(
+          transferredBytes: 12 * 1000 * 1000,
+          totalBytes: 400 * 1000 * 1000,
+          completedCount: 1,
+          batchTotal: 5,
+          speedBytesPerSecond: 1.9 * 1000 * 1000,
+        ),
+        '1.9MB/s • 12MB/400MB • 1 of 5',
+      );
+
+      final whileEp1 = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep1',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 1',
+            progress: 0.1,
+            totalBytes: 400 * 1000 * 1000,
+            speedBytesPerSecond: 1.9 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep2',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 2',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep3',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 3',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep4',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 4',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep5',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 5',
+          ),
+        ],
+      );
+      expect(whileEp1.currentTaskId, 'ep1');
+      expect(whileEp1.completedCount, 0);
+      expect(whileEp1.batchTotal, 5);
+      expect(whileEp1.transferredBytes, 40 * 1000 * 1000);
+      expect(whileEp1.shouldFinish, isFalse);
+      expect(
+        formatDownloadSessionSubtitle(
+          transferredBytes: whileEp1.transferredBytes,
+          totalBytes: whileEp1.totalBytes,
+          completedCount: whileEp1.completedCount,
+          batchTotal: whileEp1.batchTotal,
+        ),
+        '40MB/400MB • 0 of 5',
+      );
+
+      final afterEp1 = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep1',
+            status: TaskStatus.complete,
+            displayName: 'الحلقة 1',
+            progress: 1,
+            totalBytes: 400 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep2',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 2',
+            progress: 0.03,
+            totalBytes: 400 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep3',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 3',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep4',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 4',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep5',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 5',
+          ),
+        ],
+      );
+      expect(afterEp1.currentTaskId, 'ep2');
+      expect(afterEp1.completedCount, 1);
+      expect(afterEp1.batchTotal, 5);
+      expect(afterEp1.shouldFinish, isFalse);
+      expect(
+        shouldStartSecondDownloadLiveActivity(sessionAlreadyActive: true),
+        isFalse,
+      );
+
+      final allDone = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep1',
+            status: TaskStatus.complete,
+            displayName: 'الحلقة 1',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep2',
+            status: TaskStatus.complete,
+            displayName: 'الحلقة 2',
+          ),
+        ],
+      );
+      expect(allDone.completedCount, 2);
+      expect(allDone.runningCount, 0);
+      expect(allDone.waitingCount, 0);
+      expect(allDone.shouldFinish, isTrue);
+    });
+
     test('overflow is OS-enqueued; overlay starts only when running', () {
       expect(shouldEnqueueOverflowToNativeHoldingQueue(), isTrue);
       expect(shouldPromoteWaitingWhenIsolateAlive(), isTrue);

@@ -97,10 +97,191 @@ TaskStatus displayDownloadStatus({
   return persisted;
 }
 
+/// One BGContinuedProcessingTask / Live Activity for the whole download
+/// batch. Per-episode identifiers caused Rivera to lose the island on ep2
+/// (finish ep1 → process suspends → Dart vs native fight).
+const String kDownloadSessionOverlayTaskId = 'session';
+
 /// iOS Live Activity / `BGContinuedProcessingTask` is only for a file that
 /// is actually transferring. Waiting **في الانتظار** rows must not call `start`.
 bool shouldStartDownloadLiveActivity(TaskStatus status) =>
     status == TaskStatus.running;
+
+/// Never submit a second system task while the session overlay is alive.
+/// `start()` must update the existing activity (new file, reset progress).
+bool shouldStartSecondDownloadLiveActivity({
+  required bool sessionAlreadyActive,
+}) => !sessionAlreadyActive;
+
+/// Hard rule: do not `finish` / `stop` the session overlay while any episode
+/// in the batch is still running or waiting. That suspends the process and
+/// breaks promotion. Only end the session when the batch is empty.
+bool shouldFinishDownloadSessionOverlay({
+  required int runningCount,
+  required int waitingCount,
+}) => runningCount <= 0 && waitingCount <= 0;
+
+class DownloadOverlayEntry {
+  const DownloadOverlayEntry({
+    required this.taskId,
+    required this.status,
+    required this.displayName,
+    this.queueWaiting = false,
+    this.progress = 0,
+    this.totalBytes = -1,
+    this.speedBytesPerSecond = 0,
+  });
+
+  final String taskId;
+  final TaskStatus status;
+  final String displayName;
+  final bool queueWaiting;
+  final double progress;
+  final int totalBytes;
+  final double speedBytesPerSecond;
+}
+
+class DownloadOverlaySession {
+  const DownloadOverlaySession({
+    required this.currentTaskId,
+    required this.displayName,
+    required this.progress,
+    required this.transferredBytes,
+    required this.totalBytes,
+    required this.completedCount,
+    required this.batchTotal,
+    required this.runningCount,
+    required this.waitingCount,
+    this.speedBytesPerSecond = 0,
+  });
+
+  final String currentTaskId;
+  final String displayName;
+  final double progress;
+  final int transferredBytes;
+  final int totalBytes;
+  final int completedCount;
+  final int batchTotal;
+  final int runningCount;
+  final int waitingCount;
+  final double speedBytesPerSecond;
+
+  bool get shouldFinish => shouldFinishDownloadSessionOverlay(
+    runningCount: runningCount,
+    waitingCount: waitingCount,
+  );
+}
+
+bool _isOverlayWaiting(DownloadOverlayEntry entry) =>
+    entry.queueWaiting || entry.status == TaskStatus.enqueued;
+
+bool _isOverlayRunning(DownloadOverlayEntry entry) => occupiesDownloadSlot(
+  status: entry.status,
+  queueWaiting: entry.queueWaiting,
+);
+
+/// Batch overlay: current **running** file's bytes, plus completed-of-total
+/// for this session (running + waiting + complete in the batch).
+DownloadOverlaySession planDownloadOverlaySession({
+  required Iterable<DownloadOverlayEntry> entries,
+}) {
+  final list = entries.toList();
+  final running = list.where(_isOverlayRunning).toList();
+  final waiting = list.where(_isOverlayWaiting).toList();
+  final completed = list
+      .where((entry) => entry.status == TaskStatus.complete)
+      .toList();
+  final current = running.isNotEmpty
+      ? running.first
+      : (waiting.isNotEmpty ? waiting.first : null);
+  final progress = current == null
+      ? 0.0
+      : current.progress.clamp(0.0, 1.0).toDouble();
+  final totalBytes = current?.totalBytes ?? -1;
+  final transferred = overlayTransferredBytes(
+    progress: progress,
+    totalBytes: totalBytes,
+  );
+  return DownloadOverlaySession(
+    currentTaskId: current?.taskId ?? kDownloadSessionOverlayTaskId,
+    displayName: current?.displayName ?? '',
+    progress: progress,
+    transferredBytes: transferred,
+    totalBytes: totalBytes,
+    completedCount: completed.length,
+    batchTotal: running.length + waiting.length + completed.length,
+    runningCount: running.length,
+    waitingCount: waiting.length,
+    speedBytesPerSecond: current?.speedBytesPerSecond ?? 0,
+  );
+}
+
+int overlayTransferredBytes({
+  required double progress,
+  required int totalBytes,
+}) {
+  if (totalBytes <= 0) return 0;
+  final normalized = progress.clamp(0.0, 1.0);
+  return (totalBytes * normalized).floor();
+}
+
+/// Compact `40MB` / `1.9MB/s` matching the manga-style island subtitle.
+String formatDownloadOverlayBytes(int bytes) {
+  final value = bytes < 0 ? 0.0 : bytes.toDouble();
+  if (value >= 1000000000) {
+    final gb = value / 1000000000;
+    final text = gb >= 10 ? gb.toStringAsFixed(0) : gb.toStringAsFixed(1);
+    return '${text}GB';
+  }
+  if (value >= 1000000) {
+    final mb = value / 1000000;
+    final text = mb >= 10 ? mb.toStringAsFixed(0) : mb.toStringAsFixed(1);
+    return '${text}MB';
+  }
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(0)}KB';
+  }
+  return '${value.toStringAsFixed(0)}B';
+}
+
+String formatDownloadOverlaySpeed(double bytesPerSecond) {
+  if (bytesPerSecond <= 0) return '';
+  if (bytesPerSecond >= 1000000) {
+    return '${(bytesPerSecond / 1000000).toStringAsFixed(1)}MB/s';
+  }
+  if (bytesPerSecond >= 1000) {
+    return '${(bytesPerSecond / 1000).toStringAsFixed(0)}KB/s';
+  }
+  return '${bytesPerSecond.toStringAsFixed(0)}B/s';
+}
+
+/// Line 1 of the manga overlay: `Downloading... 40%` of the current file.
+String formatDownloadSessionTitle({required double progress}) {
+  final percent = (progress.clamp(0.0, 1.0) * 100).round();
+  return 'Downloading... $percent%';
+}
+
+/// Line 2: `40MB/400MB • 0 of 5`, optionally `1.9MB/s • 40MB/400MB • 0 of 5`.
+String formatDownloadSessionSubtitle({
+  required int transferredBytes,
+  required int totalBytes,
+  required int completedCount,
+  required int batchTotal,
+  double speedBytesPerSecond = 0,
+}) {
+  final count = '$completedCount of ${batchTotal < 1 ? 1 : batchTotal}';
+  final parts = <String>[];
+  final speed = formatDownloadOverlaySpeed(speedBytesPerSecond);
+  if (speed.isNotEmpty) parts.add(speed);
+  if (totalBytes > 0) {
+    parts.add(
+      '${formatDownloadOverlayBytes(transferredBytes)}/'
+      '${formatDownloadOverlayBytes(totalBytes)}',
+    );
+  }
+  parts.add(count);
+  return parts.join(' • ');
+}
 
 /// Overflow episodes are always OS-enqueued into the native holding queue.
 /// Dart must not park-without-enqueue: that stranded ep3 on device (#116).
