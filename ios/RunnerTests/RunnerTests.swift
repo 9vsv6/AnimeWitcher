@@ -60,6 +60,33 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(state.pausedTaskIds, ["ep2"])
   }
 
+  func testFailedEpisodeParksPausedAndStartsNextWaiter() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())
+
+    let session = URLSession(configuration: .ephemeral)
+    let ep1 = session.downloadTask(with: URL(string: "https://127.0.0.1:1/ep1.mp4")!)
+    ep1.taskDescription = "{\"taskId\":\"ep1\"}"
+    let error = NSError(
+      domain: NSURLErrorDomain,
+      code: NSURLErrorTimedOut,
+      userInfo: nil
+    )
+    DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+      session: session,
+      task: ep1,
+      error: error
+    )
+
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.pausedTaskIds, ["ep1"])
+    XCTAssertFalse(state.completedTaskIds.contains("ep1"))
+    XCTAssertFalse(state.transferringTaskIds.contains("ep1"))
+    XCTAssertEqual(state.transferringTaskIds, ["ep2"])
+    XCTAssertTrue(state.waiters.isEmpty)
+    XCTAssertFalse(state.sessionIsIdle)
+  }
+
   func testNativeCompletionStartsNextWaiterBeforeDartWakes() {
     DownloadNativeWaitingQueue.resetForTests()
     DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())

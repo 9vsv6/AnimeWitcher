@@ -319,20 +319,55 @@ enum DownloadNativeWaitingQueue {
     lastWrites.removeAll()
   }
 
-  /// Called from the plugin URLSession delegate after ep1's native completion.
-  /// Starts the next waiter on **this same session** synchronously, then
-  /// the caller may invoke `completionHandler()`.
+  /// Called from the plugin URLSession delegate after a native completion
+  /// or failure. Parks a failed file as paused, starts the next waiter on
+  /// **this same session**, and never finishes the overlay as "failed".
   static func handlePluginTaskCompleted(
     session: URLSession,
     task: URLSessionTask,
     error: Error?
   ) {
-    markPluginTaskCompleted(task: task)
+    if error != nil {
+      parkFailedTask(task: task)
+    } else {
+      markPluginTaskCompleted(task: task)
+    }
 
     // Promote / update the SAME overlay before any finish. Finishing the
     // session task here is what suspended the process on ep1 complete.
     promoteNext(on: session)
     refreshSessionOverlay(success: error == nil)
+  }
+
+  /// Keep a failed episode in the batch as paused and free its slot so the
+  /// next waiter can start. Do not treat it as a successful completion.
+  static func parkFailedTask(task: URLSessionTask) {
+    let failedId = taskId(from: task)
+    lock.lock()
+    var state = loadLocked()
+    if let failedId {
+      state.transferringTaskIds.removeAll { $0 == failedId }
+      state.runningSamples[failedId] = nil
+      lastWrites[failedId] = nil
+      seenTransferringIds.remove(failedId)
+      if !state.pausedTaskIds.contains(failedId) {
+        state.pausedTaskIds.append(failedId)
+      }
+      state.waiters.removeAll { $0.taskId == failedId }
+      if !state.sessionTaskIds.contains(failedId) {
+        state.sessionTaskIds.append(failedId)
+      }
+      state.sessionBatchTotal = max(
+        max(
+          state.sessionBatchTotal,
+          state.transferringTaskIds.count + state.waiters.count
+            + state.completedTaskIds.count + state.pausedTaskIds.count
+        ),
+        state.sessionTaskIds.count
+      )
+    }
+    saveLocked(state)
+    lock.unlock()
   }
 
   /// Record native completion without starting the next file. Used from
@@ -668,7 +703,7 @@ enum DownloadNativeWaitingQueue {
           DownloadContinuedProcessingManager.shared.finish(
             taskId: DownloadContinuedProcessingManager.sessionKey,
             success: success,
-            status: success ? "completed" : "failed",
+            status: success ? "completed" : "canceled",
             endSession: true
           )
         }

@@ -253,7 +253,7 @@ final class DownloadContinuedProcessingManager {
         )
       } else if status == "failed" {
         task.updateTitle(
-          "Download failed",
+          "Download paused",
           subtitle: sessionCountSubtitle(snapshot)
         )
       }

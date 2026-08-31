@@ -24,6 +24,10 @@ int parseDownloadConcurrency(Object? raw) {
   return kDownloadConcurrencyDefault;
 }
 
+/// A dead URL must not occupy the only slot with plugin retries. Park that
+/// episode as paused and let the next waiter run; the user can resume later.
+const int kDownloadTaskRetries = 0;
+
 /// [Config.holdingQueue] triple: `(maxConcurrent, maxConcurrentByHost, maxConcurrentByGroup)`.
 ///
 /// Host and group are left unconstrained (`null`) so the user's N is the only
@@ -113,6 +117,46 @@ bool shouldFinishDownloadSessionOverlay({
   required int runningCount,
   required int waitingCount,
 }) => runningCount <= 0 && waitingCount <= 0;
+
+/// Plugin/system failure — keep the row, never wipe it as an error.
+bool shouldParkFailedDownloadAsPaused(TaskStatus status) {
+  switch (status) {
+    case TaskStatus.failed:
+    case TaskStatus.notFound:
+      return true;
+    case TaskStatus.canceled:
+    case TaskStatus.paused:
+    case TaskStatus.running:
+    case TaskStatus.enqueued:
+    case TaskStatus.waitingToRetry:
+    case TaskStatus.complete:
+      return false;
+  }
+}
+
+/// System cancel (not the user's trash button) also parks as paused.
+bool shouldParkSystemCanceledDownload({
+  required TaskStatus status,
+  required bool userCancel,
+}) {
+  if (userCancel) return false;
+  return status == TaskStatus.canceled ||
+      shouldParkFailedDownloadAsPaused(status);
+}
+
+/// Overlay copy for a parked failure. Never "Download failed" while the
+/// rest of the queue is still going — or even when this was the last file.
+const String kDownloadParkedNotificationBody = 'التنزيل متوقف مؤقتاً';
+
+/// Native overlay finish: never report `failed` for a parked episode.
+/// Remaining waiters keep the session; an idle batch ends as canceled.
+String downloadSessionFinishStatus({
+  required bool success,
+  required bool parkedFailure,
+}) {
+  if (success && !parkedFailure) return 'completed';
+  return 'canceled';
+}
 
 class DownloadOverlayEntry {
   const DownloadOverlayEntry({
@@ -768,6 +812,26 @@ DownloadQueuePlan planDownloadQueue({
     waitingFifoIds: waitingFifoIds,
     idsToPromote: idsToPromote,
   );
+}
+
+/// After a file is parked paused (failure / system cancel), the slot is
+/// free. Leftover Dart-parked waiters re-enqueue; HQ `enqueued` waiters
+/// are listed so the caller can attach UI — never enqueue a second copy.
+List<String> idsToStartAfterParkedFailure({
+  required int maxConcurrent,
+  required Iterable<DownloadQueueEntry> entries,
+  List<String>? queueOrder,
+}) {
+  final plan = planDownloadQueue(
+    maxConcurrent: maxConcurrent,
+    entries: entries,
+    queueOrder: queueOrder,
+  );
+  if (plan.freeSlots <= 0) return const [];
+  if (plan.idsToPromote.isNotEmpty) {
+    return plan.idsToPromote.take(plan.freeSlots).toList();
+  }
+  return plan.waitingFifoIds.take(plan.freeSlots).toList();
 }
 
 class DownloadReorderPlan {
