@@ -165,6 +165,22 @@ void main() {
           shouldFinishDownloadSessionOverlay(runningCount: 0, waitingCount: 0),
           isTrue,
         );
+        expect(
+          downloadSessionHasRemainingWork(
+            runningCount: 0,
+            waitingCount: 0,
+            pendingWaiterPayloads: 3,
+          ),
+          isTrue,
+        );
+        expect(
+          downloadSessionHasRemainingWork(
+            runningCount: 0,
+            waitingCount: 0,
+            pendingWaiterPayloads: 0,
+          ),
+          isFalse,
+        );
       },
     );
 
@@ -311,6 +327,49 @@ void main() {
         '12MB/400MB • 2 of 5',
       );
 
+      final afterEp1BeforeBytes = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep1',
+            status: TaskStatus.complete,
+            displayName: 'الحلقة 1',
+            progress: 1,
+            totalBytes: 10 * 1000 * 1000,
+            speedBytesPerSecond: 859 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep2',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 11 (480p).mp4',
+            totalBytes: 10 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep3',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 12',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep4',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 13',
+          ),
+        ],
+      );
+      expect(afterEp1BeforeBytes.currentTaskId, 'ep2');
+      expect(afterEp1BeforeBytes.currentIndex, 2);
+      expect(afterEp1BeforeBytes.transferredBytes, 0);
+      expect(afterEp1BeforeBytes.speedBytesPerSecond, 0);
+      expect(afterEp1BeforeBytes.shouldFinish, isFalse);
+      expect(
+        formatDownloadSessionSubtitle(
+          transferredBytes: afterEp1BeforeBytes.transferredBytes,
+          totalBytes: afterEp1BeforeBytes.totalBytes,
+          currentIndex: afterEp1BeforeBytes.currentIndex,
+          batchTotal: afterEp1BeforeBytes.batchTotal,
+        ),
+        '0B/10MB • 2 of 4',
+      );
+
       final allDone = planDownloadOverlaySession(
         entries: const [
           DownloadOverlayEntry(
@@ -366,6 +425,37 @@ void main() {
         ),
         '200B/1KB • 1 of 3',
       );
+    });
+
+    test('dragging a waiting file to the top parks the runner in overlay', () {
+      final after = planDownloadOverlaySession(
+        queueOrder: const ['ep7', 'ep8', 'ep9'],
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep7',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 7',
+            progress: 0.01,
+            totalBytes: 10 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep8',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 8',
+            queueWaiting: true,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep9',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 9',
+          ),
+        ],
+      );
+      expect(after.currentTaskId, 'ep7');
+      expect(after.waitingCount, 2);
+      expect(after.runningCount, 1);
+      expect(after.displayName, 'الحلقة 7');
+      expect(after.shouldFinish, isFalse);
     });
 
     test('N>1 overlay sums running bytes and uses started-count', () {
@@ -474,6 +564,50 @@ void main() {
       );
     });
 
+    test('dragging a paused row above a running file preempts the slot', () {
+      final plan = planDownloadReorderSlots(
+        maxConcurrent: 1,
+        activeOrder: const ['ep7', 'ep8', 'ep9'],
+        statusById: const {
+          'ep7': TaskStatus.paused,
+          'ep8': TaskStatus.running,
+          'ep9': TaskStatus.enqueued,
+        },
+        userPausedIds: const {'ep7'},
+      );
+      expect(plan.idsToRun, ['ep7']);
+      expect(plan.idsToPark, ['ep8']);
+      expect(plan.idsToEnqueue, ['ep8', 'ep9']);
+    });
+
+    test('waiting file dragged to the top parks the running transfer', () {
+      final plan = planDownloadReorderSlots(
+        maxConcurrent: 1,
+        activeOrder: const ['ep7', 'ep8', 'ep9'],
+        statusById: const {
+          'ep7': TaskStatus.enqueued,
+          'ep8': TaskStatus.running,
+          'ep9': TaskStatus.enqueued,
+        },
+        userPausedIds: const {},
+      );
+      expect(plan.idsToRun, ['ep7']);
+      expect(plan.idsToPark, ['ep8']);
+      expect(plan.idsToEnqueue, ['ep8', 'ep9']);
+    });
+
+    test('user-paused rows below N stay paused', () {
+      final plan = planDownloadReorderSlots(
+        maxConcurrent: 1,
+        activeOrder: const ['ep8', 'ep7'],
+        statusById: const {'ep8': TaskStatus.running, 'ep7': TaskStatus.paused},
+        userPausedIds: const {'ep7'},
+      );
+      expect(plan.idsToRun, ['ep8']);
+      expect(plan.idsToPark, isEmpty);
+      expect(plan.idsToEnqueue, isEmpty);
+    });
+
     test('applyActiveDownloadReorder keeps completed slots', () {
       expect(
         applyActiveDownloadReorder(
@@ -528,6 +662,36 @@ void main() {
           status: TaskStatus.paused,
           incomingSpeed: 0,
           lastKnownSpeed: 0.64,
+        ),
+        0,
+      );
+    });
+
+    test('overlay speed resets on file switch, keeps hitch on same file', () {
+      expect(
+        overlayNativeSpeedUpdate(
+          currentTaskId: 'ep1',
+          previousTaskId: 'ep1',
+          runningCount: 1,
+          plannedSpeed: 0,
+        ),
+        -1,
+      );
+      expect(
+        overlayNativeSpeedUpdate(
+          currentTaskId: 'ep2',
+          previousTaskId: 'ep1',
+          runningCount: 0,
+          plannedSpeed: 859 * 1000,
+        ),
+        0,
+      );
+      expect(
+        overlayNativeSpeedUpdate(
+          currentTaskId: 'ep2',
+          previousTaskId: 'ep1',
+          runningCount: 1,
+          plannedSpeed: 0,
         ),
         0,
       );

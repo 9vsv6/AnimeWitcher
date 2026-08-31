@@ -296,6 +296,19 @@ DownloadOverlaySession planDownloadOverlaySession({
       ? totals.transferredBytes
       : overlayTransferredBytes(progress: progress, totalBytes: totalBytes);
   final batchTotal = running.length + waiting.length + completed.length;
+  // While ep2 has not written bytes yet, the overlay still shows ep2 as
+  // current. Started-count would be `1 of 4` (completed only) — Rivera
+  // saw that on a 0B island. Use completed+1 so the next file is `2 of 4`.
+  final currentIndex = running.isNotEmpty
+      ? overlayStartedIndex(
+          runningCount: running.length,
+          completedCount: completed.length,
+          batchTotal: batchTotal,
+        )
+      : overlayCurrentIndex(
+          completedCount: completed.length,
+          batchTotal: batchTotal,
+        );
   return DownloadOverlaySession(
     currentTaskId: current?.taskId ?? kDownloadSessionOverlayTaskId,
     displayName: current?.displayName ?? '',
@@ -306,14 +319,8 @@ DownloadOverlaySession planDownloadOverlaySession({
     batchTotal: batchTotal,
     runningCount: running.length,
     waitingCount: waiting.length,
-    currentIndex: overlayStartedIndex(
-      runningCount: running.length,
-      completedCount: completed.length,
-      batchTotal: batchTotal,
-    ),
-    speedBytesPerSecond: running.isNotEmpty
-        ? totals.speedBytesPerSecond
-        : (current?.speedBytesPerSecond ?? 0),
+    currentIndex: currentIndex,
+    speedBytesPerSecond: running.isNotEmpty ? totals.speedBytesPerSecond : 0,
   );
 }
 
@@ -491,6 +498,35 @@ double keepLastKnownDownloadSpeed({
   if (last > 0) return last;
   return incomingSpeed;
 }
+
+/// Native overlay `update` keeps the last speed when the incoming value is
+/// ≤0. After ep1 completes that leaks **859KB/s** onto ep2 at **0B**.
+///
+/// Returns `-1` only for hitch-protection on the **same** transferring file.
+/// File switches and waiting-only overlays send `0` so native resets.
+double overlayNativeSpeedUpdate({
+  required String currentTaskId,
+  required String previousTaskId,
+  required int runningCount,
+  required double plannedSpeed,
+}) {
+  final switched =
+      previousTaskId.isNotEmpty &&
+      currentTaskId.isNotEmpty &&
+      previousTaskId != currentTaskId;
+  if (runningCount <= 0) return 0;
+  if (switched) return plannedSpeed > 0 ? plannedSpeed : 0;
+  return plannedSpeed > 0 ? plannedSpeed : -1;
+}
+
+/// Finish the session overlay only when nothing is running, waiting in the
+/// plugin, **or** still in the native waiter payload map. An empty
+/// `allRecords()` while Flutter is backgrounded must not wipe waiters.
+bool downloadSessionHasRemainingWork({
+  required int runningCount,
+  required int waitingCount,
+  int pendingWaiterPayloads = 0,
+}) => runningCount > 0 || waitingCount > 0 || pendingWaiterPayloads > 0;
 
 /// Line 1: `Downloading “الحلقة 2.mp4”`. Percent lives on the circular progress.
 String formatDownloadSessionTitle({required String displayName}) {
@@ -731,5 +767,57 @@ DownloadQueuePlan planDownloadQueue({
     occupiedCount: occupiedCount,
     waitingFifoIds: waitingFifoIds,
     idsToPromote: idsToPromote,
+  );
+}
+
+class DownloadReorderPlan {
+  const DownloadReorderPlan({
+    required this.idsToRun,
+    required this.idsToPark,
+    required this.idsToEnqueue,
+  });
+
+  /// First N rows — run these, even if the user just dragged a paused file here.
+  final List<String> idsToRun;
+
+  /// Occupying transfers that fell below N — pause and keep as waiters.
+  final List<String> idsToPark;
+
+  /// Visual order of HQ / leftover waiters after the live slots.
+  final List<String> idsToEnqueue;
+}
+
+/// After a user drag: top [maxConcurrent] run; displaced running files park;
+/// remaining active rows wait in the new order. User-paused rows that stay
+/// below N stay paused.
+DownloadReorderPlan planDownloadReorderSlots({
+  required int maxConcurrent,
+  required List<String> activeOrder,
+  required Map<String, TaskStatus> statusById,
+  required Set<String> userPausedIds,
+}) {
+  final n = clampDownloadConcurrency(maxConcurrent);
+  final idsToRun = activeOrder.take(n).toList();
+  final below = activeOrder.skip(n).toList();
+  final occupying = <String>{
+    for (final id in activeOrder)
+      if (occupiesDownloadSlot(
+        status: statusById[id] ?? TaskStatus.enqueued,
+        queueWaiting: false,
+      ))
+        id,
+  };
+  final idsToPark = [
+    for (final id in occupying)
+      if (!idsToRun.contains(id)) id,
+  ];
+  final idsToEnqueue = [
+    for (final id in below)
+      if (idsToPark.contains(id) || !userPausedIds.contains(id)) id,
+  ];
+  return DownloadReorderPlan(
+    idsToRun: idsToRun,
+    idsToPark: idsToPark,
+    idsToEnqueue: idsToEnqueue,
   );
 }

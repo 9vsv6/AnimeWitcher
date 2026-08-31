@@ -141,6 +141,9 @@ enum DownloadNativeWaitingQueue {
 
     func overlayCurrentIndex(runningTaskId: String? = nil) -> Int {
       let total = max(sessionBatchTotal, 1)
+      if transferringTaskIds.isEmpty && !completedTaskIds.isEmpty {
+        return min(max(completedTaskIds.count + 1, 1), total)
+      }
       let started = transferringTaskIds.count + completedTaskIds.count
       if started > 0 {
         return min(max(started, 1), total)
@@ -190,6 +193,7 @@ enum DownloadNativeWaitingQueue {
     let dartSessionIds = stringArray(arguments["sessionTaskIds"])
     let dartCompletedCount = intValue(arguments["sessionCompletedCount"]) ?? 0
     let dartBatchTotal = intValue(arguments["sessionBatchTotal"]) ?? 0
+    let released = Set(stringArray(arguments["queueWaitingTaskIds"]))
 
     let pausedSet = Set(dartPaused)
     // Dart order first so a user drag rewrite of sessionTaskIds / waiters wins.
@@ -203,11 +207,22 @@ enum DownloadNativeWaitingQueue {
       completed = completed.filter { sessionIds.contains($0) }
     }
 
+    // Drag-park (في الانتظار) must free the native slot. Stale Dart snapshots
+    // that still list a natively-started file as a waiter do not send it in
+    // queueWaitingTaskIds, so that promotion stays transferring.
+    seenTransferringIds.subtract(released)
     let transferring = unique(current.transferringTaskIds + dartTransferring)
-      .filter { !pausedSet.contains($0) && !completed.contains($0) }
+      .filter {
+        !pausedSet.contains($0)
+          && !completed.contains($0)
+          && !released.contains($0)
+      }
     let transferringSet = Set(transferring)
+    let completedSet = Set(completed)
     let waiters = dartWaiters.filter {
-      !transferringSet.contains($0.taskId) && !pausedSet.contains($0.taskId)
+      !transferringSet.contains($0.taskId)
+        && !pausedSet.contains($0.taskId)
+        && !completedSet.contains($0.taskId)
     }
 
     let idle = transferring.isEmpty && waiters.isEmpty
@@ -226,6 +241,11 @@ enum DownloadNativeWaitingQueue {
         max(current.sessionBatchTotal, dartBatchTotal),
         max(computedBatch, sessionIds.count)
       )
+
+    let dartCurrentId = string(arguments["sessionCurrentTaskId"]) ?? ""
+    let switchedFile = !dartCurrentId.isEmpty
+      && dartCurrentId != "session"
+      && dartCurrentId != current.sessionCurrentTaskId
 
     saveLocked(
       State(
@@ -246,27 +266,38 @@ enum DownloadNativeWaitingQueue {
           return dart.isEmpty ? current.sessionDisplayName : dart
         }(),
         sessionProgress: {
+          if switchedFile { return (arguments["sessionProgress"] as? NSNumber)?.doubleValue ?? 0 }
           let dart = (arguments["sessionProgress"] as? NSNumber)?.doubleValue
           if let dart, dart > 0 { return dart }
           return current.sessionProgress
         }(),
-        sessionTotalBytes: int64Value(arguments["sessionTotalBytes"]).flatMap { $0 > 0 ? $0 : nil }
-          ?? current.sessionTotalBytes,
+        sessionTotalBytes: {
+          if switchedFile {
+            return int64Value(arguments["sessionTotalBytes"]) ?? -1
+          }
+          return int64Value(arguments["sessionTotalBytes"]).flatMap { $0 > 0 ? $0 : nil }
+            ?? current.sessionTotalBytes
+        }(),
         sessionTransferredBytes: {
           let dart = int64Value(arguments["sessionTransferredBytes"])
+          if switchedFile { return dart ?? 0 }
           if let dart, dart > 0 { return dart }
           return current.sessionTransferredBytes
         }(),
         sessionSpeedBytesPerSecond: {
           let dart = (arguments["sessionSpeedBytesPerSecond"] as? NSNumber)?.doubleValue
+          if switchedFile { return dart ?? 0 }
           if let dart, dart > 0 { return dart }
           return current.sessionSpeedBytesPerSecond
         }(),
         sessionCurrentIndex: {
-          let started = transferring.count + completed.count
-          if started > 0 { return started }
           let dart = intValue(arguments["sessionCurrentIndex"]) ?? 0
-          if dart > 0 { return dart }
+          let started = transferring.count + completed.count
+          let nextWaiter = transferring.isEmpty && !completed.isEmpty
+            ? completed.count + 1
+            : started
+          if dart > 0 { return max(dart, nextWaiter) }
+          if nextWaiter > 0 { return nextWaiter }
           return current.sessionCurrentIndex
         }(),
         runningSamples: current.runningSamples.filter { transferringSet.contains($0.key) }
@@ -296,6 +327,17 @@ enum DownloadNativeWaitingQueue {
     task: URLSessionTask,
     error: Error?
   ) {
+    markPluginTaskCompleted(task: task)
+
+    // Promote / update the SAME overlay before any finish. Finishing the
+    // session task here is what suspended the process on ep1 complete.
+    promoteNext(on: session)
+    refreshSessionOverlay(success: error == nil)
+  }
+
+  /// Record native completion without starting the next file. Used from
+  /// `didFinishDownloadingToURL` so ep2 is not created before `didComplete`.
+  static func markPluginTaskCompleted(task: URLSessionTask) {
     let completedId = taskId(from: task)
     lock.lock()
     var state = loadLocked()
@@ -323,22 +365,17 @@ enum DownloadNativeWaitingQueue {
     }
     saveLocked(state)
     lock.unlock()
-
-    // Promote / update the SAME overlay before any finish. Finishing the
-    // session task here is what suspended the process on ep1 complete.
-    promoteNext(on: session)
-    refreshSessionOverlay(success: error == nil)
   }
 
   static func promoteNext(on session: URLSession) {
-    // In-app, Dart + plugin HoldingQueue own promotion. Starting a second
-    // URLSession task here while the app is `.active` double-downloads.
-    // Background/suspended: HoldingQueue's async `taskFinished` often never
-    // runs, so this callback must start the persisted waiter now.
-    let isActive = runOnMainActor {
-      UIApplication.shared.applicationState == .active
-    }
-    if isActive {
+    // In-app (scene foregroundActive), Dart + plugin HoldingQueue own
+    // promotion. Starting a second URLSession task while the user is in
+    // the app double-downloads.
+    // Home screen / Dynamic Island: applicationState can still look `.active`
+    // because BGContinuedProcessing keeps the process alive — HQ then never
+    // starts ep2 and the island sits at 0B. Scene activation is the
+    // foreground check that still skips in-app.
+    if isAppInForeground() {
       return
     }
     while true {
@@ -377,7 +414,10 @@ enum DownloadNativeWaitingQueue {
 
   private static func popWaiterLocked(_ state: inout State) -> Waiter? {
     let paused = Set(state.pausedTaskIds)
-    guard let index = state.waiters.firstIndex(where: { !paused.contains($0.taskId) })
+    let completed = Set(state.completedTaskIds)
+    guard let index = state.waiters.firstIndex(where: {
+      !paused.contains($0.taskId) && !completed.contains($0.taskId)
+    })
     else {
       return nil
     }
@@ -386,6 +426,22 @@ enum DownloadNativeWaitingQueue {
       state.transferringTaskIds.append(waiter.taskId)
     }
     return waiter
+  }
+
+  /// Skip native promotion while the user is looking at the app. Home
+  /// screen / island must still promote — `applicationState == .active` is
+  /// true under BGContinuedProcessing even when the scene is backgrounded.
+  private static func isAppInForeground() -> Bool {
+    if NSClassFromString("XCTestCase") != nil {
+      return false
+    }
+    return runOnMainActor {
+      let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+      if !scenes.isEmpty {
+        return scenes.contains { $0.activationState == .foregroundActive }
+      }
+      return UIApplication.shared.applicationState == .active
+    }
   }
 
   private static func start(_ waiter: Waiter, on session: URLSession) {
@@ -467,11 +523,15 @@ enum DownloadNativeWaitingQueue {
       if running.speed > 0 { combinedSpeed += running.speed }
     }
     if written == 0 && expected <= 0 {
-      written = state.sessionTransferredBytes
-      expected = state.sessionTotalBytes
-      hasExpected = expected > 0
-      if combinedSpeed <= 0 {
-        combinedSpeed = state.sessionSpeedBytesPerSecond
+      let sameFile = transferringSet.contains(state.sessionCurrentTaskId)
+        || state.transferringTaskIds.isEmpty
+      if sameFile {
+        written = state.sessionTransferredBytes
+        expected = state.sessionTotalBytes
+        hasExpected = expected > 0
+        if combinedSpeed <= 0 {
+          combinedSpeed = state.sessionSpeedBytesPerSecond
+        }
       }
     }
     let firstRunningId = state.sessionTaskIds.first(where: { transferringSet.contains($0) })
@@ -572,7 +632,6 @@ enum DownloadNativeWaitingQueue {
       fallbackName: displayName
     )
     let keepExisting = state.transferringTaskIds.count > 1
-      || state.sessionTransferredBytes > 0
     lock.unlock()
     upsertSessionOverlay(
       currentTaskId: keepExisting ? presentation.currentTaskId : taskId,
@@ -655,17 +714,28 @@ enum DownloadNativeWaitingQueue {
   ) {
     lock.lock()
     var state = loadLocked()
+    let switched = !currentTaskId.isEmpty
+      && currentTaskId != state.sessionCurrentTaskId
+      && currentTaskId != "session"
+    let resetOnSwitch = switched && state.transferringTaskIds.count <= 1
     state.sessionCurrentTaskId = currentTaskId
     if !displayName.isEmpty {
       state.sessionDisplayName = displayName
     }
-    state.sessionProgress = progress
-    if totalBytes > 0 {
-      state.sessionTotalBytes = totalBytes
-    }
-    state.sessionTransferredBytes = transferredBytes
-    if speedBytesPerSecond > 0 {
-      state.sessionSpeedBytesPerSecond = speedBytesPerSecond
+    if resetOnSwitch {
+      state.sessionProgress = progress
+      state.sessionTotalBytes = totalBytes > 0 ? totalBytes : -1
+      state.sessionTransferredBytes = transferredBytes
+      state.sessionSpeedBytesPerSecond = max(speedBytesPerSecond, 0)
+    } else {
+      state.sessionProgress = progress
+      if totalBytes > 0 {
+        state.sessionTotalBytes = totalBytes
+      }
+      state.sessionTransferredBytes = transferredBytes
+      if speedBytesPerSecond > 0 {
+        state.sessionSpeedBytesPerSecond = speedBytesPerSecond
+      }
     }
     if let completedCount {
       state.sessionCompletedCount = max(state.sessionCompletedCount, completedCount)
@@ -891,6 +961,7 @@ private enum DownloadUrlSessionHook {
     originalFinishDownload = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionDownloadTask, URL) -> Void = { slf, session, downloadTask, location in
       // Original must run first so the plugin can move the temp file.
+      // Then promote like pre-tabs: ep2 must start before the session sleeps.
       if let original = DownloadUrlSessionHook.originalFinishDownload {
         let fn = unsafeBitCast(
           original,
@@ -898,6 +969,8 @@ private enum DownloadUrlSessionHook {
         )
         fn(slf, finishDownloadSelector, session, downloadTask, location)
       }
+      // Same as before the Downloads tabs split: promote the next waiter
+      // from this callback so ep2 starts before the session goes to sleep.
       DownloadNativeWaitingQueue.handlePluginTaskCompleted(
         session: session,
         task: downloadTask,

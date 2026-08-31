@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/services/download_concurrency.dart';
 import 'package:animewitcher/core/services/download_service.dart';
 import 'package:animewitcher/core/utils/download_cleanup.dart';
 import 'package:animewitcher/features/library/presentation/downloads_provider.dart';
@@ -78,21 +79,28 @@ class _StubDownloadsNotifier extends DownloadsNotifier {
   Future<List<DownloadItem>> build() async => _items;
 }
 
-Widget _downloadsApp(List<DownloadItem> items) {
+Widget _downloadsApp(
+  List<DownloadItem> items, {
+  TextDirection? shellDirection,
+}) {
+  Widget home = const Scaffold(
+    body: RepaintBoundary(
+      key: ValueKey('downloads-tab-root'),
+      child: DownloadsTab(),
+    ),
+  );
+  if (shellDirection != null) {
+    home = Directionality(textDirection: shellDirection, child: home);
+  }
   return ProviderScope(
     overrides: [
       downloadsProvider.overrideWith(() => _StubDownloadsNotifier(items)),
     ],
-    child: const MaterialApp(
-      locale: Locale('ar'),
+    child: MaterialApp(
+      locale: const Locale('ar'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: const Scaffold(
-        body: RepaintBoundary(
-          key: ValueKey('downloads-tab-root'),
-          child: DownloadsTab(),
-        ),
-      ),
+      home: home,
     ),
   );
 }
@@ -633,6 +641,72 @@ void main() {
     }
   });
 
+  testWidgets('tab swipe follows RTL like المواسم and الإحصائيات', (
+    tester,
+  ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => '/tmp',
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        null,
+      ),
+    );
+
+    final show = MultimediaItem(
+      title: 'Kuroneko',
+      url: 'https://animewitcher.test/kuro',
+      posterUrl: '',
+      contentType: MultimediaContentType.anime,
+      tmdbId: 20,
+    );
+    DownloadItem episode(int n, TaskStatus status) {
+      return DownloadItem(
+        task: _task(
+          taskId: 'ep$n',
+          filename: 'الحلقة $n.mp4',
+          metaData: 'https://animewitcher.test/kuro/$n',
+        ),
+        status: status,
+        progress: status == TaskStatus.complete ? 1 : 0.2,
+        item: show,
+        episode: Episode(
+          name: 'الحلقة $n',
+          url: 'https://animewitcher.test/kuro/$n',
+          episode: n,
+          serverName: 'الحلقة $n',
+        ),
+        timestamp: n * 10,
+      );
+    }
+
+    await tester.pumpWidget(
+      _downloadsApp(
+        [episode(20, TaskStatus.running), episode(9, TaskStatus.complete)],
+        // DownloadsScreen used to force LTR on the whole page; the pager
+        // must still be RTL like the other FilterStyleTabBar screens.
+        shellDirection: TextDirection.ltr,
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      Directionality.of(tester.element(find.byType(TabBarView))),
+      TextDirection.rtl,
+    );
+    expect(find.text('الحلقة 20'), findsOneWidget);
+    expect(find.text('الحلقة 9'), findsNothing);
+
+    await tester.fling(find.byType(TabBarView), const Offset(400, 0), 2000);
+    await tester.pumpAndSettle();
+
+    expect(find.text('الحلقة 9'), findsOneWidget);
+    expect(find.text('مكتمل'), findsOneWidget);
+    expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
+  });
+
   test('active FIFO is oldest first until the user reorders', () {
     final older = _item(
       taskId: 'old-run',
@@ -660,8 +734,64 @@ void main() {
         serverName: 'الحلقة 10',
       ),
     );
-    final collapsed = collapseDuplicateDownloads([newer, older]).visible;
+    final collapsed = sortByDownloadQueueOrder(
+      collapseDuplicateDownloads([newer, older]).visible,
+      idOf: (item) => item.id,
+      order: const [],
+      fallbackTimestamp: (item) => item.timestamp,
+    );
     expect(collapsed.first.id, 'old-run');
     expect(collapsed.last.id, 'new-run');
+    expect(
+      collapseDuplicateDownloads([newer, older]).visible.map((item) => item.id),
+      ['new-run', 'old-run'],
+    );
   });
+
+  test(
+    'Hive metadata is enough to show a waiting row before enqueue returns',
+    () {
+      final task = _task(
+        taskId: 'ep11',
+        filename: 'الحلقة 11 (480p).mp4',
+        metaData: 'https://animewitcher.test/black-torch/11',
+      );
+      final incoming = downloadItemFromTaskMetadata(
+        task: task,
+        status: TaskStatus.enqueued,
+        metadata: {
+          'item': _blackTorch().toJson(),
+          'episode': Episode(
+            name: 'الحلقة 11',
+            url: 'https://animewitcher.test/black-torch/11',
+            episode: 11,
+            serverName: 'الحلقة 11',
+          ).toJson(),
+          'timestamp': 50,
+        },
+      );
+      expect(incoming, isNotNull);
+      expect(incoming!.id, 'ep11');
+      expect(incoming.status, TaskStatus.enqueued);
+      expect(incoming.episode?.name, 'الحلقة 11');
+      expect(isActiveDownloadStatus(incoming.status), isTrue);
+
+      final running = _item(
+        taskId: 'ep10',
+        timestamp: 40,
+        filename: 'الحلقة 10.mp4',
+        status: TaskStatus.running,
+        metaData: 'https://animewitcher.test/black-torch/10',
+        episode: Episode(
+          name: 'الحلقة 10',
+          url: 'https://animewitcher.test/black-torch/10',
+          episode: 10,
+          serverName: 'الحلقة 10',
+        ),
+      );
+      final visible = collapseDuplicateDownloads([running, incoming]).visible;
+      expect(visible.map((row) => row.id), ['ep10', 'ep11']);
+      expect(visible.last.episode?.name, 'الحلقة 11');
+    },
+  );
 }

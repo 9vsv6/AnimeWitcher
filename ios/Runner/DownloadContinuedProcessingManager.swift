@@ -74,6 +74,7 @@ final class DownloadContinuedProcessingManager {
     // state check here: transient `.inactive` states during UI transitions can
     // otherwise make a user-initiated download silently skip system UI.
 
+    let previousEpisodeTaskId = currentEpisodeTaskId
     if taskId != Self.sessionKey, !taskId.isEmpty {
       currentEpisodeTaskId = taskId
     }
@@ -82,9 +83,14 @@ final class DownloadContinuedProcessingManager {
     let transferred = transferredBytes >= 0
       ? transferredBytes
       : overlayTransferredBytes(progress: normalized, totalBytes: totalBytes)
-    let keepSpeed = speedBytesPerSecond > 0
-      ? speedBytesPerSecond
-      : max(snapshot?.speedBytesPerSecond ?? 0, 0)
+    let switched = !previousEpisodeTaskId.isEmpty
+      && taskId != Self.sessionKey
+      && taskId != previousEpisodeTaskId
+    let keepSpeed = switched
+      ? max(speedBytesPerSecond, 0)
+      : (speedBytesPerSecond > 0
+        ? speedBytesPerSecond
+        : max(snapshot?.speedBytesPerSecond ?? 0, 0))
     let snapshot = Snapshot(
       displayName: displayName,
       progress: normalized,
@@ -167,17 +173,26 @@ final class DownloadContinuedProcessingManager {
     displayName: String = "",
     currentIndex: Int = -1
   ) {
+    let previousEpisodeTaskId = currentEpisodeTaskId
     if taskId != Self.sessionKey, !taskId.isEmpty {
       currentEpisodeTaskId = taskId
     }
     guard var snapshot = snapshot else { return }
 
+    let switched = !previousEpisodeTaskId.isEmpty
+      && taskId != Self.sessionKey
+      && taskId != previousEpisodeTaskId
+
     snapshot.progress = min(max(progress, 0.0), 1.0)
     if totalBytes > 0 {
       snapshot.totalBytes = totalBytes
+    } else if switched {
+      snapshot.totalBytes = -1
     }
     if transferredBytes >= 0 {
       snapshot.transferredBytes = transferredBytes
+    } else if switched {
+      snapshot.transferredBytes = 0
     } else if snapshot.totalBytes > 0 {
       snapshot.transferredBytes = overlayTransferredBytes(
         progress: snapshot.progress,
@@ -190,7 +205,9 @@ final class DownloadContinuedProcessingManager {
     if batchTotal > 0 {
       snapshot.batchTotal = batchTotal
     }
-    if speedBytesPerSecond > 0 {
+    if switched {
+      snapshot.speedBytesPerSecond = max(speedBytesPerSecond, 0)
+    } else if speedBytesPerSecond > 0 {
       snapshot.speedBytesPerSecond = speedBytesPerSecond
     }
     if !displayName.isEmpty {
