@@ -286,47 +286,50 @@ void showDownloadNotificationsDialog(BuildContext context, WidgetRef ref) {
         return AlertDialog(
           surfaceTintColor: Colors.transparent,
           title: Text(downloadNotificationsTitle()),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SwitchListTile(
-                  secondary: const Icon(Icons.notifications_active_rounded),
-                  title: const Text('كل الإشعارات'),
-                  value: prefs.allEnabled,
-                  onChanged: (val) => apply(prefs.copyAll(val)),
-                ),
-                SwitchListTile(
-                  secondary: const Icon(Icons.play_arrow_rounded),
-                  title: const Text('البدء'),
-                  value: prefs.running,
-                  onChanged: (val) => apply(prefs.copyWith(running: val)),
-                ),
-                SwitchListTile(
-                  secondary: const Icon(Icons.check_circle_rounded),
-                  title: const Text('الانتهاء'),
-                  value: prefs.complete,
-                  onChanged: (val) => apply(prefs.copyWith(complete: val)),
-                ),
-                SwitchListTile(
-                  secondary: const Icon(Icons.pause_rounded),
-                  title: const Text('الإيقاف'),
-                  value: prefs.paused,
-                  onChanged: (val) => apply(prefs.copyWith(paused: val)),
-                ),
-                SwitchListTile(
-                  secondary: const Icon(Icons.cancel_rounded),
-                  title: const Text('الإلغاء'),
-                  value: prefs.canceled,
-                  onChanged: (val) => apply(prefs.copyWith(canceled: val)),
-                ),
-                SwitchListTile(
-                  secondary: const Icon(Icons.error_outline_rounded),
-                  title: const Text('التوقف أو الفشل'),
-                  value: prefs.error,
-                  onChanged: (val) => apply(prefs.copyWith(error: val)),
-                ),
-              ],
+          content: RepaintBoundary(
+            key: const ValueKey('download-notifications-dialog'),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.notifications_active_rounded),
+                    title: const Text('كل الإشعارات'),
+                    value: prefs.allEnabled,
+                    onChanged: (val) => apply(prefs.copyAll(val)),
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.play_arrow_rounded),
+                    title: const Text('البدء'),
+                    value: prefs.running,
+                    onChanged: (val) => apply(prefs.copyWith(running: val)),
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.check_circle_rounded),
+                    title: const Text('الانتهاء'),
+                    value: prefs.complete,
+                    onChanged: (val) => apply(prefs.copyWith(complete: val)),
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.pause_rounded),
+                    title: const Text('الإيقاف'),
+                    value: prefs.paused,
+                    onChanged: (val) => apply(prefs.copyWith(paused: val)),
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.cancel_rounded),
+                    title: const Text('الإلغاء'),
+                    value: prefs.canceled,
+                    onChanged: (val) => apply(prefs.copyWith(canceled: val)),
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.error_outline_rounded),
+                    title: const Text('التوقف أو الفشل'),
+                    value: prefs.error,
+                    onChanged: (val) => apply(prefs.copyWith(error: val)),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [

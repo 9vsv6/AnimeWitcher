@@ -1302,6 +1302,18 @@ void main() {
           )?.body,
           kDownloadCompleteNotificationBody,
         );
+        expect(
+          shouldClearDownloadNotificationConfigs(
+            DownloadNotificationPrefs.disabled,
+          ),
+          isTrue,
+        );
+        expect(
+          shouldClearDownloadNotificationConfigs(
+            DownloadNotificationPrefs.enabled,
+          ),
+          isFalse,
+        );
       },
     );
   });

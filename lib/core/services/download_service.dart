@@ -425,6 +425,12 @@ class DownloadService {
   }
 
   void _configureDownloadNotifications(DownloadNotificationPrefs prefs) {
+    if (shouldClearDownloadNotificationConfigs(prefs)) {
+      // Plugin requires at least one notification in a config.
+      // ignore: invalid_use_of_visible_for_testing_member
+      FileDownloader().downloaderForTesting.notificationConfigs.clear();
+      return;
+    }
     const title = '{displayName}';
     final running = downloadNotificationIfEnabled(
       enabled: prefs.running,

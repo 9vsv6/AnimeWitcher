@@ -267,6 +267,11 @@ TaskNotification? downloadNotificationIfEnabled({
   required String body,
 }) => enabled ? TaskNotification(title, body) : null;
 
+/// Plugin asserts at least one of running/complete/error/paused/canceled.
+/// Turning every type off means we must clear the config set instead.
+bool shouldClearDownloadNotificationConfigs(DownloadNotificationPrefs prefs) =>
+    prefs.noneEnabled;
+
 /// Native overlay finish: never report `failed` for a parked episode.
 /// Remaining waiters keep the session; an idle batch ends as canceled.
 String downloadSessionFinishStatus({

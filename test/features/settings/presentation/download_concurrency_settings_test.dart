@@ -177,6 +177,20 @@ void main() {
       DownloadNotificationPrefs.disabled,
     );
 
+    final artifacts = Directory('/opt/cursor/artifacts');
+    if (artifacts.existsSync()) {
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('download-notifications-dialog')),
+        );
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File(
+          '${artifacts.path}/settings_download_notifications.png',
+        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    }
+
     await tester.tap(find.text('إغلاق'));
     await tester.pumpAndSettle();
     expect(
@@ -185,21 +199,5 @@ void main() {
       ),
       findsOneWidget,
     );
-
-    final artifacts = Directory('/opt/cursor/artifacts');
-    if (!artifacts.existsSync()) return;
-
-    await tester.tap(find.text(downloadNotificationsTitle()));
-    await tester.pumpAndSettle();
-    await tester.runAsync(() async {
-      final boundary = tester.renderObject<RenderRepaintBoundary>(
-        find.byType(AlertDialog),
-      );
-      final image = await boundary.toImage(pixelRatio: 2);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/settings_download_notifications.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
-    });
   });
 }
