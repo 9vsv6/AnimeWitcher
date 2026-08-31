@@ -68,19 +68,46 @@ enum DownloadNativeWaitingQueue {
     var pausedTaskIds: [String]
     var waiters: [Waiter]
     var completedTaskIds: [String]
+    var sessionTaskIds: [String]
+    var sessionCompletedCount: Int
+    var sessionBatchTotal: Int
+    var sessionCurrentTaskId: String
+    var sessionDisplayName: String
+    var sessionProgress: Double
+    var sessionTotalBytes: Int64
+    var sessionTransferredBytes: Int64
+    var sessionSpeedBytesPerSecond: Double
 
     init(
       maxConcurrent: Int,
       transferringTaskIds: [String],
       pausedTaskIds: [String],
       waiters: [Waiter],
-      completedTaskIds: [String] = []
+      completedTaskIds: [String] = [],
+      sessionTaskIds: [String] = [],
+      sessionCompletedCount: Int = 0,
+      sessionBatchTotal: Int = 0,
+      sessionCurrentTaskId: String = "",
+      sessionDisplayName: String = "",
+      sessionProgress: Double = 0,
+      sessionTotalBytes: Int64 = -1,
+      sessionTransferredBytes: Int64 = 0,
+      sessionSpeedBytesPerSecond: Double = 0
     ) {
       self.maxConcurrent = maxConcurrent
       self.transferringTaskIds = transferringTaskIds
       self.pausedTaskIds = pausedTaskIds
       self.waiters = waiters
       self.completedTaskIds = completedTaskIds
+      self.sessionTaskIds = sessionTaskIds
+      self.sessionCompletedCount = sessionCompletedCount
+      self.sessionBatchTotal = sessionBatchTotal
+      self.sessionCurrentTaskId = sessionCurrentTaskId
+      self.sessionDisplayName = sessionDisplayName
+      self.sessionProgress = sessionProgress
+      self.sessionTotalBytes = sessionTotalBytes
+      self.sessionTransferredBytes = sessionTransferredBytes
+      self.sessionSpeedBytesPerSecond = sessionSpeedBytesPerSecond
     }
 
     init(from decoder: Decoder) throws {
@@ -90,7 +117,26 @@ enum DownloadNativeWaitingQueue {
       pausedTaskIds = try container.decodeIfPresent([String].self, forKey: .pausedTaskIds) ?? []
       waiters = try container.decodeIfPresent([Waiter].self, forKey: .waiters) ?? []
       completedTaskIds = try container.decodeIfPresent([String].self, forKey: .completedTaskIds) ?? []
+      sessionTaskIds = try container.decodeIfPresent([String].self, forKey: .sessionTaskIds) ?? []
+      sessionCompletedCount = try container.decodeIfPresent(Int.self, forKey: .sessionCompletedCount) ?? 0
+      sessionBatchTotal = try container.decodeIfPresent(Int.self, forKey: .sessionBatchTotal) ?? 0
+      sessionCurrentTaskId = try container.decodeIfPresent(String.self, forKey: .sessionCurrentTaskId) ?? ""
+      sessionDisplayName = try container.decodeIfPresent(String.self, forKey: .sessionDisplayName) ?? ""
+      sessionProgress = try container.decodeIfPresent(Double.self, forKey: .sessionProgress) ?? 0
+      sessionTotalBytes = try container.decodeIfPresent(Int64.self, forKey: .sessionTotalBytes) ?? -1
+      sessionTransferredBytes = try container.decodeIfPresent(Int64.self, forKey: .sessionTransferredBytes) ?? 0
+      sessionSpeedBytesPerSecond = try container.decodeIfPresent(Double.self, forKey: .sessionSpeedBytesPerSecond) ?? 0
     }
+
+    var sessionIsIdle: Bool {
+      transferringTaskIds.isEmpty && waiters.isEmpty
+    }
+  }
+
+  private struct WriteSample {
+    var taskId: String
+    var bytes: Int64
+    var time: CFAbsoluteTime
   }
 
   private static let lock = NSLock()
@@ -99,6 +145,7 @@ enum DownloadNativeWaitingQueue {
   /// Used instead of `BDPlugin.holdingQueue`, which is internal to the plugin
   /// and fails Xcode 26 (`holdingQueue` / `taskForId` inaccessible).
   private static var seenTransferringIds = Set<String>()
+  private static var lastWrite: WriteSample?
 
   static func installUrlSessionHook() {
     lock.lock()
@@ -118,15 +165,20 @@ enum DownloadNativeWaitingQueue {
     let dartTransferring = stringArray(arguments["transferringTaskIds"])
     let dartPaused = stringArray(arguments["pausedTaskIds"])
     let dartWaiters = dictionaryArray(arguments["waiters"]).compactMap(Waiter.from(arguments:))
+    let dartSessionIds = stringArray(arguments["sessionTaskIds"])
+    let dartCompletedCount = intValue(arguments["sessionCompletedCount"]) ?? 0
+    let dartBatchTotal = intValue(arguments["sessionBatchTotal"]) ?? 0
 
     let pausedSet = Set(dartPaused)
-    // Keep completed IDs while Dart still lists them as transferring/waiting so a
-    // stale snapshot cannot put a finished episode back in a slot.
-    let completed = unique(
-      current.completedTaskIds.filter { id in
-        dartTransferring.contains(id) || dartWaiters.contains(where: { $0.taskId == id })
-      }
+    let sessionIds = unique(
+      current.sessionTaskIds + dartSessionIds + dartTransferring + dartWaiters.map(\.taskId)
     )
+    // Keep completed-in-session IDs so `1 of 5` survives Dart snapshots that
+    // no longer list ep1 as transferring. Drop them only when the session is idle.
+    var completed = unique(current.completedTaskIds)
+    if !sessionIds.isEmpty {
+      completed = completed.filter { sessionIds.contains($0) }
+    }
 
     let transferring = unique(current.transferringTaskIds + dartTransferring)
       .filter { !pausedSet.contains($0) && !completed.contains($0) }
@@ -135,13 +187,49 @@ enum DownloadNativeWaitingQueue {
       !transferringSet.contains($0.taskId) && !pausedSet.contains($0.taskId)
     }
 
+    let idle = transferring.isEmpty && waiters.isEmpty
+    if idle && dartBatchTotal == 0 && dartCompletedCount == 0 {
+      completed = []
+    }
+
+    let completedCount = max(
+      max(current.sessionCompletedCount, dartCompletedCount),
+      completed.count
+    )
+    let computedBatch = transferring.count + waiters.count + completed.count
+    let batchTotal = idle && dartBatchTotal == 0
+      ? 0
+      : max(
+        max(current.sessionBatchTotal, dartBatchTotal),
+        max(computedBatch, sessionIds.count)
+      )
+
     saveLocked(
       State(
         maxConcurrent: maxConcurrent,
         transferringTaskIds: transferring,
         pausedTaskIds: unique(dartPaused),
         waiters: waiters,
-        completedTaskIds: completed
+        completedTaskIds: idle && dartBatchTotal == 0 ? [] : completed,
+        sessionTaskIds: idle && dartBatchTotal == 0 ? [] : sessionIds,
+        sessionCompletedCount: idle && dartBatchTotal == 0 ? 0 : completedCount,
+        sessionBatchTotal: batchTotal,
+        sessionCurrentTaskId: {
+          let dart = string(arguments["sessionCurrentTaskId"]) ?? ""
+          return dart.isEmpty ? current.sessionCurrentTaskId : dart
+        }(),
+        sessionDisplayName: {
+          let dart = string(arguments["sessionDisplayName"]) ?? ""
+          return dart.isEmpty ? current.sessionDisplayName : dart
+        }(),
+        sessionProgress: (arguments["sessionProgress"] as? NSNumber)?.doubleValue
+          ?? current.sessionProgress,
+        sessionTotalBytes: int64Value(arguments["sessionTotalBytes"]).flatMap { $0 > 0 ? $0 : nil }
+          ?? current.sessionTotalBytes,
+        sessionTransferredBytes: int64Value(arguments["sessionTransferredBytes"])
+          ?? current.sessionTransferredBytes,
+        sessionSpeedBytesPerSecond: (arguments["sessionSpeedBytesPerSecond"] as? NSNumber)?.doubleValue
+          ?? current.sessionSpeedBytesPerSecond
       )
     )
   }
@@ -176,15 +264,36 @@ enum DownloadNativeWaitingQueue {
       }
     }
     saveLocked(state)
+    if let completedId {
+      state.sessionBatchTotal = max(
+        max(
+          state.sessionBatchTotal,
+          state.transferringTaskIds.count + state.waiters.count + state.completedTaskIds.count
+        ),
+        state.sessionTaskIds.count
+      )
+      if !state.completedTaskIds.contains(completedId) {
+        state.sessionCompletedCount = max(
+          state.sessionCompletedCount + 1,
+          state.completedTaskIds.count
+        )
+      } else {
+        state.sessionCompletedCount = max(
+          state.sessionCompletedCount,
+          state.completedTaskIds.count
+        )
+      }
+      if !state.sessionTaskIds.contains(completedId) {
+        state.sessionTaskIds.append(completedId)
+      }
+    }
+    saveLocked(state)
     lock.unlock()
 
-    // Start ep2 (and its Live Activity) before finishing ep1's overlay.
-    // Finishing continued-processing first can suspend the process.
+    // Promote / update the SAME overlay before any finish. Finishing the
+    // session task here is what suspended the process on ep1 complete.
     promoteNext(on: session)
-
-    if let completedId {
-      finishLiveActivity(taskId: completedId, success: error == nil)
-    }
+    refreshSessionOverlay(success: error == nil)
   }
 
   static func promoteNext(on session: URLSession) {
@@ -267,6 +376,14 @@ enum DownloadNativeWaitingQueue {
     seenTransferringIds.insert(waiter.taskId)
     lock.unlock()
     NSLog("[DownloadNativeWaitingQueue] started %@", waiter.taskId)
+    upsertSessionOverlay(
+      currentTaskId: waiter.taskId,
+      displayName: waiter.displayName,
+      progress: 0,
+      totalBytes: -1,
+      transferredBytes: 0,
+      speedBytesPerSecond: 0
+    )
   }
 
   private static func requeue(_ waiter: Waiter) {
@@ -295,17 +412,41 @@ enum DownloadNativeWaitingQueue {
     }
   }
 
-  static func handleBytesWritten(_ downloadTask: URLSessionDownloadTask) {
+  static func handleBytesWritten(
+    _ downloadTask: URLSessionDownloadTask,
+    totalWritten: Int64,
+    totalExpected: Int64
+  ) {
     guard let id = taskId(from: downloadTask) else { return }
+    let now = CFAbsoluteTimeGetCurrent()
+    var speed: Double = 0
     lock.lock()
     seenTransferringIds.insert(id)
+    if let last = lastWrite, last.taskId == id, now > last.time {
+      let deltaBytes = Double(max(totalWritten - last.bytes, 0))
+      let deltaTime = now - last.time
+      if deltaTime > 0 {
+        speed = deltaBytes / deltaTime
+      }
+    }
+    lastWrite = WriteSample(taskId: id, bytes: totalWritten, time: now)
     lock.unlock()
     let json = downloadTask.taskDescription?
       .components(separatedBy: "***<<<|>>>***").first ?? ""
     let display = stringFromTaskJson(json, key: "displayName")
     let filename = stringFromTaskJson(json, key: "filename")
     let name = display.isEmpty ? (filename.isEmpty ? id : filename) : display
-    startLiveActivity(taskId: id, displayName: name)
+    let progress = totalExpected > 0
+      ? min(max(Double(totalWritten) / Double(totalExpected), 0), 1)
+      : 0
+    upsertSessionOverlay(
+      currentTaskId: id,
+      displayName: name,
+      progress: progress,
+      totalBytes: totalExpected,
+      transferredBytes: totalWritten,
+      speedBytesPerSecond: speed
+    )
   }
 
   private static func startLiveActivity(for waiter: Waiter) {
@@ -313,25 +454,102 @@ enum DownloadNativeWaitingQueue {
   }
 
   private static func startLiveActivity(taskId: String, displayName: String) {
+    upsertSessionOverlay(
+      currentTaskId: taskId,
+      displayName: displayName,
+      progress: 0,
+      totalBytes: -1,
+      transferredBytes: 0,
+      speedBytesPerSecond: 0
+    )
+  }
+
+  private static func refreshSessionOverlay(success: Bool) {
+    lock.lock()
+    let state = loadLocked()
+    let idle = state.sessionIsIdle
+    let nextId = state.transferringTaskIds.first ?? state.waiters.first?.taskId
+    let nextName: String
+    if let next = state.waiters.first(where: { $0.taskId == nextId }) {
+      nextName = next.displayName
+    } else {
+      nextName = state.sessionDisplayName
+    }
+    let completed = state.sessionCompletedCount
+    let batch = max(state.sessionBatchTotal, 1)
+    lock.unlock()
+
+    if idle {
+      runOnMainActor {
+        if #available(iOS 26.0, *) {
+          DownloadContinuedProcessingManager.shared.finish(
+            taskId: DownloadContinuedProcessingManager.sessionKey,
+            success: success,
+            status: success ? "completed" : "failed",
+            endSession: true
+          )
+        }
+      }
+      return
+    }
+
+    upsertSessionOverlay(
+      currentTaskId: nextId ?? state.sessionCurrentTaskId,
+      displayName: nextName,
+      progress: 0,
+      totalBytes: -1,
+      transferredBytes: 0,
+      speedBytesPerSecond: 0,
+      completedCount: completed,
+      batchTotal: batch
+    )
+  }
+
+  private static func upsertSessionOverlay(
+    currentTaskId: String,
+    displayName: String,
+    progress: Double,
+    totalBytes: Int64,
+    transferredBytes: Int64,
+    speedBytesPerSecond: Double,
+    completedCount: Int? = nil,
+    batchTotal: Int? = nil
+  ) {
+    lock.lock()
+    var state = loadLocked()
+    state.sessionCurrentTaskId = currentTaskId
+    if !displayName.isEmpty {
+      state.sessionDisplayName = displayName
+    }
+    state.sessionProgress = progress
+    if totalBytes > 0 {
+      state.sessionTotalBytes = totalBytes
+    }
+    state.sessionTransferredBytes = transferredBytes
+    if speedBytesPerSecond > 0 {
+      state.sessionSpeedBytesPerSecond = speedBytesPerSecond
+    }
+    if let completedCount {
+      state.sessionCompletedCount = max(state.sessionCompletedCount, completedCount)
+    }
+    if let batchTotal {
+      state.sessionBatchTotal = max(state.sessionBatchTotal, batchTotal)
+    }
+    let snapshot = state
+    saveLocked(state)
+    lock.unlock()
+
     runOnMainActor {
       if #available(iOS 26.0, *) {
         _ = try? DownloadContinuedProcessingManager.shared.start(
-          taskId: taskId,
-          displayName: displayName,
-          progress: 0,
-          totalBytes: -1
-        )
-      }
-    }
-  }
-
-  private static func finishLiveActivity(taskId: String, success: Bool) {
-    runOnMainActor {
-      if #available(iOS 26.0, *) {
-        DownloadContinuedProcessingManager.shared.finish(
-          taskId: taskId,
-          success: success,
-          status: success ? "completed" : "failed"
+          taskId: currentTaskId,
+          displayName: displayName.isEmpty ? snapshot.sessionDisplayName : displayName,
+          progress: progress,
+          totalBytes: totalBytes > 0 ? totalBytes : snapshot.sessionTotalBytes,
+          transferredBytes: transferredBytes,
+          completedCount: snapshot.sessionCompletedCount,
+          batchTotal: max(snapshot.sessionBatchTotal, 1),
+          speedBytesPerSecond: snapshot.sessionSpeedBytesPerSecond
         )
       }
     }
@@ -407,6 +625,13 @@ enum DownloadNativeWaitingQueue {
   private static func intValue(_ value: Any?) -> Int? {
     if let number = value as? NSNumber { return number.intValue }
     if let int = value as? Int { return int }
+    return nil
+  }
+
+  private static func int64Value(_ value: Any?) -> Int64? {
+    if let number = value as? NSNumber { return number.int64Value }
+    if let int = value as? Int { return Int64(int) }
+    if let int64 = value as? Int64 { return int64 }
     return nil
   }
 
@@ -557,7 +782,11 @@ private enum DownloadUrlSessionHook {
         )
         fn(slf, writeSelector, session, downloadTask, bytesWritten, totalWritten, totalExpected)
       }
-      DownloadNativeWaitingQueue.handleBytesWritten(downloadTask)
+      DownloadNativeWaitingQueue.handleBytesWritten(
+        downloadTask,
+        totalWritten: totalWritten,
+        totalExpected: totalExpected
+      )
     }
     method_setImplementation(method, imp_implementationWithBlock(block))
   }

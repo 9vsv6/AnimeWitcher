@@ -240,12 +240,24 @@ import UserNotifications
               (arguments["progress"] as? NSNumber)?.doubleValue ?? 0.0
             let totalBytes =
               (arguments["totalBytes"] as? NSNumber)?.int64Value ?? -1
+            let transferredBytes =
+              (arguments["transferredBytes"] as? NSNumber)?.int64Value ?? -1
+            let completedCount =
+              (arguments["completedCount"] as? NSNumber)?.intValue ?? 0
+            let batchTotal =
+              (arguments["batchTotal"] as? NSNumber)?.intValue ?? 1
+            let speedBytesPerSecond =
+              (arguments["speedBytesPerSecond"] as? NSNumber)?.doubleValue ?? 0
 
             let identifier = try manager.start(
               taskId: taskId,
               displayName: displayName,
               progress: progress,
-              totalBytes: totalBytes
+              totalBytes: totalBytes,
+              transferredBytes: transferredBytes,
+              completedCount: completedCount,
+              batchTotal: batchTotal,
+              speedBytesPerSecond: speedBytesPerSecond
             )
             if let identifier {
               result(identifier)
@@ -261,22 +273,32 @@ import UserNotifications
             manager.update(
               taskId: taskId,
               progress: progress,
-              totalBytes: totalBytes
+              totalBytes: totalBytes,
+              transferredBytes: (arguments["transferredBytes"] as? NSNumber)?.int64Value ?? -1,
+              completedCount: (arguments["completedCount"] as? NSNumber)?.intValue ?? -1,
+              batchTotal: (arguments["batchTotal"] as? NSNumber)?.intValue ?? -1,
+              speedBytesPerSecond: (arguments["speedBytesPerSecond"] as? NSNumber)?.doubleValue ?? -1,
+              displayName: arguments["displayName"] as? String ?? ""
             )
             result(true)
 
           case "finish":
             let success = arguments["success"] as? Bool ?? false
             let status = arguments["status"] as? String ?? "failed"
+            let endSession = arguments["endSession"] as? Bool ?? false
             manager.finish(
               taskId: taskId,
               success: success,
-              status: status
+              status: status,
+              endSession: endSession
             )
             result(true)
 
           case "stop":
-            manager.stop(taskId: taskId)
+            manager.stop(
+              taskId: taskId,
+              endSession: arguments["endSession"] as? Bool ?? false
+            )
             result(true)
 
           default:
