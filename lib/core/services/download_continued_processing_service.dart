@@ -40,6 +40,7 @@ class DownloadContinuedProcessingService {
     int completedCount = 0,
     int batchTotal = 1,
     double speedBytesPerSecond = 0,
+    int currentIndex = 0,
   }) async {
     await _invoke('start', <String, Object>{
       'taskId': taskId,
@@ -50,6 +51,7 @@ class DownloadContinuedProcessingService {
       'completedCount': completedCount,
       'batchTotal': batchTotal,
       'speedBytesPerSecond': speedBytesPerSecond,
+      'currentIndex': currentIndex,
     });
   }
 
@@ -62,6 +64,7 @@ class DownloadContinuedProcessingService {
     int batchTotal = 1,
     double speedBytesPerSecond = 0,
     String displayName = '',
+    int currentIndex = 0,
   }) async {
     await _invoke('update', <String, Object>{
       'taskId': taskId,
@@ -72,6 +75,7 @@ class DownloadContinuedProcessingService {
       'batchTotal': batchTotal,
       'speedBytesPerSecond': speedBytesPerSecond,
       if (displayName.isNotEmpty) 'displayName': displayName,
+      'currentIndex': currentIndex,
     });
   }
 
@@ -112,6 +116,7 @@ class DownloadContinuedProcessingService {
     int sessionTotalBytes = -1,
     int sessionTransferredBytes = 0,
     double sessionSpeedBytesPerSecond = 0,
+    int sessionCurrentIndex = 0,
   }) async {
     await _invoke('persistNativeQueue', <String, Object>{
       'maxConcurrent': maxConcurrent,
@@ -129,15 +134,11 @@ class DownloadContinuedProcessingService {
       'sessionTotalBytes': sessionTotalBytes,
       'sessionTransferredBytes': sessionTransferredBytes,
       'sessionSpeedBytesPerSecond': sessionSpeedBytesPerSecond,
+      'sessionCurrentIndex': sessionCurrentIndex,
     });
   }
 
   Future<dynamic> _handleNativeCall(MethodCall call) async {
-    if (call.method == 'promoteWaitingAfterBackgroundSession') {
-      // Native Swift starts the file. This channel is bookkeeping only.
-      return true;
-    }
-
     if (call.method != 'cancel') return false;
 
     final arguments = call.arguments;

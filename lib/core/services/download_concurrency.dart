@@ -5,9 +5,9 @@ import 'package:background_downloader/background_downloader.dart';
 /// Hive settings key used by official SkyStream and this fork.
 const String kDownloadConcurrencyStorageKey = 'download_concurrency';
 
-/// Persisted on download metadata for leftover Dart-parked rows (PR #114)
-/// and for kill-recovery of native holding-queue waiters that never reached
-/// URLSession. In-app UI still maps this to **في الانتظار...**.
+/// Persisted on download metadata for leftover Dart-parked rows
+/// (kill-recovery of waiters that never reached URLSession). In-app UI
+/// still maps this to **في الانتظار...**.
 const String kDownloadQueueWaitingMetadataKey = 'queueWaiting';
 
 const int kDownloadConcurrencyMin = 1;
@@ -98,24 +98,17 @@ TaskStatus displayDownloadStatus({
 }
 
 /// One BGContinuedProcessingTask / Live Activity for the whole download
-/// batch. Per-episode identifiers caused Rivera to lose the island on ep2
-/// (finish ep1 → process suspends → Dart vs native fight).
+/// batch. `start` updates this session; never finish while anything is
+/// running or waiting.
 const String kDownloadSessionOverlayTaskId = 'session';
 
-/// iOS Live Activity / `BGContinuedProcessingTask` is only for a file that
-/// is actually transferring. Waiting **في الانتظار** rows must not call `start`.
+/// iOS Live Activity is only for a file that is actually transferring.
+/// Waiting **في الانتظار** rows must not create a system task.
 bool shouldStartDownloadLiveActivity(TaskStatus status) =>
     status == TaskStatus.running;
 
-/// Never submit a second system task while the session overlay is alive.
-/// `start()` must update the existing activity (new file, reset progress).
-bool shouldStartSecondDownloadLiveActivity({
-  required bool sessionAlreadyActive,
-}) => !sessionAlreadyActive;
-
-/// Hard rule: do not `finish` / `stop` the session overlay while any episode
-/// in the batch is still running or waiting. That suspends the process and
-/// breaks promotion. Only end the session when the batch is empty.
+/// Never finish the session overlay while any episode in the batch is still
+/// running or waiting. Only end the session when the batch is empty.
 bool shouldFinishDownloadSessionOverlay({
   required int runningCount,
   required int waitingCount,
@@ -152,6 +145,7 @@ class DownloadOverlaySession {
     required this.batchTotal,
     required this.runningCount,
     required this.waitingCount,
+    required this.currentIndex,
     this.speedBytesPerSecond = 0,
   });
 
@@ -165,6 +159,9 @@ class DownloadOverlaySession {
   final int runningCount;
   final int waitingCount;
   final double speedBytesPerSecond;
+
+  /// 1-based started count of this batch (`3 of 5` when three files run).
+  final int currentIndex;
 
   bool get shouldFinish => shouldFinishDownloadSessionOverlay(
     runningCount: runningCount,
@@ -180,12 +177,106 @@ bool _isOverlayRunning(DownloadOverlayEntry entry) => occupiesDownloadSlot(
   queueWaiting: entry.queueWaiting,
 );
 
-/// Batch overlay: current **running** file's bytes, plus completed-of-total
-/// for this session (running + waiting + complete in the batch).
+/// How many episodes in the batch have started (running + complete).
+int overlayStartedCount({
+  required int runningCount,
+  required int completedCount,
+}) => runningCount + completedCount;
+
+/// `k of N` is started-count, not "which running file is flashing".
+int overlayStartedIndex({
+  required int runningCount,
+  required int completedCount,
+  required int batchTotal,
+}) {
+  final started = overlayStartedCount(
+    runningCount: runningCount,
+    completedCount: completedCount,
+  );
+  return overlayCurrentIndex(
+    completedCount: started < 1 ? 0 : started - 1,
+    batchTotal: batchTotal,
+  );
+}
+
+class OverlayByteTotals {
+  const OverlayByteTotals({
+    required this.transferredBytes,
+    required this.totalBytes,
+    required this.progress,
+    required this.speedBytesPerSecond,
+  });
+
+  final int transferredBytes;
+  final int totalBytes;
+  final double progress;
+  final double speedBytesPerSecond;
+}
+
+/// N=1: current file bytes. N>1: sum of every transferring file so the
+/// island does not flip between sizes.
+OverlayByteTotals overlayRunningByteTotals(
+  Iterable<DownloadOverlayEntry> running,
+) {
+  final list = running.toList();
+  if (list.isEmpty) {
+    return const OverlayByteTotals(
+      transferredBytes: 0,
+      totalBytes: -1,
+      progress: 0,
+      speedBytesPerSecond: 0,
+    );
+  }
+  if (list.length == 1) {
+    final entry = list.first;
+    final progress = entry.progress.clamp(0.0, 1.0).toDouble();
+    return OverlayByteTotals(
+      transferredBytes: overlayTransferredBytes(
+        progress: progress,
+        totalBytes: entry.totalBytes,
+      ),
+      totalBytes: entry.totalBytes,
+      progress: progress,
+      speedBytesPerSecond: entry.speedBytesPerSecond,
+    );
+  }
+  var transferred = 0;
+  var total = 0;
+  var speed = 0.0;
+  var hasTotal = false;
+  for (final entry in list) {
+    if (entry.totalBytes > 0) {
+      hasTotal = true;
+      total += entry.totalBytes;
+      transferred += overlayTransferredBytes(
+        progress: entry.progress,
+        totalBytes: entry.totalBytes,
+      );
+    }
+    if (entry.speedBytesPerSecond > 0) {
+      speed += entry.speedBytesPerSecond;
+    }
+  }
+  return OverlayByteTotals(
+    transferredBytes: transferred,
+    totalBytes: hasTotal ? total : -1,
+    progress: hasTotal && total > 0
+        ? (transferred / total).clamp(0.0, 1.0)
+        : 0.0,
+    speedBytesPerSecond: speed,
+  );
+}
+
 DownloadOverlaySession planDownloadOverlaySession({
   required Iterable<DownloadOverlayEntry> entries,
+  List<String>? queueOrder,
 }) {
-  final list = entries.toList();
+  final list = List<DownloadOverlayEntry>.from(entries);
+  if (queueOrder != null && queueOrder.isNotEmpty) {
+    list.sort(
+      (a, b) => compareByDownloadQueueOrder(a.taskId, b.taskId, queueOrder),
+    );
+  }
   final running = list.where(_isOverlayRunning).toList();
   final waiting = list.where(_isOverlayWaiting).toList();
   final completed = list
@@ -194,14 +285,17 @@ DownloadOverlaySession planDownloadOverlaySession({
   final current = running.isNotEmpty
       ? running.first
       : (waiting.isNotEmpty ? waiting.first : null);
-  final progress = current == null
-      ? 0.0
-      : current.progress.clamp(0.0, 1.0).toDouble();
-  final totalBytes = current?.totalBytes ?? -1;
-  final transferred = overlayTransferredBytes(
-    progress: progress,
-    totalBytes: totalBytes,
-  );
+  final totals = overlayRunningByteTotals(running);
+  final progress = running.isNotEmpty
+      ? totals.progress
+      : (current == null ? 0.0 : current.progress.clamp(0.0, 1.0).toDouble());
+  final totalBytes = running.isNotEmpty
+      ? totals.totalBytes
+      : (current?.totalBytes ?? -1);
+  final transferred = running.isNotEmpty
+      ? totals.transferredBytes
+      : overlayTransferredBytes(progress: progress, totalBytes: totalBytes);
+  final batchTotal = running.length + waiting.length + completed.length;
   return DownloadOverlaySession(
     currentTaskId: current?.taskId ?? kDownloadSessionOverlayTaskId,
     displayName: current?.displayName ?? '',
@@ -209,10 +303,17 @@ DownloadOverlaySession planDownloadOverlaySession({
     transferredBytes: transferred,
     totalBytes: totalBytes,
     completedCount: completed.length,
-    batchTotal: running.length + waiting.length + completed.length,
+    batchTotal: batchTotal,
     runningCount: running.length,
     waitingCount: waiting.length,
-    speedBytesPerSecond: current?.speedBytesPerSecond ?? 0,
+    currentIndex: overlayStartedIndex(
+      runningCount: running.length,
+      completedCount: completed.length,
+      batchTotal: batchTotal,
+    ),
+    speedBytesPerSecond: running.isNotEmpty
+        ? totals.speedBytesPerSecond
+        : (current?.speedBytesPerSecond ?? 0),
   );
 }
 
@@ -255,21 +356,162 @@ String formatDownloadOverlaySpeed(double bytesPerSecond) {
   return '${bytesPerSecond.toStringAsFixed(0)}B/s';
 }
 
-/// Line 1 of the manga overlay: `Downloading... 40%` of the current file.
-String formatDownloadSessionTitle({required double progress}) {
-  final percent = (progress.clamp(0.0, 1.0) * 100).round();
-  return 'Downloading... $percent%';
+/// 1-based current episode of the batch. First of 3 → `1 of 3`, not `0 of 3`.
+int overlayCurrentIndex({
+  required int completedCount,
+  required int batchTotal,
+}) {
+  final total = batchTotal < 1 ? 1 : batchTotal;
+  final index = completedCount + 1;
+  if (index < 1) return 1;
+  if (index > total) return total;
+  return index;
 }
 
-/// Line 2: `40MB/400MB • 0 of 5`, optionally `1.9MB/s • 40MB/400MB • 0 of 5`.
+/// Hive key for the user-facing active download FIFO (top → bottom).
+const String kDownloadQueueOrderStorageKey = 'download_queue_order';
+
+/// In-progress, waiting, or paused — not complete/canceled.
+bool isActiveDownloadStatus(TaskStatus status) {
+  switch (status) {
+    case TaskStatus.complete:
+    case TaskStatus.canceled:
+      return false;
+    case TaskStatus.running:
+    case TaskStatus.enqueued:
+    case TaskStatus.waitingToRetry:
+    case TaskStatus.paused:
+    case TaskStatus.failed:
+    case TaskStatus.notFound:
+      return true;
+  }
+}
+
+int compareByDownloadQueueOrder(
+  String a,
+  String b,
+  List<String> order, {
+  int fallbackA = 0,
+  int fallbackB = 0,
+}) {
+  final indexA = order.indexOf(a);
+  final indexB = order.indexOf(b);
+  if (indexA >= 0 && indexB >= 0) return indexA.compareTo(indexB);
+  if (indexA >= 0) return -1;
+  if (indexB >= 0) return 1;
+  return fallbackA.compareTo(fallbackB);
+}
+
+List<T> sortByDownloadQueueOrder<T>(
+  Iterable<T> items, {
+  required String Function(T) idOf,
+  required List<String> order,
+  required int Function(T) fallbackTimestamp,
+}) {
+  final list = items.toList();
+  list.sort(
+    (a, b) => compareByDownloadQueueOrder(
+      idOf(a),
+      idOf(b),
+      order,
+      fallbackA: fallbackTimestamp(a),
+      fallbackB: fallbackTimestamp(b),
+    ),
+  );
+  return list;
+}
+
+/// Keep completed IDs in their session slots; fill the rest from the new
+/// active (visual) order so overlay `k of N` follows the drag.
+List<String> applyActiveDownloadReorder({
+  required List<String> sessionOrder,
+  required List<String> newActiveOrder,
+  required Set<String> completedIds,
+}) {
+  final remaining = List<String>.from(newActiveOrder);
+  final result = <String>[];
+  final used = <String>{};
+  for (final id in sessionOrder) {
+    if (completedIds.contains(id)) {
+      if (used.add(id)) result.add(id);
+    } else if (remaining.isNotEmpty) {
+      final next = remaining.removeAt(0);
+      if (used.add(next)) result.add(next);
+    }
+  }
+  for (final id in remaining) {
+    if (used.add(id)) result.add(id);
+  }
+  return result;
+}
+
+List<String> appendDownloadQueueId(List<String> order, String id) {
+  if (id.isEmpty || order.contains(id)) return List<String>.from(order);
+  return [...order, id];
+}
+
+List<String> removeDownloadQueueIds(List<String> order, Iterable<String> ids) {
+  final drop = ids.toSet();
+  return order.where((id) => !drop.contains(id)).toList();
+}
+
+List<String> moveDownloadQueueIndex(
+  List<String> order,
+  int oldIndex,
+  int newIndex,
+) {
+  if (oldIndex < 0 || oldIndex >= order.length) {
+    return List<String>.from(order);
+  }
+  var target = newIndex;
+  if (target > oldIndex) target -= 1;
+  if (target < 0) target = 0;
+  if (target > order.length) target = order.length;
+  final next = List<String>.from(order);
+  final item = next.removeAt(oldIndex);
+  if (target > next.length) target = next.length;
+  next.insert(target, item);
+  return next;
+}
+
+/// Attach / foreground must not flash **0 MB/s**. Keep the last live speed
+/// until the next real progress event.
+double keepLastKnownDownloadSpeed({
+  required TaskStatus status,
+  required double incomingSpeed,
+  double? lastKnownSpeed,
+}) {
+  final transferring =
+      status == TaskStatus.running || status == TaskStatus.waitingToRetry;
+  if (!transferring) {
+    return incomingSpeed < 0 ? 0 : incomingSpeed;
+  }
+  if (incomingSpeed > 0) return incomingSpeed;
+  final last = lastKnownSpeed ?? 0;
+  if (last > 0) return last;
+  return incomingSpeed;
+}
+
+/// Line 1: `Downloading “الحلقة 2.mp4”`. Percent lives on the circular progress.
+String formatDownloadSessionTitle({required String displayName}) {
+  final name = displayName.trim();
+  if (name.isEmpty) return 'Downloading';
+  return 'Downloading “$name”';
+}
+
+/// Line 2: `3.2MB/6.6MB • 1 of 3`, optionally `85KB/s • 3.2MB/6.6MB • 1 of 3`.
 String formatDownloadSessionSubtitle({
   required int transferredBytes,
   required int totalBytes,
-  required int completedCount,
+  required int currentIndex,
   required int batchTotal,
   double speedBytesPerSecond = 0,
 }) {
-  final count = '$completedCount of ${batchTotal < 1 ? 1 : batchTotal}';
+  final total = batchTotal < 1 ? 1 : batchTotal;
+  final index = currentIndex < 1
+      ? 1
+      : (currentIndex > total ? total : currentIndex);
+  final count = '$index of $total';
   final parts = <String>[];
   final speed = formatDownloadOverlaySpeed(speedBytesPerSecond);
   if (speed.isNotEmpty) parts.add(speed);
@@ -282,17 +524,6 @@ String formatDownloadSessionSubtitle({
   parts.add(count);
   return parts.join(' • ');
 }
-
-/// Overflow episodes are always OS-enqueued into the native holding queue.
-/// Dart must not park-without-enqueue: that stranded ep3 on device (#116).
-bool shouldEnqueueOverflowToNativeHoldingQueue() => true;
-
-/// When the Flutter isolate is alive, Dart must start the next leftover
-/// waiter if a slot is free. Always true in production — do not gate this off.
-bool shouldPromoteWaitingWhenIsolateAlive() => true;
-
-/// Opening the app must unstick a leftover waiter if a slot is free.
-bool shouldPromoteWaitingOnAppForeground() => true;
 
 /// Native UserDefaults snapshot: leftover parked rows and HQ `enqueued`
 /// waiters. User-paused stays paused and is never persisted as a waiter.
@@ -343,9 +574,6 @@ bool shouldAttachToLiveNativeTask({
   }
   return false;
 }
-
-bool shouldStartSecondTransfer({required bool liveNativeOwnsEpisode}) =>
-    !liveNativeOwnsEpisode;
 
 /// Bytes on the wire: a waiter that is actually transferring must show
 /// **جارٍ التنزيل...**, not stay frozen at في الانتظار.
@@ -419,22 +647,6 @@ bool shouldReenqueueWaitingAfterProcessKill({
   return persisted == TaskStatus.enqueued;
 }
 
-/// iOS concurrency=1, two episodes: waiting rows stay **في الانتظار** with
-/// no Live Activity. Overlay starts only when the native task is `running`.
-bool waitingEpisodeMayStartLiveActivityWhileQueued() => false;
-
-enum DownloadAdmission { enqueueToNativeHoldingQueue }
-
-/// Every user-started episode is OS-enqueued. Native HoldingQueue owns N.
-DownloadAdmission admitDownload({
-  required int occupiedSlots,
-  required int maxConcurrent,
-}) {
-  assert(occupiedSlots >= 0);
-  clampDownloadConcurrency(maxConcurrent);
-  return DownloadAdmission.enqueueToNativeHoldingQueue;
-}
-
 class DownloadQueueEntry {
   const DownloadQueueEntry({
     required this.taskId,
@@ -454,14 +666,12 @@ class DownloadQueuePlan {
     required this.maxConcurrent,
     required this.occupiedCount,
     required this.waitingFifoIds,
-    required this.idsToPark,
     required this.idsToPromote,
   });
 
   final int maxConcurrent;
   final int occupiedCount;
   final List<String> waitingFifoIds;
-  final List<String> idsToPark;
   final List<String> idsToPromote;
 
   int get freeSlots => (maxConcurrent - occupiedCount).clamp(0, maxConcurrent);
@@ -469,11 +679,12 @@ class DownloadQueuePlan {
 
 /// FIFO re-enqueue of leftover Dart-parked waiters only. Native holding-queue
 /// `enqueued` rows already have a live FileDownloader task — promoting them
-/// starts a second transfer of the same episode (Rivera: 0.1MB ghost complete
-/// then restart from 0). Occupying URLSession tasks are never detached.
+/// starts a second transfer of the same episode. Occupying URLSession tasks
+/// are never detached.
 DownloadQueuePlan planDownloadQueue({
   required int maxConcurrent,
   required Iterable<DownloadQueueEntry> entries,
+  List<String>? queueOrder,
 }) {
   final n = clampDownloadConcurrency(maxConcurrent);
   final occupying = entries
@@ -484,6 +695,18 @@ DownloadQueuePlan planDownloadQueue({
         ),
       )
       .toList();
+  int fifo(DownloadQueueEntry a, DownloadQueueEntry b) {
+    final order = queueOrder ?? const <String>[];
+    if (order.isEmpty) return a.timestamp.compareTo(b.timestamp);
+    return compareByDownloadQueueOrder(
+      a.taskId,
+      b.taskId,
+      order,
+      fallbackA: a.timestamp,
+      fallbackB: b.timestamp,
+    );
+  }
+
   final waiting =
       entries
           .where(
@@ -491,9 +714,9 @@ DownloadQueuePlan planDownloadQueue({
                 entry.queueWaiting || entry.status == TaskStatus.enqueued,
           )
           .toList()
-        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        ..sort(fifo);
   final leftoverParked = entries.where((entry) => entry.queueWaiting).toList()
-    ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    ..sort(fifo);
 
   final waitingFifoIds = waiting.map((e) => e.taskId).toList();
   final occupiedCount = occupying.length;
@@ -507,7 +730,6 @@ DownloadQueuePlan planDownloadQueue({
     maxConcurrent: n,
     occupiedCount: occupiedCount,
     waitingFifoIds: waitingFifoIds,
-    idsToPark: const [],
     idsToPromote: idsToPromote,
   );
 }

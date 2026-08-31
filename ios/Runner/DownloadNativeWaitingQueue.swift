@@ -8,12 +8,8 @@ import background_downloader
 
 /// Full waiter payloads so Swift can start the next URLSession download when
 /// ep1 completes — without Flutter, and without reconstructing the task in Dart.
-///
-/// PR #115 only stored task IDs and then `invokeMethod` to Dart. That channel
-/// is a no-op while the engine is asleep; Rivera opening the app is what
-/// ran promotion. This store holds url/headers/filename/directory/task JSON
-/// so the plugin URLSession can start ep2 in the same native completion
-/// callback, before `completionHandler()`.
+/// Flutter method channels are a no-op while the engine is asleep, so this
+/// store holds url/headers/filename/directory/task JSON for the plugin session.
 enum DownloadNativeWaitingQueue {
   static let stateKey = "com.animewitcher.download.nativeWaitingQueue.v2"
 
@@ -62,6 +58,13 @@ enum DownloadNativeWaitingQueue {
     }
   }
 
+  struct RunningSample: Codable, Equatable {
+    var written: Int64
+    var expected: Int64
+    var speed: Double
+    var displayName: String
+  }
+
   struct State: Codable {
     var maxConcurrent: Int
     var transferringTaskIds: [String]
@@ -77,6 +80,8 @@ enum DownloadNativeWaitingQueue {
     var sessionTotalBytes: Int64
     var sessionTransferredBytes: Int64
     var sessionSpeedBytesPerSecond: Double
+    var sessionCurrentIndex: Int
+    var runningSamples: [String: RunningSample]
 
     init(
       maxConcurrent: Int,
@@ -92,7 +97,9 @@ enum DownloadNativeWaitingQueue {
       sessionProgress: Double = 0,
       sessionTotalBytes: Int64 = -1,
       sessionTransferredBytes: Int64 = 0,
-      sessionSpeedBytesPerSecond: Double = 0
+      sessionSpeedBytesPerSecond: Double = 0,
+      sessionCurrentIndex: Int = 0,
+      runningSamples: [String: RunningSample] = [:]
     ) {
       self.maxConcurrent = maxConcurrent
       self.transferringTaskIds = transferringTaskIds
@@ -108,6 +115,8 @@ enum DownloadNativeWaitingQueue {
       self.sessionTotalBytes = sessionTotalBytes
       self.sessionTransferredBytes = sessionTransferredBytes
       self.sessionSpeedBytesPerSecond = sessionSpeedBytesPerSecond
+      self.sessionCurrentIndex = sessionCurrentIndex
+      self.runningSamples = runningSamples
     }
 
     init(from decoder: Decoder) throws {
@@ -126,6 +135,20 @@ enum DownloadNativeWaitingQueue {
       sessionTotalBytes = try container.decodeIfPresent(Int64.self, forKey: .sessionTotalBytes) ?? -1
       sessionTransferredBytes = try container.decodeIfPresent(Int64.self, forKey: .sessionTransferredBytes) ?? 0
       sessionSpeedBytesPerSecond = try container.decodeIfPresent(Double.self, forKey: .sessionSpeedBytesPerSecond) ?? 0
+      sessionCurrentIndex = try container.decodeIfPresent(Int.self, forKey: .sessionCurrentIndex) ?? 0
+      runningSamples = try container.decodeIfPresent([String: RunningSample].self, forKey: .runningSamples) ?? [:]
+    }
+
+    func overlayCurrentIndex(runningTaskId: String? = nil) -> Int {
+      let total = max(sessionBatchTotal, 1)
+      let started = transferringTaskIds.count + completedTaskIds.count
+      if started > 0 {
+        return min(max(started, 1), total)
+      }
+      if sessionCurrentIndex > 0 {
+        return min(max(sessionCurrentIndex, 1), total)
+      }
+      return min(max(sessionCompletedCount + 1, 1), total)
     }
 
     var sessionIsIdle: Bool {
@@ -142,10 +165,9 @@ enum DownloadNativeWaitingQueue {
   private static let lock = NSLock()
   private static var hookInstalled = false
   /// Task IDs that already have URLSession bytes (plugin HQ or our start).
-  /// Used instead of `BDPlugin.holdingQueue`, which is internal to the plugin
-  /// and fails Xcode 26 (`holdingQueue` / `taskForId` inaccessible).
+  /// Do not query plugin-internal HoldingQueue APIs.
   private static var seenTransferringIds = Set<String>()
-  private static var lastWrite: WriteSample?
+  private static var lastWrites: [String: WriteSample] = [:]
 
   static func installUrlSessionHook() {
     lock.lock()
@@ -170,8 +192,9 @@ enum DownloadNativeWaitingQueue {
     let dartBatchTotal = intValue(arguments["sessionBatchTotal"]) ?? 0
 
     let pausedSet = Set(dartPaused)
+    // Dart order first so a user drag rewrite of sessionTaskIds / waiters wins.
     let sessionIds = unique(
-      current.sessionTaskIds + dartSessionIds + dartTransferring + dartWaiters.map(\.taskId)
+      dartSessionIds + current.sessionTaskIds + dartTransferring + dartWaiters.map(\.taskId)
     )
     // Keep completed-in-session IDs so `1 of 5` survives Dart snapshots that
     // no longer list ep1 as transferring. Drop them only when the session is idle.
@@ -222,14 +245,31 @@ enum DownloadNativeWaitingQueue {
           let dart = string(arguments["sessionDisplayName"]) ?? ""
           return dart.isEmpty ? current.sessionDisplayName : dart
         }(),
-        sessionProgress: (arguments["sessionProgress"] as? NSNumber)?.doubleValue
-          ?? current.sessionProgress,
+        sessionProgress: {
+          let dart = (arguments["sessionProgress"] as? NSNumber)?.doubleValue
+          if let dart, dart > 0 { return dart }
+          return current.sessionProgress
+        }(),
         sessionTotalBytes: int64Value(arguments["sessionTotalBytes"]).flatMap { $0 > 0 ? $0 : nil }
           ?? current.sessionTotalBytes,
-        sessionTransferredBytes: int64Value(arguments["sessionTransferredBytes"])
-          ?? current.sessionTransferredBytes,
-        sessionSpeedBytesPerSecond: (arguments["sessionSpeedBytesPerSecond"] as? NSNumber)?.doubleValue
-          ?? current.sessionSpeedBytesPerSecond
+        sessionTransferredBytes: {
+          let dart = int64Value(arguments["sessionTransferredBytes"])
+          if let dart, dart > 0 { return dart }
+          return current.sessionTransferredBytes
+        }(),
+        sessionSpeedBytesPerSecond: {
+          let dart = (arguments["sessionSpeedBytesPerSecond"] as? NSNumber)?.doubleValue
+          if let dart, dart > 0 { return dart }
+          return current.sessionSpeedBytesPerSecond
+        }(),
+        sessionCurrentIndex: {
+          let started = transferring.count + completed.count
+          if started > 0 { return started }
+          let dart = intValue(arguments["sessionCurrentIndex"]) ?? 0
+          if dart > 0 { return dart }
+          return current.sessionCurrentIndex
+        }(),
+        runningSamples: current.runningSamples.filter { transferringSet.contains($0.key) }
       )
     )
   }
@@ -244,6 +284,8 @@ enum DownloadNativeWaitingQueue {
     lock.lock()
     defer { lock.unlock() }
     UserDefaults.standard.removeObject(forKey: stateKey)
+    seenTransferringIds.removeAll()
+    lastWrites.removeAll()
   }
 
   /// Called from the plugin URLSession delegate after ep1's native completion.
@@ -259,12 +301,18 @@ enum DownloadNativeWaitingQueue {
     var state = loadLocked()
     if let completedId {
       state.transferringTaskIds.removeAll { $0 == completedId }
+      state.runningSamples[completedId] = nil
+      lastWrites[completedId] = nil
       if !state.completedTaskIds.contains(completedId) {
         state.completedTaskIds.append(completedId)
       }
-    }
-    saveLocked(state)
-    if let completedId {
+      state.sessionCompletedCount = max(
+        state.sessionCompletedCount,
+        state.completedTaskIds.count
+      )
+      if !state.sessionTaskIds.contains(completedId) {
+        state.sessionTaskIds.append(completedId)
+      }
       state.sessionBatchTotal = max(
         max(
           state.sessionBatchTotal,
@@ -272,20 +320,6 @@ enum DownloadNativeWaitingQueue {
         ),
         state.sessionTaskIds.count
       )
-      if !state.completedTaskIds.contains(completedId) {
-        state.sessionCompletedCount = max(
-          state.sessionCompletedCount + 1,
-          state.completedTaskIds.count
-        )
-      } else {
-        state.sessionCompletedCount = max(
-          state.sessionCompletedCount,
-          state.completedTaskIds.count
-        )
-      }
-      if !state.sessionTaskIds.contains(completedId) {
-        state.sessionTaskIds.append(completedId)
-      }
     }
     saveLocked(state)
     lock.unlock()
@@ -299,8 +333,8 @@ enum DownloadNativeWaitingQueue {
   static func promoteNext(on session: URLSession) {
     // In-app, Dart + plugin HoldingQueue own promotion. Starting a second
     // URLSession task here while the app is `.active` double-downloads.
-    // Background/suspended: HQ's async `taskFinished` often never runs
-    // (#115), so this callback must start the persisted waiter now.
+    // Background/suspended: HoldingQueue's async `taskFinished` often never
+    // runs, so this callback must start the persisted waiter now.
     let isActive = runOnMainActor {
       UIApplication.shared.applicationState == .active
     }
@@ -326,9 +360,8 @@ enum DownloadNativeWaitingQueue {
     }
   }
 
-  /// One URLSession task per episode. If this waiter is already transferring
-  /// (plugin HoldingQueue submitted it, or we already started it), only
-  /// attach the overlay. Do not touch plugin-internal `holdingQueue`.
+  /// One URLSession task per episode. If this waiter is already transferring,
+  /// only update the session overlay.
   private static func startIfNotAlreadyNative(_ waiter: Waiter, on session: URLSession) {
     lock.lock()
     let alreadyTransferring = seenTransferringIds.contains(waiter.taskId)
@@ -376,14 +409,7 @@ enum DownloadNativeWaitingQueue {
     seenTransferringIds.insert(waiter.taskId)
     lock.unlock()
     NSLog("[DownloadNativeWaitingQueue] started %@", waiter.taskId)
-    upsertSessionOverlay(
-      currentTaskId: waiter.taskId,
-      displayName: waiter.displayName,
-      progress: 0,
-      totalBytes: -1,
-      transferredBytes: 0,
-      speedBytesPerSecond: 0
-    )
+    startLiveActivity(taskId: waiter.taskId, displayName: waiter.displayName)
   }
 
   private static func requeue(_ waiter: Waiter) {
@@ -412,55 +438,151 @@ enum DownloadNativeWaitingQueue {
     }
   }
 
+  /// Sum every transferring file so the island does not flip sizes/titles
+  /// when N>1. Title stays the first running filename in queue order.
+  private static func overlayPresentation(
+    from state: State,
+    fallbackId: String,
+    fallbackName: String
+  ) -> (
+    currentTaskId: String,
+    displayName: String,
+    progress: Double,
+    totalBytes: Int64,
+    transferredBytes: Int64,
+    speedBytesPerSecond: Double
+  ) {
+    let transferringSet = Set(state.transferringTaskIds)
+    var written: Int64 = 0
+    var expected: Int64 = 0
+    var combinedSpeed = 0.0
+    var hasExpected = false
+    for taskId in state.transferringTaskIds {
+      guard let running = state.runningSamples[taskId] else { continue }
+      written += running.written
+      if running.expected > 0 {
+        hasExpected = true
+        expected += running.expected
+      }
+      if running.speed > 0 { combinedSpeed += running.speed }
+    }
+    if written == 0 && expected <= 0 {
+      written = state.sessionTransferredBytes
+      expected = state.sessionTotalBytes
+      hasExpected = expected > 0
+      if combinedSpeed <= 0 {
+        combinedSpeed = state.sessionSpeedBytesPerSecond
+      }
+    }
+    let firstRunningId = state.sessionTaskIds.first(where: { transferringSet.contains($0) })
+      ?? state.transferringTaskIds.first
+      ?? fallbackId
+    let name: String
+    if state.transferringTaskIds.count > 1 {
+      if let sample = state.runningSamples[firstRunningId], !sample.displayName.isEmpty {
+        name = sample.displayName
+      } else if !state.sessionDisplayName.isEmpty {
+        name = state.sessionDisplayName
+      } else {
+        name = fallbackName
+      }
+    } else if !fallbackName.isEmpty {
+      name = fallbackName
+    } else if let sample = state.runningSamples[firstRunningId], !sample.displayName.isEmpty {
+      name = sample.displayName
+    } else {
+      name = state.sessionDisplayName
+    }
+    let progress = hasExpected && expected > 0
+      ? min(max(Double(written) / Double(expected), 0), 1)
+      : state.sessionProgress
+    return (
+      currentTaskId: firstRunningId,
+      displayName: name,
+      progress: progress,
+      totalBytes: hasExpected ? expected : -1,
+      transferredBytes: written,
+      speedBytesPerSecond: combinedSpeed
+    )
+  }
+
   static func handleBytesWritten(
     _ downloadTask: URLSessionDownloadTask,
     totalWritten: Int64,
     totalExpected: Int64
   ) {
     guard let id = taskId(from: downloadTask) else { return }
+    let json = downloadTask.taskDescription?
+      .components(separatedBy: "***<<<|>>>***").first ?? ""
+    let display = stringFromTaskJson(json, key: "displayName")
+    let filename = stringFromTaskJson(json, key: "filename")
+    let name = display.isEmpty ? (filename.isEmpty ? id : filename) : display
     let now = CFAbsoluteTimeGetCurrent()
-    var speed: Double = 0
+
     lock.lock()
     seenTransferringIds.insert(id)
-    if let last = lastWrite, last.taskId == id, now > last.time {
+    var speed: Double = 0
+    if let last = lastWrites[id], now > last.time {
       let deltaBytes = Double(max(totalWritten - last.bytes, 0))
       let deltaTime = now - last.time
       if deltaTime > 0 {
         speed = deltaBytes / deltaTime
       }
     }
-    lastWrite = WriteSample(taskId: id, bytes: totalWritten, time: now)
+    lastWrites[id] = WriteSample(taskId: id, bytes: totalWritten, time: now)
+    var state = loadLocked()
+    if !state.transferringTaskIds.contains(id) {
+      state.transferringTaskIds.append(id)
+    }
+    var sample = state.runningSamples[id] ?? RunningSample(
+      written: 0,
+      expected: -1,
+      speed: 0,
+      displayName: ""
+    )
+    sample.written = totalWritten
+    if totalExpected > 0 { sample.expected = totalExpected }
+    if speed > 0 { sample.speed = speed }
+    if sample.displayName.isEmpty {
+      sample.displayName = name
+    }
+    state.runningSamples[id] = sample
+    let transferringSet = Set(state.transferringTaskIds)
+    state.runningSamples = state.runningSamples.filter { transferringSet.contains($0.key) }
+    let presentation = overlayPresentation(from: state, fallbackId: id, fallbackName: name)
+    saveLocked(state)
     lock.unlock()
-    let json = downloadTask.taskDescription?
-      .components(separatedBy: "***<<<|>>>***").first ?? ""
-    let display = stringFromTaskJson(json, key: "displayName")
-    let filename = stringFromTaskJson(json, key: "filename")
-    let name = display.isEmpty ? (filename.isEmpty ? id : filename) : display
-    let progress = totalExpected > 0
-      ? min(max(Double(totalWritten) / Double(totalExpected), 0), 1)
-      : 0
+
     upsertSessionOverlay(
-      currentTaskId: id,
-      displayName: name,
-      progress: progress,
-      totalBytes: totalExpected,
-      transferredBytes: totalWritten,
-      speedBytesPerSecond: speed
+      currentTaskId: presentation.currentTaskId,
+      displayName: presentation.displayName,
+      progress: presentation.progress,
+      totalBytes: presentation.totalBytes,
+      transferredBytes: presentation.transferredBytes,
+      speedBytesPerSecond: presentation.speedBytesPerSecond
     )
   }
 
-  private static func startLiveActivity(for waiter: Waiter) {
-    startLiveActivity(taskId: waiter.taskId, displayName: waiter.displayName)
-  }
-
   private static func startLiveActivity(taskId: String, displayName: String) {
+    lock.lock()
+    let state = loadLocked()
+    let presentation = overlayPresentation(
+      from: state,
+      fallbackId: taskId,
+      fallbackName: displayName
+    )
+    let keepExisting = state.transferringTaskIds.count > 1
+      || state.sessionTransferredBytes > 0
+    lock.unlock()
     upsertSessionOverlay(
-      currentTaskId: taskId,
-      displayName: displayName,
-      progress: 0,
-      totalBytes: -1,
-      transferredBytes: 0,
-      speedBytesPerSecond: 0
+      currentTaskId: keepExisting ? presentation.currentTaskId : taskId,
+      displayName: keepExisting && !presentation.displayName.isEmpty
+        ? presentation.displayName
+        : displayName,
+      progress: keepExisting ? presentation.progress : 0,
+      totalBytes: keepExisting ? presentation.totalBytes : -1,
+      transferredBytes: keepExisting ? presentation.transferredBytes : 0,
+      speedBytesPerSecond: keepExisting ? presentation.speedBytesPerSecond : 0
     )
   }
 
@@ -468,13 +590,15 @@ enum DownloadNativeWaitingQueue {
     lock.lock()
     let state = loadLocked()
     let idle = state.sessionIsIdle
-    let nextId = state.transferringTaskIds.first ?? state.waiters.first?.taskId
-    let nextName: String
-    if let next = state.waiters.first(where: { $0.taskId == nextId }) {
-      nextName = next.displayName
-    } else {
-      nextName = state.sessionDisplayName
-    }
+    let transferringCount = state.transferringTaskIds.count
+    let presentation = overlayPresentation(
+      from: state,
+      fallbackId: state.sessionCurrentTaskId,
+      fallbackName: state.sessionDisplayName
+    )
+    let nextWaiterId = state.waiters.first?.taskId
+    let nextWaiterName = state.waiters.first?.displayName ?? state.sessionDisplayName
+    let sessionCurrent = state.sessionCurrentTaskId
     let completed = state.sessionCompletedCount
     let batch = max(state.sessionBatchTotal, 1)
     lock.unlock()
@@ -493,9 +617,23 @@ enum DownloadNativeWaitingQueue {
       return
     }
 
+    if transferringCount > 0 {
+      upsertSessionOverlay(
+        currentTaskId: presentation.currentTaskId,
+        displayName: presentation.displayName,
+        progress: presentation.progress,
+        totalBytes: presentation.totalBytes,
+        transferredBytes: presentation.transferredBytes,
+        speedBytesPerSecond: presentation.speedBytesPerSecond,
+        completedCount: completed,
+        batchTotal: batch
+      )
+      return
+    }
+
     upsertSessionOverlay(
-      currentTaskId: nextId ?? state.sessionCurrentTaskId,
-      displayName: nextName,
+      currentTaskId: nextWaiterId ?? sessionCurrent,
+      displayName: nextWaiterName,
       progress: 0,
       totalBytes: -1,
       transferredBytes: 0,
@@ -535,6 +673,7 @@ enum DownloadNativeWaitingQueue {
     if let batchTotal {
       state.sessionBatchTotal = max(state.sessionBatchTotal, batchTotal)
     }
+    state.sessionCurrentIndex = state.overlayCurrentIndex(runningTaskId: currentTaskId)
     let snapshot = state
     saveLocked(state)
     lock.unlock()
@@ -549,7 +688,8 @@ enum DownloadNativeWaitingQueue {
           transferredBytes: transferredBytes,
           completedCount: snapshot.sessionCompletedCount,
           batchTotal: max(snapshot.sessionBatchTotal, 1),
-          speedBytesPerSecond: snapshot.sessionSpeedBytesPerSecond
+          speedBytesPerSecond: snapshot.sessionSpeedBytesPerSecond,
+          currentIndex: snapshot.sessionCurrentIndex
         )
       }
     }

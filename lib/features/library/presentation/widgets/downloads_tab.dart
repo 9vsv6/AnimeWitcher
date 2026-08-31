@@ -9,6 +9,7 @@ import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/core/utils/episode_label.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/services/download_service.dart';
+import '../../../../core/services/download_concurrency.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../details/presentation/playback_launcher.dart';
 import '../downloads_provider.dart';
@@ -17,6 +18,7 @@ import '../../../../core/services/notification_service.dart';
 import '../../../../core/utils/file_size_formatter.dart';
 import '../../../../core/utils/download_time_remaining.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
+import '../../../../shared/widgets/underline_segment_tabs.dart';
 
 class DownloadsTab extends ConsumerStatefulWidget {
   const DownloadsTab({super.key});
@@ -26,9 +28,23 @@ class DownloadsTab extends ConsumerStatefulWidget {
 }
 
 class _DownloadsTabState extends ConsumerState<DownloadsTab>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
+  late final TabController _tabs;
+
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,77 +56,202 @@ class _DownloadsTabState extends ConsumerState<DownloadsTab>
     return downloadsAsync.when(
       data: (downloads) {
         if (downloads.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.download_for_offline_outlined,
-                  size: 64,
-                  color: Theme.of(context).dividerColor,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.noDownloadsYet,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-              ],
-            ),
-          );
+          return _DownloadsEmptyState(message: l10n.noDownloadsYet);
         }
 
-        // Grouping logic. Collapse leftover complete records for the same
-        // episode/file so a re-download cannot render الحلقة 9 twice.
+        // Collapse leftover complete records for the same episode/file so a
+        // re-download cannot render الحلقة 9 twice.
         final visibleDownloads = collapseDuplicateDownloads(downloads).visible;
-        final Map<String, List<DownloadItem>> grouped = {};
-        final List<String> keys = [];
+        final active = visibleDownloads
+            .where((item) => isActiveDownloadStatus(item.status))
+            .toList();
+        final completed = visibleDownloads
+            .where((item) => !isActiveDownloadStatus(item.status))
+            .toList();
 
-        for (final item in visibleDownloads) {
-          final String key = item.item.tmdbId?.toString() ?? item.item.title;
-          if (!grouped.containsKey(key)) {
-            keys.add(key);
-            grouped[key] = [];
-          }
-          grouped[key]!.add(item);
-        }
-
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-          itemCount: keys.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 16),
-          itemBuilder: (context, index) {
-            final key = keys[index];
-            final groupItems = grouped[key]!;
-
-            if (groupItems.length == 1) {
-              final download = groupItems.first;
-              final trackingUrl = download.task.metaData.isNotEmpty
-                  ? download.task.metaData
-                  : download.task.url;
-              final progressData = activeProgress[trackingUrl];
-              final double displayProgress =
-                  progressData?.progress ?? download.progress;
-              final TaskStatus displayStatus =
-                  progressData?.status ?? download.status;
-
-              return _DownloadItemTile(
-                item: download,
-                progress: displayProgress,
-                status: displayStatus,
-                progressData: progressData,
-              );
-            } else {
-              return _GroupedDownloadTile(
-                items: groupItems,
-                activeProgress: activeProgress,
-              );
-            }
-          },
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Directionality(
+              textDirection: TextDirection.rtl,
+              child: FilterStyleTabBar(
+                controller: _tabs,
+                isScrollable: false,
+                tabs: [
+                  FilterStyleTab(label: l10n.downloads),
+                  FilterStyleTab(label: l10n.downloadsTabCompleted),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabs,
+                children: [
+                  _ActiveDownloadsList(
+                    items: active,
+                    activeProgress: activeProgress,
+                    emptyMessage: l10n.noDownloadsYet,
+                  ),
+                  _CompletedDownloadsList(
+                    items: completed,
+                    activeProgress: activeProgress,
+                    emptyMessage: l10n.noCompletedDownloadsYet,
+                  ),
+                ],
+              ),
+            ),
+          ],
         );
       },
       loading: () => const Center(child: AppLoadingIndicator()),
       error: (err, stack) =>
           Center(child: Text(l10n.errorPrefix(err.toString()))),
+    );
+  }
+}
+
+class _DownloadsEmptyState extends StatelessWidget {
+  const _DownloadsEmptyState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.download_for_offline_outlined,
+            size: 64,
+            color: Theme.of(context).dividerColor,
+          ),
+          const SizedBox(height: 16),
+          Text(message, style: Theme.of(context).textTheme.bodyLarge),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveDownloadsList extends ConsumerWidget {
+  const _ActiveDownloadsList({
+    required this.items,
+    required this.activeProgress,
+    required this.emptyMessage,
+  });
+
+  final List<DownloadItem> items;
+  final Map<String, DownloadProgressData> activeProgress;
+  final String emptyMessage;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (items.isEmpty) {
+      return _DownloadsEmptyState(message: emptyMessage);
+    }
+
+    return ReorderableListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      buildDefaultDragHandles: false,
+      itemCount: items.length,
+      onReorder: (oldIndex, newIndex) {
+        unawaited(
+          ref
+              .read(downloadsProvider.notifier)
+              .reorderActive(oldIndex, newIndex),
+        );
+      },
+      proxyDecorator: (child, index, animation) {
+        return Material(color: Colors.transparent, elevation: 0, child: child);
+      },
+      itemBuilder: (context, index) {
+        final download = items[index];
+        final trackingUrl = download.task.metaData.isNotEmpty
+            ? download.task.metaData
+            : download.task.url;
+        final progressData = activeProgress[trackingUrl];
+        final double displayProgress =
+            progressData?.progress ?? download.progress;
+        final TaskStatus displayStatus =
+            progressData?.status ?? download.status;
+
+        return Padding(
+          key: ValueKey(download.id),
+          padding: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 16),
+          child: _DownloadItemTile(
+            item: download,
+            progress: displayProgress,
+            status: displayStatus,
+            progressData: progressData,
+            dragIndex: index,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CompletedDownloadsList extends StatelessWidget {
+  const _CompletedDownloadsList({
+    required this.items,
+    required this.activeProgress,
+    required this.emptyMessage,
+  });
+
+  final List<DownloadItem> items;
+  final Map<String, DownloadProgressData> activeProgress;
+  final String emptyMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return _DownloadsEmptyState(message: emptyMessage);
+    }
+
+    final Map<String, List<DownloadItem>> grouped = {};
+    final List<String> keys = [];
+    for (final item in items) {
+      final String key = item.item.tmdbId?.toString() ?? item.item.title;
+      if (!grouped.containsKey(key)) {
+        keys.add(key);
+        grouped[key] = [];
+      }
+      grouped[key]!.add(item);
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      itemCount: keys.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        final key = keys[index];
+        final groupItems = grouped[key]!;
+
+        if (groupItems.length == 1) {
+          final download = groupItems.first;
+          final trackingUrl = download.task.metaData.isNotEmpty
+              ? download.task.metaData
+              : download.task.url;
+          final progressData = activeProgress[trackingUrl];
+          final double displayProgress =
+              progressData?.progress ?? download.progress;
+          final TaskStatus displayStatus =
+              progressData?.status ?? download.status;
+
+          return _DownloadItemTile(
+            item: download,
+            progress: displayProgress,
+            status: displayStatus,
+            progressData: progressData,
+          );
+        }
+
+        return _GroupedDownloadTile(
+          items: groupItems,
+          activeProgress: activeProgress,
+        );
+      },
     );
   }
 }
@@ -311,6 +452,7 @@ class _DownloadItemTile extends ConsumerWidget {
   final TaskStatus status;
   final DownloadProgressData? progressData;
   final bool isInsideGroup;
+  final int? dragIndex;
 
   const _DownloadItemTile({
     required this.item,
@@ -318,6 +460,7 @@ class _DownloadItemTile extends ConsumerWidget {
     required this.status,
     this.progressData,
     this.isInsideGroup = false,
+    this.dragIndex,
   });
 
   @override
@@ -345,36 +488,54 @@ class _DownloadItemTile extends ConsumerWidget {
             serverName: item.episode!.serverName,
           );
 
-    final content = Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Poster
-        ClipRRect(
-          borderRadius: BorderRadius.circular(LayoutConstants.radiusMd),
-          child: ArtworkDecode(
-            paintedWidth: 80,
-            builder: (BuildContext context, int? decodeWidth) =>
-                CachedNetworkImage(
-                  imageUrl:
-                      AppImageFallbacks.poster(
-                        item.item.posterUrl,
-                        label: item.item.title,
-                      ) ??
-                      '',
-                  width: 80,
-                  height: 120,
-                  fit: BoxFit.cover,
-                  memCacheWidth: decodeWidth,
-                  filterQuality: FilterQuality.medium,
-                  errorWidget: (context, url, error) => Container(
-                    width: 80,
-                    height: 120,
-                    color: theme.dividerColor,
-                    child: const Icon(Icons.movie_outlined),
-                  ),
-                ),
+    final poster = ClipRRect(
+      borderRadius: BorderRadius.circular(LayoutConstants.radiusMd),
+      child: ArtworkDecode(
+        paintedWidth: 80,
+        builder: (BuildContext context, int? decodeWidth) => CachedNetworkImage(
+          imageUrl:
+              AppImageFallbacks.poster(
+                item.item.posterUrl,
+                label: item.item.title,
+              ) ??
+              '',
+          width: 80,
+          height: 120,
+          fit: BoxFit.cover,
+          memCacheWidth: decodeWidth,
+          filterQuality: FilterQuality.medium,
+          errorWidget: (context, url, error) => Container(
+            width: 80,
+            height: 120,
+            color: theme.dividerColor,
+            child: const Icon(Icons.movie_outlined),
           ),
         ),
+      ),
+    );
+
+    final posterWithHandle = dragIndex == null
+        ? poster
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              poster,
+              ReorderableDragStartListener(
+                index: dragIndex!,
+                child: const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Icon(Icons.drag_handle_rounded),
+                ),
+              ),
+            ],
+          );
+
+    final content = Row(
+      textDirection: TextDirection.ltr,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Poster (LTR: left) with the taskbar two-line handle under it.
+        posterWithHandle,
         const SizedBox(width: LayoutConstants.spacingMd),
         // Details
         Expanded(

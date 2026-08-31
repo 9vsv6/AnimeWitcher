@@ -248,6 +248,8 @@ import UserNotifications
               (arguments["batchTotal"] as? NSNumber)?.intValue ?? 1
             let speedBytesPerSecond =
               (arguments["speedBytesPerSecond"] as? NSNumber)?.doubleValue ?? 0
+            let currentIndex =
+              (arguments["currentIndex"] as? NSNumber)?.intValue ?? 0
 
             let identifier = try manager.start(
               taskId: taskId,
@@ -257,7 +259,8 @@ import UserNotifications
               transferredBytes: transferredBytes,
               completedCount: completedCount,
               batchTotal: batchTotal,
-              speedBytesPerSecond: speedBytesPerSecond
+              speedBytesPerSecond: speedBytesPerSecond,
+              currentIndex: currentIndex
             )
             if let identifier {
               result(identifier)
@@ -278,7 +281,8 @@ import UserNotifications
               completedCount: (arguments["completedCount"] as? NSNumber)?.intValue ?? -1,
               batchTotal: (arguments["batchTotal"] as? NSNumber)?.intValue ?? -1,
               speedBytesPerSecond: (arguments["speedBytesPerSecond"] as? NSNumber)?.doubleValue ?? -1,
-              displayName: arguments["displayName"] as? String ?? ""
+              displayName: arguments["displayName"] as? String ?? "",
+              currentIndex: (arguments["currentIndex"] as? NSNumber)?.intValue ?? -1
             )
             result(true)
 
