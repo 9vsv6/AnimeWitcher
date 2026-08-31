@@ -110,8 +110,6 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     final isSeries = item.contentType == MultimediaContentType.series;
     final isAnime = item.contentType == MultimediaContentType.anime;
     final hasEpisodes = isSeries || isAnime;
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     final episodePosterUrl = AppImageFallbacks.optional(
       widget.historyItem.episodePosterUrl,
@@ -197,10 +195,9 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
         }
 
         unawaited(
-          ref.read(playbackLauncherProvider).playFromContinueWatching(
-            context,
-            widget.historyItem,
-          ),
+          ref
+              .read(playbackLauncherProvider)
+              .playFromContinueWatching(context, widget.historyItem),
         );
       },
       onLongPress: () {
