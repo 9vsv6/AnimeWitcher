@@ -196,7 +196,7 @@ enum DownloadNativeWaitingQueue {
     let released = Set(stringArray(arguments["queueWaitingTaskIds"]))
 
     let pausedSet = Set(dartPaused)
-    // Dart order first so a user drag rewrite of sessionTaskIds / waiters wins.
+    // Enqueue FIFO from Dart is source of truth for session / waiter order.
     let sessionIds = unique(
       dartSessionIds + current.sessionTaskIds + dartTransferring + dartWaiters.map(\.taskId)
     )
@@ -207,9 +207,7 @@ enum DownloadNativeWaitingQueue {
       completed = completed.filter { sessionIds.contains($0) }
     }
 
-    // Drag-park (في الانتظار) must free the native slot. Stale Dart snapshots
-    // that still list a natively-started file as a waiter do not send it in
-    // queueWaitingTaskIds, so that promotion stays transferring.
+    // Leftover Dart-parked waiters must not occupy a native transferring slot.
     seenTransferringIds.subtract(released)
     let transferring = unique(current.transferringTaskIds + dartTransferring)
       .filter {

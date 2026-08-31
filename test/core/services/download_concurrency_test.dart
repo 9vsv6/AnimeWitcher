@@ -390,9 +390,9 @@ void main() {
       expect(allDone.shouldFinish, isTrue);
     });
 
-    test('overlay k of N follows queue order after a user reorder', () {
-      final reordered = planDownloadOverlaySession(
-        queueOrder: const ['ep3', 'ep1', 'ep2'],
+    test('overlay k of N follows enqueue FIFO', () {
+      final session = planDownloadOverlaySession(
+        queueOrder: const ['ep1', 'ep2', 'ep3'],
         entries: const [
           DownloadOverlayEntry(
             taskId: 'ep1',
@@ -413,21 +413,21 @@ void main() {
           ),
         ],
       );
-      expect(reordered.currentTaskId, 'ep1');
-      expect(reordered.currentIndex, 1);
-      expect(reordered.batchTotal, 3);
+      expect(session.currentTaskId, 'ep1');
+      expect(session.currentIndex, 1);
+      expect(session.batchTotal, 3);
       expect(
         formatDownloadSessionSubtitle(
-          transferredBytes: reordered.transferredBytes,
-          totalBytes: reordered.totalBytes,
-          currentIndex: reordered.currentIndex,
-          batchTotal: reordered.batchTotal,
+          transferredBytes: session.transferredBytes,
+          totalBytes: session.totalBytes,
+          currentIndex: session.currentIndex,
+          batchTotal: session.batchTotal,
         ),
         '200B/1KB • 1 of 3',
       );
     });
 
-    test('dragging a waiting file to the top parks the runner in overlay', () {
+    test('overlay stays on the running file while waiters wait', () {
       final after = planDownloadOverlaySession(
         queueOrder: const ['ep7', 'ep8', 'ep9'],
         entries: const [
@@ -564,79 +564,15 @@ void main() {
       );
     });
 
-    test('dragging a paused row above a running file preempts the slot', () {
-      final plan = planDownloadReorderSlots(
-        maxConcurrent: 1,
-        activeOrder: const ['ep7', 'ep8', 'ep9'],
-        statusById: const {
-          'ep7': TaskStatus.paused,
-          'ep8': TaskStatus.running,
-          'ep9': TaskStatus.enqueued,
-        },
-        userPausedIds: const {'ep7'},
-      );
-      expect(plan.idsToRun, ['ep7']);
-      expect(plan.idsToPark, ['ep8']);
-      expect(plan.idsToEnqueue, ['ep8', 'ep9']);
-    });
-
-    test('waiting file dragged to the top parks the running transfer', () {
-      final plan = planDownloadReorderSlots(
-        maxConcurrent: 1,
-        activeOrder: const ['ep7', 'ep8', 'ep9'],
-        statusById: const {
-          'ep7': TaskStatus.enqueued,
-          'ep8': TaskStatus.running,
-          'ep9': TaskStatus.enqueued,
-        },
-        userPausedIds: const {},
-      );
-      expect(plan.idsToRun, ['ep7']);
-      expect(plan.idsToPark, ['ep8']);
-      expect(plan.idsToEnqueue, ['ep8', 'ep9']);
-    });
-
-    test('user-paused rows below N stay paused', () {
-      final plan = planDownloadReorderSlots(
-        maxConcurrent: 1,
-        activeOrder: const ['ep8', 'ep7'],
-        statusById: const {'ep8': TaskStatus.running, 'ep7': TaskStatus.paused},
-        userPausedIds: const {'ep7'},
-      );
-      expect(plan.idsToRun, ['ep8']);
-      expect(plan.idsToPark, isEmpty);
-      expect(plan.idsToEnqueue, isEmpty);
-    });
-
-    test('applyActiveDownloadReorder keeps completed slots', () {
-      expect(
-        applyActiveDownloadReorder(
-          sessionOrder: const ['ep1', 'ep2', 'ep3'],
-          newActiveOrder: const ['ep3', 'ep1', 'ep2'],
-          completedIds: const {},
-        ),
-        ['ep3', 'ep1', 'ep2'],
-      );
-      expect(
-        applyActiveDownloadReorder(
-          sessionOrder: const ['ep1', 'ep2', 'ep3'],
-          newActiveOrder: const ['ep3', 'ep2'],
-          completedIds: const {'ep1'},
-        ),
-        ['ep1', 'ep3', 'ep2'],
-      );
-    });
-
     test('new downloads append at the bottom of the FIFO', () {
       expect(appendDownloadQueueId(const ['ep1'], 'ep2'), ['ep1', 'ep2']);
       expect(appendDownloadQueueId(const ['ep1', 'ep2'], 'ep1'), [
         'ep1',
         'ep2',
       ]);
-      expect(moveDownloadQueueIndex(const ['ep1', 'ep2', 'ep3'], 2, 0), [
-        'ep3',
+      expect(removeDownloadQueueIds(const ['ep1', 'ep2', 'ep3'], ['ep2']), [
         'ep1',
-        'ep2',
+        'ep3',
       ]);
     });
 
@@ -1059,24 +995,6 @@ void main() {
         );
         expect(twoWaiters.idsToPromote, ['ep3']);
         expect(twoWaiters.waitingFifoIds, ['ep3', 'ep4']);
-
-        final reorderedWaiters = planDownloadQueue(
-          maxConcurrent: 1,
-          queueOrder: const ['ep4', 'ep3'],
-          entries: const [
-            DownloadQueueEntry(
-              taskId: 'ep3',
-              status: TaskStatus.enqueued,
-              timestamp: 2,
-            ),
-            DownloadQueueEntry(
-              taskId: 'ep4',
-              status: TaskStatus.enqueued,
-              timestamp: 3,
-            ),
-          ],
-        );
-        expect(reorderedWaiters.waitingFifoIds, ['ep4', 'ep3']);
       },
     );
 

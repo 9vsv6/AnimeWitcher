@@ -637,19 +637,6 @@ class StorageService {
     );
   }
 
-  Future<void> setDownloadQueueOrder(List<String> order) async {
-    await _settingsBox.put(
-      kDownloadQueueOrderStorageKey,
-      List<String>.from(order),
-    );
-  }
-
-  List<String> getDownloadQueueOrder() {
-    final value = _settingsBox.get(kDownloadQueueOrderStorageKey);
-    if (value is! List) return const <String>[];
-    return value.map((item) => item.toString()).toList();
-  }
-
   @visibleForTesting
   void debugBindSettingsBox(Box<dynamic> box) {
     _settingsBox = box;

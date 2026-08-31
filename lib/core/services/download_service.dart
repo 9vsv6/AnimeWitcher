@@ -105,7 +105,6 @@ class DownloadService {
   final Set<String> _queueWaitingIds = {};
   final Set<String> _startingTaskIds = {};
   final List<String> _sessionOrder = [];
-  final Set<String> _reorderingTaskIds = {};
   bool _sessionOverlayActive = false;
   int _sessionCompletedCount = 0;
   int _sessionBatchTotal = 0;
@@ -206,10 +205,6 @@ class DownloadService {
           ? update.task.metaData
           : update.task.url;
 
-      if (_reorderingTaskIds.contains(update.task.taskId)) {
-        return;
-      }
-
       // User-initiated cancels are cleaned up in [cancelDownload]; ignore their
       // follow-up events so they cannot race with pause-on-failure handling.
       if (_cancellingUrls.contains(trackingUrl)) {
@@ -229,9 +224,6 @@ class DownloadService {
             status: update.status,
             userCancel: _cancellingUrls.contains(trackingUrl),
           )) {
-        if (_reorderingTaskIds.contains(update.task.taskId)) {
-          return;
-        }
         unawaited(_retainLiveNativeOrPause(update, trackingUrl));
         return;
       }
@@ -557,29 +549,8 @@ class DownloadService {
       );
     }
 
-    await _restoreQueueOrder();
     await _syncQueueToCapUnlocked();
     await _syncSessionOverlay();
-  }
-
-  Future<void> _restoreQueueOrder() async {
-    final stored = _ref.read(storageServiceProvider).getDownloadQueueOrder();
-    if (stored.isEmpty && _sessionOrder.isEmpty) return;
-    final records = await FileDownloader().database.allRecords();
-    final completed = {
-      for (final record in records)
-        if (record.status == TaskStatus.complete) record.task.taskId,
-    };
-    final next = applyActiveDownloadReorder(
-      sessionOrder: _sessionOrder.isEmpty ? stored : _sessionOrder,
-      newActiveOrder: stored.isEmpty
-          ? _sessionOrder.where((id) => !completed.contains(id)).toList()
-          : stored,
-      completedIds: completed,
-    );
-    _sessionOrder
-      ..clear()
-      ..addAll(next);
   }
 
   int _occupiedSlotCount(List<TaskRecord> records) {
@@ -663,11 +634,7 @@ class DownloadService {
     await _syncSessionOverlay();
   }
 
-  List<String> _queueOrder() {
-    final stored = _ref.read(storageServiceProvider).getDownloadQueueOrder();
-    if (_sessionOrder.isNotEmpty) return List<String>.from(_sessionOrder);
-    return stored;
-  }
+  List<String> _queueOrder() => List<String>.from(_sessionOrder);
 
   void _rememberSessionTask(String taskId) {
     if (taskId.isEmpty) return;
@@ -676,148 +643,6 @@ class DownloadService {
 
   void _forgetSessionTask(String taskId) {
     _sessionOrder.remove(taskId);
-  }
-
-  Future<void> applyDownloadQueueOrder(
-    List<String> activeTaskIds, {
-    bool rewriteHoldingQueue = false,
-  }) async {
-    if (activeTaskIds.isEmpty && _sessionOrder.isEmpty) return;
-    Future<void> apply() async {
-      final records = _isInitialized
-          ? await FileDownloader().database.allRecords()
-          : const <TaskRecord>[];
-      final completedIds = {
-        for (final record in records)
-          if (record.status == TaskStatus.complete) record.task.taskId,
-      };
-      final baseline = _sessionOrder.isEmpty
-          ? [...completedIds, ...activeTaskIds]
-          : _sessionOrder;
-      final nextOrder = applyActiveDownloadReorder(
-        sessionOrder: baseline,
-        newActiveOrder: activeTaskIds,
-        completedIds: completedIds,
-      );
-      _sessionOrder
-        ..clear()
-        ..addAll(nextOrder);
-      await _ref
-          .read(storageServiceProvider)
-          .setDownloadQueueOrder(activeTaskIds);
-      if (rewriteHoldingQueue && _isInitialized) {
-        await _applyReorderSlots(activeTaskIds, records);
-      }
-      if (_isInitialized) {
-        await _persistNativeWaitingSnapshot();
-        await _syncSessionOverlay();
-      }
-    }
-
-    if (!_isInitialized) {
-      await apply();
-      return;
-    }
-    await _serializeQueue(apply);
-  }
-
-  Future<void> _applyReorderSlots(
-    List<String> activeTaskIds,
-    List<TaskRecord> records,
-  ) async {
-    final max = clampDownloadConcurrency(
-      _ref.read(storageServiceProvider).getDownloadConcurrency(),
-    );
-    final byId = {for (final record in records) record.task.taskId: record};
-    final statusById = {
-      for (final record in records) record.task.taskId: record.status,
-    };
-    final userPausedIds = <String>{
-      for (final record in records)
-        if (record.status == TaskStatus.paused &&
-            !_queueWaitingIds.contains(record.task.taskId))
-          record.task.taskId,
-    };
-    final plan = planDownloadReorderSlots(
-      maxConcurrent: max,
-      activeOrder: activeTaskIds,
-      statusById: statusById,
-      userPausedIds: userPausedIds,
-    );
-
-    final cancelIds = [
-      for (final id in activeTaskIds)
-        if (statusById[id] == TaskStatus.enqueued) id,
-    ];
-    _reorderingTaskIds.addAll(cancelIds);
-    _reorderingTaskIds.addAll(plan.idsToPark);
-    try {
-      if (cancelIds.isNotEmpty) {
-        await FileDownloader().cancelTasksWithIds(cancelIds);
-      }
-      for (final id in plan.idsToPark) {
-        final record = byId[id];
-        if (record?.task is! DownloadTask) continue;
-        await _parkOccupyingTaskUnlocked(record!.task as DownloadTask);
-      }
-      for (final id in plan.idsToRun) {
-        final record = byId[id];
-        if (record?.task is! DownloadTask) continue;
-        final occupying = occupiesDownloadSlot(
-          status: record!.status,
-          queueWaiting: false,
-        );
-        if (occupying && !cancelIds.contains(id)) continue;
-        await _promoteWaitingTask(record.task as DownloadTask);
-      }
-      var index = 0;
-      for (final id in plan.idsToEnqueue) {
-        if (plan.idsToPark.contains(id)) continue;
-        if (userPausedIds.contains(id)) continue;
-        final record = byId[id];
-        if (record?.task is! DownloadTask) continue;
-        final task = record!.task as DownloadTask;
-        final copy = task.copyWith(
-          taskId: task.taskId,
-          creationTime: DateTime.now().add(Duration(milliseconds: index++)),
-        );
-        _waitingPayloads[copy.taskId] = _waitingPayloadFor(copy);
-        await FileDownloader().enqueue(copy);
-      }
-    } finally {
-      final ids = List<String>.from(cancelIds);
-      Future<void>.delayed(const Duration(seconds: 3), () {
-        _reorderingTaskIds.removeAll(ids);
-        _reorderingTaskIds.removeAll(plan.idsToPark);
-      });
-    }
-  }
-
-  Future<void> _parkOccupyingTaskUnlocked(DownloadTask task) async {
-    final taskId = task.taskId;
-    await FileDownloader().pause(task);
-    final trackingUrl = downloadTrackingUrl(task);
-    final current = _ref.read(downloadProgressProvider)[trackingUrl];
-    final record = await FileDownloader().database.recordForId(taskId);
-    var progress = current?.progress ?? record?.progress ?? 0.0;
-    if (progress < 0 || progress > 1) progress = 0.0;
-    final totalSize = current?.totalSize ?? record?.expectedFileSize ?? -1;
-    await FileDownloader().database.updateRecord(
-      TaskRecord(task, TaskStatus.paused, progress, totalSize),
-    );
-    _queueWaitingIds.add(taskId);
-    _waitingPayloads[taskId] = _waitingPayloadFor(task);
-    await _ref
-        .read(storageServiceProvider)
-        .patchDownloadMetadata(taskId, queueWaiting: true);
-    _publishProgress(
-      trackingUrl: trackingUrl,
-      taskId: taskId,
-      progress: progress,
-      totalSize: totalSize,
-      status: TaskStatus.enqueued,
-    );
-    _updatesController.add(TaskStatusUpdate(task, TaskStatus.enqueued));
   }
 
   Future<DownloadOverlaySession> _planSessionOverlay({
@@ -1964,9 +1789,6 @@ class DownloadService {
         _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
         _rememberSessionTask(task.taskId);
         final storage = _ref.read(storageServiceProvider);
-        await storage.setDownloadQueueOrder(
-          appendDownloadQueueId(storage.getDownloadQueueOrder(), task.taskId),
-        );
         await storage.saveDownloadMetadata(
           task.taskId,
           item,
@@ -1990,11 +1812,6 @@ class DownloadService {
           _waitingPayloads.remove(task.taskId);
           _forgetSessionTask(task.taskId);
           await storage.removeDownloadMetadata(task.taskId);
-          await storage.setDownloadQueueOrder(
-            removeDownloadQueueIds(storage.getDownloadQueueOrder(), [
-              task.taskId,
-            ]),
-          );
           _ref
               .read(activeDownloadsProvider.notifier)
               .remove(trackingUrl ?? url);
@@ -2011,11 +1828,6 @@ class DownloadService {
         _forgetSessionTask(task.taskId);
         final storage = _ref.read(storageServiceProvider);
         await storage.removeDownloadMetadata(task.taskId);
-        await storage.setDownloadQueueOrder(
-          removeDownloadQueueIds(storage.getDownloadQueueOrder(), [
-            task.taskId,
-          ]),
-        );
         _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl ?? url);
         _updatesController.add(TaskStatusUpdate(task, TaskStatus.canceled));
         await _syncSessionOverlay(completedSuccess: false);

@@ -419,9 +419,6 @@ int overlayCurrentIndex({
   return index;
 }
 
-/// Hive key for the user-facing active download FIFO (top → bottom).
-const String kDownloadQueueOrderStorageKey = 'download_queue_order';
-
 /// In-progress, waiting, or paused — not complete/canceled.
 bool isActiveDownloadStatus(TaskStatus status) {
   switch (status) {
@@ -472,30 +469,6 @@ List<T> sortByDownloadQueueOrder<T>(
   return list;
 }
 
-/// Keep completed IDs in their session slots; fill the rest from the new
-/// active (visual) order so overlay `k of N` follows the drag.
-List<String> applyActiveDownloadReorder({
-  required List<String> sessionOrder,
-  required List<String> newActiveOrder,
-  required Set<String> completedIds,
-}) {
-  final remaining = List<String>.from(newActiveOrder);
-  final result = <String>[];
-  final used = <String>{};
-  for (final id in sessionOrder) {
-    if (completedIds.contains(id)) {
-      if (used.add(id)) result.add(id);
-    } else if (remaining.isNotEmpty) {
-      final next = remaining.removeAt(0);
-      if (used.add(next)) result.add(next);
-    }
-  }
-  for (final id in remaining) {
-    if (used.add(id)) result.add(id);
-  }
-  return result;
-}
-
 List<String> appendDownloadQueueId(List<String> order, String id) {
   if (id.isEmpty || order.contains(id)) return List<String>.from(order);
   return [...order, id];
@@ -504,25 +477,6 @@ List<String> appendDownloadQueueId(List<String> order, String id) {
 List<String> removeDownloadQueueIds(List<String> order, Iterable<String> ids) {
   final drop = ids.toSet();
   return order.where((id) => !drop.contains(id)).toList();
-}
-
-List<String> moveDownloadQueueIndex(
-  List<String> order,
-  int oldIndex,
-  int newIndex,
-) {
-  if (oldIndex < 0 || oldIndex >= order.length) {
-    return List<String>.from(order);
-  }
-  var target = newIndex;
-  if (target > oldIndex) target -= 1;
-  if (target < 0) target = 0;
-  if (target > order.length) target = order.length;
-  final next = List<String>.from(order);
-  final item = next.removeAt(oldIndex);
-  if (target > next.length) target = next.length;
-  next.insert(target, item);
-  return next;
 }
 
 /// Attach / foreground must not flash **0 MB/s**. Keep the last live speed
@@ -832,56 +786,4 @@ List<String> idsToStartAfterParkedFailure({
     return plan.idsToPromote.take(plan.freeSlots).toList();
   }
   return plan.waitingFifoIds.take(plan.freeSlots).toList();
-}
-
-class DownloadReorderPlan {
-  const DownloadReorderPlan({
-    required this.idsToRun,
-    required this.idsToPark,
-    required this.idsToEnqueue,
-  });
-
-  /// First N rows — run these, even if the user just dragged a paused file here.
-  final List<String> idsToRun;
-
-  /// Occupying transfers that fell below N — pause and keep as waiters.
-  final List<String> idsToPark;
-
-  /// Visual order of HQ / leftover waiters after the live slots.
-  final List<String> idsToEnqueue;
-}
-
-/// After a user drag: top [maxConcurrent] run; displaced running files park;
-/// remaining active rows wait in the new order. User-paused rows that stay
-/// below N stay paused.
-DownloadReorderPlan planDownloadReorderSlots({
-  required int maxConcurrent,
-  required List<String> activeOrder,
-  required Map<String, TaskStatus> statusById,
-  required Set<String> userPausedIds,
-}) {
-  final n = clampDownloadConcurrency(maxConcurrent);
-  final idsToRun = activeOrder.take(n).toList();
-  final below = activeOrder.skip(n).toList();
-  final occupying = <String>{
-    for (final id in activeOrder)
-      if (occupiesDownloadSlot(
-        status: statusById[id] ?? TaskStatus.enqueued,
-        queueWaiting: false,
-      ))
-        id,
-  };
-  final idsToPark = [
-    for (final id in occupying)
-      if (!idsToRun.contains(id)) id,
-  ];
-  final idsToEnqueue = [
-    for (final id in below)
-      if (idsToPark.contains(id) || !userPausedIds.contains(id)) id,
-  ];
-  return DownloadReorderPlan(
-    idsToRun: idsToRun,
-    idsToPark: idsToPark,
-    idsToEnqueue: idsToEnqueue,
-  );
 }

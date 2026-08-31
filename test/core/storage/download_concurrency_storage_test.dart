@@ -47,11 +47,4 @@ void main() {
     expect(storage.getDownloadConcurrency(), 4);
     expect(storage.getDownloadConcurrency(), clampDownloadConcurrency(4));
   });
-
-  test('Hive round-trips the active download FIFO order', () async {
-    final storage = await bindFreshBox('download_queue_order');
-    expect(storage.getDownloadQueueOrder(), isEmpty);
-    await storage.setDownloadQueueOrder(const ['ep1', 'ep3', 'ep2']);
-    expect(storage.getDownloadQueueOrder(), ['ep1', 'ep3', 'ep2']);
-  });
 }
