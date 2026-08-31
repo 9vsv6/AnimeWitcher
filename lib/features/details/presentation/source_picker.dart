@@ -1,72 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/utils/episode_label.dart';
+import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/widgets/taskbar_visibility.dart';
 
 Future<StreamResult?> showStreamSourcePicker(
   BuildContext context,
   List<StreamResult> sources, {
+  Future<List<StreamResult>>? sourcesFuture,
   required bool forDownload,
   String? episodeLabel,
 }) {
-  final rows = _buildSourcePickerRows(sources);
-
-  return showModalBottomSheet<StreamResult>(
+  return showModalOverTaskbar<StreamResult>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
-              child: Text(
-                sourcePickerHeader(episodeLabel, isArabic: true),
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-            const Divider(height: 1),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.only(bottom: 12),
-                itemCount: rows.length,
-                itemBuilder: (context, index) {
-                  final row = rows[index];
-                  if (row.heading != null) {
-                    return _SourceQualityHeader(label: row.heading!);
-                  }
-
-                  final source = row.source!;
-                  return ListTile(
-                    contentPadding: const EdgeInsetsDirectional.only(
-                      start: 36,
-                      end: 20,
-                    ),
-                    leading: Icon(
-                      forDownload
-                          ? Icons.file_download_outlined
-                          : Icons.play_circle_outline,
-                    ),
-                    title: Text(
-                      source.source,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    onTap: () => Navigator.of(sheetContext).pop(source),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+    builder: (sheetContext) => _SourcePickerSheet(
+      sources: sources,
+      sourcesFuture: sourcesFuture,
+      forDownload: forDownload,
+      episodeLabel: episodeLabel,
     ),
   );
 }
@@ -89,6 +44,159 @@ String? episodePickerTitle(Episode? episode) {
     serverName: episode.serverName,
   );
   return label.isEmpty ? null : label;
+}
+
+class _SourcePickerSheet extends StatefulWidget {
+  final List<StreamResult> sources;
+  final Future<List<StreamResult>>? sourcesFuture;
+  final bool forDownload;
+  final String? episodeLabel;
+
+  const _SourcePickerSheet({
+    required this.sources,
+    required this.sourcesFuture,
+    required this.forDownload,
+    required this.episodeLabel,
+  });
+
+  @override
+  State<_SourcePickerSheet> createState() => _SourcePickerSheetState();
+}
+
+class _SourcePickerSheetState extends State<_SourcePickerSheet> {
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
+              child: Text(
+                sourcePickerHeader(widget.episodeLabel, isArabic: true),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: widget.sourcesFuture == null
+                  ? _buildSourcesBody(context, widget.sources)
+                  : FutureBuilder<List<StreamResult>>(
+                      future: widget.sourcesFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState != ConnectionState.done) {
+                          return const Padding(
+                            padding: EdgeInsets.fromLTRB(20, 28, 20, 32),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AppLoadingIndicator(),
+                                  SizedBox(height: 16),
+                                  _SourcePickerLoadingLabel(),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return _SourcePickerMessage(
+                            snapshot.error.toString(),
+                          );
+                        }
+
+                        return _buildSourcesBody(
+                          context,
+                          snapshot.data ?? const <StreamResult>[],
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourcesBody(BuildContext context, List<StreamResult> sources) {
+    if (sources.isEmpty) {
+      return const _SourcePickerMessage('لم يتم العثور على مصادر تشغيل.');
+    }
+
+    final rows = _buildSourcePickerRows(sources);
+    return ListView.builder(
+      shrinkWrap: true,
+      padding: const EdgeInsets.only(bottom: 12),
+      itemCount: rows.length,
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        if (row.heading != null) {
+          return _SourceQualityHeader(label: row.heading!);
+        }
+
+        final source = row.source!;
+        return ListTile(
+          contentPadding: const EdgeInsetsDirectional.only(
+            start: 36,
+            end: 20,
+          ),
+          leading: Icon(
+            widget.forDownload
+                ? Icons.file_download_outlined
+                : Icons.play_circle_outline,
+          ),
+          title: Text(
+            source.source,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          onTap: () => Navigator.of(context).pop(source),
+        );
+      },
+    );
+  }
+}
+
+class _SourcePickerLoadingLabel extends StatelessWidget {
+  const _SourcePickerLoadingLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Text(
+      l10n?.resolving ?? 'جارٍ الحل...',
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+class _SourcePickerMessage extends StatelessWidget {
+  final String message;
+
+  const _SourcePickerMessage(this.message);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+      child: Center(
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+      ),
+    );
+  }
 }
 
 List<_SourcePickerRow> _buildSourcePickerRows(List<StreamResult> sources) {
@@ -206,8 +314,8 @@ class _SourceQualityHeader extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );

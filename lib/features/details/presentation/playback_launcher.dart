@@ -17,6 +17,7 @@ import '../../../core/services/download_service.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../core/utils/app_utils.dart';
 import '../../../core/utils/episode_label.dart';
+import '../../../core/utils/resume_episode.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../../core/services/notification_service.dart';
 import '../../library/presentation/history_provider.dart';
@@ -54,52 +55,101 @@ class PlaybackLauncher {
     AnimeWitcherProvider provider,
     String episodeDataUrl, {
     Episode? episode,
+    Future<List<StreamResult>> Function()? loadSources,
   }) async {
-    bool isCanceled = false;
-    bool dialogDismissed = false;
-    unawaited(
-      LoadingDialog.show(
-        context,
-        message: AppLocalizations.of(context)!.resolving,
-        onCancel: () {
-          isCanceled = true;
-          dialogDismissed = true;
-        },
-      ),
+    if (!context.mounted) return null;
+    final future = loadSources != null
+        ? loadSources()
+        : provider.loadStreamSources(episodeDataUrl);
+    return showStreamSourcePicker(
+      context,
+      const <StreamResult>[],
+      sourcesFuture: future,
+      forDownload: false,
+      episodeLabel: episodePickerTitle(episode),
     );
+  }
 
-    try {
-      final sources = await provider.loadStreamSources(episodeDataUrl);
-      if (isCanceled || !context.mounted) return null;
-      if (!dialogDismissed) {
-        Navigator.of(context).pop();
-        dialogDismissed = true;
-      }
-      if (sources.isEmpty) {
-        _ref
-            .read(notificationServiceProvider)
-            .showError('لم يتم العثور على مصادر تشغيل.');
-        return null;
-      }
-      return showStreamSourcePicker(
+  /// Builds a catalog episode from continue-watching storage so the picker
+  /// title and playback progress use the known anime + episode without
+  /// waiting on the details page.
+  Episode episodeFromContinueWatching(HistoryItem history) {
+    return Episode(
+      name: history.episodeTitle ?? '',
+      url: history.lastEpisodeUrl ?? '',
+      season: history.season ?? 0,
+      episode: history.episode ?? 0,
+      posterUrl: history.episodePosterUrl,
+      serverName: history.episodeServerName ?? '',
+    );
+  }
+
+  /// Opens the episode server list on the current screen (home) instead of
+  /// routing through details. Uses the stored episode data URL when present,
+  /// otherwise matches the continue-watching episode in the catalog.
+  Future<void> playFromContinueWatching(
+    BuildContext context,
+    HistoryItem history,
+  ) async {
+    final item = history.item;
+    final savedUrl = history.lastEpisodeUrl?.trim() ?? '';
+    final hintEpisode = episodeFromContinueWatching(history);
+
+    if (savedUrl.isNotEmpty) {
+      await play(
         context,
-        sources,
-        forDownload: false,
-        episodeLabel: episodePickerTitle(episode),
+        savedUrl,
+        baseItem: item,
+        episode: hintEpisode,
       );
-    } catch (e) {
-      if (context.mounted && !isCanceled && !dialogDismissed) {
-        Navigator.of(context).pop();
-      }
-      if (context.mounted) {
-        _ref
-            .read(notificationServiceProvider)
-            .showError(
-              AppLocalizations.of(context)!.usingInternalPlayerError(e.toString()),
-            );
-      }
-      return null;
+      return;
     }
+
+    final provider = _resolveProvider(item);
+    if (provider == null) {
+      _ref
+          .read(notificationServiceProvider)
+          .showError('لم يتم العثور على مزود التشغيل.');
+      return;
+    }
+
+    Episode? resolvedEpisode = hintEpisode.episode > 0 ||
+            (hintEpisode.serverName.trim().isNotEmpty)
+        ? hintEpisode
+        : null;
+    var resolvedUrl = '';
+    final selected = await _chooseSource(
+      context,
+      provider,
+      item.url,
+      episode: hintEpisode,
+      loadSources: () async {
+        final episodes = await provider.getEpisodes(item.url);
+        resolvedEpisode = matchResumeEpisode(
+          episodes,
+          resumeEpisodeNumber: history.episode,
+          resumeSeason: history.season,
+        );
+        if (resolvedEpisode == null &&
+            episodes.isNotEmpty &&
+            (history.episode == null || history.episode! <= 0)) {
+          resolvedEpisode = episodes.first;
+        }
+        resolvedUrl = resolvedEpisode?.url.trim() ?? '';
+        if (resolvedUrl.isEmpty) return const <StreamResult>[];
+        return provider.loadStreamSources(resolvedUrl);
+      },
+    );
+    if (selected == null || !context.mounted) return;
+    if (resolvedUrl.isEmpty) return;
+
+    await play(
+      context,
+      resolvedUrl,
+      baseItem: item,
+      episode: resolvedEpisode,
+      preselectedSource: selected,
+    );
   }
 
   /// Reuses the same source discovery + picker shown before initial playback.
@@ -210,6 +260,7 @@ class PlaybackLauncher {
     required MultimediaItem baseItem,
     MultimediaItem? detailedItem,
     Episode? episode,
+    StreamResult? preselectedSource,
   }) async {
     final settings = await _ref.read(playerSettingsProvider.future);
     if (!context.mounted) return;
@@ -273,12 +324,14 @@ class PlaybackLauncher {
     // Use the same quality/server picker for internal playback and downloads.
     // The selected source is carried into the player so it is not silently
     // replaced by saved-source or automatic quality preferences.
-    final selected = await _chooseSource(
-      context,
-      provider,
-      localOrEpisodeUrl,
-      episode: resolvedEpisode,
-    );
+    // Continue-watching on home may already have shown that picker.
+    final selected = preselectedSource ??
+        await _chooseSource(
+          context,
+          provider,
+          localOrEpisodeUrl,
+          episode: resolvedEpisode,
+        );
     if (selected == null || !context.mounted) return;
 
     if (settings.preferredPlayer == null) {
