@@ -48,10 +48,18 @@ void main() {
     expect(storage.getDownloadConcurrency(), clampDownloadConcurrency(4));
   });
 
-  test('Hive round-trips the active download FIFO order', () async {
-    final storage = await bindFreshBox('download_queue_order');
-    expect(storage.getDownloadQueueOrder(), isEmpty);
-    await storage.setDownloadQueueOrder(const ['ep1', 'ep3', 'ep2']);
-    expect(storage.getDownloadQueueOrder(), ['ep1', 'ep3', 'ep2']);
+  test('Hive round-trips download notification toggles', () async {
+    final storage = await bindFreshBox('download_notification_prefs');
+    expect(
+      storage.getDownloadNotificationPrefs(),
+      DownloadNotificationPrefs.enabled,
+    );
+    await storage.setDownloadNotificationPrefs(
+      const DownloadNotificationPrefs(running: false, error: false),
+    );
+    expect(
+      storage.getDownloadNotificationPrefs(),
+      const DownloadNotificationPrefs(running: false, error: false),
+    );
   });
 }

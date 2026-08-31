@@ -155,8 +155,7 @@ CollapsedDownloads collapseDuplicateDownloads(List<DownloadItem> items) {
     }
   }
 
-  // Keep the caller's order (FIFO or the user's drag). Timestamp sort here
-  // made a drag snap back to oldest-first on the next rebuild.
+  // Keep the caller's order (FIFO by enqueue timestamp).
   final originalIndex = <String, int>{};
   for (var i = 0; i < items.length; i++) {
     originalIndex.putIfAbsent(items[i].id, () => i);
@@ -267,20 +266,17 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       items.add(item);
     }
 
-    // FIFO: oldest first unless the user has a saved drag order.
+    // FIFO: oldest first.
     items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     final collapsed = collapseDuplicateDownloads(items);
     for (final extra in collapsed.extraCompleteRecords) {
       await FileDownloader().database.deleteRecordWithId(extra.task.taskId);
       await storage.removeDownloadMetadata(extra.task.taskId);
     }
-    return _orderDownloads(collapsed.visible, storage.getDownloadQueueOrder());
+    return _orderDownloads(collapsed.visible);
   }
 
-  List<DownloadItem> _orderDownloads(
-    List<DownloadItem> items,
-    List<String> queueOrder,
-  ) {
+  List<DownloadItem> _orderDownloads(List<DownloadItem> items) {
     final active = <DownloadItem>[];
     final completed = <DownloadItem>[];
     for (final item in items) {
@@ -290,53 +286,9 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         completed.add(item);
       }
     }
-    final orderedActive = sortByDownloadQueueOrder(
-      active,
-      idOf: (item) => item.id,
-      order: queueOrder,
-      fallbackTimestamp: (item) => item.timestamp,
-    );
+    active.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     completed.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return [...orderedActive, ...completed];
-  }
-
-  Future<void> _persistActiveQueueOrder(
-    List<String> order, {
-    bool rewriteHoldingQueue = false,
-  }) async {
-    await ref.read(storageServiceProvider).setDownloadQueueOrder(order);
-    unawaited(
-      ref
-          .read(downloadServiceProvider)
-          .applyDownloadQueueOrder(
-            order,
-            rewriteHoldingQueue: rewriteHoldingQueue,
-          ),
-    );
-  }
-
-  Future<void> reorderActive(int oldIndex, int newIndex) async {
-    final current = state.value;
-    if (current == null) return;
-    final active = current
-        .where((item) => isActiveDownloadStatus(item.status))
-        .toList();
-    if (oldIndex < 0 || oldIndex >= active.length) return;
-    final ids = moveDownloadQueueIndex(
-      active.map((item) => item.id).toList(),
-      oldIndex,
-      newIndex,
-    );
-    final byId = {for (final item in active) item.id: item};
-    final reorderedActive = [
-      for (final id in ids)
-        if (byId[id] != null) byId[id]!,
-    ];
-    final completed = current
-        .where((item) => !isActiveDownloadStatus(item.status))
-        .toList();
-    state = AsyncData([...reorderedActive, ...completed]);
-    await _persistActiveQueueOrder(ids, rewriteHoldingQueue: true);
+    return [...active, ...completed];
   }
 
   Future<void> _handleUpdate(TaskUpdate update) async {
@@ -361,32 +313,10 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       }
 
       if (newStatus == TaskStatus.canceled) {
-        // Reorder rewrite cancels HQ waiters then re-enqueues them. Dropping
-        // the row here is what snapped the dragged card back and looked like
-        // a delete. User delete already removes the row after cancel.
-        // Enqueue rollback deletes metadata — those rows must disappear.
-        if (existing.status == TaskStatus.enqueued ||
-            existing.status == TaskStatus.paused) {
-          final metadata = await ref
-              .read(storageServiceProvider)
-              .getDownloadMetadata(existing.id);
-          if (metadata == null) {
-            final newList = List<DownloadItem>.from(currentList)
-              ..removeAt(index);
-            state = AsyncData(newList);
-          }
-          return;
-        }
+        // User delete and enqueue rollback already drop metadata. A canceled
+        // event must not leave a ghost row.
         final newList = List<DownloadItem>.from(currentList)..removeAt(index);
         state = AsyncData(newList);
-        unawaited(
-          _persistActiveQueueOrder(
-            newList
-                .where((item) => isActiveDownloadStatus(item.status))
-                .map((item) => item.id)
-                .toList(),
-          ),
-        );
       } else {
         // Failures are remapped to paused by DownloadService before broadcast,
         // but keep this guard so a raw failed event can never wipe the row.
@@ -407,12 +337,7 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         newList[index] = updatedItem;
         if (isActiveDownloadStatus(existing.status) &&
             !isActiveDownloadStatus(newStatus)) {
-          final storage = ref.read(storageServiceProvider);
-          final next = removeDownloadQueueIds(storage.getDownloadQueueOrder(), [
-            updatedItem.id,
-          ]);
-          state = AsyncData(_orderDownloads(newList, next));
-          unawaited(_persistActiveQueueOrder(next));
+          state = AsyncData(_orderDownloads(newList));
         } else {
           state = AsyncData(newList);
         }
@@ -438,12 +363,7 @@ class DownloadsNotifier extends _$DownloadsNotifier {
             ...currentList,
             incoming,
           ]);
-          state = AsyncData(
-            _orderDownloads(
-              collapsed.visible,
-              ref.read(storageServiceProvider).getDownloadQueueOrder(),
-            ),
-          );
+          state = AsyncData(_orderDownloads(collapsed.visible));
           return;
         }
       }
@@ -539,14 +459,6 @@ class DownloadsNotifier extends _$DownloadsNotifier {
           .where((i) => !droppedIds.contains(i.id))
           .toList();
       state = AsyncData(remaining);
-      unawaited(
-        _persistActiveQueueOrder(
-          remaining
-              .where((item) => isActiveDownloadStatus(item.status))
-              .map((item) => item.id)
-              .toList(),
-        ),
-      );
     }
   }
 

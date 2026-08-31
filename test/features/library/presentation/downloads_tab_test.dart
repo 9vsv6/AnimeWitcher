@@ -10,7 +10,6 @@ import 'package:animewitcher/features/library/presentation/widgets/downloads_tab
 import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:background_downloader/background_downloader.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -489,14 +488,9 @@ void main() {
     expect(find.text('متوقف مؤقتاً'), findsNothing);
     expect(find.byIcon(Icons.pause_rounded), findsNWidgets(2));
     expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
-    expect(find.byIcon(Icons.drag_handle_rounded), findsNWidgets(2));
+    expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
     expect(find.byType(ExpansionTile), findsNothing);
-
-    final handleLeft = tester
-        .getTopLeft(find.byIcon(Icons.drag_handle_rounded).first)
-        .dx;
-    final posterLeft = tester.getTopLeft(find.byType(CachedNetworkImage).first).dx;
-    expect(handleLeft, lessThan(posterLeft));
+    expect(find.byType(ReorderableListView), findsNothing);
 
     final artifacts = Directory('/opt/cursor/artifacts');
     if (!artifacts.existsSync()) return;
@@ -511,7 +505,7 @@ void main() {
         '${artifacts.path}/downloads_waiting_in_app.png',
       ).writeAsBytesSync(bytes!.buffer.asUint8List());
       File(
-        '${artifacts.path}/downloads_drag_handle_left_of_poster.png',
+        '${artifacts.path}/downloads_no_reorder_handle.png',
       ).writeAsBytesSync(bytes.buffer.asUint8List());
     });
   });
@@ -568,7 +562,7 @@ void main() {
     expect(find.text('الحلقة 20'), findsOneWidget);
     expect(find.text('الحلقة 21'), findsOneWidget);
     expect(find.byType(ExpansionTile), findsNothing);
-    expect(find.byIcon(Icons.drag_handle_rounded), findsNWidgets(2));
+    expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
     expect(find.byType(FilterStyleTabBar), findsOneWidget);
 
     final artifacts = Directory('/opt/cursor/artifacts');
@@ -828,7 +822,7 @@ void main() {
     }
   });
 
-  test('active FIFO is oldest first until the user reorders', () {
+  test('active FIFO is oldest first', () {
     final older = _item(
       taskId: 'old-run',
       timestamp: 10,
@@ -867,6 +861,63 @@ void main() {
       collapseDuplicateDownloads([newer, older]).visible.map((item) => item.id),
       ['new-run', 'old-run'],
     );
+  });
+
+  testWidgets('paused downloads stay paused, not fake-running', (tester) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => '/tmp',
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        null,
+      ),
+    );
+    await tester.runAsync(TestFonts.loadWalkthroughFonts);
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    DownloadItem paused(int n) => DownloadItem(
+      task: _task(
+        taskId: 'ep$n',
+        filename: 'الحلقة $n.mp4',
+        metaData: 'https://animewitcher.test/black-torch/$n',
+      ),
+      status: TaskStatus.paused,
+      progress: 0.02,
+      item: _blackTorch(),
+      episode: Episode(
+        name: 'الحلقة $n',
+        url: 'https://animewitcher.test/black-torch/$n',
+        episode: n,
+        serverName: 'الحلقة $n',
+      ),
+      timestamp: n * 10,
+    );
+
+    await tester.pumpWidget(_downloadsApp([paused(6), paused(7), paused(8)]));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('متوقف مؤقتاً'), findsNWidgets(3));
+    expect(find.text('جارٍ التنزيل...'), findsNothing);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNWidgets(3));
+    expect(find.byIcon(Icons.pause_rounded), findsNothing);
+    expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
+
+    final artifacts = Directory('/opt/cursor/artifacts');
+    if (!artifacts.existsSync()) return;
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(const ValueKey('downloads-tab-root')),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(
+        '${artifacts.path}/downloads_paused_not_running.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
   });
 
   test(

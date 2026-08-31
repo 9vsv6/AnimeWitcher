@@ -145,7 +145,7 @@ class _DownloadsEmptyState extends StatelessWidget {
   }
 }
 
-class _ActiveDownloadsList extends ConsumerWidget {
+class _ActiveDownloadsList extends StatelessWidget {
   const _ActiveDownloadsList({
     required this.items,
     required this.activeProgress,
@@ -157,31 +157,17 @@ class _ActiveDownloadsList extends ConsumerWidget {
   final String emptyMessage;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     if (items.isEmpty) {
       return _DownloadsEmptyState(message: emptyMessage);
     }
 
     return Directionality(
       textDirection: TextDirection.ltr,
-      child: ReorderableListView.builder(
+      child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        buildDefaultDragHandles: false,
         itemCount: items.length,
-        onReorder: (oldIndex, newIndex) {
-          unawaited(
-            ref
-                .read(downloadsProvider.notifier)
-                .reorderActive(oldIndex, newIndex),
-          );
-        },
-        proxyDecorator: (child, index, animation) {
-          return Material(
-            color: Colors.transparent,
-            elevation: 0,
-            child: child,
-          );
-        },
+        separatorBuilder: (context, index) => const SizedBox(height: 16),
         itemBuilder: (context, index) {
           final download = items[index];
           final trackingUrl = download.task.metaData.isNotEmpty
@@ -193,18 +179,11 @@ class _ActiveDownloadsList extends ConsumerWidget {
           final TaskStatus displayStatus =
               progressData?.status ?? download.status;
 
-          return Padding(
-            key: ValueKey(download.id),
-            padding: EdgeInsets.only(
-              bottom: index == items.length - 1 ? 0 : 16,
-            ),
-            child: _DownloadItemTile(
-              item: download,
-              progress: displayProgress,
-              status: displayStatus,
-              progressData: progressData,
-              dragIndex: index,
-            ),
+          return _DownloadItemTile(
+            item: download,
+            progress: displayProgress,
+            status: displayStatus,
+            progressData: progressData,
           );
         },
       ),
@@ -476,7 +455,6 @@ class _DownloadItemTile extends ConsumerWidget {
   final TaskStatus status;
   final DownloadProgressData? progressData;
   final bool isInsideGroup;
-  final int? dragIndex;
 
   const _DownloadItemTile({
     required this.item,
@@ -484,7 +462,6 @@ class _DownloadItemTile extends ConsumerWidget {
     required this.status,
     this.progressData,
     this.isInsideGroup = false,
-    this.dragIndex,
   });
 
   @override
@@ -538,29 +515,11 @@ class _DownloadItemTile extends ConsumerWidget {
       ),
     );
 
-    final posterWithHandle = dragIndex == null
-        ? poster
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              ReorderableDragStartListener(
-                index: dragIndex!,
-                child: const Padding(
-                  padding: EdgeInsets.only(right: LayoutConstants.spacingXs),
-                  child: Icon(Icons.drag_handle_rounded),
-                ),
-              ),
-              poster,
-            ],
-          );
-
     final content = Row(
       textDirection: TextDirection.ltr,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Poster (LTR: left) with the two-line reorder handle to its left.
-        posterWithHandle,
+        poster,
         const SizedBox(width: LayoutConstants.spacingMd),
         // Details
         Expanded(

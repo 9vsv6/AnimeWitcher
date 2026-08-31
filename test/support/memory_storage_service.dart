@@ -17,15 +17,17 @@ class MemoryStorageService extends StorageService {
   }
 
   @override
-  Future<void> setDownloadQueueOrder(List<String> order) async {
-    settings[kDownloadQueueOrderStorageKey] = List<String>.from(order);
+  Future<void> setDownloadNotificationPrefs(
+    DownloadNotificationPrefs prefs,
+  ) async {
+    settings[kDownloadNotificationSettingsKey] = prefs.toJson();
   }
 
   @override
-  List<String> getDownloadQueueOrder() {
-    final value = settings[kDownloadQueueOrderStorageKey];
-    if (value is! List) return const <String>[];
-    return value.map((item) => item.toString()).toList();
+  DownloadNotificationPrefs getDownloadNotificationPrefs() {
+    return parseDownloadNotificationPrefs(
+      settings[kDownloadNotificationSettingsKey],
+    );
   }
 
   @override

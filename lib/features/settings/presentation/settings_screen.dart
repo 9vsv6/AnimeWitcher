@@ -251,12 +251,20 @@ class SettingsScreen extends ConsumerWidget {
                   subtitle: downloadConcurrencySubtitle(
                     generalSettings.downloadConcurrency,
                   ),
-                  isLast: true,
                   onTap: () => showDownloadConcurrencyDialog(
                     context,
                     ref,
                     generalSettings.downloadConcurrency,
                   ),
+                ),
+                SettingsTile(
+                  icon: Icons.notifications_rounded,
+                  title: downloadNotificationsTitle(),
+                  subtitle: downloadNotificationsSubtitle(
+                    generalSettings.downloadNotifications,
+                  ),
+                  isLast: true,
+                  onTap: () => showDownloadNotificationsDialog(context, ref),
                 ),
               ],
             ),

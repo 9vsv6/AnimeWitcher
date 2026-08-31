@@ -637,17 +637,16 @@ class StorageService {
     );
   }
 
-  Future<void> setDownloadQueueOrder(List<String> order) async {
-    await _settingsBox.put(
-      kDownloadQueueOrderStorageKey,
-      List<String>.from(order),
-    );
+  Future<void> setDownloadNotificationPrefs(
+    DownloadNotificationPrefs prefs,
+  ) async {
+    await _settingsBox.put(kDownloadNotificationSettingsKey, prefs.toJson());
   }
 
-  List<String> getDownloadQueueOrder() {
-    final value = _settingsBox.get(kDownloadQueueOrderStorageKey);
-    if (value is! List) return const <String>[];
-    return value.map((item) => item.toString()).toList();
+  DownloadNotificationPrefs getDownloadNotificationPrefs() {
+    return parseDownloadNotificationPrefs(
+      _settingsBox.get(kDownloadNotificationSettingsKey),
+    );
   }
 
   @visibleForTesting
@@ -1304,6 +1303,7 @@ class StorageService {
     String? trackingUrl,
     String? filePath,
     bool? queueWaiting,
+    bool? userPaused,
   }) async {
     final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
     await box.put(taskId, {
@@ -1314,6 +1314,7 @@ class StorageService {
         'trackingUrl': trackingUrl,
       if (filePath != null && filePath.isNotEmpty) 'filePath': filePath,
       if (queueWaiting != null) kDownloadQueueWaitingMetadataKey: queueWaiting,
+      if (userPaused != null) kDownloadUserPausedMetadataKey: userPaused,
     });
   }
 
@@ -1322,6 +1323,7 @@ class StorageService {
     String? trackingUrl,
     String? filePath,
     bool? queueWaiting,
+    bool? userPaused,
   }) async {
     final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
     final data = box.get(taskId);
@@ -1335,6 +1337,9 @@ class StorageService {
     }
     if (queueWaiting != null) {
       map[kDownloadQueueWaitingMetadataKey] = queueWaiting;
+    }
+    if (userPaused != null) {
+      map[kDownloadUserPausedMetadataKey] = userPaused;
     }
     await box.put(taskId, map);
   }
