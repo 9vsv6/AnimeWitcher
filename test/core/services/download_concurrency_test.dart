@@ -1177,10 +1177,12 @@ void main() {
       },
     );
 
-    test('predecessor complete resumes the next user-paused row', () {
-      expect(
-        nextUserPausedAfterPredecessor(
-          completedId: 'ep6',
+    test(
+      'complete skips user-paused and starts the first unpaused waiter',
+      () {
+        final plan = planDownloadQueue(
+          maxConcurrent: 1,
+          queueOrder: const ['ep6', 'ep7', 'ep8'],
           entries: const [
             DownloadQueueEntry(
               taskId: 'ep6',
@@ -1199,35 +1201,212 @@ void main() {
               timestamp: 3,
             ),
           ],
+        );
+        expect(plan.occupiedCount, 0);
+        expect(plan.waitingFifoIds, ['ep8']);
+        expect(plan.idsToPromote, isEmpty);
+        expect(
+          idsToStartAfterParkedFailure(
+            maxConcurrent: 1,
+            queueOrder: const ['ep6', 'ep7', 'ep8'],
+            entries: const [
+              DownloadQueueEntry(
+                taskId: 'ep7',
+                status: TaskStatus.paused,
+                timestamp: 2,
+                userPaused: true,
+              ),
+              DownloadQueueEntry(
+                taskId: 'ep8',
+                status: TaskStatus.enqueued,
+                timestamp: 3,
+              ),
+            ],
+          ),
+          ['ep8'],
+        );
+      },
+    );
+
+    test(
+      'user resume while a slot is occupied waits and restacks later HQ waiters',
+      () {
+        final plan = planUserResumeQueue(
+          resumedId: 'ep7',
+          maxConcurrent: 1,
           queueOrder: const ['ep6', 'ep7', 'ep8'],
-        ),
-        'ep7',
-      );
-      expect(
-        nextUserPausedAfterPredecessor(
-          completedId: 'ep6',
           entries: const [
             DownloadQueueEntry(
               taskId: 'ep6',
-              status: TaskStatus.complete,
+              status: TaskStatus.running,
               timestamp: 1,
             ),
             DownloadQueueEntry(
               taskId: 'ep7',
-              status: TaskStatus.enqueued,
+              status: TaskStatus.paused,
               timestamp: 2,
+              userPaused: true,
             ),
             DownloadQueueEntry(
               taskId: 'ep8',
-              status: TaskStatus.paused,
+              status: TaskStatus.enqueued,
               timestamp: 3,
-              userPaused: true,
             ),
           ],
-          queueOrder: const ['ep6', 'ep7', 'ep8'],
-        ),
-        isNull,
+        );
+        expect(plan.startNow, isFalse);
+        expect(plan.occupiedCount, 1);
+        expect(plan.waitingFifoIds, ['ep7', 'ep8']);
+        expect(plan.earlierWaiterIds, isEmpty);
+        expect(plan.waitersToRestack, ['ep8']);
+        expect(
+          shouldStartImmediatelyAfterUserResume(
+            resumedId: 'ep7',
+            occupyingCount: 1,
+            waitingFifoIdsIncludingResumed: plan.waitingFifoIds,
+            maxConcurrent: 1,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('pause-all then play starts that episode immediately', () {
+      final plan = planUserResumeQueue(
+        resumedId: 'ep6',
+        maxConcurrent: 1,
+        queueOrder: const ['ep6', 'ep7'],
+        entries: const [
+          DownloadQueueEntry(
+            taskId: 'ep6',
+            status: TaskStatus.paused,
+            timestamp: 1,
+            userPaused: true,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep7',
+            status: TaskStatus.paused,
+            timestamp: 2,
+            userPaused: true,
+          ),
+        ],
       );
+      expect(plan.startNow, isTrue);
+      expect(plan.occupiedCount, 0);
+      expect(plan.waitingFifoIds, ['ep6']);
+      expect(plan.waitersToRestack, isEmpty);
+    });
+
+    test(
+      'resume with a free slot and first in FIFO starts now and restacks later waiters',
+      () {
+        final plan = planUserResumeQueue(
+          resumedId: 'ep7',
+          maxConcurrent: 1,
+          queueOrder: const ['ep7', 'ep8'],
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep7',
+              status: TaskStatus.paused,
+              timestamp: 1,
+              userPaused: true,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep8',
+              status: TaskStatus.enqueued,
+              timestamp: 2,
+            ),
+          ],
+        );
+        expect(plan.startNow, isTrue);
+        expect(plan.waitingFifoIds, ['ep7', 'ep8']);
+        expect(plan.waitersToRestack, ['ep8']);
+      },
+    );
+
+    test('resume keeps original FIFO place ahead of later leftover waiters', () {
+      final plan = planUserResumeQueue(
+        resumedId: 'ep7',
+        maxConcurrent: 1,
+        queueOrder: const ['ep6', 'ep7', 'ep8'],
+        entries: const [
+          DownloadQueueEntry(
+            taskId: 'ep6',
+            status: TaskStatus.running,
+            timestamp: 1,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep7',
+            status: TaskStatus.paused,
+            timestamp: 2,
+            userPaused: true,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep8',
+            status: TaskStatus.paused,
+            timestamp: 3,
+            queueWaiting: true,
+          ),
+        ],
+      );
+      expect(plan.startNow, isFalse);
+      expect(plan.waitingFifoIds, ['ep7', 'ep8']);
+      expect(plan.waitersToRestack, ['ep8']);
+    });
+
+    test('failure-parked is not a waiter when resuming another episode', () {
+      final plan = planUserResumeQueue(
+        resumedId: 'ep7',
+        maxConcurrent: 1,
+        queueOrder: const ['ep6', 'ep7', 'ep8'],
+        entries: const [
+          DownloadQueueEntry(
+            taskId: 'ep6',
+            status: TaskStatus.running,
+            timestamp: 1,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep7',
+            status: TaskStatus.paused,
+            timestamp: 2,
+            userPaused: true,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep8',
+            status: TaskStatus.paused,
+            timestamp: 3,
+          ),
+        ],
+      );
+      expect(plan.startNow, isFalse);
+      expect(plan.waitingFifoIds, ['ep7']);
+      expect(plan.waitersToRestack, isEmpty);
+    });
+
+    test('earlier leftover waiters start before a later resumed episode', () {
+      final plan = planUserResumeQueue(
+        resumedId: 'ep8',
+        maxConcurrent: 1,
+        queueOrder: const ['ep6', 'ep7', 'ep8'],
+        entries: const [
+          DownloadQueueEntry(
+            taskId: 'ep7',
+            status: TaskStatus.paused,
+            timestamp: 2,
+            queueWaiting: true,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep8',
+            status: TaskStatus.paused,
+            timestamp: 3,
+            userPaused: true,
+          ),
+        ],
+      );
+      expect(plan.startNow, isFalse);
+      expect(plan.waitingFifoIds, ['ep7', 'ep8']);
+      expect(plan.earlierWaiterIds, ['ep7']);
+      expect(plan.waitersToRestack, isEmpty);
     });
 
     test('kill recovery dequeues a user-paused native leftover', () {

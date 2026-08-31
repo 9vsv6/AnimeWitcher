@@ -574,6 +574,22 @@ int compareByDownloadQueueOrder(
   return fallbackA.compareTo(fallbackB);
 }
 
+int compareDownloadQueueEntries(
+  DownloadQueueEntry a,
+  DownloadQueueEntry b, [
+  List<String>? queueOrder,
+]) {
+  final order = queueOrder ?? const <String>[];
+  if (order.isEmpty) return a.timestamp.compareTo(b.timestamp);
+  return compareByDownloadQueueOrder(
+    a.taskId,
+    b.taskId,
+    order,
+    fallbackA: a.timestamp,
+    fallbackB: b.timestamp,
+  );
+}
+
 List<T> sortByDownloadQueueOrder<T>(
   Iterable<T> items, {
   required String Function(T) idOf,
@@ -844,10 +860,11 @@ class DownloadQueuePlan {
   int get freeSlots => (maxConcurrent - occupiedCount).clamp(0, maxConcurrent);
 }
 
-/// FIFO re-enqueue of leftover Dart-parked waiters only. Native holding-queue
-/// `enqueued` rows already have a live FileDownloader task — promoting them
-/// starts a second transfer of the same episode. Occupying URLSession tasks
-/// are never detached.
+/// FIFO re-enqueue of leftover Dart-parked waiters only. User-paused rows
+/// are out of the queue and are skipped. Native holding-queue `enqueued`
+/// rows already have a live FileDownloader task — promoting them starts a
+/// second transfer of the same episode. Occupying URLSession tasks are
+/// never detached.
 DownloadQueuePlan planDownloadQueue({
   required int maxConcurrent,
   required Iterable<DownloadQueueEntry> entries,
@@ -864,17 +881,6 @@ DownloadQueuePlan planDownloadQueue({
             ),
       )
       .toList();
-  int fifo(DownloadQueueEntry a, DownloadQueueEntry b) {
-    final order = queueOrder ?? const <String>[];
-    if (order.isEmpty) return a.timestamp.compareTo(b.timestamp);
-    return compareByDownloadQueueOrder(
-      a.taskId,
-      b.taskId,
-      order,
-      fallbackA: a.timestamp,
-      fallbackB: b.timestamp,
-    );
-  }
 
   final waiting =
       entries
@@ -884,10 +890,10 @@ DownloadQueuePlan planDownloadQueue({
                 (entry.queueWaiting || entry.status == TaskStatus.enqueued),
           )
           .toList()
-        ..sort(fifo);
+        ..sort((a, b) => compareDownloadQueueEntries(a, b, queueOrder));
   final leftoverParked =
       entries.where((entry) => entry.queueWaiting && !entry.userPaused).toList()
-        ..sort(fifo);
+        ..sort((a, b) => compareDownloadQueueEntries(a, b, queueOrder));
 
   final waitingFifoIds = waiting.map((e) => e.taskId).toList();
   final occupiedCount = occupying.length;
@@ -925,38 +931,125 @@ List<String> idsToStartAfterParkedFailure({
   return plan.waitingFifoIds.take(plan.freeSlots).toList();
 }
 
-/// After [completedId] finishes, resume the next FIFO row if the user
-/// paused it. Do not skip a waiter / runner. Pause-all stays paused because
-/// nothing completes to trigger this.
-String? nextUserPausedAfterPredecessor({
-  required String completedId,
+class UserResumeQueuePlan {
+  const UserResumeQueuePlan({
+    required this.startNow,
+    required this.occupiedCount,
+    required this.waitingFifoIds,
+    required this.earlierWaiterIds,
+    required this.waitersToRestack,
+  });
+
+  final bool startNow;
+  final int occupiedCount;
+  final List<String> waitingFifoIds;
+  final List<String> earlierWaiterIds;
+  final List<String> waitersToRestack;
+}
+
+/// User-paused rows are out of the queue. Play puts [resumedId] back at
+/// its original FIFO place. A parked failure (`paused` without `userPaused`)
+/// is not a waiter.
+bool isUserResumeWaiter(DownloadQueueEntry entry, {required String resumedId}) {
+  if (entry.taskId == resumedId) return true;
+  if (entry.userPaused) return false;
+  return entry.queueWaiting || entry.status == TaskStatus.enqueued;
+}
+
+List<String> userResumeWaitingFifoIds({
+  required String resumedId,
   required Iterable<DownloadQueueEntry> entries,
   List<String>? queueOrder,
 }) {
-  final list = entries.toList();
-  if (list.isEmpty || completedId.isEmpty) return null;
-  final byId = {for (final entry in list) entry.taskId: entry};
-  final order = <String>[];
-  if (queueOrder != null && queueOrder.isNotEmpty) {
-    order.addAll(queueOrder);
-    for (final entry in list) {
-      if (!order.contains(entry.taskId)) order.add(entry.taskId);
+  final waiters =
+      entries
+          .where((entry) => isUserResumeWaiter(entry, resumedId: resumedId))
+          .toList()
+        ..sort((a, b) => compareDownloadQueueEntries(a, b, queueOrder));
+  return waiters.map((entry) => entry.taskId).toList();
+}
+
+/// Start now only when a slot is free and [resumedId] is among the next
+/// unpaused FIFO waiters. An occupying transfer is never displaced.
+bool shouldStartImmediatelyAfterUserResume({
+  required String resumedId,
+  required int occupyingCount,
+  required List<String> waitingFifoIdsIncludingResumed,
+  required int maxConcurrent,
+}) {
+  final n = clampDownloadConcurrency(maxConcurrent);
+  if (resumedId.isEmpty || occupyingCount >= n) return false;
+  final freeSlots = n - occupyingCount;
+  return waitingFifoIdsIncludingResumed.take(freeSlots).contains(resumedId);
+}
+
+/// Later unpaused HQ / leftover waiters that must be placed behind the
+/// resumed id. Occupying URLSession tasks are never restacked.
+List<String> waitersToRestackAfterResume({
+  required String resumedId,
+  required List<String> waitingFifoIdsIncludingResumed,
+  required Iterable<DownloadQueueEntry> entries,
+}) {
+  final index = waitingFifoIdsIncludingResumed.indexOf(resumedId);
+  if (index < 0) return const [];
+  final byId = {for (final entry in entries) entry.taskId: entry};
+  return waitingFifoIdsIncludingResumed.skip(index + 1).where((id) {
+    final entry = byId[id];
+    if (entry == null || entry.userPaused) return false;
+    if (occupiesDownloadSlot(
+      status: entry.status,
+      queueWaiting: entry.queueWaiting,
+    )) {
+      return false;
     }
-  } else {
-    list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    order.addAll(list.map((entry) => entry.taskId));
-  }
-  final start = order.indexOf(completedId);
-  if (start < 0) return null;
-  for (var i = start + 1; i < order.length; i++) {
-    final entry = byId[order[i]];
-    if (entry == null) continue;
-    if (entry.status == TaskStatus.complete ||
-        entry.status == TaskStatus.canceled) {
-      continue;
-    }
-    if (entry.userPaused) return entry.taskId;
-    return null;
-  }
-  return null;
+    return entry.status == TaskStatus.enqueued || entry.queueWaiting;
+  }).toList();
+}
+
+/// Play: re-enter the queue at the original tap/FIFO place. Skip other
+/// user-paused rows. Do not treat failure-parked rows as waiters.
+UserResumeQueuePlan planUserResumeQueue({
+  required String resumedId,
+  required int maxConcurrent,
+  required Iterable<DownloadQueueEntry> entries,
+  List<String>? queueOrder,
+}) {
+  final n = clampDownloadConcurrency(maxConcurrent);
+  final occupiedCount = entries
+      .where(
+        (entry) =>
+            entry.taskId != resumedId &&
+            !entry.userPaused &&
+            occupiesDownloadSlot(
+              status: entry.status,
+              queueWaiting: entry.queueWaiting,
+            ),
+      )
+      .length;
+  final waitingFifoIds = userResumeWaitingFifoIds(
+    resumedId: resumedId,
+    entries: entries,
+    queueOrder: queueOrder,
+  );
+  final resumeIndex = waitingFifoIds.indexOf(resumedId);
+  final earlierWaiterIds = resumeIndex <= 0
+      ? const <String>[]
+      : waitingFifoIds.take(resumeIndex).toList();
+  final waitersToRestack = waitersToRestackAfterResume(
+    resumedId: resumedId,
+    waitingFifoIdsIncludingResumed: waitingFifoIds,
+    entries: entries,
+  );
+  return UserResumeQueuePlan(
+    startNow: shouldStartImmediatelyAfterUserResume(
+      resumedId: resumedId,
+      occupyingCount: occupiedCount,
+      waitingFifoIdsIncludingResumed: waitingFifoIds,
+      maxConcurrent: n,
+    ),
+    occupiedCount: occupiedCount,
+    waitingFifoIds: waitingFifoIds,
+    earlierWaiterIds: earlierWaiterIds,
+    waitersToRestack: waitersToRestack,
+  );
 }
