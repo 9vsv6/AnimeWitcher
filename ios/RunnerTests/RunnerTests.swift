@@ -138,7 +138,22 @@ class RunnerTests: XCTestCase {
     let state = DownloadNativeWaitingQueue.load()
     XCTAssertEqual(state.waiters.map(\.taskId), ["ep3", "ep2"])
     XCTAssertEqual(state.sessionTaskIds.first, "ep3")
-    XCTAssertEqual(state.overlayCurrentIndex(runningTaskId: "ep1"), 2)
+    XCTAssertEqual(state.overlayCurrentIndex(runningTaskId: "ep1"), 1)
+  }
+
+  func testOverlayIndexIsStartedCountWhenSeveralTransfer() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: [
+      "maxConcurrent": 3,
+      "transferringTaskIds": ["ep1", "ep2", "ep3"],
+      "pausedTaskIds": [],
+      "waiters": [],
+      "sessionTaskIds": ["ep1", "ep2", "ep3", "ep4", "ep5"],
+      "sessionBatchTotal": 5,
+      "sessionCurrentIndex": 1,
+    ])
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.overlayCurrentIndex(), 3)
   }
 
   private func ep3Waiter() -> [String: Any] {
@@ -154,6 +169,8 @@ class RunnerTests: XCTestCase {
       "group": "downloads",
     ]
   }
+
+  private func ep2Waiter() -> [String: Any] {
     [
       "taskId": "ep2",
       "taskJson": "{\"taskId\":\"ep2\",\"url\":\"https://127.0.0.1:1/ep2.mp4\",\"filename\":\"الحلقة 2.mp4\"}",

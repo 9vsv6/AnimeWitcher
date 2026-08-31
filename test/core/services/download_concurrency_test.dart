@@ -355,7 +355,7 @@ void main() {
         ],
       );
       expect(reordered.currentTaskId, 'ep1');
-      expect(reordered.currentIndex, 2);
+      expect(reordered.currentIndex, 1);
       expect(reordered.batchTotal, 3);
       expect(
         formatDownloadSessionSubtitle(
@@ -364,7 +364,113 @@ void main() {
           currentIndex: reordered.currentIndex,
           batchTotal: reordered.batchTotal,
         ),
-        '200B/1KB • 2 of 3',
+        '200B/1KB • 1 of 3',
+      );
+    });
+
+    test('N>1 overlay sums running bytes and uses started-count', () {
+      final concurrent = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep1',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 1.mp4',
+            progress: 0.1,
+            totalBytes: 100 * 1000 * 1000,
+            speedBytesPerSecond: 10 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep2',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 2.mp4',
+            progress: 0.1,
+            totalBytes: 200 * 1000 * 1000,
+            speedBytesPerSecond: 20 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep3',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 3.mp4',
+            progress: 0.1,
+            totalBytes: 50 * 1000 * 1000,
+            speedBytesPerSecond: 5 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep4',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 4.mp4',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep5',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 5.mp4',
+          ),
+        ],
+      );
+      expect(concurrent.displayName, 'الحلقة 1.mp4');
+      expect(concurrent.currentIndex, 3);
+      expect(concurrent.batchTotal, 5);
+      expect(concurrent.transferredBytes, 35 * 1000 * 1000);
+      expect(concurrent.totalBytes, 350 * 1000 * 1000);
+      expect(
+        formatDownloadSessionSubtitle(
+          transferredBytes: concurrent.transferredBytes,
+          totalBytes: concurrent.totalBytes,
+          currentIndex: concurrent.currentIndex,
+          batchTotal: concurrent.batchTotal,
+          speedBytesPerSecond: concurrent.speedBytesPerSecond,
+        ),
+        '35.0MB/s • 35MB/350MB • 3 of 5',
+      );
+
+      final later = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep1',
+            status: TaskStatus.complete,
+            displayName: 'الحلقة 1.mp4',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep2',
+            status: TaskStatus.complete,
+            displayName: 'الحلقة 2.mp4',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep3',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 3.mp4',
+            progress: 0.5,
+            totalBytes: 100 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep4',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 4.mp4',
+            progress: 0.5,
+            totalBytes: 100 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep5',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 5.mp4',
+            progress: 0.5,
+            totalBytes: 100 * 1000 * 1000,
+          ),
+        ],
+      );
+      expect(later.currentIndex, 5);
+      expect(later.batchTotal, 5);
+      expect(later.displayName, 'الحلقة 3.mp4');
+      expect(later.transferredBytes, 150 * 1000 * 1000);
+      expect(later.totalBytes, 300 * 1000 * 1000);
+      expect(
+        formatDownloadSessionSubtitle(
+          transferredBytes: later.transferredBytes,
+          totalBytes: later.totalBytes,
+          currentIndex: later.currentIndex,
+          batchTotal: later.batchTotal,
+        ),
+        '150MB/300MB • 5 of 5',
       );
     });
 

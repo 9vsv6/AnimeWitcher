@@ -277,19 +277,11 @@ class DownloadService {
           if (_sessionOverlayActive) {
             _rememberSessionTask(update.task.taskId);
             unawaited(
-              _continuedProcessing.update(
-                taskId: update.task.taskId,
+              _syncSessionOverlay(
+                preferTaskId: update.task.taskId,
                 progress: progressData.progress,
                 totalBytes: progressData.totalSize,
-                transferredBytes: overlayTransferredBytes(
-                  progress: progressData.progress,
-                  totalBytes: progressData.totalSize,
-                ),
-                completedCount: _sessionCompletedCount,
-                batchTotal: _sessionBatchTotal,
                 speedBytesPerSecond: progressData.networkSpeed * 1000 * 1000,
-                displayName: update.task.displayName,
-                currentIndex: _overlayIndexForTask(update.task.taskId),
               ),
             );
           } else if (progressMeansNativeTransfer(progressData.progress)) {
@@ -648,14 +640,6 @@ class DownloadService {
       await _syncQueueToCapUnlocked();
     });
     await _syncSessionOverlay();
-  }
-
-  int _overlayIndexForTask(String taskId) {
-    final index = _sessionOrder.indexOf(taskId);
-    return overlayCurrentIndex(
-      completedCount: index >= 0 ? index : _sessionCompletedCount,
-      batchTotal: _sessionBatchTotal,
-    );
   }
 
   List<String> _queueOrder() {
@@ -1512,17 +1496,10 @@ class DownloadService {
             status: TaskStatus.running,
           );
           unawaited(
-            _continuedProcessing.update(
-              taskId: task.taskId,
+            _syncSessionOverlay(
+              preferTaskId: task.taskId,
               progress: progress,
               totalBytes: totalSize,
-              transferredBytes: overlayTransferredBytes(
-                progress: progress,
-                totalBytes: totalSize,
-              ),
-              completedCount: _sessionCompletedCount,
-              batchTotal: _sessionBatchTotal,
-              currentIndex: _overlayIndexForTask(task.taskId),
             ),
           );
         },

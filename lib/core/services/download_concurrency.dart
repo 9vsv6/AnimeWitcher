@@ -160,7 +160,7 @@ class DownloadOverlaySession {
   final int waitingCount;
   final double speedBytesPerSecond;
 
-  /// 1-based index of the running file in the current queue order (`1 of 3`).
+  /// 1-based started count of this batch (`3 of 5` when three files run).
   final int currentIndex;
 
   bool get shouldFinish => shouldFinishDownloadSessionOverlay(
@@ -177,8 +177,96 @@ bool _isOverlayRunning(DownloadOverlayEntry entry) => occupiesDownloadSlot(
   queueWaiting: entry.queueWaiting,
 );
 
-/// Batch overlay: current **running** file's bytes, plus 1-based current
-/// episode index of this session in [queueOrder] (running + waiting + complete).
+/// How many episodes in the batch have started (running + complete).
+int overlayStartedCount({
+  required int runningCount,
+  required int completedCount,
+}) => runningCount + completedCount;
+
+/// `k of N` is started-count, not "which running file is flashing".
+int overlayStartedIndex({
+  required int runningCount,
+  required int completedCount,
+  required int batchTotal,
+}) {
+  final started = overlayStartedCount(
+    runningCount: runningCount,
+    completedCount: completedCount,
+  );
+  return overlayCurrentIndex(
+    completedCount: started < 1 ? 0 : started - 1,
+    batchTotal: batchTotal,
+  );
+}
+
+class OverlayByteTotals {
+  const OverlayByteTotals({
+    required this.transferredBytes,
+    required this.totalBytes,
+    required this.progress,
+    required this.speedBytesPerSecond,
+  });
+
+  final int transferredBytes;
+  final int totalBytes;
+  final double progress;
+  final double speedBytesPerSecond;
+}
+
+/// N=1: current file bytes. N>1: sum of every transferring file so the
+/// island does not flip between sizes.
+OverlayByteTotals overlayRunningByteTotals(
+  Iterable<DownloadOverlayEntry> running,
+) {
+  final list = running.toList();
+  if (list.isEmpty) {
+    return const OverlayByteTotals(
+      transferredBytes: 0,
+      totalBytes: -1,
+      progress: 0,
+      speedBytesPerSecond: 0,
+    );
+  }
+  if (list.length == 1) {
+    final entry = list.first;
+    final progress = entry.progress.clamp(0.0, 1.0).toDouble();
+    return OverlayByteTotals(
+      transferredBytes: overlayTransferredBytes(
+        progress: progress,
+        totalBytes: entry.totalBytes,
+      ),
+      totalBytes: entry.totalBytes,
+      progress: progress,
+      speedBytesPerSecond: entry.speedBytesPerSecond,
+    );
+  }
+  var transferred = 0;
+  var total = 0;
+  var speed = 0.0;
+  var hasTotal = false;
+  for (final entry in list) {
+    if (entry.totalBytes > 0) {
+      hasTotal = true;
+      total += entry.totalBytes;
+      transferred += overlayTransferredBytes(
+        progress: entry.progress,
+        totalBytes: entry.totalBytes,
+      );
+    }
+    if (entry.speedBytesPerSecond > 0) {
+      speed += entry.speedBytesPerSecond;
+    }
+  }
+  return OverlayByteTotals(
+    transferredBytes: transferred,
+    totalBytes: hasTotal ? total : -1,
+    progress: hasTotal && total > 0
+        ? (transferred / total).clamp(0.0, 1.0)
+        : 0.0,
+    speedBytesPerSecond: speed,
+  );
+}
+
 DownloadOverlaySession planDownloadOverlaySession({
   required Iterable<DownloadOverlayEntry> entries,
   List<String>? queueOrder,
@@ -197,16 +285,17 @@ DownloadOverlaySession planDownloadOverlaySession({
   final current = running.isNotEmpty
       ? running.first
       : (waiting.isNotEmpty ? waiting.first : null);
-  final progress = current == null
-      ? 0.0
-      : current.progress.clamp(0.0, 1.0).toDouble();
-  final totalBytes = current?.totalBytes ?? -1;
-  final transferred = overlayTransferredBytes(
-    progress: progress,
-    totalBytes: totalBytes,
-  );
+  final totals = overlayRunningByteTotals(running);
+  final progress = running.isNotEmpty
+      ? totals.progress
+      : (current == null ? 0.0 : current.progress.clamp(0.0, 1.0).toDouble());
+  final totalBytes = running.isNotEmpty
+      ? totals.totalBytes
+      : (current?.totalBytes ?? -1);
+  final transferred = running.isNotEmpty
+      ? totals.transferredBytes
+      : overlayTransferredBytes(progress: progress, totalBytes: totalBytes);
   final batchTotal = running.length + waiting.length + completed.length;
-  final runningIndex = list.indexWhere(_isOverlayRunning);
   return DownloadOverlaySession(
     currentTaskId: current?.taskId ?? kDownloadSessionOverlayTaskId,
     displayName: current?.displayName ?? '',
@@ -217,16 +306,14 @@ DownloadOverlaySession planDownloadOverlaySession({
     batchTotal: batchTotal,
     runningCount: running.length,
     waitingCount: waiting.length,
-    currentIndex: runningIndex >= 0
-        ? overlayCurrentIndex(
-            completedCount: runningIndex,
-            batchTotal: batchTotal,
-          )
-        : overlayCurrentIndex(
-            completedCount: completed.length,
-            batchTotal: batchTotal,
-          ),
-    speedBytesPerSecond: current?.speedBytesPerSecond ?? 0,
+    currentIndex: overlayStartedIndex(
+      runningCount: running.length,
+      completedCount: completed.length,
+      batchTotal: batchTotal,
+    ),
+    speedBytesPerSecond: running.isNotEmpty
+        ? totals.speedBytesPerSecond
+        : (current?.speedBytesPerSecond ?? 0),
   );
 }
 
