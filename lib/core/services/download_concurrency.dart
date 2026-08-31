@@ -10,6 +10,14 @@ const String kDownloadConcurrencyStorageKey = 'download_concurrency';
 /// still maps this to **في الانتظار...**.
 const String kDownloadQueueWaitingMetadataKey = 'queueWaiting';
 
+/// Hive metadata: the user tapped pause. Native URLSession / HQ must drop
+/// this task so kill-reopen cannot revive it as **جارٍ التنزيل** at 0 MB/s.
+const String kDownloadUserPausedMetadataKey = 'userPaused';
+
+/// Hive settings key for per-type download notification toggles.
+const String kDownloadNotificationSettingsKey =
+    'download_notification_settings';
+
 const int kDownloadConcurrencyMin = 1;
 const int kDownloadConcurrencyMax = 5;
 const int kDownloadConcurrencyDefault = 1;
@@ -62,6 +70,10 @@ Future<int> applyDownloadQueueSettings({
 /// True when Hive metadata marks this row as holding-queue waiting.
 bool isQueueWaitingMetadata(Map<String, dynamic>? metadata) =>
     metadata?[kDownloadQueueWaitingMetadataKey] == true;
+
+/// True when the user paused this episode (not a parked failure).
+bool isUserPausedMetadata(Map<String, dynamic>? metadata) =>
+    metadata?[kDownloadUserPausedMetadataKey] == true;
 
 /// Occupied slots are files actually transferring. Native holding-queue
 /// waiters (`enqueued`) and leftover Dart-parked (`queueWaiting`) rows wait
@@ -147,6 +159,113 @@ bool shouldParkSystemCanceledDownload({
 /// Overlay copy for a parked failure. Never "Download failed" while the
 /// rest of the queue is still going — or even when this was the last file.
 const String kDownloadParkedNotificationBody = 'التنزيل متوقف مؤقتاً';
+
+const String kDownloadRunningNotificationBodyIos = 'جارٍ التنزيل...';
+const String kDownloadRunningNotificationBodyAndroid =
+    '{progress} • {networkSpeed} • {timeRemaining}';
+const String kDownloadCompleteNotificationBody = 'اكتمل التنزيل';
+const String kDownloadCanceledNotificationBody = 'تم إلغاء التنزيل';
+
+/// Per-type plugin notifications. All default on so existing installs keep
+/// start / complete / pause / cancel / error banners until the user turns
+/// them off in Settings.
+class DownloadNotificationPrefs {
+  const DownloadNotificationPrefs({
+    this.running = true,
+    this.complete = true,
+    this.paused = true,
+    this.canceled = true,
+    this.error = true,
+  });
+
+  static const enabled = DownloadNotificationPrefs();
+
+  static const disabled = DownloadNotificationPrefs(
+    running: false,
+    complete: false,
+    paused: false,
+    canceled: false,
+    error: false,
+  );
+
+  final bool running;
+  final bool complete;
+  final bool paused;
+  final bool canceled;
+  final bool error;
+
+  bool get allEnabled => running && complete && paused && canceled && error;
+
+  bool get noneEnabled =>
+      !running && !complete && !paused && !canceled && !error;
+
+  DownloadNotificationPrefs copyWith({
+    bool? running,
+    bool? complete,
+    bool? paused,
+    bool? canceled,
+    bool? error,
+  }) {
+    return DownloadNotificationPrefs(
+      running: running ?? this.running,
+      complete: complete ?? this.complete,
+      paused: paused ?? this.paused,
+      canceled: canceled ?? this.canceled,
+      error: error ?? this.error,
+    );
+  }
+
+  DownloadNotificationPrefs copyAll(bool enabled) => DownloadNotificationPrefs(
+    running: enabled,
+    complete: enabled,
+    paused: enabled,
+    canceled: enabled,
+    error: enabled,
+  );
+
+  Map<String, bool> toJson() => <String, bool>{
+    'running': running,
+    'complete': complete,
+    'paused': paused,
+    'canceled': canceled,
+    'error': error,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is DownloadNotificationPrefs &&
+      running == other.running &&
+      complete == other.complete &&
+      paused == other.paused &&
+      canceled == other.canceled &&
+      error == other.error;
+
+  @override
+  int get hashCode => Object.hash(running, complete, paused, canceled, error);
+}
+
+DownloadNotificationPrefs parseDownloadNotificationPrefs(Object? raw) {
+  if (raw is! Map) return const DownloadNotificationPrefs();
+  bool read(String key) {
+    final value = raw[key];
+    if (value is bool) return value;
+    return true;
+  }
+
+  return DownloadNotificationPrefs(
+    running: read('running'),
+    complete: read('complete'),
+    paused: read('paused'),
+    canceled: read('canceled'),
+    error: read('error'),
+  );
+}
+
+TaskNotification? downloadNotificationIfEnabled({
+  required bool enabled,
+  required String title,
+  required String body,
+}) => enabled ? TaskNotification(title, body) : null;
 
 /// Native overlay finish: never report `failed` for a parked episode.
 /// Remaining waiters keep the session; an idle batch ends as canceled.
@@ -681,17 +800,26 @@ bool shouldReenqueueWaitingAfterProcessKill({
   return persisted == TaskStatus.enqueued;
 }
 
+/// Plugin `pause()` does not drop iOS URLSession tasks. After kill they
+/// come back as **جارٍ التنزيل** at 0 MB/s. Cancel the native task instead.
+bool shouldDequeueNativeAfterUserPause({
+  required bool userPaused,
+  required bool stillInNativeQueue,
+}) => userPaused && stillInNativeQueue;
+
 class DownloadQueueEntry {
   const DownloadQueueEntry({
     required this.taskId,
     required this.status,
     required this.timestamp,
     this.queueWaiting = false,
+    this.userPaused = false,
   });
 
   final String taskId;
   final TaskStatus status;
   final bool queueWaiting;
+  final bool userPaused;
   final int timestamp;
 }
 
@@ -723,10 +851,12 @@ DownloadQueuePlan planDownloadQueue({
   final n = clampDownloadConcurrency(maxConcurrent);
   final occupying = entries
       .where(
-        (entry) => occupiesDownloadSlot(
-          status: entry.status,
-          queueWaiting: entry.queueWaiting,
-        ),
+        (entry) =>
+            !entry.userPaused &&
+            occupiesDownloadSlot(
+              status: entry.status,
+              queueWaiting: entry.queueWaiting,
+            ),
       )
       .toList();
   int fifo(DownloadQueueEntry a, DownloadQueueEntry b) {
@@ -745,12 +875,14 @@ DownloadQueuePlan planDownloadQueue({
       entries
           .where(
             (entry) =>
-                entry.queueWaiting || entry.status == TaskStatus.enqueued,
+                !entry.userPaused &&
+                (entry.queueWaiting || entry.status == TaskStatus.enqueued),
           )
           .toList()
         ..sort(fifo);
-  final leftoverParked = entries.where((entry) => entry.queueWaiting).toList()
-    ..sort(fifo);
+  final leftoverParked =
+      entries.where((entry) => entry.queueWaiting && !entry.userPaused).toList()
+        ..sort(fifo);
 
   final waitingFifoIds = waiting.map((e) => e.taskId).toList();
   final occupiedCount = occupying.length;
@@ -786,4 +918,40 @@ List<String> idsToStartAfterParkedFailure({
     return plan.idsToPromote.take(plan.freeSlots).toList();
   }
   return plan.waitingFifoIds.take(plan.freeSlots).toList();
+}
+
+/// After [completedId] finishes, resume the next FIFO row if the user
+/// paused it. Do not skip a waiter / runner. Pause-all stays paused because
+/// nothing completes to trigger this.
+String? nextUserPausedAfterPredecessor({
+  required String completedId,
+  required Iterable<DownloadQueueEntry> entries,
+  List<String>? queueOrder,
+}) {
+  final list = entries.toList();
+  if (list.isEmpty || completedId.isEmpty) return null;
+  final byId = {for (final entry in list) entry.taskId: entry};
+  final order = <String>[];
+  if (queueOrder != null && queueOrder.isNotEmpty) {
+    order.addAll(queueOrder);
+    for (final entry in list) {
+      if (!order.contains(entry.taskId)) order.add(entry.taskId);
+    }
+  } else {
+    list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    order.addAll(list.map((entry) => entry.taskId));
+  }
+  final start = order.indexOf(completedId);
+  if (start < 0) return null;
+  for (var i = start + 1; i < order.length; i++) {
+    final entry = byId[order[i]];
+    if (entry == null) continue;
+    if (entry.status == TaskStatus.complete ||
+        entry.status == TaskStatus.canceled) {
+      continue;
+    }
+    if (entry.userPaused) return entry.taskId;
+    return null;
+  }
+  return null;
 }

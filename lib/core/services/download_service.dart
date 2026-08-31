@@ -97,6 +97,8 @@ class DownloadService {
   final Ref _ref;
   final Dio _dio;
   final Set<String> _cancellingUrls = {};
+  final Set<String> _userPausedIds = {};
+  final Set<String> _dequeuingPausedIds = {};
   late final DownloadContinuedProcessingService _continuedProcessing;
   final _updatesController = StreamController<TaskUpdate>.broadcast();
   StreamSubscription<TaskUpdate>? _updatesSubscription;
@@ -148,46 +150,12 @@ class DownloadService {
         .then((result) => debugPrint('Configuration result = $result'));
 
     // 2. Register callbacks and configure notifications
-    final notificationConfig = TaskNotification(
-      '{displayName}',
-      Platform.isIOS
-          ? 'جارٍ التنزيل...'
-          : '{progress} • {networkSpeed} • {timeRemaining}',
+    FileDownloader().registerCallbacks(
+      taskNotificationTapCallback: _myNotificationTapCallback,
     );
-
-    FileDownloader()
-        .registerCallbacks(
-          taskNotificationTapCallback: _myNotificationTapCallback,
-        )
-        .configureNotification(
-          running: notificationConfig,
-          complete: const TaskNotification('{displayName}', 'اكتمل التنزيل'),
-          error: const TaskNotification(
-            '{displayName}',
-            kDownloadParkedNotificationBody,
-          ),
-          paused: const TaskNotification(
-            '{displayName}',
-            kDownloadParkedNotificationBody,
-          ),
-          canceled: const TaskNotification('{displayName}', 'تم إلغاء التنزيل'),
-          progressBar: !Platform.isIOS,
-        )
-        .configureNotificationForGroup(
-          'downloads',
-          running: notificationConfig,
-          complete: const TaskNotification('{displayName}', 'اكتمل التنزيل'),
-          error: const TaskNotification(
-            '{displayName}',
-            kDownloadParkedNotificationBody,
-          ),
-          paused: const TaskNotification(
-            '{displayName}',
-            kDownloadParkedNotificationBody,
-          ),
-          canceled: const TaskNotification('{displayName}', 'تم إلغاء التنزيل'),
-          progressBar: !Platform.isIOS,
-        );
+    _configureDownloadNotifications(
+      _ref.read(storageServiceProvider).getDownloadNotificationPrefs(),
+    );
 
     // 3. Re-check Permission status (native API)
     final status = await FileDownloader().permissions.status(
@@ -204,6 +172,14 @@ class DownloadService {
       final trackingUrl = update.task.metaData.isNotEmpty
           ? update.task.metaData
           : update.task.url;
+
+      // User pause dequeues the native task. Swallow cancel/progress so the
+      // row stays **متوقف مؤقتاً** instead of vanishing or flipping back to
+      // **جارٍ التنزيل**.
+      if (_userPausedIds.contains(update.task.taskId) ||
+          _dequeuingPausedIds.contains(update.task.taskId)) {
+        return;
+      }
 
       // User-initiated cancels are cleaned up in [cancelDownload]; ignore their
       // follow-up events so they cannot race with pause-on-failure handling.
@@ -441,6 +417,63 @@ class DownloadService {
     await _serializeQueue(_syncQueueToCapUnlocked);
   }
 
+  Future<void> applyNotificationSettings(
+    DownloadNotificationPrefs prefs,
+  ) async {
+    await _ref.read(storageServiceProvider).setDownloadNotificationPrefs(prefs);
+    _configureDownloadNotifications(prefs);
+  }
+
+  void _configureDownloadNotifications(DownloadNotificationPrefs prefs) {
+    const title = '{displayName}';
+    final running = downloadNotificationIfEnabled(
+      enabled: prefs.running,
+      title: title,
+      body: Platform.isIOS
+          ? kDownloadRunningNotificationBodyIos
+          : kDownloadRunningNotificationBodyAndroid,
+    );
+    final complete = downloadNotificationIfEnabled(
+      enabled: prefs.complete,
+      title: title,
+      body: kDownloadCompleteNotificationBody,
+    );
+    final error = downloadNotificationIfEnabled(
+      enabled: prefs.error,
+      title: title,
+      body: kDownloadParkedNotificationBody,
+    );
+    final paused = downloadNotificationIfEnabled(
+      enabled: prefs.paused,
+      title: title,
+      body: kDownloadParkedNotificationBody,
+    );
+    final canceled = downloadNotificationIfEnabled(
+      enabled: prefs.canceled,
+      title: title,
+      body: kDownloadCanceledNotificationBody,
+    );
+    final progressBar = !Platform.isIOS && prefs.running;
+    FileDownloader()
+        .configureNotification(
+          running: running,
+          complete: complete,
+          error: error,
+          paused: paused,
+          canceled: canceled,
+          progressBar: progressBar,
+        )
+        .configureNotificationForGroup(
+          'downloads',
+          running: running,
+          complete: complete,
+          error: error,
+          paused: paused,
+          canceled: canceled,
+          progressBar: progressBar,
+        );
+  }
+
   Future<T> _serializeQueue<T>(Future<T> Function() action) {
     final done = Completer<void>();
     final previous = _queueChain;
@@ -464,13 +497,16 @@ class DownloadService {
 
     for (final record in records) {
       if (record.task is! DownloadTask) continue;
-      if (record.status == TaskStatus.complete ||
-          record.status == TaskStatus.canceled) {
-        continue;
-      }
       final task = record.task as DownloadTask;
       final trackingUrl = downloadTrackingUrl(task);
       final metadata = await storage.getDownloadMetadata(task.taskId);
+      final userPausedMeta = isUserPausedMetadata(metadata);
+      if (record.status == TaskStatus.complete) {
+        continue;
+      }
+      if (record.status == TaskStatus.canceled && !userPausedMeta) {
+        continue;
+      }
       final queueWaiting = isQueueWaitingMetadata(metadata);
       if (queueWaiting) {
         _queueWaitingIds.add(task.taskId);
@@ -494,7 +530,34 @@ class DownloadService {
           record.status == TaskStatus.waitingToRetry;
       final stillNative = nativeIds.contains(task.taskId);
       final userPaused =
-          record.status == TaskStatus.paused && !isFailed && !queueWaiting;
+          isUserPausedMetadata(metadata) ||
+          _userPausedIds.contains(task.taskId);
+
+      if (userPaused) {
+        _userPausedIds.add(task.taskId);
+        _queueWaitingIds.remove(task.taskId);
+        _waitingPayloads.remove(task.taskId);
+        _rememberSessionTask(task.taskId);
+        if (shouldDequeueNativeAfterUserPause(
+          userPaused: true,
+          stillInNativeQueue: stillNative,
+        )) {
+          await _dequeueNativeUnlocked(task);
+        }
+        await FileDownloader().database.updateRecord(
+          TaskRecord(
+            task,
+            TaskStatus.paused,
+            progress,
+            record.expectedFileSize,
+          ),
+        );
+        await storage.patchDownloadMetadata(
+          task.taskId,
+          queueWaiting: false,
+          userPaused: true,
+        );
+      }
 
       if (isFailed) {
         await FileDownloader().database.updateRecord(
@@ -532,8 +595,9 @@ class DownloadService {
 
       final showAsWaiting = _queueWaitingIds.contains(task.taskId);
       final showAsRunning =
-          (record.status == TaskStatus.running && stillNative) ||
-          (shouldContinue && !showAsWaiting);
+          !userPaused &&
+          ((record.status == TaskStatus.running && stillNative) ||
+              (shouldContinue && !showAsWaiting));
       _publishProgress(
         trackingUrl: trackingUrl,
         taskId: task.taskId,
@@ -541,11 +605,13 @@ class DownloadService {
         totalSize: record.expectedFileSize,
         status: showAsWaiting
             ? TaskStatus.enqueued
-            : (showAsRunning
-                  ? TaskStatus.running
-                  : (stillNative && wasRunning
-                        ? record.status
-                        : TaskStatus.paused)),
+            : (userPaused
+                  ? TaskStatus.paused
+                  : (showAsRunning
+                        ? TaskStatus.running
+                        : (stillNative && wasRunning
+                              ? record.status
+                              : TaskStatus.paused))),
       );
     }
 
@@ -582,12 +648,16 @@ class DownloadService {
       final queueWaiting =
           _queueWaitingIds.contains(record.task.taskId) ||
           isQueueWaitingMetadata(metadata);
+      final userPaused =
+          _userPausedIds.contains(record.task.taskId) ||
+          isUserPausedMetadata(metadata);
       entries.add(
         DownloadQueueEntry(
           taskId: record.task.taskId,
           status: record.status,
           timestamp: (metadata?['timestamp'] as int?) ?? 0,
           queueWaiting: queueWaiting,
+          userPaused: userPaused,
         ),
       );
     }
@@ -817,30 +887,43 @@ class DownloadService {
     for (final record in records) {
       if (record.task is! DownloadTask) continue;
       final task = record.task as DownloadTask;
-      if (record.status == TaskStatus.complete ||
-          record.status == TaskStatus.canceled) {
+      if (record.status == TaskStatus.complete) {
+        completedIds.add(task.taskId);
+        _waitingPayloads.remove(task.taskId);
+        continue;
+      }
+      if (record.status == TaskStatus.canceled &&
+          !_userPausedIds.contains(task.taskId)) {
         completedIds.add(task.taskId);
         _waitingPayloads.remove(task.taskId);
         continue;
       }
       final leftoverWaiting = _queueWaitingIds.contains(task.taskId);
-      final userPaused = record.status == TaskStatus.paused && !leftoverWaiting;
+      final userPaused =
+          _userPausedIds.contains(task.taskId) ||
+          (record.status == TaskStatus.paused && !leftoverWaiting);
+      if (userPaused) {
+        paused.add(task.taskId);
+        continue;
+      }
       if (isNativeWaitingSnapshotWaiter(
         status: record.status,
         queueWaiting: leftoverWaiting,
-        userPaused: userPaused,
+        userPaused: false,
       )) {
         waiters.add(_waitingPayloads[task.taskId] ?? _waitingPayloadFor(task));
         waiterIds.add(task.taskId);
         continue;
       }
-      if (userPaused) {
-        paused.add(task.taskId);
-        continue;
-      }
       if (occupiesDownloadSlot(status: record.status, queueWaiting: false)) {
         transferring.add(task.taskId);
         _waitingPayloads.remove(task.taskId);
+      }
+    }
+    for (final id in _userPausedIds) {
+      if (!paused.contains(id) && !completedIds.contains(id)) {
+        paused.add(id);
+        transferring.remove(id);
       }
     }
     for (final entry in _waitingPayloads.entries) {
@@ -1085,6 +1168,7 @@ class DownloadService {
       unawaited(
         _serializeQueue(() async {
           await _attachUiToLiveNativeTasks();
+          await _resumeNextUserPausedAfterUnlocked(update.task.taskId);
           await _syncQueueToCapUnlocked();
         }),
       );
@@ -1271,11 +1355,12 @@ class DownloadService {
 
   Future<void> pauseDownload(String taskId) async {
     await _serializeQueue(() async {
-      final wasWaiting = _queueWaitingIds.remove(taskId);
+      _userPausedIds.add(taskId);
+      _queueWaitingIds.remove(taskId);
       _waitingPayloads.remove(taskId);
       await _ref
           .read(storageServiceProvider)
-          .patchDownloadMetadata(taskId, queueWaiting: false);
+          .patchDownloadMetadata(taskId, queueWaiting: false, userPaused: true);
 
       final recordForId = await FileDownloader().database.recordForId(taskId);
       final tracking = recordForId != null
@@ -1290,7 +1375,9 @@ class DownloadService {
       }
 
       if (downloadTask != null) {
-        await FileDownloader().pause(downloadTask);
+        // Drop the URLSession / HQ task. Plugin pause leaves it in the OS
+        // queue, which is why pause-all + kill comes back as 0 MB/s running.
+        await _dequeueNativeUnlocked(downloadTask);
         final trackingUrl = downloadTrackingUrl(downloadTask);
         final current = _ref.read(downloadProgressProvider)[trackingUrl];
         final record = await FileDownloader().database.recordForId(taskId);
@@ -1317,28 +1404,66 @@ class DownloadService {
       }
       await _syncSessionOverlay(completedSuccess: false);
       await _persistNativeWaitingSnapshot();
-      if (!wasWaiting) {
-        await _syncQueueToCapUnlocked();
-      }
+      await _syncQueueToCapUnlocked();
     });
   }
 
   Future<void> resumeDownload(String taskId) async {
     await _serializeQueue(() async {
-      DownloadTask? downloadTask = await _liveNativeTaskFor(taskId: taskId);
-      if (downloadTask == null) {
-        final record = await FileDownloader().database.recordForId(taskId);
-        if (record?.task is DownloadTask) {
-          downloadTask = record!.task as DownloadTask;
-        }
+      await _resumeUserPausedUnlocked(taskId);
+    });
+  }
+
+  Future<void> _resumeUserPausedUnlocked(String taskId) async {
+    _userPausedIds.remove(taskId);
+    _dequeuingPausedIds.remove(taskId);
+    DownloadTask? downloadTask = await _liveNativeTaskFor(taskId: taskId);
+    if (downloadTask == null) {
+      final record = await FileDownloader().database.recordForId(taskId);
+      if (record?.task is DownloadTask) {
+        downloadTask = record!.task as DownloadTask;
       }
-      if (downloadTask == null) return;
-      _queueWaitingIds.remove(taskId);
-      _waitingPayloads.remove(taskId);
-      await _ref
-          .read(storageServiceProvider)
-          .patchDownloadMetadata(taskId, queueWaiting: false);
-      await _resumeDownloadTask(downloadTask);
+    }
+    if (downloadTask == null) return;
+    _queueWaitingIds.remove(taskId);
+    _waitingPayloads.remove(taskId);
+    await _ref
+        .read(storageServiceProvider)
+        .patchDownloadMetadata(taskId, queueWaiting: false, userPaused: false);
+    await _resumeDownloadTask(downloadTask);
+    await _persistNativeWaitingSnapshot();
+    await _syncSessionOverlay();
+  }
+
+  Future<void> _resumeNextUserPausedAfterUnlocked(String completedId) async {
+    final records = await FileDownloader().database.allRecords();
+    final nextId = nextUserPausedAfterPredecessor(
+      completedId: completedId,
+      entries: await _queueEntries(records),
+      queueOrder: _queueOrder(),
+    );
+    if (nextId == null) return;
+    await _resumeUserPausedUnlocked(nextId);
+  }
+
+  Future<void> _dequeueNativeUnlocked(DownloadTask task) async {
+    final trackingUrl = downloadTrackingUrl(task);
+    final ids = <String>{task.taskId};
+    for (final live in await FileDownloader().allTasks(allGroups: true)) {
+      if (live.taskId == task.taskId) {
+        ids.add(live.taskId);
+        continue;
+      }
+      if (trackingUrl.isNotEmpty && downloadTrackingUrl(live) == trackingUrl) {
+        ids.add(live.taskId);
+      }
+    }
+    _dequeuingPausedIds.addAll(ids);
+    try {
+      await FileDownloader().cancelTasksWithIds(ids.toList());
+    } catch (_) {}
+    Future<void>.delayed(const Duration(milliseconds: 800), () {
+      _dequeuingPausedIds.removeAll(ids);
     });
   }
 

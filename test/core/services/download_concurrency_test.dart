@@ -1121,6 +1121,138 @@ void main() {
         isFalse,
       );
     });
+
+    test('user pause is not a waiter and does not occupy a slot', () {
+      final plan = planDownloadQueue(
+        maxConcurrent: 1,
+        queueOrder: const ['ep6', 'ep7', 'ep8'],
+        entries: const [
+          DownloadQueueEntry(
+            taskId: 'ep6',
+            status: TaskStatus.paused,
+            timestamp: 1,
+            userPaused: true,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep7',
+            status: TaskStatus.enqueued,
+            timestamp: 2,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep8',
+            status: TaskStatus.paused,
+            timestamp: 3,
+            userPaused: true,
+          ),
+        ],
+      );
+      expect(plan.occupiedCount, 0);
+      expect(plan.waitingFifoIds, ['ep7']);
+      expect(plan.idsToPromote, isEmpty);
+    });
+
+    test(
+      'pause-all does not promote paused rows just because slots are free',
+      () {
+        final plan = planDownloadQueue(
+          maxConcurrent: 1,
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep6',
+              status: TaskStatus.paused,
+              timestamp: 1,
+              userPaused: true,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep7',
+              status: TaskStatus.paused,
+              timestamp: 2,
+              userPaused: true,
+            ),
+          ],
+        );
+        expect(plan.occupiedCount, 0);
+        expect(plan.idsToPromote, isEmpty);
+        expect(plan.waitingFifoIds, isEmpty);
+      },
+    );
+
+    test('predecessor complete resumes the next user-paused row', () {
+      expect(
+        nextUserPausedAfterPredecessor(
+          completedId: 'ep6',
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep6',
+              status: TaskStatus.complete,
+              timestamp: 1,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep7',
+              status: TaskStatus.paused,
+              timestamp: 2,
+              userPaused: true,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep8',
+              status: TaskStatus.enqueued,
+              timestamp: 3,
+            ),
+          ],
+          queueOrder: const ['ep6', 'ep7', 'ep8'],
+        ),
+        'ep7',
+      );
+      expect(
+        nextUserPausedAfterPredecessor(
+          completedId: 'ep6',
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep6',
+              status: TaskStatus.complete,
+              timestamp: 1,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep7',
+              status: TaskStatus.enqueued,
+              timestamp: 2,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep8',
+              status: TaskStatus.paused,
+              timestamp: 3,
+              userPaused: true,
+            ),
+          ],
+          queueOrder: const ['ep6', 'ep7', 'ep8'],
+        ),
+        isNull,
+      );
+    });
+
+    test('kill recovery dequeues a user-paused native leftover', () {
+      expect(
+        shouldDequeueNativeAfterUserPause(
+          userPaused: true,
+          stillInNativeQueue: true,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldDequeueNativeAfterUserPause(
+          userPaused: true,
+          stillInNativeQueue: false,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldDequeueNativeAfterUserPause(
+          userPaused: false,
+          stillInNativeQueue: true,
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('SettingsRepository download concurrency', () {
@@ -1136,5 +1268,41 @@ void main() {
       await repository.setDownloadConcurrency(99);
       expect(repository.getDownloadConcurrency(), 5);
     });
+
+    test(
+      'download notification prefs default on and persist toggles',
+      () async {
+        final storage = MemoryStorageService();
+        final repository = SettingsRepository(storage);
+
+        expect(
+          repository.getDownloadNotificationPrefs(),
+          DownloadNotificationPrefs.enabled,
+        );
+        await repository.setDownloadNotificationPrefs(
+          const DownloadNotificationPrefs(running: false, canceled: false),
+        );
+        expect(
+          repository.getDownloadNotificationPrefs(),
+          const DownloadNotificationPrefs(running: false, canceled: false),
+        );
+        expect(
+          downloadNotificationIfEnabled(
+            enabled: false,
+            title: '{displayName}',
+            body: kDownloadCompleteNotificationBody,
+          ),
+          isNull,
+        );
+        expect(
+          downloadNotificationIfEnabled(
+            enabled: true,
+            title: '{displayName}',
+            body: kDownloadCompleteNotificationBody,
+          )?.body,
+          kDownloadCompleteNotificationBody,
+        );
+      },
+    );
   });
 }

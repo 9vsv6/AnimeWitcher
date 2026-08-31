@@ -47,4 +47,19 @@ void main() {
     expect(storage.getDownloadConcurrency(), 4);
     expect(storage.getDownloadConcurrency(), clampDownloadConcurrency(4));
   });
+
+  test('Hive round-trips download notification toggles', () async {
+    final storage = await bindFreshBox('download_notification_prefs');
+    expect(
+      storage.getDownloadNotificationPrefs(),
+      DownloadNotificationPrefs.enabled,
+    );
+    await storage.setDownloadNotificationPrefs(
+      const DownloadNotificationPrefs(running: false, error: false),
+    );
+    expect(
+      storage.getDownloadNotificationPrefs(),
+      const DownloadNotificationPrefs(running: false, error: false),
+    );
+  });
 }

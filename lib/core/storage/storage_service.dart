@@ -637,6 +637,18 @@ class StorageService {
     );
   }
 
+  Future<void> setDownloadNotificationPrefs(
+    DownloadNotificationPrefs prefs,
+  ) async {
+    await _settingsBox.put(kDownloadNotificationSettingsKey, prefs.toJson());
+  }
+
+  DownloadNotificationPrefs getDownloadNotificationPrefs() {
+    return parseDownloadNotificationPrefs(
+      _settingsBox.get(kDownloadNotificationSettingsKey),
+    );
+  }
+
   @visibleForTesting
   void debugBindSettingsBox(Box<dynamic> box) {
     _settingsBox = box;
@@ -1291,6 +1303,7 @@ class StorageService {
     String? trackingUrl,
     String? filePath,
     bool? queueWaiting,
+    bool? userPaused,
   }) async {
     final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
     await box.put(taskId, {
@@ -1301,6 +1314,7 @@ class StorageService {
         'trackingUrl': trackingUrl,
       if (filePath != null && filePath.isNotEmpty) 'filePath': filePath,
       if (queueWaiting != null) kDownloadQueueWaitingMetadataKey: queueWaiting,
+      if (userPaused != null) kDownloadUserPausedMetadataKey: userPaused,
     });
   }
 
@@ -1309,6 +1323,7 @@ class StorageService {
     String? trackingUrl,
     String? filePath,
     bool? queueWaiting,
+    bool? userPaused,
   }) async {
     final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
     final data = box.get(taskId);
@@ -1322,6 +1337,9 @@ class StorageService {
     }
     if (queueWaiting != null) {
       map[kDownloadQueueWaitingMetadataKey] = queueWaiting;
+    }
+    if (userPaused != null) {
+      map[kDownloadUserPausedMetadataKey] = userPaused;
     }
     await box.put(taskId, map);
   }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../services/download_concurrency.dart';
 import 'storage_service.dart';
 
 part 'settings_repository.g.dart';
@@ -55,6 +56,12 @@ class SettingsRepository {
 
   int getDownloadConcurrency() => _storageService.getDownloadConcurrency();
 
+  Future<void> setDownloadNotificationPrefs(DownloadNotificationPrefs prefs) =>
+      _storageService.setDownloadNotificationPrefs(prefs);
+
+  DownloadNotificationPrefs getDownloadNotificationPrefs() =>
+      _storageService.getDownloadNotificationPrefs();
+
   Future<void> setDevLoadAssets(bool enabled) async {
     await _storageService.setDevLoadAssets(enabled);
   }
@@ -70,7 +77,6 @@ class SettingsRepository {
     return _storageService.getActiveProviderId();
   }
 
-
   Future<void> setEpisodeImagesFromAniZipEnabled(bool enabled) =>
       _storageService.setEpisodeImagesFromAniZipEnabled(enabled);
 
@@ -82,9 +88,6 @@ class SettingsRepository {
 
   bool isHighQualityPostersEnabled() =>
       _storageService.isHighQualityPostersEnabled();
-
-
-
 
   Future<void> setCustomBaseUrl(String packageName, String? url) =>
       _storageService.setCustomBaseUrl(packageName, url);
@@ -107,7 +110,6 @@ class SettingsRepository {
   String getExploreLanguage() {
     return _storageService.getExploreLanguage();
   }
-
 
   Future<void> setAlwaysOnTop(bool enabled) async {
     await _storageService.setAlwaysOnTop(enabled);
@@ -171,10 +173,8 @@ class SettingsRepository {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return const <String, dynamic>{};
       return decoded.map<String, dynamic>(
-        (dynamic nestedKey, dynamic nestedValue) => MapEntry<String, dynamic>(
-          nestedKey.toString(),
-          nestedValue,
-        ),
+        (dynamic nestedKey, dynamic nestedValue) =>
+            MapEntry<String, dynamic>(nestedKey.toString(), nestedValue),
       );
     } catch (_) {
       return const <String, dynamic>{};
@@ -194,6 +194,5 @@ class SettingsRepository {
   Future<int> computeImageVideoCacheBytes() =>
       _storageService.computeImageVideoCacheBytes();
 
-  Future<void> clearImageVideoCache() =>
-      _storageService.clearImageVideoCache();
+  Future<void> clearImageVideoCache() => _storageService.clearImageVideoCache();
 }

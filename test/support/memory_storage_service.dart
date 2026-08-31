@@ -17,6 +17,20 @@ class MemoryStorageService extends StorageService {
   }
 
   @override
+  Future<void> setDownloadNotificationPrefs(
+    DownloadNotificationPrefs prefs,
+  ) async {
+    settings[kDownloadNotificationSettingsKey] = prefs.toJson();
+  }
+
+  @override
+  DownloadNotificationPrefs getDownloadNotificationPrefs() {
+    return parseDownloadNotificationPrefs(
+      settings[kDownloadNotificationSettingsKey],
+    );
+  }
+
+  @override
   T? getPlayerSetting<T>(String key, {T? defaultValue}) => defaultValue;
 
   @override

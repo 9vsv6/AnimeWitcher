@@ -260,6 +260,92 @@ void showDownloadConcurrencyDialog(
   );
 }
 
+String downloadNotificationsTitle() => 'إشعارات التنزيل';
+
+String downloadNotificationsSubtitle(DownloadNotificationPrefs prefs) {
+  if (prefs.noneEnabled) return 'معطّلة';
+  if (prefs.allEnabled) return 'مفعّلة';
+  return 'مخصصة';
+}
+
+void showDownloadNotificationsDialog(BuildContext context, WidgetRef ref) {
+  var prefs = ref.read(generalSettingsProvider).downloadNotifications;
+  final l10n = AppLocalizations.of(context)!;
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) {
+        Future<void> apply(DownloadNotificationPrefs next) async {
+          await ref
+              .read(generalSettingsProvider.notifier)
+              .setDownloadNotificationPrefs(next);
+          setState(() => prefs = next);
+        }
+
+        return AlertDialog(
+          surfaceTintColor: Colors.transparent,
+          title: Text(downloadNotificationsTitle()),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.notifications_active_rounded),
+                  title: const Text('كل الإشعارات'),
+                  value: prefs.allEnabled,
+                  onChanged: (val) => apply(prefs.copyAll(val)),
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.play_arrow_rounded),
+                  title: const Text('البدء'),
+                  value: prefs.running,
+                  onChanged: (val) => apply(prefs.copyWith(running: val)),
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.check_circle_rounded),
+                  title: const Text('الانتهاء'),
+                  value: prefs.complete,
+                  onChanged: (val) => apply(prefs.copyWith(complete: val)),
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.pause_rounded),
+                  title: const Text('الإيقاف'),
+                  value: prefs.paused,
+                  onChanged: (val) => apply(prefs.copyWith(paused: val)),
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.cancel_rounded),
+                  title: const Text('الإلغاء'),
+                  value: prefs.canceled,
+                  onChanged: (val) => apply(prefs.copyWith(canceled: val)),
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.error_outline_rounded),
+                  title: const Text('التوقف أو الفشل'),
+                  value: prefs.error,
+                  onChanged: (val) => apply(prefs.copyWith(error: val)),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop<void>(ctx),
+              child: Text(
+                l10n.close,
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
 /// Shows a dialog to pick the readahead duration (5-10 min).
 void showReadaheadDialog(BuildContext context, WidgetRef ref, int current) {
   final l10n = AppLocalizations.of(context)!;

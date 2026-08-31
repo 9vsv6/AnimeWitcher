@@ -13,6 +13,7 @@ class GeneralSettings {
   final List<String> taskbarOrder;
   final Set<String> hiddenTaskbarItems;
   final int downloadConcurrency;
+  final DownloadNotificationPrefs downloadNotifications;
 
   const GeneralSettings({
     this.defaultHomeScreen = '/home',
@@ -20,6 +21,7 @@ class GeneralSettings {
     this.taskbarOrder = defaultTaskbarOrderIds,
     this.hiddenTaskbarItems = const <String>{},
     this.downloadConcurrency = kDownloadConcurrencyDefault,
+    this.downloadNotifications = const DownloadNotificationPrefs(),
   });
 
   GeneralSettings copyWith({
@@ -28,6 +30,7 @@ class GeneralSettings {
     List<String>? taskbarOrder,
     Set<String>? hiddenTaskbarItems,
     int? downloadConcurrency,
+    DownloadNotificationPrefs? downloadNotifications,
   }) {
     return GeneralSettings(
       defaultHomeScreen: defaultHomeScreen ?? this.defaultHomeScreen,
@@ -35,6 +38,8 @@ class GeneralSettings {
       taskbarOrder: taskbarOrder ?? this.taskbarOrder,
       hiddenTaskbarItems: hiddenTaskbarItems ?? this.hiddenTaskbarItems,
       downloadConcurrency: downloadConcurrency ?? this.downloadConcurrency,
+      downloadNotifications:
+          downloadNotifications ?? this.downloadNotifications,
     );
   }
 }
@@ -61,6 +66,7 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
       taskbarOrder: order,
       hiddenTaskbarItems: hidden,
       downloadConcurrency: repository.getDownloadConcurrency(),
+      downloadNotifications: repository.getDownloadNotificationPrefs(),
     );
   }
 
@@ -118,5 +124,12 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
     state = state.copyWith(
       downloadConcurrency: clampDownloadConcurrency(value),
     );
+  }
+
+  Future<void> setDownloadNotificationPrefs(
+    DownloadNotificationPrefs prefs,
+  ) async {
+    await ref.read(downloadServiceProvider).applyNotificationSettings(prefs);
+    state = state.copyWith(downloadNotifications: prefs);
   }
 }
