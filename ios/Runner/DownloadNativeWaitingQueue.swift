@@ -95,6 +95,10 @@ enum DownloadNativeWaitingQueue {
 
   private static let lock = NSLock()
   private static var hookInstalled = false
+  /// Task IDs that already have URLSession bytes (plugin HQ or our start).
+  /// Used instead of `BDPlugin.holdingQueue`, which is internal to the plugin
+  /// and fails Xcode 26 (`holdingQueue` / `taskForId` inaccessible).
+  private static var seenTransferringIds = Set<String>()
 
   static func installUrlSessionHook() {
     lock.lock()
@@ -213,17 +217,19 @@ enum DownloadNativeWaitingQueue {
     }
   }
 
-  /// One URLSession task per episode. If HoldingQueue already submitted this
-  /// waiter, only attach the overlay — do not start a second download.
+  /// One URLSession task per episode. If this waiter is already transferring
+  /// (plugin HoldingQueue submitted it, or we already started it), only
+  /// attach the overlay. Do not touch plugin-internal `holdingQueue`.
   private static func startIfNotAlreadyNative(_ waiter: Waiter, on session: URLSession) {
-    #if canImport(background_downloader)
-    let stillInHoldingQueue = BDPlugin.holdingQueue?.taskForId(waiter.taskId) != nil
-    if !stillInHoldingQueue {
+    lock.lock()
+    let alreadyTransferring = seenTransferringIds.contains(waiter.taskId)
+    let alreadyCompleted = loadLocked().completedTaskIds.contains(waiter.taskId)
+    lock.unlock()
+    if alreadyTransferring || alreadyCompleted {
       NSLog("[DownloadNativeWaitingQueue] already native %@", waiter.taskId)
       startLiveActivity(taskId: waiter.taskId, displayName: waiter.displayName)
       return
     }
-    #endif
     start(waiter, on: session)
   }
 
@@ -257,6 +263,9 @@ enum DownloadNativeWaitingQueue {
     let downloadTask = session.downloadTask(with: request)
     downloadTask.taskDescription = waiter.taskDescription
     downloadTask.resume()
+    lock.lock()
+    seenTransferringIds.insert(waiter.taskId)
+    lock.unlock()
     NSLog("[DownloadNativeWaitingQueue] started %@", waiter.taskId)
   }
 
@@ -288,6 +297,9 @@ enum DownloadNativeWaitingQueue {
 
   static func handleBytesWritten(_ downloadTask: URLSessionDownloadTask) {
     guard let id = taskId(from: downloadTask) else { return }
+    lock.lock()
+    seenTransferringIds.insert(id)
+    lock.unlock()
     let json = downloadTask.taskDescription?
       .components(separatedBy: "***<<<|>>>***").first ?? ""
     let display = stringFromTaskJson(json, key: "displayName")
