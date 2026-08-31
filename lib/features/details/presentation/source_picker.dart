@@ -143,10 +143,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
 
         final source = row.source!;
         return ListTile(
-          contentPadding: const EdgeInsetsDirectional.only(
-            start: 36,
-            end: 20,
-          ),
+          contentPadding: const EdgeInsetsDirectional.only(start: 36, end: 20),
           leading: Icon(
             widget.forDownload
                 ? Icons.file_download_outlined
@@ -172,9 +169,9 @@ class _SourcePickerLoadingLabel extends StatelessWidget {
     return Text(
       l10n?.resolving ?? 'جارٍ الحل...',
       textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-        fontWeight: FontWeight.w500,
-      ),
+      style: Theme.of(
+        context,
+      ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
     );
   }
 }
@@ -214,13 +211,14 @@ List<_SourcePickerRow> _buildSourcePickerRows(List<StreamResult> sources) {
     final qualityCompare = b.qualityScore.compareTo(a.qualityScore);
     if (qualityCompare != 0) return qualityCompare;
 
-    final serverCompare = _serverPriority(a.source.source)
-        .compareTo(_serverPriority(b.source.source));
+    final serverCompare = _serverPriority(
+      a.source.source,
+    ).compareTo(_serverPriority(b.source.source));
     if (serverCompare != 0) return serverCompare;
 
-    final nameCompare = a.source.source
-        .toLowerCase()
-        .compareTo(b.source.source.toLowerCase());
+    final nameCompare = a.source.source.toLowerCase().compareTo(
+      b.source.source.toLowerCase(),
+    );
     if (nameCompare != 0) return nameCompare;
 
     return a.originalIndex.compareTo(b.originalIndex);
@@ -313,9 +311,9 @@ class _SourceQualityHeader extends StatelessWidget {
         alignment: AlignmentDirectional.centerStart,
         child: Text(
           label,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
     );

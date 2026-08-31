@@ -96,12 +96,7 @@ class PlaybackLauncher {
     final hintEpisode = episodeFromContinueWatching(history);
 
     if (savedUrl.isNotEmpty) {
-      await play(
-        context,
-        savedUrl,
-        baseItem: item,
-        episode: hintEpisode,
-      );
+      await play(context, savedUrl, baseItem: item, episode: hintEpisode);
       return;
     }
 
@@ -113,8 +108,8 @@ class PlaybackLauncher {
       return;
     }
 
-    Episode? resolvedEpisode = hintEpisode.episode > 0 ||
-            (hintEpisode.serverName.trim().isNotEmpty)
+    Episode? resolvedEpisode =
+        hintEpisode.episode > 0 || (hintEpisode.serverName.trim().isNotEmpty)
         ? hintEpisode
         : null;
     var resolvedUrl = '';
@@ -226,7 +221,9 @@ class PlaybackLauncher {
         _ref
             .read(notificationServiceProvider)
             .showError(
-              AppLocalizations.of(context)!.usingInternalPlayerError(e.toString()),
+              AppLocalizations.of(
+                context,
+              )!.usingInternalPlayerError(e.toString()),
             );
       }
       return null;
@@ -238,20 +235,22 @@ class PlaybackLauncher {
     Episode? episode,
   ) async {
     if (episode == null) return;
-    await _ref.read(watchHistoryProvider.notifier).recordOpened(
-      item,
-      lastEpisodeUrl: episode.url,
-      season: episode.season,
-      episode: episode.episode,
-      episodeTitle: episodeTitleForStorage(
-        episode: episode.episode,
-        title: episode.name,
-        isFinal: episode.isFinal,
-        serverName: episode.serverName,
-      ),
-      episodeServerName: episode.serverName,
-      episodePosterUrl: episode.posterUrl,
-    );
+    await _ref
+        .read(watchHistoryProvider.notifier)
+        .recordOpened(
+          item,
+          lastEpisodeUrl: episode.url,
+          season: episode.season,
+          episode: episode.episode,
+          episodeTitle: episodeTitleForStorage(
+            episode: episode.episode,
+            title: episode.name,
+            isFinal: episode.isFinal,
+            serverName: episode.serverName,
+          ),
+          episodeServerName: episode.serverName,
+          episodePosterUrl: episode.posterUrl,
+        );
   }
 
   Future<void> play(
@@ -269,15 +268,16 @@ class PlaybackLauncher {
     final resolvedEpisode =
         episode ?? item.episodes?.firstWhereOrNull((e) => e.url == url);
     final resolvedEpisodeUrl = resolvedEpisode?.url.trim() ?? '';
-    final canonicalProgressUrl =
-        resolvedEpisodeUrl.isNotEmpty ? resolvedEpisodeUrl : url;
+    final canonicalProgressUrl = resolvedEpisodeUrl.isNotEmpty
+        ? resolvedEpisodeUrl
+        : url;
     String? downloadedPath;
     if (!AppUtils.isLocalFile(url)) {
-      downloadedPath = (await _ref.read(downloadServiceProvider).getDownloadedFile(
-        item,
-        episode: resolvedEpisode,
-      ))
-          ?.path;
+      downloadedPath =
+          (await _ref
+                  .read(downloadServiceProvider)
+                  .getDownloadedFile(item, episode: resolvedEpisode))
+              ?.path;
       if (!context.mounted) return;
     }
 
@@ -325,7 +325,8 @@ class PlaybackLauncher {
     // The selected source is carried into the player so it is not silently
     // replaced by saved-source or automatic quality preferences.
     // Continue-watching on home may already have shown that picker.
-    final selected = preselectedSource ??
+    final selected =
+        preselectedSource ??
         await _chooseSource(
           context,
           provider,
@@ -357,7 +358,11 @@ class PlaybackLauncher {
             .setLaunching(true);
       }
       try {
-        final resolved = await _resolveSelectedSource(context, provider, selected);
+        final resolved = await _resolveSelectedSource(
+          context,
+          provider,
+          selected,
+        );
         if (resolved == null || !context.mounted) return;
         await _recordEpisodeOpened(item, resolvedEpisode);
         await _launchStream(
@@ -378,7 +383,6 @@ class PlaybackLauncher {
       }
       return;
     }
-
   }
 
   Future<void> _launchStream(

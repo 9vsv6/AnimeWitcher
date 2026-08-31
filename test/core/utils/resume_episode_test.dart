@@ -2,11 +2,7 @@ import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/utils/resume_episode.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Episode _episode({
-  required String url,
-  required int number,
-  int season = 1,
-}) {
+Episode _episode({required String url, required int number, int season = 1}) {
   return Episode(
     name: 'Episode $number',
     url: url,
@@ -36,10 +32,7 @@ void main() {
 
     test('matches episode number when the stored URL is missing', () {
       expect(
-        matchResumeEpisode(
-          episodes,
-          resumeEpisodeNumber: 9,
-        )?.url,
+        matchResumeEpisode(episodes, resumeEpisodeNumber: 9)?.url,
         'anime|ep9',
       );
     });
@@ -56,13 +49,7 @@ void main() {
     });
 
     test('returns null when nothing in the catalog matches', () {
-      expect(
-        matchResumeEpisode(
-          episodes,
-          resumeEpisodeNumber: 12,
-        ),
-        isNull,
-      );
+      expect(matchResumeEpisode(episodes, resumeEpisodeNumber: 12), isNull);
     });
   });
 }
