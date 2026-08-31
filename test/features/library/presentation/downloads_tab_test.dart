@@ -6,6 +6,7 @@ import 'package:animewitcher/core/services/download_service.dart';
 import 'package:animewitcher/core/utils/download_cleanup.dart';
 import 'package:animewitcher/features/library/presentation/downloads_provider.dart';
 import 'package:animewitcher/features/library/presentation/widgets/downloads_tab.dart';
+import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
@@ -56,13 +57,14 @@ DownloadItem _item({
   String filename = 'الحلقة 9.mp4',
   TaskStatus status = TaskStatus.complete,
   String metaData = 'https://animewitcher.test/black-torch/9',
+  Episode? episode,
 }) {
   return DownloadItem(
     task: _task(taskId: taskId, filename: filename, metaData: metaData),
     status: status,
     progress: status == TaskStatus.complete ? 1.0 : 0.4,
     item: _blackTorch(),
-    episode: _episode9(),
+    episode: episode ?? _episode9(),
     timestamp: timestamp,
   );
 }
@@ -85,7 +87,12 @@ Widget _downloadsApp(List<DownloadItem> items) {
       locale: Locale('ar'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(body: DownloadsTab()),
+      home: const Scaffold(
+        body: RepaintBoundary(
+          key: ValueKey('downloads-tab-root'),
+          child: DownloadsTab(),
+        ),
+      ),
     ),
   );
 }
@@ -282,11 +289,16 @@ void main() {
       await tester.pumpWidget(_downloadsApp([older, newer]));
       await tester.pump();
 
+      expect(find.text('المكتملة'), findsOneWidget);
+      await tester.tap(find.text('المكتملة'));
+      await tester.pumpAndSettle();
+
       expect(find.text('الحلقة 9'), findsOneWidget);
       expect(find.text('Black Torch'), findsOneWidget);
       expect(find.byType(ExpansionTile), findsNothing);
       expect(find.byIcon(Icons.play_circle_fill_rounded), findsOneWidget);
       expect(find.byIcon(Icons.delete_outline_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
     },
   );
 
@@ -460,12 +472,16 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
+    expect(find.text('التنزيلات'), findsWidgets);
+    expect(find.text('المكتملة'), findsOneWidget);
     expect(find.text('جارٍ التنزيل...'), findsOneWidget);
     expect(find.text('في الانتظار...'), findsOneWidget);
     expect(find.text('قيد الانتظار'), findsNothing);
     expect(find.text('متوقف مؤقتاً'), findsNothing);
     expect(find.byIcon(Icons.pause_rounded), findsNWidgets(2));
     expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
+    expect(find.byIcon(Icons.drag_handle_rounded), findsNWidgets(2));
+    expect(find.byType(ExpansionTile), findsNothing);
 
     final artifacts = Directory('/opt/cursor/artifacts');
     if (!artifacts.existsSync()) return;
@@ -480,5 +496,172 @@ void main() {
         '${artifacts.path}/downloads_waiting_in_app.png',
       ).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
+  });
+
+  testWidgets('active tab keeps one ungrouped card per episode', (
+    tester,
+  ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => '/tmp',
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        null,
+      ),
+    );
+
+    final show = MultimediaItem(
+      title: 'Kuroneko',
+      url: 'https://animewitcher.test/kuro',
+      posterUrl: '',
+      contentType: MultimediaContentType.anime,
+      tmdbId: 20,
+    );
+    DownloadItem episode(int n, TaskStatus status) {
+      return DownloadItem(
+        task: _task(
+          taskId: 'ep$n',
+          filename: 'الحلقة $n.mp4',
+          metaData: 'https://animewitcher.test/kuro/$n',
+        ),
+        status: status,
+        progress: status == TaskStatus.complete ? 1 : 0.2,
+        item: show,
+        episode: Episode(
+          name: 'الحلقة $n',
+          url: 'https://animewitcher.test/kuro/$n',
+          episode: n,
+          serverName: 'الحلقة $n',
+        ),
+        timestamp: n * 10,
+      );
+    }
+
+    await tester.pumpWidget(
+      _downloadsApp([
+        episode(20, TaskStatus.running),
+        episode(21, TaskStatus.enqueued),
+      ]),
+    );
+    await tester.pump();
+
+    expect(find.text('الحلقة 20'), findsOneWidget);
+    expect(find.text('الحلقة 21'), findsOneWidget);
+    expect(find.byType(ExpansionTile), findsNothing);
+    expect(find.byIcon(Icons.drag_handle_rounded), findsNWidgets(2));
+    expect(find.byType(FilterStyleTabBar), findsOneWidget);
+
+    final artifacts = Directory('/opt/cursor/artifacts');
+    if (artifacts.existsSync()) {
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('downloads-tab-root')),
+        );
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File(
+          '${artifacts.path}/downloads_active_ungrouped.png',
+        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    }
+  });
+
+  testWidgets('completed tab still groups multiple episodes of one anime', (
+    tester,
+  ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => '/tmp',
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        null,
+      ),
+    );
+
+    final show = MultimediaItem(
+      title: 'Bleach',
+      url: 'https://animewitcher.test/bleach',
+      posterUrl: '',
+      contentType: MultimediaContentType.anime,
+      tmdbId: 7,
+    );
+    DownloadItem episode(int n) {
+      return DownloadItem(
+        task: _task(
+          taskId: 'bleach-$n',
+          filename: 'الحلقة $n.mp4',
+          metaData: 'https://animewitcher.test/bleach/$n',
+        ),
+        status: TaskStatus.complete,
+        progress: 1,
+        item: show,
+        episode: Episode(
+          name: 'الحلقة $n',
+          url: 'https://animewitcher.test/bleach/$n',
+          episode: n,
+          serverName: 'الحلقة $n',
+        ),
+        timestamp: n,
+      );
+    }
+
+    await tester.pumpWidget(_downloadsApp([episode(1), episode(2)]));
+    await tester.pump();
+    await tester.tap(find.text('المكتملة'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ExpansionTile), findsOneWidget);
+    expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
+    expect(find.text('Bleach'), findsOneWidget);
+
+    final artifacts = Directory('/opt/cursor/artifacts');
+    if (artifacts.existsSync()) {
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('downloads-tab-root')),
+        );
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File(
+          '${artifacts.path}/downloads_completed_grouped.png',
+        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    }
+  });
+
+  test('active FIFO is oldest first until the user reorders', () {
+    final older = _item(
+      taskId: 'old-run',
+      timestamp: 10,
+      filename: 'الحلقة 1.mp4',
+      status: TaskStatus.running,
+      metaData: 'https://animewitcher.test/black-torch/1',
+      episode: Episode(
+        name: 'الحلقة 1',
+        url: 'https://animewitcher.test/black-torch/1',
+        episode: 1,
+        serverName: 'الحلقة 1',
+      ),
+    );
+    final newer = _item(
+      taskId: 'new-run',
+      timestamp: 20,
+      filename: 'الحلقة 10.mp4',
+      status: TaskStatus.enqueued,
+      metaData: 'https://animewitcher.test/black-torch/10',
+      episode: Episode(
+        name: 'الحلقة 10',
+        url: 'https://animewitcher.test/black-torch/10',
+        episode: 10,
+        serverName: 'الحلقة 10',
+      ),
+    );
+    final collapsed = collapseDuplicateDownloads([newer, older]).visible;
+    expect(collapsed.first.id, 'old-run');
+    expect(collapsed.last.id, 'new-run');
   });
 }

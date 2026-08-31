@@ -580,17 +580,29 @@ abstract class AppLocalizations {
   /// **'التنزيلات'**
   String get downloads;
 
-  /// No description provided for @bookmarks.
+  /// No description provided for @downloadsTabCompleted.
   ///
   /// In ar, this message translates to:
-  /// **'الإشارات المرجعية'**
-  String get bookmarks;
+  /// **'المكتملة'**
+  String get downloadsTabCompleted;
 
   /// No description provided for @noDownloadsYet.
   ///
   /// In ar, this message translates to:
   /// **'لا توجد تنزيلات بعد'**
   String get noDownloadsYet;
+
+  /// No description provided for @noCompletedDownloadsYet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تنزيلات مكتملة'**
+  String get noCompletedDownloadsYet;
+
+  /// No description provided for @bookmarks.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإشارات المرجعية'**
+  String get bookmarks;
 
   /// No description provided for @episodesCount.
   ///

@@ -331,6 +331,102 @@ void main() {
       expect(allDone.shouldFinish, isTrue);
     });
 
+    test('overlay k of N follows queue order after a user reorder', () {
+      final reordered = planDownloadOverlaySession(
+        queueOrder: const ['ep3', 'ep1', 'ep2'],
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep1',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 1',
+            progress: 0.2,
+            totalBytes: 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep2',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 2',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep3',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 3',
+          ),
+        ],
+      );
+      expect(reordered.currentTaskId, 'ep1');
+      expect(reordered.currentIndex, 2);
+      expect(reordered.batchTotal, 3);
+      expect(
+        formatDownloadSessionSubtitle(
+          transferredBytes: reordered.transferredBytes,
+          totalBytes: reordered.totalBytes,
+          currentIndex: reordered.currentIndex,
+          batchTotal: reordered.batchTotal,
+        ),
+        '200B/1KB • 2 of 3',
+      );
+    });
+
+    test('applyActiveDownloadReorder keeps completed slots', () {
+      expect(
+        applyActiveDownloadReorder(
+          sessionOrder: const ['ep1', 'ep2', 'ep3'],
+          newActiveOrder: const ['ep3', 'ep1', 'ep2'],
+          completedIds: const {},
+        ),
+        ['ep3', 'ep1', 'ep2'],
+      );
+      expect(
+        applyActiveDownloadReorder(
+          sessionOrder: const ['ep1', 'ep2', 'ep3'],
+          newActiveOrder: const ['ep3', 'ep2'],
+          completedIds: const {'ep1'},
+        ),
+        ['ep1', 'ep3', 'ep2'],
+      );
+    });
+
+    test('new downloads append at the bottom of the FIFO', () {
+      expect(appendDownloadQueueId(const ['ep1'], 'ep2'), ['ep1', 'ep2']);
+      expect(appendDownloadQueueId(const ['ep1', 'ep2'], 'ep1'), [
+        'ep1',
+        'ep2',
+      ]);
+      expect(moveDownloadQueueIndex(const ['ep1', 'ep2', 'ep3'], 2, 0), [
+        'ep3',
+        'ep1',
+        'ep2',
+      ]);
+    });
+
+    test('foreground attach keeps last known speed until the next tick', () {
+      expect(
+        keepLastKnownDownloadSpeed(
+          status: TaskStatus.running,
+          incomingSpeed: 0,
+          lastKnownSpeed: 0.64,
+        ),
+        0.64,
+      );
+      expect(
+        keepLastKnownDownloadSpeed(
+          status: TaskStatus.running,
+          incomingSpeed: 1.2,
+          lastKnownSpeed: 0.64,
+        ),
+        1.2,
+      );
+      expect(
+        keepLastKnownDownloadSpeed(
+          status: TaskStatus.paused,
+          incomingSpeed: 0,
+          lastKnownSpeed: 0.64,
+        ),
+        0,
+      );
+    });
+
     test('overflow is OS-enqueued; overlay starts only when running', () {
       expect(shouldStartDownloadLiveActivity(TaskStatus.enqueued), isFalse);
       expect(shouldStartDownloadLiveActivity(TaskStatus.running), isTrue);
@@ -566,6 +662,24 @@ void main() {
         );
         expect(twoWaiters.idsToPromote, ['ep3']);
         expect(twoWaiters.waitingFifoIds, ['ep3', 'ep4']);
+
+        final reorderedWaiters = planDownloadQueue(
+          maxConcurrent: 1,
+          queueOrder: const ['ep4', 'ep3'],
+          entries: const [
+            DownloadQueueEntry(
+              taskId: 'ep3',
+              status: TaskStatus.enqueued,
+              timestamp: 2,
+            ),
+            DownloadQueueEntry(
+              taskId: 'ep4',
+              status: TaskStatus.enqueued,
+              timestamp: 3,
+            ),
+          ],
+        );
+        expect(reorderedWaiters.waitingFifoIds, ['ep4', 'ep3']);
       },
     );
 

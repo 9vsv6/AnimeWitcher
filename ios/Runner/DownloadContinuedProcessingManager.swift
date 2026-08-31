@@ -44,6 +44,7 @@ final class DownloadContinuedProcessingManager {
     var batchTotal: Int
     var speedBytesPerSecond: Double
     var currentTaskId: String
+    var currentIndex: Int
   }
 
   var cancellationHandler: ((String) -> Void)?
@@ -65,7 +66,8 @@ final class DownloadContinuedProcessingManager {
     transferredBytes: Int64 = -1,
     completedCount: Int = 0,
     batchTotal: Int = 1,
-    speedBytesPerSecond: Double = 0
+    speedBytesPerSecond: Double = 0,
+    currentIndex: Int = 0
   ) throws -> String? {
     // BGContinuedProcessingTaskRequest itself validates that submission is
     // associated with the foreground app. Avoid an additional UIApplication
@@ -80,6 +82,9 @@ final class DownloadContinuedProcessingManager {
     let transferred = transferredBytes >= 0
       ? transferredBytes
       : overlayTransferredBytes(progress: normalized, totalBytes: totalBytes)
+    let keepSpeed = speedBytesPerSecond > 0
+      ? speedBytesPerSecond
+      : max(snapshot?.speedBytesPerSecond ?? 0, 0)
     let snapshot = Snapshot(
       displayName: displayName,
       progress: normalized,
@@ -87,8 +92,11 @@ final class DownloadContinuedProcessingManager {
       transferredBytes: transferred,
       completedCount: max(completedCount, 0),
       batchTotal: max(batchTotal, 1),
-      speedBytesPerSecond: max(speedBytesPerSecond, 0),
-      currentTaskId: currentEpisodeTaskId.isEmpty ? taskId : currentEpisodeTaskId
+      speedBytesPerSecond: keepSpeed,
+      currentTaskId: currentEpisodeTaskId.isEmpty ? taskId : currentEpisodeTaskId,
+      currentIndex: currentIndex > 0
+        ? currentIndex
+        : (self.snapshot?.currentIndex ?? 0)
     )
     self.snapshot = snapshot
 
@@ -156,7 +164,8 @@ final class DownloadContinuedProcessingManager {
     completedCount: Int = -1,
     batchTotal: Int = -1,
     speedBytesPerSecond: Double = -1,
-    displayName: String = ""
+    displayName: String = "",
+    currentIndex: Int = -1
   ) {
     if taskId != Self.sessionKey, !taskId.isEmpty {
       currentEpisodeTaskId = taskId
@@ -181,11 +190,14 @@ final class DownloadContinuedProcessingManager {
     if batchTotal > 0 {
       snapshot.batchTotal = batchTotal
     }
-    if speedBytesPerSecond >= 0 {
+    if speedBytesPerSecond > 0 {
       snapshot.speedBytesPerSecond = speedBytesPerSecond
     }
     if !displayName.isEmpty {
       snapshot.displayName = displayName
+    }
+    if currentIndex > 0 {
+      snapshot.currentIndex = currentIndex
     }
     snapshot.currentTaskId = currentEpisodeTaskId
     self.snapshot = snapshot
@@ -329,7 +341,9 @@ final class DownloadContinuedProcessingManager {
 
   private func currentIndex(for snapshot: Snapshot) -> Int {
     let total = max(snapshot.batchTotal, 1)
-    let index = snapshot.completedCount + 1
+    let index = snapshot.currentIndex > 0
+      ? snapshot.currentIndex
+      : snapshot.completedCount + 1
     return min(max(index, 1), total)
   }
 

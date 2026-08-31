@@ -17,6 +17,18 @@ class MemoryStorageService extends StorageService {
   }
 
   @override
+  Future<void> setDownloadQueueOrder(List<String> order) async {
+    settings[kDownloadQueueOrderStorageKey] = List<String>.from(order);
+  }
+
+  @override
+  List<String> getDownloadQueueOrder() {
+    final value = settings[kDownloadQueueOrderStorageKey];
+    if (value is! List) return const <String>[];
+    return value.map((item) => item.toString()).toList();
+  }
+
+  @override
   T? getPlayerSetting<T>(String key, {T? defaultValue}) => defaultValue;
 
   @override

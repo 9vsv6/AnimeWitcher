@@ -113,7 +113,47 @@ class RunnerTests: XCTestCase {
     ]
   }
 
-  private func ep2Waiter() -> [String: Any] {
+  func testPersistRewritesWaiterOrderFromDart() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: [
+      "maxConcurrent": 1,
+      "transferringTaskIds": ["ep1"],
+      "pausedTaskIds": [],
+      "waiters": [ep2Waiter(), ep3Waiter()],
+      "sessionTaskIds": ["ep1", "ep2", "ep3"],
+    ])
+    XCTAssertEqual(
+      DownloadNativeWaitingQueue.load().waiters.map(\.taskId),
+      ["ep2", "ep3"]
+    )
+
+    DownloadNativeWaitingQueue.persist(from: [
+      "maxConcurrent": 1,
+      "transferringTaskIds": ["ep1"],
+      "pausedTaskIds": [],
+      "waiters": [ep3Waiter(), ep2Waiter()],
+      "sessionTaskIds": ["ep3", "ep1", "ep2"],
+      "sessionCurrentIndex": 2,
+    ])
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.waiters.map(\.taskId), ["ep3", "ep2"])
+    XCTAssertEqual(state.sessionTaskIds.first, "ep3")
+    XCTAssertEqual(state.overlayCurrentIndex(runningTaskId: "ep1"), 2)
+  }
+
+  private func ep3Waiter() -> [String: Any] {
+    [
+      "taskId": "ep3",
+      "taskJson": "{\"taskId\":\"ep3\",\"url\":\"https://127.0.0.1:1/ep3.mp4\",\"filename\":\"الحلقة 3.mp4\"}",
+      "url": "https://127.0.0.1:1/ep3.mp4",
+      "filename": "الحلقة 3.mp4",
+      "displayName": "الحلقة 3.mp4",
+      "headers": ["Authorization": "Bearer x"],
+      "directory": "AnimeWitcher/Downloads/Show",
+      "httpRequestMethod": "GET",
+      "group": "downloads",
+    ]
+  }
     [
       "taskId": "ep2",
       "taskJson": "{\"taskId\":\"ep2\",\"url\":\"https://127.0.0.1:1/ep2.mp4\",\"filename\":\"الحلقة 2.mp4\"}",

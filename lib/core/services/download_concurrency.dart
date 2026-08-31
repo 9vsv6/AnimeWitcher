@@ -145,6 +145,7 @@ class DownloadOverlaySession {
     required this.batchTotal,
     required this.runningCount,
     required this.waitingCount,
+    required this.currentIndex,
     this.speedBytesPerSecond = 0,
   });
 
@@ -159,11 +160,8 @@ class DownloadOverlaySession {
   final int waitingCount;
   final double speedBytesPerSecond;
 
-  /// 1-based index of the current episode in this batch (`1 of 3`).
-  int get currentIndex => overlayCurrentIndex(
-    completedCount: completedCount,
-    batchTotal: batchTotal,
-  );
+  /// 1-based index of the running file in the current queue order (`1 of 3`).
+  final int currentIndex;
 
   bool get shouldFinish => shouldFinishDownloadSessionOverlay(
     runningCount: runningCount,
@@ -180,11 +178,17 @@ bool _isOverlayRunning(DownloadOverlayEntry entry) => occupiesDownloadSlot(
 );
 
 /// Batch overlay: current **running** file's bytes, plus 1-based current
-/// episode index of this session (running + waiting + complete in the batch).
+/// episode index of this session in [queueOrder] (running + waiting + complete).
 DownloadOverlaySession planDownloadOverlaySession({
   required Iterable<DownloadOverlayEntry> entries,
+  List<String>? queueOrder,
 }) {
-  final list = entries.toList();
+  final list = List<DownloadOverlayEntry>.from(entries);
+  if (queueOrder != null && queueOrder.isNotEmpty) {
+    list.sort(
+      (a, b) => compareByDownloadQueueOrder(a.taskId, b.taskId, queueOrder),
+    );
+  }
   final running = list.where(_isOverlayRunning).toList();
   final waiting = list.where(_isOverlayWaiting).toList();
   final completed = list
@@ -201,6 +205,8 @@ DownloadOverlaySession planDownloadOverlaySession({
     progress: progress,
     totalBytes: totalBytes,
   );
+  final batchTotal = running.length + waiting.length + completed.length;
+  final runningIndex = list.indexWhere(_isOverlayRunning);
   return DownloadOverlaySession(
     currentTaskId: current?.taskId ?? kDownloadSessionOverlayTaskId,
     displayName: current?.displayName ?? '',
@@ -208,9 +214,18 @@ DownloadOverlaySession planDownloadOverlaySession({
     transferredBytes: transferred,
     totalBytes: totalBytes,
     completedCount: completed.length,
-    batchTotal: running.length + waiting.length + completed.length,
+    batchTotal: batchTotal,
     runningCount: running.length,
     waitingCount: waiting.length,
+    currentIndex: runningIndex >= 0
+        ? overlayCurrentIndex(
+            completedCount: runningIndex,
+            batchTotal: batchTotal,
+          )
+        : overlayCurrentIndex(
+            completedCount: completed.length,
+            batchTotal: batchTotal,
+          ),
     speedBytesPerSecond: current?.speedBytesPerSecond ?? 0,
   );
 }
@@ -264,6 +279,130 @@ int overlayCurrentIndex({
   if (index < 1) return 1;
   if (index > total) return total;
   return index;
+}
+
+/// Hive key for the user-facing active download FIFO (top → bottom).
+const String kDownloadQueueOrderStorageKey = 'download_queue_order';
+
+/// In-progress, waiting, or paused — not complete/canceled.
+bool isActiveDownloadStatus(TaskStatus status) {
+  switch (status) {
+    case TaskStatus.complete:
+    case TaskStatus.canceled:
+      return false;
+    case TaskStatus.running:
+    case TaskStatus.enqueued:
+    case TaskStatus.waitingToRetry:
+    case TaskStatus.paused:
+    case TaskStatus.failed:
+    case TaskStatus.notFound:
+      return true;
+  }
+}
+
+int compareByDownloadQueueOrder(
+  String a,
+  String b,
+  List<String> order, {
+  int fallbackA = 0,
+  int fallbackB = 0,
+}) {
+  final indexA = order.indexOf(a);
+  final indexB = order.indexOf(b);
+  if (indexA >= 0 && indexB >= 0) return indexA.compareTo(indexB);
+  if (indexA >= 0) return -1;
+  if (indexB >= 0) return 1;
+  return fallbackA.compareTo(fallbackB);
+}
+
+List<T> sortByDownloadQueueOrder<T>(
+  Iterable<T> items, {
+  required String Function(T) idOf,
+  required List<String> order,
+  required int Function(T) fallbackTimestamp,
+}) {
+  final list = items.toList();
+  list.sort(
+    (a, b) => compareByDownloadQueueOrder(
+      idOf(a),
+      idOf(b),
+      order,
+      fallbackA: fallbackTimestamp(a),
+      fallbackB: fallbackTimestamp(b),
+    ),
+  );
+  return list;
+}
+
+/// Keep completed IDs in their session slots; fill the rest from the new
+/// active (visual) order so overlay `k of N` follows the drag.
+List<String> applyActiveDownloadReorder({
+  required List<String> sessionOrder,
+  required List<String> newActiveOrder,
+  required Set<String> completedIds,
+}) {
+  final remaining = List<String>.from(newActiveOrder);
+  final result = <String>[];
+  final used = <String>{};
+  for (final id in sessionOrder) {
+    if (completedIds.contains(id)) {
+      if (used.add(id)) result.add(id);
+    } else if (remaining.isNotEmpty) {
+      final next = remaining.removeAt(0);
+      if (used.add(next)) result.add(next);
+    }
+  }
+  for (final id in remaining) {
+    if (used.add(id)) result.add(id);
+  }
+  return result;
+}
+
+List<String> appendDownloadQueueId(List<String> order, String id) {
+  if (id.isEmpty || order.contains(id)) return List<String>.from(order);
+  return [...order, id];
+}
+
+List<String> removeDownloadQueueIds(List<String> order, Iterable<String> ids) {
+  final drop = ids.toSet();
+  return order.where((id) => !drop.contains(id)).toList();
+}
+
+List<String> moveDownloadQueueIndex(
+  List<String> order,
+  int oldIndex,
+  int newIndex,
+) {
+  if (oldIndex < 0 || oldIndex >= order.length) {
+    return List<String>.from(order);
+  }
+  var target = newIndex;
+  if (target > oldIndex) target -= 1;
+  if (target < 0) target = 0;
+  if (target > order.length) target = order.length;
+  final next = List<String>.from(order);
+  final item = next.removeAt(oldIndex);
+  if (target > next.length) target = next.length;
+  next.insert(target, item);
+  return next;
+}
+
+/// Attach / foreground must not flash **0 MB/s**. Keep the last live speed
+/// until the next real progress event.
+double keepLastKnownDownloadSpeed({
+  required TaskStatus status,
+  required double incomingSpeed,
+  double? lastKnownSpeed,
+}) {
+  final transferring =
+      status == TaskStatus.running || status == TaskStatus.waitingToRetry;
+  if (!transferring) {
+    return incomingSpeed < 0 ? 0 : incomingSpeed;
+  }
+  if (incomingSpeed > 0) return incomingSpeed;
+  final last = lastKnownSpeed ?? 0;
+  if (last > 0) return last;
+  return incomingSpeed;
 }
 
 /// Line 1: `Downloading “الحلقة 2.mp4”`. Percent lives on the circular progress.
@@ -458,6 +597,7 @@ class DownloadQueuePlan {
 DownloadQueuePlan planDownloadQueue({
   required int maxConcurrent,
   required Iterable<DownloadQueueEntry> entries,
+  List<String>? queueOrder,
 }) {
   final n = clampDownloadConcurrency(maxConcurrent);
   final occupying = entries
@@ -468,6 +608,18 @@ DownloadQueuePlan planDownloadQueue({
         ),
       )
       .toList();
+  int fifo(DownloadQueueEntry a, DownloadQueueEntry b) {
+    final order = queueOrder ?? const <String>[];
+    if (order.isEmpty) return a.timestamp.compareTo(b.timestamp);
+    return compareByDownloadQueueOrder(
+      a.taskId,
+      b.taskId,
+      order,
+      fallbackA: a.timestamp,
+      fallbackB: b.timestamp,
+    );
+  }
+
   final waiting =
       entries
           .where(
@@ -475,9 +627,9 @@ DownloadQueuePlan planDownloadQueue({
                 entry.queueWaiting || entry.status == TaskStatus.enqueued,
           )
           .toList()
-        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        ..sort(fifo);
   final leftoverParked = entries.where((entry) => entry.queueWaiting).toList()
-    ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    ..sort(fifo);
 
   final waitingFifoIds = waiting.map((e) => e.taskId).toList();
   final occupiedCount = occupying.length;

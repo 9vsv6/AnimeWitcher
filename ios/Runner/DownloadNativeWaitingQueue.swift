@@ -73,6 +73,7 @@ enum DownloadNativeWaitingQueue {
     var sessionTotalBytes: Int64
     var sessionTransferredBytes: Int64
     var sessionSpeedBytesPerSecond: Double
+    var sessionCurrentIndex: Int
 
     init(
       maxConcurrent: Int,
@@ -88,7 +89,8 @@ enum DownloadNativeWaitingQueue {
       sessionProgress: Double = 0,
       sessionTotalBytes: Int64 = -1,
       sessionTransferredBytes: Int64 = 0,
-      sessionSpeedBytesPerSecond: Double = 0
+      sessionSpeedBytesPerSecond: Double = 0,
+      sessionCurrentIndex: Int = 0
     ) {
       self.maxConcurrent = maxConcurrent
       self.transferringTaskIds = transferringTaskIds
@@ -104,6 +106,7 @@ enum DownloadNativeWaitingQueue {
       self.sessionTotalBytes = sessionTotalBytes
       self.sessionTransferredBytes = sessionTransferredBytes
       self.sessionSpeedBytesPerSecond = sessionSpeedBytesPerSecond
+      self.sessionCurrentIndex = sessionCurrentIndex
     }
 
     init(from decoder: Decoder) throws {
@@ -122,6 +125,20 @@ enum DownloadNativeWaitingQueue {
       sessionTotalBytes = try container.decodeIfPresent(Int64.self, forKey: .sessionTotalBytes) ?? -1
       sessionTransferredBytes = try container.decodeIfPresent(Int64.self, forKey: .sessionTransferredBytes) ?? 0
       sessionSpeedBytesPerSecond = try container.decodeIfPresent(Double.self, forKey: .sessionSpeedBytesPerSecond) ?? 0
+      sessionCurrentIndex = try container.decodeIfPresent(Int.self, forKey: .sessionCurrentIndex) ?? 0
+    }
+
+    func overlayCurrentIndex(runningTaskId: String? = nil) -> Int {
+      let total = max(sessionBatchTotal, 1)
+      let tid = runningTaskId
+        ?? (transferringTaskIds.first ?? sessionCurrentTaskId)
+      if !tid.isEmpty, let idx = sessionTaskIds.firstIndex(of: tid) {
+        return min(max(idx + 1, 1), total)
+      }
+      if sessionCurrentIndex > 0 {
+        return min(max(sessionCurrentIndex, 1), total)
+      }
+      return min(max(sessionCompletedCount + 1, 1), total)
     }
 
     var sessionIsIdle: Bool {
@@ -165,8 +182,9 @@ enum DownloadNativeWaitingQueue {
     let dartBatchTotal = intValue(arguments["sessionBatchTotal"]) ?? 0
 
     let pausedSet = Set(dartPaused)
+    // Dart order first so a user drag rewrite of sessionTaskIds / waiters wins.
     let sessionIds = unique(
-      current.sessionTaskIds + dartSessionIds + dartTransferring + dartWaiters.map(\.taskId)
+      dartSessionIds + current.sessionTaskIds + dartTransferring + dartWaiters.map(\.taskId)
     )
     // Keep completed-in-session IDs so `1 of 5` survives Dart snapshots that
     // no longer list ep1 as transferring. Drop them only when the session is idle.
@@ -223,8 +241,21 @@ enum DownloadNativeWaitingQueue {
           ?? current.sessionTotalBytes,
         sessionTransferredBytes: int64Value(arguments["sessionTransferredBytes"])
           ?? current.sessionTransferredBytes,
-        sessionSpeedBytesPerSecond: (arguments["sessionSpeedBytesPerSecond"] as? NSNumber)?.doubleValue
-          ?? current.sessionSpeedBytesPerSecond
+        sessionSpeedBytesPerSecond: {
+          let dart = (arguments["sessionSpeedBytesPerSecond"] as? NSNumber)?.doubleValue
+          if let dart, dart > 0 { return dart }
+          return current.sessionSpeedBytesPerSecond
+        }(),
+        sessionCurrentIndex: {
+          let dart = intValue(arguments["sessionCurrentIndex"]) ?? 0
+          if dart > 0 { return dart }
+          if let running = dartTransferring.first,
+             let idx = (dartSessionIds.isEmpty ? sessionIds : dartSessionIds).firstIndex(of: running)
+          {
+            return idx + 1
+          }
+          return current.sessionCurrentIndex
+        }()
       )
     )
   }
@@ -515,6 +546,7 @@ enum DownloadNativeWaitingQueue {
     if let batchTotal {
       state.sessionBatchTotal = max(state.sessionBatchTotal, batchTotal)
     }
+    state.sessionCurrentIndex = state.overlayCurrentIndex(runningTaskId: currentTaskId)
     let snapshot = state
     saveLocked(state)
     lock.unlock()
@@ -529,7 +561,8 @@ enum DownloadNativeWaitingQueue {
           transferredBytes: transferredBytes,
           completedCount: snapshot.sessionCompletedCount,
           batchTotal: max(snapshot.sessionBatchTotal, 1),
-          speedBytesPerSecond: snapshot.sessionSpeedBytesPerSecond
+          speedBytesPerSecond: snapshot.sessionSpeedBytesPerSecond,
+          currentIndex: snapshot.sessionCurrentIndex
         )
       }
     }

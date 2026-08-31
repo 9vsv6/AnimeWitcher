@@ -155,7 +155,7 @@ CollapsedDownloads collapseDuplicateDownloads(List<DownloadItem> items) {
     }
   }
 
-  visible.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  visible.sort((a, b) => a.timestamp.compareTo(b.timestamp));
   return CollapsedDownloads(
     visible: visible,
     extraCompleteRecords: extraComplete
@@ -240,14 +240,76 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       );
     }
 
-    // Sort by timestamp descending
-    items.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    // FIFO: oldest first unless the user has a saved drag order.
+    items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     final collapsed = collapseDuplicateDownloads(items);
     for (final extra in collapsed.extraCompleteRecords) {
       await FileDownloader().database.deleteRecordWithId(extra.task.taskId);
       await storage.removeDownloadMetadata(extra.task.taskId);
     }
-    return collapsed.visible;
+    return _orderDownloads(collapsed.visible, storage.getDownloadQueueOrder());
+  }
+
+  List<DownloadItem> _orderDownloads(
+    List<DownloadItem> items,
+    List<String> queueOrder,
+  ) {
+    final active = <DownloadItem>[];
+    final completed = <DownloadItem>[];
+    for (final item in items) {
+      if (isActiveDownloadStatus(item.status)) {
+        active.add(item);
+      } else {
+        completed.add(item);
+      }
+    }
+    final orderedActive = sortByDownloadQueueOrder(
+      active,
+      idOf: (item) => item.id,
+      order: queueOrder,
+      fallbackTimestamp: (item) => item.timestamp,
+    );
+    completed.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return [...orderedActive, ...completed];
+  }
+
+  Future<void> _persistActiveQueueOrder(
+    List<String> order, {
+    bool rewriteHoldingQueue = false,
+  }) async {
+    await ref.read(storageServiceProvider).setDownloadQueueOrder(order);
+    unawaited(
+      ref
+          .read(downloadServiceProvider)
+          .applyDownloadQueueOrder(
+            order,
+            rewriteHoldingQueue: rewriteHoldingQueue,
+          ),
+    );
+  }
+
+  Future<void> reorderActive(int oldIndex, int newIndex) async {
+    final current = state.value;
+    if (current == null) return;
+    final active = current
+        .where((item) => isActiveDownloadStatus(item.status))
+        .toList();
+    if (oldIndex < 0 || oldIndex >= active.length) return;
+    final ids = moveDownloadQueueIndex(
+      active.map((item) => item.id).toList(),
+      oldIndex,
+      newIndex,
+    );
+    final byId = {for (final item in active) item.id: item};
+    final reorderedActive = [
+      for (final id in ids)
+        if (byId[id] != null) byId[id]!,
+    ];
+    final completed = current
+        .where((item) => !isActiveDownloadStatus(item.status))
+        .toList();
+    state = AsyncData([...reorderedActive, ...completed]);
+    await _persistActiveQueueOrder(ids, rewriteHoldingQueue: true);
   }
 
   Future<void> _handleUpdate(TaskUpdate update) async {
@@ -275,6 +337,14 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         // Remove from list only on explicit user cancel.
         final newList = List<DownloadItem>.from(currentList)..removeAt(index);
         state = AsyncData(newList);
+        unawaited(
+          _persistActiveQueueOrder(
+            newList
+                .where((item) => isActiveDownloadStatus(item.status))
+                .map((item) => item.id)
+                .toList(),
+          ),
+        );
       } else {
         // Failures are remapped to paused by DownloadService before broadcast,
         // but keep this guard so a raw failed event can never wipe the row.
@@ -293,7 +363,17 @@ class DownloadsNotifier extends _$DownloadsNotifier {
 
         final newList = List<DownloadItem>.from(currentList);
         newList[index] = updatedItem;
-        state = AsyncData(newList);
+        if (isActiveDownloadStatus(existing.status) &&
+            !isActiveDownloadStatus(newStatus)) {
+          final storage = ref.read(storageServiceProvider);
+          final next = removeDownloadQueueIds(storage.getDownloadQueueOrder(), [
+            updatedItem.id,
+          ]);
+          state = AsyncData(_orderDownloads(newList, next));
+          unawaited(_persistActiveQueueOrder(next));
+        } else {
+          state = AsyncData(newList);
+        }
       }
     } else {
       // If not in state, it might be a new download. Refresh to get metadata.
@@ -385,8 +465,17 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     }
 
     if (state.value != null && droppedIds.isNotEmpty) {
-      state = AsyncData(
-        state.value!.where((i) => !droppedIds.contains(i.id)).toList(),
+      final remaining = state.value!
+          .where((i) => !droppedIds.contains(i.id))
+          .toList();
+      state = AsyncData(remaining);
+      unawaited(
+        _persistActiveQueueOrder(
+          remaining
+              .where((item) => isActiveDownloadStatus(item.status))
+              .map((item) => item.id)
+              .toList(),
+        ),
       );
     }
   }

@@ -260,10 +260,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get downloads => 'التنزيلات';
 
   @override
-  String get bookmarks => 'الإشارات المرجعية';
+  String get downloadsTabCompleted => 'المكتملة';
 
   @override
   String get noDownloadsYet => 'لا توجد تنزيلات بعد';
+
+  @override
+  String get noCompletedDownloadsYet => 'لا توجد تنزيلات مكتملة';
+
+  @override
+  String get bookmarks => 'الإشارات المرجعية';
 
   @override
   String episodesCount(int count, int done) {

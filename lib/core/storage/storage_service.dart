@@ -99,7 +99,6 @@ class StorageService {
     return md5.convert(utf8.encode(url)).toString();
   }
 
-
   String _canonicalMediaUrl(String rawUrl) {
     final value = rawUrl.trim();
     final uri = safeTryParseUri(value);
@@ -125,10 +124,7 @@ class StorageService {
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  bool _historyEntryMatchesUrl(
-    Map<dynamic, dynamic> raw,
-    String canonicalUrl,
-  ) {
+  bool _historyEntryMatchesUrl(Map<dynamic, dynamic> raw, String canonicalUrl) {
     final storedUrl = (raw['url'] ?? '').toString();
     return storedUrl.isNotEmpty &&
         _canonicalMediaUrl(storedUrl) == canonicalUrl;
@@ -351,9 +347,10 @@ class StorageService {
   }
 
   String? getLibraryItemSyncedAccountUid(String url) {
-    final value = _libraryMetadata(url, 'animeWitcherSyncedUid')
-        ?.toString()
-        .trim();
+    final value = _libraryMetadata(
+      url,
+      'animeWitcherSyncedUid',
+    )?.toString().trim();
     return value == null || value.isEmpty ? null : value;
   }
 
@@ -567,7 +564,6 @@ class StorageService {
     return value.map((item) => item.toString()).toSet();
   }
 
-
   Future<void> setDevLoadAssets(bool enabled) async {
     await _settingsBox.put('dev_load_assets', enabled);
   }
@@ -598,7 +594,6 @@ class StorageService {
     return _settingsBox.get('home_category_filter') as String?;
   }
 
-
   // --- Anime metadata source toggles ---
 
   static const String _kEpisodeImagesFromAniZip =
@@ -609,10 +604,8 @@ class StorageService {
   }
 
   bool isEpisodeImagesFromAniZipEnabled() {
-    return (_settingsBox.get(
-              _kEpisodeImagesFromAniZip,
-              defaultValue: true,
-            ) as bool?) ??
+    return (_settingsBox.get(_kEpisodeImagesFromAniZip, defaultValue: true)
+            as bool?) ??
         true;
   }
 
@@ -624,10 +617,8 @@ class StorageService {
   }
 
   bool isHighQualityPostersEnabled() {
-    return (_settingsBox.get(
-              _kHighQualityPosters,
-              defaultValue: true,
-            ) as bool?) ??
+    return (_settingsBox.get(_kHighQualityPosters, defaultValue: true)
+            as bool?) ??
         true;
   }
 
@@ -646,13 +637,23 @@ class StorageService {
     );
   }
 
+  Future<void> setDownloadQueueOrder(List<String> order) async {
+    await _settingsBox.put(
+      kDownloadQueueOrderStorageKey,
+      List<String>.from(order),
+    );
+  }
+
+  List<String> getDownloadQueueOrder() {
+    final value = _settingsBox.get(kDownloadQueueOrderStorageKey);
+    if (value is! List) return const <String>[];
+    return value.map((item) => item.toString()).toList();
+  }
+
   @visibleForTesting
   void debugBindSettingsBox(Box<dynamic> box) {
     _settingsBox = box;
   }
-
-
-
 
   // --- Custom Plugin Overrides ---
 
@@ -686,7 +687,6 @@ class StorageService {
     return _settingsBox.get('explore_language', defaultValue: 'en-US')
         as String;
   }
-
 
   // --- Window Settings ---
   Future<void> setAlwaysOnTop(bool enabled) async {
@@ -854,8 +854,7 @@ class StorageService {
     final staleMainKeys = <dynamic>[];
     for (var i = 0; i < _historyBox.length; i++) {
       final key = _historyBox.keyAt(i);
-      if (key == canonicalKey ||
-          (key is String && key.startsWith('EP_'))) {
+      if (key == canonicalKey || (key is String && key.startsWith('EP_'))) {
         continue;
       }
       final raw = _historyBox.getAt(i);
@@ -893,7 +892,8 @@ class StorageService {
     String? episodePosterUrl,
   }) async {
     final canonicalUrl = _canonicalMediaUrl(item.url);
-    final mainRaw = _historyBox.get(_getKey(canonicalUrl)) ??
+    final mainRaw =
+        _historyBox.get(_getKey(canonicalUrl)) ??
         _latestHistoryMainEntry(canonicalUrl);
     final main = mainRaw is Map
         ? Map<String, dynamic>.from(mainRaw)
@@ -958,11 +958,12 @@ class StorageService {
       'imdbId': item.imdbId,
       'position': positionMillis,
       'duration': durationMillis,
-      'progress': (progressPercent ??
-              (durationMillis > 0
-                  ? ((positionMillis / durationMillis) * 100).round()
-                  : 0))
-          .clamp(0, 100),
+      'progress':
+          (progressPercent ??
+                  (durationMillis > 0
+                      ? ((positionMillis / durationMillis) * 100).round()
+                      : 0))
+              .clamp(0, 100),
       'lastStreamUrl': lastStreamUrl,
       'lastEpisodeUrl': lastEpisodeUrl,
       'season': season,
@@ -1049,8 +1050,9 @@ class StorageService {
       if (raw is Map) items.add(Map<String, dynamic>.from(raw));
     }
     items.sort(
-      (a, b) => ((b['timestamp'] as int?) ?? 0)
-          .compareTo((a['timestamp'] as int?) ?? 0),
+      (a, b) => ((b['timestamp'] as int?) ?? 0).compareTo(
+        (a['timestamp'] as int?) ?? 0,
+      ),
     );
     _cachedContinueWatching = items;
     _continueWatchingCacheDirty = false;
@@ -1086,10 +1088,7 @@ class StorageService {
 
   Future<void> removeFromHistory(String url) async {
     final canonicalUrl = _canonicalMediaUrl(url);
-    final keysToDelete = <dynamic>{
-      _getKey(url),
-      _getKey(canonicalUrl),
-    };
+    final keysToDelete = <dynamic>{_getKey(url), _getKey(canonicalUrl)};
     for (var i = 0; i < _historyBox.length; i++) {
       final key = _historyBox.keyAt(i);
       final raw = _historyBox.getAt(i);
@@ -1110,8 +1109,8 @@ class StorageService {
   ) async {
     final canonicalUrl = _canonicalMediaUrl(url);
     final mainKey = _getKey(canonicalUrl);
-    final entry = _historyBox.get(mainKey) ??
-        _latestHistoryMainEntry(canonicalUrl);
+    final entry =
+        _historyBox.get(mainKey) ?? _latestHistoryMainEntry(canonicalUrl);
     if (entry is Map) {
       final updatedEntry = Map<String, dynamic>.from(entry);
       updatedEntry['url'] = canonicalUrl;
@@ -1121,8 +1120,7 @@ class StorageService {
       final staleMainKeys = <dynamic>[];
       for (var i = 0; i < _historyBox.length; i++) {
         final key = _historyBox.keyAt(i);
-        if (key == mainKey ||
-            (key is String && key.startsWith('EP_'))) {
+        if (key == mainKey || (key is String && key.startsWith('EP_'))) {
           continue;
         }
         final raw = _historyBox.getAt(i);
@@ -1183,9 +1181,7 @@ class StorageService {
     }
     final items = newestByAnime.values.toList(growable: false);
     // Sort by timestamp descending (newest first)
-    items.sort(
-      (a, b) => _historyTimestamp(b).compareTo(_historyTimestamp(a)),
-    );
+    items.sort((a, b) => _historyTimestamp(b).compareTo(_historyTimestamp(a)));
 
     _cachedHistory = items;
     _historyCacheDirty = false;
@@ -1314,7 +1310,8 @@ class StorageService {
       'item': item.toJson(),
       'episode': episode?.toJson(),
       'timestamp': DateTime.now().millisecondsSinceEpoch,
-      if (trackingUrl != null && trackingUrl.isNotEmpty) 'trackingUrl': trackingUrl,
+      if (trackingUrl != null && trackingUrl.isNotEmpty)
+        'trackingUrl': trackingUrl,
       if (filePath != null && filePath.isNotEmpty) 'filePath': filePath,
       if (queueWaiting != null) kDownloadQueueWaitingMetadataKey: queueWaiting,
     });
