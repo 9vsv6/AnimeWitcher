@@ -766,6 +766,7 @@ class DownloadService {
         if (record?.task is! DownloadTask) continue;
         final task = record!.task as DownloadTask;
         final copy = task.copyWith(
+          taskId: task.taskId,
           creationTime: DateTime.now().add(Duration(milliseconds: index++)),
         );
         _waitingPayloads[copy.taskId] = _waitingPayloadFor(copy);
@@ -1021,6 +1022,7 @@ class DownloadService {
       waiters: waiters,
       transferringTaskIds: transferring,
       pausedTaskIds: paused,
+      queueWaitingTaskIds: _queueWaitingIds.toList(),
       sessionTaskIds: List<String>.from(_sessionOrder),
       sessionCompletedCount: overlay?.completedCount ?? _sessionCompletedCount,
       sessionBatchTotal: overlay?.batchTotal ?? _sessionBatchTotal,

@@ -156,6 +156,29 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(state.overlayCurrentIndex(), 3)
   }
 
+  func testDragParkReleasesNativeSlotSoNextFileCanStart() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())
+    XCTAssertEqual(DownloadNativeWaitingQueue.load().transferringTaskIds, ["ep1"])
+
+    DownloadNativeWaitingQueue.persist(from: [
+      "maxConcurrent": 1,
+      "transferringTaskIds": ["ep2"],
+      "pausedTaskIds": [],
+      "queueWaitingTaskIds": ["ep1"],
+      "waiters": [ep1Waiter(), ep3Waiter()],
+      "sessionTaskIds": ["ep2", "ep1", "ep3"],
+      "sessionCurrentTaskId": "ep2",
+      "sessionBatchTotal": 3,
+      "sessionCurrentIndex": 1,
+    ])
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.transferringTaskIds, ["ep2"])
+    XCTAssertFalse(state.transferringTaskIds.contains("ep1"))
+    XCTAssertEqual(state.waiters.map(\.taskId), ["ep1", "ep3"])
+    XCTAssertEqual(state.sessionTaskIds.first, "ep2")
+  }
+
   func testCompletedFileIsNotPromotedAsTheNextWaiter() {
     DownloadNativeWaitingQueue.resetForTests()
     DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())

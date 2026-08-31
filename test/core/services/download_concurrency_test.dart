@@ -427,6 +427,37 @@ void main() {
       );
     });
 
+    test('dragging a waiting file to the top parks the runner in overlay', () {
+      final after = planDownloadOverlaySession(
+        queueOrder: const ['ep7', 'ep8', 'ep9'],
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep7',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 7',
+            progress: 0.01,
+            totalBytes: 10 * 1000 * 1000,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep8',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 8',
+            queueWaiting: true,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep9',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 9',
+          ),
+        ],
+      );
+      expect(after.currentTaskId, 'ep7');
+      expect(after.waitingCount, 2);
+      expect(after.runningCount, 1);
+      expect(after.displayName, 'الحلقة 7');
+      expect(after.shouldFinish, isFalse);
+    });
+
     test('N>1 overlay sums running bytes and uses started-count', () {
       final concurrent = planDownloadOverlaySession(
         entries: const [

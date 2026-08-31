@@ -193,6 +193,7 @@ enum DownloadNativeWaitingQueue {
     let dartSessionIds = stringArray(arguments["sessionTaskIds"])
     let dartCompletedCount = intValue(arguments["sessionCompletedCount"]) ?? 0
     let dartBatchTotal = intValue(arguments["sessionBatchTotal"]) ?? 0
+    let released = Set(stringArray(arguments["queueWaitingTaskIds"]))
 
     let pausedSet = Set(dartPaused)
     // Dart order first so a user drag rewrite of sessionTaskIds / waiters wins.
@@ -206,8 +207,16 @@ enum DownloadNativeWaitingQueue {
       completed = completed.filter { sessionIds.contains($0) }
     }
 
+    // Drag-park (في الانتظار) must free the native slot. Stale Dart snapshots
+    // that still list a natively-started file as a waiter do not send it in
+    // queueWaitingTaskIds, so that promotion stays transferring.
+    seenTransferringIds.subtract(released)
     let transferring = unique(current.transferringTaskIds + dartTransferring)
-      .filter { !pausedSet.contains($0) && !completed.contains($0) }
+      .filter {
+        !pausedSet.contains($0)
+          && !completed.contains($0)
+          && !released.contains($0)
+      }
     let transferringSet = Set(transferring)
     let completedSet = Set(completed)
     let waiters = dartWaiters.filter {
@@ -952,9 +961,7 @@ private enum DownloadUrlSessionHook {
     originalFinishDownload = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionDownloadTask, URL) -> Void = { slf, session, downloadTask, location in
       // Original must run first so the plugin can move the temp file.
-      // Do not promote here — starting ep2 before didComplete leaves a
-      // URLSession task that never writes (0B island). Promote from
-      // didComplete / finishEvents instead.
+      // Then promote like pre-tabs: ep2 must start before the session sleeps.
       if let original = DownloadUrlSessionHook.originalFinishDownload {
         let fn = unsafeBitCast(
           original,
@@ -962,7 +969,13 @@ private enum DownloadUrlSessionHook {
         )
         fn(slf, finishDownloadSelector, session, downloadTask, location)
       }
-      DownloadNativeWaitingQueue.markPluginTaskCompleted(task: downloadTask)
+      // Same as before the Downloads tabs split: promote the next waiter
+      // from this callback so ep2 starts before the session goes to sleep.
+      DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+        session: session,
+        task: downloadTask,
+        error: nil
+      )
     }
     method_setImplementation(method, imp_implementationWithBlock(block))
   }
