@@ -540,17 +540,18 @@ class _DownloadItemTile extends ConsumerWidget {
 
     final posterWithHandle = dragIndex == null
         ? poster
-        : Column(
+        : Row(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              poster,
               ReorderableDragStartListener(
                 index: dragIndex!,
                 child: const Padding(
-                  padding: EdgeInsets.only(top: 8),
+                  padding: EdgeInsets.only(right: LayoutConstants.spacingXs),
                   child: Icon(Icons.drag_handle_rounded),
                 ),
               ),
+              poster,
             ],
           );
 
@@ -558,7 +559,7 @@ class _DownloadItemTile extends ConsumerWidget {
       textDirection: TextDirection.ltr,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Poster (LTR: left) with the taskbar two-line handle under it.
+        // Poster (LTR: left) with the two-line reorder handle to its left.
         posterWithHandle,
         const SizedBox(width: LayoutConstants.spacingMd),
         // Details

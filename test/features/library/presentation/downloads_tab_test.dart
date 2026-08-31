@@ -10,6 +10,7 @@ import 'package:animewitcher/features/library/presentation/widgets/downloads_tab
 import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:background_downloader/background_downloader.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -491,6 +492,12 @@ void main() {
     expect(find.byIcon(Icons.drag_handle_rounded), findsNWidgets(2));
     expect(find.byType(ExpansionTile), findsNothing);
 
+    final handleLeft = tester
+        .getTopLeft(find.byIcon(Icons.drag_handle_rounded).first)
+        .dx;
+    final posterLeft = tester.getTopLeft(find.byType(CachedNetworkImage).first).dx;
+    expect(handleLeft, lessThan(posterLeft));
+
     final artifacts = Directory('/opt/cursor/artifacts');
     if (!artifacts.existsSync()) return;
 
@@ -503,6 +510,9 @@ void main() {
       File(
         '${artifacts.path}/downloads_waiting_in_app.png',
       ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      File(
+        '${artifacts.path}/downloads_drag_handle_left_of_poster.png',
+      ).writeAsBytesSync(bytes.buffer.asUint8List());
     });
   });
 
