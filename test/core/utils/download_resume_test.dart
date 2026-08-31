@@ -189,6 +189,14 @@ void main() {
       ),
       isFalse,
     );
+    expect(
+      shouldAutoResumeInterruptedDownload(
+        wasRunningOrFailed: false,
+        userPaused: true,
+        stillInNativeQueue: false,
+      ),
+      isFalse,
+    );
   });
 
   test(

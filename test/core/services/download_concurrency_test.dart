@@ -884,6 +884,133 @@ void main() {
       },
     );
 
+    test('a failed episode parks paused and the next waiter starts', () {
+      expect(shouldParkFailedDownloadAsPaused(TaskStatus.failed), isTrue);
+      expect(shouldParkFailedDownloadAsPaused(TaskStatus.notFound), isTrue);
+      expect(shouldParkFailedDownloadAsPaused(TaskStatus.complete), isFalse);
+      expect(
+        shouldParkSystemCanceledDownload(
+          status: TaskStatus.canceled,
+          userCancel: true,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldParkSystemCanceledDownload(
+          status: TaskStatus.canceled,
+          userCancel: false,
+        ),
+        isTrue,
+      );
+      expect(kDownloadTaskRetries, 0);
+      expect(kDownloadParkedNotificationBody, 'التنزيل متوقف مؤقتاً');
+      expect(
+        downloadSessionFinishStatus(success: false, parkedFailure: true),
+        'canceled',
+      );
+      expect(
+        downloadSessionFinishStatus(success: true, parkedFailure: true),
+        'canceled',
+      );
+      expect(
+        downloadSessionFinishStatus(success: true, parkedFailure: false),
+        'completed',
+      );
+
+      const afterEp2Failed = [
+        DownloadQueueEntry(
+          taskId: 'ep5',
+          status: TaskStatus.paused,
+          timestamp: 1,
+        ),
+        DownloadQueueEntry(
+          taskId: 'ep7',
+          status: TaskStatus.enqueued,
+          timestamp: 2,
+        ),
+        DownloadQueueEntry(
+          taskId: 'ep9',
+          status: TaskStatus.enqueued,
+          timestamp: 3,
+        ),
+      ];
+      expect(occupiesDownloadSlot(status: TaskStatus.failed), isFalse);
+      expect(occupiesDownloadSlot(status: TaskStatus.paused), isFalse);
+      final plan = planDownloadQueue(
+        maxConcurrent: 1,
+        entries: afterEp2Failed,
+        queueOrder: const ['ep5', 'ep7', 'ep9'],
+      );
+      expect(plan.occupiedCount, 0);
+      expect(plan.waitingFifoIds, ['ep7', 'ep9']);
+      expect(
+        idsToStartAfterParkedFailure(
+          maxConcurrent: 1,
+          entries: afterEp2Failed,
+          queueOrder: const ['ep5', 'ep7', 'ep9'],
+        ),
+        ['ep7'],
+      );
+
+      final leftover = idsToStartAfterParkedFailure(
+        maxConcurrent: 1,
+        entries: const [
+          DownloadQueueEntry(
+            taskId: 'ep5',
+            status: TaskStatus.paused,
+            timestamp: 1,
+          ),
+          DownloadQueueEntry(
+            taskId: 'ep7',
+            status: TaskStatus.paused,
+            timestamp: 2,
+            queueWaiting: true,
+          ),
+        ],
+      );
+      expect(leftover, ['ep7']);
+
+      final overlay = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'ep5',
+            status: TaskStatus.paused,
+            displayName: 'الحلقة 5',
+            progress: 0.5,
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep7',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 7',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'ep9',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 9',
+          ),
+        ],
+        queueOrder: const ['ep5', 'ep7', 'ep9'],
+      );
+      expect(overlay.runningCount, 0);
+      expect(overlay.waitingCount, 2);
+      expect(overlay.shouldFinish, isFalse);
+      expect(overlay.currentTaskId, 'ep7');
+      expect(
+        downloadSessionHasRemainingWork(
+          runningCount: overlay.runningCount,
+          waitingCount: overlay.waitingCount,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldFinishDownloadSessionOverlay(
+          runningCount: overlay.runningCount,
+          waitingCount: overlay.waitingCount,
+        ),
+        isFalse,
+      );
+    });
+
     test(
       'in-app complete starts the oldest waiter; user-paused stays paused',
       () {

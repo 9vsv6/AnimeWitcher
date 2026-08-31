@@ -163,10 +163,13 @@ class DownloadService {
         .configureNotification(
           running: notificationConfig,
           complete: const TaskNotification('{displayName}', 'اكتمل التنزيل'),
-          error: const TaskNotification('{displayName}', 'فشل التنزيل'),
+          error: const TaskNotification(
+            '{displayName}',
+            kDownloadParkedNotificationBody,
+          ),
           paused: const TaskNotification(
             '{displayName}',
-            'التنزيل متوقف مؤقتاً',
+            kDownloadParkedNotificationBody,
           ),
           canceled: const TaskNotification('{displayName}', 'تم إلغاء التنزيل'),
           progressBar: !Platform.isIOS,
@@ -175,10 +178,13 @@ class DownloadService {
           'downloads',
           running: notificationConfig,
           complete: const TaskNotification('{displayName}', 'اكتمل التنزيل'),
-          error: const TaskNotification('{displayName}', 'فشل التنزيل'),
+          error: const TaskNotification(
+            '{displayName}',
+            kDownloadParkedNotificationBody,
+          ),
           paused: const TaskNotification(
             '{displayName}',
-            'التنزيل متوقف مؤقتاً',
+            kDownloadParkedNotificationBody,
           ),
           canceled: const TaskNotification('{displayName}', 'تم إلغاء التنزيل'),
           progressBar: !Platform.isIOS,
@@ -215,10 +221,14 @@ class DownloadService {
       }
 
       // Ghost cancel/fail from HQ dequeue while URLSession still owns this
-      // episode: attach, do not park as paused.
+      // episode: attach, do not park as paused. A real fail/system-cancel
+      // parks that one file and the queue continues — never finish the
+      // whole session as an error.
       if (update is TaskStatusUpdate &&
-          (update.status == TaskStatus.failed ||
-              update.status == TaskStatus.canceled)) {
+          shouldParkSystemCanceledDownload(
+            status: update.status,
+            userCancel: _cancellingUrls.contains(trackingUrl),
+          )) {
         if (_reorderingTaskIds.contains(update.task.taskId)) {
           return;
         }
@@ -382,7 +392,9 @@ class DownloadService {
             case TaskStatus.failed:
             case TaskStatus.canceled:
             case TaskStatus.notFound:
-              unawaited(_syncSessionOverlay(completedSuccess: false));
+              // Intercepted above into pause-and-continue. If a raw event
+              // still lands here, do not finish the overlay as failed.
+              unawaited(_syncSessionOverlay());
             default:
               break;
           }
@@ -517,8 +529,8 @@ class DownloadService {
       }
 
       final shouldContinue = shouldAutoResumeInterruptedDownload(
-        wasRunningOrFailed: wasRunning || isFailed,
-        userPaused: userPaused,
+        wasRunningOrFailed: wasRunning,
+        userPaused: userPaused || isFailed,
         stillInNativeQueue: stillNative,
         queueWaiting: queueWaiting || shouldReenqueue,
       );
@@ -909,7 +921,10 @@ class DownloadService {
         await _continuedProcessing.finish(
           taskId: kDownloadSessionOverlayTaskId,
           success: completedSuccess,
-          status: completedSuccess ? 'completed' : 'canceled',
+          status: downloadSessionFinishStatus(
+            success: completedSuccess,
+            parkedFailure: !completedSuccess,
+          ),
           endSession: true,
         );
       }
@@ -1264,14 +1279,14 @@ class DownloadService {
 
   /// Keep a failed/system-canceled download as [TaskStatus.paused] with its
   /// last known progress so it stays on the Downloads page and can resume.
+  /// The rest of the queue keeps going — do not finish the session overlay
+  /// or cancel remaining waiters.
   Future<void> _preserveDownloadAsPaused(
     TaskStatusUpdate update,
     String trackingUrl,
   ) async {
     if (update.task is! DownloadTask) return;
     final task = update.task as DownloadTask;
-
-    unawaited(_syncSessionOverlay(completedSuccess: false));
 
     final current = _ref.read(downloadProgressProvider)[trackingUrl];
     final record = await FileDownloader().database.recordForId(task.taskId);
@@ -1314,7 +1329,48 @@ class DownloadService {
         '(${(progress * 100).toStringAsFixed(1)}%): $trackingUrl',
       );
     }
-    unawaited(_serializeQueue(_syncQueueToCapUnlocked));
+    await _serializeQueue(() async {
+      await _syncQueueToCapUnlocked();
+      await _startNextAfterParkedFailureUnlocked();
+    });
+    unawaited(_syncSessionOverlay());
+  }
+
+  /// After parking a failed file, attach UI to the next waiter (HQ already
+  /// owns it) or re-enqueue leftover Dart-parked waiters. Never enqueue a
+  /// second copy of a live native task.
+  Future<void> _startNextAfterParkedFailureUnlocked() async {
+    final max = clampDownloadConcurrency(
+      _ref.read(storageServiceProvider).getDownloadConcurrency(),
+    );
+    final records = await FileDownloader().database.allRecords();
+    final byId = <String, TaskRecord>{
+      for (final record in records) record.task.taskId: record,
+    };
+    final ids = idsToStartAfterParkedFailure(
+      maxConcurrent: max,
+      entries: await _queueEntries(records),
+      queueOrder: _queueOrder(),
+    );
+    for (final taskId in ids) {
+      if (_occupiedSlotCount(await FileDownloader().database.allRecords()) >=
+          max) {
+        break;
+      }
+      final record = byId[taskId];
+      if (record == null || record.task is! DownloadTask) continue;
+      final task = record.task as DownloadTask;
+      final live = await _liveNativeTaskFor(
+        taskId: task.taskId,
+        trackingUrl: downloadTrackingUrl(task),
+      );
+      if (live != null) {
+        await _attachToLiveNativeTask(task, live: live);
+        continue;
+      }
+      await _promoteWaitingTask(task);
+    }
+    await _persistNativeWaitingSnapshot();
   }
 
   /// iOS continued-processing expiration / system cancel — treat as pause,
@@ -1341,7 +1397,7 @@ class DownloadService {
 
     final didPause = await FileDownloader().pause(downloadTask);
     if (didPause) {
-      await _syncSessionOverlay(completedSuccess: false);
+      await _syncSessionOverlay();
       return;
     }
 
@@ -1876,7 +1932,7 @@ class DownloadService {
         directory: taskDirectory,
         headers: headers ?? {},
         updates: Updates.statusAndProgress,
-        retries: 3, // Align with example
+        retries: kDownloadTaskRetries,
         allowPause: true,
         metaData: trackingUrl ?? url,
       );
