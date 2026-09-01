@@ -1,3 +1,5 @@
+import '../domain/entity/multimedia_item.dart';
+
 enum LibraryCategory {
   favorite('favorite'),
   watching('watching'),
@@ -18,6 +20,26 @@ enum LibraryCategory {
     LibraryCategory.completed,
     LibraryCategory.notInterested,
   ];
+
+  /// List-assignment options for the details overflow menu.
+  ///
+  /// Hides [watching] when the title has not aired yet, and hides
+  /// [completed] unless the title is finished. Existing watching entries
+  /// are left in place; the option is simply not offered.
+  static List<LibraryCategory> assignmentValuesFor(MultimediaItem item) {
+    return <LibraryCategory>[
+      for (final category in primaryValues)
+        if (category.isAssignableTo(item)) category,
+    ];
+  }
+
+  bool isAssignableTo(MultimediaItem item) {
+    return switch (this) {
+      LibraryCategory.watching => !item.isNotYetAired,
+      LibraryCategory.completed => item.status == ShowStatus.completed,
+      _ => true,
+    };
+  }
 
   static LibraryCategory fromStorageKey(String? raw) {
     final value = (raw ?? '').trim();

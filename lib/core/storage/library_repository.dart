@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../account/account_providers.dart';
 import '../account/animewitcher_account_service.dart';
 import '../domain/entity/multimedia_item.dart';
@@ -37,6 +38,9 @@ class LibraryRepository {
         item.status != ShowStatus.completed) {
       return;
     }
+    if (target == LibraryCategory.watching && item.isNotYetAired) {
+      return;
+    }
 
     await _storageService.addToLibrary(item, category: target.storageKey);
     _syncInBackground(
@@ -60,6 +64,11 @@ class LibraryRepository {
     if (category == LibraryCategory.completed &&
         item != null &&
         item.status != ShowStatus.completed) {
+      return;
+    }
+    if (category == LibraryCategory.watching &&
+        item != null &&
+        item.isNotYetAired) {
       return;
     }
     await _storageService.setLibraryItemCategory(url, category.storageKey);

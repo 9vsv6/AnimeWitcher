@@ -338,11 +338,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     LibraryCategory? currentCategory,
   ) {
     final items = <AppleNativeMenuItem>[
-      for (final category in LibraryCategory.primaryValues.where(
-        (category) =>
-            category != LibraryCategory.completed ||
-            item.status == ShowStatus.completed,
-      ))
+      for (final category in LibraryCategory.assignmentValuesFor(item))
         AppleNativeMenuItem(
           value: category.storageKey,
           label: _libraryCategoryLabel(context, category),
@@ -377,7 +373,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       return;
     }
     LibraryCategory? category;
-    for (final candidate in LibraryCategory.primaryValues) {
+    for (final candidate in LibraryCategory.assignmentValuesFor(item)) {
       if (candidate.storageKey == value) {
         category = candidate;
         break;
