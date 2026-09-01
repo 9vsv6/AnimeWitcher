@@ -226,8 +226,9 @@ class SeasonListTitle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Text(
         title,
-        style: Theme.of(context).textTheme.titleLarge
-            ?.copyWith(fontWeight: FontWeight.w800),
+        style: Theme.of(
+          context,
+        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -372,8 +373,9 @@ class _OtherSeasonsList extends StatelessWidget {
                   '$year',
                   key: ValueKey('other-season-year-$year'),
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
@@ -502,7 +504,6 @@ class _SeasonGrid extends StatefulWidget {
   final String emptyLabel;
 
   const _SeasonGrid({
-    super.key,
     required this.provider,
     required this.season,
     required this.emptyLabel,

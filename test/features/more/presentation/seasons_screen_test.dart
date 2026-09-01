@@ -11,6 +11,7 @@ import 'package:animewitcher/core/storage/settings_repository.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/more/presentation/seasons_screen.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/shared/widgets/multimedia_card.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -49,30 +50,29 @@ class _MemoryStorage extends StorageService {
 }
 
 class _StubSeasonsProvider extends AnimeWitcherNativeProvider {
-  _StubSeasonsProvider({
-    this.past = 'ربيع عام 2026',
-    this.current = 'صيف عام 2026',
-    this.next = 'خريف عام 2026',
-    this.allSeasons = const <String>[
-      'شتاء عام 2026',
-      'ربيع عام 2026',
-      'صيف عام 2026',
-      'خريف عام 2026',
-      'شتاء عام 2025',
-      'ربيع عام 2025',
-      'صيف عام 2025',
-      'خريف عام 2025',
-    ],
-  }) : super(Dio(), SettingsRepository(_MemoryStorage()));
+  _StubSeasonsProvider() : super(Dio(), SettingsRepository(_MemoryStorage()));
 
-  final String past;
-  final String current;
-  final String next;
-  final List<String> allSeasons;
+  static const String past = 'ربيع عام 2026';
+  static const String current = 'صيف عام 2026';
+  static const String next = 'خريف عام 2026';
+  static const List<String> allSeasons = <String>[
+    'شتاء عام 2026',
+    'ربيع عام 2026',
+    'صيف عام 2026',
+    'خريف عام 2026',
+    'شتاء عام 2025',
+    'ربيع عام 2025',
+    'صيف عام 2025',
+    'خريف عام 2025',
+  ];
 
   @override
   Future<AnimeWitcherSeasonConfig> getSeasonConfig() async {
-    return AnimeWitcherSeasonConfig(past: past, current: current, next: next);
+    return const AnimeWitcherSeasonConfig(
+      past: past,
+      current: current,
+      next: next,
+    );
   }
 
   @override
@@ -166,8 +166,9 @@ Future<void> _writeShot(WidgetTester tester, Key key, String filename) async {
     );
     final image = await boundary.toImage(pixelRatio: 2);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    File('${artifacts.path}/$filename')
-        .writeAsBytesSync(bytes!.buffer.asUint8List());
+    File(
+      '${artifacts.path}/$filename',
+    ).writeAsBytesSync(bytes!.buffer.asUint8List());
   });
 }
 
@@ -189,7 +190,9 @@ void main() {
 
       final tabsBottom = tester.getBottomLeft(find.text('الحالي')).dy;
       final titleBox = tester.getRect(find.text('صيف عام 2026').hitTestable());
-      final gridTop = tester.getTopLeft(find.text('Black Torch').hitTestable());
+      final gridTop = tester
+          .getTopLeft(find.byType(MultimediaCard).hitTestable().first)
+          .dy;
       expect(titleBox.top, greaterThan(tabsBottom));
       expect(titleBox.bottom, lessThan(gridTop));
 
