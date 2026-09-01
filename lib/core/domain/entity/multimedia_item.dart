@@ -5,6 +5,10 @@ enum MultimediaContentType { movie, series, anime, livestream, other }
 
 enum ShowStatus { completed, ongoing, upcoming }
 
+/// Arabic `details.state` value shown on the details page for titles that
+/// have not started airing.
+const kNotYetAiredArabicState = 'لم يتم بثه بعد';
+
 enum DubStatus { none, dubbed, subbed }
 
 class Actor {
@@ -475,6 +479,20 @@ class MultimediaItem {
   String get overview => description ?? '';
   double get voteAverage => score ?? 0.0;
   String get genresStr => tags?.join(' | ') ?? '';
+
+  /// Whether the details page would show the unaired status
+  /// ([kNotYetAiredArabicState]).
+  ///
+  /// Prefers `syncData['awState']` (`details.state`) — the same field the
+  /// details metadata bar displays — and falls back to [status] when that
+  /// field is missing.
+  bool get isNotYetAired {
+    final raw = syncData?['awState']?.trim();
+    if (raw != null && raw.isNotEmpty && raw.toLowerCase() != 'null') {
+      return raw == kNotYetAiredArabicState;
+    }
+    return status == ShowStatus.upcoming;
+  }
 
   MultimediaItem copyWith({
     String? title,

@@ -58,7 +58,7 @@ class MetadataBar extends ConsumerWidget {
           label = isArabic ? 'مكتمل' : 'Completed';
           break;
         case ShowStatus.upcoming:
-          label = isArabic ? 'لم يتم بثه بعد' : 'Not yet aired';
+          label = isArabic ? kNotYetAiredArabicState : 'Not yet aired';
           break;
         case ShowStatus.ongoing:
           label = isArabic ? 'مستمر' : 'Ongoing';
