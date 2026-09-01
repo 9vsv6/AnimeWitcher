@@ -175,6 +175,16 @@ Map<String, String> _queryParams(RequestOptions options) {
 }
 
 void main() {
+  test('season config uses Settings JSON seasons.past/current/next as-is',
+      () async {
+    final stub = _stubDio();
+    final config = await _provider(stub.dio).getSeasonConfig();
+
+    expect(config.past, 'شتاء عام 2025');
+    expect(config.current, 'ربيع عام 2026');
+    expect(config.next, 'صيف عام 2026');
+  });
+
   test('season tabs browse series with details.season and the browse key',
       () async {
     final stub = _stubDio();
