@@ -15,7 +15,12 @@ import '../../details/presentation/details_screen.dart';
 import 'animewitcher_replies_screen.dart';
 
 class AnimeWitcherMyCommentsScreen extends ConsumerStatefulWidget {
-  const AnimeWitcherMyCommentsScreen({super.key});
+  const AnimeWitcherMyCommentsScreen({
+    super.key,
+    this.isReviews = false,
+  });
+
+  final bool isReviews;
 
   @override
   ConsumerState<AnimeWitcherMyCommentsScreen> createState() =>
@@ -24,7 +29,10 @@ class AnimeWitcherMyCommentsScreen extends ConsumerStatefulWidget {
 
 class _AnimeWitcherMyCommentsScreenState
     extends ConsumerState<AnimeWitcherMyCommentsScreen> {
-  static const int _pageSize = 20;
+  int get _pageSize =>
+      widget.isReviews ? kAnimeWitcherReviewsPageSize : 20;
+
+  bool get _isReviews => widget.isReviews;
 
   late final ScrollController _scrollController;
   final Set<String> _busyComments = <String>{};
@@ -82,9 +90,10 @@ class _AnimeWitcherMyCommentsScreenState
       _loadError = null;
     });
     try {
-      final page = await ref
-          .read(animeWitcherAccountServiceProvider)
-          .loadMyComments(sort: sort, limit: _pageSize);
+      final service = ref.read(animeWitcherAccountServiceProvider);
+      final page = _isReviews
+          ? await service.loadMyReviews(sort: sort, limit: _pageSize)
+          : await service.loadMyComments(sort: sort, limit: _pageSize);
       if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       setState(() {
         _comments = page.items;
@@ -108,13 +117,18 @@ class _AnimeWitcherMyCommentsScreenState
     final cursor = _cursor;
     setState(() => _loadingMore = true);
     try {
-      final page = await ref
-          .read(animeWitcherAccountServiceProvider)
-          .loadMyComments(
-            sort: sort,
-            cursor: cursor,
-            limit: _pageSize,
-          );
+      final service = ref.read(animeWitcherAccountServiceProvider);
+      final page = _isReviews
+          ? await service.loadMyReviews(
+              sort: sort,
+              cursor: cursor,
+              limit: _pageSize,
+            )
+          : await service.loadMyComments(
+              sort: sort,
+              cursor: cursor,
+              limit: _pageSize,
+            );
       if (!mounted || !_loadGeneration.isCurrent(generation)) return;
       final paths = _comments.map((comment) => comment.path).toSet();
       final additions = page.items
@@ -408,11 +422,15 @@ class _AnimeWitcherMyCommentsScreenState
         title: ApplePersistentGlassHeaderScope(
           enabled: Navigator.of(context).canPop(),
           onBack: () => Navigator.of(context).maybePop(),
-          child: Text(_isArabic ? 'تعليقاتي' : 'My comments'),
+          child: Text(_isArabic
+              ? (_isReviews ? 'مراجعاتي' : 'تعليقاتي')
+              : (_isReviews ? 'My reviews' : 'My comments')),
         ),
         actions: [
           PopupMenuButton<AnimeWitcherCommentSort>(
-            tooltip: _isArabic ? 'ترتيب التعليقات' : 'Sort comments',
+            tooltip: _isArabic
+                ? (_isReviews ? 'ترتيب المراجعات' : 'ترتيب التعليقات')
+                : (_isReviews ? 'Sort reviews' : 'Sort comments'),
             initialValue: _sort,
             onSelected: _changeSort,
             itemBuilder: (context) => AnimeWitcherCommentSort.values
@@ -464,8 +482,12 @@ class _AnimeWitcherMyCommentsScreenState
             const SizedBox(height: 12),
             Text(
               _isArabic
-                  ? 'لم تكتب أي تعليقات بعد.'
-                  : 'You have not written any comments yet.',
+                  ? (_isReviews
+                      ? 'لم تكتب أي مراجعات بعد.'
+                      : 'لم تكتب أي تعليقات بعد.')
+                  : (_isReviews
+                      ? 'You have not written any reviews yet.'
+                      : 'You have not written any comments yet.'),
               textAlign: TextAlign.center,
             ),
           ],
@@ -623,11 +645,20 @@ class _AnimeWitcherMyCommentsScreenState
                       ),
                     ),
                     const SizedBox(height: 10),
-                    if (comment.spoiler || comment.repliesClosed) ...[
+                    if (comment.spoiler ||
+                        comment.repliesClosed ||
+                        (_isReviews && !comment.published)) ...[
                       Wrap(
                         spacing: 6,
                         runSpacing: 6,
                         children: [
+                          if (_isReviews && !comment.published)
+                            _statusChip(
+                              Icons.hourglass_top_rounded,
+                              _isArabic ? 'جاري مراجعته' : 'Pending review',
+                              colors.tertiaryContainer,
+                              colors.onTertiaryContainer,
+                            ),
                           if (comment.spoiler)
                             _statusChip(
                               Icons.visibility_off_rounded,
@@ -832,6 +863,9 @@ class _AnimeWitcherMyCommentsScreenState
         'permission-denied' => _isArabic
             ? 'لا يمكن تعديل هذا التعليق.'
             : 'This comment cannot be modified.',
+        'review-exists' => _isArabic
+            ? 'لديك مراجعة واحدة فقط على هذا الأنمي.'
+            : 'You already wrote a review for this anime.',
         _ => error.message,
       };
     }

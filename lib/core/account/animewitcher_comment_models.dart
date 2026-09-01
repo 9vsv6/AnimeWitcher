@@ -38,6 +38,31 @@ Map<String, dynamic> animeWitcherReplyWriteFields({
   };
 }
 
+/// Firestore create-map for APK `AddReviewActivity`. `date`, `published`, and
+/// the nested `user` map are filled by server-side moderation, not the client.
+Map<String, dynamic> animeWitcherReviewWriteFields({
+  required String reviewText,
+  required String userId,
+  required String animeId,
+}) {
+  return <String, dynamic>{
+    'review_text': reviewText,
+    'likes': 0,
+    'comments': 0,
+    'user_id': userId,
+    'anime_id': animeId,
+  };
+}
+
+const int kAnimeWitcherReviewsPageSize = 10;
+
+bool animeWitcherIsReviewPath(String path) {
+  return path
+      .split('/')
+      .where((segment) => segment.isNotEmpty)
+      .contains('reviews');
+}
+
 class AnimeWitcherCommentPage {
   const AnimeWitcherCommentPage({
     required this.items,
@@ -109,6 +134,7 @@ class AnimeWitcherComment {
     this.newsId,
     this.repliesClosed = false,
     this.likedByMe = false,
+    this.published = true,
   });
 
   final String id;
@@ -129,8 +155,11 @@ class AnimeWitcherComment {
   final String? newsId;
   final bool repliesClosed;
   final bool likedByMe;
+  final bool published;
 
   String get repliesCollectionPath => '$path/replies';
+
+  bool get isReview => animeWitcherIsReviewPath(path);
 
   AnimeWitcherComment copyWith({
     String? text,
@@ -139,6 +168,7 @@ class AnimeWitcherComment {
     bool? spoiler,
     bool? likedByMe,
     bool? repliesClosed,
+    bool? published,
   }) {
     return AnimeWitcherComment(
       id: id,
@@ -159,6 +189,7 @@ class AnimeWitcherComment {
       newsId: newsId,
       repliesClosed: repliesClosed ?? this.repliesClosed,
       likedByMe: likedByMe ?? this.likedByMe,
+      published: published ?? this.published,
     );
   }
 
@@ -170,10 +201,15 @@ class AnimeWitcherComment {
   }) {
     final fields = document.fields;
     final user = _stringMap(fields['user']);
+    final isReview = animeWitcherIsReviewPath(document.path);
     return AnimeWitcherComment(
       id: document.id,
       path: document.path,
-      text: _text(fields['comment']),
+      text: _text(
+        isReview
+            ? (fields['review_text'] ?? fields['comment'])
+            : fields['comment'],
+      ),
       userId: _text(fields['user_id']),
       userName: _firstNonEmpty(<dynamic>[
         user['name'],
@@ -185,7 +221,9 @@ class AnimeWitcherComment {
           _optionalText(user['pic'] ?? user['pic_uri']) ??
           _optionalText(fallbackUserPhotoUrl),
       likes: _intValue(fields['likes']),
-      replies: _intValue(fields['replies']),
+      replies: fields.containsKey('replies')
+          ? _intValue(fields['replies'])
+          : _intValue(fields['comments']),
       spoiler: fields['spoiler'] == true,
       date: _dateValue(fields['date']),
       animeId: _optionalText(fields['anime_id']),
@@ -196,6 +234,7 @@ class AnimeWitcherComment {
       newsId: _optionalText(fields['new_id']),
       repliesClosed: fields['replies_closed'] == true,
       likedByMe: likedByMe,
+      published: fields['published'] != false,
     );
   }
 }

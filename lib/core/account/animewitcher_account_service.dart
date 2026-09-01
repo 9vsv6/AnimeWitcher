@@ -870,6 +870,45 @@ class AnimeWitcherAccountService {
     );
   }
 
+  Future<AnimeWitcherCommentPage> loadMyReviews({
+    AnimeWitcherCommentSort sort = AnimeWitcherCommentSort.newest,
+    FirestoreDocument? cursor,
+    int limit = kAnimeWitcherReviewsPageSize,
+  }) async {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher to manage your reviews.',
+      );
+    }
+    final documents = await _authenticated(
+      (token) => _firestore.queryUserReviews(
+        userId: profile.documentId,
+        idToken: token,
+        orderField: sort.orderField,
+        descending: sort.descending,
+        startAfter: cursor,
+        limit: limit,
+      ),
+    );
+    final reviews = documents
+        .map(
+          (document) => AnimeWitcherComment.fromDocument(
+            document,
+            fallbackUserName: profile.userName,
+            fallbackUserPhotoUrl: profile.photoUrl,
+          ),
+        )
+        .where((review) => review.text.isNotEmpty)
+        .toList(growable: false);
+    return AnimeWitcherCommentPage(
+      items: reviews,
+      cursor: documents.isEmpty ? cursor : documents.last,
+      hasMore: documents.length >= limit,
+    );
+  }
+
   Future<AnimeWitcherComment> updateOwnComment(
     AnimeWitcherComment comment,
     String rawText, {
@@ -913,7 +952,9 @@ class AnimeWitcherAccountService {
       }
       await _firestore.patchDocument(
         comment.path,
-        <String, dynamic>{'comment': text, 'spoiler': spoiler},
+        comment.isReview
+            ? <String, dynamic>{'review_text': text}
+            : <String, dynamic>{'comment': text, 'spoiler': spoiler},
         token,
         requireExisting: true,
       );
@@ -1188,6 +1229,16 @@ class AnimeWitcherAccountService {
         );
       }
 
+      if (target.isReviews) {
+        await _publishReviewDocument(
+          target: target,
+          reviewText: comment,
+          userId: profile.documentId,
+          token: token,
+        );
+        return;
+      }
+
       var commentsLimit = 1;
       final constants = await _firestore.getDocument('Settings/constants', token);
       final commentsSettingsRaw = constants?.fields['comments'];
@@ -1246,6 +1297,36 @@ class AnimeWitcherAccountService {
         token,
       );
     });
+  }
+
+  Future<void> _publishReviewDocument({
+    required AnimeWitcherCommentTarget target,
+    required String reviewText,
+    required String userId,
+    required String token,
+  }) async {
+    final ownReviews = await _firestore.queryCommentsByUserInCollection(
+      collectionPath: target.collectionPath,
+      userId: userId,
+      idToken: token,
+      limit: 1,
+    );
+    if (ownReviews.isNotEmpty) {
+      throw const AnimeWitcherAccountException(
+        'review-exists',
+        'You already wrote a review for this anime.',
+      );
+    }
+    final animeId = (target.animeId ?? '').trim();
+    await _firestore.createDocument(
+      target.collectionPath,
+      animeWitcherReviewWriteFields(
+        reviewText: reviewText,
+        userId: userId,
+        animeId: animeId,
+      ),
+      token,
+    );
   }
 
   // -------------------------------------------------------------------------

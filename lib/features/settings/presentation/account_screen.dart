@@ -567,6 +567,20 @@ class _AnimeWitcherAccountScreenState
               onTap: busy ? null : _openMyComments,
             ),
             SettingsTile(
+              icon: Icons.rate_review_outlined,
+              title: appText(
+                context,
+                english: 'My reviews',
+                arabic: 'مراجعاتي',
+              ),
+              subtitle: appText(
+                context,
+                english: 'Edit, delete, or disable replies on your reviews',
+                arabic: 'تعديل المراجعات أو حذفها أو منع الردود',
+              ),
+              onTap: busy ? null : _openMyReviews,
+            ),
+            SettingsTile(
               icon: Icons.alternate_email_rounded,
               title: appText(
                 context,
@@ -667,6 +681,14 @@ class _AnimeWitcherAccountScreenState
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => const AnimeWitcherMyCommentsScreen(),
+      ),
+    );
+  }
+
+  Future<void> _openMyReviews() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const AnimeWitcherMyCommentsScreen(isReviews: true),
       ),
     );
   }

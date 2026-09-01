@@ -19,6 +19,10 @@ const Key kDetailsRatingsReviewsButtonKey = Key(
   'details-ratings-reviews-button',
 );
 const Key kDetailsRatingsUserStarsKey = Key('details-ratings-user-stars');
+const Key kDetailsRatingsMalBadgeKey = Key('details-ratings-mal-badge');
+const Key kDetailsRatingsMalStarKey = Key('details-ratings-mal-star');
+
+const Color kMalBadgeBlue = Color(0xFF2E51A2);
 
 const String kRateLoginRequiredToast = 'يجب تسجيل الدخول';
 const String kReviewsClosedToast = 'تم ايقاف المراجعات علي هذا الأنمي';
@@ -231,7 +235,12 @@ class _DetailsRatingsRowState extends ConsumerState<DetailsRatingsRow> {
                     Expanded(
                       child: _RatingsActionButton(
                         key: kDetailsRatingsRateButtonKey,
-                        icon: Icons.star_outline_rounded,
+                        icon: (_userRating ?? 0) > 0
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        iconColor: (_userRating ?? 0) > 0
+                            ? AppTheme.animeWitcherAccent
+                            : null,
                         label: 'قيّم',
                         onPressed: _onRatePressed,
                       ),
@@ -243,7 +252,6 @@ class _DetailsRatingsRowState extends ConsumerState<DetailsRatingsRow> {
                       key: kDetailsRatingsReviewsButtonKey,
                       icon: Icons.rate_review_outlined,
                       label: 'المراجعات',
-                      emphasized: true,
                       onPressed: _onReviewsPressed,
                     ),
                   ),
@@ -331,30 +339,41 @@ class _DetailsRatingsRowState extends ConsumerState<DetailsRatingsRow> {
       child: Column(
         children: [
           Container(
+            key: kDetailsRatingsMalBadgeKey,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: AppTheme.animeWitcherAccent.withValues(alpha: 0.16),
+              color: kMalBadgeBlue,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: AppTheme.animeWitcherAccent.withValues(alpha: 0.45),
-              ),
             ),
             child: Text(
               'MAL',
               style: theme.textTheme.labelSmall?.copyWith(
-                color: AppTheme.animeWitcherAccent,
+                color: Colors.white,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.6,
               ),
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            mean == null ? '—' : formatRatingScore(mean),
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
+          Row(
+            textDirection: TextDirection.ltr,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                key: kDetailsRatingsMalStarKey,
+                Icons.star_rounded,
+                size: 26,
+                color: kMalBadgeBlue,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                mean == null ? '—' : formatRatingScore(mean),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
@@ -375,25 +394,20 @@ class _RatingsActionButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
-    this.emphasized = false,
+    this.iconColor,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
-  final bool emphasized;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final background = emphasized
-        ? AppTheme.animeWitcherAccent.withValues(alpha: 0.16)
-        : colors.surfaceContainerHigh.withValues(alpha: 0.92);
-    final foreground = emphasized
-        ? AppTheme.animeWitcherAccent
-        : colors.onSurface;
+    final foreground = colors.onSurface;
     return Material(
-      color: background,
+      color: colors.surfaceContainerHigh.withValues(alpha: 0.92),
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -405,7 +419,7 @@ class _RatingsActionButton extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 18, color: foreground),
+                Icon(icon, size: 18, color: iconColor ?? foreground),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
