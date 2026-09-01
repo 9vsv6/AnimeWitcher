@@ -222,7 +222,7 @@ void main() {
       // Latin still runs LTR inside a line; RTL paragraph direction puts the
       // last (short) wrapped line on the right, not left-aligned.
       final lastGlyph = titleParagraph.getBoxesForSelection(
-        TextSelection(
+        const TextSelection(
           baseOffset: englishTitle.length - 1,
           extentOffset: englishTitle.length,
         ),
