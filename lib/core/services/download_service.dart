@@ -809,6 +809,12 @@ class DownloadService {
           progress: storedProgress,
           totalBytes: storedTotal,
           speedBytesPerSecond: speed,
+          episodeKey: nativeDownloadEpisodeIdentity(
+            taskId: record.task.taskId,
+            trackingUrl: trackingUrl,
+            url: record.task.url,
+            fileKey: downloadTaskFileKey(record.task),
+          ),
         ),
       );
     }
@@ -822,6 +828,15 @@ class DownloadService {
           status: TaskStatus.enqueued,
           displayName: payload.value['displayName'] as String? ?? '',
           queueWaiting: true,
+          episodeKey: nativeDownloadEpisodeIdentity(
+            taskId: payload.key,
+            trackingUrl: payload.value['metaData'] as String? ?? '',
+            url: payload.value['url'] as String? ?? '',
+            fileKey: downloadTaskFileKeyFromParts(
+              directory: payload.value['directory'] as String? ?? '',
+              filename: payload.value['filename'] as String? ?? '',
+            ),
+          ),
         ),
       );
     }
@@ -925,9 +940,12 @@ class DownloadService {
     final paused = <String>[];
     final waiterIds = <String>{};
     final completedIds = <String>{};
+    final episodeIdentities = <Map<String, String>>[];
+    final seenTransferringEpisodes = <String>{};
     for (final record in records) {
       if (record.task is! DownloadTask) continue;
       final task = record.task as DownloadTask;
+      episodeIdentities.add(_episodeIdentityPayload(task));
       if (record.status == TaskStatus.complete) {
         completedIds.add(task.taskId);
         _waitingPayloads.remove(task.taskId);
@@ -960,6 +978,15 @@ class DownloadService {
         continue;
       }
       if (occupiesDownloadSlot(status: record.status, queueWaiting: false)) {
+        final episodeKey = nativeDownloadEpisodeIdentity(
+          taskId: task.taskId,
+          trackingUrl: downloadTrackingUrl(task),
+          url: task.url,
+          fileKey: downloadTaskFileKey(task),
+        );
+        if (!seenTransferringEpisodes.add(episodeKey)) {
+          continue;
+        }
         transferring.add(task.taskId);
         _waitingPayloads.remove(task.taskId);
       }
@@ -984,6 +1011,20 @@ class DownloadService {
       final idB = b['taskId'] as String? ?? '';
       return compareByDownloadQueueOrder(idA, idB, _sessionOrder);
     });
+    waiters.removeWhere((payload) {
+      final id = payload['taskId'] as String? ?? '';
+      if (id.isEmpty || transferring.contains(id)) return true;
+      final key = nativeDownloadEpisodeIdentity(
+        taskId: id,
+        trackingUrl: payload['metaData'] as String? ?? '',
+        url: payload['url'] as String? ?? '',
+        fileKey: downloadTaskFileKeyFromParts(
+          directory: payload['directory'] as String? ?? '',
+          filename: payload['filename'] as String? ?? '',
+        ),
+      );
+      return !seenTransferringEpisodes.add(key);
+    });
     for (var i = 0; i < waiters.length; i++) {
       final id = waiters[i]['taskId'] as String?;
       if (id == null || id.isEmpty) continue;
@@ -996,6 +1037,20 @@ class DownloadService {
           waiters[i] = {...waiters[i], 'resumeDataBase64': resume.data};
         }
       } catch (_) {}
+    }
+    for (final payload in waiters) {
+      final id = payload['taskId'] as String? ?? '';
+      if (id.isEmpty) continue;
+      if (episodeIdentities.any((item) => item['taskId'] == id)) continue;
+      episodeIdentities.add(
+        nativeDownloadEpisodeIdentityPayload(
+          taskId: id,
+          trackingUrl: payload['metaData'] as String? ?? '',
+          url: payload['url'] as String? ?? '',
+          filename: payload['filename'] as String? ?? '',
+          directory: payload['directory'] as String? ?? '',
+        ),
+      );
     }
     await _continuedProcessing.persistNativeQueue(
       maxConcurrent: max,
@@ -1013,6 +1068,27 @@ class DownloadService {
       sessionTransferredBytes: overlay?.transferredBytes ?? 0,
       sessionSpeedBytesPerSecond: overlay?.speedBytesPerSecond ?? 0,
       sessionCurrentIndex: overlay?.currentIndex ?? 0,
+      episodeIdentities: episodeIdentities,
+    );
+  }
+
+  Map<String, String> _episodeIdentityPayload(DownloadTask task) {
+    return nativeDownloadEpisodeIdentityPayload(
+      taskId: task.taskId,
+      trackingUrl: downloadTrackingUrl(task),
+      url: task.url,
+      filename: task.filename,
+      directory: task.directory,
+      fileKey: downloadTaskFileKey(task),
+    );
+  }
+
+  LiveNativeDownload _liveIdentityFor(DownloadTask task) {
+    return LiveNativeDownload(
+      taskId: task.taskId,
+      trackingUrl: downloadTrackingUrl(task),
+      url: task.url,
+      fileKey: downloadTaskFileKey(task),
     );
   }
 
@@ -1097,21 +1173,67 @@ class DownloadService {
     );
   }
 
+  Future<List<LiveNativeDownload>> _liveNativeDownloads() async {
+    final byId = <String, LiveNativeDownload>{};
+    void add(LiveNativeDownload item) {
+      if (item.taskId.isEmpty) return;
+      byId.putIfAbsent(item.taskId, () => item);
+    }
+
+    for (final task in await FileDownloader().allTasks(allGroups: true)) {
+      if (task is! DownloadTask) continue;
+      add(_liveIdentityFor(task));
+    }
+    for (final item in await _continuedProcessing.liveNativeIdentities()) {
+      add(item);
+    }
+    return byId.values.toList();
+  }
+
+  Future<bool> _episodeHasLiveNativeTask({
+    required String taskId,
+    String trackingUrl = '',
+    String url = '',
+    String fileKey = '',
+  }) async {
+    final live = await _liveNativeDownloads();
+    return shouldAttachToLiveNativeTask(
+      taskId: taskId,
+      trackingUrl: trackingUrl,
+      url: url,
+      fileKey: fileKey,
+      live: live,
+    );
+  }
+
   Future<DownloadTask?> _liveNativeTaskFor({
     required String taskId,
     String? trackingUrl,
+    String? url,
+    String? fileKey,
   }) async {
-    final byId = await FileDownloader().taskForId(taskId);
-    if (byId is DownloadTask) return byId;
+    if (taskId.isNotEmpty) {
+      final byId = await FileDownloader().taskForId(taskId);
+      if (byId is DownloadTask) return byId;
+    }
     final track = trackingUrl ?? '';
+    final downloadUrl = url ?? '';
+    final key = fileKey ?? '';
+    DownloadTask? match;
     for (final task in await FileDownloader().allTasks(allGroups: true)) {
       if (task is! DownloadTask) continue;
-      if (task.taskId == taskId) return task;
-      if (track.isNotEmpty && downloadTrackingUrl(task) == track) {
-        return task;
+      if (taskId.isNotEmpty && task.taskId == taskId) return task;
+      if (shouldAttachToLiveNativeTask(
+        taskId: taskId,
+        trackingUrl: track,
+        url: downloadUrl,
+        fileKey: key,
+        live: [_liveIdentityFor(task)],
+      )) {
+        match ??= task;
       }
     }
-    return null;
+    return match;
   }
 
   Future<void> _attachToLiveNativeTask(
@@ -1785,20 +1907,25 @@ class DownloadService {
   }
 
   Future<bool> _resumeDownloadTask(DownloadTask task) async {
-    final live = await _liveNativeTaskFor(
+    final trackingUrl = downloadTrackingUrl(task);
+    final fileKey = downloadTaskFileKey(task);
+    if (await _episodeHasLiveNativeTask(
       taskId: task.taskId,
-      trackingUrl: downloadTrackingUrl(task),
-    );
-    if (live != null) {
-      final record = await FileDownloader().database.recordForId(live.taskId);
-      if (record != null && isLiveNativeDownloadStatus(record.status)) {
-        await _attachToLiveNativeTask(task, live: live);
-        return true;
-      }
+      trackingUrl: trackingUrl,
+      url: task.url,
+      fileKey: fileKey,
+    )) {
+      final live = await _liveNativeTaskFor(
+        taskId: task.taskId,
+        trackingUrl: trackingUrl,
+        url: task.url,
+        fileKey: fileKey,
+      );
+      await _attachToLiveNativeTask(task, live: live);
+      return true;
     }
 
     final saved = await _savedProgressFor(task);
-    final trackingUrl = downloadTrackingUrl(task);
     if (saved.progress > 0) {
       _publishProgress(
         trackingUrl: trackingUrl,
@@ -2082,17 +2209,54 @@ class DownloadService {
     final isIOS = Platform.isIOS;
 
     return _serializeQueue(() async {
+      final tracking = trackingUrl ?? url;
+      final requestedFileKey = downloadTaskFileKeyFromParts(
+        directory: directory,
+        filename: filename,
+      );
+      if (await _episodeHasLiveNativeTask(
+        taskId: '',
+        trackingUrl: tracking,
+        url: url,
+        fileKey: requestedFileKey,
+      )) {
+        final live = await _liveNativeTaskFor(
+          taskId: '',
+          trackingUrl: tracking,
+          url: url,
+          fileKey: requestedFileKey,
+        );
+        if (live != null) {
+          await _attachToLiveNativeTask(live, live: live);
+        }
+        _ref.read(activeDownloadsProvider.notifier).add(tracking);
+        return true;
+      }
+
       // Prevention: Check if task is ALREADY running (using database for robustness)
       final records = await FileDownloader().database.allRecords();
-      final existingRecord = records.firstWhereOrNull(
-        (r) =>
-            (r.status == TaskStatus.enqueued ||
-                r.status == TaskStatus.running ||
-                r.status == TaskStatus.paused ||
-                r.status == TaskStatus.waitingToRetry) &&
-            (r.task.metaData.isNotEmpty ? r.task.metaData : r.task.url) ==
-                (trackingUrl ?? url),
-      );
+      final existingRecord = records.firstWhereOrNull((r) {
+        final statusOk =
+            r.status == TaskStatus.enqueued ||
+            r.status == TaskStatus.running ||
+            r.status == TaskStatus.paused ||
+            r.status == TaskStatus.waitingToRetry;
+        if (!statusOk) return false;
+        return shouldAttachToLiveNativeTask(
+          taskId: '',
+          trackingUrl: tracking,
+          url: url,
+          fileKey: requestedFileKey,
+          live: [
+            LiveNativeDownload(
+              taskId: r.task.taskId,
+              trackingUrl: downloadTrackingUrl(r.task),
+              url: r.task.url,
+              fileKey: downloadTaskFileKey(r.task),
+            ),
+          ],
+        );
+      });
 
       if (existingRecord != null) {
         if (kDebugMode) {
@@ -2138,7 +2302,6 @@ class DownloadService {
         return true;
       }
 
-      final tracking = trackingUrl ?? url;
       final completeRecords = await _completeRecordsForEpisode(
         records,
         trackingUrl: tracking,

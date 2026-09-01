@@ -201,6 +201,10 @@ import UserNotifications
         result(true)
         return
       }
+      if call.method == "liveNativeIdentities" {
+        result(DownloadNativeWaitingQueue.liveIdentities())
+        return
+      }
 
       guard #available(iOS 26.0, *) else {
         result(false)
