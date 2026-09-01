@@ -215,6 +215,16 @@ void main() {
       expect(titleParagraph.textDirection, TextDirection.ltr);
       expect(titleParagraph.textAlign, TextAlign.start);
 
+      final firstGlyph = titleParagraph.getBoxesForSelection(
+        const TextSelection(baseOffset: 0, extentOffset: 1),
+      );
+      expect(firstGlyph, isNotEmpty);
+      expect(
+        firstGlyph.first.left,
+        lessThan(8),
+        reason: 'LTR English title must start at the left of its box',
+      );
+
       final studio = tester.widget<Text>(find.text('MAPPA'));
       expect(studio.textDirection, isNull);
 
