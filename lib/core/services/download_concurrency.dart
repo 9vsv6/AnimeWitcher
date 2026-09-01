@@ -314,6 +314,7 @@ class DownloadOverlayEntry {
     this.progress = 0,
     this.totalBytes = -1,
     this.speedBytesPerSecond = 0,
+    this.episodeKey = '',
   });
 
   final String taskId;
@@ -323,6 +324,10 @@ class DownloadOverlayEntry {
   final double progress;
   final int totalBytes;
   final double speedBytesPerSecond;
+
+  /// Episode identity (trackingUrl / file / url). Duplicate native tasks of
+  /// the same file share this key so the overlay counts 1 of 1, not 2 of 2.
+  final String episodeKey;
 }
 
 class DownloadOverlaySession {
@@ -404,12 +409,61 @@ class OverlayByteTotals {
   final double speedBytesPerSecond;
 }
 
-/// N=1: current file bytes. N>1: sum of every transferring file so the
-/// island does not flip between sizes.
+String overlayEpisodeIdentity(DownloadOverlayEntry entry) {
+  final key = entry.episodeKey.trim();
+  if (key.isNotEmpty) return key;
+  return 'id:${entry.taskId}';
+}
+
+/// One overlay row per episode. Duplicate URLSession tasks of the same file
+/// keep the sample with more bytes — never sum 2×/3× for one episode.
+List<DownloadOverlayEntry> uniqueOverlayEntriesByEpisode(
+  Iterable<DownloadOverlayEntry> entries,
+) {
+  final byKey = <String, DownloadOverlayEntry>{};
+  final order = <String>[];
+  for (final entry in entries) {
+    final key = overlayEpisodeIdentity(entry);
+    final existing = byKey[key];
+    if (existing == null) {
+      byKey[key] = entry;
+      order.add(key);
+      continue;
+    }
+    final existingRunning = occupiesDownloadSlot(
+      status: existing.status,
+      queueWaiting: existing.queueWaiting,
+    );
+    final nextRunning = occupiesDownloadSlot(
+      status: entry.status,
+      queueWaiting: entry.queueWaiting,
+    );
+    if (nextRunning && !existingRunning) {
+      byKey[key] = entry;
+      continue;
+    }
+    if (!nextRunning && existingRunning) continue;
+    final existingBytes = overlayTransferredBytes(
+      progress: existing.progress,
+      totalBytes: existing.totalBytes,
+    );
+    final nextBytes = overlayTransferredBytes(
+      progress: entry.progress,
+      totalBytes: entry.totalBytes,
+    );
+    if (nextBytes > existingBytes) {
+      byKey[key] = entry;
+    }
+  }
+  return [for (final key in order) byKey[key]!];
+}
+
+/// N=1: current file bytes. N>1: sum of every **distinct** transferring
+/// episode so the island does not flip between sizes or 2× duplicate tasks.
 OverlayByteTotals overlayRunningByteTotals(
   Iterable<DownloadOverlayEntry> running,
 ) {
-  final list = running.toList();
+  final list = uniqueOverlayEntriesByEpisode(running);
   if (list.isEmpty) {
     return const OverlayByteTotals(
       transferredBytes: 0,
@@ -468,11 +522,23 @@ DownloadOverlaySession planDownloadOverlaySession({
       (a, b) => compareByDownloadQueueOrder(a.taskId, b.taskId, queueOrder),
     );
   }
-  final running = list.where(_isOverlayRunning).toList();
-  final waiting = list.where(_isOverlayWaiting).toList();
-  final completed = list
-      .where((entry) => entry.status == TaskStatus.complete)
+  final running = uniqueOverlayEntriesByEpisode(list.where(_isOverlayRunning));
+  final runningKeys = {
+    for (final entry in running) overlayEpisodeIdentity(entry),
+  };
+  final waiting = uniqueOverlayEntriesByEpisode(list.where(_isOverlayWaiting))
+      .where((entry) => !runningKeys.contains(overlayEpisodeIdentity(entry)))
       .toList();
+  final waitingKeys = {
+    for (final entry in waiting) overlayEpisodeIdentity(entry),
+  };
+  final completed =
+      uniqueOverlayEntriesByEpisode(
+        list.where((entry) => entry.status == TaskStatus.complete),
+      ).where((entry) {
+        final key = overlayEpisodeIdentity(entry);
+        return !runningKeys.contains(key) && !waitingKeys.contains(key);
+      }).toList();
   final current = running.isNotEmpty
       ? running.first
       : (waiting.isNotEmpty ? waiting.first : null);
@@ -750,22 +816,82 @@ bool isLiveNativeDownloadStatus(TaskStatus status) {
 }
 
 class LiveNativeDownload {
-  const LiveNativeDownload({required this.taskId, required this.trackingUrl});
+  const LiveNativeDownload({
+    required this.taskId,
+    required this.trackingUrl,
+    this.url = '',
+    this.fileKey = '',
+  });
 
   final String taskId;
   final String trackingUrl;
+  final String url;
+  final String fileKey;
 }
 
-/// One native task per episode. If this taskId or trackingUrl is already in
-/// FileDownloader's live set, Dart must attach — never enqueue a second copy.
+/// Stable episode key for one native download. Prefer trackingUrl (episode
+/// page), then directory|filename, then the CDN url. `taskId` is last because
+/// a second enqueue of the same file gets a new UUID.
+String nativeDownloadEpisodeIdentity({
+  required String taskId,
+  String trackingUrl = '',
+  String url = '',
+  String fileKey = '',
+}) {
+  final track = trackingUrl.trim();
+  if (track.isNotEmpty) return 'track:$track';
+  final file = fileKey.trim();
+  if (file.isNotEmpty) return 'file:$file';
+  final downloadUrl = url.trim();
+  if (downloadUrl.isNotEmpty) return 'url:$downloadUrl';
+  return 'id:$taskId';
+}
+
+Map<String, String> nativeDownloadEpisodeIdentityPayload({
+  required String taskId,
+  String trackingUrl = '',
+  String url = '',
+  String filename = '',
+  String directory = '',
+  String fileKey = '',
+}) {
+  final key = fileKey.trim().isNotEmpty
+      ? fileKey.trim()
+      : (filename.trim().isEmpty
+            ? ''
+            : '${directory.replaceAll('\\', '/').trim()}|${filename.trim()}');
+  return <String, String>{
+    'taskId': taskId,
+    'trackingUrl': trackingUrl,
+    'url': url,
+    'filename': filename,
+    'directory': directory,
+    'fileKey': key,
+  };
+}
+
+/// One native task per episode. If this taskId, trackingUrl, url, or file is
+/// already in the live set, Dart must attach — never enqueue a second copy.
 bool shouldAttachToLiveNativeTask({
   required String taskId,
   required String trackingUrl,
+  String url = '',
+  String fileKey = '',
   required Iterable<LiveNativeDownload> live,
 }) {
   for (final item in live) {
-    if (item.taskId == taskId) return true;
-    if (trackingUrl.isNotEmpty && item.trackingUrl == trackingUrl) {
+    if (taskId.isNotEmpty && item.taskId == taskId) return true;
+    if (trackingUrl.isNotEmpty &&
+        item.trackingUrl.isNotEmpty &&
+        item.trackingUrl == trackingUrl) {
+      return true;
+    }
+    if (url.isNotEmpty && item.url.isNotEmpty && item.url == url) {
+      return true;
+    }
+    if (fileKey.isNotEmpty &&
+        item.fileKey.isNotEmpty &&
+        item.fileKey == fileKey) {
       return true;
     }
   }

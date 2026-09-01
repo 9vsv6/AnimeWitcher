@@ -83,6 +83,42 @@ enum DownloadNativeWaitingQueue {
     var expected: Int64
     var speed: Double
     var displayName: String
+    var url: String
+    var filename: String
+    var directory: String
+    var metaData: String
+
+    init(
+      written: Int64,
+      expected: Int64,
+      speed: Double,
+      displayName: String,
+      url: String = "",
+      filename: String = "",
+      directory: String = "",
+      metaData: String = ""
+    ) {
+      self.written = written
+      self.expected = expected
+      self.speed = speed
+      self.displayName = displayName
+      self.url = url
+      self.filename = filename
+      self.directory = directory
+      self.metaData = metaData
+    }
+
+    init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      written = try container.decodeIfPresent(Int64.self, forKey: .written) ?? 0
+      expected = try container.decodeIfPresent(Int64.self, forKey: .expected) ?? -1
+      speed = try container.decodeIfPresent(Double.self, forKey: .speed) ?? 0
+      displayName = try container.decodeIfPresent(String.self, forKey: .displayName) ?? ""
+      url = try container.decodeIfPresent(String.self, forKey: .url) ?? ""
+      filename = try container.decodeIfPresent(String.self, forKey: .filename) ?? ""
+      directory = try container.decodeIfPresent(String.self, forKey: .directory) ?? ""
+      metaData = try container.decodeIfPresent(String.self, forKey: .metaData) ?? ""
+    }
   }
 
   struct State: Codable {
@@ -161,10 +197,12 @@ enum DownloadNativeWaitingQueue {
 
     func overlayCurrentIndex(runningTaskId: String? = nil) -> Int {
       let total = max(sessionBatchTotal, 1)
-      if transferringTaskIds.isEmpty && !completedTaskIds.isEmpty {
-        return min(max(completedTaskIds.count + 1, 1), total)
+      let transferringUnique = uniqueEpisodeCount(transferringTaskIds)
+      let completedUnique = uniqueEpisodeCount(completedTaskIds)
+      if transferringUnique == 0 && completedUnique > 0 {
+        return min(max(completedUnique + 1, 1), total)
       }
-      let started = transferringTaskIds.count + completedTaskIds.count
+      let started = transferringUnique + completedUnique
       if started > 0 {
         return min(max(started, 1), total)
       }
@@ -172,6 +210,40 @@ enum DownloadNativeWaitingQueue {
         return min(max(sessionCurrentIndex, 1), total)
       }
       return min(max(sessionCompletedCount + 1, 1), total)
+    }
+
+    var uniqueTransferringCount: Int {
+      uniqueEpisodeCount(transferringTaskIds)
+    }
+
+    func uniqueEpisodeCount(_ ids: [String]) -> Int {
+      var seen = Set<String>()
+      for id in ids {
+        seen.insert(episodeKey(taskId: id))
+      }
+      return max(seen.count, 0)
+    }
+
+    func episodeKey(taskId: String) -> String {
+      if let sample = runningSamples[taskId] {
+        return DownloadNativeWaitingQueue.episodeKey(
+          taskId: taskId,
+          url: sample.url,
+          filename: sample.filename,
+          directory: sample.directory,
+          trackingUrl: sample.metaData
+        )
+      }
+      if let waiter = waiters.first(where: { $0.taskId == taskId }) {
+        return DownloadNativeWaitingQueue.episodeKey(
+          taskId: waiter.taskId,
+          url: waiter.url,
+          filename: waiter.filename,
+          directory: waiter.directory,
+          trackingUrl: DownloadNativeWaitingQueue.metaDataFromTaskJson(waiter.taskJson)
+        )
+      }
+      return "id:\(taskId)"
     }
 
     var sessionIsIdle: Bool {
@@ -190,6 +262,7 @@ enum DownloadNativeWaitingQueue {
   /// Task IDs that already have URLSession bytes (plugin HQ or our start).
   /// Do not query plugin-internal HoldingQueue APIs.
   private static var seenTransferringIds = Set<String>()
+  private static var seenTransferringUrls = Set<String>()
   private static var lastWrites: [String: WriteSample] = [:]
 
   static func installUrlSessionHook() {
@@ -215,6 +288,7 @@ enum DownloadNativeWaitingQueue {
     let dartBatchTotal = intValue(arguments["sessionBatchTotal"]) ?? 0
     let released = Set(stringArray(arguments["queueWaitingTaskIds"]))
 
+    let dartIdentities = identityLookup(arguments["episodeIdentities"])
     let pausedSet = Set(dartPaused)
     // Enqueue FIFO from Dart is source of truth for session / waiter order.
     let sessionIds = unique(
@@ -229,18 +303,48 @@ enum DownloadNativeWaitingQueue {
 
     // Leftover Dart-parked waiters must not occupy a native transferring slot.
     seenTransferringIds.subtract(released)
-    let transferring = unique(current.transferringTaskIds + dartTransferring)
+    let mergedTransferring = unique(current.transferringTaskIds + dartTransferring)
       .filter {
         !pausedSet.contains($0)
           && !completed.contains($0)
           && !released.contains($0)
       }
+    func persistEpisodeKey(_ id: String) -> String {
+      if let identity = dartIdentities[id] {
+        return identity.key
+      }
+      if let sample = current.runningSamples[id] {
+        return episodeKey(
+          taskId: id,
+          url: sample.url,
+          filename: sample.filename,
+          directory: sample.directory,
+          trackingUrl: sample.metaData
+        )
+      }
+      if let waiter = dartWaiters.first(where: { $0.taskId == id }) {
+        return episodeKey(for: waiter)
+      }
+      return "id:\(id)"
+    }
+    let transferring = uniqueByEpisode(mergedTransferring, key: persistEpisodeKey)
+    for id in transferring {
+      seenTransferringIds.insert(id)
+      if let identity = dartIdentities[id], !identity.url.isEmpty {
+        seenTransferringUrls.insert(identity.url)
+      } else if let sample = current.runningSamples[id], !sample.url.isEmpty {
+        seenTransferringUrls.insert(sample.url)
+      }
+    }
     let transferringSet = Set(transferring)
+    let transferringKeys = Set(transferring.map(persistEpisodeKey))
     let completedSet = Set(completed)
     let waiters = dartWaiters.filter {
       !transferringSet.contains($0.taskId)
         && !pausedSet.contains($0.taskId)
         && !completedSet.contains($0.taskId)
+        && !transferringKeys.contains(episodeKey(for: $0))
+        && ( $0.url.isEmpty || !seenTransferringUrls.contains($0.url) )
     }
 
     let idle = transferring.isEmpty && waiters.isEmpty
@@ -250,15 +354,23 @@ enum DownloadNativeWaitingQueue {
 
     let completedCount = max(
       max(current.sessionCompletedCount, dartCompletedCount),
-      completed.count
+      uniqueByEpisode(completed, key: persistEpisodeKey).count
     )
-    let computedBatch = transferring.count + waiters.count + completed.count
+    let uniqueSession = uniqueByEpisode(sessionIds, key: persistEpisodeKey)
+    let computedBatch = uniqueByEpisode(transferring, key: persistEpisodeKey).count
+      + uniqueByEpisode(waiters.map(\.taskId), key: persistEpisodeKey).count
+      + uniqueByEpisode(completed, key: persistEpisodeKey).count
+    let uniqueComputed = max(computedBatch, uniqueSession.count)
+    let rawSessionCount = unique(sessionIds).count
+    let collapsedDuplicates = rawSessionCount > uniqueSession.count
     let batchTotal = idle && dartBatchTotal == 0
       ? 0
-      : max(
-        max(current.sessionBatchTotal, dartBatchTotal),
-        max(computedBatch, sessionIds.count)
-      )
+      : (collapsedDuplicates
+        ? uniqueComputed
+        : max(
+          max(current.sessionBatchTotal, dartBatchTotal),
+          uniqueComputed
+        ))
 
     let dartCurrentId = string(arguments["sessionCurrentTaskId"]) ?? ""
     let switchedFile = !dartCurrentId.isEmpty
@@ -310,9 +422,10 @@ enum DownloadNativeWaitingQueue {
         }(),
         sessionCurrentIndex: {
           let dart = intValue(arguments["sessionCurrentIndex"]) ?? 0
-          let started = transferring.count + completed.count
+          let started = uniqueByEpisode(transferring, key: persistEpisodeKey).count
+            + uniqueByEpisode(completed, key: persistEpisodeKey).count
           let nextWaiter = transferring.isEmpty && !completed.isEmpty
-            ? completed.count + 1
+            ? uniqueByEpisode(completed, key: persistEpisodeKey).count + 1
             : started
           if dart > 0 { return max(dart, nextWaiter) }
           if nextWaiter > 0 { return nextWaiter }
@@ -334,6 +447,7 @@ enum DownloadNativeWaitingQueue {
     defer { lock.unlock() }
     UserDefaults.standard.removeObject(forKey: stateKey)
     seenTransferringIds.removeAll()
+    seenTransferringUrls.removeAll()
     lastWrites.removeAll()
   }
 
@@ -364,10 +478,20 @@ enum DownloadNativeWaitingQueue {
     lock.lock()
     var state = loadLocked()
     if let failedId {
+      let sample = state.runningSamples[failedId]
+      let failedKey = state.episodeKey(taskId: failedId)
       state.transferringTaskIds.removeAll { $0 == failedId }
       state.runningSamples[failedId] = nil
       lastWrites[failedId] = nil
       seenTransferringIds.remove(failedId)
+      if let url = sample?.url, !url.isEmpty {
+        let stillSameUrl = state.transferringTaskIds.contains { id in
+          state.episodeKey(taskId: id) == failedKey
+        }
+        if !stillSameUrl {
+          seenTransferringUrls.remove(url)
+        }
+      }
       if !state.pausedTaskIds.contains(failedId) {
         state.pausedTaskIds.append(failedId)
       }
@@ -395,9 +519,20 @@ enum DownloadNativeWaitingQueue {
     lock.lock()
     var state = loadLocked()
     if let completedId {
+      let sample = state.runningSamples[completedId]
+      let completedKey = state.episodeKey(taskId: completedId)
       state.transferringTaskIds.removeAll { $0 == completedId }
       state.runningSamples[completedId] = nil
       lastWrites[completedId] = nil
+      seenTransferringIds.remove(completedId)
+      if let url = sample?.url, !url.isEmpty {
+        let stillSameUrl = state.transferringTaskIds.contains { id in
+          state.episodeKey(taskId: id) == completedKey
+        }
+        if !stillSameUrl {
+          seenTransferringUrls.remove(url)
+        }
+      }
       if !state.completedTaskIds.contains(completedId) {
         state.completedTaskIds.append(completedId)
       }
@@ -450,19 +585,35 @@ enum DownloadNativeWaitingQueue {
     }
   }
 
-  /// One URLSession task per episode. If this waiter is already transferring,
-  /// only update the session overlay.
+  /// One URLSession task per episode. If this waiter is already transferring
+  /// (same taskId, url, or file), only update the session overlay.
   private static func startIfNotAlreadyNative(_ waiter: Waiter, on session: URLSession) {
-    lock.lock()
-    let alreadyTransferring = seenTransferringIds.contains(waiter.taskId)
-    let alreadyCompleted = loadLocked().completedTaskIds.contains(waiter.taskId)
-    lock.unlock()
-    if alreadyTransferring || alreadyCompleted {
+    if alreadyHasNativeTask(waiter) {
       NSLog("[DownloadNativeWaitingQueue] already native %@", waiter.taskId)
-      startLiveActivity(taskId: waiter.taskId, displayName: waiter.displayName)
+      startLiveActivity(
+        taskId: waiter.taskId,
+        displayName: waiter.displayName,
+        progress: waiter.savedProgress,
+        totalBytes: waiter.savedExpectedBytes,
+        transferredBytes: waiter.transferredBytes
+      )
       return
     }
     start(waiter, on: session)
+  }
+
+  private static func alreadyHasNativeTask(_ waiter: Waiter) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    if seenTransferringIds.contains(waiter.taskId) { return true }
+    if !waiter.url.isEmpty && seenTransferringUrls.contains(waiter.url) { return true }
+    let state = loadLocked()
+    if state.completedTaskIds.contains(waiter.taskId) { return true }
+    let waiterKey = episodeKey(for: waiter)
+    if state.transferringTaskIds.contains(where: { state.episodeKey(taskId: $0) == waiterKey }) {
+      return true
+    }
+    return false
   }
 
   private static func popWaiterLocked(_ state: inout State) -> Waiter? {
@@ -503,6 +654,25 @@ enum DownloadNativeWaitingQueue {
       requeue(waiter)
       return
     }
+    lock.lock()
+    if seenTransferringIds.contains(waiter.taskId)
+      || (!waiter.url.isEmpty && seenTransferringUrls.contains(waiter.url)) {
+      lock.unlock()
+      NSLog("[DownloadNativeWaitingQueue] already native %@", waiter.taskId)
+      startLiveActivity(
+        taskId: waiter.taskId,
+        displayName: waiter.displayName,
+        progress: waiter.savedProgress,
+        totalBytes: waiter.savedExpectedBytes,
+        transferredBytes: waiter.transferredBytes
+      )
+      return
+    }
+    seenTransferringIds.insert(waiter.taskId)
+    if !waiter.url.isEmpty {
+      seenTransferringUrls.insert(waiter.url)
+    }
+    lock.unlock()
     let downloadTask: URLSessionDownloadTask
     if let resume = waiter.resumeDataBase64,
        !resume.isEmpty,
@@ -523,9 +693,6 @@ enum DownloadNativeWaitingQueue {
     }
     downloadTask.taskDescription = waiter.taskDescription
     downloadTask.resume()
-    lock.lock()
-    seenTransferringIds.insert(waiter.taskId)
-    lock.unlock()
     NSLog("[DownloadNativeWaitingQueue] started %@", waiter.taskId)
     startLiveActivity(
       taskId: waiter.taskId,
@@ -581,7 +748,10 @@ enum DownloadNativeWaitingQueue {
     var expected: Int64 = 0
     var combinedSpeed = 0.0
     var hasExpected = false
+    var seenEpisodes = Set<String>()
     for taskId in state.transferringTaskIds {
+      let key = state.episodeKey(taskId: taskId)
+      if !seenEpisodes.insert(key).inserted { continue }
       guard let running = state.runningSamples[taskId] else { continue }
       written += running.written
       if running.expected > 0 {
@@ -606,7 +776,7 @@ enum DownloadNativeWaitingQueue {
       ?? state.transferringTaskIds.first
       ?? fallbackId
     let name: String
-    if state.transferringTaskIds.count > 1 {
+    if state.uniqueTransferringCount > 1 {
       if let sample = state.runningSamples[firstRunningId], !sample.displayName.isEmpty {
         name = sample.displayName
       } else if !state.sessionDisplayName.isEmpty {
@@ -644,11 +814,24 @@ enum DownloadNativeWaitingQueue {
       .components(separatedBy: "***<<<|>>>***").first ?? ""
     let display = stringFromTaskJson(json, key: "displayName")
     let filename = stringFromTaskJson(json, key: "filename")
+    let url = stringFromTaskJson(json, key: "url")
+    let directory = stringFromTaskJson(json, key: "directory")
+    let metaData = stringFromTaskJson(json, key: "metaData")
     let name = display.isEmpty ? (filename.isEmpty ? id : filename) : display
     let now = CFAbsoluteTimeGetCurrent()
+    let writeKey = episodeKey(
+      taskId: id,
+      url: url,
+      filename: filename,
+      directory: directory,
+      trackingUrl: metaData
+    )
 
     lock.lock()
     seenTransferringIds.insert(id)
+    if !url.isEmpty {
+      seenTransferringUrls.insert(url)
+    }
     var speed: Double = 0
     if let last = lastWrites[id], now > last.time {
       let deltaBytes = Double(max(totalWritten - last.bytes, 0))
@@ -659,25 +842,38 @@ enum DownloadNativeWaitingQueue {
     }
     lastWrites[id] = WriteSample(taskId: id, bytes: totalWritten, time: now)
     var state = loadLocked()
-    if !state.transferringTaskIds.contains(id) {
+    let existingId = state.transferringTaskIds.first {
+      $0 != id && state.episodeKey(taskId: $0) == writeKey
+    }
+    let sampleId = existingId ?? id
+    if existingId == nil, !state.transferringTaskIds.contains(id) {
       state.transferringTaskIds.append(id)
     }
-    var sample = state.runningSamples[id] ?? RunningSample(
+    var sample = state.runningSamples[sampleId] ?? RunningSample(
       written: 0,
       expected: -1,
       speed: 0,
       displayName: ""
     )
-    sample.written = totalWritten
+    if totalWritten >= sample.written {
+      sample.written = totalWritten
+    }
     if totalExpected > 0 { sample.expected = totalExpected }
     if speed > 0 { sample.speed = speed }
     if sample.displayName.isEmpty {
       sample.displayName = name
     }
-    state.runningSamples[id] = sample
+    if sample.url.isEmpty { sample.url = url }
+    if sample.filename.isEmpty { sample.filename = filename }
+    if sample.directory.isEmpty { sample.directory = directory }
+    if sample.metaData.isEmpty { sample.metaData = metaData }
+    state.runningSamples[sampleId] = sample
+    state.transferringTaskIds = uniqueByEpisode(state.transferringTaskIds) {
+      state.episodeKey(taskId: $0)
+    }
     let transferringSet = Set(state.transferringTaskIds)
     state.runningSamples = state.runningSamples.filter { transferringSet.contains($0.key) }
-    let presentation = overlayPresentation(from: state, fallbackId: id, fallbackName: name)
+    let presentation = overlayPresentation(from: state, fallbackId: sampleId, fallbackName: name)
     saveLocked(state)
     lock.unlock()
 
@@ -705,7 +901,7 @@ enum DownloadNativeWaitingQueue {
       fallbackId: taskId,
       fallbackName: displayName
     )
-    let keepExisting = state.transferringTaskIds.count > 1
+    let keepExisting = state.uniqueTransferringCount > 1
     lock.unlock()
     let initialProgress = progress > 0 ? progress : 0
     upsertSessionOverlay(
@@ -724,7 +920,7 @@ enum DownloadNativeWaitingQueue {
     lock.lock()
     let state = loadLocked()
     let idle = state.sessionIsIdle
-    let transferringCount = state.transferringTaskIds.count
+    let transferringCount = state.uniqueTransferringCount
     let presentation = overlayPresentation(
       from: state,
       fallbackId: state.sessionCurrentTaskId,
@@ -792,7 +988,7 @@ enum DownloadNativeWaitingQueue {
     let switched = !currentTaskId.isEmpty
       && currentTaskId != state.sessionCurrentTaskId
       && currentTaskId != "session"
-    let resetOnSwitch = switched && state.transferringTaskIds.count <= 1
+    let resetOnSwitch = switched && state.uniqueTransferringCount <= 1
     state.sessionCurrentTaskId = currentTaskId
     if !displayName.isEmpty {
       state.sessionDisplayName = displayName
@@ -865,6 +1061,108 @@ enum DownloadNativeWaitingQueue {
   private static func unique(_ values: [String]) -> [String] {
     var seen = Set<String>()
     return values.filter { seen.insert($0).inserted }
+  }
+
+  private static func uniqueByEpisode(_ ids: [String], key: (String) -> String) -> [String] {
+    var seen = Set<String>()
+    return ids.filter { seen.insert(key($0)).inserted }
+  }
+
+  static func episodeKey(
+    taskId: String,
+    url: String = "",
+    filename: String = "",
+    directory: String = "",
+    trackingUrl: String = ""
+  ) -> String {
+    let track = trackingUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !track.isEmpty { return "track:\(track)" }
+    let file = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+    let dir = directory.replacingOccurrences(of: "\\", with: "/")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    if !file.isEmpty { return "file:\(dir)|\(file)" }
+    let downloadUrl = url.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !downloadUrl.isEmpty { return "url:\(downloadUrl)" }
+    return "id:\(taskId)"
+  }
+
+  static func episodeKey(for waiter: Waiter) -> String {
+    episodeKey(
+      taskId: waiter.taskId,
+      url: waiter.url,
+      filename: waiter.filename,
+      directory: waiter.directory,
+      trackingUrl: metaDataFromTaskJson(waiter.taskJson)
+    )
+  }
+
+  private struct StoredEpisodeIdentity {
+    var taskId: String
+    var url: String
+    var filename: String
+    var directory: String
+    var trackingUrl: String
+
+    var key: String {
+      DownloadNativeWaitingQueue.episodeKey(
+        taskId: taskId,
+        url: url,
+        filename: filename,
+        directory: directory,
+        trackingUrl: trackingUrl
+      )
+    }
+  }
+
+  private static func identityLookup(_ value: Any?) -> [String: StoredEpisodeIdentity] {
+    var result: [String: StoredEpisodeIdentity] = [:]
+    let rows: [[String: Any]]
+    if let typed = value as? [[String: Any]] {
+      rows = typed
+    } else if let any = value as? [Any] {
+      rows = any.compactMap { $0 as? [String: Any] }
+    } else {
+      rows = []
+    }
+    for row in rows {
+      guard let taskId = string(row["taskId"]), !taskId.isEmpty else { continue }
+      result[taskId] = StoredEpisodeIdentity(
+        taskId: taskId,
+        url: string(row["url"]) ?? "",
+        filename: string(row["filename"]) ?? "",
+        directory: string(row["directory"]) ?? "",
+        trackingUrl: string(row["trackingUrl"]) ?? ""
+      )
+    }
+    return result
+  }
+
+  static func liveIdentities() -> [[String: String]] {
+    lock.lock()
+    defer { lock.unlock() }
+    let state = loadLocked()
+    var result: [[String: String]] = []
+    var seen = Set<String>()
+    for id in state.transferringTaskIds {
+      guard seen.insert(id).inserted else { continue }
+      let sample = state.runningSamples[id]
+      let filename = sample?.filename ?? ""
+      let directory = sample?.directory ?? ""
+      let fileKey = filename.isEmpty ? "" : "\(directory)|\(filename)"
+      result.append([
+        "taskId": id,
+        "url": sample?.url ?? "",
+        "filename": filename,
+        "directory": directory,
+        "trackingUrl": sample?.metaData ?? "",
+        "fileKey": fileKey,
+      ])
+    }
+    return result
+  }
+
+  static func metaDataFromTaskJson(_ taskJson: String) -> String {
+    stringFromTaskJson(taskJson, key: "metaData")
   }
 
   private static func clamp(_ value: Int) -> Int {
