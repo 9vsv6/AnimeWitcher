@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/account/animewitcher_character_models.dart';
@@ -112,20 +113,25 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
   }
 
   bool _isSectionOnScreen() {
-    final box = context.findRenderObject();
-    if (box is! RenderBox || !box.hasSize || !box.attached) return false;
-    final section = box.localToGlobal(Offset.zero) & box.size;
-    if (section.isEmpty) return false;
-
-    final scrollableBox = Scrollable.maybeOf(
-      context,
-    )?.context.findRenderObject();
-    if (scrollableBox is RenderBox && scrollableBox.hasSize) {
-      final viewport =
-          scrollableBox.localToGlobal(Offset.zero) & scrollableBox.size;
-      return section.overlaps(viewport);
+    final object = context.findRenderObject();
+    if (object is! RenderBox || !object.hasSize || !object.attached) {
+      return false;
     }
 
+    // Sliver viewports do not always apply their scroll offset to
+    // [RenderBox.localToGlobal]. Use the viewport reveal offset instead.
+    final viewport = RenderAbstractViewport.maybeOf(object);
+    final position = Scrollable.maybeOf(context)?.position;
+    if (viewport != null && position != null && position.hasPixels) {
+      final leading = viewport.getOffsetToReveal(object, 0).offset;
+      final trailing = leading + object.size.height;
+      final viewStart = position.pixels;
+      final viewEnd = viewStart + position.viewportDimension;
+      return leading < viewEnd && trailing > viewStart;
+    }
+
+    final section = object.localToGlobal(Offset.zero) & object.size;
+    if (section.isEmpty) return false;
     return section.overlaps(Offset.zero & MediaQuery.sizeOf(context));
   }
 
