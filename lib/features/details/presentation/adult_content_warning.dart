@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
+import 'widgets/details_ratings_row.dart';
 import 'widgets/premium_details_widgets.dart';
 
 /// Exact APK `snippet_ecchi_warning.xml` copy. Do not rephrase.
@@ -86,21 +87,24 @@ class AdultContentWarningBanner extends StatelessWidget {
   }
 }
 
-/// Countdown, then the APK adult warning, then the story card.
+/// Countdown, adult warning, ratings row, then the story card.
 ///
 /// Pass [showCountdown] false on desktop, where the countdown already lives
-/// in the hero. The warning still sits immediately above [storyCard].
+/// in the hero. The warning and ratings still sit immediately above
+/// [storyCard].
 class DetailsCountdownAndStory extends StatelessWidget {
   const DetailsCountdownAndStory({
     super.key,
     required this.item,
     required this.storyCard,
     this.showCountdown = true,
+    this.showRatings = true,
   });
 
   final MultimediaItem item;
   final Widget storyCard;
   final bool showCountdown;
+  final bool showRatings;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +120,10 @@ class DetailsCountdownAndStory extends StatelessWidget {
         ],
         if (showWarning) ...[
           const AdultContentWarningBanner(),
+          const SizedBox(height: 8),
+        ],
+        if (showRatings) ...[
+          DetailsRatingsRow(item: item),
           const SizedBox(height: 8),
         ],
         storyCard,

@@ -157,19 +157,6 @@ class MetadataBar extends ConsumerWidget {
     return count;
   }
 
-  String? _ratingValue(Map<String, String> data) {
-    final raw = _clean(data['awMalScore']);
-    if (raw == null) return null;
-    final normalized = _normalizeDigits(raw);
-    final match = RegExp(r'[0-9]+(?:[.][0-9]+)?').firstMatch(normalized);
-    final score = match == null ? null : double.tryParse(match.group(0)!);
-    if (score == null || score <= 0) return null;
-    return score
-        .toStringAsFixed(2)
-        .replaceFirst(RegExp(r'0+$'), '')
-        .replaceFirst(RegExp(r'[.]$'), '');
-  }
-
   Widget _buildMetadataRow(List<Widget> entries, TextStyle? separatorStyle) {
     return Wrap(
       spacing: 8,
@@ -197,7 +184,6 @@ class MetadataBar extends ConsumerWidget {
     final ageRating = _clean(data['awAge']) ?? _clean(item.contentRating);
     final season = _seasonLabel(context, data);
     final episodeCount = _episodeCount(data);
-    final ratingValue = _ratingValue(data);
 
     final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.76),
@@ -228,16 +214,6 @@ class MetadataBar extends ConsumerWidget {
             ],
           )
         : Text('$episodeCount episodes', style: style);
-    final ratingEntry = ratingValue == null
-        ? null
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.star_rounded, size: 17, color: Colors.amber.shade600),
-              const SizedBox(width: 3),
-              Text(ratingValue, style: style),
-            ],
-          );
 
     final isArabic = _isArabicDetailsLocale(context);
     final firstRow = <Widget>[
@@ -260,12 +236,8 @@ class MetadataBar extends ConsumerWidget {
         if (ageEntry != null) ageEntry,
       ],
     ];
-    final thirdRow = <Widget>[if (ratingEntry != null) ratingEntry];
 
-    if (firstRow.isEmpty &&
-        secondRow.isEmpty &&
-        thirdRow.isEmpty &&
-        isLoading) {
+    if (firstRow.isEmpty && secondRow.isEmpty && isLoading) {
       return Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -287,10 +259,6 @@ class MetadataBar extends ConsumerWidget {
         if (secondRow.isNotEmpty) ...[
           const SizedBox(height: 4),
           _buildMetadataRow(secondRow, separatorStyle),
-        ],
-        if (thirdRow.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          _buildMetadataRow(thirdRow, separatorStyle),
         ],
       ],
     );

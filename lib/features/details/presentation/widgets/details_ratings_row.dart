@@ -1,0 +1,489 @@
+import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../../../core/account/account_providers.dart';
+import '../../../../core/account/animewitcher_account_models.dart';
+import '../../../../core/account/animewitcher_comment_models.dart';
+import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/services/notification_service.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../comments/presentation/animewitcher_comments_screen.dart';
+import '../details_ratings.dart';
+import 'scale_rating_bar.dart';
+
+const Key kDetailsRatingsRowKey = Key('details-ratings-row');
+const Key kDetailsRatingsWitcherKey = Key('details-ratings-witcher');
+const Key kDetailsRatingsMalKey = Key('details-ratings-mal');
+const Key kDetailsRatingsRateButtonKey = Key('details-ratings-rate-button');
+const Key kDetailsRatingsReviewsButtonKey = Key(
+  'details-ratings-reviews-button',
+);
+const Key kDetailsRatingsUserStarsKey = Key('details-ratings-user-stars');
+
+const String kRateLoginRequiredToast = 'يجب تسجيل الدخول';
+const String kReviewsClosedToast = 'تم ايقاف المراجعات علي هذا الأنمي';
+
+class DetailsRatingsRow extends ConsumerStatefulWidget {
+  const DetailsRatingsRow({super.key, required this.item});
+
+  final MultimediaItem item;
+
+  @override
+  ConsumerState<DetailsRatingsRow> createState() => _DetailsRatingsRowState();
+}
+
+class _DetailsRatingsRowState extends ConsumerState<DetailsRatingsRow> {
+  int? _userRating;
+  bool _loadingRating = false;
+  bool _loadedRating = false;
+  String? _loadedAnimeId;
+
+  AnimeDetailsRatings get _ratings =>
+      AnimeDetailsRatings.fromItem(widget.item);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadUserRating();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant DetailsRatingsRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.url != widget.item.url) {
+      _loadUserRating();
+    }
+  }
+
+  Future<void> _loadUserRating() async {
+    final service = ref.read(animeWitcherAccountServiceProvider);
+    final animeId = _ratings.animeId;
+    if (!service.isSignedIn || animeId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _userRating = null;
+          _loadingRating = false;
+          _loadedRating = true;
+          _loadedAnimeId = animeId;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _loadingRating = true;
+      _loadedAnimeId = animeId;
+    });
+    try {
+      final rating = await service.loadAnimeUserRating(animeId);
+      if (!mounted) return;
+      setState(() {
+        _userRating = rating;
+        _loadingRating = false;
+        _loadedRating = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingRating = false;
+        _loadedRating = true;
+      });
+    }
+  }
+
+  void _toast(String message, {bool info = true}) {
+    final notifications = ref.read(notificationServiceProvider);
+    if (info) {
+      notifications.showInfo(message);
+    } else {
+      notifications.showError(message);
+    }
+  }
+
+  Future<void> _onRatePressed() async {
+    final service = ref.read(animeWitcherAccountServiceProvider);
+    if (!service.isSignedIn) {
+      _toast(kRateLoginRequiredToast);
+      return;
+    }
+    if (!_ratings.canRate) return;
+    final selected = await showAnimeRatingDialog(
+      context,
+      initialRating: _userRating ?? 0,
+    );
+    if (!mounted || selected == null) return;
+    try {
+      if (selected == 0) {
+        await service.clearAnimeUserRating(_ratings.animeId);
+        if (!mounted) return;
+        setState(() => _userRating = null);
+      } else {
+        final saved = await service.saveAnimeUserRating(
+          _ratings.animeId,
+          selected,
+        );
+        if (!mounted) return;
+        setState(() => _userRating = saved);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      if (error is AnimeWitcherAccountException &&
+          error.code == 'not-signed-in') {
+        _toast(kRateLoginRequiredToast);
+      } else {
+        _toast(error.toString(), info: false);
+      }
+    }
+  }
+
+  Future<void> _onReviewsPressed() async {
+    final ratings = _ratings;
+    if (ratings.reviewsClosed) {
+      _toast(kReviewsClosedToast);
+      return;
+    }
+    final service = ref.read(animeWitcherAccountServiceProvider);
+    if (service.isSignedIn && ratings.animeId.isNotEmpty) {
+      try {
+        final closed = await service.isAnimeReviewsClosed(ratings.animeId);
+        if (!mounted) return;
+        if (closed) {
+          _toast(kReviewsClosedToast);
+          return;
+        }
+      } catch (_) {
+        // Keep the local details flag as the fallback.
+      }
+    }
+    final target = animeWitcherAnimeReviewTarget(widget.item);
+    if (target == null || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AnimeWitcherCommentsScreen(target: target),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final account = ref.watch(animeWitcherAccountControllerProvider);
+    final signedIn =
+        account.asData?.value.isSignedIn ??
+        ref.read(animeWitcherAccountServiceProvider).isSignedIn;
+    final animeId = _ratings.animeId;
+    if (signedIn &&
+        !_loadingRating &&
+        (!_loadedRating || _loadedAnimeId != animeId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadUserRating();
+      });
+    }
+
+    final ratings = _ratings;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final showMal = ratings.showMalColumn;
+
+    return DecoratedBox(
+      key: kDetailsRatingsRowKey,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.38),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _witcherColumn(context, ratings)),
+                  if (showMal) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: SizedBox(
+                        height: 72,
+                        child: VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: colors.outlineVariant.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ),
+                    Expanded(child: _malColumn(context, ratings)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                children: [
+                  if (ratings.canRate) ...[
+                    Expanded(
+                      child: _RatingsActionButton(
+                        key: kDetailsRatingsRateButtonKey,
+                        icon: Icons.star_outline_rounded,
+                        label: 'قيّم',
+                        onPressed: _onRatePressed,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: _RatingsActionButton(
+                      key: kDetailsRatingsReviewsButtonKey,
+                      icon: Icons.rate_review_outlined,
+                      label: 'المراجعات',
+                      emphasized: true,
+                      onPressed: _onReviewsPressed,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _witcherColumn(BuildContext context, AnimeDetailsRatings ratings) {
+    final theme = Theme.of(context);
+    final score = ratings.witcherScore;
+    return KeyedSubtree(
+      key: kDetailsRatingsWitcherKey,
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Column(
+          children: [
+            Text(
+              'تقييم انمي ويتشر',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: AppTheme.animeWitcherAccent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              textDirection: TextDirection.ltr,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.star_rounded,
+                  size: 26,
+                  color: AppTheme.animeWitcherAccent,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  score == null ? '—' : formatRatingScore(score),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+            if (ratings.witcherVoteCount != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${ratings.witcherVoteCount} تصويت',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: ScaleRatingBar(
+                key: kDetailsRatingsUserStarsKey,
+                rating: _userRating ?? 0,
+                enabled: ratings.canRate,
+                starSize: 18,
+                padding: const EdgeInsets.symmetric(horizontal: 1),
+                onChanged: ratings.canRate
+                    ? (_) => _onRatePressed()
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _malColumn(BuildContext context, AnimeDetailsRatings ratings) {
+    final theme = Theme.of(context);
+    final mean = ratings.malMean;
+    final users = ratings.displayedMalScoringUsers;
+    return KeyedSubtree(
+      key: kDetailsRatingsMalKey,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppTheme.animeWitcherAccent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: AppTheme.animeWitcherAccent.withValues(alpha: 0.45),
+              ),
+            ),
+            child: Text(
+              'MAL',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: AppTheme.animeWitcherAccent,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            mean == null ? '—' : formatRatingScore(mean),
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            users == null ? 'MAL Score' : '($users)',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RatingsActionButton extends StatelessWidget {
+  const _RatingsActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.emphasized = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final background = emphasized
+        ? AppTheme.animeWitcherAccent.withValues(alpha: 0.16)
+        : colors.surfaceContainerHigh.withValues(alpha: 0.92);
+    final foreground = emphasized
+        ? AppTheme.animeWitcherAccent
+        : colors.onSurface;
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: foreground),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<int?> showAnimeRatingDialog(
+  BuildContext context, {
+  required int initialRating,
+}) {
+  var rating = initialRating.clamp(0, 10);
+  return showDialog<int>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('قيّم'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$rating /10',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: ScaleRatingBar(
+                      rating: rating,
+                      starSize: 30,
+                      onChanged: (value) {
+                        setDialogState(() => rating = value);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              if (initialRating > 0)
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, 0),
+                  child: const Text('مسح التقييم'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('إلغاء'),
+              ),
+              FilledButton(
+                onPressed: rating <= 0
+                    ? null
+                    : () => Navigator.pop(dialogContext, rating),
+                child: const Text('تأكيد'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}

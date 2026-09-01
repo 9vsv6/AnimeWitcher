@@ -102,6 +102,7 @@ Future<void> _pumpStack(
       DetailsCountdownAndStory(
         item: item,
         showCountdown: showCountdown,
+        showRatings: false,
         storyCard: _storyCard(),
       ),
       fontFamily: fontFamily,
