@@ -15,6 +15,7 @@ import 'related_anime_screen.dart';
 import '../../comments/presentation/animewitcher_comments_screen.dart';
 import '../../../core/utils/artwork_quality.dart';
 import '../../../core/utils/image_fallbacks.dart';
+import '../../../core/utils/resume_episode.dart';
 import 'details_item_merge.dart';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -867,28 +868,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   }
 
   Episode? _resumeEpisodeFrom(List<Episode> episodes) {
-    final resumeUrl = widget.resumeEpisodeUrl?.trim();
-    if (resumeUrl != null && resumeUrl.isNotEmpty) {
-      for (final episode in episodes) {
-        if (episode.url.trim() == resumeUrl) return episode;
-      }
-    }
-
-    final resumeNumber = widget.resumeEpisodeNumber;
-    if (resumeNumber == null || resumeNumber <= 0) return null;
-
-    final resumeSeason = widget.resumeSeason;
-    Episode? numberMatch;
-    for (final episode in episodes) {
-      if (episode.episode != resumeNumber) continue;
-      numberMatch ??= episode;
-      if (resumeSeason != null &&
-          resumeSeason > 0 &&
-          episode.season == resumeSeason) {
-        return episode;
-      }
-    }
-    return numberMatch;
+    return matchResumeEpisode(
+      episodes,
+      resumeEpisodeUrl: widget.resumeEpisodeUrl,
+      resumeEpisodeNumber: widget.resumeEpisodeNumber,
+      resumeSeason: widget.resumeSeason,
+    );
   }
 
   @override

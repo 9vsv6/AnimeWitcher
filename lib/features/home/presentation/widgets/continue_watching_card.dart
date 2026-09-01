@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/features/details/presentation/playback_launcher.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 
@@ -12,6 +13,7 @@ import 'package:animewitcher/core/utils/layout_constants.dart';
 import '../../../../core/extensions/extension_manager.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/loading_dialog.dart';
+import 'package:animewitcher/shared/widgets/taskbar_visibility.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
 
@@ -108,8 +110,6 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
     final isSeries = item.contentType == MultimediaContentType.series;
     final isAnime = item.contentType == MultimediaContentType.anime;
     final hasEpisodes = isSeries || isAnime;
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
     final episodePosterUrl = AppImageFallbacks.optional(
       widget.historyItem.episodePosterUrl,
@@ -195,76 +195,75 @@ class _ContinueWatchingCardState extends ConsumerState<ContinueWatchingCard> {
         }
 
         unawaited(
-          DetailsRoute(
-            $extra: DetailsRouteExtra(
-              item: item,
-              autoPlay: true,
-              resumeEpisodeUrl: widget.historyItem.lastEpisodeUrl,
-              resumeEpisodeNumber: widget.historyItem.episode,
-              resumeSeason: widget.historyItem.season,
-            ),
-          ).push<void>(context),
+          ref
+              .read(playbackLauncherProvider)
+              .playFromContinueWatching(context, widget.historyItem),
         );
       },
       onLongPress: () {
-        showModalBottomSheet<void>(
-          context: context,
-          builder: (context) => Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  textDirection: TextDirection.ltr,
-                  textAlign: TextAlign.start,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: Text(AppLocalizations.of(context)!.viewDetails),
-                  onTap: () {
-                    Navigator.pop(context);
-                    unawaited(
-                      DetailsRoute(
-                        $extra: DetailsRouteExtra(item: item),
-                      ).push<void>(context),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: Icon(
-                    Icons.delete_outline,
-                    color: Theme.of(context).colorScheme.error,
+        final origin = context;
+        showModalOverTaskbar<void>(
+          context: origin,
+          builder: (sheetContext) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.start,
+                    style: Theme.of(sheetContext).textTheme.titleLarge,
                   ),
-                  title: Text(
-                    AppLocalizations.of(context)!.removeFromHistory,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                  const SizedBox(height: 8),
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: Text(AppLocalizations.of(sheetContext)!.viewDetails),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      if (!origin.mounted) return;
+                      unawaited(
+                        DetailsRoute(
+                          $extra: DetailsRouteExtra(item: item),
+                        ).push<void>(origin),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(sheetContext).colorScheme.error,
                     ),
+                    title: Text(
+                      AppLocalizations.of(sheetContext)!.removeFromHistory,
+                      style: TextStyle(
+                        color: Theme.of(sheetContext).colorScheme.error,
+                      ),
+                    ),
+                    onTap: () {
+                      ref
+                          .read(continueWatchingProvider.notifier)
+                          .remove(item.url);
+                      Navigator.pop(sheetContext);
+                      if (!origin.mounted) return;
+                      ref
+                          .read(notificationServiceProvider)
+                          .showSuccess(
+                            AppLocalizations.of(
+                              origin,
+                            )!.removedFromHistory(item.title),
+                          );
+                    },
                   ),
-                  onTap: () {
-                    ref
-                        .read(continueWatchingProvider.notifier)
-                        .remove(item.url);
-                    Navigator.pop(context);
-                    ref
-                        .read(notificationServiceProvider)
-                        .showSuccess(
-                          AppLocalizations.of(
-                            context,
-                          )!.removedFromHistory(item.title),
-                        );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.close),
-                  title: Text(AppLocalizations.of(context)!.cancel),
-                  onTap: () => Navigator.pop(context),
-                ),
-              ],
+                  ListTile(
+                    leading: const Icon(Icons.close),
+                    title: Text(AppLocalizations.of(sheetContext)!.cancel),
+                    onTap: () => Navigator.pop(sheetContext),
+                  ),
+                ],
+              ),
             ),
           ),
         );
