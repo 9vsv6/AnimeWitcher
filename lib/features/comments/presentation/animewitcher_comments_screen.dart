@@ -13,6 +13,7 @@ import 'package:animewitcher/core/services/notification_service.dart';
 import 'package:animewitcher/core/utils/request_generation.dart';
 
 import 'animewitcher_replies_screen.dart';
+import 'widgets/animewitcher_comment_sort_control.dart';
 
 class AnimeWitcherCommentsScreen extends ConsumerStatefulWidget {
   const AnimeWitcherCommentsScreen({
@@ -498,42 +499,6 @@ class _AnimeWitcherCommentsScreenState
     return _sort;
   }
 
-  String _commentSortSystemImage(AnimeWitcherCommentSort sort) {
-    return switch (sort) {
-      AnimeWitcherCommentSort.newest => 'clock',
-      AnimeWitcherCommentSort.oldest => 'clock.arrow.circlepath',
-      AnimeWitcherCommentSort.mostLiked => 'heart',
-    };
-  }
-
-  IconData _commentSortFallbackIcon(AnimeWitcherCommentSort sort) {
-    return switch (sort) {
-      AnimeWitcherCommentSort.newest => Icons.schedule_rounded,
-      AnimeWitcherCommentSort.oldest => Icons.history_rounded,
-      AnimeWitcherCommentSort.mostLiked => Icons.favorite_border_rounded,
-    };
-  }
-
-  List<AppleNativeMenuItem> _commentSortMenuItems(bool isArabic) {
-    return <AppleNativeMenuItem>[
-      AppleNativeMenuItem(
-        value: AnimeWitcherCommentSort.newest.name,
-        label: _sortLabel(AnimeWitcherCommentSort.newest, isArabic),
-        systemImage: _commentSortSystemImage(AnimeWitcherCommentSort.newest),
-      ),
-      AppleNativeMenuItem(
-        value: AnimeWitcherCommentSort.oldest.name,
-        label: _sortLabel(AnimeWitcherCommentSort.oldest, isArabic),
-        systemImage: _commentSortSystemImage(AnimeWitcherCommentSort.oldest),
-      ),
-      AppleNativeMenuItem(
-        value: AnimeWitcherCommentSort.mostLiked.name,
-        label: _sortLabel(AnimeWitcherCommentSort.mostLiked, isArabic),
-        systemImage: _commentSortSystemImage(AnimeWitcherCommentSort.mostLiked),
-      ),
-    ];
-  }
-
   void _showMessage(
     String message, {
     bool isError = false,
@@ -562,23 +527,6 @@ class _AnimeWitcherCommentsScreenState
 
     if (appleUsesPersistentLiquidGlassHeader) {
       final colors = Theme.of(context).colorScheme;
-      final trailingButtons = <AppleLiquidGlassToolbarButton>[
-        AppleLiquidGlassToolbarButton(
-          width: isArabic ? 150 : 140,
-          tooltip: _sortTooltip(isArabic),
-          icon: _commentSortFallbackIcon(_sort),
-          systemImage: _commentSortSystemImage(_sort),
-          title: _sortLabel(_sort, isArabic),
-          color: colors.primary,
-          menuTintColor: colors.primary,
-          onPressed: null,
-          selectedMenuValue: _sort.name,
-          menuItems: _commentSortMenuItems(isArabic),
-          onMenuSelected: (value) {
-            _applyCommentSort(_commentSortFromValue(value));
-          },
-        ),
-      ];
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
         applePersistentGlassHeaderController.show(
@@ -588,7 +536,15 @@ class _AnimeWitcherCommentsScreenState
             onBack: () => Navigator.of(context).pop(),
             backForegroundColor: colors.onSurface,
             backFallbackColor: colors.surfaceContainerHigh,
-            trailingButtons: trailingButtons,
+            trailingButtons: AnimeWitcherCommentSortControl.persistentButtons(
+              context: context,
+              isArabic: isArabic,
+              tooltip: _sortTooltip(isArabic),
+              sort: _sort,
+              onSelected: (value) {
+                _applyCommentSort(_commentSortFromValue(value));
+              },
+            ),
           ),
         );
       });
@@ -623,24 +579,14 @@ class _AnimeWitcherCommentsScreenState
             ),
             actions: appleUsesPersistentLiquidGlassHeader
                 ? const <Widget>[]
-                : [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: AppleNativeMenuButton(
-                        accessibilityLabel: _sortTooltip(isArabic),
-                        systemImage: 'arrow.up.arrow.down',
-                        fallbackIcon: Icons.filter_list_rounded,
-                        size: 46,
-                        width: 72,
-                        tintColor: Theme.of(context).colorScheme.primary,
-                        selectedValue: _sort.name,
-                        items: _commentSortMenuItems(isArabic),
-                        onSelected: (value) {
-                          _applyCommentSort(_commentSortFromValue(value));
-                        },
-                      ),
-                    ),
-                  ],
+                : AnimeWitcherCommentSortControl.appBarActions(
+                    tooltip: _sortTooltip(isArabic),
+                    selectedValue: _sort.name,
+                    items: AnimeWitcherCommentSortControl.menuItems(isArabic),
+                    onSelected: (value) {
+                      _applyCommentSort(_commentSortFromValue(value));
+                    },
+                  ),
           ),
         ),
       ),
@@ -1118,15 +1064,6 @@ class _CommentEditDraft {
 
   final String text;
   final bool spoiler;
-}
-
-String _sortLabel(AnimeWitcherCommentSort sort, bool isArabic) {
-  return switch (sort) {
-    AnimeWitcherCommentSort.newest => isArabic ? 'الأحدث' : 'Newest',
-    AnimeWitcherCommentSort.oldest => isArabic ? 'الأقدم' : 'Oldest',
-    AnimeWitcherCommentSort.mostLiked =>
-      isArabic ? 'الأكثر اعجابا' : 'Most liked',
-  };
 }
 
 String _commentErrorText(Object error, bool isArabic) {

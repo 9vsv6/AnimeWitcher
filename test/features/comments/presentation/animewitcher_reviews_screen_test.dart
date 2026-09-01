@@ -11,6 +11,8 @@ import 'package:animewitcher/core/storage/secure_token_storage.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/comments/presentation/animewitcher_comments_screen.dart';
 import 'package:animewitcher/features/comments/presentation/animewitcher_my_comments_screen.dart';
+import 'package:animewitcher/features/comments/presentation/widgets/animewitcher_comment_sort_control.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -33,6 +35,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
   final bool signedIn;
   final String myUserId;
   int? lastLimit;
+  AnimeWitcherCommentSort? lastSort;
   String? lastPublishedText;
   bool lastPublishedWasReview = false;
   bool lastPublishedSpoiler = false;
@@ -65,6 +68,22 @@ class _FakeAccountService extends AnimeWitcherAccountService {
     int limit = 20,
   }) async {
     lastLimit = limit;
+    lastSort = sort;
+    return AnimeWitcherCommentPage(
+      items: reviews,
+      cursor: null,
+      hasMore: false,
+    );
+  }
+
+  @override
+  Future<AnimeWitcherCommentPage> loadMyComments({
+    AnimeWitcherCommentSort sort = AnimeWitcherCommentSort.newest,
+    FirestoreDocument? cursor,
+    int limit = 20,
+  }) async {
+    lastLimit = limit;
+    lastSort = sort;
     return AnimeWitcherCommentPage(
       items: reviews,
       cursor: null,
@@ -79,6 +98,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
     int limit = kAnimeWitcherReviewsPageSize,
   }) async {
     lastLimit = limit;
+    lastSort = sort;
     return AnimeWitcherCommentPage(
       items: reviews,
       cursor: null,
@@ -149,8 +169,10 @@ Widget _app({
       scaffoldBackgroundColor: Colors.black,
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFFEEC60A),
-        surface: Color(0xFF000000),
+        surface: Color(0xFF0F0F13),
         onSurface: Color(0xFFE5E7EB),
+        surfaceContainerHigh: Color(0xFF18181F),
+        outlineVariant: Color(0xFF3F3F46),
       ),
     ),
     home: home,
@@ -166,6 +188,60 @@ Widget _app({
       ),
     ],
     child: app,
+  );
+}
+
+void _expectSharedDetailsSortControl(
+  WidgetTester tester, {
+  required String tooltip,
+}) {
+  expect(find.byType(AnimeWitcherCommentSortControl), findsOneWidget);
+  expect(find.byKey(kAnimeWitcherCommentSortControlKey), findsOneWidget);
+  expect(find.byKey(kMyCommentsSortButtonKey), findsOneWidget);
+
+  final button = tester.widget<AppleNativeMenuButton>(
+    find.byType(AppleNativeMenuButton),
+  );
+  expect(button.size, AnimeWitcherCommentSortControl.size);
+  expect(button.width, AnimeWitcherCommentSortControl.width);
+  expect(button.systemImage, AnimeWitcherCommentSortControl.systemImage);
+  expect(button.fallbackIcon, AnimeWitcherCommentSortControl.fallbackIcon);
+  expect(button.accessibilityLabel, tooltip);
+}
+
+void _expectAccountSortHeader(
+  WidgetTester tester, {
+  required String title,
+  required String sortTooltip,
+}) {
+  expect(find.text(title), findsOneWidget);
+  _expectSharedDetailsSortControl(tester, tooltip: sortTooltip);
+  expect(find.byType(AppleLiquidGlassBackButton), findsOneWidget);
+  expect(find.byIcon(Icons.sort_rounded), findsNothing);
+
+  final titleRect = tester.getRect(find.byKey(kMyCommentsTitleKey));
+  final sortRect = tester.getRect(find.byKey(kAnimeWitcherCommentSortControlKey));
+  final backRect = tester.getRect(find.byType(AppleLiquidGlassBackButton));
+
+  expect(
+    backRect.center.dx,
+    lessThan(titleRect.center.dx),
+    reason: 'Back stays on the visual left, away from the title',
+  );
+  expect(
+    sortRect.center.dx,
+    greaterThan(titleRect.center.dx),
+    reason: 'Sort sits to the visual right of the title, not next to back',
+  );
+  expect(
+    sortRect.left - titleRect.right,
+    lessThan(36),
+    reason: 'Sort is immediately next to the title',
+  );
+  expect(
+    titleRect.left - backRect.right,
+    greaterThan(sortRect.left - titleRect.right),
+    reason: 'Sort is closer to the title than the back button is',
   );
 }
 
@@ -239,6 +315,162 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 2));
   });
+
+  testWidgets(
+    'my reviews header places liquid-glass sort to the right of the title',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _app(
+          service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+          home: const AnimeWitcherMyCommentsScreen(isReviews: true),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      _expectAccountSortHeader(
+        tester,
+        title: 'مراجعاتي',
+        sortTooltip: 'ترتيب المراجعات',
+      );
+    },
+  );
+
+  testWidgets(
+    'my comments header places liquid-glass sort to the right of the title',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _app(
+          service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+          home: const AnimeWitcherMyCommentsScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      _expectAccountSortHeader(
+        tester,
+        title: 'تعليقاتي',
+        sortTooltip: 'ترتيب التعليقات',
+      );
+    },
+  );
+
+  testWidgets('my reviews sort menu keeps newest/oldest/most-liked options', (
+    tester,
+  ) async {
+    final service = _FakeAccountService(reviews: const <AnimeWitcherComment>[]);
+    await tester.pumpWidget(
+      _app(
+        service: service,
+        home: const AnimeWitcherMyCommentsScreen(isReviews: true),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(service.lastSort, AnimeWitcherCommentSort.newest);
+
+    await tester.tap(find.byKey(kMyCommentsSortButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('الأحدث'), findsWidgets);
+    expect(find.text('الأقدم'), findsWidgets);
+    expect(find.text('الأكثر اعجابا'), findsWidgets);
+
+    await tester.tap(find.text('الأقدم').last);
+    await tester.pumpAndSettle();
+    expect(service.lastSort, AnimeWitcherCommentSort.oldest);
+  });
+
+  testWidgets(
+    'details reviews and account pages share the details sort control',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      Future<AppleNativeMenuButton> pumpAndRead(Widget home) async {
+        await tester.pumpWidget(
+          _app(
+            service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+            home: home,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.byType(AnimeWitcherCommentSortControl), findsOneWidget);
+        expect(find.byKey(kAnimeWitcherCommentSortControlKey), findsOneWidget);
+        return tester.widget<AppleNativeMenuButton>(
+          find.byType(AppleNativeMenuButton),
+        );
+      }
+
+      final details = await pumpAndRead(
+        const AnimeWitcherCommentsScreen(target: _target),
+      );
+      final myReviews = await pumpAndRead(
+        const AnimeWitcherMyCommentsScreen(isReviews: true),
+      );
+      final myComments = await pumpAndRead(const AnimeWitcherMyCommentsScreen());
+
+      for (final button in <AppleNativeMenuButton>[
+        details,
+        myReviews,
+        myComments,
+      ]) {
+        expect(button.size, AnimeWitcherCommentSortControl.size);
+        expect(button.width, AnimeWitcherCommentSortControl.width);
+        expect(button.systemImage, AnimeWitcherCommentSortControl.systemImage);
+        expect(button.fallbackIcon, AnimeWitcherCommentSortControl.fallbackIcon);
+      }
+    },
+  );
+
+  testWidgets(
+    'iOS persistent trailing sort matches details comments/reviews geometry',
+    (tester) async {
+      late List<AppleLiquidGlassToolbarButton> arabic;
+      late List<AppleLiquidGlassToolbarButton> english;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            colorScheme: const ColorScheme.dark(primary: Color(0xFFEEC60A)),
+          ),
+          home: Builder(
+            builder: (context) {
+              arabic = AnimeWitcherCommentSortControl.persistentButtons(
+                context: context,
+                isArabic: true,
+                tooltip: 'ترتيب المراجعات',
+                sort: AnimeWitcherCommentSort.newest,
+                onSelected: (_) {},
+              );
+              english = AnimeWitcherCommentSortControl.persistentButtons(
+                context: context,
+                isArabic: false,
+                tooltip: 'Sort reviews',
+                sort: AnimeWitcherCommentSort.oldest,
+                onSelected: (_) {},
+              );
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+
+      expect(arabic, hasLength(1));
+      expect(arabic.single.width, 150);
+      expect(arabic.single.systemImage, 'clock');
+      expect(arabic.single.icon, Icons.schedule_rounded);
+      expect(arabic.single.title, 'الأحدث');
+      expect(arabic.single.menuItems, hasLength(3));
+
+      expect(english, hasLength(1));
+      expect(english.single.width, 140);
+      expect(english.single.systemImage, 'clock.arrow.circlepath');
+      expect(english.single.title, 'Oldest');
+    },
+  );
 
   testWidgets('my reviews screen lists unpublished review_text', (tester) async {
     final service = _FakeAccountService(
@@ -405,6 +637,113 @@ void main() {
         ],
       ),
     );
+    await shot(
+      'account_my_reviews_empty',
+      const AnimeWitcherMyCommentsScreen(isReviews: true),
+      _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+    );
+    await shot(
+      'account_my_comments_empty',
+      const AnimeWitcherMyCommentsScreen(),
+      _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+    );
+
+    const menuKey = ValueKey<String>('account_my_reviews_sort_menu');
+    await tester.pumpWidget(
+      _app(
+        service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+        home: const AnimeWitcherMyCommentsScreen(isReviews: true),
+        fontFamily: 'NotoSansArabic',
+        shotKey: menuKey,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(find.byKey(kMyCommentsSortButtonKey));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(menuKey),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File('${artifacts.path}/account_my_reviews_sort_menu.png').writeAsBytesSync(
+        bytes!.buffer.asUint8List(),
+      );
+    });
+
+    const iosKey = ValueKey<String>('sort_control_ios_trailing_fallback');
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: iosKey,
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            fontFamily: 'NotoSansArabic',
+            scaffoldBackgroundColor: Colors.black,
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFFEEC60A),
+              surface: Color(0xFF0F0F13),
+              onSurface: Color(0xFFE5E7EB),
+              surfaceContainerHigh: Color(0xFF18181F),
+              outlineVariant: Color(0xFF3F3F46),
+            ),
+          ),
+          home: Scaffold(
+            appBar: PreferredSize(
+              preferredSize: const Size.fromHeight(kToolbarHeight),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: AppBar(
+                  automaticallyImplyLeading: false,
+                  leading: const AppleLiquidGlassBackButton(),
+                  title: const Align(
+                    alignment: Alignment.centerRight,
+                    child: Text('المراجعات'),
+                  ),
+                  actions: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Builder(
+                        builder: (context) {
+                          return SizedBox(
+                            height: AnimeWitcherCommentSortControl.size,
+                            child: AppleLiquidGlassActionGroup(
+                              height: AnimeWitcherCommentSortControl.size,
+                              children: AnimeWitcherCommentSortControl
+                                  .persistentButtons(
+                                context: context,
+                                isArabic: true,
+                                tooltip: 'ترتيب المراجعات',
+                                sort: AnimeWitcherCommentSort.newest,
+                                onSelected: (_) {},
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(iosKey),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File('${artifacts.path}/sort_control_ios_trailing_fallback.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
+
     const editShot = ValueKey('review_edit_dialog');
     await tester.pumpWidget(
       _app(

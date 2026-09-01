@@ -13,6 +13,10 @@ import '../../../core/services/notification_service.dart';
 import '../../../core/utils/request_generation.dart';
 import '../../details/presentation/details_screen.dart';
 import 'animewitcher_replies_screen.dart';
+import 'widgets/animewitcher_comment_sort_control.dart';
+
+const Key kMyCommentsSortButtonKey = kAnimeWitcherCommentSortControlKey;
+const Key kMyCommentsTitleKey = Key('my-comments-title');
 
 class AnimeWitcherMyCommentsScreen extends ConsumerStatefulWidget {
   const AnimeWitcherMyCommentsScreen({
@@ -419,47 +423,88 @@ class _AnimeWitcherMyCommentsScreenState
     }
   }
 
+  String _sortTooltip(bool isArabic) => _isReviews
+      ? (isArabic ? 'ترتيب المراجعات' : 'Sort reviews')
+      : (isArabic ? 'ترتيب التعليقات' : 'Sort comments');
+
+  String _screenTitle(bool isArabic) => isArabic
+      ? (_isReviews ? 'مراجعاتي' : 'تعليقاتي')
+      : (_isReviews ? 'My reviews' : 'My comments');
+
+  AnimeWitcherCommentSort _sortFromValue(String value) {
+    for (final option in AnimeWitcherCommentSort.values) {
+      if (option.name == value) return option;
+    }
+    return _sort;
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(animeWitcherAccountControllerProvider);
+    final isArabic = _isArabic;
+    final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        leading: !appleUsesPersistentLiquidGlassHeader &&
-                Navigator.of(context).canPop()
-            ? const AppleLiquidGlassBackButton()
-            : null,
-        title: ApplePersistentGlassHeaderScope(
-          enabled: Navigator.of(context).canPop(),
-          onBack: () => Navigator.of(context).maybePop(),
-          child: Text(_isArabic
-              ? (_isReviews ? 'مراجعاتي' : 'تعليقاتي')
-              : (_isReviews ? 'My reviews' : 'My comments')),
-        ),
-        actions: [
-          PopupMenuButton<AnimeWitcherCommentSort>(
-            tooltip: _isArabic
-                ? (_isReviews ? 'ترتيب المراجعات' : 'ترتيب التعليقات')
-                : (_isReviews ? 'Sort reviews' : 'Sort comments'),
-            initialValue: _sort,
-            onSelected: _changeSort,
-            itemBuilder: (context) => AnimeWitcherCommentSort.values
-                .map(
-                  (sort) => PopupMenuItem<AnimeWitcherCommentSort>(
-                    value: sort,
-                    child: Row(
-                      children: [
-                        Icon(_sortIcon(sort), size: 20),
-                        const SizedBox(width: 10),
-                        Text(_sortLabel(sort)),
-                      ],
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Directionality(
+          // Keep back on the visual left and the liquid-glass sort on the
+          // visual right, next to the (RTL) title — same header geometry as
+          // the anime-details comments/reviews screen.
+          textDirection: TextDirection.ltr,
+          child: AppBar(
+            centerTitle: false,
+            titleSpacing: 16,
+            automaticallyImplyLeading: false,
+            leading: usePersistentGlass
+                ? null
+                : AppleLiquidGlassBackButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+            title: ApplePersistentGlassHeaderScope(
+              enabled: Navigator.of(context).canPop() || usePersistentGlass,
+              onBack: () => Navigator.of(context).maybePop(),
+              trailingButtons: usePersistentGlass
+                  ? AnimeWitcherCommentSortControl.persistentButtons(
+                      context: context,
+                      isArabic: isArabic,
+                      tooltip: _sortTooltip(isArabic),
+                      sort: _sort,
+                      onSelected: (value) {
+                        _changeSort(_sortFromValue(value));
+                      },
+                    )
+                  : null,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: usePersistentGlass && isArabic ? 92 : 0,
+                  left: usePersistentGlass && !isArabic ? 92 : 0,
+                ),
+                child: Align(
+                  alignment:
+                      isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Directionality(
+                    textDirection:
+                        isArabic ? TextDirection.rtl : TextDirection.ltr,
+                    child: Text(
+                      _screenTitle(isArabic),
+                      key: kMyCommentsTitleKey,
                     ),
                   ),
-                )
-                .toList(growable: false),
-            icon: const Icon(Icons.sort_rounded),
+                ),
+              ),
+            ),
+            actions: usePersistentGlass
+                ? const <Widget>[]
+                : AnimeWitcherCommentSortControl.appBarActions(
+                    tooltip: _sortTooltip(isArabic),
+                    selectedValue: _sort.name,
+                    items: AnimeWitcherCommentSortControl.menuItems(isArabic),
+                    onSelected: (value) {
+                      _changeSort(_sortFromValue(value));
+                    },
+                  ),
           ),
-        ],
+        ),
       ),
       body: Center(
         child: ConstrainedBox(
@@ -834,23 +879,6 @@ class _AnimeWitcherMyCommentsScreenState
         ],
       ),
     );
-  }
-
-  IconData _sortIcon(AnimeWitcherCommentSort sort) {
-    return switch (sort) {
-      AnimeWitcherCommentSort.newest => Icons.schedule_rounded,
-      AnimeWitcherCommentSort.oldest => Icons.history_rounded,
-      AnimeWitcherCommentSort.mostLiked => Icons.favorite_border_rounded,
-    };
-  }
-
-  String _sortLabel(AnimeWitcherCommentSort sort) {
-    return switch (sort) {
-      AnimeWitcherCommentSort.newest => _isArabic ? 'الأحدث' : 'Newest',
-      AnimeWitcherCommentSort.oldest => _isArabic ? 'الأقدم' : 'Oldest',
-      AnimeWitcherCommentSort.mostLiked =>
-        _isArabic ? 'الأكثر إعجابًا' : 'Most liked',
-    };
   }
 
   String _errorText(Object error) {
