@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/features/home/presentation/home_section_titles.dart';
 import 'package:animewitcher/features/home/presentation/view_all_screen.dart';
 import 'package:animewitcher/features/home/presentation/widgets/home_section_header.dart';
 import 'package:animewitcher/features/home/presentation/widgets/media_horizontal_list.dart';
@@ -235,6 +236,73 @@ void main() {
     expect(find.text(mostWatched), findsOneWidget);
     expect(find.text(newsTitle), findsOneWidget);
     expect(find.text('عرض الكل'), findsNWidgets(3));
+  });
+
+  testWidgets('home rails omit فصول جديدة and keep neighboring rows', (
+    tester,
+  ) async {
+    await tester.runAsync(_loadWalkthroughFonts);
+    const size = Size(390, 900);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const newChapters = 'فصول جديدة';
+    const latestEpisodes = 'الحلقات الجديدة';
+    const latestAdded = 'آخر الأعمال المضافة';
+    final data = <String, List<MultimediaItem>>{
+      'Trending': <MultimediaItem>[_anime('Hero', 'hero')],
+      latestEpisodes: <MultimediaItem>[_anime('Episode Show', 'ep1')],
+      newChapters: <MultimediaItem>[
+        _anime('RxOiaLyVTBIUObsclHrw', 'RxOiaLyVTBIUObsclHrw'),
+      ],
+      latestAdded: <MultimediaItem>[_anime('Added Show', 'added')],
+    };
+
+    await tester.pumpWidget(
+      _rtlApp(
+        size: size,
+        theme: _homeTheme(),
+        child: RepaintBoundary(
+          key: const ValueKey('home-rails-no-chapters'),
+          child: ColoredBox(
+            color: Colors.black,
+            child: ListView(
+              padding: const EdgeInsets.only(top: 8, bottom: 24),
+              children: [
+                for (final entry in visibleHomeRailEntries(data))
+                  _rail(
+                    title: entry.key,
+                    ids: [for (final item in entry.value) item.title],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text(newChapters), findsNothing);
+    expect(find.text('RxOiaLyVTBIUObsclHrw'), findsNothing);
+    expect(find.text(latestEpisodes), findsOneWidget);
+    expect(find.text(latestAdded), findsOneWidget);
+    expect(find.text('Episode Show'), findsWidgets);
+    expect(find.text('Added Show'), findsWidgets);
+
+    final artifacts = Directory('/opt/cursor/artifacts');
+    if (!artifacts.existsSync()) {
+      return;
+    }
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(const ValueKey('home-rails-no-chapters')),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(
+        '${artifacts.path}/home_rails_without_new_chapters.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
   });
 
   testWidgets('home rails screenshot for walkthrough', (tester) async {

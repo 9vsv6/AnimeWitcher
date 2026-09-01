@@ -74,7 +74,6 @@ class AnimeInformationSection extends StatelessWidget {
       String en,
       dynamic value, {
       bool showFullValue = false,
-      TextDirection? valueTextDirection,
     }) {
       final cleaned = cleanAnimeInfoValue(value);
       if (cleaned == null) return null;
@@ -82,7 +81,6 @@ class AnimeInformationSection extends StatelessWidget {
         label: isArabic ? ar : en,
         value: cleaned,
         showFullValue: showFullValue,
-        valueTextDirection: valueTextDirection,
       );
     }
 
@@ -112,9 +110,6 @@ class AnimeInformationSection extends StatelessWidget {
         'English title',
         _read(data, const ['awEnglishTitle']),
         showFullValue: true,
-        // Always Latin script: keep LTR/left-aligned even on the Arabic RTL
-        // details page. The Arabic label still inherits page direction.
-        valueTextDirection: TextDirection.ltr,
       ),
     ].whereType<_AnimeInfoEntry>().toList(growable: false);
 
@@ -155,13 +150,11 @@ class _AnimeInfoEntry {
   final String label;
   final String value;
   final bool showFullValue;
-  final TextDirection? valueTextDirection;
 
   const _AnimeInfoEntry({
     required this.label,
     required this.value,
     this.showFullValue = false,
-    this.valueTextDirection,
   });
 }
 
@@ -188,24 +181,15 @@ class _AnimeInfoValue extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        SizedBox(
-          width: entry.valueTextDirection == TextDirection.ltr
-              ? double.infinity
-              : null,
-          child: Text(
-            entry.value,
-            textDirection: entry.valueTextDirection,
-            textAlign: entry.valueTextDirection == TextDirection.ltr
-                ? TextAlign.start
-                : null,
-            maxLines: entry.showFullValue ? null : 2,
-            overflow: entry.showFullValue
-                ? TextOverflow.visible
-                : TextOverflow.ellipsis,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colors.onSurfaceVariant,
-              height: 1.25,
-            ),
+        Text(
+          entry.value,
+          maxLines: entry.showFullValue ? null : 2,
+          overflow: entry.showFullValue
+              ? TextOverflow.visible
+              : TextOverflow.ellipsis,
+          style: textTheme.bodyMedium?.copyWith(
+            color: colors.onSurfaceVariant,
+            height: 1.25,
           ),
         ),
       ],
