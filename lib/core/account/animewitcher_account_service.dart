@@ -956,7 +956,9 @@ class AnimeWitcherAccountService {
         .split('/')
         .where((segment) => segment.isNotEmpty)
         .toList(growable: false);
-    if (!ownsComment(comment) || !pathSegments.contains('comments')) {
+    if (!ownsComment(comment) ||
+        !(pathSegments.contains('comments') ||
+            pathSegments.contains('reviews'))) {
       throw const AnimeWitcherAccountException(
         'permission-denied',
         'Only the comment author can modify this comment.',
@@ -1143,7 +1145,14 @@ class AnimeWitcherAccountService {
         target.sourceDocumentPath,
         token,
       );
-      if (sourceDocument?.fields['comments_closed'] == true) {
+      if (target.isReviews) {
+        if (sourceDocument?.fields['reviews_closed'] == true) {
+          throw const AnimeWitcherAccountException(
+            'reviews-closed',
+            'Reviews are disabled for this anime.',
+          );
+        }
+      } else if (sourceDocument?.fields['comments_closed'] == true) {
         throw const AnimeWitcherAccountException(
           'comments-closed',
           'Comments are disabled for this item.',
@@ -1237,6 +1246,100 @@ class AnimeWitcherAccountService {
         token,
       );
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Anime ratings (`anime_list/{id}/ratings/{userDocId}`)
+  // -------------------------------------------------------------------------
+
+  Future<int?> loadAnimeUserRating(String animeId) async {
+    final id = animeId.trim();
+    final profile = _profile;
+    if (id.isEmpty || profile == null || _session == null) return null;
+    final document = await _authenticated(
+      (token) => _firestore.getDocument(
+        animeWitcherAnimeRatingPath(id, profile.documentId),
+        token,
+      ),
+    );
+    return _ratingValue(document?.fields['rate']);
+  }
+
+  Future<int?> saveAnimeUserRating(String animeId, int rate) async {
+    final id = animeId.trim();
+    if (id.isEmpty) {
+      throw const AnimeWitcherAccountException(
+        'invalid-anime',
+        'Anime id is missing.',
+      );
+    }
+    if (rate < 1 || rate > 10) {
+      throw const AnimeWitcherAccountException(
+        'invalid-rating',
+        'Rating must be an integer from 1 to 10.',
+      );
+    }
+    final profile = _requireSignedInProfile();
+    final path = animeWitcherAnimeRatingPath(id, profile.documentId);
+    await _authenticated(
+      (token) => _firestore.setDocument(
+        path,
+        <String, dynamic>{'rate': rate},
+        token,
+        merge: true,
+      ),
+    );
+    return rate;
+  }
+
+  Future<void> clearAnimeUserRating(String animeId) async {
+    final id = animeId.trim();
+    if (id.isEmpty) return;
+    final profile = _requireSignedInProfile();
+    final path = animeWitcherAnimeRatingPath(id, profile.documentId);
+    await _authenticated((token) async {
+      final existing = await _firestore.getDocument(path, token);
+      if (existing == null) return;
+      await _firestore.deleteDocument(path, token);
+    });
+  }
+
+  Future<bool> isAnimeReviewsClosed(String animeId) async {
+    final id = animeId.trim();
+    if (id.isEmpty) return false;
+    try {
+      if (_session != null) {
+        final document = await _authenticated(
+          (token) => _firestore.getDocument('anime_list/$id', token),
+        );
+        return document?.fields['reviews_closed'] == true;
+      }
+    } catch (_) {
+      // Fall through to the details-document fields already on screen.
+    }
+    return false;
+  }
+
+  AnimeWitcherProfile _requireSignedInProfile() {
+    final profile = _profile;
+    if (profile == null || _session == null) {
+      throw const AnimeWitcherAccountException(
+        'not-signed-in',
+        'Sign in to AnimeWitcher before rating.',
+      );
+    }
+    return profile;
+  }
+
+  int? _ratingValue(dynamic raw) {
+    if (raw is num) {
+      final value = raw.toInt();
+      if (value < 1 || value > 10) return null;
+      return value;
+    }
+    final parsed = int.tryParse(raw?.toString() ?? '');
+    if (parsed == null || parsed < 1 || parsed > 10) return null;
+    return parsed;
   }
 
   // -------------------------------------------------------------------------

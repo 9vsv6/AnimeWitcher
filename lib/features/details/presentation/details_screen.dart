@@ -38,6 +38,7 @@ import "widgets/premium_details_widgets.dart";
 import "widgets/details_extra_tabs.dart";
 import "widgets/details_tab_swipe.dart";
 import "widgets/anime_information_section.dart";
+import "adult_content_warning.dart";
 import "../../../shared/widgets/expandable_text.dart";
 import "../../../shared/widgets/loading_indicator.dart";
 import "../../../shared/widgets/underline_segment_tabs.dart";
@@ -1927,7 +1928,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       final isWide = constraints.maxWidth >= 900;
                       final infoColumn = [AnimeInformationSection(item: item)];
                       final synopsisColumn = [
-                        _buildSynopsisAndGenres(context, item, l10n),
+                        DetailsCountdownAndStory(
+                          item: item,
+                          showCountdown: false,
+                          storyCard: _buildSynopsisAndGenres(
+                            context,
+                            item,
+                            l10n,
+                          ),
+                        ),
                       ];
 
                       if (isWide) {
@@ -2080,11 +2089,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (item.nextAiring != null) ...[
-                    NextAiringWidget(nextAiring: item.nextAiring!),
-                    const SizedBox(height: 8),
-                  ],
-                  _buildSynopsisAndGenres(context, item, l10n),
+                  DetailsCountdownAndStory(
+                    item: item,
+                    storyCard: _buildSynopsisAndGenres(context, item, l10n),
+                  ),
                   const SizedBox(height: 28),
                   AnimeInformationSection(item: item),
                   ..._buildTrailerSections(context, item, trailersState),

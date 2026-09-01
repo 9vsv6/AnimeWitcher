@@ -31,6 +31,42 @@ class _AnimeWitcherCommentsScreenState
     extends ConsumerState<AnimeWitcherCommentsScreen> {
   static const int _pageSize = 20;
 
+  bool get _isReviews => widget.target.isReviews;
+
+  String _screenTitle(bool isArabic) => _isReviews
+      ? (isArabic ? 'المراجعات' : 'Reviews')
+      : (isArabic ? 'التعليقات' : 'Comments');
+
+  String _sortTooltip(bool isArabic) => _isReviews
+      ? (isArabic ? 'ترتيب المراجعات' : 'Sort reviews')
+      : (isArabic ? 'ترتيب التعليقات' : 'Sort comments');
+
+  String _emptyListText(bool isArabic) => _isReviews
+      ? (isArabic ? 'لا توجد مراجعات منشورة بعد.' : 'No published reviews yet.')
+      : (isArabic
+          ? 'لا توجد تعليقات منشورة بعد.'
+          : 'No published comments yet.');
+
+  String _composerHint(bool isArabic) => _isReviews
+      ? (isArabic ? 'اكتب مراجعة...' : 'Write a review...')
+      : (isArabic ? 'اكتب تعليقًا...' : 'Write a comment...');
+
+  String _signInComposerText(bool isArabic) => _isReviews
+      ? (isArabic
+          ? 'سجّل الدخول إلى حساب AnimeWitcher لإضافة مراجعة.'
+          : 'Sign in to your AnimeWitcher account to review.')
+      : (isArabic
+          ? 'سجّل الدخول إلى حساب AnimeWitcher لإضافة تعليق.'
+          : 'Sign in to your AnimeWitcher account to comment.');
+
+  String _publishedMessage(bool isArabic) => _isReviews
+      ? (isArabic
+          ? 'تم نشر مراجعتك وهي قيد المراجعة.'
+          : 'Your review was submitted and is under review.')
+      : (isArabic
+          ? 'تم نشر تعليقك وهو قيد المراجعة.'
+          : 'Your comment was submitted and is under review.');
+
   final TextEditingController _commentController = TextEditingController();
   final Set<String> _revealedSpoilers = <String>{};
   final Set<String> _pendingLikes = <String>{};
@@ -166,11 +202,7 @@ class _AnimeWitcherCommentsScreenState
       if (!mounted) return;
       _commentController.clear();
       setState(() => _spoiler = false);
-      _showMessage(
-        isArabic
-            ? 'تم نشر تعليقك وهو قيد المراجعة.'
-            : 'Your comment was submitted and is under review.',
-      );
+      _showMessage(_publishedMessage(isArabic));
       await _loadInitial();
     } catch (error) {
       if (!mounted) return;
@@ -519,7 +551,7 @@ class _AnimeWitcherCommentsScreenState
       final trailingButtons = <AppleLiquidGlassToolbarButton>[
         AppleLiquidGlassToolbarButton(
           width: isArabic ? 150 : 140,
-          tooltip: isArabic ? 'ترتيب التعليقات' : 'Sort comments',
+          tooltip: _sortTooltip(isArabic),
           icon: _commentSortFallbackIcon(_sort),
           systemImage: _commentSortSystemImage(_sort),
           title: _sortLabel(_sort, isArabic),
@@ -571,7 +603,7 @@ class _AnimeWitcherCommentsScreenState
                 alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
                 child: Directionality(
                   textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-                  child: Text(isArabic ? 'التعليقات' : 'Comments'),
+                  child: Text(_screenTitle(isArabic)),
                 ),
               ),
             ),
@@ -581,8 +613,7 @@ class _AnimeWitcherCommentsScreenState
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: AppleNativeMenuButton(
-                        accessibilityLabel:
-                            isArabic ? 'ترتيب التعليقات' : 'Sort comments',
+                        accessibilityLabel: _sortTooltip(isArabic),
                         systemImage: 'arrow.up.arrow.down',
                         fallbackIcon: Icons.filter_list_rounded,
                         size: 46,
@@ -633,6 +664,7 @@ class _AnimeWitcherCommentsScreenState
     if (_loadError != null && _comments.isEmpty) {
       return _CommentsLoadError(
         isArabic: isArabic,
+        isReviews: _isReviews,
         onRetry: _loadInitial,
       );
     }
@@ -646,9 +678,7 @@ class _AnimeWitcherCommentsScreenState
             Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                isArabic
-                    ? 'لا توجد تعليقات منشورة بعد.'
-                    : 'No published comments yet.',
+                _emptyListText(isArabic),
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -899,7 +929,7 @@ class _AnimeWitcherCommentsScreenState
                       textDirection:
                           isArabic ? TextDirection.rtl : TextDirection.ltr,
                       decoration: InputDecoration(
-                        hintText: isArabic ? 'اكتب تعليقًا...' : 'Write a comment...',
+                        hintText: _composerHint(isArabic),
                         counterText: '',
                         filled: true,
                         fillColor: colors.surfaceContainerLow,
@@ -947,9 +977,7 @@ class _AnimeWitcherCommentsScreenState
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        isArabic
-                            ? 'سجّل الدخول إلى حساب AnimeWitcher لإضافة تعليق.'
-                            : 'Sign in to your AnimeWitcher account to comment.',
+                        _signInComposerText(isArabic),
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: colors.onSurfaceVariant,
@@ -1025,9 +1053,11 @@ class _CommentsLoadError extends StatelessWidget {
   const _CommentsLoadError({
     required this.isArabic,
     required this.onRetry,
+    this.isReviews = false,
   });
 
   final bool isArabic;
+  final bool isReviews;
   final VoidCallback onRetry;
 
   @override
@@ -1041,7 +1071,13 @@ class _CommentsLoadError extends StatelessWidget {
             const Icon(Icons.cloud_off_rounded, size: 40),
             const SizedBox(height: 10),
             Text(
-              isArabic ? 'تعذر تحميل التعليقات.' : 'Could not load comments.',
+              isReviews
+                  ? (isArabic
+                      ? 'تعذر تحميل المراجعات.'
+                      : 'Could not load reviews.')
+                  : (isArabic
+                      ? 'تعذر تحميل التعليقات.'
+                      : 'Could not load comments.'),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 10),
@@ -1101,6 +1137,9 @@ String _commentErrorText(Object error, bool isArabic) {
       'comments-closed' => isArabic
           ? 'تم إيقاف التعليقات على هذا المحتوى.'
           : 'Comments are disabled for this item.',
+      'reviews-closed' => isArabic
+          ? 'تم ايقاف المراجعات علي هذا الأنمي'
+          : 'Reviews are disabled for this anime.',
       'replies-closed' => isArabic
           ? 'تم إيقاف الردود على هذا التعليق.'
           : 'Replies are disabled for this comment.',

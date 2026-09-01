@@ -2955,6 +2955,23 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       syncData['malId'] = '$malId';
       syncData['mal_id'] = '$malId';
     }
+    var imdbId = _firstText(source, const <String>[
+      'imdb_id',
+      'imdbId',
+      'imdbID',
+    ]);
+    if (imdbId.isEmpty) {
+      imdbId = _firstText(details, const <String>[
+        'imdb_id',
+        'imdbId',
+        'imdbID',
+      ]);
+    }
+    if (imdbId.isNotEmpty) {
+      syncData['imdbId'] = imdbId;
+      syncData['imdb_id'] = imdbId;
+      syncData['awImdbId'] = imdbId;
+    }
     final rating = _map(source['rating']);
     final statistics = _map(source['statictes']).isNotEmpty
         ? _map(source['statictes'])
@@ -3000,10 +3017,20 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       'awMalScoringUsers',
       details['mal_num_scoring_users'] ?? details['mal_scoring_users'],
     );
+    // APK details score is `rating.rate`. Do not fall back to `average_rate`.
     putSync('awScore', rating['rate']);
+    // Vote count is only shown when a real count field exists on the map.
+    // APK details do not display a Witcher vote count; never invent one.
     putSync(
-      'awRatingsCount',
-      rating['totalRatingsCount'] ?? rating['total_ratings_count'],
+      'awScoreCount',
+      rating['num'] ??
+          rating['count'] ??
+          rating['votes'] ??
+          rating['num_scoring_users'],
+    );
+    putSync(
+      'awReviewsClosed',
+      source['reviews_closed'] ?? details['reviews_closed'],
     );
     putSync('awViews', source['views']);
     putSync('awFavorites', statistics['fav_count'] ?? statistics['favorite_count']);
@@ -3024,6 +3051,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       status: _statusFromHit(source),
       tags: _stringList(source['tags']),
       contentRating: age.isEmpty ? null : age,
+      imdbId: imdbId.isEmpty ? null : imdbId,
       syncData: syncData.isEmpty ? null : syncData,
       source: 'AnimeWitcher',
       catalogType: _catalogTypeFromHit(source),

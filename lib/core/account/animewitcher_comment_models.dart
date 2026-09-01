@@ -50,11 +50,14 @@ class AnimeWitcherCommentPage {
   final bool hasMore;
 }
 
+enum AnimeWitcherSocialKind { comments, reviews }
+
 class AnimeWitcherCommentTarget {
   const AnimeWitcherCommentTarget({
     required this.collectionPath,
     required this.sourceDocumentPath,
     required this.title,
+    this.kind = AnimeWitcherSocialKind.comments,
     this.animeId,
     this.episodeId,
     this.episodeName,
@@ -66,12 +69,15 @@ class AnimeWitcherCommentTarget {
   final String collectionPath;
   final String sourceDocumentPath;
   final String title;
+  final AnimeWitcherSocialKind kind;
   final String? animeId;
   final String? episodeId;
   final String? episodeName;
   final String? newsId;
   final String? characterId;
   final String? characterName;
+
+  bool get isReviews => kind == AnimeWitcherSocialKind.reviews;
 
   Map<String, dynamic> get publishFields => <String, dynamic>{
         if (animeId?.isNotEmpty == true) 'anime_id': animeId,
@@ -202,7 +208,7 @@ bool isAnimeWitcherCommentItem(MultimediaItem item) {
 AnimeWitcherCommentTarget? animeWitcherAnimeCommentTarget(
   MultimediaItem item,
 ) {
-  final animeId = _animeIdFromItem(item);
+  final animeId = animeWitcherAnimeIdFromItem(item);
   if (animeId.isEmpty) return null;
   final sourcePath = 'anime_list/$animeId';
   return AnimeWitcherCommentTarget(
@@ -213,11 +219,26 @@ AnimeWitcherCommentTarget? animeWitcherAnimeCommentTarget(
   );
 }
 
+AnimeWitcherCommentTarget? animeWitcherAnimeReviewTarget(
+  MultimediaItem item,
+) {
+  final animeId = animeWitcherAnimeIdFromItem(item);
+  if (animeId.isEmpty) return null;
+  final sourcePath = 'anime_list/$animeId';
+  return AnimeWitcherCommentTarget(
+    collectionPath: '$sourcePath/reviews',
+    sourceDocumentPath: sourcePath,
+    title: item.title,
+    kind: AnimeWitcherSocialKind.reviews,
+    animeId: animeId,
+  );
+}
+
 AnimeWitcherCommentTarget? animeWitcherEpisodeCommentTarget(
   MultimediaItem parent,
   Episode episode,
 ) {
-  var animeId = _animeIdFromItem(parent);
+  var animeId = animeWitcherAnimeIdFromItem(parent);
   var episodeId = '';
   final parts = episode.url.split('|');
   if (parts.length >= 2) {
@@ -257,13 +278,17 @@ AnimeWitcherCommentTarget animeWitcherNewsCommentTarget(NewsItem item) {
   );
 }
 
-String _animeIdFromItem(MultimediaItem item) {
+String animeWitcherAnimeIdFromItem(MultimediaItem item) {
   final uri = safeTryParseUri(item.url);
   if (uri != null && uri.pathSegments.isNotEmpty) {
     final value = uri.pathSegments.last.trim();
     if (value.isNotEmpty) return value;
   }
   return '';
+}
+
+String animeWitcherAnimeRatingPath(String animeId, String userDocId) {
+  return 'anime_list/$animeId/ratings/$userDocId';
 }
 
 String? _normalizeDocumentPath(String? raw) {
