@@ -9,6 +9,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../../support/test_fonts.dart';
+
 MultimediaItem _item({
   String? source,
   int? duration,
@@ -24,7 +26,11 @@ MultimediaItem _item({
   );
 }
 
-Widget _app(Widget child, {String? fontFamily}) {
+Widget _app(
+  Widget child, {
+  String? fontFamily,
+  List<String>? fontFamilyFallback,
+}) {
   return MaterialApp(
     locale: const Locale('ar'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -32,6 +38,7 @@ Widget _app(Widget child, {String? fontFamily}) {
     theme: ThemeData(
       brightness: Brightness.dark,
       fontFamily: fontFamily,
+      fontFamilyFallback: fontFamilyFallback,
       scaffoldBackgroundColor: Colors.black,
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFFEEC60A),
@@ -149,6 +156,125 @@ void main() {
     expect(find.text('2024-06-01'), findsOneWidget);
     expect(find.text('?'), findsOneWidget);
   });
+
+  testWidgets(
+    'keeps the English title LTR and left-aligned on an Arabic details page',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const englishTitle =
+          "A Livid Lady's Guide to Getting Even: How I Crushed My Homeland with My Mighty Grimoires";
+
+      await tester.pumpWidget(
+        _app(
+          AnimeInformationSection(
+            item: _item(
+              duration: 24,
+              syncData: const {
+                'awDuration': '24',
+                'awStudio': 'MAPPA',
+                'awEnglishTitle': englishTitle,
+              },
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('العنوان الإنجليزي'), findsOneWidget);
+      expect(find.text(englishTitle), findsOneWidget);
+
+      final pageDirection = tester.widget<Directionality>(
+        find
+            .ancestor(
+              of: find.text('العنوان الإنجليزي'),
+              matching: find.byType(Directionality),
+            )
+            .first,
+      );
+      expect(pageDirection.textDirection, TextDirection.rtl);
+
+      final label = tester.widget<Text>(find.text('العنوان الإنجليزي'));
+      expect(label.textDirection, isNull);
+      expect(
+        tester
+            .renderObject<RenderParagraph>(find.text('العنوان الإنجليزي'))
+            .textDirection,
+        TextDirection.rtl,
+      );
+
+      final title = tester.widget<Text>(find.text(englishTitle));
+      expect(title.textDirection, TextDirection.ltr);
+      expect(title.textAlign, TextAlign.start);
+
+      final titleParagraph = tester.renderObject<RenderParagraph>(
+        find.text(englishTitle),
+      );
+      expect(titleParagraph.textDirection, TextDirection.ltr);
+      expect(titleParagraph.textAlign, TextAlign.start);
+
+      final firstGlyph = titleParagraph.getBoxesForSelection(
+        const TextSelection(baseOffset: 0, extentOffset: 1),
+      );
+      expect(firstGlyph, isNotEmpty);
+      expect(
+        firstGlyph.first.left,
+        lessThan(8),
+        reason: 'LTR English title must start at the left of its box',
+      );
+
+      final studio = tester.widget<Text>(find.text('MAPPA'));
+      expect(studio.textDirection, isNull);
+
+      final artifacts = Directory('/opt/cursor/artifacts');
+      if (artifacts.existsSync()) {
+        final loaded = await tester.runAsync(() async {
+          final arabic = await TestFonts.loadWalkthroughFonts();
+          await TestFonts.loadFamily('NotoSans', const [
+            '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+            '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
+          ]);
+          return arabic;
+        });
+        if (loaded == true) {
+          await tester.pumpWidget(
+            _app(
+              RepaintBoundary(
+                key: const ValueKey('english-title-ltr'),
+                child: AnimeInformationSection(
+                  item: _item(
+                    duration: 24,
+                    syncData: const {
+                      'awDuration': '24',
+                      'awStudio': 'CloverWorks',
+                      'awEnglishTitle': englishTitle,
+                    },
+                  ),
+                ),
+              ),
+              fontFamily: 'NotoSansArabic',
+              fontFamilyFallback: const ['NotoSans', 'Roboto'],
+            ),
+          );
+          await tester.pump();
+          await tester.runAsync(() async {
+            final boundary = tester.renderObject<RenderRepaintBoundary>(
+              find.byKey(const ValueKey('english-title-ltr')),
+            );
+            final image = await boundary.toImage(pixelRatio: 3);
+            final bytes = await image.toByteData(
+              format: ui.ImageByteFormat.png,
+            );
+            File(
+              '${artifacts.path}/details_english_title_ltr.png',
+            ).writeAsBytesSync(bytes!.buffer.asUint8List());
+          });
+        }
+      }
+    },
+  );
 
   testWidgets('hides duration when it is missing', (tester) async {
     await tester.pumpWidget(

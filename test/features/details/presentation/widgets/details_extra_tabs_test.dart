@@ -1331,4 +1331,104 @@ void main() {
 
     expect(parent.position.pixels, greaterThan(80));
   });
+
+  testWidgets(
+    'similar extra tab waits until the section is on screen and caches',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 920));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final visited = <int>[];
+      await tester.pumpWidget(
+        _app(
+          CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 2000, child: Text('above-fold')),
+                    DetailsExtraTabs(
+                      similar: const AsyncLoading(),
+                      related: const AsyncLoading(),
+                      relatedHasMore: false,
+                      cast: const AsyncLoading(),
+                      onTabBecameVisible: visited.add,
+                      onAnimeTap: (_) {},
+                      onCharacterTap: (_) {},
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('above-fold'), findsOneWidget);
+      expect(find.text(animeWitcherSimilarTabLabel), findsOneWidget);
+      expect(visited, isEmpty);
+
+      await tester.ensureVisible(find.byType(DetailsExtraTabs));
+      await tester.pump();
+      await tester.pump();
+
+      expect(visited, <int>[detailsExtraSimilarTabIndex]);
+
+      final verticalScrollable = find.byWidgetPredicate((widget) {
+        return widget is Scrollable &&
+            widget.axisDirection == AxisDirection.down;
+      });
+      await tester.drag(verticalScrollable.first, const Offset(0, 1600));
+      await tester.pump();
+      await tester.ensureVisible(find.byType(DetailsExtraTabs));
+      await tester.pump();
+      await tester.pump();
+
+      expect(visited, <int>[detailsExtraSimilarTabIndex]);
+    },
+  );
+
+  testWidgets(
+    'reselecting أنميات مشابهة after related does not notify similar again',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 920));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final visited = <int>[];
+      await tester.pumpWidget(
+        _app(
+          DetailsExtraTabs(
+            similar: const AsyncLoading(),
+            related: const AsyncLoading(),
+            relatedHasMore: false,
+            cast: const AsyncLoading(),
+            onTabBecameVisible: visited.add,
+            onAnimeTap: (_) {},
+            onCharacterTap: (_) {},
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(visited, <int>[detailsExtraSimilarTabIndex]);
+
+      await tester.tap(find.text(animeWitcherRelatedTabLabel));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(visited, <int>[
+        detailsExtraSimilarTabIndex,
+        detailsExtraRelatedTabIndex,
+      ]);
+
+      await tester.tap(find.text(animeWitcherSimilarTabLabel));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(visited, <int>[
+        detailsExtraSimilarTabIndex,
+        detailsExtraRelatedTabIndex,
+      ]);
+    },
+  );
 }

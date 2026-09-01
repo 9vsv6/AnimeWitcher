@@ -1,9 +1,15 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/features/details/presentation/adult_content_warning.dart';
 import 'package:animewitcher/features/details/presentation/widgets/premium_details_widgets.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../support/test_fonts.dart';
 
 MultimediaItem _item({
   List<String>? tags,
@@ -29,13 +35,14 @@ int _unixSecondsFromNow(Duration remaining) {
   return DateTime.now().toUtc().add(remaining).millisecondsSinceEpoch ~/ 1000;
 }
 
-Widget _app(Widget child) {
-  return MaterialApp(
+Widget _app(Widget child, {String? fontFamily, Key? boundaryKey}) {
+  final content = MaterialApp(
     locale: const Locale('ar'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     theme: ThemeData(
       brightness: Brightness.dark,
+      fontFamily: fontFamily,
       scaffoldBackgroundColor: const Color(0xFF111111),
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFFEEC60A),
@@ -55,6 +62,8 @@ Widget _app(Widget child) {
       ),
     ),
   );
+  if (boundaryKey == null) return content;
+  return RepaintBoundary(key: boundaryKey, child: content);
 }
 
 Widget _storyCard() {
@@ -85,6 +94,8 @@ Future<void> _pumpStack(
   WidgetTester tester, {
   required MultimediaItem item,
   bool showCountdown = true,
+  Key? boundaryKey,
+  String? fontFamily,
 }) {
   return tester.pumpWidget(
     _app(
@@ -94,6 +105,8 @@ Future<void> _pumpStack(
         showRatings: false,
         storyCard: _storyCard(),
       ),
+      fontFamily: fontFamily,
+      boundaryKey: boundaryKey,
     ),
   );
 }
@@ -240,5 +253,65 @@ void main() {
 
     expect(find.byKey(kAdultContentWarningKey), findsNothing);
     expect(find.text(kAdultContentWarningText), findsNothing);
+  });
+
+  testWidgets('does not consult a hide-ecchi setting', (tester) async {
+    await _pumpStack(
+      tester,
+      item: _item(tags: const <String>['ايتشي']),
+      showCountdown: false,
+    );
+
+    expect(find.byKey(kAdultContentWarningKey), findsOneWidget);
+  });
+
+  testWidgets('adult warning screenshots', (tester) async {
+    final loaded = await tester.runAsync(TestFonts.loadWalkthroughFonts);
+    if (loaded != true) return;
+
+    final artifacts = Directory('/opt/cursor/artifacts');
+    if (!artifacts.existsSync()) return;
+
+    Future<void> shot(String name, MultimediaItem item) async {
+      final key = ValueKey(name);
+      await _pumpStack(
+        tester,
+        item: item,
+        fontFamily: 'NotoSansArabic',
+        boundaryKey: key,
+      );
+      await tester.pump();
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(key),
+        );
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File(
+          '${artifacts.path}/$name.png',
+        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    }
+
+    await shot(
+      'details_adult_warning_between_countdown_and_story',
+      _item(
+        tags: const <String>['ايتشي', 'خيال'],
+        nextAiring: NextAiring(
+          episode: 8,
+          unixTime: _unixSecondsFromNow(
+            const Duration(days: 2, hours: 5, minutes: 12),
+          ),
+        ),
+      ),
+    );
+    await shot(
+      'details_adult_warning_above_story_no_countdown',
+      _item(contentRating: '+17', tags: const <String>['دراما']),
+    );
+    await shot(
+      'details_adult_warning_hidden_for_non_matching',
+      _item(tags: const <String>['دراما'], contentRating: '+13'),
+    );
   });
 }

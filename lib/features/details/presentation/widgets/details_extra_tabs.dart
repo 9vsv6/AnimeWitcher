@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/account/animewitcher_character_models.dart';
@@ -58,7 +59,8 @@ class DetailsExtraTabs extends StatefulWidget {
 class _DetailsExtraTabsState extends State<DetailsExtraTabs>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  final Set<int> _visited = <int>{detailsExtraSimilarTabIndex};
+  final Set<int> _visited = <int>{};
+  ScrollPosition? _scrollPosition;
 
   @override
   void initState() {
@@ -70,24 +72,72 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
     )..addListener(_handleTabTick);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      widget.onTabBecameVisible(detailsExtraSimilarTabIndex);
+      _notifySimilarIfOnScreen();
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final position = Scrollable.maybeOf(context)?.position;
+    if (identical(position, _scrollPosition)) return;
+    _scrollPosition?.removeListener(_handleScroll);
+    _scrollPosition = position;
+    _scrollPosition?.addListener(_handleScroll);
+  }
+
+  @override
   void dispose() {
+    _scrollPosition?.removeListener(_handleScroll);
     _tabController
       ..removeListener(_handleTabTick)
       ..dispose();
     super.dispose();
   }
 
+  void _handleScroll() => _notifySimilarIfOnScreen();
+
   void _handleTabTick() {
     if (_tabController.indexIsChanging) return;
-    final index = _tabController.index;
-    if (_visited.add(index)) {
-      widget.onTabBecameVisible(index);
+    _notifyTab(_tabController.index);
+  }
+
+  /// Similar is the default extra tab, but the details page builds this
+  /// section below the hero even when it is off-screen. Fetch Algolia
+  /// `series_similar` only once the rail is actually in the viewport.
+  void _notifySimilarIfOnScreen() {
+    if (_visited.contains(detailsExtraSimilarTabIndex)) return;
+    if (_tabController.index != detailsExtraSimilarTabIndex) return;
+    if (!_isSectionOnScreen()) return;
+    _notifyTab(detailsExtraSimilarTabIndex);
+  }
+
+  bool _isSectionOnScreen() {
+    final object = context.findRenderObject();
+    if (object is! RenderBox || !object.hasSize || !object.attached) {
+      return false;
     }
+
+    // Sliver viewports do not always apply their scroll offset to
+    // [RenderBox.localToGlobal]. Use the viewport reveal offset instead.
+    final viewport = RenderAbstractViewport.maybeOf(object);
+    final position = Scrollable.maybeOf(context)?.position;
+    if (viewport != null && position != null && position.hasPixels) {
+      final leading = viewport.getOffsetToReveal(object, 0).offset;
+      final trailing = leading + object.size.height;
+      final viewStart = position.pixels;
+      final viewEnd = viewStart + position.viewportDimension;
+      return leading < viewEnd && trailing > viewStart;
+    }
+
+    final section = object.localToGlobal(Offset.zero) & object.size;
+    if (section.isEmpty) return false;
+    return section.overlaps(Offset.zero & MediaQuery.sizeOf(context));
+  }
+
+  void _notifyTab(int index) {
+    if (!_visited.add(index)) return;
+    widget.onTabBecameVisible(index);
   }
 
   /// Characters rails can be taller than the 6-poster similar/related grid.
@@ -137,6 +187,7 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
                 controller: _tabController,
                 isScrollable: false,
                 padding: EdgeInsets.zero,
+                onTap: _notifyTab,
                 tabs: const [
                   FilterStyleTab(label: animeWitcherSimilarTabLabel),
                   FilterStyleTab(label: animeWitcherRelatedTabLabel),
