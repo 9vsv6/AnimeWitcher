@@ -10,6 +10,7 @@ import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
 import 'package:animewitcher/core/storage/secure_token_storage.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
+import 'package:animewitcher/core/theme/app_theme.dart';
 import 'package:animewitcher/features/details/presentation/adult_content_warning.dart';
 import 'package:animewitcher/features/details/presentation/widgets/details_ratings_row.dart';
 import 'package:animewitcher/features/details/presentation/widgets/scale_rating_bar.dart';
@@ -317,6 +318,52 @@ void main() {
     expect(find.text('8.73'), findsOneWidget);
     expect(find.text('(668508)'), findsOneWidget);
     expect(find.textContaining('تصويت'), findsNothing);
+    final malStar = tester.getRect(find.byKey(kDetailsRatingsMalStarKey));
+    final malScore = tester.getRect(find.text('8.73'));
+    expect(malStar.left, lessThan(malScore.left));
+    final badge = tester.widget<Container>(find.byKey(kDetailsRatingsMalBadgeKey));
+    expect((badge.decoration as BoxDecoration).color, kMalBadgeBlue);
+    final malLabel = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(kDetailsRatingsMalBadgeKey),
+        matching: find.text('MAL'),
+      ),
+    );
+    expect(malLabel.style?.color, Colors.white);
+    Color buttonFill(Key key) {
+      return tester
+          .widget<Material>(
+            find
+                .descendant(
+                  of: find.byKey(key),
+                  matching: find.byType(Material),
+                )
+                .first,
+          )
+          .color!;
+    }
+
+    expect(
+      buttonFill(kDetailsRatingsReviewsButtonKey),
+      buttonFill(kDetailsRatingsRateButtonKey),
+    );
+    expect(
+      buttonFill(kDetailsRatingsReviewsButtonKey),
+      isNot(AppTheme.animeWitcherAccent.withValues(alpha: 0.16)),
+    );
+    final star1 = tester.getRect(
+      find.descendant(
+        of: find.byKey(kDetailsRatingsUserStarsKey),
+        matching: find.bySemanticsLabel('1'),
+      ),
+    );
+    final star10 = tester.getRect(
+      find.descendant(
+        of: find.byKey(kDetailsRatingsUserStarsKey),
+        matching: find.bySemanticsLabel('10'),
+      ),
+    );
+    expect(star1.left, lessThan(star10.left));
   });
 
   testWidgets('hides the MAL column without mal_id or imdb_id', (tester) async {
@@ -454,6 +501,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.writes, contains('test-anime:10'));
     expect(service.userRating, 10);
+    final rateIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(kDetailsRatingsRateButtonKey),
+        matching: find.byIcon(Icons.star_rounded),
+      ),
+    );
+    expect(rateIcon.color, AppTheme.animeWitcherAccent);
+  });
+
+  testWidgets('dialog stars stay LTR with 1 on the left', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpStack(
+      tester,
+      service: _FakeAccountService(signedIn: true, userRating: 1),
+      item: _item(syncData: _ratedSync()),
+      showCountdown: false,
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(kDetailsRatingsRateButtonKey));
+    await tester.pumpAndSettle();
+    final dialogBar = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(ScaleRatingBar),
+    );
+    final first = tester.getRect(
+      find.descendant(of: dialogBar, matching: find.bySemanticsLabel('1')),
+    );
+    final tenth = tester.getRect(
+      find.descendant(of: dialogBar, matching: find.bySemanticsLabel('10')),
+    );
+    expect(first.left, lessThan(tenth.left));
   });
 
   testWidgets('ratings screenshots', (tester) async {
@@ -520,5 +599,40 @@ void main() {
       'details_ratings_mal_hidden',
       _item(syncData: const <String, String>{'awScore': '8.4'}),
     );
+
+    const ratedKey = ValueKey('details_ratings_after_user_rates');
+    await _pumpStack(
+      tester,
+      service: _FakeAccountService(signedIn: true, userRating: 8),
+      item: _item(syncData: _ratedSync()),
+      fontFamily: 'NotoSansArabic',
+      boundaryKey: ratedKey,
+      showCountdown: false,
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(ratedKey),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(
+        '${artifacts.path}/details_ratings_after_user_rates.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
+
+    await tester.tap(find.byKey(kDetailsRatingsRateButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('8 /10'), findsOneWidget);
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(ratedKey),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(
+        '${artifacts.path}/details_rate_dialog.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
   });
 }

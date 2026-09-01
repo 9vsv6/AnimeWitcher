@@ -29,7 +29,8 @@ class AnimeWitcherCommentsScreen extends ConsumerStatefulWidget {
 
 class _AnimeWitcherCommentsScreenState
     extends ConsumerState<AnimeWitcherCommentsScreen> {
-  static const int _pageSize = 20;
+  int get _pageSize =>
+      _isReviews ? kAnimeWitcherReviewsPageSize : 20;
 
   bool get _isReviews => widget.target.isReviews;
 
@@ -60,9 +61,7 @@ class _AnimeWitcherCommentsScreenState
           : 'Sign in to your AnimeWitcher account to comment.');
 
   String _publishedMessage(bool isArabic) => _isReviews
-      ? (isArabic
-          ? 'تم نشر مراجعتك وهي قيد المراجعة.'
-          : 'Your review was submitted and is under review.')
+      ? (isArabic ? 'جاري مراجعته.' : 'Your review is pending moderation.')
       : (isArabic
           ? 'تم نشر تعليقك وهو قيد المراجعة.'
           : 'Your comment was submitted and is under review.');
@@ -1140,6 +1139,9 @@ String _commentErrorText(Object error, bool isArabic) {
       'reviews-closed' => isArabic
           ? 'تم ايقاف المراجعات علي هذا الأنمي'
           : 'Reviews are disabled for this anime.',
+      'review-exists' => isArabic
+          ? 'لديك مراجعة واحدة فقط على هذا الأنمي.'
+          : 'You already wrote a review for this anime.',
       'replies-closed' => isArabic
           ? 'تم إيقاف الردود على هذا التعليق.'
           : 'Replies are disabled for this comment.',

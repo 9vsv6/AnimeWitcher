@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 
-/// 1–10 star bar matching APK `ScaleRatingBar`: filled/empty gold stars
-/// with a short scale bounce when the selected value changes.
+/// 1–10 star bar matching APK `ScaleRatingBar`: filled/empty gold stars.
+/// Leftmost star is 1 and rightmost is 10 even on an RTL page. Only the
+/// tapped (or newly selected) star bounces.
 class ScaleRatingBar extends StatefulWidget {
   const ScaleRatingBar({
     super.key,
@@ -30,7 +31,7 @@ class _ScaleRatingBarState extends State<ScaleRatingBar>
     with SingleTickerProviderStateMixin {
   late final AnimationController _bounce;
   late final Animation<double> _scale;
-  int _pulseUntil = 0;
+  int? _pulseIndex;
 
   @override
   void initState() {
@@ -42,16 +43,13 @@ class _ScaleRatingBarState extends State<ScaleRatingBar>
     _scale = Tween<double>(begin: 1, end: 1.28).animate(
       CurvedAnimation(parent: _bounce, curve: Curves.elasticOut),
     );
-    if (widget.rating > 0) {
-      _pulseUntil = widget.rating;
-    }
   }
 
   @override
   void didUpdateWidget(covariant ScaleRatingBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.rating != widget.rating) {
-      _pulseUntil = widget.rating;
+    if (oldWidget.rating != widget.rating && widget.rating > 0) {
+      _pulseIndex ??= widget.rating;
       _bounce.forward(from: 0);
     }
   }
@@ -64,33 +62,40 @@ class _ScaleRatingBarState extends State<ScaleRatingBar>
 
   void _select(int value) {
     if (!widget.enabled || widget.onChanged == null) return;
+    setState(() => _pulseIndex = value);
+    _bounce.forward(from: 0);
     widget.onChanged!(value);
   }
 
   @override
   Widget build(BuildContext context) {
     const gold = AppTheme.animeWitcherAccent;
-    return AnimatedBuilder(
-      animation: _bounce,
-      builder: (context, _) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var index = 1; index <= widget.itemCount; index++)
-              _StarButton(
-                index: index,
-                filled: index <= widget.rating,
-                pulsing: index <= _pulseUntil && _bounce.isAnimating,
-                scale: _scale.value,
-                size: widget.starSize,
-                color: gold,
-                enabled: widget.enabled && widget.onChanged != null,
-                padding: widget.padding,
-                onPressed: () => _select(index),
-              ),
-          ],
-        );
-      },
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: AnimatedBuilder(
+        animation: _bounce,
+        builder: (context, _) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            textDirection: TextDirection.ltr,
+            children: [
+              for (var index = 1; index <= widget.itemCount; index++)
+                _StarButton(
+                  index: index,
+                  filled: index <= widget.rating,
+                  pulsing: index == _pulseIndex && _bounce.isAnimating,
+                  scale: _scale.value,
+                  size: widget.starSize,
+                  color: gold,
+                  enabled: widget.enabled && widget.onChanged != null,
+                  padding: widget.padding,
+                  onPressed: () => _select(index),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

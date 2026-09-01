@@ -567,12 +567,52 @@ class FirestoreRestClient {
     bool descending = true,
     FirestoreDocument? startAfter,
     int limit = 20,
+  }) {
+    return queryUserCollectionGroup(
+      collectionId: 'comments',
+      userId: userId,
+      idToken: idToken,
+      orderField: orderField,
+      descending: descending,
+      startAfter: startAfter,
+      limit: limit,
+    );
+  }
+
+  /// APK `UserReviewsActivity`: collectionGroup("reviews") where user_id.
+  Future<List<FirestoreDocument>> queryUserReviews({
+    required String userId,
+    required String idToken,
+    String orderField = 'date',
+    bool descending = true,
+    FirestoreDocument? startAfter,
+    int limit = 20,
+  }) {
+    return queryUserCollectionGroup(
+      collectionId: 'reviews',
+      userId: userId,
+      idToken: idToken,
+      orderField: orderField,
+      descending: descending,
+      startAfter: startAfter,
+      limit: limit,
+    );
+  }
+
+  Future<List<FirestoreDocument>> queryUserCollectionGroup({
+    required String collectionId,
+    required String userId,
+    required String idToken,
+    String orderField = 'date',
+    bool descending = true,
+    FirestoreDocument? startAfter,
+    int limit = 20,
   }) async {
     final direction = descending ? 'DESCENDING' : 'ASCENDING';
     final structuredQuery = <String, dynamic>{
       'from': <Map<String, dynamic>>[
         <String, dynamic>{
-          'collectionId': 'comments',
+          'collectionId': collectionId,
           'allDescendants': true,
         },
       ],
