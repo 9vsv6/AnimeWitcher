@@ -151,8 +151,17 @@ Future<void> _pumpSeasons(
   await tester.pump(const Duration(milliseconds: 50));
 }
 
+const Map<String, int> _seasonTabIndex = <String, int>{
+  'السابق': 0,
+  'الحالي': 1,
+  'القادم': 2,
+  'المواسم الأخرى': 3,
+};
+
 Future<void> _selectTab(WidgetTester tester, String label) async {
-  await tester.tap(find.text(label));
+  final index = _seasonTabIndex[label]!;
+  final bar = tester.widget<TabBar>(find.byType(TabBar));
+  bar.controller!.animateTo(index);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
 }
