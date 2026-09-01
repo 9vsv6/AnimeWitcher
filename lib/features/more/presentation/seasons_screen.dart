@@ -177,7 +177,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen>
   Widget _tabBody(_SeasonsBootstrap data, bool isArabic, int index) {
     switch (index) {
       case 0:
-        return _SeasonGrid(
+        return _SeasonCatalogTab(
           key: ValueKey('past-${data.config.past}-$_reloadGeneration'),
           provider: data.provider,
           season: data.config.past,
@@ -186,7 +186,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen>
               : 'No titles in the previous season',
         );
       case 1:
-        return _SeasonGrid(
+        return _SeasonCatalogTab(
           key: ValueKey('current-${data.config.current}-$_reloadGeneration'),
           provider: data.provider,
           season: data.config.current,
@@ -195,7 +195,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen>
               : 'No titles in the current season',
         );
       case 2:
-        return _SeasonGrid(
+        return _SeasonCatalogTab(
           key: ValueKey('next-${data.config.next}-$_reloadGeneration'),
           provider: data.provider,
           season: data.config.next,
@@ -211,6 +211,56 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen>
           isArabic: isArabic,
         );
     }
+  }
+}
+
+/// Settings `seasons.past|current|next` string shown as-is above the grid.
+class SeasonListTitle extends StatelessWidget {
+  const SeasonListTitle({super.key, required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        title,
+        style: Theme.of(
+          context,
+        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+class _SeasonCatalogTab extends StatelessWidget {
+  final AnimeWitcherNativeProvider provider;
+  final String season;
+  final String emptyLabel;
+
+  const _SeasonCatalogTab({
+    super.key,
+    required this.provider,
+    required this.season,
+    required this.emptyLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (season.trim().isNotEmpty) SeasonListTitle(title: season),
+        Expanded(
+          child: _SeasonGrid(
+            provider: provider,
+            season: season,
+            emptyLabel: emptyLabel,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -317,10 +367,15 @@ class _OtherSeasonsList extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '$year',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+              Align(
+                alignment: Alignment.center,
+                child: Text(
+                  '$year',
+                  key: ValueKey('other-season-year-$year'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
@@ -449,7 +504,6 @@ class _SeasonGrid extends StatefulWidget {
   final String emptyLabel;
 
   const _SeasonGrid({
-    super.key,
     required this.provider,
     required this.season,
     required this.emptyLabel,
