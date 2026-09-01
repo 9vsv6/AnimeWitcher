@@ -11,6 +11,7 @@ import 'package:animewitcher/core/storage/secure_token_storage.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/comments/presentation/animewitcher_comments_screen.dart';
 import 'package:animewitcher/features/comments/presentation/animewitcher_my_comments_screen.dart';
+import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -33,6 +34,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
   final bool signedIn;
   final String myUserId;
   int? lastLimit;
+  AnimeWitcherCommentSort? lastSort;
   String? lastPublishedText;
   bool lastPublishedWasReview = false;
 
@@ -64,6 +66,22 @@ class _FakeAccountService extends AnimeWitcherAccountService {
     int limit = 20,
   }) async {
     lastLimit = limit;
+    lastSort = sort;
+    return AnimeWitcherCommentPage(
+      items: reviews,
+      cursor: null,
+      hasMore: false,
+    );
+  }
+
+  @override
+  Future<AnimeWitcherCommentPage> loadMyComments({
+    AnimeWitcherCommentSort sort = AnimeWitcherCommentSort.newest,
+    FirestoreDocument? cursor,
+    int limit = 20,
+  }) async {
+    lastLimit = limit;
+    lastSort = sort;
     return AnimeWitcherCommentPage(
       items: reviews,
       cursor: null,
@@ -78,6 +96,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
     int limit = kAnimeWitcherReviewsPageSize,
   }) async {
     lastLimit = limit;
+    lastSort = sort;
     return AnimeWitcherCommentPage(
       items: reviews,
       cursor: null,
@@ -167,6 +186,44 @@ Widget _app({
   );
 }
 
+void _expectAccountSortHeader(
+  WidgetTester tester, {
+  required String title,
+  required String sortTooltip,
+}) {
+  expect(find.text(title), findsOneWidget);
+  expect(find.byType(AppleNativeMenuButton), findsOneWidget);
+  expect(find.byKey(kMyCommentsSortButtonKey), findsOneWidget);
+  expect(find.byTooltip(sortTooltip), findsOneWidget);
+  expect(find.byType(AppleLiquidGlassBackButton), findsOneWidget);
+  expect(find.byIcon(Icons.sort_rounded), findsNothing);
+
+  final titleRect = tester.getRect(find.byKey(kMyCommentsTitleKey));
+  final sortRect = tester.getRect(find.byKey(kMyCommentsSortButtonKey));
+  final backRect = tester.getRect(find.byType(AppleLiquidGlassBackButton));
+
+  expect(
+    backRect.center.dx,
+    lessThan(titleRect.center.dx),
+    reason: 'Back stays on the visual left, away from the title',
+  );
+  expect(
+    sortRect.center.dx,
+    greaterThan(titleRect.center.dx),
+    reason: 'Sort sits to the visual right of the title, not next to back',
+  );
+  expect(
+    sortRect.left - titleRect.right,
+    lessThan(36),
+    reason: 'Sort is immediately next to the title',
+  );
+  expect(
+    titleRect.left - backRect.right,
+    greaterThan(sortRect.left - titleRect.right),
+    reason: 'Sort is closer to the title than the back button is',
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -228,6 +285,73 @@ void main() {
       contains('جاري مراجعته.'),
     );
     await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets(
+    'my reviews header places liquid-glass sort to the right of the title',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _app(
+          service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+          home: const AnimeWitcherMyCommentsScreen(isReviews: true),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      _expectAccountSortHeader(
+        tester,
+        title: 'مراجعاتي',
+        sortTooltip: 'ترتيب المراجعات',
+      );
+    },
+  );
+
+  testWidgets(
+    'my comments header places liquid-glass sort to the right of the title',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _app(
+          service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+          home: const AnimeWitcherMyCommentsScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      _expectAccountSortHeader(
+        tester,
+        title: 'تعليقاتي',
+        sortTooltip: 'ترتيب التعليقات',
+      );
+    },
+  );
+
+  testWidgets('my reviews sort menu keeps newest/oldest/most-liked options', (
+    tester,
+  ) async {
+    final service = _FakeAccountService(reviews: const <AnimeWitcherComment>[]);
+    await tester.pumpWidget(
+      _app(
+        service: service,
+        home: const AnimeWitcherMyCommentsScreen(isReviews: true),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(service.lastSort, AnimeWitcherCommentSort.newest);
+
+    await tester.tap(find.byKey(kMyCommentsSortButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('الأحدث'), findsWidgets);
+    expect(find.text('الأقدم'), findsWidgets);
+    expect(find.text('الأكثر إعجابًا'), findsWidgets);
+
+    await tester.tap(find.text('الأقدم').last);
+    await tester.pumpAndSettle();
+    expect(service.lastSort, AnimeWitcherCommentSort.oldest);
   });
 
   testWidgets('my reviews screen lists unpublished review_text', (tester) async {
@@ -316,5 +440,41 @@ void main() {
         ],
       ),
     );
+    await shot(
+      'account_my_reviews_empty',
+      const AnimeWitcherMyCommentsScreen(isReviews: true),
+      _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+    );
+    await shot(
+      'account_my_comments_empty',
+      const AnimeWitcherMyCommentsScreen(),
+      _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+    );
+
+    const menuKey = ValueKey<String>('account_my_reviews_sort_menu');
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: menuKey,
+        child: _app(
+          service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+          home: const AnimeWitcherMyCommentsScreen(isReviews: true),
+          fontFamily: 'NotoSansArabic',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(find.byKey(kMyCommentsSortButtonKey));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(menuKey),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File('${artifacts.path}/account_my_reviews_sort_menu.png').writeAsBytesSync(
+        bytes!.buffer.asUint8List(),
+      );
+    });
   });
 }
