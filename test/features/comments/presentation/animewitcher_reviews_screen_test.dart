@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:animewitcher/core/account/account_providers.dart';
 import 'package:animewitcher/core/account/animewitcher_account_models.dart';
 import 'package:animewitcher/core/account/animewitcher_account_service.dart';
@@ -10,8 +13,11 @@ import 'package:animewitcher/features/comments/presentation/animewitcher_comment
 import 'package:animewitcher/features/comments/presentation/animewitcher_my_comments_screen.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../support/test_fonts.dart';
 
 class _FakeAccountService extends AnimeWitcherAccountService {
   _FakeAccountService({
@@ -128,7 +134,13 @@ const _target = AnimeWitcherCommentTarget(
 Widget _app({
   required _FakeAccountService service,
   required Widget home,
+  String? fontFamily,
+  Key? shotKey,
 }) {
+  Widget child = home;
+  if (shotKey != null) {
+    child = RepaintBoundary(key: shotKey, child: home);
+  }
   return ProviderScope(
     overrides: [
       animeWitcherAccountServiceProvider.overrideWithValue(service),
@@ -140,8 +152,17 @@ Widget _app({
       locale: const Locale('ar'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      theme: ThemeData(brightness: Brightness.dark),
-      home: home,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        fontFamily: fontFamily,
+        scaffoldBackgroundColor: Colors.black,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFEEC60A),
+          surface: Color(0xFF000000),
+          onSurface: Color(0xFFE5E7EB),
+        ),
+      ),
+      home: child,
     ),
   );
 }
@@ -206,6 +227,7 @@ void main() {
       notifications.toasts.map((toast) => toast.message),
       contains('جاري مراجعته.'),
     );
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('my reviews screen lists unpublished review_text', (tester) async {
@@ -231,5 +253,68 @@ void main() {
     expect(find.text('مراجعتي قيد الفحص'), findsOneWidget);
     expect(find.text('جاري مراجعته'), findsOneWidget);
     expect(service.lastLimit, kAnimeWitcherReviewsPageSize);
+  });
+
+  testWidgets('reviews screenshots', (tester) async {
+    final loaded = await tester.runAsync(TestFonts.loadWalkthroughFonts);
+    if (loaded != true) return;
+    final artifacts = Directory('/opt/cursor/artifacts');
+    if (!artifacts.existsSync()) {
+      artifacts.createSync(recursive: true);
+    }
+
+    Future<void> shot(String name, Widget home, _FakeAccountService service) async {
+      final key = ValueKey(name);
+      await tester.pumpWidget(
+        _app(
+          service: service,
+          home: home,
+          fontFamily: 'NotoSansArabic',
+          shotKey: key,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(key),
+        );
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File('${artifacts.path}/$name.png').writeAsBytesSync(
+          bytes!.buffer.asUint8List(),
+        );
+      });
+    }
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await shot(
+      'reviews_published_list',
+      const AnimeWitcherCommentsScreen(target: _target),
+      _FakeAccountService(
+        reviews: <AnimeWitcherComment>[_review(id: 'r1', text: 'مراجعة منشورة')],
+      ),
+    );
+    await shot(
+      'reviews_empty_published',
+      const AnimeWitcherCommentsScreen(target: _target),
+      _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+    );
+    await shot(
+      'account_my_reviews',
+      const AnimeWitcherMyCommentsScreen(isReviews: true),
+      _FakeAccountService(
+        reviews: <AnimeWitcherComment>[
+          _review(
+            id: 'mine',
+            text: 'مراجعتي قيد الفحص',
+            published: false,
+            userId: 'me',
+          ),
+        ],
+      ),
+    );
   });
 }

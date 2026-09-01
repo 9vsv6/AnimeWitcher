@@ -599,5 +599,40 @@ void main() {
       'details_ratings_mal_hidden',
       _item(syncData: const <String, String>{'awScore': '8.4'}),
     );
+
+    const ratedKey = ValueKey('details_ratings_after_user_rates');
+    await _pumpStack(
+      tester,
+      service: _FakeAccountService(signedIn: true, userRating: 8),
+      item: _item(syncData: _ratedSync()),
+      fontFamily: 'NotoSansArabic',
+      boundaryKey: ratedKey,
+      showCountdown: false,
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(ratedKey),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(
+        '${artifacts.path}/details_ratings_after_user_rates.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
+
+    await tester.tap(find.byKey(kDetailsRatingsRateButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('8 /10'), findsOneWidget);
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(ratedKey),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(
+        '${artifacts.path}/details_rate_dialog.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
   });
 }
