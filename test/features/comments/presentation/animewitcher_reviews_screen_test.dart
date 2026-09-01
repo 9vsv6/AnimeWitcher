@@ -177,8 +177,10 @@ Widget _app({
         scaffoldBackgroundColor: Colors.black,
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFFEEC60A),
-          surface: Color(0xFF000000),
+          surface: Color(0xFF0F0F13),
           onSurface: Color(0xFFE5E7EB),
+          surfaceContainerHigh: Color(0xFF18181F),
+          outlineVariant: Color(0xFF3F3F46),
         ),
       ),
       home: child,
