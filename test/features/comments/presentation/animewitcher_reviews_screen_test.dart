@@ -11,6 +11,7 @@ import 'package:animewitcher/core/storage/secure_token_storage.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
 import 'package:animewitcher/features/comments/presentation/animewitcher_comments_screen.dart';
 import 'package:animewitcher/features/comments/presentation/animewitcher_my_comments_screen.dart';
+import 'package:animewitcher/features/comments/presentation/widgets/animewitcher_comment_sort_control.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -188,20 +189,36 @@ Widget _app({
   );
 }
 
+void _expectSharedDetailsSortControl(
+  WidgetTester tester, {
+  required String tooltip,
+}) {
+  expect(find.byType(AnimeWitcherCommentSortControl), findsOneWidget);
+  expect(find.byKey(kAnimeWitcherCommentSortControlKey), findsOneWidget);
+  expect(find.byKey(kMyCommentsSortButtonKey), findsOneWidget);
+
+  final button = tester.widget<AppleNativeMenuButton>(
+    find.byType(AppleNativeMenuButton),
+  );
+  expect(button.size, AnimeWitcherCommentSortControl.size);
+  expect(button.width, AnimeWitcherCommentSortControl.width);
+  expect(button.systemImage, AnimeWitcherCommentSortControl.systemImage);
+  expect(button.fallbackIcon, AnimeWitcherCommentSortControl.fallbackIcon);
+  expect(button.accessibilityLabel, tooltip);
+}
+
 void _expectAccountSortHeader(
   WidgetTester tester, {
   required String title,
   required String sortTooltip,
 }) {
   expect(find.text(title), findsOneWidget);
-  expect(find.byType(AppleNativeMenuButton), findsOneWidget);
-  expect(find.byKey(kMyCommentsSortButtonKey), findsOneWidget);
-  expect(find.byTooltip(sortTooltip), findsOneWidget);
+  _expectSharedDetailsSortControl(tester, tooltip: sortTooltip);
   expect(find.byType(AppleLiquidGlassBackButton), findsOneWidget);
   expect(find.byIcon(Icons.sort_rounded), findsNothing);
 
   final titleRect = tester.getRect(find.byKey(kMyCommentsTitleKey));
-  final sortRect = tester.getRect(find.byKey(kMyCommentsSortButtonKey));
+  final sortRect = tester.getRect(find.byKey(kAnimeWitcherCommentSortControlKey));
   final backRect = tester.getRect(find.byType(AppleLiquidGlassBackButton));
 
   expect(
@@ -349,12 +366,101 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('الأحدث'), findsWidgets);
     expect(find.text('الأقدم'), findsWidgets);
-    expect(find.text('الأكثر إعجابًا'), findsWidgets);
+    expect(find.text('الأكثر اعجابا'), findsWidgets);
 
     await tester.tap(find.text('الأقدم').last);
     await tester.pumpAndSettle();
     expect(service.lastSort, AnimeWitcherCommentSort.oldest);
   });
+
+  testWidgets(
+    'details reviews and account pages share the details sort control',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      Future<AppleNativeMenuButton> pumpAndRead(Widget home) async {
+        await tester.pumpWidget(
+          _app(
+            service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+            home: home,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.byType(AnimeWitcherCommentSortControl), findsOneWidget);
+        expect(find.byKey(kAnimeWitcherCommentSortControlKey), findsOneWidget);
+        return tester.widget<AppleNativeMenuButton>(
+          find.byType(AppleNativeMenuButton),
+        );
+      }
+
+      final details = await pumpAndRead(
+        const AnimeWitcherCommentsScreen(target: _target),
+      );
+      final myReviews = await pumpAndRead(
+        const AnimeWitcherMyCommentsScreen(isReviews: true),
+      );
+      final myComments = await pumpAndRead(const AnimeWitcherMyCommentsScreen());
+
+      for (final button in <AppleNativeMenuButton>[
+        details,
+        myReviews,
+        myComments,
+      ]) {
+        expect(button.size, AnimeWitcherCommentSortControl.size);
+        expect(button.width, AnimeWitcherCommentSortControl.width);
+        expect(button.systemImage, AnimeWitcherCommentSortControl.systemImage);
+        expect(button.fallbackIcon, AnimeWitcherCommentSortControl.fallbackIcon);
+      }
+    },
+  );
+
+  testWidgets(
+    'iOS persistent trailing sort matches details comments/reviews geometry',
+    (tester) async {
+      late List<AppleLiquidGlassToolbarButton> arabic;
+      late List<AppleLiquidGlassToolbarButton> english;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            colorScheme: const ColorScheme.dark(primary: Color(0xFFEEC60A)),
+          ),
+          home: Builder(
+            builder: (context) {
+              arabic = AnimeWitcherCommentSortControl.persistentButtons(
+                context: context,
+                isArabic: true,
+                tooltip: 'ترتيب المراجعات',
+                sort: AnimeWitcherCommentSort.newest,
+                onSelected: (_) {},
+              );
+              english = AnimeWitcherCommentSortControl.persistentButtons(
+                context: context,
+                isArabic: false,
+                tooltip: 'Sort reviews',
+                sort: AnimeWitcherCommentSort.oldest,
+                onSelected: (_) {},
+              );
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+
+      expect(arabic, hasLength(1));
+      expect(arabic.single.width, 150);
+      expect(arabic.single.systemImage, 'clock');
+      expect(arabic.single.icon, Icons.schedule_rounded);
+      expect(arabic.single.title, 'الأحدث');
+      expect(arabic.single.menuItems, hasLength(3));
+
+      expect(english, hasLength(1));
+      expect(english.single.width, 140);
+      expect(english.single.systemImage, 'clock.arrow.circlepath');
+      expect(english.single.title, 'Oldest');
+    },
+  );
 
   testWidgets('my reviews screen lists unpublished review_text', (tester) async {
     final service = _FakeAccountService(
@@ -477,6 +583,78 @@ void main() {
       File('${artifacts.path}/account_my_reviews_sort_menu.png').writeAsBytesSync(
         bytes!.buffer.asUint8List(),
       );
+    });
+
+    const iosKey = ValueKey<String>('sort_control_ios_trailing_fallback');
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: iosKey,
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            fontFamily: 'NotoSansArabic',
+            scaffoldBackgroundColor: Colors.black,
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFFEEC60A),
+              surface: Color(0xFF0F0F13),
+              onSurface: Color(0xFFE5E7EB),
+              surfaceContainerHigh: Color(0xFF18181F),
+              outlineVariant: Color(0xFF3F3F46),
+            ),
+          ),
+          home: Scaffold(
+            appBar: PreferredSize(
+              preferredSize: const Size.fromHeight(kToolbarHeight),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: AppBar(
+                  automaticallyImplyLeading: false,
+                  leading: const AppleLiquidGlassBackButton(),
+                  title: const Align(
+                    alignment: Alignment.centerRight,
+                    child: Text('المراجعات'),
+                  ),
+                  actions: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Builder(
+                        builder: (context) {
+                          return SizedBox(
+                            height: AnimeWitcherCommentSortControl.size,
+                            child: AppleLiquidGlassActionGroup(
+                              height: AnimeWitcherCommentSortControl.size,
+                              children: AnimeWitcherCommentSortControl
+                                  .persistentButtons(
+                                context: context,
+                                isArabic: true,
+                                tooltip: 'ترتيب المراجعات',
+                                sort: AnimeWitcherCommentSort.newest,
+                                onSelected: (_) {},
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(iosKey),
+      );
+      final image = await boundary.toImage(pixelRatio: 2);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File('${artifacts.path}/sort_control_ios_trailing_fallback.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
 }
