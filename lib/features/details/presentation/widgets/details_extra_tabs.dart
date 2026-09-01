@@ -58,7 +58,8 @@ class DetailsExtraTabs extends StatefulWidget {
 class _DetailsExtraTabsState extends State<DetailsExtraTabs>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  final Set<int> _visited = <int>{detailsExtraSimilarTabIndex};
+  final Set<int> _visited = <int>{};
+  ScrollPosition? _scrollPosition;
 
   @override
   void initState() {
@@ -70,24 +71,67 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
     )..addListener(_handleTabTick);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      widget.onTabBecameVisible(detailsExtraSimilarTabIndex);
+      _notifySimilarIfOnScreen();
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final position = Scrollable.maybeOf(context)?.position;
+    if (identical(position, _scrollPosition)) return;
+    _scrollPosition?.removeListener(_handleScroll);
+    _scrollPosition = position;
+    _scrollPosition?.addListener(_handleScroll);
+  }
+
+  @override
   void dispose() {
+    _scrollPosition?.removeListener(_handleScroll);
     _tabController
       ..removeListener(_handleTabTick)
       ..dispose();
     super.dispose();
   }
 
+  void _handleScroll() => _notifySimilarIfOnScreen();
+
   void _handleTabTick() {
     if (_tabController.indexIsChanging) return;
-    final index = _tabController.index;
-    if (_visited.add(index)) {
-      widget.onTabBecameVisible(index);
+    _notifyTab(_tabController.index);
+  }
+
+  /// Similar is the default extra tab, but the details page builds this
+  /// section below the hero even when it is off-screen. Fetch Algolia
+  /// `series_similar` only once the rail is actually in the viewport.
+  void _notifySimilarIfOnScreen() {
+    if (_visited.contains(detailsExtraSimilarTabIndex)) return;
+    if (_tabController.index != detailsExtraSimilarTabIndex) return;
+    if (!_isSectionOnScreen()) return;
+    _notifyTab(detailsExtraSimilarTabIndex);
+  }
+
+  bool _isSectionOnScreen() {
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize || !box.attached) return false;
+    final section = box.localToGlobal(Offset.zero) & box.size;
+    if (section.isEmpty) return false;
+
+    final scrollableBox = Scrollable.maybeOf(
+      context,
+    )?.context.findRenderObject();
+    if (scrollableBox is RenderBox && scrollableBox.hasSize) {
+      final viewport =
+          scrollableBox.localToGlobal(Offset.zero) & scrollableBox.size;
+      return section.overlaps(viewport);
     }
+
+    return section.overlaps(Offset.zero & MediaQuery.sizeOf(context));
+  }
+
+  void _notifyTab(int index) {
+    if (!_visited.add(index)) return;
+    widget.onTabBecameVisible(index);
   }
 
   /// Characters rails can be taller than the 6-poster similar/related grid.
@@ -137,6 +181,7 @@ class _DetailsExtraTabsState extends State<DetailsExtraTabs>
                 controller: _tabController,
                 isScrollable: false,
                 padding: EdgeInsets.zero,
+                onTap: _notifyTab,
                 tabs: const [
                   FilterStyleTab(label: animeWitcherSimilarTabLabel),
                   FilterStyleTab(label: animeWitcherRelatedTabLabel),
