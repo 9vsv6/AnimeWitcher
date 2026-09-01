@@ -158,7 +158,7 @@ void main() {
   });
 
   testWidgets(
-    'keeps the English title LTR and left-aligned on an Arabic details page',
+    'keeps the English title RTL like other info values on an Arabic details page',
     (tester) async {
       tester.view.physicalSize = const Size(390, 800);
       tester.view.devicePixelRatio = 1;
@@ -206,27 +206,40 @@ void main() {
       );
 
       final title = tester.widget<Text>(find.text(englishTitle));
-      expect(title.textDirection, TextDirection.ltr);
-      expect(title.textAlign, TextAlign.start);
+      expect(
+        title.textDirection,
+        isNull,
+        reason: 'English title must inherit page RTL, not force LTR',
+      );
+      expect(title.textAlign, isNull);
 
       final titleParagraph = tester.renderObject<RenderParagraph>(
         find.text(englishTitle),
       );
-      expect(titleParagraph.textDirection, TextDirection.ltr);
+      expect(titleParagraph.textDirection, TextDirection.rtl);
       expect(titleParagraph.textAlign, TextAlign.start);
 
-      final firstGlyph = titleParagraph.getBoxesForSelection(
-        const TextSelection(baseOffset: 0, extentOffset: 1),
+      // Latin still runs LTR inside a line; RTL paragraph direction puts the
+      // last (short) wrapped line on the right, not left-aligned.
+      final lastGlyph = titleParagraph.getBoxesForSelection(
+        const TextSelection(
+          baseOffset: englishTitle.length - 1,
+          extentOffset: englishTitle.length,
+        ),
       );
-      expect(firstGlyph, isNotEmpty);
+      expect(lastGlyph, isNotEmpty);
       expect(
-        firstGlyph.first.left,
+        titleParagraph.size.width - lastGlyph.first.right,
         lessThan(8),
-        reason: 'LTR English title must start at the left of its box',
+        reason: 'RTL English title wrap must sit on the right of its box',
       );
 
       final studio = tester.widget<Text>(find.text('MAPPA'));
       expect(studio.textDirection, isNull);
+      expect(
+        tester.renderObject<RenderParagraph>(find.text('MAPPA')).textDirection,
+        TextDirection.rtl,
+      );
 
       final artifacts = Directory('/opt/cursor/artifacts');
       if (artifacts.existsSync()) {
@@ -242,7 +255,7 @@ void main() {
           await tester.pumpWidget(
             _app(
               RepaintBoundary(
-                key: const ValueKey('english-title-ltr'),
+                key: const ValueKey('english-title-rtl'),
                 child: AnimeInformationSection(
                   item: _item(
                     duration: 24,
@@ -261,14 +274,14 @@ void main() {
           await tester.pump();
           await tester.runAsync(() async {
             final boundary = tester.renderObject<RenderRepaintBoundary>(
-              find.byKey(const ValueKey('english-title-ltr')),
+              find.byKey(const ValueKey('english-title-rtl')),
             );
             final image = await boundary.toImage(pixelRatio: 3);
             final bytes = await image.toByteData(
               format: ui.ImageByteFormat.png,
             );
             File(
-              '${artifacts.path}/details_english_title_ltr.png',
+              '${artifacts.path}/details_english_title_rtl.png',
             ).writeAsBytesSync(bytes!.buffer.asUint8List());
           });
         }
