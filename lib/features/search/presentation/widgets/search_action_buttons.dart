@@ -216,63 +216,68 @@ class _ActionIcon extends StatelessWidget {
 
     return Tooltip(
       message: tooltip,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: IconButton(
-          onPressed: onPressed,
-          padding: EdgeInsets.zero,
-          style: IconButton.styleFrom(
-            foregroundColor: color,
-            backgroundColor: Colors.transparent,
-            minimumSize: Size(size, size),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          icon: isLoading
-              ? SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: color,
-                  ),
-                )
-              : Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(icon, size: 22, color: color),
-                    if (showBadge)
-                      Positioned(
-                        right: -6,
-                        top: -6,
-                        child: Container(
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            color: colors.primary,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: colors.surface,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Text(
-                            badgeCount > 99 ? '99+' : '$badgeCount',
-                            style: TextStyle(
-                              color: colors.onPrimary,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              height: 1,
-                            ),
-                          ),
-                        ),
+      child: Semantics(
+        button: true,
+        enabled: onPressed != null,
+        label: tooltip,
+        onTap: onPressed,
+        child: GestureDetector(
+          // Own the entire square ourselves instead of relying on IconButton's
+          // platform tap-target geometry. This keeps the painted filter icon
+          // and its hitbox pixel-aligned inside RTL AppBar leading slots on iOS.
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Center(
+              child: isLoading
+                  ? SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: color,
                       ),
-                  ],
-                ),
+                    )
+                  : Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(icon, size: 22, color: color),
+                        if (showBadge)
+                          Positioned(
+                            right: -6,
+                            top: -6,
+                            child: Container(
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: colors.primary,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: colors.surface,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Text(
+                                badgeCount > 99 ? '99+' : '$badgeCount',
+                                style: TextStyle(
+                                  color: colors.onPrimary,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ),
         ),
       ),
     );
