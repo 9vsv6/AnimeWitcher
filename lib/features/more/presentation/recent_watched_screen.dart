@@ -142,7 +142,12 @@ class _RecentWatchedGrid extends StatelessWidget {
     final isDesktop = context.isDesktop;
     return CatalogLtr(
       child: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+        padding: EdgeInsets.fromLTRB(
+            MultimediaCardLayout.catalogGridHorizontalPadding(context),
+            16,
+            MultimediaCardLayout.catalogGridHorizontalPadding(context),
+            110,
+          ),
         gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
           context,
           maxCrossAxisExtent: isDesktop ? 240 : 150,
@@ -150,9 +155,17 @@ class _RecentWatchedGrid extends StatelessWidget {
             isPortrait: true,
             isDesktop: isDesktop,
           ),
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          horizontalPadding: 16,
+          crossAxisSpacing: MultimediaCardLayout.catalogGridCrossAxisSpacing(
+            context,
+          ),
+          mainAxisSpacing: MultimediaCardLayout.catalogGridMainAxisSpacing(
+            context,
+          ),
+          handsetPortraitCrossAxisCount:
+              MultimediaCardLayout.handsetPortraitGridColumns,
+          horizontalPadding: MultimediaCardLayout.catalogGridHorizontalPadding(
+            context,
+          ),
         ),
         itemCount: items.length,
         itemBuilder: (context, index) {

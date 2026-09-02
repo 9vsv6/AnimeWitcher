@@ -24,6 +24,7 @@ import 'package:animewitcher/core/utils/responsive_breakpoints.dart';
 
 import 'package:animewitcher/shared/widgets/custom_widgets.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
+import 'package:animewitcher/shared/widgets/multimedia_card.dart';
 
 import '../../library/presentation/library_provider.dart';
 import '../../library/presentation/library_auth.dart';
@@ -1474,7 +1475,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState, {
     EdgeInsetsGeometry contentPadding = const EdgeInsets.symmetric(
-      horizontal: 16,
+      horizontal: MultimediaCardLayout.handsetPortraitGridHorizontalPadding,
     ),
   }) {
     final related = _uniqueMediaItems(

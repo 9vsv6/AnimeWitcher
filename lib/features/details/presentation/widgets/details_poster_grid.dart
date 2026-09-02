@@ -20,13 +20,13 @@ int detailsExtraTabCrossAxisCount(BuildContext context) {
 double detailsExtraTabBodyHeight(BuildContext context, double width) {
   final isDesktop = context.isDesktop;
   final columns = detailsExtraTabCrossAxisCount(context);
-  final crossSpacing = ResponsiveBreakpoints.animeGridSpacing(
+  final crossSpacing = MultimediaCardLayout.catalogGridCrossAxisSpacing(
     context,
-    detailsExtraTabCrossAxisSpacing,
+    fallback: detailsExtraTabCrossAxisSpacing,
   );
-  final mainSpacing = ResponsiveBreakpoints.animeGridSpacing(
+  final mainSpacing = MultimediaCardLayout.catalogGridMainAxisSpacing(
     context,
-    detailsExtraTabMainAxisSpacing,
+    fallback: detailsExtraTabMainAxisSpacing,
   );
   final childWidth = (width - crossSpacing * (columns - 1)) / columns;
   final childHeight =
@@ -99,9 +99,16 @@ class DetailsPosterGrid extends StatelessWidget {
             isPortrait: true,
             isDesktop: isDesktop,
           ),
-          crossAxisSpacing: detailsExtraTabCrossAxisSpacing,
-          mainAxisSpacing: detailsExtraTabMainAxisSpacing,
-          handsetPortraitCrossAxisCount: detailsExtraTabGridColumns,
+          crossAxisSpacing: MultimediaCardLayout.catalogGridCrossAxisSpacing(
+            context,
+            fallback: detailsExtraTabCrossAxisSpacing,
+          ),
+          mainAxisSpacing: MultimediaCardLayout.catalogGridMainAxisSpacing(
+            context,
+            fallback: detailsExtraTabMainAxisSpacing,
+          ),
+          handsetPortraitCrossAxisCount:
+              MultimediaCardLayout.handsetPortraitGridColumns,
         ),
         itemCount: items.length + extra,
         itemBuilder: (context, index) {

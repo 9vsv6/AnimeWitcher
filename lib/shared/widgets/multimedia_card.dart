@@ -18,6 +18,49 @@ class MultimediaCardLayout {
   static const double landscapeGridAspectRatio = 1.12;
   static const double desktopPortraitGridAspectRatio = 0.54;
 
+  /// Character cards reserve less room below the poster because they only
+  /// render one name line, while anime cards reserve title + type space.
+  static const double characterGridAspectRatio = 0.58;
+
+  /// Search is the mobile catalog reference: every portrait anime grid uses
+  /// these metrics so the same poster has the same physical size everywhere.
+  static const int handsetPortraitGridColumns = 3;
+  static const double handsetPortraitGridHorizontalPadding = 12;
+  static const double handsetPortraitGridCrossAxisSpacing = 10;
+  static const double handsetPortraitGridMainAxisSpacing = 14;
+  static const double handsetLandscapeGridHorizontalPadding = 8;
+
+  static double catalogGridHorizontalPadding(
+    BuildContext context, {
+    double fallback = 16,
+  }) {
+    if (context.isHandsetLandscape) return handsetLandscapeGridHorizontalPadding;
+    if (context.isHandset) return handsetPortraitGridHorizontalPadding;
+    return fallback;
+  }
+
+  static double catalogGridCrossAxisSpacing(
+    BuildContext context, {
+    double fallback = 16,
+  }) {
+    if (context.isHandsetLandscape) {
+      return ResponsiveBreakpoints.handsetLandscapeGridMaxSpacing;
+    }
+    if (context.isHandset) return handsetPortraitGridCrossAxisSpacing;
+    return fallback;
+  }
+
+  static double catalogGridMainAxisSpacing(
+    BuildContext context, {
+    double fallback = 16,
+  }) {
+    if (context.isHandsetLandscape) {
+      return ResponsiveBreakpoints.handsetLandscapeGridMaxSpacing;
+    }
+    if (context.isHandset) return handsetPortraitGridMainAxisSpacing;
+    return fallback;
+  }
+
   /// Single source of truth for the poster width used by horizontal rails.
   ///
   /// Rails, their shimmer placeholders and the cards themselves must all

@@ -10,6 +10,7 @@ import '../../../core/extensions/extension_manager.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
+import '../../../shared/widgets/multimedia_card.dart';
 import 'widgets/details_poster_grid.dart';
 
 typedef ExtraAnimeListLoader =
@@ -202,7 +203,12 @@ class _ExtraAnimeListScreenState extends ConsumerState<ExtraAnimeListScreen> {
               onRefresh: _load,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                padding: EdgeInsets.fromLTRB(
+                  MultimediaCardLayout.catalogGridHorizontalPadding(context),
+                  16,
+                  MultimediaCardLayout.catalogGridHorizontalPadding(context),
+                  110,
+                ),
                 children: [
                   DetailsPosterGrid(
                     keyPrefix: widget.keyPrefix,

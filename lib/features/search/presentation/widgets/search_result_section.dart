@@ -7,7 +7,7 @@ import 'package:animewitcher/core/router/app_router.dart';
 import 'package:animewitcher/shared/widgets/desktop_scroll_wrapper.dart';
 import 'package:animewitcher/shared/widgets/multimedia_card.dart';
 import 'package:animewitcher/shared/widgets/paged_rail.dart';
-import 'package:animewitcher/shared/widgets/shimmer_placeholder.dart';
+import 'package:animewitcher/shared/widgets/anime_catalog_shimmer.dart';
 
 class SearchResultSection extends ConsumerStatefulWidget {
   final String providerName;
@@ -63,10 +63,16 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
     if (!isLarge) {
       final mobileColumns = context.isHandsetLandscape
           ? ResponsiveBreakpoints.handsetLandscapeAnimeColumns
-          : 3;
-      final gridPadding = context.isHandsetLandscape ? 8.0 : 12.0;
-      final crossSpacing = ResponsiveBreakpoints.animeGridSpacing(context, 10);
-      final mainSpacing = ResponsiveBreakpoints.animeGridSpacing(context, 14);
+          : MultimediaCardLayout.handsetPortraitGridColumns;
+      final gridPadding = MultimediaCardLayout.catalogGridHorizontalPadding(
+        context,
+      );
+      final crossSpacing = MultimediaCardLayout.catalogGridCrossAxisSpacing(
+        context,
+      );
+      final mainSpacing = MultimediaCardLayout.catalogGridMainAxisSpacing(
+        context,
+      );
       // Lazy sliver grid, same pattern as View All: only on-screen posters
       // exist, so returning from details remounts a handful of cache hits
       // instead of rebuilding the whole catalog at once.
@@ -82,9 +88,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           delegate: SliverChildBuilderDelegate(
             (context, rIndex) {
               if (rIndex >= widget.results.length) {
-                return ShimmerPlaceholder(
-                  borderRadius: MultimediaCardLayout.posterRadius,
-                );
+                return const AnimePosterShimmer();
               }
               return _resultCard(widget.results[rIndex], rIndex);
             },
@@ -118,9 +122,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
           delegate: SliverChildBuilderDelegate(
             (context, rIndex) {
               if (rIndex >= widget.results.length) {
-                return ShimmerPlaceholder(
-                  borderRadius: MultimediaCardLayout.posterRadius,
-                );
+                return const AnimePosterShimmer();
               }
               return _resultCard(widget.results[rIndex], rIndex, compact: true);
             },
@@ -151,9 +153,7 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
               if (rIndex >= widget.results.length) {
                 return Padding(
                   padding: const EdgeInsets.only(right: spacing),
-                  child: ShimmerPlaceholder(
-                    borderRadius: MultimediaCardLayout.posterRadius,
-                  ),
+                  child: const AnimePosterShimmer(),
                 );
               }
 

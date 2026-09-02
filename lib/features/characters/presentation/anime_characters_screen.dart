@@ -11,6 +11,7 @@ import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../shared/widgets/catalog_ltr.dart';
+import '../../../shared/widgets/multimedia_card.dart';
 import 'character_card.dart';
 import 'character_details_screen.dart';
 
@@ -139,7 +140,7 @@ class _AnimeCharactersScreenState
         ),
       ),
       body: _loading
-          ? const AnimeCatalogShimmer()
+          ? const AnimeCatalogShimmer(characterCaptionSpace: true)
           : _error != null
               ? Center(
                   child: FilledButton.tonalIcon(
@@ -161,16 +162,30 @@ class _AnimeCharactersScreenState
                       child: CatalogLtr(
                         child: GridView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                          padding: EdgeInsets.fromLTRB(
+            MultimediaCardLayout.catalogGridHorizontalPadding(context),
+            16,
+            MultimediaCardLayout.catalogGridHorizontalPadding(context),
+            110,
+          ),
                           gridDelegate:
                               ResponsiveBreakpoints.animeGridDelegate(
                             context,
                             maxCrossAxisExtent: 140,
-                            childAspectRatio: 0.58,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 14,
-                            handsetPortraitCrossAxisCount: 3,
-                            horizontalPadding: 16,
+                            childAspectRatio: MultimediaCardLayout.characterGridAspectRatio,
+                            crossAxisSpacing: MultimediaCardLayout.catalogGridCrossAxisSpacing(
+                              context,
+                              fallback: 12,
+                            ),
+                            mainAxisSpacing: MultimediaCardLayout.catalogGridMainAxisSpacing(
+                              context,
+                              fallback: 14,
+                            ),
+                            handsetPortraitCrossAxisCount:
+                                MultimediaCardLayout.handsetPortraitGridColumns,
+                            horizontalPadding: MultimediaCardLayout.catalogGridHorizontalPadding(
+                              context,
+                            ),
                           ),
                           itemCount: _cast.length,
                           itemBuilder: (context, index) {

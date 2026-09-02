@@ -9,7 +9,7 @@ import '../../../core/utils/localized_text.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/catalog_ltr.dart';
 import '../../../shared/widgets/multimedia_card.dart';
-import '../../../shared/widgets/shimmer_placeholder.dart';
+import '../../../shared/widgets/anime_catalog_shimmer.dart';
 
 enum ViewAllCategory {
   popularMovies,
@@ -203,13 +203,25 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
     final maxExtent = isDesktop
         ? (_isPortrait ? 240.0 : 340.0)
         : (_isPortrait ? 150.0 : 220.0);
+    final gridHorizontalPadding = _isPortrait
+        ? MultimediaCardLayout.catalogGridHorizontalPadding(context)
+        : 16.0;
+    final gridCrossAxisSpacing = _isPortrait
+        ? MultimediaCardLayout.catalogGridCrossAxisSpacing(context)
+        : 16.0;
+    final gridMainAxisSpacing = _isPortrait
+        ? MultimediaCardLayout.catalogGridMainAxisSpacing(context)
+        : 16.0;
     // Derived from the same helper the grid delegate uses, so the trailing
     // shimmer tiles always complete the last row instead of guessing.
     final crossAxisCount = ResponsiveBreakpoints.animeGridCrossAxisCount(
       context,
       maxCrossAxisExtent: maxExtent,
-      crossAxisSpacing: 16,
-      horizontalPadding: 16,
+      crossAxisSpacing: gridCrossAxisSpacing,
+      horizontalPadding: gridHorizontalPadding,
+      handsetPortraitCrossAxisCount: _isPortrait
+          ? MultimediaCardLayout.handsetPortraitGridColumns
+          : null,
     );
     final childAspectRatio = MultimediaCardLayout.gridAspectRatio(
       isPortrait: _isPortrait,
@@ -289,14 +301,22 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
                 child: GridView.builder(
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(
+                    gridHorizontalPadding,
+                    16,
+                    gridHorizontalPadding,
+                    16,
+                  ),
                   gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
                     context,
                     maxCrossAxisExtent: maxExtent,
                     childAspectRatio: childAspectRatio,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    horizontalPadding: 16,
+                    crossAxisSpacing: gridCrossAxisSpacing,
+                    mainAxisSpacing: gridMainAxisSpacing,
+                    handsetPortraitCrossAxisCount: _isPortrait
+                        ? MultimediaCardLayout.handsetPortraitGridColumns
+                        : null,
+                    horizontalPadding: gridHorizontalPadding,
                   ),
                   itemCount:
                       items.length +
@@ -311,7 +331,9 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
                           onRetry: _loadNextProviderPage,
                         );
                       }
-                      return ShimmerPlaceholder(borderRadius: 12);
+                      return AnimePosterShimmer(
+                        isPortrait: _isPortrait,
+                      );
                     }
 
                     final item = items[index];

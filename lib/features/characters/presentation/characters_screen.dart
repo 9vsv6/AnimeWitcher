@@ -14,6 +14,7 @@ import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../shared/widgets/catalog_ltr.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/widgets/multimedia_card.dart';
 import '../../../shared/widgets/underline_segment_tabs.dart';
 import '../../search/presentation/search_text_direction.dart';
 import '../../settings/presentation/account_screen.dart';
@@ -400,7 +401,7 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
 
   Widget _buildCatalogTab(bool isArabic) {
     if (_catalog.isEmpty && _catalogLoading) {
-      return const AnimeCatalogShimmer();
+      return const AnimeCatalogShimmer(characterCaptionSpace: true);
     }
     if (_catalog.isEmpty && _catalogError != null) {
       return _CharactersStatus(
@@ -428,15 +429,29 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
         child: GridView.builder(
           controller: _catalogController,
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+          padding: EdgeInsets.fromLTRB(
+            MultimediaCardLayout.catalogGridHorizontalPadding(context),
+            16,
+            MultimediaCardLayout.catalogGridHorizontalPadding(context),
+            110,
+          ),
           gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
             context,
             maxCrossAxisExtent: 140,
-            childAspectRatio: 0.58,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 14,
-            handsetPortraitCrossAxisCount: 3,
-            horizontalPadding: 16,
+            childAspectRatio: MultimediaCardLayout.characterGridAspectRatio,
+            crossAxisSpacing: MultimediaCardLayout.catalogGridCrossAxisSpacing(
+              context,
+              fallback: 12,
+            ),
+            mainAxisSpacing: MultimediaCardLayout.catalogGridMainAxisSpacing(
+              context,
+              fallback: 14,
+            ),
+            handsetPortraitCrossAxisCount:
+                MultimediaCardLayout.handsetPortraitGridColumns,
+            horizontalPadding: MultimediaCardLayout.catalogGridHorizontalPadding(
+              context,
+            ),
           ),
           itemCount: _catalog.length + extra,
           itemBuilder: (context, index) {
@@ -477,7 +492,7 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
       );
     }
     if (_favorites.isEmpty && _favoritesLoading) {
-      return const AnimeCatalogShimmer();
+      return const AnimeCatalogShimmer(characterCaptionSpace: true);
     }
     if (_favorites.isEmpty && _favoritesError != null) {
       return _CharactersStatus(
@@ -504,15 +519,29 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
         child: GridView.builder(
           controller: _favoritesController,
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+          padding: EdgeInsets.fromLTRB(
+            MultimediaCardLayout.catalogGridHorizontalPadding(context),
+            16,
+            MultimediaCardLayout.catalogGridHorizontalPadding(context),
+            110,
+          ),
           gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
             context,
             maxCrossAxisExtent: 140,
-            childAspectRatio: 0.58,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 14,
-            handsetPortraitCrossAxisCount: 3,
-            horizontalPadding: 16,
+            childAspectRatio: MultimediaCardLayout.characterGridAspectRatio,
+            crossAxisSpacing: MultimediaCardLayout.catalogGridCrossAxisSpacing(
+              context,
+              fallback: 12,
+            ),
+            mainAxisSpacing: MultimediaCardLayout.catalogGridMainAxisSpacing(
+              context,
+              fallback: 14,
+            ),
+            handsetPortraitCrossAxisCount:
+                MultimediaCardLayout.handsetPortraitGridColumns,
+            horizontalPadding: MultimediaCardLayout.catalogGridHorizontalPadding(
+              context,
+            ),
           ),
           itemCount: _favorites.length + extra,
           itemBuilder: (context, index) {

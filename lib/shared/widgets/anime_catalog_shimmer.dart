@@ -7,11 +7,26 @@ import 'shimmer_placeholder.dart';
 
 /// Skeleton poster matching home-page card loading.
 class AnimePosterShimmer extends StatelessWidget {
-  const AnimePosterShimmer({super.key});
+  const AnimePosterShimmer({super.key, this.isPortrait = true});
+
+  final bool isPortrait;
 
   @override
   Widget build(BuildContext context) {
-    return ShimmerPlaceholder.rectangular(borderRadius: 12);
+    // Match home loading exactly: only the artwork rectangle shimmers. The
+    // rest of the grid tile remains empty for the caption that will appear
+    // after loading, so the placeholder never stretches into a giant card.
+    return Align(
+      alignment: Alignment.topCenter,
+      child: AspectRatio(
+        aspectRatio: MultimediaCardLayout.posterAspectRatio(
+          isPortrait: isPortrait,
+        ),
+        child: ShimmerPlaceholder.rectangular(
+          borderRadius: MultimediaCardLayout.posterRadius,
+        ),
+      ),
+    );
   }
 }
 
@@ -20,34 +35,63 @@ class AnimeCatalogShimmer extends StatelessWidget {
   const AnimeCatalogShimmer({
     super.key,
     this.itemCount,
-    this.padding = const EdgeInsets.fromLTRB(16, 16, 16, 110),
+    this.padding,
     this.physics = const AlwaysScrollableScrollPhysics(),
+    this.characterCaptionSpace = false,
   });
 
   final int? itemCount;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
   final ScrollPhysics? physics;
+
+  /// Character tiles only reserve one name line, so their empty caption area
+  /// is intentionally smaller than the anime title + type area.
+  final bool characterCaptionSpace;
 
   @override
   Widget build(BuildContext context) {
     final isDesktop = context.isDesktop;
     final count = itemCount ?? (isDesktop ? 18 : 12);
+    final horizontalPadding = MultimediaCardLayout.catalogGridHorizontalPadding(
+      context,
+    );
+    final crossAxisSpacing = MultimediaCardLayout.catalogGridCrossAxisSpacing(
+      context,
+    );
+    final mainAxisSpacing = MultimediaCardLayout.catalogGridMainAxisSpacing(
+      context,
+    );
+    final childAspectRatio = characterCaptionSpace
+        ? MultimediaCardLayout.characterGridAspectRatio
+        : MultimediaCardLayout.gridAspectRatio(
+            isPortrait: true,
+            isDesktop: isDesktop,
+          );
     return CatalogLtr(
       child: GridView.builder(
         physics: physics,
-        padding: padding,
+        padding:
+            padding ??
+            EdgeInsets.fromLTRB(
+              horizontalPadding,
+              16,
+              horizontalPadding,
+              110,
+            ),
         gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
           context,
           maxCrossAxisExtent: isDesktop ? 240 : 150,
-          childAspectRatio: MultimediaCardLayout.gridAspectRatio(
-            isPortrait: true,
-            isDesktop: isDesktop,
-          ),
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
+          childAspectRatio: childAspectRatio,
+          crossAxisSpacing: crossAxisSpacing,
+          mainAxisSpacing: mainAxisSpacing,
+          handsetPortraitCrossAxisCount:
+              MultimediaCardLayout.handsetPortraitGridColumns,
+          horizontalPadding: horizontalPadding,
         ),
         itemCount: count,
-        itemBuilder: (context, index) => const AnimePosterShimmer(),
+        itemBuilder: (context, index) => AnimePosterShimmer(
+          key: ValueKey('anime-catalog-shimmer-$index'),
+        ),
       ),
     );
   }

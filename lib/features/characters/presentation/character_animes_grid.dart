@@ -47,9 +47,16 @@ class CharacterAnimesGrid extends StatelessWidget {
                 isPortrait: true,
                 isDesktop: isDesktop,
               ),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 14,
-              handsetPortraitCrossAxisCount: 3,
+              crossAxisSpacing: MultimediaCardLayout.catalogGridCrossAxisSpacing(
+                context,
+                fallback: 12,
+              ),
+              mainAxisSpacing: MultimediaCardLayout.catalogGridMainAxisSpacing(
+                context,
+                fallback: 14,
+              ),
+              handsetPortraitCrossAxisCount:
+                  MultimediaCardLayout.handsetPortraitGridColumns,
             ),
             itemCount: items.length,
             itemBuilder: (context, index) {

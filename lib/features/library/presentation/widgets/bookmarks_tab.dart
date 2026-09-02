@@ -31,6 +31,12 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
     super.build(context);
     final libraryState = ref.watch(libraryProvider);
     final isDesktop = context.isDesktop;
+    final gridHorizontalPadding =
+        MultimediaCardLayout.catalogGridHorizontalPadding(context);
+    final gridCrossAxisSpacing =
+        MultimediaCardLayout.catalogGridCrossAxisSpacing(context);
+    final gridMainAxisSpacing =
+        MultimediaCardLayout.catalogGridMainAxisSpacing(context);
     // Poster *width* budget per column. The previous value was named
     // "totalHeight" and fed into maxCrossAxisExtent, so the library grid
     // sized its columns from a height and ended up denser than every other
@@ -43,10 +49,10 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
       LibraryEmpty() => _buildEmpty(context),
       LibrarySuccess(items: final items) => CatalogLtr(
         child: GridView.builder(
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
+            gridHorizontalPadding,
             LayoutConstants.spacingMd,
-            LayoutConstants.spacingMd,
-            LayoutConstants.spacingMd,
+            gridHorizontalPadding,
             100,
           ),
           gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
@@ -56,9 +62,11 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
               isPortrait: true,
               isDesktop: isDesktop,
             ),
-            crossAxisSpacing: LayoutConstants.spacingMd,
-            mainAxisSpacing: LayoutConstants.spacingMd,
-            horizontalPadding: LayoutConstants.spacingMd,
+            crossAxisSpacing: gridCrossAxisSpacing,
+            mainAxisSpacing: gridMainAxisSpacing,
+            handsetPortraitCrossAxisCount:
+                MultimediaCardLayout.handsetPortraitGridColumns,
+            horizontalPadding: gridHorizontalPadding,
           ),
           itemCount: items.length,
           itemBuilder: (context, index) {
