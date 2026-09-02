@@ -12,7 +12,8 @@ enum DownloadResumeStrategy {
   /// A leftover dest/temp file has bytes that should be appended to.
   partialFile,
 
-  /// Nothing to keep; start the transfer from byte 0.
+  /// Legacy sentinel kept for compatibility. Existing downloads never select
+  /// this automatically; only a brand-new download may start from byte 0.
   restartFromZero,
 }
 
@@ -43,8 +44,9 @@ DownloadResumeStrategy chooseDownloadResumeStrategy({
   )) {
     return DownloadResumeStrategy.partialFile;
   }
-  if (savedProgress > 0) return DownloadResumeStrategy.partialFile;
-  return DownloadResumeStrategy.restartFromZero;
+  // Even with no discoverable bytes, an existing download must remain
+  // resumable/paused rather than silently becoming a fresh transfer.
+  return DownloadResumeStrategy.partialFile;
 }
 
 /// Fresh GET from byte 0 is allowed only when nothing has been saved.
@@ -54,14 +56,9 @@ bool shouldRestartDownloadFromZero({
   required int expectedBytes,
   double savedProgress = 0,
 }) {
-  if (shouldResumeFromPartialBytes(
-    existingPartialBytes: existingPartialBytes,
-    expectedBytes: expectedBytes,
-  )) {
-    return false;
-  }
-  if (savedProgress > 0) return false;
-  return true;
+  // Existing rows are never allowed to restart automatically. The only
+  // byte-zero path is explicit user deletion followed by a new download.
+  return false;
 }
 
 /// Unpause / retry / overlay ticks must not flash 0% over saved bytes.
@@ -168,7 +165,7 @@ Future<bool> resumeOrRestartDownload({
       return true;
     }
   } catch (_) {
-    // A stale task can throw while its resume metadata is being inspected.
+    // A stale native resume blob must never trigger a fresh byte-zero GET.
   }
 
   if (resumeFromPartial != null) {
@@ -177,21 +174,14 @@ Future<bool> resumeOrRestartDownload({
         return true;
       }
     } catch (_) {
-      // Leftover bytes can be unreadable or the host can reject Range.
+      // Keep the preserved bytes untouched if the host rejects Range or the
+      // partial file cannot be resumed right now.
     }
   }
 
-  if (!shouldRestartDownloadFromZero(
-    existingPartialBytes: existingPartialBytes,
-    expectedBytes: expectedBytes,
-    savedProgress: savedProgress,
-  )) {
-    return false;
-  }
-
-  try {
-    return await restart();
-  } catch (_) {
-    return false;
-  }
+  // Existing downloads never restart automatically, even when the saved
+  // progress is 0 or resume metadata is missing. `restart` is intentionally
+  // not called; a fresh transfer is created only after explicit user deletion
+  // followed by a new startDownload action.
+  return false;
 }

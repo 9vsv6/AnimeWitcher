@@ -616,20 +616,24 @@ class DownloadService {
       }
 
       final shouldContinue = shouldAutoResumeInterruptedDownload(
-        wasRunningOrFailed: wasRunning,
-        userPaused: userPaused || isFailed,
+        wasRunningOrFailed: wasRunning || isFailed,
+        userPaused: userPaused,
         stillInNativeQueue: stillNative,
         queueWaiting: queueWaiting || shouldReenqueue,
       );
+      var didContinue = false;
       if (shouldContinue) {
-        unawaited(_resumeDownloadTask(task));
+        // Recovery is not considered running until a real native resume or
+        // byte-range continuation has actually started. This prevents stale
+        // persisted state from rendering جارٍ التنزيل at 0 MB/s forever.
+        didContinue = await _resumeDownloadTask(task);
       }
 
       final showAsWaiting = _queueWaitingIds.contains(task.taskId);
       final showAsRunning =
           !userPaused &&
           ((record.status == TaskStatus.running && stillNative) ||
-              (shouldContinue && !showAsWaiting));
+              (didContinue && !showAsWaiting));
       _publishProgress(
         trackingUrl: trackingUrl,
         taskId: task.taskId,
@@ -1174,18 +1178,14 @@ class DownloadService {
   }
 
   Future<List<LiveNativeDownload>> _liveNativeDownloads() async {
+    // Only FileDownloader's current task set is authoritative for whether a
+    // transfer is actually alive. The iOS continued-processing snapshot is
+    // persisted state and can outlive a paused/failed/killed URLSession task;
+    // treating that snapshot as live creates a fake running row at 0 MB/s.
     final byId = <String, LiveNativeDownload>{};
-    void add(LiveNativeDownload item) {
-      if (item.taskId.isEmpty) return;
-      byId.putIfAbsent(item.taskId, () => item);
-    }
-
     for (final task in await FileDownloader().allTasks(allGroups: true)) {
       if (task is! DownloadTask) continue;
-      add(_liveIdentityFor(task));
-    }
-    for (final item in await _continuedProcessing.liveNativeIdentities()) {
-      add(item);
+      byId.putIfAbsent(task.taskId, () => _liveIdentityFor(task));
     }
     return byId.values.toList();
   }
@@ -1342,18 +1342,9 @@ class DownloadService {
         .patchDownloadMetadata(task.taskId, queueWaiting: false);
     _startingTaskIds.add(task.taskId);
     try {
-      var started = await _resumeDownloadTask(task);
-      if (!started) {
-        final saved = await _savedProgressFor(task);
-        if (shouldRestartDownloadFromZero(
-          existingPartialBytes: saved.partialBytes,
-          expectedBytes: saved.totalSize,
-          savedProgress: saved.progress,
-        )) {
-          started = await FileDownloader().enqueue(task);
-        }
-      }
-      return started;
+      // Promotion of an existing queue row must only resume preserved state.
+      // Never turn a failed resume into a byte-zero enqueue.
+      return await _resumeDownloadTask(task);
     } finally {
       _startingTaskIds.remove(task.taskId);
     }
@@ -1778,9 +1769,38 @@ class DownloadService {
             .read(storageServiceProvider)
             .patchDownloadMetadata(taskId, queueWaiting: false);
       }
-      // resume() enqueues with resumeData. HoldingQueue holds it when N is
-      // full — never a fresh GET from byte 0.
-      await _resumeDownloadTask(downloadTask);
+      // Resume only from native resumeData or an existing partial file.
+      // If neither can be used, keep the row paused instead of issuing a
+      // fresh GET. Only delete + startDownload is allowed to start from zero.
+      final resumed = await _resumeDownloadTask(downloadTask);
+      if (!resumed) {
+        _userPausedIds.add(taskId);
+        final saved = await _savedProgressFor(downloadTask);
+        await FileDownloader().database.updateRecord(
+          TaskRecord(
+            downloadTask,
+            TaskStatus.paused,
+            saved.progress,
+            saved.totalSize,
+          ),
+        );
+        await _ref
+            .read(storageServiceProvider)
+            .patchDownloadMetadata(
+              taskId,
+              queueWaiting: false,
+              userPaused: true,
+              lastProgress: saved.progress,
+              lastExpectedBytes: saved.totalSize,
+            );
+        _publishProgress(
+          trackingUrl: downloadTrackingUrl(downloadTask),
+          taskId: taskId,
+          progress: saved.progress,
+          totalSize: saved.totalSize,
+          status: TaskStatus.paused,
+        );
+      }
 
       for (final waiterId in plan.waitersToRestack) {
         final record = byId[waiterId];
@@ -1909,18 +1929,13 @@ class DownloadService {
   Future<bool> _resumeDownloadTask(DownloadTask task) async {
     final trackingUrl = downloadTrackingUrl(task);
     final fileKey = downloadTaskFileKey(task);
-    if (await _episodeHasLiveNativeTask(
+    final live = await _liveNativeTaskFor(
       taskId: task.taskId,
       trackingUrl: trackingUrl,
       url: task.url,
       fileKey: fileKey,
-    )) {
-      final live = await _liveNativeTaskFor(
-        taskId: task.taskId,
-        trackingUrl: trackingUrl,
-        url: task.url,
-        fileKey: fileKey,
-      );
+    );
+    if (live != null) {
       await _attachToLiveNativeTask(task, live: live);
       return true;
     }
@@ -1940,7 +1955,10 @@ class DownloadService {
       canResume: () => FileDownloader().taskCanResume(task),
       resume: () => FileDownloader().resume(task),
       resumeFromPartial: () => _resumeUsingPartialFile(task),
-      restart: () => FileDownloader().enqueue(task),
+      // Existing downloads are never allowed to issue a fresh GET. A fresh
+      // enqueue is only created by startDownload after the user explicitly
+      // deletes the old download and starts it again.
+      restart: () async => false,
       savedProgress: saved.progress,
       existingPartialBytes: saved.partialBytes,
       expectedBytes: saved.totalSize,
