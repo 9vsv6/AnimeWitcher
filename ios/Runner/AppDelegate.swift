@@ -1280,19 +1280,51 @@ private final class AnimeWitcherPassthroughView: UIView {
 }
 
 private final class AnimeWitcherPassthroughToolbar: UIToolbar {
-  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    guard let hit = super.hitTest(point, with: event) else { return nil }
+  private static let horizontalHitSlop: CGFloat = 22
+  private static let verticalHitSlop: CGFloat = 10
 
-    // The persistent toolbar intentionally has a wider transparent host so a
-    // long library-category item can morph into the 3-action details group
-    // without recreating the platform view. Only actual controls should claim
-    // touches; the empty flexible-space region must pass taps through to Flutter.
-    var candidate: UIView? = hit
-    while let view = candidate, view !== self {
-      if view is UIControl { return hit }
-      candidate = view.superview
+  private func descendantControls(in view: UIView) -> [UIControl] {
+    view.subviews.flatMap { subview -> [UIControl] in
+      let control = subview as? UIControl
+      return (control.map { [$0] } ?? []) + descendantControls(in: subview)
     }
-    return nil
+  }
+
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    if let hit = super.hitTest(point, with: event) {
+      var candidate: UIView? = hit
+      while let view = candidate, view !== self {
+        if view is UIControl { return hit }
+        candidate = view.superview
+      }
+    }
+
+    // iOS 26 can draw a shared Liquid Glass capsule and its symbol slightly
+    // outside the private UIBarButtonItem control frame. Search the real
+    // controls using an expanded hit rect, then route the touch to the closest
+    // control so tapping the visible icon always triggers that exact action.
+    let controls = descendantControls(in: self).filter {
+      !$0.isHidden && $0.alpha > 0.01 && $0.isUserInteractionEnabled && $0.isEnabled
+    }
+    let matches = controls.compactMap { control -> (UIControl, CGFloat)? in
+      let localPoint = control.convert(point, from: self)
+      let expandedBounds = control.bounds.insetBy(
+        dx: -Self.horizontalHitSlop,
+        dy: -Self.verticalHitSlop
+      )
+      guard expandedBounds.contains(localPoint) else { return nil }
+
+      let dx = localPoint.x - control.bounds.midX
+      let dy = localPoint.y - control.bounds.midY
+      return (control, dx * dx + dy * dy)
+    }
+    guard let target = matches.min(by: { $0.1 < $1.1 })?.0 else {
+      // Preserve passthrough behavior over the toolbar's flexible empty space.
+      return nil
+    }
+
+    let localPoint = target.convert(point, from: self)
+    return target.hitTest(localPoint, with: event) ?? target
   }
 }
 
