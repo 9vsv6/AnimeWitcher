@@ -9,33 +9,30 @@ Future<void> _pumpCatalog(
   WidgetTester tester, {
   bool characterCaptionSpace = false,
 }) async {
-  tester.view.physicalSize = const Size(390, 844);
-  tester.view.devicePixelRatio = 1;
-  await tester.binding.setSurfaceSize(const Size(390, 844));
-  await tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(
-        body: AnimeCatalogShimmer(
-          itemCount: 6,
-          physics: const NeverScrollableScrollPhysics(),
-          characterCaptionSpace: characterCaptionSpace,
+  debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+  try {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AnimeCatalogShimmer(
+            itemCount: 6,
+            physics: const NeverScrollableScrollPhysics(),
+            characterCaptionSpace: characterCaptionSpace,
+          ),
         ),
       ),
-    ),
-  );
-  await tester.pump();
+    );
+    await tester.pump();
+  } finally {
+    debugDefaultTargetPlatformOverride = null;
+  }
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  setUp(() {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-  });
-
-  tearDown(() {
-    debugDefaultTargetPlatformOverride = null;
-  });
 
   test('shared mobile catalog metrics match the search reference', () {
     expect(MultimediaCardLayout.handsetPortraitGridColumns, 3);
