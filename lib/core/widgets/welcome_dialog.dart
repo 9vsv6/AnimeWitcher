@@ -167,20 +167,6 @@ class _ThemeStep extends ConsumerWidget {
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: LayoutConstants.spacingSm),
-        Text(
-          appText(
-            context,
-            english:
-                'AnimeWitcher works on PC, iOS, and Android. Pick a look for this device, you can always change it later from Settings.',
-            arabic:
-                'AnimeWitcher متاح على الكمبيوتر وiOS وأندرويد. اختر المظهر الذي يناسب هذا الجهاز، ويمكنك تغييره لاحقًا من الإعدادات.',
-          ),
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
-        ),
         const SizedBox(height: LayoutConstants.spacingMd),
         RadioGroup<ThemeMode>(
           groupValue: currentTheme,
