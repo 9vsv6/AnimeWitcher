@@ -106,10 +106,8 @@ class _SearchResultSectionState extends ConsumerState<SearchResultSection> {
       // Adaptive: a 900pt window gets fewer, readable posters while an
       // ultrawide monitor gets more of them at the same physical size,
       // instead of a fixed 8 columns that shrank or ballooned the cards.
-      final desktopColumns = ResponsiveBreakpoints.desktopLandscapeColumnsFor(
-        MediaQuery.sizeOf(context).width - 32,
-        spacing: 12,
-      );
+      final desktopColumns =
+          ResponsiveBreakpoints.desktopLandscapeColumnsForViewport(context);
       return SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
         sliver: SliverGrid(

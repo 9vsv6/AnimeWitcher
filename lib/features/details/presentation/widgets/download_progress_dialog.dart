@@ -6,7 +6,7 @@ import '../../../../core/utils/file_size_formatter.dart';
 import '../../../../core/utils/download_time_remaining.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
-class DownloadProgressDialog extends ConsumerWidget {
+class DownloadProgressDialog extends ConsumerStatefulWidget {
   final String title;
   final String trackingUrl;
 
@@ -17,18 +17,52 @@ class DownloadProgressDialog extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DownloadProgressDialog> createState() =>
+      _DownloadProgressDialogState();
+}
+
+class _DownloadProgressDialogState
+    extends ConsumerState<DownloadProgressDialog> {
+  bool _dismissRequested = false;
+
+  void _dismissOnce() {
+    if (_dismissRequested) return;
+    _dismissRequested = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+      Navigator.of(context).pop();
+    });
+  }
+
+  Future<void> _cancelDownload(DownloadProgressData data) async {
+    if (_dismissRequested) return;
+    _dismissRequested = true;
+    final navigator = Navigator.of(context);
+    final service = ref.read(downloadServiceProvider);
+    try {
+      await service.cancelDownload(data.taskId, widget.trackingUrl);
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+        navigator.pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _dismissRequested = false);
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final progressMap = ref.watch(downloadProgressProvider);
-    final data = progressMap[trackingUrl];
+    final data = progressMap[widget.trackingUrl];
 
     if (data == null) {
-      // If download finished or disappeared, close dialog safely
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted && ModalRoute.of(context)?.isCurrent == true) {
-          Navigator.of(context).pop();
-        }
-      });
+      // A cancellation removes the progress entry before its Future
+      // completes. Guarding this route close prevents the dialog rebuild and
+      // the cancel handler from popping both the dialog and the anime page.
+      _dismissOnce();
       return const SizedBox.shrink();
     }
 
@@ -54,7 +88,7 @@ class DownloadProgressDialog extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                title,
+                widget.title,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -126,11 +160,7 @@ class DownloadProgressDialog extends ConsumerWidget {
                 children: [
                   if (data.progress < 1.0) ...[
                     TextButton(
-                      onPressed: () async {
-                        final service = ref.read(downloadServiceProvider);
-                        await service.cancelDownload(data.taskId, trackingUrl);
-                        if (context.mounted) Navigator.of(context).pop();
-                      },
+                      onPressed: () => _cancelDownload(data),
                       style: TextButton.styleFrom(
                         foregroundColor: Theme.of(context).colorScheme.error,
                       ),
@@ -155,7 +185,7 @@ class DownloadProgressDialog extends ConsumerWidget {
                     const SizedBox(width: 8),
                   ],
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: _dismissOnce,
                     child: Text(l10n.close),
                   ),
                 ],
