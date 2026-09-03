@@ -1048,6 +1048,11 @@ class AnimeWitcherPlayerControlsState
     final uiPhase = ref.watch(
       playerControllerProvider.select((s) => s.uiPhase),
     );
+    final seekDuration =
+        ref.watch(
+          playerSettingsProvider.select((s) => s.asData?.value.seekDuration),
+        ) ??
+        10;
     // Guard against PiP or small window size
     final size = MediaQuery.sizeOf(context);
     final isSmallWindow = size.width < 300 || size.height < 200;
@@ -1153,16 +1158,51 @@ class AnimeWitcherPlayerControlsState
                         opacity: _isVisible ? 1.0 : 0.0,
                         duration: _animDuration,
                         child: Center(
-                          child: PlayerPlayPauseButton(
-                            player: widget.player,
-                            videoViewController: widget.videoViewController,
-                            isLoading: widget.isLoading,
-                            isTv: _isTv,
-                            size: 82,
-                            backgroundColor: Colors.black.withValues(
-                              alpha: 0.32,
-                            ),
-                            onPressed: _togglePlay,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              PlayerSeekButton(
+                                forward: false,
+                                tooltip: appText(
+                                  context,
+                                  english: 'Rewind ${seekDuration}s',
+                                  arabic: 'إرجاع $seekDuration ثوانٍ',
+                                ),
+                                onPressed: () => _seekRelative(
+                                  Duration(seconds: -seekDuration),
+                                ),
+                                backgroundColor: Colors.black.withValues(
+                                  alpha: 0.32,
+                                ),
+                              ),
+                              const SizedBox(width: 28),
+                              PlayerPlayPauseButton(
+                                player: widget.player,
+                                videoViewController: widget.videoViewController,
+                                isLoading: widget.isLoading,
+                                isTv: _isTv,
+                                size: 82,
+                                backgroundColor: Colors.black.withValues(
+                                  alpha: 0.32,
+                                ),
+                                onPressed: _togglePlay,
+                              ),
+                              const SizedBox(width: 28),
+                              PlayerSeekButton(
+                                forward: true,
+                                tooltip: appText(
+                                  context,
+                                  english: 'Forward ${seekDuration}s',
+                                  arabic: 'تقديم $seekDuration ثوانٍ',
+                                ),
+                                onPressed: () => _seekRelative(
+                                  Duration(seconds: seekDuration),
+                                ),
+                                backgroundColor: Colors.black.withValues(
+                                  alpha: 0.32,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -1356,6 +1396,9 @@ class AnimeWitcherPlayerControlsState
     final isTouch = !_isTv && (Platform.isAndroid || Platform.isIOS);
     final isDesktop =
         Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+    final playerSettings =
+        ref.watch(playerSettingsProvider).asData?.value ??
+        const PlayerSettings();
 
     // Playback placement: touch keeps the big thumb-reach triplet centered;
     // TV and desktop fold compact playback into the start of the controls row
@@ -1372,10 +1415,17 @@ class AnimeWitcherPlayerControlsState
       showBufferingSpinner: false,
     );
 
-    // Left cluster: play/pause (non-touch), lock (touch only), adjacent episodes.
+    // Left cluster: touch keeps its own compact row (lock + adjacent
+    // episodes; play/pause floats centered instead, see build()). TV and
+    // desktop get a seek trio around play/pause, flanked by adjacent-episode
+    // buttons, with a speaker+slider volume control leading the row (mouse
+    // interaction only, so desktop only).
     final leading = <Widget>[
-      if (!isTouch) playPause,
-      if (isTouch)
+      if (isDesktop) ...[
+        const PlayerVolumeControl(),
+        const SizedBox(width: 4),
+      ],
+      if (isTouch) ...[
         PlayerIconButton(
           icon: _isLocked ? Icons.lock : Icons.lock_open,
           tooltip: _isLocked ? l10n.unlock : l10n.lock,
@@ -1383,25 +1433,61 @@ class AnimeWitcherPlayerControlsState
           isTv: _isTv,
           highlight: _isLocked,
         ),
-      if (isSeries && hasPreviousEpisode)
+        if (isSeries && hasPreviousEpisode)
+          PlayerIconButton(
+            icon: Icons.skip_previous_rounded,
+            tooltip: appText(context, english: 'Previous', arabic: 'السابق'),
+            onPressed: () => unawaited(_playPreviousEpisodeWithSourcePicker()),
+            isTv: _isTv,
+          ),
+        if (isSeries && hasNextEpisode)
+          PlayerIconButton(
+            icon: Icons.skip_next_rounded,
+            tooltip: l10n.next,
+            onPressed: () => unawaited(_playNextEpisodeWithSourcePicker()),
+            isTv: _isTv,
+          ),
+      ] else ...[
+        if (isSeries && hasPreviousEpisode)
+          PlayerIconButton(
+            icon: Icons.skip_previous_rounded,
+            tooltip: appText(context, english: 'Previous', arabic: 'السابق'),
+            onPressed: () => unawaited(_playPreviousEpisodeWithSourcePicker()),
+            isTv: _isTv,
+          ),
         PlayerIconButton(
-          icon: Icons.skip_previous_rounded,
-          tooltip: appText(context, english: 'Previous', arabic: 'السابق'),
-          onPressed: () => unawaited(_playPreviousEpisodeWithSourcePicker()),
+          icon: Icons.replay_10_rounded,
+          tooltip: appText(
+            context,
+            english: 'Rewind ${playerSettings.seekDuration}s',
+            arabic: 'إرجاع ${playerSettings.seekDuration} ثوانٍ',
+          ),
+          onPressed: () =>
+              _seekRelative(Duration(seconds: -playerSettings.seekDuration)),
           isTv: _isTv,
         ),
-      if (isSeries && hasNextEpisode)
+        playPause,
         PlayerIconButton(
-          icon: Icons.skip_next_rounded,
-          tooltip: l10n.next,
-          onPressed: () => unawaited(_playNextEpisodeWithSourcePicker()),
+          icon: Icons.forward_10_rounded,
+          tooltip: appText(
+            context,
+            english: 'Forward ${playerSettings.seekDuration}s',
+            arabic: 'تقديم ${playerSettings.seekDuration} ثوانٍ',
+          ),
+          onPressed: () =>
+              _seekRelative(Duration(seconds: playerSettings.seekDuration)),
           isTv: _isTv,
         ),
+        if (isSeries && hasNextEpisode)
+          PlayerIconButton(
+            icon: Icons.skip_next_rounded,
+            tooltip: l10n.next,
+            onPressed: () => unawaited(_playNextEpisodeWithSourcePicker()),
+            isTv: _isTv,
+          ),
+      ],
     ];
 
-    final playerSettings =
-        ref.watch(playerSettingsProvider).asData?.value ??
-        const PlayerSettings();
     final canRotate =
         isTouch && (Platform.isAndroid || (Platform.isIOS && !_isIpad));
     final pipSupported = PlayerPip.shouldShowButton(

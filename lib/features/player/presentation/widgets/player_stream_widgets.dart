@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:video_view/video_view.dart' as vv;
 import '../player_controller.dart';
+import '../player_gesture_handler.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
 import 'hotstar_player_style.dart';
+import 'player_control_components.dart';
 import '../../../skip/data/skip_service.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
@@ -515,6 +517,173 @@ class PlayerPlayPauseButton extends StatelessWidget {
   }
 }
 
+/// Circular ±10s seek button shown beside [PlayerPlayPauseButton] in the
+/// touch centered overlay. The desktop/TV control row uses [PlayerIconButton]
+/// for the same action instead, to match the rest of that row's buttons.
+class PlayerSeekButton extends StatelessWidget {
+  final bool forward;
+  final String tooltip;
+  final VoidCallback onPressed;
+  final double size;
+  final Color? backgroundColor;
+
+  const PlayerSeekButton({
+    super.key,
+    required this.forward,
+    required this.tooltip,
+    required this.onPressed,
+    this.size = 52,
+    this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: CustomButton(
+        onPressed: onPressed,
+        shape: const CircleBorder(),
+        child: Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: backgroundColor != null
+              ? BoxDecoration(shape: BoxShape.circle, color: backgroundColor)
+              : null,
+          child: Icon(
+            forward ? Icons.forward_10_rounded : Icons.replay_10_rounded,
+            color: Colors.white,
+            size: size * 0.55,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Persistent speaker icon + slider for mouse-driven desktop control rows —
+/// touch and TV keep their existing swipe/hardware volume handling, so this
+/// is only used on desktop where hover+drag makes sense.
+class PlayerVolumeControl extends ConsumerStatefulWidget {
+  const PlayerVolumeControl({super.key});
+
+  @override
+  ConsumerState<PlayerVolumeControl> createState() =>
+      _PlayerVolumeControlState();
+}
+
+class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
+  double? _volume;
+  double? _dragValue;
+  double _lastNonZero = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refresh());
+  }
+
+  Future<void> _refresh() async {
+    final level = await ref
+        .read(playerControllerProvider.notifier)
+        .getVolumeLevel();
+    if (!mounted) return;
+    final clamped = level.clamp(0.0, 1.0);
+    setState(() {
+      _volume = clamped;
+      if (clamped > 0) _lastNonZero = clamped;
+    });
+  }
+
+  Future<void> _commit(double value) async {
+    await ref.read(playerControllerProvider.notifier).setVolumeLevel(value);
+  }
+
+  void _toggleMute() {
+    final current = _dragValue ?? _volume ?? 1.0;
+    final target = current > 0 ? 0.0 : _lastNonZero;
+    setState(() {
+      _volume = target;
+      _dragValue = null;
+    });
+    unawaited(_commit(target));
+  }
+
+  IconData _iconFor(double value) {
+    if (value <= 0.0) return Icons.volume_off_rounded;
+    if (value < 0.5) return Icons.volume_down_rounded;
+    return Icons.volume_up_rounded;
+  }
+
+  // Icons the gesture handler's OSD uses for a volume (not brightness)
+  // change — keyboard shortcuts and scroll/swipe volume adjustments only
+  // surface through that OSD state, so this is how the slider notices them.
+  static final Set<IconData> _volumeOsdIcons = {
+    Icons.volume_off,
+    Icons.volume_mute,
+    Icons.volume_down,
+    Icons.volume_up,
+    Icons.campaign,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<PlayerGestureState>(playerGestureHandlerProvider, (
+      previous,
+      next,
+    ) {
+      if (_dragValue != null) return; // don't fight an active drag
+      if (!next.showOSD || next.osdValue == null) return;
+      if (!_volumeOsdIcons.contains(next.osdIcon)) return;
+      final clamped = next.osdValue!.clamp(0.0, 1.0);
+      setState(() {
+        _volume = clamped;
+        if (clamped > 0) _lastNonZero = clamped;
+      });
+    });
+
+    final display = (_dragValue ?? _volume ?? 1.0).clamp(0.0, 1.0);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PlayerIconButton(
+          icon: _iconFor(display),
+          tooltip: appText(context, english: 'Mute', arabic: 'كتم الصوت'),
+          onPressed: _toggleMute,
+        ),
+        SizedBox(
+          width: 64,
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 4,
+              activeTrackColor: Colors.white,
+              inactiveTrackColor: const Color(0x4DCFDEF6),
+              thumbColor: Colors.white,
+              overlayColor: Colors.white.withValues(alpha: 0.12),
+              thumbShape: const RoundSliderThumbShape(
+                enabledThumbRadius: 6,
+                elevation: 0,
+              ),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            ),
+            child: Slider(
+              value: display,
+              onChanged: (value) => setState(() => _dragValue = value),
+              onChangeEnd: (value) {
+                setState(() {
+                  _volume = value;
+                  _dragValue = null;
+                });
+                unawaited(_commit(value));
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// The single shared player spinner — used by the centered buffering indicator
 /// and by the play/pause button so they look identical (they both appear in the
 /// screen centre on touch).
@@ -875,10 +1044,13 @@ class _SeekBarState extends State<_SeekBar> {
                   (_isTrackHovered || _isDragging) &&
                   _hoverX >= interval.start &&
                   _hoverX <= interval.end;
-              intervalHeights.add(isIntervalHovered ? 12.0 : 8.0);
+              intervalHeights.add(isIntervalHovered ? 7.0 : 5.0);
             }
 
-            // Thumb morphs if hovering anywhere on track or actively dragging
+            // Thumb grows (but stays a round handle) while hovering anywhere
+            // on the track or actively dragging — always visible at rest so
+            // the scrubber reads as a persistent handle rather than a marker
+            // that only appears on interaction.
             final bool isMorphed = _isDragging || _isTrackHovered;
 
             final double thumbWidth;
@@ -887,20 +1059,20 @@ class _SeekBarState extends State<_SeekBar> {
             final double thumbOpacity;
 
             if (isMorphed) {
-              thumbWidth = 3.0;
+              thumbWidth = 18.0;
               thumbHeight = 18.0;
-              thumbRadius = 2.0; // rounded-sm ≈ 2px
+              thumbRadius = 9.0;
               thumbOpacity = 1.0;
             } else if (_isFocused) {
+              thumbWidth = 16.0;
+              thumbHeight = 16.0;
+              thumbRadius = 8.0;
+              thumbOpacity = 1.0;
+            } else {
               thumbWidth = 14.0;
               thumbHeight = 14.0;
               thumbRadius = 7.0;
               thumbOpacity = 1.0;
-            } else {
-              thumbWidth = 10.0;
-              thumbHeight = 10.0;
-              thumbRadius = 5.0;
-              thumbOpacity = 0.9;
             }
 
             return MouseRegion(
