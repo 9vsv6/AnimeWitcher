@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -168,6 +169,102 @@ class AniSkipService implements SkipService {
     // Cache the miss too, so a seek-heavy session doesn't re-ask every time.
     _store(key, const []);
     return [];
+  }
+
+  /// Derives segments for an episode nobody has submitted from the episodes
+  /// around it, and only when those agree closely.
+  ///
+  /// Endings sit at a near-fixed offset from the end of an episode, so they
+  /// cluster tightly and can be placed confidently. Openings often move by
+  /// minutes between episodes, and the spread check rejects them rather than
+  /// putting the button somewhere that would skip real story.
+  Future<List<SkipSegment>> estimateFromNeighbours({
+    required int malId,
+    required int episode,
+    required int episodeLength,
+    int radius = 4,
+  }) async {
+    if (malId <= 0 || episodeLength <= 0) return const <SkipSegment>[];
+
+    // Offsets measured from the start for openings and from the end for
+    // endings, which is what actually stays constant across episodes.
+    final introStarts = <double>[];
+    final introEnds = <double>[];
+    final outroFromEndStarts = <double>[];
+    final outroFromEndEnds = <double>[];
+
+    for (var offset = 1; offset <= radius; offset++) {
+      for (final neighbour in <int>[episode - offset, episode + offset]) {
+        if (neighbour < 1 || neighbour == episode) continue;
+        final segments = await getSkipSegments(
+          malId: malId,
+          season: 1,
+          episode: neighbour,
+          duration: episodeLength,
+        );
+        for (final segment in segments) {
+          if (segment.type == SkipType.intro) {
+            introStarts.add(segment.startTime);
+            introEnds.add(segment.endTime);
+          } else if (segment.type == SkipType.outro) {
+            outroFromEndStarts.add(episodeLength - segment.startTime);
+            outroFromEndEnds.add(episodeLength - segment.endTime);
+          }
+        }
+      }
+    }
+
+    final out = <SkipSegment>[];
+    final intro = _agreedSegment(introStarts, introEnds);
+    if (intro != null) {
+      out.add(
+        SkipSegment(
+          startTime: intro.$1,
+          endTime: intro.$2,
+          type: SkipType.intro,
+        ),
+      );
+    }
+    final outro = _agreedSegment(outroFromEndStarts, outroFromEndEnds);
+    if (outro != null) {
+      final start = episodeLength - outro.$1;
+      final end = episodeLength - outro.$2;
+      if (end > start) {
+        out.add(
+          SkipSegment(startTime: start, endTime: end, type: SkipType.outro),
+        );
+      }
+    }
+
+    return SkipSegment.sanitize(out, durationSec: episodeLength.toDouble());
+  }
+
+  /// At least three neighbours, all within [_agreementToleranceSec] of each
+  /// other on both edges. Anything looser is a guess, not an estimate.
+  static const int _minAgreeingNeighbours = 3;
+  static const double _agreementToleranceSec = 8;
+
+  static (double, double)? _agreedSegment(
+    List<double> starts,
+    List<double> ends,
+  ) {
+    if (starts.length < _minAgreeingNeighbours) return null;
+    if (starts.length != ends.length) return null;
+    final startSpread = starts.reduce(max) - starts.reduce(min);
+    final endSpread = ends.reduce(max) - ends.reduce(min);
+    if (startSpread > _agreementToleranceSec) return null;
+    if (endSpread > _agreementToleranceSec) return null;
+    final medianStart = _median(starts);
+    final medianEnd = _median(ends);
+    if (medianEnd <= medianStart) return null;
+    return (medianStart, medianEnd);
+  }
+
+  static double _median(List<double> values) {
+    final sorted = [...values]..sort();
+    final middle = sorted.length ~/ 2;
+    if (sorted.length.isOdd) return sorted[middle];
+    return (sorted[middle - 1] + sorted[middle]) / 2;
   }
 
   Duration _parseRetryAfter(String? header) {

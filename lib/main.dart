@@ -863,7 +863,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                   ),
                 ),
               ),
-            // Right-side window controls (fullscreen, minimize, maximize/restore, close)
+            // Right-side window controls (minimize, maximize/restore, close).
+            // Fullscreen has no caption button: F11 toggles it.
             if (!Platform.isMacOS)
               Positioned(
                 right: 12,
@@ -875,109 +876,102 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                   child: IgnorePointer(
                     ignoring: !_hovered,
                     child: Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 1. Full Screen Toggle / Exit Full Screen
-                          _TitleBarButton(
-                            onPressed: () async {
-                              await windowManager.setFullScreen(!_isFullScreen);
-                              await _updateStates();
-                            },
-                            child: Icon(
-                              _isFullScreen
-                                  ? Icons.fullscreen_exit_rounded
-                                  : Icons.fullscreen_rounded,
-                              color: iconColor,
-                              size: 16,
-                            ),
-                          ),
-                          if (!_isFullScreen) ...[
-                            const SizedBox(width: 6),
-                            // 2. Minimize
-                            _TitleBarButton(
-                              onPressed: () => windowManager.minimize(),
-                              child: Center(
-                                child: Container(
-                                  width: 10,
-                                  height: 1.5,
-                                  color: iconColor,
+                      // The app runs RTL, which would mirror the caption
+                      // buttons and put close on the left. Window controls
+                      // follow the OS, not the content language.
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!_isFullScreen) ...[
+                              // 2. Minimize
+                              _TitleBarButton(
+                                onPressed: () => windowManager.minimize(),
+                                child: Center(
+                                  child: Container(
+                                    width: 10,
+                                    height: 1,
+                                    color: iconColor,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            // 3. Maximize / Restore
-                            _TitleBarButton(
-                              onPressed: () async {
-                                if (_isMaximized) {
-                                  await windowManager.unmaximize();
-                                } else {
-                                  await windowManager.maximize();
-                                }
-                                await _updateStates();
-                              },
-                              child: Center(
-                                child: _isMaximized
-                                    ? SizedBox(
-                                        width: 12,
-                                        height: 12,
-                                        child: Stack(
-                                          children: [
-                                            Positioned(
-                                              right: 0,
-                                              top: 0,
-                                              child: Container(
-                                                width: 8,
-                                                height: 8,
-                                                decoration: BoxDecoration(
-                                                  border: Border.all(
-                                                    color: iconColor,
-                                                    width: 1.2,
+                              const SizedBox(width: 6),
+                              // 3. Maximize / Restore
+                              _TitleBarButton(
+                                onPressed: () async {
+                                  if (_isMaximized) {
+                                    await windowManager.unmaximize();
+                                  } else {
+                                    await windowManager.maximize();
+                                  }
+                                  await _updateStates();
+                                },
+                                child: Center(
+                                  child: _isMaximized
+                                      ? SizedBox(
+                                          width: 12,
+                                          height: 12,
+                                          child: Stack(
+                                            children: [
+                                              Positioned(
+                                                right: 0,
+                                                top: 0,
+                                                child: Container(
+                                                  width: 8,
+                                                  height: 8,
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: iconColor,
+                                                      width: 1,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                            Positioned(
-                                              left: 0,
-                                              bottom: 0,
-                                              child: Container(
-                                                width: 8,
-                                                height: 8,
-                                                decoration: BoxDecoration(
-                                                  color: isDark
-                                                      ? const Color(0xFF050505)
-                                                      : const Color(
-                                                          0xFFFAF8F5,
-                                                        ), // overlap box bg matches titlebar
-                                                  border: Border.all(
-                                                    color: iconColor,
-                                                    width: 1.2,
+                                              Positioned(
+                                                left: 0,
+                                                bottom: 0,
+                                                child: Container(
+                                                  width: 8,
+                                                  height: 8,
+                                                  decoration: BoxDecoration(
+                                                    color: isDark
+                                                        ? const Color(
+                                                            0xFF050505,
+                                                          )
+                                                        : const Color(
+                                                            0xFFFAF8F5,
+                                                          ), // overlap box bg matches titlebar
+                                                    border: Border.all(
+                                                      color: iconColor,
+                                                      width: 1,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
+                                            ],
+                                          ),
+                                        )
+                                      : Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: iconColor,
+                                              width: 1,
                                             ),
-                                          ],
-                                        ),
-                                      )
-                                    : Container(
-                                        width: 10,
-                                        height: 10,
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: iconColor,
-                                            width: 1.2,
                                           ),
                                         ),
-                                      ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            // 4. Close
-                            _CloseButton(
-                              onPressed: () => windowManager.close(),
-                            ),
+                              const SizedBox(width: 6),
+                              // 4. Close
+                              _CloseButton(
+                                onPressed: () => windowManager.close(),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -1098,13 +1092,15 @@ class _CloseButtonState extends State<_CloseButton> {
             width: 32,
             height: 32,
             child: Icon(
-              Icons.close_rounded,
+              // Square-cut rather than rounded, to sit at the same visual
+              // weight as the minimize line and the maximize outline.
+              Icons.close,
               color: _isHovered
                   ? Colors.white
                   : (isDark
                         ? Colors.white.withValues(alpha: 0.85)
                         : const Color(0xFF5C5C5C)),
-              size: 16,
+              size: 15,
             ),
           ),
         ),

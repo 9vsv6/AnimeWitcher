@@ -2955,6 +2955,27 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       syncData['malId'] = '$malId';
       syncData['mal_id'] = '$malId';
     }
+    // The catalog document carries `aniList_id`; without it the AniList-keyed
+    // skip source (anime-skip.com) can never resolve the show.
+    var aniListId = _firstText(source, const <String>[
+      'aniList_id',
+      'anilist_id',
+      'aniListId',
+      'anilistId',
+    ]);
+    if (aniListId.isEmpty) {
+      aniListId = _firstText(details, const <String>[
+        'aniList_id',
+        'anilist_id',
+        'aniListId',
+        'anilistId',
+      ]);
+    }
+    if (aniListId.isNotEmpty) {
+      syncData['anilist'] = aniListId;
+      syncData['anilistId'] = aniListId;
+      syncData['anilist_id'] = aniListId;
+    }
     var imdbId = _firstText(source, const <String>[
       'imdb_id',
       'imdbId',

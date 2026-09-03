@@ -447,6 +447,10 @@ class PlayerController extends Notifier<PlayerState> {
   int? _pendingResumeSeekPosition;
   bool _isApplyingPendingResumeSeek = false;
   double _lastNonZeroVolumeLevel = 1.0;
+
+  /// MyAnimeList id for the anime being played, resolved from the catalog or
+  /// from the title. Needed to submit a viewer's marks back to AniSkip.
+  int? _resolvedMalId;
   final List<SubtitleFile> _userAddedExternalSubtitles = [];
   bool _hasConfirmedPlaybackFrame = false;
 
@@ -893,7 +897,6 @@ class PlayerController extends Notifier<PlayerState> {
     // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies).
     // Runs under the master toggle: its own legacy flag had no UI, so it
     // could never be switched on.
-    final settingsRepo = ref.read(settingsRepositoryProvider);
     if (state.tmdbId != null || state.imdbId != null) {
       try {
         final introDb = ref.read(introDbServiceProvider);
@@ -943,6 +946,8 @@ class PlayerController extends Notifier<PlayerState> {
       // The provider usually hands us a title and nothing else, so fall
       // back to resolving the MyAnimeList id from it.
       var resolvedMalId = malId;
+      // Kept for the neighbour estimate and for submitting marks later.
+      _resolvedMalId = resolvedMalId;
       if (resolvedMalId == null && _item.title.trim().isNotEmpty) {
         resolvedMalId = await ref
             .read(malIdResolverProvider)
@@ -994,7 +999,10 @@ class PlayerController extends Notifier<PlayerState> {
 
       if (_isDisposed) return;
 
-      if (settingsRepo.isAnimeSkipIntegrationEnabled()) {
+      // anime-skip.com needs a client id supplied at build time; without one
+      // every request is rejected, so skip the round trip entirely. Its own
+      // legacy settings flag had no UI, so the master toggle gates it now.
+      if (AnimeSkipService.isConfigured) {
         try {
           final anilistId =
               _item.syncData?['anilist'] ??
@@ -1024,7 +1032,9 @@ class PlayerController extends Notifier<PlayerState> {
         }
       } else {
         if (kDebugMode) {
-          debugPrint('AnimeSkip integration is disabled in settings.');
+          debugPrint(
+            'AnimeSkip: Bypassed lookup (no ANIMESKIP_CLIENT_ID in this build)',
+          );
         }
       }
     } else {
@@ -1054,14 +1064,48 @@ class PlayerController extends Notifier<PlayerState> {
       if (kDebugMode) debugPrint('Chapters error: $e');
     }
 
+    // 4. Nothing online had this episode: derive it from the episodes around
+    // it, and only when those agree closely (see estimateFromNeighbours).
+    var estimatedSegments = const <SkipSegment>[];
+    final needsEstimate =
+        animeSkipSegments.isEmpty &&
+        aniSkipSegments.isEmpty &&
+        introDbSegments.isEmpty &&
+        chapterSegments.isEmpty;
+    final estimateMalId = _resolvedMalId;
+    if (needsEstimate && estimateMalId != null && durationSec != null) {
+      try {
+        estimatedSegments = await ref
+            .read(aniSkipServiceProvider)
+            .estimateFromNeighbours(
+              malId: estimateMalId,
+              episode: episodeNum,
+              episodeLength: durationSec,
+            );
+        if (_isDisposed) return;
+        if (kDebugMode) {
+          debugPrint(
+            'Neighbour estimate returned ${estimatedSegments.length} segments:',
+          );
+          for (final s in estimatedSegments) {
+            debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Neighbour estimate error: $e');
+      }
+    }
+
     // Best source first. Anything overlapping a segment an earlier source
     // already supplied is dropped, so the later ones only fill gaps.
+    // viewer's own marks outrank every database.
     final merged = SkipSegment.merge(
       <List<SkipSegment>>[
         animeSkipSegments,
         aniSkipSegments,
         introDbSegments,
         chapterSegments,
+        estimatedSegments,
       ],
       durationSec: durationSec?.toDouble(),
     );

@@ -15,6 +15,11 @@ class AnimeSkipService implements SkipService {
 
   static const String _clientId = SyncConfig.animeSkipClientId;
 
+  /// anime-skip.com rejects every request without an `X-Client-ID`, so a
+  /// build without one has nothing to gain from calling it. Create a client
+  /// id from an Anime Skip account and pass it as `ANIMESKIP_CLIENT_ID`.
+  static bool get isConfigured => _clientId.trim().isNotEmpty;
+
   // Cache the three-step GraphQL chain (show → episodes → timestamps)
   // for an hour, keyed by anilistId+episode. Without this, fast-skipping
   // through anime episodes fires 3 GraphQL queries per seek.
