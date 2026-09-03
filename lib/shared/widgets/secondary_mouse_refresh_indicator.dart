@@ -1,6 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+const secondaryMouseRefreshListenerKey =
+    ValueKey<String>('secondary-mouse-refresh-listener');
+
 /// A [RefreshIndicator] that also supports a desktop-style secondary-mouse
 /// pull gesture. Starting at the top of the scrollable, hold the right mouse
 /// button and drag downward to refresh.
@@ -83,6 +86,7 @@ class _SecondaryMouseRefreshIndicatorState
   @override
   Widget build(BuildContext context) {
     return Listener(
+      key: secondaryMouseRefreshListenerKey,
       behavior: HitTestBehavior.translucent,
       onPointerDown: _onPointerDown,
       onPointerMove: _onPointerMove,

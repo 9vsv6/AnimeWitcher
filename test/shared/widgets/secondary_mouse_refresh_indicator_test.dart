@@ -25,10 +25,7 @@ void main() {
     );
 
     final listener = tester.widget<Listener>(
-      find.descendant(
-        of: find.byType(SecondaryMouseRefreshIndicator),
-        matching: find.byType(Listener),
-      ).first,
+      find.byKey(secondaryMouseRefreshListenerKey),
     );
     listener.onPointerDown!(
       const PointerDownEvent(
@@ -47,7 +44,7 @@ void main() {
         buttons: kSecondaryMouseButton,
       ),
     );
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(seconds: 1));
 
     expect(refreshCount, 1);
     await tester.pumpAndSettle();
