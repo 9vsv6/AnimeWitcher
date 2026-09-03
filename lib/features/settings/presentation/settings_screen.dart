@@ -232,6 +232,34 @@ class SettingsScreen extends ConsumerWidget {
                       .setHardwareDecoding(!playerSettings.hardwareDecoding),
                 ),
                 SettingsTile(
+                  icon: Icons.fast_forward_rounded,
+                  title: appText(
+                    context,
+                    english: 'Skip intro and credits',
+                    arabic: 'تخطي المقدمة والنهاية',
+                  ),
+                  subtitle: appText(
+                    context,
+                    english: playerSettings.skipSegmentsEnabled
+                        ? 'A skip button appears during the opening and ending (AniSkip)'
+                        : 'Disabled',
+                    arabic: playerSettings.skipSegmentsEnabled
+                        ? 'يظهر زر التخطي أثناء المقدمة والنهاية (AniSkip)'
+                        : 'معطل',
+                  ),
+                  trailing: Switch(
+                    value: playerSettings.skipSegmentsEnabled,
+                    onChanged: (val) => ref
+                        .read(playerSettingsProvider.notifier)
+                        .setSkipSegmentsEnabled(val),
+                  ),
+                  onTap: () => ref
+                      .read(playerSettingsProvider.notifier)
+                      .setSkipSegmentsEnabled(
+                        !playerSettings.skipSegmentsEnabled,
+                      ),
+                ),
+                SettingsTile(
                   icon: Icons.tune_rounded,
                   title: l10n.playerControls,
                   subtitle: l10n.playerControlsSubtitle,

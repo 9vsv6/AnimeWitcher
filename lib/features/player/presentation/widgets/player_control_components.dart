@@ -1,8 +1,64 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import 'hotstar_player_style.dart';
+
+/// A ±N second seek glyph: [Icons.replay_rounded] (mirrored for the forward
+/// direction) with the actual configured duration overlaid, since Material
+/// only ships fixed replay_5/10/30 icons — not every value the seek-duration
+/// setting allows (15s, 20s, 1 min, 2 min, ...).
+class SeekIcon extends StatelessWidget {
+  final bool forward;
+  final int seconds;
+  final double size;
+  final Color color;
+
+  const SeekIcon({
+    super.key,
+    required this.forward,
+    required this.seconds,
+    this.size = 24,
+    this.color = Colors.white,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final arrow = Icon(Icons.replay_rounded, size: size, color: color);
+    final label = seconds.toString();
+    final double fontSize = size * (label.length >= 3 ? 0.24 : 0.32);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          forward
+              ? Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.rotationY(math.pi),
+                  child: arrow,
+                )
+              : arrow,
+          Padding(
+            padding: EdgeInsets.only(top: size * 0.1),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w800,
+                height: 1.0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Top zone: back button + title/subtitle. Paints its own top scrim so the
 /// chrome no longer needs a separate fixed-height Positioned gradient.
@@ -123,6 +179,9 @@ class PlayerTopBar extends StatelessWidget {
 /// trap. Up/Down still bubble out to move between the scrubber / controls /
 /// top-bar rows. (Off TV the handler is null, so desktop keyboard arrows keep
 /// their seek/volume behaviour and touch just scrolls.) Paints its own scrim.
+///
+/// An optional [center] group overlays the row at its true horizontal
+/// midpoint (see [_buildRow]) — used for the desktop seek trio.
 class PlayerBottomBar extends StatelessWidget {
   final Widget progressBar;
   final List<Widget> leading;
@@ -135,6 +194,14 @@ class PlayerBottomBar extends StatelessWidget {
   /// is used only where there's no directional focus (touch).
   final bool isTouch;
 
+  /// Optional group pinned to the true horizontal center of the bar
+  /// (overlaid via [Stack], independent of how wide [leading]/[actions] are)
+  /// instead of sitting inline in the [leading] row. Used for the desktop
+  /// seek trio so it lines up under the middle of the video regardless of
+  /// the volume control's width on one side or the action icons' count on
+  /// the other.
+  final Widget? center;
+
   const PlayerBottomBar({
     super.key,
     required this.progressBar,
@@ -142,6 +209,7 @@ class PlayerBottomBar extends StatelessWidget {
     this.actions = const [],
     this.isTv = false,
     this.isTouch = false,
+    this.center,
   });
 
   KeyEventResult _handleRowKey(FocusNode node, KeyEvent event) {
@@ -182,40 +250,48 @@ class PlayerBottomBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             progressBar,
-            FocusTraversalGroup(
-              child: Focus(
-                canRequestFocus: false,
-                skipTraversal: true,
-                onKeyEvent: isTv ? _handleRowKey : null,
-                child: Row(
-                  children: [
-                    // Left group: play/pause, lock, next â always visible.
-                    ...leading,
-                    if (isTouch)
-                      // Touch: right-anchored finger-scroll strip so a long
-                      // action list is never clipped out of reach.
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          reverse: true,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: actions,
-                          ),
-                        ),
-                      )
-                    else ...[
-                      // TV/desktop: fixed right-aligned group (D-pad nav).
-                      const Spacer(),
-                      ...actions,
-                    ],
-                  ],
-                ),
-              ),
-            ),
+            _buildRow(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildRow() {
+    final row = FocusTraversalGroup(
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: isTv ? _handleRowKey : null,
+        child: Row(
+          children: [
+            // Left group: play/pause, lock, next, volume - always visible.
+            ...leading,
+            if (isTouch)
+              // Touch: right-anchored finger-scroll strip so a long action
+              // list is never clipped out of reach.
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: actions),
+                ),
+              )
+            else ...[
+              // TV/desktop: fixed right-aligned group (D-pad nav).
+              const Spacer(),
+              ...actions,
+            ],
+          ],
+        ),
+      ),
+    );
+    if (center == null) return row;
+    // Overlaid rather than inlined so it lands at the bar's true horizontal
+    // center regardless of how wide leading/actions are on either side.
+    return Stack(
+      alignment: Alignment.center,
+      children: [row, Center(child: center!)],
     );
   }
 }
@@ -235,6 +311,11 @@ class PlayerIconButton extends StatefulWidget {
   final double? iconSize;
   final Color? foregroundColor;
 
+  /// When set, replaces the plain [icon] glyph with a custom-built one (e.g.
+  /// [SeekIcon]) that still gets this button's hover/highlight color and
+  /// sizing. [icon] is still required as the semantic fallback value.
+  final Widget Function(Color color, double size)? iconBuilder;
+
   const PlayerIconButton({
     super.key,
     required this.icon,
@@ -245,6 +326,7 @@ class PlayerIconButton extends StatefulWidget {
     this.focusNode,
     this.iconSize,
     this.foregroundColor,
+    this.iconBuilder,
   });
 
   @override
@@ -283,7 +365,9 @@ class _PlayerIconButtonState extends State<PlayerIconButton> {
           child: SizedBox(
             width: box,
             height: box,
-            child: Icon(widget.icon, color: iconColor, size: glyph),
+            child: widget.iconBuilder != null
+                ? widget.iconBuilder!(iconColor, glyph)
+                : Icon(widget.icon, color: iconColor, size: glyph),
           ),
         ),
       ),

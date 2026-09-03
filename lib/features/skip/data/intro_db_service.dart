@@ -59,6 +59,7 @@ class IntroDbService implements SkipService {
     int? tmdbId,
     String? imdbId,
     int? anilistId,
+    int? malId,
     required int season,
     required int episode,
     int? duration,

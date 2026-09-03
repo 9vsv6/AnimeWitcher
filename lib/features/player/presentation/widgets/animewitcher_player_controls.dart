@@ -1163,6 +1163,7 @@ class AnimeWitcherPlayerControlsState
                             children: [
                               PlayerSeekButton(
                                 forward: false,
+                                seconds: seekDuration,
                                 tooltip: appText(
                                   context,
                                   english: 'Rewind ${seekDuration}s',
@@ -1190,6 +1191,7 @@ class AnimeWitcherPlayerControlsState
                               const SizedBox(width: 28),
                               PlayerSeekButton(
                                 forward: true,
+                                seconds: seekDuration,
                                 tooltip: appText(
                                   context,
                                   english: 'Forward ${seekDuration}s',
@@ -1416,15 +1418,13 @@ class AnimeWitcherPlayerControlsState
     );
 
     // Left cluster: touch keeps its own compact row (lock + adjacent
-    // episodes; play/pause floats centered instead, see build()). TV and
-    // desktop get a seek trio around play/pause, flanked by adjacent-episode
-    // buttons, with a speaker+slider volume control leading the row (mouse
-    // interaction only, so desktop only).
+    // episodes; play/pause floats centered instead, see build()). TV keeps
+    // a seek trio around play/pause inline, flanked by adjacent-episode
+    // buttons (D-pad reading order needs everything in one row). Desktop
+    // gets just a speaker+slider volume control here â its seek trio is
+    // centered separately below (mouse-only interaction, so desktop only).
     final leading = <Widget>[
-      if (isDesktop) ...[
-        const PlayerVolumeControl(),
-        const SizedBox(width: 4),
-      ],
+      if (isDesktop) const PlayerVolumeControl(),
       if (isTouch) ...[
         PlayerIconButton(
           icon: _isLocked ? Icons.lock : Icons.lock_open,
@@ -1447,7 +1447,7 @@ class AnimeWitcherPlayerControlsState
             onPressed: () => unawaited(_playNextEpisodeWithSourcePicker()),
             isTv: _isTv,
           ),
-      ] else ...[
+      ] else if (_isTv) ...[
         if (isSeries && hasPreviousEpisode)
           PlayerIconButton(
             icon: Icons.skip_previous_rounded,
@@ -1457,6 +1457,12 @@ class AnimeWitcherPlayerControlsState
           ),
         PlayerIconButton(
           icon: Icons.replay_10_rounded,
+          iconBuilder: (color, size) => SeekIcon(
+            forward: false,
+            seconds: playerSettings.seekDuration,
+            size: size,
+            color: color,
+          ),
           tooltip: appText(
             context,
             english: 'Rewind ${playerSettings.seekDuration}s',
@@ -1469,6 +1475,12 @@ class AnimeWitcherPlayerControlsState
         playPause,
         PlayerIconButton(
           icon: Icons.forward_10_rounded,
+          iconBuilder: (color, size) => SeekIcon(
+            forward: true,
+            seconds: playerSettings.seekDuration,
+            size: size,
+            color: color,
+          ),
           tooltip: appText(
             context,
             english: 'Forward ${playerSettings.seekDuration}s',
@@ -1487,6 +1499,52 @@ class AnimeWitcherPlayerControlsState
           ),
       ],
     ];
+
+    // Desktop-only: the seek trio centered under the video, independent of
+    // the volume control's width on the left and the action icons on the
+    // right (see PlayerBottomBar's `center`).
+    final center = !isDesktop
+        ? null
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              PlayerIconButton(
+                icon: Icons.replay_10_rounded,
+                iconBuilder: (color, size) => SeekIcon(
+                  forward: false,
+                  seconds: playerSettings.seekDuration,
+                  size: size,
+                  color: color,
+                ),
+                tooltip: appText(
+                  context,
+                  english: 'Rewind ${playerSettings.seekDuration}s',
+                  arabic: 'إرجاع ${playerSettings.seekDuration} ثوانٍ',
+                ),
+                onPressed: () => _seekRelative(
+                  Duration(seconds: -playerSettings.seekDuration),
+                ),
+              ),
+              playPause,
+              PlayerIconButton(
+                icon: Icons.forward_10_rounded,
+                iconBuilder: (color, size) => SeekIcon(
+                  forward: true,
+                  seconds: playerSettings.seekDuration,
+                  size: size,
+                  color: color,
+                ),
+                tooltip: appText(
+                  context,
+                  english: 'Forward ${playerSettings.seekDuration}s',
+                  arabic: 'تقديم ${playerSettings.seekDuration} ثوانٍ',
+                ),
+                onPressed: () => _seekRelative(
+                  Duration(seconds: playerSettings.seekDuration),
+                ),
+              ),
+            ],
+          );
 
     final canRotate =
         isTouch && (Platform.isAndroid || (Platform.isIOS && !_isIpad));
@@ -1628,6 +1686,7 @@ class AnimeWitcherPlayerControlsState
                       },
                     ),
                     leading: leading,
+                    center: center,
                     actions: actions,
                   ),
                 ),

@@ -4,11 +4,13 @@ abstract class SkipService {
 
   /// Fetch skip segments for a specific episode
   ///
-  /// The [tmdbId], [imdbId], or [anilistId] can be used depending on the service.
+  /// The [tmdbId], [imdbId], [anilistId], or [malId] can be used depending on
+  /// the service (AniSkip keys off MyAnimeList ids, IntroDB off IMDb, ...).
   Future<List<SkipSegment>> getSkipSegments({
     int? tmdbId,
     String? imdbId,
     int? anilistId,
+    int? malId,
     required int season,
     required int episode,
     int? duration,

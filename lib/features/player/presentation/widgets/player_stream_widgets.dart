@@ -522,6 +522,7 @@ class PlayerPlayPauseButton extends StatelessWidget {
 /// for the same action instead, to match the rest of that row's buttons.
 class PlayerSeekButton extends StatelessWidget {
   final bool forward;
+  final int seconds;
   final String tooltip;
   final VoidCallback onPressed;
   final double size;
@@ -530,6 +531,7 @@ class PlayerSeekButton extends StatelessWidget {
   const PlayerSeekButton({
     super.key,
     required this.forward,
+    required this.seconds,
     required this.tooltip,
     required this.onPressed,
     this.size = 52,
@@ -550,11 +552,7 @@ class PlayerSeekButton extends StatelessWidget {
           decoration: backgroundColor != null
               ? BoxDecoration(shape: BoxShape.circle, color: backgroundColor)
               : null,
-          child: Icon(
-            forward ? Icons.forward_10_rounded : Icons.replay_10_rounded,
-            color: Colors.white,
-            size: size * 0.55,
-          ),
+          child: SeekIcon(forward: forward, seconds: seconds, size: size * 0.55),
         ),
       ),
     );

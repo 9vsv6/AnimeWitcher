@@ -8,7 +8,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
-import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:file_picker/file_picker.dart';
@@ -35,6 +34,7 @@ import '../../../../core/services/local_proxy_service.dart';
 import '../../../../core/network/http_defaults.dart';
 import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/anime_skip_service.dart';
+import '../../skip/data/aniskip_service.dart';
 import '../../skip/data/skip_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 import 'playback_recovery_policy.dart';
@@ -787,6 +787,38 @@ class PlayerController extends Notifier<PlayerState> {
     unawaited(_fetchAndLogSkipSegments());
   }
 
+  /// Episode length in seconds, or null while the media is still opening.
+  /// AniSkip uses it to scale crowd-sourced timestamps to this exact file.
+  int? _currentDurationSeconds() {
+    final dur = state.useExoPlayer
+        ? Duration(
+            milliseconds: _videoViewController?.mediaInfo.value?.duration ?? 0,
+          )
+        : _player.state.duration;
+    return dur > Duration.zero ? dur.inSeconds : null;
+  }
+
+  /// Skip segments are looked up as soon as playback starts, which is
+  /// usually before the engine reports a duration. Without a length AniSkip
+  /// hands back every submission it has for the episode — including entries
+  /// timed against other releases, which overlap each other. Waiting the
+  /// couple of seconds it takes for the duration to land gets the set that
+  /// actually matches this file.
+  Future<int?> _awaitDurationSeconds({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final immediate = _currentDurationSeconds();
+    if (immediate != null) return immediate;
+
+    final deadline = DateTime.now().add(timeout);
+    while (!_isDisposed && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      final value = _currentDurationSeconds();
+      if (value != null) return value;
+    }
+    return null;
+  }
+
   Future<void> _fetchAndLogSkipSegments() async {
     if (_episode == null) return;
     if (state.isLive || _item.contentType == MultimediaContentType.livestream) {
@@ -798,9 +830,27 @@ class PlayerController extends Notifier<PlayerState> {
       return;
     }
 
+    // A single master switch for the whole feature — AniSkip and the legacy
+    // sources all feed the same skip button, so one "off" means no lookups.
+    final skipEnabled = ref
+        .read(settingsRepositoryProvider)
+        .getPlayerSetting<bool>('player_skip_segments', defaultValue: true) ??
+        true;
+    if (!skipEnabled) {
+      if (kDebugMode) {
+        debugPrint('Skip Segments: Disabled in settings.');
+      }
+      return;
+    }
+
+    final malId = int.tryParse(
+      (_item.syncData?['malId'] ?? _item.syncData?['mal_id'] ?? '').trim(),
+    );
+
     final hasNoIds =
         state.tmdbId == null &&
         state.imdbId == null &&
+        malId == null &&
         _item.syncData?['anilist'] == null &&
         _item.syncData?['anilistId'] == null &&
         _item.syncData?['anilist_id'] == null;
@@ -808,7 +858,7 @@ class PlayerController extends Notifier<PlayerState> {
     if (hasNoIds) {
       if (kDebugMode) {
         debugPrint(
-          'Skip Segments: Bypassed lookup (no TMDB/IMDB/AniList IDs available)',
+          'Skip Segments: Bypassed lookup (no TMDB/IMDB/MAL/AniList IDs available)',
         );
       }
       return;
@@ -816,7 +866,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     if (kDebugMode) {
       debugPrint('=============================================');
-      debugPrint('SKIP SEGMENTS (IntroDB/AnimeSkip)');
+      debugPrint('SKIP SEGMENTS (AniSkip/IntroDB/AnimeSkip)');
     }
 
     final List<SkipSegment> allSegments = [];
@@ -857,9 +907,11 @@ class PlayerController extends Notifier<PlayerState> {
 
     if (_isDisposed) return;
 
-    // 2. Check if the media is anime or animated to run AnimeSkip logic
+    // 2. Check if the media is anime or animated to run AnimeSkip logic.
+    // A MyAnimeList id is itself proof of anime — MAL indexes nothing else.
     final isAnime =
         _item.contentType == MultimediaContentType.anime ||
+        malId != null ||
         _item.syncData?['anilist'] != null ||
         _item.syncData?['anilistId'] != null ||
         _item.syncData?['anilist_id'] != null ||
@@ -870,6 +922,45 @@ class PlayerController extends Notifier<PlayerState> {
             ));
 
     if (isAnime) {
+      // 2a. AniSkip (api.aniskip.com) — keyless and MAL-keyed, so it is the
+      // primary anime source. Its data is anime-specific, so it replaces
+      // whatever IntroDB returned for the same episode.
+      if (malId != null) {
+        try {
+          final durationSec = await _awaitDurationSeconds();
+          if (_isDisposed) return;
+          final aniSkip = ref.read(aniSkipServiceProvider);
+          final segments = await aniSkip.getSkipSegments(
+            malId: malId,
+            season: season,
+            episode: episodeNum,
+            duration: durationSec,
+          );
+          if (_isDisposed) return;
+          if (segments.isNotEmpty) {
+            allSegments
+              ..clear()
+              ..addAll(segments);
+            if (kDebugMode) {
+              debugPrint('AniSkip returned ${segments.length} segments:');
+              for (final s in segments) {
+                debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+              }
+            }
+          } else {
+            if (kDebugMode) debugPrint('AniSkip returned 0 segments');
+          }
+        } catch (e) {
+          if (kDebugMode) debugPrint('AniSkip error: $e');
+        }
+      } else {
+        if (kDebugMode) {
+          debugPrint('AniSkip: Bypassed lookup (no MyAnimeList id available)');
+        }
+      }
+
+      if (_isDisposed) return;
+
       if (settingsRepo.isAnimeSkipIntegrationEnabled()) {
         try {
           final anilistId =
@@ -4276,29 +4367,12 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<double> _getSystemVolumeLevel() async {
-    try {
-      return ((await FlutterVolumeController.getVolume()) ?? 0.5).clamp(
-        0.0,
-        1.0,
-      );
-    } catch (_) {
-      return 0.5;
-    }
-  }
-
   double _getEngineVolumeLevel() {
     if (state.useExoPlayer && _videoViewController != null) {
       return _videoViewController!.volume.value.clamp(0.0, 1.0);
     }
 
     return (_player.state.volume / 100).clamp(0.0, 2.0);
-  }
-
-  Future<void> _setSystemVolumeLevel(double value) async {
-    try {
-      await FlutterVolumeController.setVolume(value.clamp(0.0, 1.0));
-    } catch (_) {}
   }
 
   Future<void> _setEngineVolumeLevel(double value) async {
@@ -4310,10 +4384,11 @@ class PlayerController extends Notifier<PlayerState> {
     await _player.setVolume((value * 100).clamp(0.0, 200.0));
   }
 
+  // Volume lives entirely in the player engine (mpv/ExoPlayer's own gain),
+  // never the OS output level — muting or turning volume down in-app must
+  // not touch system volume, which would affect every other app too.
   Future<double> getVolumeLevel() async {
-    final systemVolume = await _getSystemVolumeLevel();
-    final engineVolume = _getEngineVolumeLevel();
-    final value = engineVolume > 1.0 ? engineVolume : systemVolume;
+    final value = _getEngineVolumeLevel();
     if (value > 0) {
       _lastNonZeroVolumeLevel = value;
     }
@@ -4327,14 +4402,7 @@ class PlayerController extends Notifier<PlayerState> {
       _lastNonZeroVolumeLevel = target;
     }
 
-    if (target > 1.0 && state.supportsVolumeBoost) {
-      await _setSystemVolumeLevel(1.0);
-      await _setEngineVolumeLevel(target);
-      return target;
-    }
-
-    await _setEngineVolumeLevel(1.0);
-    await _setSystemVolumeLevel(target);
+    await _setEngineVolumeLevel(target);
     return target;
   }
 
