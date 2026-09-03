@@ -1279,6 +1279,16 @@ private final class AnimeWitcherPassthroughToolbar: UIToolbar {
   private static let horizontalHitSlop: CGFloat = 22
   private static let verticalHitSlop: CGFloat = 10
 
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    // Liquid Glass can render the trailing capsule outside UIToolbar's private
+    // control bounds. Let the toolbar participate in hit testing across that
+    // visible overflow; [hitTest] below still rejects transparent empty space.
+    bounds.insetBy(
+      dx: -Self.horizontalHitSlop,
+      dy: -Self.verticalHitSlop
+    ).contains(point)
+  }
+
   private func descendantControls(in view: UIView) -> [UIControl] {
     view.subviews.flatMap { subview -> [UIControl] in
       let control = subview as? UIControl
