@@ -321,6 +321,31 @@ jobs:
       - name: Build Windows
         run: flutter build windows --release --dart-define-from-file=dart-defines.json
 
+      - name: Bundle Visual C++ Runtime DLLs
+        shell: pwsh
+        run: |
+          $releaseDir = "build\windows\${{ matrix.arch }}\runner\Release"
+          $vcDlls = @(
+            "msvcp140.dll",
+            "msvcp140_1.dll",
+            "msvcp140_2.dll",
+            "msvcp140_atomic_wait.dll",
+            "msvcp140_codecvt_ids.dll",
+            "vcruntime140.dll",
+            "vcruntime140_1.dll",
+            "vcruntime140_threads.dll",
+            "vcomp140.dll"
+          )
+          foreach ($dll in $vcDlls) {
+            $src = Join-Path $env:SystemRoot "System32\$dll"
+            if (Test-Path $src) {
+              Copy-Item -Path $src -Destination $releaseDir -Force
+              Write-Host "Bundled $dll"
+            } else {
+              Write-Warning "Could not find $src"
+            }
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup -y --no-progress
