@@ -35,6 +35,7 @@ import '../../../../core/network/http_defaults.dart';
 import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/anime_skip_service.dart';
 import '../../skip/data/aniskip_service.dart';
+import '../../skip/data/chapter_skip_source.dart';
 import '../../skip/data/mal_id_resolver.dart';
 import '../../skip/data/skip_service.dart';
 import '../../../../core/storage/settings_repository.dart';
@@ -879,13 +880,21 @@ class PlayerController extends Notifier<PlayerState> {
       debugPrint('syncData keys: ${_item.syncData?.keys.toList()}');
     }
 
-    final List<SkipSegment> allSegments = [];
+    // Each source keeps its own list; they are merged by priority at the end
+    // so a lower-priority one can fill the episodes a better one has no data
+    // for, without ever contradicting it.
+    var introDbSegments = const <SkipSegment>[];
+    var aniSkipSegments = const <SkipSegment>[];
+    var animeSkipSegments = const <SkipSegment>[];
+    var chapterSegments = const <SkipSegment>[];
     final int season = _episode!.season > 0 ? _episode!.season : 1;
     final int episodeNum = _episode!.episode > 0 ? _episode!.episode : 1;
 
-    // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies)
+    // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies).
+    // Runs under the master toggle: its own legacy flag had no UI, so it
+    // could never be switched on.
     final settingsRepo = ref.read(settingsRepositoryProvider);
-    if (settingsRepo.isIntroDbIntegrationEnabled()) {
+    if (state.tmdbId != null || state.imdbId != null) {
       try {
         final introDb = ref.read(introDbServiceProvider);
         final segments = await introDb.getSkipSegments(
@@ -895,23 +904,19 @@ class PlayerController extends Notifier<PlayerState> {
           episode: episodeNum,
         );
         if (_isDisposed) return;
-        if (segments.isNotEmpty) {
-          allSegments.addAll(segments);
-          if (kDebugMode) {
-            debugPrint('IntroDB returned ${segments.length} segments:');
-            for (final s in segments) {
-              debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
-            }
+        introDbSegments = segments;
+        if (kDebugMode) {
+          debugPrint('IntroDB returned ${segments.length} segments:');
+          for (final s in segments) {
+            debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
           }
-        } else {
-          if (kDebugMode) debugPrint('IntroDB returned 0 segments');
         }
       } catch (e) {
         if (kDebugMode) debugPrint('IntroDB error: $e');
       }
     } else {
       if (kDebugMode) {
-        debugPrint('IntroDB integration is disabled in settings.');
+        debugPrint('IntroDB: Bypassed lookup (no TMDB/IMDb id available)');
       }
     }
 
@@ -969,18 +974,12 @@ class PlayerController extends Notifier<PlayerState> {
             duration: durationSec,
           );
           if (_isDisposed) return;
-          if (segments.isNotEmpty) {
-            allSegments
-              ..clear()
-              ..addAll(segments);
-            if (kDebugMode) {
-              debugPrint('AniSkip returned ${segments.length} segments:');
-              for (final s in segments) {
-                debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
-              }
+          aniSkipSegments = segments;
+          if (kDebugMode) {
+            debugPrint('AniSkip returned ${segments.length} segments:');
+            for (final s in segments) {
+              debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
             }
-          } else {
-            if (kDebugMode) debugPrint('AniSkip returned 0 segments');
           }
         } catch (e) {
           if (kDebugMode) debugPrint('AniSkip error: $e');
@@ -1012,20 +1011,12 @@ class PlayerController extends Notifier<PlayerState> {
               episode: episodeNum,
             );
             if (_isDisposed) return;
-            if (segments.isNotEmpty) {
-              // AnimeSkip data is richer and more accurate for anime. Disregard IntroDB.
-              allSegments.clear();
-              allSegments.addAll(segments);
-              if (kDebugMode) {
-                debugPrint('AnimeSkip returned ${segments.length} segments:');
-                for (final s in segments) {
-                  debugPrint(
-                    '  - ${s.type.name}: ${s.startTime} -> ${s.endTime}',
-                  );
-                }
+            animeSkipSegments = segments;
+            if (kDebugMode) {
+              debugPrint('AnimeSkip returned ${segments.length} segments:');
+              for (final s in segments) {
+                debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
               }
-            } else {
-              if (kDebugMode) debugPrint('AnimeSkip returned 0 segments');
             }
           }
         } catch (e) {
@@ -1043,16 +1034,48 @@ class PlayerController extends Notifier<PlayerState> {
         );
       }
     }
-    if (kDebugMode) debugPrint('=============================================');
+    // 3. The file's own chapter markers. Per-file data, so it covers the
+    // episodes no crowd-sourced service has, and it costs no network call.
+    final durationSec = await _awaitDurationSeconds();
+    if (_isDisposed) return;
+    try {
+      chapterSegments = await ChapterSkipSource.read(
+        _player,
+        durationSec: durationSec?.toDouble(),
+      );
+      if (_isDisposed) return;
+      if (kDebugMode) {
+        debugPrint('Chapters returned ${chapterSegments.length} segments:');
+        for (final s in chapterSegments) {
+          debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Chapters error: $e');
+    }
 
-    if (allSegments.isNotEmpty && !_isDisposed) {
-      // Sort segments by start time
-      allSegments.sort((a, b) => a.startTime.compareTo(b.startTime));
+    // Best source first. Anything overlapping a segment an earlier source
+    // already supplied is dropped, so the later ones only fill gaps.
+    final merged = SkipSegment.merge(
+      <List<SkipSegment>>[
+        animeSkipSegments,
+        aniSkipSegments,
+        introDbSegments,
+        chapterSegments,
+      ],
+      durationSec: durationSec?.toDouble(),
+    );
 
-      // Merge overlapping segments if needed, or simply assign them.
-      // Usually, IntroDB is highly accurate but AnimeSkip provides more detailed segments.
-      // For now, we'll store all of them, but UI might prioritize or filter duplicates.
-      state = state.copyWith(skipSegments: allSegments);
+    if (kDebugMode) {
+      debugPrint('Merged ${merged.length} skip segments:');
+      for (final s in merged) {
+        debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+      }
+      debugPrint('=============================================');
+    }
+
+    if (merged.isNotEmpty && !_isDisposed) {
+      state = state.copyWith(skipSegments: merged);
     }
   }
 
