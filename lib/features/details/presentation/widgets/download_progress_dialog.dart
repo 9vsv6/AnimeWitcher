@@ -62,7 +62,6 @@ class _DownloadProgressDialogState
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final progressMap = ref.watch(downloadProgressProvider);
     final data = progressMap[widget.trackingUrl];
 
@@ -74,6 +73,7 @@ class _DownloadProgressDialogState
       return const SizedBox.shrink();
     }
 
+    final l10n = AppLocalizations.of(context)!;
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Dialog(

@@ -24,16 +24,32 @@ void main() {
       ),
     );
 
-    final gesture = await tester.createGesture(
-      kind: PointerDeviceKind.mouse,
-      buttons: kSecondaryMouseButton,
+    final listener = tester.widget<Listener>(
+      find.descendant(
+        of: find.byType(SecondaryMouseRefreshIndicator),
+        matching: find.byType(Listener),
+      ).first,
     );
-    await gesture.down(const Offset(200, 100));
-    await gesture.moveBy(const Offset(0, 90));
+    listener.onPointerDown!(
+      const PointerDownEvent(
+        pointer: 1,
+        kind: PointerDeviceKind.mouse,
+        position: Offset(200, 100),
+        buttons: kSecondaryMouseButton,
+      ),
+    );
+    listener.onPointerMove!(
+      const PointerMoveEvent(
+        pointer: 1,
+        kind: PointerDeviceKind.mouse,
+        position: Offset(200, 190),
+        delta: Offset(0, 90),
+        buttons: kSecondaryMouseButton,
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(refreshCount, 1);
-    await gesture.up();
     await tester.pumpAndSettle();
   });
 }
