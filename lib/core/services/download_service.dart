@@ -402,6 +402,11 @@ class DownloadService {
       }
     });
 
+    // Flush status/progress updates that iOS persisted while Flutter was
+    // suspended before we inspect the database. Without this, an already
+    // failed/paused native task can leave a stale `running` record behind.
+    await FileDownloader().resumeFromBackground();
+
     // 5. Catch up on native tasks. Do not reschedule killed tasks with a
     //    fresh enqueue — that restarts the file from byte 0. Interrupted
     //    transfers are resumed from leftover bytes below.
@@ -623,31 +628,44 @@ class DownloadService {
       );
       var didContinue = false;
       if (shouldContinue) {
-        // Recovery is not considered running until a real native resume or
-        // byte-range continuation has actually started. This prevents stale
-        // persisted state from rendering جارٍ التنزيل at 0 MB/s forever.
+        // Starting a resume is not proof that bytes are already moving. Keep
+        // the row enqueued until the plugin sends a real running/progress
+        // update. This removes the startup "running + 0 MB/s" ghost state.
         didContinue = await _resumeDownloadTask(task);
+        if (!didContinue) {
+          // A stale DB `running` status must not keep occupying a queue slot
+          // after the native task disappeared. Park it without deleting any
+          // resume data or partial bytes so a later Play can try again.
+          await FileDownloader().database.updateRecord(
+            TaskRecord(
+              task,
+              TaskStatus.paused,
+              progress,
+              record.expectedFileSize,
+            ),
+          );
+          await storage.patchDownloadMetadata(
+            task.taskId,
+            queueWaiting: false,
+            lastProgress: progress,
+            lastExpectedBytes: record.expectedFileSize,
+          );
+        }
       }
 
       final showAsWaiting = _queueWaitingIds.contains(task.taskId);
-      final showAsRunning =
-          !userPaused &&
-          ((record.status == TaskStatus.running && stillNative) ||
-              (didContinue && !showAsWaiting));
       _publishProgress(
         trackingUrl: trackingUrl,
         taskId: task.taskId,
         progress: progress,
         totalSize: record.expectedFileSize,
-        status: showAsWaiting
-            ? TaskStatus.enqueued
-            : (userPaused
-                  ? TaskStatus.paused
-                  : (showAsRunning
-                        ? TaskStatus.running
-                        : (stillNative && wasRunning
-                              ? record.status
-                              : TaskStatus.paused))),
+        status: recoveredDownloadDisplayStatus(
+          persisted: record.status,
+          userPaused: userPaused,
+          queueWaiting: showAsWaiting,
+          stillNative: stillNative,
+          resumeStarted: didContinue,
+        ),
       );
     }
 
@@ -737,6 +755,9 @@ class DownloadService {
   /// that episode. Never pause/re-enqueue/restart URLSession here.
   Future<void> onAppForegrounded() async {
     if (!_isInitialized) return;
+    // Deliver any native updates that were buffered while the app was
+    // suspended before reconciling active tasks with persisted rows.
+    await FileDownloader().resumeFromBackground();
     await _serializeQueue(() async {
       await _attachUiToLiveNativeTasks();
       await _syncQueueToCapUnlocked();
@@ -1212,10 +1233,11 @@ class DownloadService {
     String? url,
     String? fileKey,
   }) async {
-    if (taskId.isNotEmpty) {
-      final byId = await FileDownloader().taskForId(taskId);
-      if (byId is DownloadTask) return byId;
-    }
+    // `taskForId` is only a lookup and can return a paused/final/stale task.
+    // It must never be used as a liveness oracle. `allTasks` is the plugin's
+    // active set (paused tasks are excluded), so only attach to a task found
+    // in that set. Otherwise a paused/failed row can masquerade as running at
+    // 0 MB/s and a Play tap will "attach" instead of actually resuming it.
     final track = trackingUrl ?? '';
     final downloadUrl = url ?? '';
     final key = fileKey ?? '';
@@ -1251,13 +1273,9 @@ class DownloadService {
     var progress = record?.progress ?? 0.0;
     if (progress < 0 || progress > 1) progress = 0.0;
     final totalSize = record?.expectedFileSize ?? -1;
+    final status = activeNativeAttachmentStatus(record?.status);
     final transferring =
-        record?.status == TaskStatus.running ||
-        record?.status == TaskStatus.waitingToRetry ||
-        progressMeansNativeTransfer(progress);
-    final status = transferring
-        ? TaskStatus.running
-        : (record?.status ?? TaskStatus.enqueued);
+        status == TaskStatus.running || status == TaskStatus.waitingToRetry;
     _publishProgress(
       trackingUrl: trackingUrl,
       taskId: attached.taskId,
@@ -1289,18 +1307,13 @@ class DownloadService {
       var progress = record?.progress ?? 0.0;
       if (progress < 0 || progress > 1) progress = 0.0;
       final totalSize = record?.expectedFileSize ?? -1;
-      final transferring =
-          record?.status == TaskStatus.running ||
-          record?.status == TaskStatus.waitingToRetry ||
-          progressMeansNativeTransfer(progress);
+      final status = activeNativeAttachmentStatus(record?.status);
       _publishProgress(
         trackingUrl: downloadTrackingUrl(task),
         taskId: task.taskId,
         progress: progress,
         totalSize: totalSize,
-        status: transferring
-            ? TaskStatus.running
-            : (record?.status ?? TaskStatus.enqueued),
+        status: status,
       );
     }
     await _syncSessionOverlay();
@@ -1615,73 +1628,105 @@ class DownloadService {
 
   Future<void> pauseDownload(String taskId) async {
     await _serializeQueue(() async {
-      _userPausedIds.add(taskId);
-      _queueWaitingIds.remove(taskId);
-      _waitingPayloads.remove(taskId);
-      await _ref
-          .read(storageServiceProvider)
-          .patchDownloadMetadata(taskId, queueWaiting: false, userPaused: true);
-
+      final storage = _ref.read(storageServiceProvider);
       final recordForId = await FileDownloader().database.recordForId(taskId);
       final tracking = recordForId != null
           ? downloadTrackingUrl(recordForId.task)
           : null;
-      DownloadTask? downloadTask = await _liveNativeTaskFor(
+      final liveTask = await _liveNativeTaskFor(
         taskId: taskId,
         trackingUrl: tracking,
       );
+      DownloadTask? downloadTask = liveTask;
       if (downloadTask == null && recordForId?.task is DownloadTask) {
         downloadTask = recordForId!.task as DownloadTask;
       }
+      if (downloadTask == null) return;
 
-      if (downloadTask != null) {
-        // Plugin pause produces URLSession resumeData and drops the
-        // transferring task so it no longer occupies a slot. Never cancel —
-        // cancel deletes the temp file and forces a restart from byte 0.
+      // Guard plugin pause callbacks while the async pause request is in
+      // flight, but do not persist `userPaused` until pause() really succeeds.
+      // Some media servers do not support byte-range resume; background_downloader
+      // then returns false and leaves the task running. Marking that as paused
+      // creates a fake paused row that Play can never resume.
+      var pauseSucceeded = true;
+      final hadLiveNativeTask = liveTask != null;
+      if (liveTask != null) {
+        _userPausedIds.add(taskId);
         try {
-          await FileDownloader().pause(downloadTask);
-        } catch (_) {}
-        final trackingUrl = downloadTrackingUrl(downloadTask);
-        final current = _ref.read(downloadProgressProvider)[trackingUrl];
-        final record = await FileDownloader().database.recordForId(taskId);
-        final metadata = await _ref
-            .read(storageServiceProvider)
-            .getDownloadMetadata(taskId);
-        var progress = keepLastKnownDownloadProgress(
-          incoming: current?.progress ?? 0,
-          lastKnown: record?.progress,
-        );
-        progress = keepLastKnownDownloadProgress(
-          incoming: progress,
-          lastKnown: downloadMetadataProgress(metadata),
-        );
-        final totalSize =
-            current?.totalSize ??
-            record?.expectedFileSize ??
-            downloadMetadataExpectedBytes(metadata);
-        await FileDownloader().database.updateRecord(
-          TaskRecord(downloadTask, TaskStatus.paused, progress, totalSize),
-        );
-        await _ref
-            .read(storageServiceProvider)
-            .patchDownloadMetadata(
-              taskId,
-              queueWaiting: false,
-              userPaused: true,
-              lastProgress: progress,
-              lastExpectedBytes: totalSize,
-            );
-        _publishProgress(
-          trackingUrl: trackingUrl,
-          taskId: taskId,
-          progress: progress,
-          totalSize: totalSize,
-          status: TaskStatus.paused,
-        );
-        _updatesController.add(
-          TaskStatusUpdate(downloadTask, TaskStatus.paused),
-        );
+          pauseSucceeded = await FileDownloader().pause(liveTask);
+        } catch (_) {
+          pauseSucceeded = false;
+        }
       }
+
+      if (!shouldCommitUserPause(
+        hadLiveNativeTask: hadLiveNativeTask,
+        pauseSucceeded: pauseSucceeded,
+      )) {
+        _userPausedIds.remove(taskId);
+        await storage.patchDownloadMetadata(taskId, userPaused: false);
+
+        // The server rejected pause. Keep the real transfer state instead of
+        // lying to the UI. No cancel/re-enqueue is used, so no downloaded bytes
+        // are discarded and there is no byte-zero restart path.
+        final stillLive = await _liveNativeTaskFor(
+          taskId: taskId,
+          trackingUrl: tracking,
+        );
+        if (stillLive != null) {
+          await _attachToLiveNativeTask(downloadTask, live: stillLive);
+        }
+        await _persistNativeWaitingSnapshot();
+        await _syncSessionOverlay();
+        return;
+      }
+
+      _userPausedIds.add(taskId);
+      _queueWaitingIds.remove(taskId);
+      _waitingPayloads.remove(taskId);
+      await storage.patchDownloadMetadata(
+        taskId,
+        queueWaiting: false,
+        userPaused: true,
+      );
+
+      final trackingUrl = downloadTrackingUrl(downloadTask);
+      final current = _ref.read(downloadProgressProvider)[trackingUrl];
+      final record = await FileDownloader().database.recordForId(taskId);
+      final metadata = await storage.getDownloadMetadata(taskId);
+      var progress = keepLastKnownDownloadProgress(
+        incoming: current?.progress ?? 0,
+        lastKnown: record?.progress,
+      );
+      progress = keepLastKnownDownloadProgress(
+        incoming: progress,
+        lastKnown: downloadMetadataProgress(metadata),
+      );
+      final totalSize =
+          current?.totalSize ??
+          record?.expectedFileSize ??
+          downloadMetadataExpectedBytes(metadata);
+      await FileDownloader().database.updateRecord(
+        TaskRecord(downloadTask, TaskStatus.paused, progress, totalSize),
+      );
+      await storage.patchDownloadMetadata(
+        taskId,
+        queueWaiting: false,
+        userPaused: true,
+        lastProgress: progress,
+        lastExpectedBytes: totalSize,
+      );
+      _publishProgress(
+        trackingUrl: trackingUrl,
+        taskId: taskId,
+        progress: progress,
+        totalSize: totalSize,
+        status: TaskStatus.paused,
+      );
+      _updatesController.add(
+        TaskStatusUpdate(downloadTask, TaskStatus.paused),
+      );
+
       await _syncSessionOverlay(completedSuccess: false);
       await _persistNativeWaitingSnapshot();
       await _syncQueueToCapUnlocked();
@@ -2287,10 +2332,6 @@ class DownloadService {
           status: existingRecord.status,
           queueWaiting: _queueWaitingIds.contains(existingRecord.task.taskId),
         );
-        if (occupying) {
-          _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
-          return true;
-        }
 
         if (existingRecord.task is! DownloadTask) {
           return false;
@@ -2299,12 +2340,23 @@ class DownloadService {
         final live = await _liveNativeTaskFor(
           taskId: existingTask.taskId,
           trackingUrl: trackingUrl ?? url,
+          url: existingTask.url,
+          fileKey: downloadTaskFileKey(existingTask),
         );
-        if (live != null &&
-            (occupying || isLiveNativeDownloadStatus(existingRecord.status))) {
+        if (live != null) {
           await _attachToLiveNativeTask(existingTask, live: live);
           _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
           return true;
+        }
+
+        // A DB row can stay `running` after iOS kills or fails its URLSession
+        // task. Persisted status alone is not liveness: recover from preserved
+        // resumeData/partial bytes instead of returning success into 0 MB/s.
+        if (occupying && kDebugMode) {
+          debugPrint(
+            '[DownloadService] Stale occupying record has no active native task; '
+            'attempting preserved-byte resume for ${existingTask.taskId}',
+          );
         }
         _queueWaitingIds.remove(existingTask.taskId);
         _waitingPayloads.remove(existingTask.taskId);
