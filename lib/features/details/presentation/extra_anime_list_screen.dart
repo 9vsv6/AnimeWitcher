@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/account/animewitcher_character_models.dart';
@@ -199,7 +200,7 @@ class _ExtraAnimeListScreenState extends ConsumerState<ExtraAnimeListScreen> {
             )
           : _items.isEmpty
           ? Center(child: Text(widget.emptyMessage))
-          : RefreshIndicator(
+          : SecondaryMouseRefreshIndicator(
               onRefresh: _load,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -227,3 +228,4 @@ class _ExtraAnimeListScreenState extends ConsumerState<ExtraAnimeListScreen> {
     );
   }
 }
+

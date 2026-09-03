@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -629,7 +630,7 @@ class _AnimeWitcherCommentsScreenState
       );
     }
     if (_comments.isEmpty) {
-      return RefreshIndicator(
+      return SecondaryMouseRefreshIndicator(
         onRefresh: _loadInitial,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -650,7 +651,7 @@ class _AnimeWitcherCommentsScreenState
       );
     }
 
-    return RefreshIndicator(
+    return SecondaryMouseRefreshIndicator(
       onRefresh: _loadInitial,
       child: ListView.separated(
         controller: _scrollController,
@@ -1149,3 +1150,4 @@ String _commentTimeAgo(DateTime? date, bool isArabic) {
   String two(int value) => value.toString().padLeft(2, '0');
   return '${two(local.day)}/${two(local.month)}/${local.year}';
 }
+
