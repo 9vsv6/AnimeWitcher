@@ -193,6 +193,7 @@ class DetailsDesktopHero extends ConsumerWidget {
           child: SecondaryMouseRefreshIndicator(
             onRefresh: onRefresh,
             child: SingleChildScrollView(
+              key: const PageStorageKey<String>('desktop-details-info-tab'),
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 60),
               child: Column(
@@ -328,4 +329,3 @@ class DetailsDesktopHero extends ConsumerWidget {
     );
   }
 }
-

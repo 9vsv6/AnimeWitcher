@@ -446,19 +446,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     _detailsTabController.animateTo(targetTab);
   }
 
-  Widget _buildTabTransition({required Widget child}) {
-    return FadeTransition(
-      opacity: _tabTransitionAnimation,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: _tabSlideFrom,
-          end: Offset.zero,
-        ).animate(_tabTransitionAnimation),
-        child: child,
-      ),
-    );
-  }
-
   bool _isPointerInExtraTabs(Offset globalPosition) {
     return ignoreDetailsEpisodesSwipe(
       selectedDetailsTab: _detailsTabController.index,
@@ -1662,54 +1649,47 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               enabled: true,
               child: Directionality(
                 textDirection: _detailsTabsTextDirection(context),
-                child: TabBarView(
-                  controller: _detailsTabController,
-                  children: [
-                    _KeepAliveDetailsTab(
-                      child: DetailsDesktopHero(
-                        displayItem: item,
-                        baseItem: widget.item,
-                        details: item,
-                        detailsState: detailsState,
-                        isMovie: isMovie,
-                        itemUrl: widget.item.url,
-                        onRefresh: _refreshDetails,
-                        onPosterTap: () => _showPosterViewer(context, item),
-                        child: _buildDesktopDetailsContentBelow(
+                child: DetailsDesktopTabSwitcher(
+                  selectedIndex: _selectedDetailsTab,
+                  transition: _tabTransitionAnimation,
+                  slideFrom: _tabSlideFrom,
+                  detailsBuilder: (context) => DetailsDesktopHero(
+                    displayItem: item,
+                    baseItem: widget.item,
+                    details: item,
+                    detailsState: detailsState,
+                    isMovie: isMovie,
+                    itemUrl: widget.item.url,
+                    onRefresh: _refreshDetails,
+                    onPosterTap: () => _showPosterViewer(context, item),
+                    child: _buildDesktopDetailsContentBelow(
+                      context,
+                      item,
+                      detailsState,
+                      castState,
+                      trailersState,
+                      relatedState,
+                      recommendationsState,
+                      l10n,
+                    ),
+                  ),
+                  episodesBuilder: (context) {
+                    return SecondaryMouseRefreshIndicator(
+                      onRefresh: _refreshDetails,
+                      child: SingleChildScrollView(
+                        key: const PageStorageKey<String>(
+                          'desktop-details-episodes-tab',
+                        ),
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(60, 24, 60, 100),
+                        child: _buildDesktopEpisodesContent(
                           context,
                           item,
-                          detailsState,
-                          castState,
-                          trailersState,
-                          relatedState,
-                          recommendationsState,
-                          l10n,
+                          episodesState,
                         ),
                       ),
-                    ),
-                    _KeepAliveDetailsTab(
-                      child: RefreshIndicator(
-                        onRefresh: _refreshDetails,
-                        child: SingleChildScrollView(
-                          key: const PageStorageKey<String>(
-                            'desktop-details-episodes-tab',
-                          ),
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(
-                            60,
-                            24,
-                            60,
-                            100,
-                          ),
-                          child: _buildDesktopEpisodesContent(
-                            context,
-                            item,
-                            episodesState,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -2191,4 +2171,3 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     ];
   }
 }
-
