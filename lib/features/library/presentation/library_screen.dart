@@ -45,7 +45,7 @@ class LibraryScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.centerRight,
                 child: categorySelector,
               ),
             ),

@@ -50,6 +50,9 @@ class _AnimeWitcherAccountScreenState
     final profile = snapshot?.profile;
     final configured = AnimeWitcherAccountConfig.firebaseConfigured;
     final busy = _submitting || account.isLoading || !configured;
+    final canPop = Navigator.of(context).canPop();
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final showFlutterBack = !appleUsesPersistentLiquidGlassHeader && canPop;
     final asyncError = account.when<Object?>(
       data: (_) => null,
       error: (error, _) => error,
@@ -59,12 +62,19 @@ class _AnimeWitcherAccountScreenState
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        leading: !appleUsesPersistentLiquidGlassHeader &&
-                Navigator.of(context).canPop()
+        leading: showFlutterBack && !isRtl
             ? const AppleLiquidGlassBackButton()
             : null,
+        actions: showFlutterBack && isRtl
+            ? const <Widget>[
+                Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: AppleLiquidGlassBackButton(),
+                ),
+              ]
+            : const <Widget>[],
         title: ApplePersistentGlassHeaderScope(
-          enabled: Navigator.of(context).canPop(),
+          enabled: canPop,
           onBack: () => Navigator.of(context).maybePop(),
           child: Text(
             appText(
