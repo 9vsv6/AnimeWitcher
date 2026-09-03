@@ -1937,29 +1937,34 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       ];
 
                       if (isWide) {
-                        return IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // LEFT: anime information table.
-                              Expanded(
-                                flex: 5,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: infoColumn,
-                                ),
+                        // No IntrinsicHeight here: the columns are aligned to
+                        // the start rather than stretched, so it changed
+                        // nothing visually while making the row measure its
+                        // subtree intrinsically — which throws in debug as
+                        // soon as any descendant uses a LayoutBuilder.
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // LEFT: anime information table.
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: infoColumn,
                               ),
-                              const SizedBox(width: 28),
-                              // RIGHT: synopsis + genres card.
-                              Expanded(
-                                flex: 6,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: synopsisColumn,
-                                ),
+                            ),
+                            const SizedBox(width: 28),
+                            // RIGHT: synopsis + genres card.
+                            Expanded(
+                              flex: 6,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: synopsisColumn,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         );
                       }
 

@@ -35,6 +35,7 @@ import '../../../../core/network/http_defaults.dart';
 import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/anime_skip_service.dart';
 import '../../skip/data/aniskip_service.dart';
+import '../../skip/data/mal_id_resolver.dart';
 import '../../skip/data/skip_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 import 'playback_recovery_policy.dart';
@@ -855,10 +856,14 @@ class PlayerController extends Notifier<PlayerState> {
         _item.syncData?['anilistId'] == null &&
         _item.syncData?['anilist_id'] == null;
 
-    if (hasNoIds) {
+    // A title alone is still workable: AniSkip is keyed by MyAnimeList id,
+    // and the title resolves to one through AniList. The catalog provider
+    // identifies most anime by title only, so bailing here would disable
+    // intro/credits skipping for nearly everything.
+    if (hasNoIds && _item.title.trim().isEmpty) {
       if (kDebugMode) {
         debugPrint(
-          'Skip Segments: Bypassed lookup (no TMDB/IMDB/MAL/AniList IDs available)',
+          'Skip Segments: Bypassed lookup (no IDs and no title available)',
         );
       }
       return;
@@ -867,6 +872,11 @@ class PlayerController extends Notifier<PlayerState> {
     if (kDebugMode) {
       debugPrint('=============================================');
       debugPrint('SKIP SEGMENTS (AniSkip/IntroDB/AnimeSkip)');
+      debugPrint(
+        'ids: mal=$malId tmdb=${state.tmdbId} imdb=${state.imdbId} '
+        'anilist=${_item.syncData?['anilist'] ?? _item.syncData?['anilistId'] ?? _item.syncData?['anilist_id']}',
+      );
+      debugPrint('syncData keys: ${_item.syncData?.keys.toList()}');
     }
 
     final List<SkipSegment> allSegments = [];
@@ -925,13 +935,35 @@ class PlayerController extends Notifier<PlayerState> {
       // 2a. AniSkip (api.aniskip.com) — keyless and MAL-keyed, so it is the
       // primary anime source. Its data is anime-specific, so it replaces
       // whatever IntroDB returned for the same episode.
-      if (malId != null) {
+      // The provider usually hands us a title and nothing else, so fall
+      // back to resolving the MyAnimeList id from it.
+      var resolvedMalId = malId;
+      if (resolvedMalId == null && _item.title.trim().isNotEmpty) {
+        resolvedMalId = await ref
+            .read(malIdResolverProvider)
+            .resolve(_item.title);
+        if (_isDisposed) return;
+        if (kDebugMode) {
+          debugPrint(
+            'AniSkip: resolved MAL id $resolvedMalId from title '
+            '"${_item.title}"',
+          );
+        }
+      }
+
+      if (resolvedMalId != null) {
         try {
           final durationSec = await _awaitDurationSeconds();
           if (_isDisposed) return;
+          if (kDebugMode) {
+            debugPrint(
+              'AniSkip: querying mal=$resolvedMalId season=$season '
+              'episode=$episodeNum durationSec=$durationSec',
+            );
+          }
           final aniSkip = ref.read(aniSkipServiceProvider);
           final segments = await aniSkip.getSkipSegments(
-            malId: malId,
+            malId: resolvedMalId,
             season: season,
             episode: episodeNum,
             duration: durationSec,
@@ -955,7 +987,9 @@ class PlayerController extends Notifier<PlayerState> {
         }
       } else {
         if (kDebugMode) {
-          debugPrint('AniSkip: Bypassed lookup (no MyAnimeList id available)');
+          debugPrint(
+            'AniSkip: Bypassed lookup (no MyAnimeList id could be resolved)',
+          );
         }
       }
 
