@@ -33,7 +33,6 @@ import '../../settings/presentation/player_settings_provider.dart';
 import '../../../../core/services/local_proxy_service.dart';
 import '../../../../core/network/http_defaults.dart';
 import '../../skip/data/intro_db_service.dart';
-import '../../skip/data/anime_skip_service.dart';
 import '../../skip/data/aniskip_service.dart';
 import '../../skip/data/chapter_skip_source.dart';
 import '../../skip/data/mal_id_resolver.dart';
@@ -876,7 +875,7 @@ class PlayerController extends Notifier<PlayerState> {
 
     if (kDebugMode) {
       debugPrint('=============================================');
-      debugPrint('SKIP SEGMENTS (AniSkip/IntroDB/AnimeSkip)');
+      debugPrint('SKIP SEGMENTS (AniSkip/IntroDB/chapters)');
       debugPrint(
         'ids: mal=$malId tmdb=${state.tmdbId} imdb=${state.imdbId} '
         'anilist=${_item.syncData?['anilist'] ?? _item.syncData?['anilistId'] ?? _item.syncData?['anilist_id']}',
@@ -889,7 +888,6 @@ class PlayerController extends Notifier<PlayerState> {
     // for, without ever contradicting it.
     var introDbSegments = const <SkipSegment>[];
     var aniSkipSegments = const <SkipSegment>[];
-    var animeSkipSegments = const <SkipSegment>[];
     var chapterSegments = const <SkipSegment>[];
     final int season = _episode!.season > 0 ? _episode!.season : 1;
     final int episodeNum = _episode!.episode > 0 ? _episode!.episode : 1;
@@ -999,49 +997,9 @@ class PlayerController extends Notifier<PlayerState> {
 
       if (_isDisposed) return;
 
-      // anime-skip.com needs a client id supplied at build time; without one
-      // every request is rejected, so skip the round trip entirely. Its own
-      // legacy settings flag had no UI, so the master toggle gates it now.
-      if (AnimeSkipService.isConfigured) {
-        try {
-          final anilistId =
-              _item.syncData?['anilist'] ??
-              _item.syncData?['anilistId'] ??
-              _item.syncData?['anilist_id'];
-
-          if (_isDisposed) return;
-
-          if (anilistId != null) {
-            final animeSkip = ref.read(animeSkipServiceProvider);
-            final segments = await animeSkip.getSkipSegments(
-              anilistId: int.tryParse(anilistId.toString()),
-              season: season,
-              episode: episodeNum,
-            );
-            if (_isDisposed) return;
-            animeSkipSegments = segments;
-            if (kDebugMode) {
-              debugPrint('AnimeSkip returned ${segments.length} segments:');
-              for (final s in segments) {
-                debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
-              }
-            }
-          }
-        } catch (e) {
-          if (kDebugMode) debugPrint('AnimeSkip error: $e');
-        }
-      } else {
-        if (kDebugMode) {
-          debugPrint(
-            'AnimeSkip: Bypassed lookup (no ANIMESKIP_CLIENT_ID in this build)',
-          );
-        }
-      }
     } else {
       if (kDebugMode) {
-        debugPrint(
-          'AnimeSkip: Bypassed lookup (media type is not anime/animated)',
-        );
+        debugPrint('AniSkip: Bypassed lookup (media is not anime/animated)');
       }
     }
     // 3. The file's own chapter markers. Per-file data, so it covers the
@@ -1068,7 +1026,6 @@ class PlayerController extends Notifier<PlayerState> {
     // it, and only when those agree closely (see estimateFromNeighbours).
     var estimatedSegments = const <SkipSegment>[];
     final needsEstimate =
-        animeSkipSegments.isEmpty &&
         aniSkipSegments.isEmpty &&
         introDbSegments.isEmpty &&
         chapterSegments.isEmpty;
@@ -1101,7 +1058,6 @@ class PlayerController extends Notifier<PlayerState> {
     // viewer's own marks outrank every database.
     final merged = SkipSegment.merge(
       <List<SkipSegment>>[
-        animeSkipSegments,
         aniSkipSegments,
         introDbSegments,
         chapterSegments,
