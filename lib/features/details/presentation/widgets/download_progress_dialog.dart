@@ -16,6 +16,14 @@ class DownloadProgressDialog extends ConsumerStatefulWidget {
     required this.trackingUrl,
   });
 
+  static void show(BuildContext context, String title, String trackingUrl) {
+    showDialog<void>(
+      context: context,
+      builder: (context) =>
+          DownloadProgressDialog(title: title, trackingUrl: trackingUrl),
+    );
+  }
+
   @override
   ConsumerState<DownloadProgressDialog> createState() =>
       _DownloadProgressDialogState();
@@ -233,14 +241,6 @@ class _DownloadProgressDialogState
           ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
-    );
-  }
-
-  static void show(BuildContext context, String title, String trackingUrl) {
-    showDialog<void>(
-      context: context,
-      builder: (context) =>
-          DownloadProgressDialog(title: title, trackingUrl: trackingUrl),
     );
   }
 }
