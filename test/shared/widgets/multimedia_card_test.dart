@@ -16,6 +16,21 @@ Widget _cardApp({required MultimediaCard card, ThemeData? theme}) {
 }
 
 void main() {
+  test('home rail height uses the same aspect ratio as catalog grids', () {
+    expect(
+      MultimediaCardLayout.listHeight(130, isPortrait: true),
+      closeTo(130 / MultimediaCardLayout.portraitGridAspectRatio, 0.001),
+    );
+    expect(
+      MultimediaCardLayout.listHeight(
+        200,
+        isPortrait: true,
+        isDesktop: true,
+      ),
+      closeTo(200 / MultimediaCardLayout.desktopPortraitGridAspectRatio, 0.001),
+    );
+  });
+
   testWidgets('announces a content card as an actionable details button', (
     tester,
   ) async {

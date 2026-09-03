@@ -679,12 +679,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           : LayoutConstants.spacingMd,
       spacing: spacing,
     );
-    final imageHeight =
-        cardWidth / MultimediaCardLayout.posterAspectRatio(isPortrait: true);
     final listHeight = MultimediaCardLayout.listHeight(
       cardWidth,
       isPortrait: true,
+      isDesktop: isDesktop,
     );
+    final captionExtent = MultimediaCardLayout.animeCaptionExtent(context);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -723,15 +723,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               itemCount: 10,
               separatorBuilder: (_, _) => SizedBox(width: spacing),
               itemBuilder: (context, index) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ShimmerPlaceholder.rectangular(
-                      width: cardWidth,
-                      height: imageHeight,
-                      borderRadius: 12,
-                    ),
-                  ],
+                return SizedBox(
+                  width: cardWidth,
+                  height: listHeight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: ShimmerPlaceholder.rectangular(
+                          width: cardWidth,
+                          borderRadius: MultimediaCardLayout.posterRadius,
+                        ),
+                      ),
+                      SizedBox(height: captionExtent),
+                    ],
+                  ),
                 );
               },
             ),

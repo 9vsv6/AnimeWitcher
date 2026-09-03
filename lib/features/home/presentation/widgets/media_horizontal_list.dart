@@ -172,6 +172,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     final double listHeight = MultimediaCardLayout.listHeight(
       cardWidth,
       isPortrait: isPortrait,
+      isDesktop: isDesktop,
     );
 
     return Directionality(
