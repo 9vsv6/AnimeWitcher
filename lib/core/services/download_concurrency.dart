@@ -136,43 +136,6 @@ TaskStatus displayDownloadStatus({
   return persisted;
 }
 
-
-/// Reconnecting to an active task must never infer `running` from a saved
-/// progress value. Old progress only says bytes were downloaded sometime in
-/// the past. Until the plugin reports `running`, show the active task as
-/// enqueued/waiting instead of a fake 0 MB/s transfer.
-TaskStatus activeNativeAttachmentStatus(TaskStatus? persisted) {
-  if (persisted == TaskStatus.running ||
-      persisted == TaskStatus.waitingToRetry ||
-      persisted == TaskStatus.enqueued) {
-    return persisted!;
-  }
-  return TaskStatus.enqueued;
-}
-
-/// Startup recovery starts a resume request first and waits for a real native
-/// status/progress callback before showing `running`.
-TaskStatus recoveredDownloadDisplayStatus({
-  required TaskStatus persisted,
-  required bool userPaused,
-  required bool queueWaiting,
-  required bool stillNative,
-  required bool resumeStarted,
-}) {
-  if (queueWaiting) return TaskStatus.enqueued;
-  if (userPaused) return TaskStatus.paused;
-  if (stillNative) return activeNativeAttachmentStatus(persisted);
-  if (resumeStarted) return TaskStatus.enqueued;
-  return TaskStatus.paused;
-}
-
-/// A user pause is real only if an active native task actually accepted the
-/// pause request. Non-live rows can be logically parked without touching bytes.
-bool shouldCommitUserPause({
-  required bool hadLiveNativeTask,
-  required bool pauseSucceeded,
-}) => !hadLiveNativeTask || pauseSucceeded;
-
 /// One BGContinuedProcessingTask / Live Activity for the whole download
 /// batch. `start` updates this session; never finish while anything is
 /// running or waiting.
@@ -836,8 +799,7 @@ bool isNativeWaitingSnapshotWaiter({
   return queueWaiting || status == TaskStatus.enqueued;
 }
 
-/// Persisted statuses that can correspond to an active native task. Liveness
-/// itself must come from `FileDownloader.allTasks`; `taskForId` is only a lookup.
+/// Plugin `allTasks` / `taskForId` membership: HQ waiter or URLSession task.
 bool isLiveNativeDownloadStatus(TaskStatus status) {
   switch (status) {
     case TaskStatus.running:
