@@ -220,6 +220,32 @@ void main() {
         '85KB/s • 3.2MB/6.6MB • 1 of 3',
       );
 
+      final duplicateSameEpisode = planDownloadOverlaySession(
+        entries: const [
+          DownloadOverlayEntry(
+            taskId: 'dup-waiting',
+            episodeKey: 'track:episode-9',
+            status: TaskStatus.enqueued,
+            displayName: 'الحلقة 9',
+          ),
+          DownloadOverlayEntry(
+            taskId: 'dup-running',
+            episodeKey: 'track:episode-9',
+            status: TaskStatus.running,
+            displayName: 'الحلقة 9',
+            progress: 0.25,
+            totalBytes: 400000000,
+            speedBytesPerSecond: 1000000,
+          ),
+        ],
+      );
+      expect(duplicateSameEpisode.batchTotal, 1);
+      expect(duplicateSameEpisode.runningCount, 1);
+      expect(duplicateSameEpisode.waitingCount, 0);
+      expect(duplicateSameEpisode.currentTaskId, 'dup-running');
+      expect(duplicateSameEpisode.currentIndex, 1);
+      expect(duplicateSameEpisode.totalBytes, 400000000);
+
       final whileEp1 = planDownloadOverlaySession(
         entries: const [
           DownloadOverlayEntry(

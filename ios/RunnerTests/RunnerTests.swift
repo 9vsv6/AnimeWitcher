@@ -373,6 +373,44 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(first, second)
   }
 
+  func testLiveUrlSessionTaskBlocksSecondPromotionBeforeFirstByte() {
+    let session = URLSession(configuration: .ephemeral)
+    let native = session.downloadTask(with: URL(string: "https://server-a.test/video.mp4")!)
+    native.taskDescription = "{\"taskId\":\"native-a\",\"metaData\":\"https://show.test/episode-9\",\"url\":\"https://server-a.test/video.mp4\",\"directory\":\"Anime/Show\",\"filename\":\"episode-9.mp4\"}"
+    let waiter = DownloadNativeWaitingQueue.Waiter.from(arguments: [
+      "taskId": "native-b",
+      "taskJson": "{\"taskId\":\"native-b\",\"metaData\":\"https://show.test/episode-9\",\"url\":\"https://server-b.test/video.mp4\",\"filename\":\"episode-9.mp4\"}",
+      "url": "https://server-b.test/video.mp4",
+      "filename": "episode-9.mp4",
+      "directory": "Anime/Show",
+      "displayName": "episode-9.mp4",
+    ])!
+    XCTAssertEqual(
+      DownloadNativeWaitingQueue.matchingLiveTaskId(for: waiter, among: [native]),
+      "native-a"
+    )
+    native.cancel()
+    session.invalidateAndCancel()
+  }
+
+  func testServerUrlMetadataStillFallsBackToStableFileIdentity() {
+    let first = DownloadNativeWaitingQueue.episodeKey(
+      taskId: "uuid-a",
+      trackingUrl: "https://server-a.test/video.mp4",
+      directory: "Anime/Show",
+      filename: "episode-9.mp4",
+      url: "https://server-a.test/video.mp4"
+    )
+    let second = DownloadNativeWaitingQueue.episodeKey(
+      taskId: "uuid-b",
+      trackingUrl: "https://server-b.test/video.mp4",
+      directory: "Anime/Show",
+      filename: "episode-9.mp4",
+      url: "https://server-b.test/video.mp4"
+    )
+    XCTAssertEqual(first, second)
+  }
+
   func testLogicalEpisodeKeyFallsBackToFileBeforeServerUrl() {
     let first = DownloadNativeWaitingQueue.episodeKey(
       taskId: "uuid-a",

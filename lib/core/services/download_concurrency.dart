@@ -314,6 +314,7 @@ class DownloadOverlayEntry {
     this.progress = 0,
     this.totalBytes = -1,
     this.speedBytesPerSecond = 0,
+    this.episodeKey = '',
   });
 
   final String taskId;
@@ -323,6 +324,7 @@ class DownloadOverlayEntry {
   final double progress;
   final int totalBytes;
   final double speedBytesPerSecond;
+  final String episodeKey;
 }
 
 class DownloadOverlaySession {
@@ -462,11 +464,40 @@ DownloadOverlaySession planDownloadOverlaySession({
   required Iterable<DownloadOverlayEntry> entries,
   List<String>? queueOrder,
 }) {
-  final list = List<DownloadOverlayEntry>.from(entries);
+  final sorted = List<DownloadOverlayEntry>.from(entries);
   if (queueOrder != null && queueOrder.isNotEmpty) {
-    list.sort(
+    sorted.sort(
       (a, b) => compareByDownloadQueueOrder(a.taskId, b.taskId, queueOrder),
     );
+  }
+
+  // A logical episode can temporarily have more than one task row when the
+  // plugin and native background promoter race. Never double-count those rows
+  // in the Dynamic Island. This changes presentation only; task persistence and
+  // pause/resume ownership stay untouched.
+  final list = <DownloadOverlayEntry>[];
+  final indexByEpisode = <String, int>{};
+  int priority(DownloadOverlayEntry entry) {
+    if (_isOverlayRunning(entry)) return 4;
+    if (_isOverlayWaiting(entry)) return 3;
+    if (entry.status == TaskStatus.complete) return 2;
+    return 1;
+  }
+  for (final entry in sorted) {
+    final key = entry.episodeKey.isEmpty ? 'id:${entry.taskId}' : entry.episodeKey;
+    final existingIndex = indexByEpisode[key];
+    if (existingIndex == null) {
+      indexByEpisode[key] = list.length;
+      list.add(entry);
+      continue;
+    }
+    final existing = list[existingIndex];
+    final incomingPriority = priority(entry);
+    final existingPriority = priority(existing);
+    if (incomingPriority > existingPriority ||
+        (incomingPriority == existingPriority && entry.progress > existing.progress)) {
+      list[existingIndex] = entry;
+    }
   }
   final running = list.where(_isOverlayRunning).toList();
   final waiting = list.where(_isOverlayWaiting).toList();

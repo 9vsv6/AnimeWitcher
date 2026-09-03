@@ -751,6 +751,38 @@ class DownloadService {
     _sessionOrder.remove(taskId);
   }
 
+
+  String _overlayEpisodeKeyFromParts({
+    required String taskId,
+    required String trackingUrl,
+    required String url,
+    required String directory,
+    required String filename,
+  }) {
+    final track = trackingUrl.trim();
+    final source = url.trim();
+    // startDownload stores the server URL in metaData when no separate
+    // tracking URL exists. In that case prefer the stable destination file.
+    if (track.isNotEmpty && track != source) return 'track:$track';
+    final file = filename.trim();
+    if (file.isNotEmpty) {
+      final dir = directory.replaceAll('\\', '/').trim();
+      return 'file:$dir|$file';
+    }
+    if (source.isNotEmpty) return 'url:$source';
+    return 'id:$taskId';
+  }
+
+  String _overlayEpisodeKeyForTask(Task task) {
+    return _overlayEpisodeKeyFromParts(
+      taskId: task.taskId,
+      trackingUrl: task.metaData,
+      url: task.url,
+      directory: task.directory,
+      filename: task.filename,
+    );
+  }
+
   Future<DownloadOverlaySession> _planSessionOverlay({
     String? preferTaskId,
     double? progress,
@@ -809,6 +841,7 @@ class DownloadService {
           progress: storedProgress,
           totalBytes: storedTotal,
           speedBytesPerSecond: speed,
+          episodeKey: _overlayEpisodeKeyForTask(record.task),
         ),
       );
     }
@@ -822,6 +855,13 @@ class DownloadService {
           status: TaskStatus.enqueued,
           displayName: payload.value['displayName'] as String? ?? '',
           queueWaiting: true,
+          episodeKey: _overlayEpisodeKeyFromParts(
+            taskId: payload.key,
+            trackingUrl: payload.value['metaData'] as String? ?? '',
+            url: payload.value['url'] as String? ?? '',
+            directory: payload.value['directory'] as String? ?? '',
+            filename: payload.value['filename'] as String? ?? '',
+          ),
         ),
       );
     }

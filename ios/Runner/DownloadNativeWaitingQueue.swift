@@ -13,7 +13,7 @@ import background_downloader
 enum DownloadNativeWaitingQueue {
   static let stateKey = "com.animewitcher.download.nativeWaitingQueue.v2"
 
-  struct Waiter: Codable, Equatable {
+  struct Waiter: Codable, Equatable, Sendable {
     var taskId: String
     var taskJson: String
     var notificationConfigJson: String?
@@ -260,12 +260,18 @@ enum DownloadNativeWaitingQueue {
       completed.count
     )
     let computedBatch = transferring.count + waiters.count + completed.count
-    let batchTotal = idle && dartBatchTotal == 0
-      ? 0
-      : max(
-        max(current.sessionBatchTotal, dartBatchTotal),
-        max(computedBatch, sessionIds.count)
-      )
+    // Dart's overlay planner counts logical episodes, not raw task IDs. When it
+    // supplies a batch total, trust it so duplicate task rows cannot turn one
+    // episode into "4 of 4". Native-only background continuation falls back to
+    // the existing state/computed count when Dart is asleep.
+    let batchTotal: Int
+    if idle && dartBatchTotal == 0 {
+      batchTotal = 0
+    } else if dartBatchTotal > 0 {
+      batchTotal = dartBatchTotal
+    } else {
+      batchTotal = max(current.sessionBatchTotal, computedBatch)
+    }
 
     let dartCurrentId = string(arguments["sessionCurrentTaskId"]) ?? ""
     let switchedFile = !dartCurrentId.isEmpty
@@ -388,12 +394,9 @@ enum DownloadNativeWaitingQueue {
         state.sessionTaskIds.append(failedId)
       }
       state.sessionBatchTotal = max(
-        max(
-          state.sessionBatchTotal,
-          state.transferringTaskIds.count + state.waiters.count
-            + state.completedTaskIds.count + state.pausedTaskIds.count
-        ),
-        state.sessionTaskIds.count
+        state.sessionBatchTotal,
+        state.transferringTaskIds.count + state.waiters.count
+          + state.completedTaskIds.count + state.pausedTaskIds.count
       )
     }
     saveLocked(state)
@@ -425,11 +428,8 @@ enum DownloadNativeWaitingQueue {
         state.sessionTaskIds.append(completedId)
       }
       state.sessionBatchTotal = max(
-        max(
-          state.sessionBatchTotal,
-          state.transferringTaskIds.count + state.waiters.count + state.completedTaskIds.count
-        ),
-        state.sessionTaskIds.count
+        state.sessionBatchTotal,
+        state.transferringTaskIds.count + state.waiters.count + state.completedTaskIds.count
       )
     }
     saveLocked(state)
@@ -498,7 +498,37 @@ enum DownloadNativeWaitingQueue {
       )
       return
     }
-    start(waiter, on: session, episodeKey: key)
+
+    // The plugin HoldingQueue can create its URLSession task before the first
+    // didWrite callback. The volatile sets above cannot see that short window,
+    // which was enough for our background promoter to create a second copy.
+    // Ask the real URLSession before creating anything. This is runtime-only:
+    // paused/resume state is never persisted or inferred from this check.
+    session.getAllTasks { tasks in
+      if let nativeTaskId = matchingLiveTaskId(for: waiter, among: tasks) {
+        lock.lock()
+        startingEpisodeKeys.remove(key)
+        activeEpisodeKeysByTaskId.removeValue(forKey: waiter.taskId)
+        activeEpisodeKeysByTaskId[nativeTaskId] = key
+        seenTransferringIds.insert(nativeTaskId)
+        lock.unlock()
+        discardDuplicatePromotion(waiter, activeTaskId: nativeTaskId)
+        NSLog(
+          "[DownloadNativeWaitingQueue] live URLSession duplicate blocked %@ -> %@",
+          waiter.taskId,
+          nativeTaskId
+        )
+        startLiveActivity(
+          taskId: nativeTaskId,
+          displayName: waiter.displayName,
+          progress: waiter.savedProgress,
+          totalBytes: waiter.savedExpectedBytes,
+          transferredBytes: waiter.transferredBytes
+        )
+        return
+      }
+      start(waiter, on: session, episodeKey: key)
+    }
   }
 
   private static func discardDuplicatePromotion(_ waiter: Waiter, activeTaskId: String?) {
@@ -566,8 +596,9 @@ enum DownloadNativeWaitingQueue {
     }
 
     lock.lock()
-    if let activeTaskId = activeEpisodeKeysByTaskId.first(where: { $0.value == logicalKey })?.key,
-       activeTaskId != waiter.taskId {
+    if let activeTaskId = activeEpisodeKeysByTaskId.first(where: {
+      $0.value == logicalKey && $0.key != waiter.taskId
+    })?.key {
       startingEpisodeKeys.remove(logicalKey)
       lock.unlock()
       discardDuplicatePromotion(waiter, activeTaskId: activeTaskId)
@@ -964,15 +995,18 @@ enum DownloadNativeWaitingQueue {
     url: String = ""
   ) -> String {
     let tracking = trackingUrl.trimmingCharacters(in: .whitespacesAndNewlines)
-    if !tracking.isEmpty { return "track:\(tracking)" }
+    let source = url.trimmingCharacters(in: .whitespacesAndNewlines)
+    // startDownload uses the server URL as metaData when no separate episode
+    // tracking URL exists. Do not let a server switch change episode identity.
+    if !tracking.isEmpty && tracking != source { return "track:\(tracking)" }
     let file = filename.trimmingCharacters(in: .whitespacesAndNewlines)
     if !file.isEmpty {
       let dir = directory.replacingOccurrences(of: "\\", with: "/")
         .trimmingCharacters(in: .whitespacesAndNewlines)
       return "file:\(dir)|\(file)"
     }
-    let source = url.trimmingCharacters(in: .whitespacesAndNewlines)
     if !source.isEmpty { return "url:\(source)" }
+    if !tracking.isEmpty { return "url:\(tracking)" }
     return "id:\(taskId)"
   }
 
@@ -984,6 +1018,51 @@ enum DownloadNativeWaitingQueue {
       filename: waiter.filename,
       url: waiter.url
     )
+  }
+
+  /// Logical identity read from the task that actually exists in URLSession.
+  /// A plugin-created task is visible here even before it writes its first byte.
+  static func episodeKey(from urlSessionTask: URLSessionTask) -> String? {
+    guard let description = urlSessionTask.taskDescription, !description.isEmpty else {
+      return nil
+    }
+    let json = description.components(separatedBy: "***<<<|>>>***").first ?? description
+    guard let data = json.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+      return nil
+    }
+    let taskId = object["taskId"] as? String ?? ""
+    let trackingUrl = object["metaData"] as? String ?? ""
+    let directory = object["directory"] as? String ?? ""
+    let filename = object["filename"] as? String ?? ""
+    let url = (object["url"] as? String)
+      ?? urlSessionTask.originalRequest?.url?.absoluteString
+      ?? ""
+    return episodeKey(
+      taskId: taskId,
+      trackingUrl: trackingUrl,
+      directory: directory,
+      filename: filename,
+      url: url
+    )
+  }
+
+  /// Returns the taskId of an already-created native task for this episode.
+  /// Suspended tasks count too: they are owned by the plugin/HoldingQueue and
+  /// must not be duplicated by our background promoter.
+  static func matchingLiveTaskId(
+    for waiter: Waiter,
+    among tasks: [URLSessionTask]
+  ) -> String? {
+    let key = episodeKey(for: waiter)
+    for task in tasks {
+      if task.state == .completed || task.state == .canceling { continue }
+      guard episodeKey(from: task) == key else { continue }
+      if let id = taskId(from: task), !id.isEmpty { return id }
+      return waiter.taskId
+    }
+    return nil
   }
 
   private static func urlFromTaskJson(_ taskJson: String) -> String {
