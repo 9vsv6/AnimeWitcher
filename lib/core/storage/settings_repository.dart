@@ -119,6 +119,14 @@ class SettingsRepository {
     return _storageService.isAlwaysOnTop();
   }
 
+  Future<void> setWelcomeDialogSeen(bool seen) async {
+    await _storageService.setWelcomeDialogSeen(seen);
+  }
+
+  bool hasSeenWelcomeDialog() {
+    return _storageService.hasSeenWelcomeDialog();
+  }
+
   Future<void> setIntroDbIntegrationEnabled(bool enabled) async {
     await _storageService.setIntroDbIntegrationEnabled(enabled);
   }
