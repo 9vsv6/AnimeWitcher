@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
@@ -314,7 +315,7 @@ class _RankingPageState extends State<_RankingPage>
       return _RankingError(isArabic: widget.isArabic, onRetry: _loadInitial);
     }
     if (_items.isEmpty) {
-      return RefreshIndicator(
+      return SecondaryMouseRefreshIndicator(
         onRefresh: _loadInitial,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -393,7 +394,7 @@ class _RankingGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDesktop = context.isDesktop;
     final hasFooter = loadingMore || loadMoreError;
-    return RefreshIndicator(
+    return SecondaryMouseRefreshIndicator(
       onRefresh: onRefresh,
       child: CatalogLtr(
         child: GridView.builder(
@@ -491,3 +492,4 @@ class _RankingError extends StatelessWidget {
     );
   }
 }
+

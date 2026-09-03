@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/navigation/taskbar_destination.dart';
 
@@ -475,7 +476,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       HomeOffline() => _buildErrorState(context, ref),
       HomeError() => _buildErrorState(context, ref),
       HomeSuccess(:final data, :final news) => _withGradientEdgeHint(
-        RefreshIndicator(
+        SecondaryMouseRefreshIndicator(
           onRefresh: () async {
             await Future.wait<void>([
               ref.read(continueWatchingProvider.notifier).refreshFromServer(),
@@ -740,3 +741,4 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 }
+

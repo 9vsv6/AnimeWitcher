@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 // [ScrollDirection] is defined in the rendering layer and is not re-exported
 // by material.dart, so it must be imported explicitly.
@@ -82,6 +83,7 @@ class _PagedRailState extends State<PagedRail> {
   /// [UserScrollNotification.direction] becomes idle on completion) and
   /// we'd recurse forever.
   bool _snapping = false;
+  int? _secondaryPointer;
 
   @override
   void initState() {
@@ -157,6 +159,42 @@ class _PagedRailState extends State<PagedRail> {
     return false;
   }
 
+  void _onPointerDown(PointerDownEvent event) {
+    if (event.kind != PointerDeviceKind.mouse ||
+        event.buttons & kSecondaryMouseButton == 0) {
+      return;
+    }
+    _secondaryPointer = event.pointer;
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_secondaryPointer != event.pointer ||
+        event.buttons & kSecondaryMouseButton == 0 ||
+        !_controller.hasClients) {
+      return;
+    }
+
+    final position = _controller.position;
+    final delta = position.axisDirection == AxisDirection.right
+        ? -event.delta.dx
+        : event.delta.dx;
+    final target = (_controller.offset + delta).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((target - _controller.offset).abs() >= 0.1) {
+      _controller.jumpTo(target);
+    }
+  }
+
+  void _finishSecondaryDrag(PointerEvent event) {
+    if (_secondaryPointer != event.pointer) return;
+    _secondaryPointer = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _snapToNearest();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget listView = widget.separatorBuilder != null
@@ -183,9 +221,16 @@ class _PagedRailState extends State<PagedRail> {
             itemBuilder: widget.itemBuilder,
           );
 
-    return NotificationListener<UserScrollNotification>(
-      onNotification: _onUserScroll,
-      child: listView,
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: _finishSecondaryDrag,
+      onPointerCancel: _finishSecondaryDrag,
+      child: NotificationListener<UserScrollNotification>(
+        onNotification: _onUserScroll,
+        child: listView,
+      ),
     );
   }
 }

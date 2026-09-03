@@ -187,9 +187,10 @@ void main() {
         debugDefaultTargetPlatformOverride = TargetPlatform.windows;
         try {
           final context = await _pumpContext(tester, size: size);
-          final expected = ResponsiveBreakpoints.desktopLandscapeColumnsFor(
-            size.width,
-          );
+          final expected =
+              ResponsiveBreakpoints.desktopLandscapeColumnsForViewport(
+                context,
+              );
           expect(
             expected,
             greaterThan(ResponsiveBreakpoints.desktopLandscapeAnimeColumns),
@@ -209,6 +210,33 @@ void main() {
             ResponsiveBreakpoints.animeGridCrossAxisCount(
               context,
               maxCrossAxisExtent: 240,
+            ),
+            expected,
+          );
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      });
+
+      testWidgets('all desktop catalogs use the search viewport reference', (
+        tester,
+      ) async {
+        const size = Size(1600, 900);
+        debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+        try {
+          final context = await _pumpContext(tester, size: size);
+          final expected = ResponsiveBreakpoints.desktopLandscapeColumnsFor(
+            size.width -
+                ResponsiveBreakpoints.desktopReferenceHorizontalPadding * 2,
+            spacing: ResponsiveBreakpoints.desktopReferenceSpacing,
+          );
+          expect(expected, 8);
+          expect(
+            ResponsiveBreakpoints.animeGridCrossAxisCount(
+              context,
+              maxCrossAxisExtent: 240,
+              crossAxisSpacing: 24,
+              horizontalPadding: 48,
             ),
             expected,
           );
