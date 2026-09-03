@@ -97,9 +97,34 @@ class MultimediaCardLayout {
   static double posterAspectRatio({required bool isPortrait}) =>
       isPortrait ? 2 / 3 : 16 / 9;
 
-  static double listHeight(double cardWidth, {required bool isPortrait}) {
-    return cardWidth / posterAspectRatio(isPortrait: isPortrait) +
-        captionHeight;
+  /// Height of an anime caption block when both title and subtitle are present.
+  /// This mirrors [_buildCaption] exactly so loading skeletons leave the same
+  /// amount of room as the final card instead of changing poster height on load.
+  static double animeCaptionExtent(BuildContext context) {
+    final effectiveCompact = context.isDesktopLandscape;
+    final isDesktop = context.isDesktop;
+    final titleSize = effectiveCompact ? 12.0 : (isDesktop ? 15.0 : 13.0);
+    final subtitleSize = effectiveCompact ? 10.0 : (isDesktop ? 12.0 : 11.0);
+    return 6 + (titleSize * 1.2) + 2 + (subtitleSize * 1.2);
+  }
+
+  /// Character cards only have the name line under the image.
+  static double characterCaptionExtent(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    final fontSize = style?.fontSize ?? 12.0;
+    return 6 + (fontSize * 1.15);
+  }
+
+  /// Horizontal home rails use the same total card aspect ratio as catalog
+  /// grids. This keeps the home card height identical to Search/View All for a
+  /// given width and prevents the home cards from looking shorter.
+  static double listHeight(
+    double cardWidth, {
+    required bool isPortrait,
+    bool isDesktop = false,
+  }) {
+    return cardWidth /
+        gridAspectRatio(isPortrait: isPortrait, isDesktop: isDesktop);
   }
 
   static double gridAspectRatio({
@@ -417,8 +442,8 @@ class MultimediaCard extends StatelessWidget {
               textAlign: TextAlign.left,
               style: titleTextStyle,
             ),
-            if (caption != null) ...[
-              const SizedBox(height: 2),
+            const SizedBox(height: 2),
+            if (caption != null)
               Text(
                 caption,
                 maxLines: 1,
@@ -426,8 +451,13 @@ class MultimediaCard extends StatelessWidget {
                 textDirection: TextDirection.ltr,
                 textAlign: TextAlign.left,
                 style: subtitleTextStyle,
+              )
+            else
+              SizedBox(
+                height:
+                    (subtitleTextStyle.fontSize ?? 11) *
+                    (subtitleTextStyle.height ?? 1.2),
               ),
-            ],
           ],
         ),
       ),

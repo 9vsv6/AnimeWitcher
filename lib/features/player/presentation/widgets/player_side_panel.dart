@@ -1,19 +1,27 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:collection/collection.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/history_repository.dart';
 import '../../../../core/storage/episode_watch_repository.dart';
 import '../../../../core/account/account_providers.dart';
+import '../../../../core/services/download_service.dart';
 
 import '../player_controller.dart';
 import '../../../details/presentation/details_controller.dart';
 import '../../../details/presentation/playback_launcher.dart';
+import '../../../details/presentation/download_launcher.dart';
+import '../../../details/presentation/downloaded_file_provider.dart';
+import '../../../details/presentation/widgets/download_management_dialog.dart';
+import '../../../details/presentation/widgets/download_progress_dialog.dart';
 import 'hotstar_player_style.dart';
 
 import 'package:animewitcher/core/utils/artwork_quality.dart';
@@ -23,6 +31,17 @@ import 'package:animewitcher/core/utils/episode_order.dart';
 const List<Shadow> _kGlassTextShadow = [
   Shadow(color: Colors.black54, offset: Offset(0, 1.5), blurRadius: 3.0),
 ];
+
+String _playerEpisodeDownloadTitle(MultimediaItem item, Episode episode) {
+  final label = formatEpisodeLabel(
+    episode: episode.episode,
+    isArabic: true,
+    title: episode.name,
+    isFinal: episode.isFinal,
+    serverName: episode.serverName,
+  );
+  return label.isEmpty ? item.title : '${item.title} - $label';
+}
 
 /// A reusable right-anchored drawer shell for the player.
 ///
@@ -382,6 +401,7 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
         final isWatched = episodeWatchRepo.isWatched(widget.item.url, ep);
         rows.add(
           _EpisodeRow(
+            parentItem: widget.item,
             episode: ep,
             isCurrent: isCurrent,
             isWatched: isWatched,
@@ -469,7 +489,8 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
 /// A single episode row: focusable (same accent border/glow cue, no scale),
 /// shows "S·E", the title, a slim progress bar, and a play marker for the
 /// episode that's currently active.
-class _EpisodeRow extends StatefulWidget {
+class _EpisodeRow extends ConsumerStatefulWidget {
+  final MultimediaItem parentItem;
   final Episode episode;
   final bool isCurrent;
   final bool isWatched;
@@ -479,6 +500,7 @@ class _EpisodeRow extends StatefulWidget {
   final VoidCallback onTap;
 
   const _EpisodeRow({
+    required this.parentItem,
     required this.episode,
     required this.isCurrent,
     required this.isWatched,
@@ -489,16 +511,146 @@ class _EpisodeRow extends StatefulWidget {
   });
 
   @override
-  State<_EpisodeRow> createState() => _EpisodeRowState();
+  ConsumerState<_EpisodeRow> createState() => _EpisodeRowState();
 }
 
-class _EpisodeRowState extends State<_EpisodeRow> {
+class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
   bool _focused = false;
   bool _hovered = false;
 
   @override
+  void initState() {
+    super.initState();
+    _queueDownloadedFileCheck();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EpisodeRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.episode.url != widget.episode.url ||
+        oldWidget.parentItem.url != widget.parentItem.url) {
+      _queueDownloadedFileCheck();
+    }
+  }
+
+  void _queueDownloadedFileCheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(activeDownloadsProvider).contains(widget.episode.url)) return;
+      ref
+          .read(downloadedFilesProvider.notifier)
+          .checkFile(widget.parentItem, episode: widget.episode);
+    });
+  }
+
+  Widget _buildDownloadAction(
+    BuildContext context, {
+    required File? downloadedFile,
+    required bool isDownloading,
+    required double downloadProgress,
+    required DownloadProgressData? progressData,
+    required VoidCallback onPressed,
+  }) {
+    if (downloadedFile != null) {
+      return IconButton(
+        icon: const Icon(
+          Icons.download_done_sharp,
+          color: Colors.green,
+          size: 32,
+        ),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        onPressed: onPressed,
+      );
+    }
+
+    if (isDownloading) {
+      return SizedBox(
+        width: 32,
+        height: 32,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: progressData?.status == TaskStatus.paused
+                ? Icon(
+                    Icons.pause_rounded,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  )
+                : Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        value: downloadProgress > 0 ? downloadProgress : null,
+                        strokeWidth: 2,
+                      ),
+                      Text(
+                        '${(downloadProgress * 100).toInt()}%',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      );
+    }
+
+    return IconButton(
+      icon: Icon(
+        Icons.file_download_outlined,
+        size: 32,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      onPressed: onPressed,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ep = widget.episode;
+    final activeDownloads = ref.watch(activeDownloadsProvider);
+    final isDownloading = activeDownloads.contains(ep.url);
+    final progressData = ref.watch(downloadProgressProvider)[ep.url];
+    final downloadProgress = progressData?.progress ?? 0.0;
+    final downloadedFile = ref.watch(downloadedFilesProvider)[ep.url];
+    ref.listen<bool>(
+      activeDownloadsProvider.select((active) => active.contains(ep.url)),
+      (previous, next) {
+        if (previous == true && !next) _queueDownloadedFileCheck();
+      },
+    );
+
+    void triggerDownload() {
+      if (downloadedFile != null) {
+        DownloadManagementDialog.show(
+          context,
+          widget.parentItem,
+          downloadedFile,
+          episode: ep,
+        );
+      } else if (isDownloading) {
+        DownloadProgressDialog.show(
+          context,
+          _playerEpisodeDownloadTitle(widget.parentItem, ep),
+          ep.url,
+        );
+      } else {
+        ref.read(downloadLauncherProvider).launch(
+          context,
+          widget.parentItem,
+          episodeUrl: ep.url,
+          episode: ep,
+        );
+      }
+    }
+
     final showHighlight = _focused || _hovered;
     final ring = _focused && widget.isTv;
     const accent = HotstarPlayerStyle.accent;
@@ -610,6 +762,20 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                           ),
                         ],
                       ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 40,
+                    child: ExcludeFocus(
+                      child: _buildDownloadAction(
+                        context,
+                        downloadedFile: downloadedFile,
+                        isDownloading: isDownloading,
+                        downloadProgress: downloadProgress,
+                        progressData: progressData,
+                        onPressed: triggerDownload,
+                      ),
                     ),
                   ),
                 ],
