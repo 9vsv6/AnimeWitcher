@@ -697,6 +697,17 @@ class StorageService {
         false;
   }
 
+  // --- Onboarding ---
+  Future<void> setWelcomeDialogSeen(bool seen) async {
+    await _settingsBox.put('welcome_dialog_seen', seen);
+  }
+
+  bool hasSeenWelcomeDialog() {
+    return (_settingsBox.get('welcome_dialog_seen', defaultValue: false)
+            as bool?) ??
+        false;
+  }
+
   // --- Integrations ---
   Future<void> setIntroDbIntegrationEnabled(bool enabled) async {
     await _settingsBox.put('introdb_integration_enabled', enabled);

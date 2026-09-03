@@ -30,6 +30,7 @@ import 'core/providers/device_info_provider.dart';
 import 'shared/widgets/loading_indicator.dart';
 import 'features/settings/presentation/general_settings_provider.dart';
 import 'core/account/account_providers.dart';
+import 'core/widgets/welcome_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -251,6 +252,7 @@ class _MyAppState extends ConsumerState<MyApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(downloadServiceProvider).init();
       _checkAppUpdates();
+      _maybeShowWelcomeDialog();
     });
   }
 
@@ -360,6 +362,17 @@ class _MyAppState extends ConsumerState<MyApp>
         debugPrint("[Lifecycle] App update trigger failed: $e");
       }
     }
+  }
+
+  Future<void> _maybeShowWelcomeDialog() async {
+    if (!mounted) return;
+    final navContext = ref
+        .read(appRouterProvider)
+        .routerDelegate
+        .navigatorKey
+        .currentContext;
+    if (navContext == null || !navContext.mounted) return;
+    await maybeShowWelcomeDialog(navContext, ref);
   }
 
   Future<void> _toggleFullscreen() async {
