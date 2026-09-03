@@ -88,16 +88,6 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
-# Copy Microsoft Visual C++ runtime libraries into the bundle so the application
-# can run on clean machines without VC++ Redistributable pre-installed.
-set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP FALSE)
-include(InstallRequiredSystemLibraries)
-if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
-  install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
-    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-    COMPONENT Runtime)
-endif()
-
 # Windows MPV override:
 # Prefer a custom Shinchiro winbuild libmpv when provided.
 # This is installed AFTER plugin bundled libraries so it replaces
