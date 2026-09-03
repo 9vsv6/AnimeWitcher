@@ -313,72 +313,6 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(state.overlayCurrentIndex(), 2)
   }
 
-  func testPersistDropsDuplicateTransferringIdsOfTheSameUrl() {
-    DownloadNativeWaitingQueue.resetForTests()
-    DownloadNativeWaitingQueue.persist(from: [
-      "maxConcurrent": 1,
-      "transferringTaskIds": ["uuid-a", "uuid-b"],
-      "pausedTaskIds": [],
-      "waiters": [],
-      "sessionTaskIds": ["uuid-a", "uuid-b"],
-      "sessionBatchTotal": 2,
-      "episodeIdentities": [
-        [
-          "taskId": "uuid-a",
-          "url": "https://cdn.test/ep8.mp4",
-          "filename": "الحلقة 8 (1080p).mp4",
-          "directory": "AnimeWitcher/Downloads/Grand Blue",
-          "trackingUrl": "https://show/ep8",
-        ],
-        [
-          "taskId": "uuid-b",
-          "url": "https://cdn.test/ep8.mp4",
-          "filename": "الحلقة 8 (1080p).mp4",
-          "directory": "AnimeWitcher/Downloads/Grand Blue",
-          "trackingUrl": "https://show/ep8",
-        ],
-      ],
-    ])
-    let state = DownloadNativeWaitingQueue.load()
-    XCTAssertEqual(state.transferringTaskIds, ["uuid-a"])
-    XCTAssertEqual(state.uniqueTransferringCount, 1)
-    XCTAssertEqual(state.overlayCurrentIndex(), 1)
-    XCTAssertEqual(state.sessionBatchTotal, 1)
-  }
-
-  func testPersistDropsWaiterWithSameUrlAsTransferringTask() {
-    DownloadNativeWaitingQueue.resetForTests()
-    DownloadNativeWaitingQueue.persist(from: [
-      "maxConcurrent": 1,
-      "transferringTaskIds": ["uuid-a"],
-      "pausedTaskIds": [],
-      "waiters": [[
-        "taskId": "uuid-b",
-        "taskJson": "{\"taskId\":\"uuid-b\",\"url\":\"https://cdn.test/ep8.mp4\",\"filename\":\"الحلقة 8 (1080p).mp4\",\"metaData\":\"https://show/ep8\"}",
-        "url": "https://cdn.test/ep8.mp4",
-        "filename": "الحلقة 8 (1080p).mp4",
-        "displayName": "الحلقة 8 (1080p).mp4",
-        "directory": "AnimeWitcher/Downloads/Grand Blue",
-        "httpRequestMethod": "GET",
-        "group": "downloads",
-      ]],
-      "sessionTaskIds": ["uuid-a", "uuid-b"],
-      "episodeIdentities": [
-        [
-          "taskId": "uuid-a",
-          "url": "https://cdn.test/ep8.mp4",
-          "filename": "الحلقة 8 (1080p).mp4",
-          "directory": "AnimeWitcher/Downloads/Grand Blue",
-          "trackingUrl": "https://show/ep8",
-        ],
-      ],
-    ])
-    let state = DownloadNativeWaitingQueue.load()
-    XCTAssertEqual(state.transferringTaskIds, ["uuid-a"])
-    XCTAssertTrue(state.waiters.isEmpty)
-    XCTAssertEqual(state.uniqueTransferringCount, 1)
-  }
-
   private func ep1Waiter() -> [String: Any] {
     [
       "taskId": "ep1",
@@ -420,4 +354,39 @@ class RunnerTests: XCTestCase {
       "group": "downloads",
     ]
   }
+
+  func testLogicalEpisodeKeyIgnoresTaskIdAndServerWhenTrackingMatches() {
+    let first = DownloadNativeWaitingQueue.episodeKey(
+      taskId: "uuid-a",
+      trackingUrl: "https://show.test/episode-9",
+      directory: "Anime/Show",
+      filename: "episode-9.mp4",
+      url: "https://server-a.test/video.mp4"
+    )
+    let second = DownloadNativeWaitingQueue.episodeKey(
+      taskId: "uuid-b",
+      trackingUrl: "https://show.test/episode-9",
+      directory: "Anime/Show",
+      filename: "episode-9.mp4",
+      url: "https://server-b.test/video.mp4"
+    )
+    XCTAssertEqual(first, second)
+  }
+
+  func testLogicalEpisodeKeyFallsBackToFileBeforeServerUrl() {
+    let first = DownloadNativeWaitingQueue.episodeKey(
+      taskId: "uuid-a",
+      directory: "Anime\\Show",
+      filename: "episode-9.mp4",
+      url: "https://server-a.test/video.mp4"
+    )
+    let second = DownloadNativeWaitingQueue.episodeKey(
+      taskId: "uuid-b",
+      directory: "Anime/Show",
+      filename: "episode-9.mp4",
+      url: "https://server-b.test/video.mp4"
+    )
+    XCTAssertEqual(first, second)
+  }
+
 }

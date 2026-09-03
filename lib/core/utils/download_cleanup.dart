@@ -6,7 +6,12 @@ import 'package:path/path.dart' as p;
 import '../domain/entity/multimedia_item.dart';
 
 /// Video extensions that count as remaining episode files.
-const Set<String> kDownloadVideoExtensions = {'.mp4', '.mkv', '.webm', '.avi'};
+const Set<String> kDownloadVideoExtensions = {
+  '.mp4',
+  '.mkv',
+  '.webm',
+  '.avi',
+};
 
 const String kAppDownloadsRootMarker = 'AnimeWitcher/Downloads';
 
@@ -32,20 +37,10 @@ String downloadIdentityKey(MultimediaItem item, Episode? episode) {
 
 /// Directory + filename as stored on the task, independent of Unicode form.
 String downloadTaskFileKey(Task task) {
-  return downloadTaskFileKeyFromParts(
-    directory: task.directory,
-    filename: task.filename,
-  );
-}
-
-String downloadTaskFileKeyFromParts({
-  required String directory,
-  required String filename,
-}) {
-  final dir = directory.replaceAll('\\', '/').trim();
-  final name = filename.trim();
-  if (name.isEmpty) return '';
-  return '$dir|$name';
+  final directory = task.directory.replaceAll('\\', '/').trim();
+  final filename = task.filename.trim();
+  if (filename.isEmpty) return '';
+  return '$directory|$filename';
 }
 
 bool metadataMatchesDownload({

@@ -118,7 +118,6 @@ class DownloadContinuedProcessingService {
     int sessionTransferredBytes = 0,
     double sessionSpeedBytesPerSecond = 0,
     int sessionCurrentIndex = 0,
-    List<Map<String, String>> episodeIdentities = const [],
   }) async {
     await _invoke('persistNativeQueue', <String, Object>{
       'maxConcurrent': maxConcurrent,
@@ -138,35 +137,7 @@ class DownloadContinuedProcessingService {
       'sessionTransferredBytes': sessionTransferredBytes,
       'sessionSpeedBytesPerSecond': sessionSpeedBytesPerSecond,
       'sessionCurrentIndex': sessionCurrentIndex,
-      'episodeIdentities': episodeIdentities,
     });
-  }
-
-  Future<List<LiveNativeDownload>> liveNativeIdentities() async {
-    if (!_isAvailable) return const [];
-    try {
-      final raw = await _channel.invokeMethod<dynamic>('liveNativeIdentities');
-      if (raw is! List) return const [];
-      final identities = <LiveNativeDownload>[];
-      for (final item in raw) {
-        if (item is! Map) continue;
-        final taskId = item['taskId'] as String? ?? '';
-        if (taskId.isEmpty) continue;
-        identities.add(
-          LiveNativeDownload(
-            taskId: taskId,
-            trackingUrl: item['trackingUrl'] as String? ?? '',
-            url: item['url'] as String? ?? '',
-            fileKey: item['fileKey'] as String? ?? '',
-          ),
-        );
-      }
-      return identities;
-    } on MissingPluginException {
-      return const [];
-    } catch (_) {
-      return const [];
-    }
   }
 
   Future<dynamic> _handleNativeCall(MethodCall call) async {

@@ -31,7 +31,7 @@ void main() {
     },
   );
 
-  test('never restarts when native resume data is unavailable', () async {
+  test('restarts when native resume data is unavailable', () async {
     var resumeCalls = 0;
     var restartCalls = 0;
 
@@ -47,12 +47,12 @@ void main() {
       },
     );
 
-    expect(result, isFalse);
+    expect(result, isTrue);
     expect(resumeCalls, 0);
-    expect(restartCalls, 0);
+    expect(restartCalls, 1);
   });
 
-  test('uses leftover bytes without ever restarting from zero', () async {
+  test('keeps leftover bytes before restarting from zero', () async {
     var partialCalls = 0;
     var restartCalls = 0;
 
@@ -74,7 +74,7 @@ void main() {
     expect(restartCalls, 0);
   });
 
-  test('never restarts when a native resume attempt is rejected', () async {
+  test('restarts when a native resume attempt is rejected', () async {
     var restartCalls = 0;
 
     final result = await resumeOrRestartDownload(
@@ -87,10 +87,10 @@ void main() {
     );
 
     expect(result, isFalse);
-    expect(restartCalls, 0);
+    expect(restartCalls, 1);
   });
 
-  test('never restarts when a native resume attempt throws', () async {
+  test('restarts when a native resume attempt throws', () async {
     var restartCalls = 0;
 
     final result = await resumeOrRestartDownload(
@@ -102,8 +102,8 @@ void main() {
       },
     );
 
-    expect(result, isFalse);
-    expect(restartCalls, 0);
+    expect(result, isTrue);
+    expect(restartCalls, 1);
   });
 
   test('does not restart from zero when saved progress exists', () async {
@@ -150,7 +150,7 @@ void main() {
     expect(keepLastKnownDownloadProgress(incoming: 0, lastKnown: 0), 0);
   });
 
-  test('never restarts when checking resumability throws for a stale task', () async {
+  test('restarts when checking resumability throws for a stale task', () async {
     var restartCalls = 0;
 
     final result = await resumeOrRestartDownload(
@@ -162,11 +162,11 @@ void main() {
       },
     );
 
-    expect(result, isFalse);
-    expect(restartCalls, 0);
+    expect(result, isTrue);
+    expect(restartCalls, 1);
   });
 
-  test('prefers native resume then leftover bytes without auto restart', () {
+  test('prefers native resume, then leftover bytes, then a full restart', () {
     expect(
       chooseDownloadResumeStrategy(
         canNativeResume: true,
@@ -212,7 +212,7 @@ void main() {
         existingPartialBytes: 0,
         expectedBytes: 100,
       ),
-      isFalse,
+      isTrue,
     );
     expect(
       shouldResumeFromPartialBytes(

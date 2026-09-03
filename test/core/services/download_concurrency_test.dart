@@ -564,86 +564,6 @@ void main() {
       );
     });
 
-    test('duplicate native tasks of one episode do not 2x/3x the overlay', () {
-      const episode = 'https://show/ep8';
-      final doubled = planDownloadOverlaySession(
-        entries: const [
-          DownloadOverlayEntry(
-            taskId: 'uuid-a',
-            status: TaskStatus.running,
-            displayName: 'الحلقة 8 (1080p).mp4',
-            progress: 1.2 / 470.2,
-            totalBytes: 470200000,
-            speedBytesPerSecond: 502040,
-            episodeKey: episode,
-          ),
-          DownloadOverlayEntry(
-            taskId: 'uuid-b',
-            status: TaskStatus.running,
-            displayName: 'الحلقة 8 (1080p).mp4',
-            progress: 1.3 / 470.2,
-            totalBytes: 470200000,
-            speedBytesPerSecond: 479000,
-            episodeKey: episode,
-          ),
-        ],
-      );
-      expect(doubled.runningCount, 1);
-      expect(doubled.batchTotal, 1);
-      expect(doubled.currentIndex, 1);
-      expect(doubled.totalBytes, 470200000);
-      expect(doubled.transferredBytes, lessThan(470200000));
-      expect(doubled.speedBytesPerSecond, 479000);
-      expect(
-        formatDownloadSessionSubtitle(
-          transferredBytes: doubled.transferredBytes,
-          totalBytes: doubled.totalBytes,
-          currentIndex: doubled.currentIndex,
-          batchTotal: doubled.batchTotal,
-          speedBytesPerSecond: doubled.speedBytesPerSecond,
-        ),
-        isNot(contains('2 of 2')),
-      );
-
-      const ep9 = 'https://show/ep9';
-      final tripled = planDownloadOverlaySession(
-        entries: const [
-          DownloadOverlayEntry(
-            taskId: 't1',
-            status: TaskStatus.running,
-            displayName: 'الحلقة 9 (1080p).mp4',
-            progress: 1.6 / 791.0,
-            totalBytes: 791000000,
-            speedBytesPerSecond: 603810,
-            episodeKey: ep9,
-          ),
-          DownloadOverlayEntry(
-            taskId: 't2',
-            status: TaskStatus.running,
-            displayName: 'الحلقة 9 (1080p).mp4',
-            progress: 1.6 / 791.0,
-            totalBytes: 791000000,
-            speedBytesPerSecond: 603810,
-            episodeKey: ep9,
-          ),
-          DownloadOverlayEntry(
-            taskId: 't3',
-            status: TaskStatus.running,
-            displayName: 'الحلقة 9 (1080p).mp4',
-            progress: 1.6 / 791.0,
-            totalBytes: 791000000,
-            speedBytesPerSecond: 603810,
-            episodeKey: ep9,
-          ),
-        ],
-      );
-      expect(tripled.runningCount, 1);
-      expect(tripled.batchTotal, 1);
-      expect(tripled.currentIndex, 1);
-      expect(tripled.totalBytes, 791000000);
-      expect(tripled.speedBytesPerSecond, 603810);
-    });
-
     test('new downloads append at the bottom of the FIFO', () {
       expect(appendDownloadQueueId(const ['ep1'], 'ep2'), ['ep1', 'ep2']);
       expect(appendDownloadQueueId(const ['ep1', 'ep2'], 'ep1'), [
@@ -1129,38 +1049,6 @@ void main() {
             ],
           ),
           isFalse,
-        );
-        expect(
-          shouldAttachToLiveNativeTask(
-            taskId: 'dart-new-uuid',
-            trackingUrl: 'https://show/ep8',
-            url: 'https://cdn.test/ep8.mp4',
-            fileKey: 'Show|الحلقة 8 (1080p).mp4',
-            live: const [
-              LiveNativeDownload(
-                taskId: 'native-old-uuid',
-                trackingUrl: 'https://show/ep8',
-                url: 'https://cdn.test/ep8.mp4',
-                fileKey: 'Show|الحلقة 8 (1080p).mp4',
-              ),
-            ],
-          ),
-          isTrue,
-        );
-        expect(
-          shouldAttachToLiveNativeTask(
-            taskId: 'other',
-            trackingUrl: '',
-            url: 'https://cdn.test/ep8.mp4',
-            live: const [
-              LiveNativeDownload(
-                taskId: 'native-ep8',
-                trackingUrl: 'https://show/ep8',
-                url: 'https://cdn.test/ep8.mp4',
-              ),
-            ],
-          ),
-          isTrue,
         );
         expect(progressMeansNativeTransfer(0), isFalse);
         expect(progressMeansNativeTransfer(0.01), isTrue);
