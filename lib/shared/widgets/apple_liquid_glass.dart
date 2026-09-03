@@ -1713,6 +1713,12 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
           height: height,
           child: UiKitView(
             viewType: _appleSearchGlassActionsViewType,
+            hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+            gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+              Factory<OneSequenceGestureRecognizer>(
+                () => EagerGestureRecognizer(),
+              ),
+            },
             layoutDirection: Directionality.of(context),
             creationParams: _state,
             creationParamsCodec: const StandardMessageCodec(),
