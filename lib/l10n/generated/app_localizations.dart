@@ -505,7 +505,7 @@ abstract class AppLocalizations {
   /// No description provided for @searchHint.
   ///
   /// In ar, this message translates to:
-  /// **'ابحث عن أفلام ومسلسلات...'**
+  /// **'ابحث عن الانمي'**
   String get searchHint;
 
   /// No description provided for @searchFavoriteContent.

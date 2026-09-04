@@ -33,6 +33,7 @@ class DetailsDesktopHero extends ConsumerWidget {
     required this.child,
     required this.onRefresh,
     this.onPosterTap,
+    this.heroActions,
     // Kept for backwards compatibility with callers that still pass it,
     // but it's no longer used now that [DetailsActionButtons] is removed
     // from the desktop layout.
@@ -64,6 +65,11 @@ class DetailsDesktopHero extends ConsumerWidget {
 
   /// Opens the fullscreen poster viewer at the largest available artwork.
   final VoidCallback? onPosterTap;
+
+  /// Actions for this anime, shown beneath its metadata. They used to sit in
+  /// the toolbar, where the window's own caption buttons are painted over the
+  /// same corner.
+  final Widget? heroActions;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -284,6 +290,10 @@ class DetailsDesktopHero extends ConsumerWidget {
                                   item: displayItem,
                                   isLoading: detailsState is AsyncLoading,
                                 ),
+                                if (heroActions != null) ...[
+                                  const SizedBox(height: 20),
+                                  heroActions!,
+                                ],
                               ],
                             ),
                           ),

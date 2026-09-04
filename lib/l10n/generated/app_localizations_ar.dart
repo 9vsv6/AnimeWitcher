@@ -221,7 +221,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get selectProvider => 'اختر المزود';
 
   @override
-  String get searchHint => 'ابحث عن أفلام ومسلسلات...';
+  String get searchHint => 'ابحث عن الانمي';
 
   @override
   String get searchFavoriteContent => 'ابحث عن محتواك المفضل';

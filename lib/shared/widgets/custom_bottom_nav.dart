@@ -120,10 +120,12 @@ class CustomBottomNavBar extends StatelessWidget {
                 : Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(height / 2),
+                      // Same hairline the home search bar carries, so the two
+                      // floating controls read as one family.
                       border: Border.all(
-                        color: isDark
-                            ? theme.dividerColor.withValues(alpha: 0.3)
-                            : colorScheme.outline.withValues(alpha: 0.15),
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.12,
+                        ),
                         width: 1,
                       ),
                       boxShadow: [
@@ -142,7 +144,12 @@ class CustomBottomNavBar extends StatelessWidget {
                         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                         child: Container(
                           height: height,
-                          color: colorScheme.surface.withValues(alpha: 0.8),
+                          // Matches the home search bar's fill. It sits over
+                          // artwork, so it leans on the blur behind it rather
+                          // than on being opaque.
+                          color: colorScheme.surfaceContainerHighest.withValues(
+                            alpha: 0.5,
+                          ),
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -198,10 +205,7 @@ class _NavTabCellState extends State<_NavTabCell> {
             decoration: _isFocused
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(26),
-                    border: Border.all(
-                      color: colorScheme.primary,
-                      width: 2,
-                    ),
+                    border: Border.all(color: colorScheme.primary, width: 2),
                     boxShadow: [
                       BoxShadow(
                         color: colorScheme.primary.withValues(alpha: 0.3),
@@ -237,11 +241,15 @@ class _NavTabCellState extends State<_NavTabCell> {
 
 const _appleNativeTabBarViewType = 'com.animewitcher.app/native_tab_bar';
 
-String _appleTabSymbol(TaskbarDestination destination, {required bool selected}) {
+String _appleTabSymbol(
+  TaskbarDestination destination, {
+  required bool selected,
+}) {
   return switch (destination) {
     TaskbarDestination.home => selected ? 'house.fill' : 'house',
     TaskbarDestination.search => 'magnifyingglass',
-    TaskbarDestination.library => selected ? 'rectangle.stack.fill' : 'rectangle.stack',
+    TaskbarDestination.library =>
+      selected ? 'rectangle.stack.fill' : 'rectangle.stack',
     TaskbarDestination.downloads =>
       selected ? 'arrow.down.circle.fill' : 'arrow.down.circle',
     TaskbarDestination.settings =>

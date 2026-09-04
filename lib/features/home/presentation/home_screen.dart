@@ -89,7 +89,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   /// Carousel controller exposed by HomeHeroCarousel via [onControllerReady].
   /// Used by DashboardHeaderBar arrows.
-  HeroCarouselController? _carouselController;
 
   @override
   bool get wantKeepAlive => true;
@@ -98,12 +97,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-  }
-
-  bool _isWidescreenForScroll() {
-    final profile = ref.read(deviceProfileProvider).asData?.value;
-    final isTv = profile?.isTv == true || context.isTv;
-    return isTv || profile?.isLargeScreen == true || context.isTabletOrLarger;
   }
 
   void _onScroll() {
@@ -117,18 +110,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _showBottomFade.value = showFade;
     }
 
-    // On widescreen there is no mobile AppBar that uses this fade value.
-    // Update any other scroll-driven UI (e.g. dashboard widgets) here.
-    if (_isWidescreenForScroll()) {
-      // Keep the AppBar fade pinned to 0 when there is no AppBar so that
-      // re-expanding the window back to mobile doesn't briefly show black.
-      if (_headerFadeOpacity.value != 0.0) {
-        _headerFadeOpacity.value = 0.0;
-      }
-      return;
-    }
-
-    // Drive the AppBar background fade-in. The AppBar sits over the hero
+    // Drive the header background fade-in. The header sits over the hero
     // carousel, so a short scroll transition (default 80px) is enough to
     // take it from fully transparent to solid black.
     final target = (currentScroll / _kHeaderFadeTriggerDistance).clamp(
@@ -168,8 +150,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         baseUrl + '/watch/' + Uri.encodeComponent(animeId),
       );
       if (!context.mounted) return;
-      DetailsRoute($extra: DetailsRouteExtra(item: details))
-          .push<void>(context);
+      DetailsRoute(
+        $extra: DetailsRouteExtra(item: details),
+      ).push<void>(context);
     } catch (_) {
       // The article remains usable even if its linked anime is unavailable.
     }
@@ -240,30 +223,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // no SliverPersistentHeader / pinned-header interaction with scroll
     // physics (which was causing scroll-direction-change jitter on iPad).
     if (isWidescreen) {
+      // The hero runs edge to edge behind the header, so the header floats on
+      // top of it rather than taking a row above it, and stays put while the
+      // page scrolls under it. It paints no backdrop of its own: a bar that
+      // filled in on scroll read as a black band across the top.
       return Scaffold(
-        extendBodyBehindAppBar: false,
+        extendBodyBehindAppBar: true,
         backgroundColor: Colors.transparent,
-        body: Column(
+        body: Stack(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: DashboardHeaderBar(
-                searchFocusNode: _firstActionFocusNode,
-                onShowSearch: () => _openSearchPage(focusKeyboard: true),
-                onPrevious: _carouselController != null
-                    ? () => _carouselController!.previousPage()
-                    : null,
-                onNext: _carouselController != null
-                    ? () => _carouselController!.nextPage()
-                    : null,
-              ),
-            ),
-            Expanded(
+            Positioned.fill(
               child: _buildBody(
                 context,
                 homeDataAsync,
                 continueWatching,
                 isWidescreen: true,
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: DashboardHeaderBar(
+                searchFocusNode: _firstActionFocusNode,
+                onShowSearch: () => _openSearchPage(focusKeyboard: true),
               ),
             ),
           ],
@@ -339,9 +322,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       arabic: 'بحث',
                                     ),
                                     icon: Icons.search_rounded,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                     onPressed: () =>
                                         _openSearchPage(focusKeyboard: true),
                                   ),
@@ -419,8 +402,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             limit: provider.viewAllPageSize,
           ),
           onTap: (item) {
-            DetailsRoute($extra: DetailsRouteExtra(item: item))
-                .push<void>(context);
+            DetailsRoute(
+              $extra: DetailsRouteExtra(item: item),
+            ).push<void>(context);
           },
           heroTagPrefix: 'home',
           forcePortrait: isLatestAddedSectionTitle(entry.key),
@@ -492,11 +476,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     movies: homeHeroMovies(data)!,
                     scrollController: _scrollController,
                     onNavigateUp: () => _firstActionFocusNode.requestFocus(),
-                    onControllerReady: (c) =>
-                        setState(() => _carouselController = c),
                     onTap: (item) {
-                      DetailsRoute($extra: DetailsRouteExtra(item: item))
-                          .push<void>(context);
+                      DetailsRoute(
+                        $extra: DetailsRouteExtra(item: item),
+                      ).push<void>(context);
                     },
                   ),
                 )
@@ -747,4 +730,3 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 }
-

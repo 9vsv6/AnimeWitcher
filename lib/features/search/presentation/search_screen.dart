@@ -457,11 +457,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
 
-            // Content layout in Column: Still header and Body directly below it
-            Positioned.fill(
+            // The results run to the top of the window and scroll under the
+            // controls, so the strip the controls sit on shows the artwork
+            // moving behind them rather than a band of background colour.
+            Positioned.fill(child: _buildBody(context, withFilterChips: true)),
+
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              // Nothing is painted behind the controls, so the results show
+              // through as they scroll past. The search field carries its own
+              // pill, which is what keeps it legible over the artwork.
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(height: 24),
+                  // Only the search field and its controls are pinned. The
+                  // chips for applied filters belong to the results and
+                  // scroll away with them.
                   SearchHeaderBar(
                     textController: _controller,
                     searchFocusNode: _focusNode,
@@ -494,17 +507,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           .read(searchSuggestionControllerProvider.notifier)
                           .onQueryChanged(val);
                     },
-                  ),
-                  _ActiveSearchFilterChips(
-                    filters: ref.watch(searchProviderFiltersProvider),
-                    onRemove: _removeSearchFilter,
-                  ),
-                  Expanded(
-                    child: Padding(
-                      // Fixed top padding below the top search bar (24px)
-                      padding: const EdgeInsets.only(top: 24.0),
-                      child: _buildBody(context),
-                    ),
                   ),
                 ],
               ),
@@ -723,7 +725,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildBody(BuildContext context) {
+  /// How far the floating search controls reach down the window. Content
+  /// starts below this and scrolls up under it.
+  static const double _floatingHeaderExtent = 56;
+
+  Widget _buildBody(BuildContext context, {bool withFilterChips = false}) {
     final state = ref.watch(searchPagedResultsProvider);
     final suggestionState = ref.watch(searchSuggestionControllerProvider);
     final typedLongEnough = suggestionState.query.trim().length >= 2;
@@ -731,43 +737,71 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         suggestionState.isLoading || suggestionState.suggestions.isNotEmpty;
     final showSuggestions = typedLongEnough && hasSuggestionContent;
 
+    // Only the results scroll, so every other state is simply held clear of
+    // the floating controls rather than passing under them.
+    final chips = withFilterChips
+        ? _ActiveSearchFilterChips(
+            filters: ref.watch(searchProviderFiltersProvider),
+            onRemove: _removeSearchFilter,
+          )
+        : const SizedBox.shrink();
+
+    Widget belowHeader(Widget child) => Padding(
+      padding: const EdgeInsets.only(top: _floatingHeaderExtent),
+      child: withFilterChips
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                chips,
+                Expanded(child: child),
+              ],
+            )
+          : child,
+    );
+
     if (showSuggestions) {
-      return _buildSuggestionsView(context, suggestionState);
+      return belowHeader(_buildSuggestionsView(context, suggestionState));
     }
 
     final allResults = state.results.expand((entry) => entry.results).toList();
     if (allResults.isEmpty && state.isLoading) {
-      return _buildLoadingIndicator(context);
+      return belowHeader(_buildLoadingIndicator(context));
     }
     if (allResults.isEmpty && state.errorMessage != null) {
-      return RecoverableNetworkState(
-        onRetry: _retrySearch,
-        onOpenDownloads: () => const DownloadsRoute().go(context),
+      return belowHeader(
+        RecoverableNetworkState(
+          onRetry: _retrySearch,
+          onOpenDownloads: () => const DownloadsRoute().go(context),
+        ),
       );
     }
     if (allResults.isEmpty) {
-      return _buildEmptyState(context);
+      return belowHeader(_buildEmptyState(context));
     }
 
     return RepaintBoundary(
       child: CatalogLtr(
         child: CustomScrollView(
-        controller: _resultsScrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          for (var index = 0; index < state.results.length; index++)
-            SearchResultSection(
-              key: ValueKey(state.results[index].providerId),
-              providerName: state.results[index].providerName,
-              providerId: state.results[index].providerId,
-              results: state.results[index].results,
-              isLoadingMore:
-                  state.isLoadingMore && index == state.results.length - 1,
-              firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
+          controller: _resultsScrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            const SliverToBoxAdapter(
+              child: SizedBox(height: _floatingHeaderExtent + 16),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
-      ),
+            if (withFilterChips) SliverToBoxAdapter(child: chips),
+            for (var index = 0; index < state.results.length; index++)
+              SearchResultSection(
+                key: ValueKey(state.results[index].providerId),
+                providerName: state.results[index].providerName,
+                providerId: state.results[index].providerId,
+                results: state.results[index].results,
+                isLoadingMore:
+                    state.isLoadingMore && index == state.results.length - 1,
+                firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
+        ),
       ),
     );
   }

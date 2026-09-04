@@ -16,6 +16,7 @@ import 'core/storage/storage_service.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'core/utils/app_utils.dart';
 import 'core/utils/artwork_host_fallback.dart';
+import 'core/utils/window_controls_visibility.dart';
 import 'core/utils/artwork_quality.dart';
 import 'core/utils/factory_reset.dart';
 import 'core/utils/localized_text.dart';
@@ -767,10 +768,8 @@ class CustomTitleBar extends StatefulWidget {
 }
 
 class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
-  bool _hovered = false;
   bool _isMaximized = false;
   bool _isFullScreen = false;
-  bool _isAlwaysOnTop = false;
 
   @override
   void initState() {
@@ -811,12 +810,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
     if (!mounted) return;
     final isMax = await windowManager.isMaximized();
     final isFull = await windowManager.isFullScreen();
-    final isAlways = await windowManager.isAlwaysOnTop();
     if (mounted) {
       setState(() {
         _isMaximized = isMax;
         _isFullScreen = isFull;
-        _isAlwaysOnTop = isAlways;
       });
     }
   }
@@ -826,235 +823,158 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final titleBarColor = isDark
-        ? const Color(0xE0050505)
-        : const Color(0xD8FAF8F5); // Transparent warm off-white (85% opacity)
+    // The controls sit directly on artwork now, so they carry their own
+    // contrast rather than relying on a bar behind them.
     final iconColor = isDark
-        ? Colors.white.withValues(alpha: 0.85)
+        ? Colors.white.withValues(alpha: 0.95)
         : const Color(0xFF5C5C5C); // High contrast text/icon color
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        height: _hovered ? (Platform.isMacOS ? 28 : 48) : 8,
-        curve: Curves.easeInOut,
-        decoration: BoxDecoration(
-          color: _hovered ? titleBarColor : Colors.transparent,
-          boxShadow: _hovered
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            if (_hovered)
-              Positioned(
-                left: Platform.isMacOS ? 80 : 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onPanStart: (_) {
-                    windowManager.startDragging();
-                  },
-                  onDoubleTap: () async {
-                    final isMax = await windowManager.isMaximized();
-                    if (isMax) {
-                      await windowManager.unmaximize();
-                    } else {
-                      await windowManager.maximize();
-                    }
-                  },
-                ),
-              ),
-            // Pin icon on the left (visible when neither maximized nor fullscreen)
-            if (_hovered && !_isFullScreen && !_isMaximized)
-              Positioned(
-                left: Platform.isMacOS ? 80 : 12,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: _PinButton(
-                    isActive: _isAlwaysOnTop,
-                    onPressed: () async {
-                      final nextState = !_isAlwaysOnTop;
-                      await windowManager.setAlwaysOnTop(nextState);
-                      await _updateStates();
-                    },
-                  ),
-                ),
-              ),
-            // Right-side window controls (minimize, maximize/restore, close).
-            // Fullscreen has no caption button: F11 toggles it.
-            if (!Platform.isMacOS)
-              Positioned(
-                right: 12,
-                top: 0,
-                bottom: 0,
-                child: AnimatedOpacity(
+    // The window controls sit on the artwork rather than in a bar of their
+    // own. The bar used to stay hidden until the pointer reached the top
+    // edge, so the only way to close the window was to go looking for the
+    // button. Nothing is painted behind them now, which also lets the hero
+    // artwork run to the very top of the window.
+    return SizedBox(
+      // Matches the dashboard header's height so the caption buttons sit on
+      // the same line as the search bar rather than above it.
+      height: 56,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: Platform.isMacOS ? 80 : 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onPanStart: (_) {
+                windowManager.startDragging();
+              },
+              onDoubleTap: () async {
+                final isMax = await windowManager.isMaximized();
+                if (isMax) {
+                  await windowManager.unmaximize();
+                } else {
+                  await windowManager.maximize();
+                }
+              },
+            ),
+          ),
+          // Right-side window controls (minimize, maximize/restore, close).
+          // Fullscreen has no caption button: F11 toggles it.
+          if (!Platform.isMacOS)
+            Positioned(
+              right: 12,
+              top: 0,
+              bottom: 0,
+              // Over a playing video the buttons follow the player's own
+              // controls out of view, so they stop sitting on the picture.
+              child: ValueListenableBuilder<bool>(
+                valueListenable: windowControlsHidden,
+                builder: (context, hidden, child) => AnimatedOpacity(
                   duration: const Duration(milliseconds: 150),
-                  opacity: _hovered ? 1.0 : 0.0,
-                  child: IgnorePointer(
-                    ignoring: !_hovered,
-                    child: Center(
-                      // The app runs RTL, which would mirror the caption
-                      // buttons and put close on the left. Window controls
-                      // follow the OS, not the content language.
-                      child: Directionality(
-                        textDirection: TextDirection.ltr,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!_isFullScreen) ...[
-                              // 2. Minimize
-                              _TitleBarButton(
-                                onPressed: () => windowManager.minimize(),
-                                child: Center(
-                                  child: Container(
-                                    width: 10,
-                                    height: 1,
-                                    color: iconColor,
-                                  ),
-                                ),
+                  opacity: hidden ? 0.0 : 1.0,
+                  child: IgnorePointer(ignoring: hidden, child: child),
+                ),
+                child: Center(
+                  // The app runs RTL, which would mirror the caption
+                  // buttons and put close on the left. Window controls
+                  // follow the OS, not the content language.
+                  child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!_isFullScreen) ...[
+                          // 2. Minimize
+                          _TitleBarButton(
+                            onPressed: () => windowManager.minimize(),
+                            child: Center(
+                              child: Container(
+                                width: 10,
+                                height: 1,
+                                color: iconColor,
                               ),
-                              const SizedBox(width: 6),
-                              // 3. Maximize / Restore
-                              _TitleBarButton(
-                                onPressed: () async {
-                                  if (_isMaximized) {
-                                    await windowManager.unmaximize();
-                                  } else {
-                                    await windowManager.maximize();
-                                  }
-                                  await _updateStates();
-                                },
-                                child: Center(
-                                  child: _isMaximized
-                                      ? SizedBox(
-                                          width: 12,
-                                          height: 12,
-                                          child: Stack(
-                                            children: [
-                                              Positioned(
-                                                right: 0,
-                                                top: 0,
-                                                child: Container(
-                                                  width: 8,
-                                                  height: 8,
-                                                  decoration: BoxDecoration(
-                                                    border: Border.all(
-                                                      color: iconColor,
-                                                      width: 1,
-                                                    ),
-                                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // 3. Maximize / Restore
+                          _TitleBarButton(
+                            onPressed: () async {
+                              if (_isMaximized) {
+                                await windowManager.unmaximize();
+                              } else {
+                                await windowManager.maximize();
+                              }
+                              await _updateStates();
+                            },
+                            child: Center(
+                              child: _isMaximized
+                                  ? SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: Stack(
+                                        children: [
+                                          Positioned(
+                                            right: 0,
+                                            top: 0,
+                                            child: Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                border: Border.all(
+                                                  color: iconColor,
+                                                  width: 1,
                                                 ),
                                               ),
-                                              Positioned(
-                                                left: 0,
-                                                bottom: 0,
-                                                child: Container(
-                                                  width: 8,
-                                                  height: 8,
-                                                  decoration: BoxDecoration(
-                                                    color: isDark
-                                                        ? const Color(
-                                                            0xFF050505,
-                                                          )
-                                                        : const Color(
-                                                            0xFFFAF8F5,
-                                                          ), // overlap box bg matches titlebar
-                                                    border: Border.all(
-                                                      color: iconColor,
-                                                      width: 1,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        )
-                                      : Container(
-                                          width: 10,
-                                          height: 10,
-                                          decoration: BoxDecoration(
-                                            border: Border.all(
-                                              color: iconColor,
-                                              width: 1,
                                             ),
                                           ),
+                                          Positioned(
+                                            left: 0,
+                                            bottom: 0,
+                                            child: Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? const Color(0xFF050505)
+                                                    : const Color(
+                                                        0xFFFAF8F5,
+                                                      ), // overlap box bg matches titlebar
+                                                border: Border.all(
+                                                  color: iconColor,
+                                                  width: 1,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: iconColor,
+                                          width: 1,
                                         ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              // 4. Close
-                              _CloseButton(
-                                onPressed: () => windowManager.close(),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // 4. Close
+                          _CloseButton(onPressed: () => windowManager.close()),
+                        ],
+                      ],
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PinButton extends StatefulWidget {
-  final bool isActive;
-  final VoidCallback onPressed;
-
-  const _PinButton({required this.isActive, required this.onPressed});
-
-  @override
-  State<_PinButton> createState() => _PinButtonState();
-}
-
-class _PinButtonState extends State<_PinButton> {
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final hoverColor = isDark
-        ? Colors.white.withValues(alpha: 0.15)
-        : const Color(
-            0xFFE4D9C8,
-          ); // Darker warm neutral tan hover background (#E4D9C8)
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: widget.onPressed,
-        borderRadius: BorderRadius.circular(6),
-        hoverColor: hoverColor,
-        splashColor: hoverColor.withValues(alpha: 0.2),
-        child: SizedBox(
-          width: 32,
-          height: Platform.isMacOS ? 28 : 32,
-          child: Icon(
-            widget.isActive ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-            color: widget.isActive
-                ? theme.colorScheme.primary
-                : (isDark
-                      ? Colors.white.withValues(alpha: 0.5)
-                      : const Color(0xFF5C5C5C).withValues(alpha: 0.6)),
-            size: 16,
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }

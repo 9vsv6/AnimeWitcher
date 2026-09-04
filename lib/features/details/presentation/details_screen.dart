@@ -14,6 +14,7 @@ import '../../characters/presentation/anime_characters_screen.dart';
 import '../../characters/presentation/character_details_screen.dart';
 import 'related_anime_screen.dart';
 import '../../comments/presentation/animewitcher_comments_screen.dart';
+import '../../../core/utils/window_controls_inset.dart';
 import '../../../core/utils/artwork_quality.dart';
 import '../../../core/utils/image_fallbacks.dart';
 import '../../../core/utils/resume_episode.dart';
@@ -1540,7 +1541,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           leading: appleUsesPersistentLiquidGlassHeader
               ? null
               : Padding(
-                  padding: const EdgeInsets.only(left: 8),
+                  padding: EdgeInsets.only(
+                    left: 8 + windowControlsLeadingInset,
+                  ),
                   child: AppleLiquidGlassBackButton(
                     size: 46,
                     onPressed: () => Navigator.of(context).maybePop(),
@@ -1550,7 +1553,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
               ? const <Widget>[]
               : [
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: EdgeInsets.only(
+                      right: 8 + windowControlsTrailingInset,
+                    ),
                     child: _buildDetailsHeaderActions(
                       context,
                       item,
@@ -1615,7 +1620,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             leading: appleUsesPersistentLiquidGlassHeader
                 ? null
                 : Padding(
-                    padding: const EdgeInsets.only(left: 8),
+                    padding: EdgeInsets.only(
+                      left: 8 + windowControlsLeadingInset,
+                    ),
                     child: AppleLiquidGlassBackButton(
                       size: 46,
                       foregroundColor: textColor,
@@ -1623,21 +1630,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                       onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ),
-            actions: appleUsesPersistentLiquidGlassHeader
-                ? const <Widget>[]
-                : [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _buildDetailsHeaderActions(
-                        context,
-                        item,
-                        isFavorite: isFavorite,
-                        libraryNotifier: libraryNotifier,
-                        foregroundColor: textColor,
-                        fallbackColor: isDark ? Colors.black45 : Colors.white54,
-                      ),
-                    ),
-                  ],
+            // The actions live under the anime's metadata instead, clear of
+            // the window's caption buttons.
+            actions: const <Widget>[],
           ),
         ),
       ),
@@ -1662,6 +1657,18 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     itemUrl: widget.item.url,
                     onRefresh: _refreshDetails,
                     onPosterTap: () => _showPosterViewer(context, item),
+                    heroActions: appleUsesPersistentLiquidGlassHeader
+                        ? null
+                        : _buildDetailsHeaderActions(
+                            context,
+                            item,
+                            isFavorite: isFavorite,
+                            libraryNotifier: libraryNotifier,
+                            foregroundColor: textColor,
+                            fallbackColor: isDark
+                                ? Colors.black45
+                                : Colors.white54,
+                          ),
                     child: _buildDesktopDetailsContentBelow(
                       context,
                       item,
@@ -2014,8 +2021,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     MultimediaItem item,
     AsyncValue<List<Episode>> episodesState,
   ) {
-    if (episodesState.hasValue &&
-        (episodesState.value?.isNotEmpty ?? false)) {
+    if (episodesState.hasValue && (episodesState.value?.isNotEmpty ?? false)) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

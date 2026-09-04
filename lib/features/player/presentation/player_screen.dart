@@ -17,6 +17,7 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/utils/window_controls_visibility.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../features/settings/presentation/player_settings_provider.dart';
 import 'widgets/animewitcher_player_controls.dart';
@@ -75,6 +76,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   // intercept in PopScope.
   final ValueNotifier<bool> _controlsVisible = ValueNotifier(false);
 
+  void _syncWindowControls() {
+    windowControlsHidden.value = !_controlsVisible.value;
+  }
+
   final GlobalKey<AnimeWitcherPlayerControlsState> _controlsKeyFinal = GlobalKey();
 
   // The persistent root key handler. It always stays focusable (it is the
@@ -105,6 +110,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     super.initState();
     MediaKit.ensureInitialized();
     WidgetsBinding.instance.addObserver(this);
+
+    // The window's caption buttons are painted over the video, so they follow
+    // the player's own controls in and out of view.
+    _controlsVisible.addListener(_syncWindowControls);
+    _syncWindowControls();
 
     final deviceProfile = ref.read(deviceProfileProvider).asData?.value;
     _isTv = deviceProfile?.isTv ?? false;
@@ -321,6 +331,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     _player.dispose();
     _videoViewController.dispose();
+    _controlsVisible.removeListener(_syncWindowControls);
+    windowControlsHidden.value = false;
     _controlsVisible.dispose();
     _videoFit.dispose();
     _rootFocusNode.dispose();
