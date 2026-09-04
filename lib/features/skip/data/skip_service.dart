@@ -4,11 +4,13 @@ abstract class SkipService {
 
   /// Fetch skip segments for a specific episode
   ///
-  /// The [tmdbId], [imdbId], or [anilistId] can be used depending on the service.
+  /// The [tmdbId], [imdbId], [anilistId], or [malId] can be used depending on
+  /// the service (AniSkip keys off MyAnimeList ids, IntroDB off IMDb, ...).
   Future<List<SkipSegment>> getSkipSegments({
     int? tmdbId,
     String? imdbId,
     int? anilistId,
+    int? malId,
     required int season,
     required int episode,
     int? duration,
@@ -73,6 +75,63 @@ class SkipSegment {
     }
     cleaned.sort((a, b) => a.startTime.compareTo(b.startTime));
     return cleaned;
+  }
+
+  /// Longest run a real opening/ending/recap takes. Anything past this is a
+  /// mislabelled chapter covering the body of the episode.
+  static const double _maxSegmentSec = 360;
+
+  /// An ending never starts in the first half of an episode. Guards against
+  /// a chapter called "credits" that actually marks an opening credit roll.
+  static const double _minOutroStartFraction = 0.5;
+
+  /// Combines several sources, best first: a segment is kept only when it
+  /// does not overlap one an earlier source already provided. That lets a
+  /// lower-priority source fill the gaps — chapters covering the episodes
+  /// nobody submitted to AniSkip — without ever contradicting a better one.
+  static List<SkipSegment> merge(
+    List<List<SkipSegment>> sourcesInPriority, {
+    double? durationSec,
+  }) {
+    final merged = <SkipSegment>[];
+    for (final source in sourcesInPriority) {
+      for (final segment in source) {
+        final overlaps = merged.any(
+          (existing) =>
+              segment.startTime < existing.endTime &&
+              segment.endTime > existing.startTime,
+        );
+        if (!overlaps) merged.add(segment);
+      }
+    }
+
+    final hasDuration = durationSec != null && durationSec > 0;
+    final minOutroStart = hasDuration
+        ? durationSec * _minOutroStartFraction
+        : 0.0;
+
+    final result = <SkipSegment>[];
+    for (final segment in merged) {
+      if (hasDuration && segment.startTime >= durationSec) continue;
+      final end = hasDuration && segment.endTime > durationSec
+          ? durationSec
+          : segment.endTime;
+      final length = end - segment.startTime;
+      if (length < 2 || length > _maxSegmentSec) continue;
+      if (segment.type == SkipType.outro && segment.startTime < minOutroStart) {
+        continue;
+      }
+      result.add(
+        SkipSegment(
+          startTime: segment.startTime,
+          endTime: end,
+          type: segment.type,
+        ),
+      );
+    }
+
+    result.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return result;
   }
 }
 

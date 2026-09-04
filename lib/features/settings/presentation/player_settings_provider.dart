@@ -57,6 +57,14 @@ class PlayerSettings {
   final bool showPlaybackSpeed;
   final bool showEpisodes;
 
+  /// Master switch for crowd-sourced intro/credits skip segments (AniSkip
+  /// and friends). When off, no lookup runs and no skip button appears.
+  final bool skipSegmentsEnabled;
+
+  /// Skip the opening/credits automatically instead of showing a button.
+  /// Only meaningful while [skipSegmentsEnabled] is on.
+  final bool autoSkipSegments;
+
   const PlayerSettings({
     this.seekDuration = 10,
     this.defaultResizeMode = 'Fit',
@@ -92,6 +100,8 @@ class PlayerSettings {
     this.showRotate = true,
     this.showPlaybackSpeed = true,
     this.showEpisodes = true,
+    this.skipSegmentsEnabled = true,
+    this.autoSkipSegments = false,
   });
 
   PlayerSettings copyWith({
@@ -130,6 +140,8 @@ class PlayerSettings {
     bool? showRotate,
     bool? showPlaybackSpeed,
     bool? showEpisodes,
+    bool? skipSegmentsEnabled,
+    bool? autoSkipSegments,
   }) {
     return PlayerSettings(
       seekDuration: seekDuration ?? this.seekDuration,
@@ -176,6 +188,8 @@ class PlayerSettings {
       showRotate: showRotate ?? this.showRotate,
       showPlaybackSpeed: showPlaybackSpeed ?? this.showPlaybackSpeed,
       showEpisodes: showEpisodes ?? this.showEpisodes,
+      skipSegmentsEnabled: skipSegmentsEnabled ?? this.skipSegmentsEnabled,
+      autoSkipSegments: autoSkipSegments ?? this.autoSkipSegments,
     );
   }
 }
@@ -341,6 +355,16 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
           defaultValue: true,
         ) ??
         true;
+    final skipSegmentsEnabled = storage.getPlayerSetting<bool>(
+          'player_skip_segments',
+          defaultValue: true,
+        ) ??
+        true;
+    final autoSkipSegments = storage.getPlayerSetting<bool>(
+          'player_auto_skip_segments',
+          defaultValue: false,
+        ) ??
+        false;
 
     return PlayerSettings(
       seekDuration: dur,
@@ -377,6 +401,8 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       showRotate: showRotate,
       showPlaybackSpeed: showPlaybackSpeed,
       showEpisodes: showEpisodes,
+      skipSegmentsEnabled: skipSegmentsEnabled,
+      autoSkipSegments: autoSkipSegments,
     );
   }
 
@@ -516,6 +542,16 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setShowEpisodes(bool val) async {
     await _repository.setPlayerSetting('player_show_episodes', val);
     state = AsyncData(state.requireValue.copyWith(showEpisodes: val));
+  }
+
+  Future<void> setSkipSegmentsEnabled(bool val) async {
+    await _repository.setPlayerSetting('player_skip_segments', val);
+    state = AsyncData(state.requireValue.copyWith(skipSegmentsEnabled: val));
+  }
+
+  Future<void> setAutoSkipSegments(bool val) async {
+    await _repository.setPlayerSetting('player_auto_skip_segments', val);
+    state = AsyncData(state.requireValue.copyWith(autoSkipSegments: val));
   }
 
   Future<void> setSubtitleSettings(

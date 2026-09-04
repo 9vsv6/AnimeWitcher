@@ -8,7 +8,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
-import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:file_picker/file_picker.dart';
@@ -34,7 +33,9 @@ import '../../settings/presentation/player_settings_provider.dart';
 import '../../../../core/services/local_proxy_service.dart';
 import '../../../../core/network/http_defaults.dart';
 import '../../skip/data/intro_db_service.dart';
-import '../../skip/data/anime_skip_service.dart';
+import '../../skip/data/aniskip_service.dart';
+import '../../skip/data/chapter_skip_source.dart';
+import '../../skip/data/mal_id_resolver.dart';
 import '../../skip/data/skip_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 import 'playback_recovery_policy.dart';
@@ -445,6 +446,10 @@ class PlayerController extends Notifier<PlayerState> {
   int? _pendingResumeSeekPosition;
   bool _isApplyingPendingResumeSeek = false;
   double _lastNonZeroVolumeLevel = 1.0;
+
+  /// MyAnimeList id for the anime being played, resolved from the catalog or
+  /// from the title. Needed to submit a viewer's marks back to AniSkip.
+  int? _resolvedMalId;
   final List<SubtitleFile> _userAddedExternalSubtitles = [];
   bool _hasConfirmedPlaybackFrame = false;
 
@@ -787,6 +792,38 @@ class PlayerController extends Notifier<PlayerState> {
     unawaited(_fetchAndLogSkipSegments());
   }
 
+  /// Episode length in seconds, or null while the media is still opening.
+  /// AniSkip uses it to scale crowd-sourced timestamps to this exact file.
+  int? _currentDurationSeconds() {
+    final dur = state.useExoPlayer
+        ? Duration(
+            milliseconds: _videoViewController?.mediaInfo.value?.duration ?? 0,
+          )
+        : _player.state.duration;
+    return dur > Duration.zero ? dur.inSeconds : null;
+  }
+
+  /// Skip segments are looked up as soon as playback starts, which is
+  /// usually before the engine reports a duration. Without a length AniSkip
+  /// hands back every submission it has for the episode — including entries
+  /// timed against other releases, which overlap each other. Waiting the
+  /// couple of seconds it takes for the duration to land gets the set that
+  /// actually matches this file.
+  Future<int?> _awaitDurationSeconds({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final immediate = _currentDurationSeconds();
+    if (immediate != null) return immediate;
+
+    final deadline = DateTime.now().add(timeout);
+    while (!_isDisposed && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      final value = _currentDurationSeconds();
+      if (value != null) return value;
+    }
+    return null;
+  }
+
   Future<void> _fetchAndLogSkipSegments() async {
     if (_episode == null) return;
     if (state.isLive || _item.contentType == MultimediaContentType.livestream) {
@@ -798,17 +835,39 @@ class PlayerController extends Notifier<PlayerState> {
       return;
     }
 
+    // A single master switch for the whole feature — AniSkip and the legacy
+    // sources all feed the same skip button, so one "off" means no lookups.
+    final skipEnabled = ref
+        .read(settingsRepositoryProvider)
+        .getPlayerSetting<bool>('player_skip_segments', defaultValue: true) ??
+        true;
+    if (!skipEnabled) {
+      if (kDebugMode) {
+        debugPrint('Skip Segments: Disabled in settings.');
+      }
+      return;
+    }
+
+    final malId = int.tryParse(
+      (_item.syncData?['malId'] ?? _item.syncData?['mal_id'] ?? '').trim(),
+    );
+
     final hasNoIds =
         state.tmdbId == null &&
         state.imdbId == null &&
+        malId == null &&
         _item.syncData?['anilist'] == null &&
         _item.syncData?['anilistId'] == null &&
         _item.syncData?['anilist_id'] == null;
 
-    if (hasNoIds) {
+    // A title alone is still workable: AniSkip is keyed by MyAnimeList id,
+    // and the title resolves to one through AniList. The catalog provider
+    // identifies most anime by title only, so bailing here would disable
+    // intro/credits skipping for nearly everything.
+    if (hasNoIds && _item.title.trim().isEmpty) {
       if (kDebugMode) {
         debugPrint(
-          'Skip Segments: Bypassed lookup (no TMDB/IMDB/AniList IDs available)',
+          'Skip Segments: Bypassed lookup (no IDs and no title available)',
         );
       }
       return;
@@ -816,16 +875,27 @@ class PlayerController extends Notifier<PlayerState> {
 
     if (kDebugMode) {
       debugPrint('=============================================');
-      debugPrint('SKIP SEGMENTS (IntroDB/AnimeSkip)');
+      debugPrint('SKIP SEGMENTS (AniSkip/IntroDB/chapters)');
+      debugPrint(
+        'ids: mal=$malId tmdb=${state.tmdbId} imdb=${state.imdbId} '
+        'anilist=${_item.syncData?['anilist'] ?? _item.syncData?['anilistId'] ?? _item.syncData?['anilist_id']}',
+      );
+      debugPrint('syncData keys: ${_item.syncData?.keys.toList()}');
     }
 
-    final List<SkipSegment> allSegments = [];
+    // Each source keeps its own list; they are merged by priority at the end
+    // so a lower-priority one can fill the episodes a better one has no data
+    // for, without ever contradicting it.
+    var introDbSegments = const <SkipSegment>[];
+    var aniSkipSegments = const <SkipSegment>[];
+    var chapterSegments = const <SkipSegment>[];
     final int season = _episode!.season > 0 ? _episode!.season : 1;
     final int episodeNum = _episode!.episode > 0 ? _episode!.episode : 1;
 
-    // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies)
-    final settingsRepo = ref.read(settingsRepositoryProvider);
-    if (settingsRepo.isIntroDbIntegrationEnabled()) {
+    // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies).
+    // Runs under the master toggle: its own legacy flag had no UI, so it
+    // could never be switched on.
+    if (state.tmdbId != null || state.imdbId != null) {
       try {
         final introDb = ref.read(introDbServiceProvider);
         final segments = await introDb.getSkipSegments(
@@ -835,31 +905,29 @@ class PlayerController extends Notifier<PlayerState> {
           episode: episodeNum,
         );
         if (_isDisposed) return;
-        if (segments.isNotEmpty) {
-          allSegments.addAll(segments);
-          if (kDebugMode) {
-            debugPrint('IntroDB returned ${segments.length} segments:');
-            for (final s in segments) {
-              debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
-            }
+        introDbSegments = segments;
+        if (kDebugMode) {
+          debugPrint('IntroDB returned ${segments.length} segments:');
+          for (final s in segments) {
+            debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
           }
-        } else {
-          if (kDebugMode) debugPrint('IntroDB returned 0 segments');
         }
       } catch (e) {
         if (kDebugMode) debugPrint('IntroDB error: $e');
       }
     } else {
       if (kDebugMode) {
-        debugPrint('IntroDB integration is disabled in settings.');
+        debugPrint('IntroDB: Bypassed lookup (no TMDB/IMDb id available)');
       }
     }
 
     if (_isDisposed) return;
 
-    // 2. Check if the media is anime or animated to run AnimeSkip logic
+    // 2. Check if the media is anime or animated to run AnimeSkip logic.
+    // A MyAnimeList id is itself proof of anime — MAL indexes nothing else.
     final isAnime =
         _item.contentType == MultimediaContentType.anime ||
+        malId != null ||
         _item.syncData?['anilist'] != null ||
         _item.syncData?['anilistId'] != null ||
         _item.syncData?['anilist_id'] != null ||
@@ -870,64 +938,144 @@ class PlayerController extends Notifier<PlayerState> {
             ));
 
     if (isAnime) {
-      if (settingsRepo.isAnimeSkipIntegrationEnabled()) {
+      // 2a. AniSkip (api.aniskip.com) — keyless and MAL-keyed, so it is the
+      // primary anime source. Its data is anime-specific, so it replaces
+      // whatever IntroDB returned for the same episode.
+      // The provider usually hands us a title and nothing else, so fall
+      // back to resolving the MyAnimeList id from it.
+      var resolvedMalId = malId;
+      // Kept for the neighbour estimate and for submitting marks later.
+      _resolvedMalId = resolvedMalId;
+      if (resolvedMalId == null && _item.title.trim().isNotEmpty) {
+        resolvedMalId = await ref
+            .read(malIdResolverProvider)
+            .resolve(_item.title);
+        if (_isDisposed) return;
+        if (kDebugMode) {
+          debugPrint(
+            'AniSkip: resolved MAL id $resolvedMalId from title '
+            '"${_item.title}"',
+          );
+        }
+      }
+
+      if (resolvedMalId != null) {
         try {
-          final anilistId =
-              _item.syncData?['anilist'] ??
-              _item.syncData?['anilistId'] ??
-              _item.syncData?['anilist_id'];
-
+          final durationSec = await _awaitDurationSeconds();
           if (_isDisposed) return;
-
-          if (anilistId != null) {
-            final animeSkip = ref.read(animeSkipServiceProvider);
-            final segments = await animeSkip.getSkipSegments(
-              anilistId: int.tryParse(anilistId.toString()),
-              season: season,
-              episode: episodeNum,
+          if (kDebugMode) {
+            debugPrint(
+              'AniSkip: querying mal=$resolvedMalId season=$season '
+              'episode=$episodeNum durationSec=$durationSec',
             );
-            if (_isDisposed) return;
-            if (segments.isNotEmpty) {
-              // AnimeSkip data is richer and more accurate for anime. Disregard IntroDB.
-              allSegments.clear();
-              allSegments.addAll(segments);
-              if (kDebugMode) {
-                debugPrint('AnimeSkip returned ${segments.length} segments:');
-                for (final s in segments) {
-                  debugPrint(
-                    '  - ${s.type.name}: ${s.startTime} -> ${s.endTime}',
-                  );
-                }
-              }
-            } else {
-              if (kDebugMode) debugPrint('AnimeSkip returned 0 segments');
+          }
+          final aniSkip = ref.read(aniSkipServiceProvider);
+          final segments = await aniSkip.getSkipSegments(
+            malId: resolvedMalId,
+            season: season,
+            episode: episodeNum,
+            duration: durationSec,
+          );
+          if (_isDisposed) return;
+          aniSkipSegments = segments;
+          if (kDebugMode) {
+            debugPrint('AniSkip returned ${segments.length} segments:');
+            for (final s in segments) {
+              debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
             }
           }
         } catch (e) {
-          if (kDebugMode) debugPrint('AnimeSkip error: $e');
+          if (kDebugMode) debugPrint('AniSkip error: $e');
         }
       } else {
         if (kDebugMode) {
-          debugPrint('AnimeSkip integration is disabled in settings.');
+          debugPrint(
+            'AniSkip: Bypassed lookup (no MyAnimeList id could be resolved)',
+          );
         }
       }
+
+      if (_isDisposed) return;
+
     } else {
       if (kDebugMode) {
-        debugPrint(
-          'AnimeSkip: Bypassed lookup (media type is not anime/animated)',
-        );
+        debugPrint('AniSkip: Bypassed lookup (media is not anime/animated)');
       }
     }
-    if (kDebugMode) debugPrint('=============================================');
+    // 3. The file's own chapter markers. Per-file data, so it covers the
+    // episodes no crowd-sourced service has, and it costs no network call.
+    final durationSec = await _awaitDurationSeconds();
+    if (_isDisposed) return;
+    try {
+      chapterSegments = await ChapterSkipSource.read(
+        _player,
+        durationSec: durationSec?.toDouble(),
+      );
+      if (_isDisposed) return;
+      if (kDebugMode) {
+        debugPrint('Chapters returned ${chapterSegments.length} segments:');
+        for (final s in chapterSegments) {
+          debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Chapters error: $e');
+    }
 
-    if (allSegments.isNotEmpty && !_isDisposed) {
-      // Sort segments by start time
-      allSegments.sort((a, b) => a.startTime.compareTo(b.startTime));
+    // 4. Nothing online had this episode: derive it from the episodes around
+    // it, and only when those agree closely (see estimateFromNeighbours).
+    var estimatedSegments = const <SkipSegment>[];
+    final needsEstimate =
+        aniSkipSegments.isEmpty &&
+        introDbSegments.isEmpty &&
+        chapterSegments.isEmpty;
+    final estimateMalId = _resolvedMalId;
+    if (needsEstimate && estimateMalId != null && durationSec != null) {
+      try {
+        estimatedSegments = await ref
+            .read(aniSkipServiceProvider)
+            .estimateFromNeighbours(
+              malId: estimateMalId,
+              episode: episodeNum,
+              episodeLength: durationSec,
+            );
+        if (_isDisposed) return;
+        if (kDebugMode) {
+          debugPrint(
+            'Neighbour estimate returned ${estimatedSegments.length} segments:',
+          );
+          for (final s in estimatedSegments) {
+            debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Neighbour estimate error: $e');
+      }
+    }
 
-      // Merge overlapping segments if needed, or simply assign them.
-      // Usually, IntroDB is highly accurate but AnimeSkip provides more detailed segments.
-      // For now, we'll store all of them, but UI might prioritize or filter duplicates.
-      state = state.copyWith(skipSegments: allSegments);
+    // Best source first. Anything overlapping a segment an earlier source
+    // already supplied is dropped, so the later ones only fill gaps.
+    // viewer's own marks outrank every database.
+    final merged = SkipSegment.merge(
+      <List<SkipSegment>>[
+        aniSkipSegments,
+        introDbSegments,
+        chapterSegments,
+        estimatedSegments,
+      ],
+      durationSec: durationSec?.toDouble(),
+    );
+
+    if (kDebugMode) {
+      debugPrint('Merged ${merged.length} skip segments:');
+      for (final s in merged) {
+        debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+      }
+      debugPrint('=============================================');
+    }
+
+    if (merged.isNotEmpty && !_isDisposed) {
+      state = state.copyWith(skipSegments: merged);
     }
   }
 
@@ -4276,29 +4424,12 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<double> _getSystemVolumeLevel() async {
-    try {
-      return ((await FlutterVolumeController.getVolume()) ?? 0.5).clamp(
-        0.0,
-        1.0,
-      );
-    } catch (_) {
-      return 0.5;
-    }
-  }
-
   double _getEngineVolumeLevel() {
     if (state.useExoPlayer && _videoViewController != null) {
       return _videoViewController!.volume.value.clamp(0.0, 1.0);
     }
 
     return (_player.state.volume / 100).clamp(0.0, 2.0);
-  }
-
-  Future<void> _setSystemVolumeLevel(double value) async {
-    try {
-      await FlutterVolumeController.setVolume(value.clamp(0.0, 1.0));
-    } catch (_) {}
   }
 
   Future<void> _setEngineVolumeLevel(double value) async {
@@ -4310,10 +4441,11 @@ class PlayerController extends Notifier<PlayerState> {
     await _player.setVolume((value * 100).clamp(0.0, 200.0));
   }
 
+  // Volume lives entirely in the player engine (mpv/ExoPlayer's own gain),
+  // never the OS output level — muting or turning volume down in-app must
+  // not touch system volume, which would affect every other app too.
   Future<double> getVolumeLevel() async {
-    final systemVolume = await _getSystemVolumeLevel();
-    final engineVolume = _getEngineVolumeLevel();
-    final value = engineVolume > 1.0 ? engineVolume : systemVolume;
+    final value = _getEngineVolumeLevel();
     if (value > 0) {
       _lastNonZeroVolumeLevel = value;
     }
@@ -4327,14 +4459,7 @@ class PlayerController extends Notifier<PlayerState> {
       _lastNonZeroVolumeLevel = target;
     }
 
-    if (target > 1.0 && state.supportsVolumeBoost) {
-      await _setSystemVolumeLevel(1.0);
-      await _setEngineVolumeLevel(target);
-      return target;
-    }
-
-    await _setEngineVolumeLevel(1.0);
-    await _setSystemVolumeLevel(target);
+    await _setEngineVolumeLevel(target);
     return target;
   }
 

@@ -19,6 +19,10 @@
 # VS Code
 .vscode/
 
+# Visual Studio (local cache written when the folder is opened in the IDE
+# for the MSVC toolchain the Windows build needs)
+.vs/
+
 # Flutter/Dart/Pub
 .dart_tool/
 .flutter-plugins

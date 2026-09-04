@@ -1955,29 +1955,32 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
             ];
 
             if (isWide) {
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // In RTL this first column is the right half. Keep the next
-                    // episode countdown directly above the anime information.
-                    Expanded(
-                      flex: 5,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: infoColumn,
-                      ),
+              // Keep the newer desktop details layout, but avoid intrinsic
+              // measurement here: descendants can contain LayoutBuilder, which
+              // throws in debug when measured by IntrinsicHeight.
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // In RTL this first column is the right half. Keep the next
+                  // episode countdown directly above the anime information.
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: infoColumn,
                     ),
-                    const SizedBox(width: 28),
-                    Expanded(
-                      flex: 6,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: synopsisColumn,
-                      ),
+                  ),
+                  const SizedBox(width: 28),
+                  Expanded(
+                    flex: 6,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: synopsisColumn,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
             }
 
