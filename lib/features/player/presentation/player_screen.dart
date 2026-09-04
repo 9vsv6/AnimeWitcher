@@ -597,6 +597,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   Future<void> _handleBack() async {
     if (!context.mounted) return;
 
+    // Silence the audio before leaving rather than relying on disposal to do
+    // it. Player.dispose() reaches its own stop() only after awaiting player
+    // and video-controller initialisation, all inside a lock — so a
+    // synchronous dispose() can start that and return, leaving the episode
+    // audible over whatever screen comes next.
+    try {
+      await _player.stop();
+    } catch (e) {
+      if (kDebugMode) debugPrint('PlayerScreen._handleBack stop: $e');
+    }
+    try {
+      // The native engine only carries live streams, but it is closed the
+      // same way rather than left to whatever teardown happens later.
+      _videoViewController.close();
+    } catch (e) {
+      if (kDebugMode) debugPrint('PlayerScreen._handleBack close: $e');
+    }
+
     if (!Platform.isAndroid && !Platform.isIOS) {
       try {
         await windowManager.setFullScreen(false);
