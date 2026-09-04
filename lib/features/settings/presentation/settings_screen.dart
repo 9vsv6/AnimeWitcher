@@ -413,12 +413,38 @@ class SettingsScreen extends ConsumerWidget {
                         .read(animeDataSourceSettingsProvider.notifier)
                         .setHighQualityPosters(value),
                   ),
-                  isLast: true,
                   onTap: () => ref
                       .read(animeDataSourceSettingsProvider.notifier)
                       .setHighQualityPosters(
                         !animeDataSettings.highQualityPosters,
                       ),
+                ),
+                SettingsTile(
+                  icon: Icons.image_search_rounded,
+                  title: appText(
+                    context,
+                    english: 'Find posters elsewhere',
+                    arabic: 'البحث عن البوسترات من مصدر آخر',
+                  ),
+                  subtitle: appText(
+                    context,
+                    english:
+                        'Turn on only if posters do not load: looks them up '
+                        'on AniList when the usual host is blocked',
+                    arabic:
+                        'فعّله فقط إذا كانت البوسترات لا تظهر: يبحث عنها في '
+                        'AniList عند حجب المصدر المعتاد',
+                  ),
+                  trailing: Switch(
+                    value: animeDataSettings.artworkFallback,
+                    onChanged: (value) => ref
+                        .read(animeDataSourceSettingsProvider.notifier)
+                        .setArtworkFallback(value),
+                  ),
+                  isLast: true,
+                  onTap: () => ref
+                      .read(animeDataSourceSettingsProvider.notifier)
+                      .setArtworkFallback(!animeDataSettings.artworkFallback),
                 ),
               ],
             ),

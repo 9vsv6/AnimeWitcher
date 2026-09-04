@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,8 +62,49 @@ class _FallbackPosterImageState extends ConsumerState<FallbackPosterImage> {
   @override
   void initState() {
     super.initState();
+    artworkFallbackEnabled.addListener(_onSwitchChanged);
+    malArtworkUnreachable.addListener(_onSwitchChanged);
     _adoptCachedFallback();
     _resolveWhenNothingToShow();
+  }
+
+  @override
+  void dispose() {
+    artworkFallbackEnabled.removeListener(_onSwitchChanged);
+    malArtworkUnreachable.removeListener(_onSwitchChanged);
+    super.dispose();
+  }
+
+  /// Turning the lookup on is how someone reacts to posters that are already
+  /// on screen and blank, so the cards they are looking at have to answer for
+  /// themselves rather than wait to be scrolled away and back.
+  void _onSwitchChanged() {
+    if (!mounted) return;
+    if (!artworkFallbackEnabled.value) {
+      // Back to the catalog's own artwork, and anything found while the
+      // lookup was on is dropped so the two states cannot be told apart.
+      if (_fallbackUrl == null && !_lookedUp) return;
+      setState(() {
+        _fallbackUrl = null;
+        _primaryFailed = false;
+        _lookedUp = false;
+      });
+      return;
+    }
+    if (_fallbackUrl != null) return;
+    _lookedUp = false;
+    _adoptCachedFallback();
+    if (_fallbackUrl != null) {
+      setState(() {});
+      return;
+    }
+    // A poster that already failed has nothing to wait for; one that has not
+    // is only worth replacing if it cannot load from here.
+    if (_primaryFailed) {
+      unawaited(_resolveFallback());
+    } else {
+      _resolveWhenNothingToShow();
+    }
   }
 
   @override
@@ -81,6 +124,7 @@ class _FallbackPosterImageState extends ConsumerState<FallbackPosterImage> {
   /// A title already resolved for another card is known synchronously, so its
   /// poster is used from the first frame instead of failing once more first.
   void _adoptCachedFallback() {
+    if (!artworkFallbackEnabled.value) return;
     final service = ref.read(artworkFallbackServiceProvider);
     final malId = widget.malId;
     final title = widget.title?.trim() ?? '';
@@ -102,7 +146,7 @@ class _FallbackPosterImageState extends ConsumerState<FallbackPosterImage> {
   /// known to be unreachable. Waiting for that request to time out is the
   /// difference between a poster appearing at once and appearing late.
   void _resolveWhenNothingToShow() {
-    if (_fallbackUrl != null) return;
+    if (!artworkFallbackEnabled.value || _fallbackUrl != null) return;
     final url = widget.imageUrl.trim();
     final doomed = url.isEmpty || (malArtworkUnreachable.value && isMalArtworkUrl(url));
     if (!doomed) return;
@@ -112,7 +156,7 @@ class _FallbackPosterImageState extends ConsumerState<FallbackPosterImage> {
   }
 
   Future<void> _resolveFallback() async {
-    if (_lookedUp) return;
+    if (!artworkFallbackEnabled.value || _lookedUp) return;
     final service = ref.read(artworkFallbackServiceProvider);
     final malId = widget.malId;
     final title = widget.title?.trim() ?? '';

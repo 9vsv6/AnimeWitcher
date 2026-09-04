@@ -17,6 +17,19 @@ import 'package:flutter/foundation.dart';
 /// [highQualityArtwork].
 final ValueNotifier<bool> malArtworkUnreachable = ValueNotifier<bool>(false);
 
+/// Whether to look for artwork outside the catalog at all.
+///
+/// Off by default: the catalog's own URLs are correct for most viewers, and
+/// only a viewer whose network blocks the artwork host needs anything else.
+/// While this is off nothing here probes, reorders or looks anything up, so
+/// artwork behaves exactly as it did before this existed.
+final ValueNotifier<bool> artworkFallbackEnabled = ValueNotifier<bool>(false);
+
+void applyArtworkFallbackEnabled(bool enabled) {
+  artworkFallbackEnabled.value = enabled;
+  if (!enabled) malArtworkUnreachable.value = false;
+}
+
 bool isMalArtworkUrl(String url) {
   if (url.isEmpty) return false;
   final host = Uri.tryParse(url)?.host.toLowerCase();
@@ -30,7 +43,9 @@ bool isMalArtworkUrl(String url) {
 /// decides between two reachable URLs.
 List<String> preferReachableArtwork(Iterable<String> candidates) {
   final values = candidates.where((c) => c.trim().isNotEmpty).toList();
-  if (!malArtworkUnreachable.value) return values;
+  if (!artworkFallbackEnabled.value || !malArtworkUnreachable.value) {
+    return values;
+  }
   final reachable = values.where((c) => !isMalArtworkUrl(c)).toList();
   final blocked = values.where(isMalArtworkUrl).toList();
   // Blocked URLs stay at the end rather than being dropped: they are better

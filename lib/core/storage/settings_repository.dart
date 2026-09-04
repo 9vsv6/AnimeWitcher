@@ -119,6 +119,11 @@ class SettingsRepository {
     return _storageService.isAlwaysOnTop();
   }
 
+  Future<void> setArtworkFallbackEnabled(bool enabled) =>
+      _storageService.setArtworkFallbackEnabled(enabled);
+
+  bool isArtworkFallbackEnabled() => _storageService.isArtworkFallbackEnabled();
+
   Future<void> setMalArtworkUnreachable(bool unreachable) =>
       _storageService.setMalArtworkUnreachable(unreachable);
 

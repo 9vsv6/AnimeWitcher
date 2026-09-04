@@ -181,9 +181,14 @@ class _AppRootState extends State<AppRoot> {
 
       // Artwork mostly lives on MyAnimeList's CDN, which some networks block.
       // Publish last run's answer immediately so the first screen already
-      // picks reachable artwork, then re-check in the background.
-      seedMalArtworkReachability(_storageService.isMalArtworkUnreachable());
-      unawaited(_refreshArtworkHostReachability());
+      // picks reachable artwork, then re-check in the background. Skipped
+      // entirely unless the viewer asked for it, so the default costs nothing.
+      final artworkFallback = _storageService.isArtworkFallbackEnabled();
+      applyArtworkFallbackEnabled(artworkFallback);
+      if (artworkFallback) {
+        seedMalArtworkReachability(_storageService.isMalArtworkUnreachable());
+        unawaited(_refreshArtworkHostReachability());
+      }
 
       if (Platform.isMacOS || Platform.isWindows) {
         final alwaysOnTop = _storageService.isAlwaysOnTop();
