@@ -460,7 +460,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             // The results run to the top of the window and scroll under the
             // controls, so the strip the controls sit on shows the artwork
             // moving behind them rather than a band of background colour.
-            Positioned.fill(child: _buildBody(context, withFilterChips: true)),
+            Positioned.fill(
+              child: _buildBody(
+                context,
+                withFilterChips: true,
+                topInset: _floatingHeaderExtent + 16,
+              ),
+            ),
 
             Positioned(
               top: 0,
@@ -535,7 +541,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       sortTooltip:
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
       filterTooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
-      tintColor: Theme.of(context).colorScheme.primary,
+      tintColor: Theme.of(context).colorScheme.onSurfaceVariant,
       height: 42,
       onFilterPressed: _showSearchFilters,
     );
@@ -690,8 +696,34 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final actionsSlotWidth =
         SearchActionButtons.groupWidthForHeight(actionHeight) + 10;
 
+    // The chips ride in the bar rather than below it, so they stay put while
+    // the results scroll under both.
+    final activeFilterCount = ref.watch(searchProviderFiltersProvider).count;
+    const chipsHeight = 44.0;
+    final barExtent =
+        MediaQuery.paddingOf(context).top +
+        kToolbarHeight +
+        (activeFilterCount > 0 ? chipsHeight : 0);
+
     final scaffold = Scaffold(
+      // Nothing is painted behind the bar: the results show through it as
+      // they scroll past, the way the desktop one behaves.
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        bottom: activeFilterCount == 0
+            ? null
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(chipsHeight),
+                child: _ActiveSearchFilterChips(
+                  filters: ref.watch(searchProviderFiltersProvider),
+                  onRemove: _removeSearchFilter,
+                ),
+              ),
         // Centred like the desktop bar rather than pushed against the
         // actions on one side.
         centerTitle: true,
@@ -721,15 +753,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           child: _buildMobileSearchField(context),
         ),
       ),
-      body: Column(
-        children: [
-          _ActiveSearchFilterChips(
-            filters: ref.watch(searchProviderFiltersProvider),
-            onRemove: _removeSearchFilter,
-          ),
-          Expanded(child: _buildBody(context)),
-        ],
-      ),
+      body: _buildBody(context, topInset: barExtent + 8),
     );
 
     // Keep the persistent glass chrome for back/system header only — search
@@ -746,7 +770,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// starts below this and scrolls up under it.
   static const double _floatingHeaderExtent = 56;
 
-  Widget _buildBody(BuildContext context, {bool withFilterChips = false}) {
+  Widget _buildBody(
+    BuildContext context, {
+    bool withFilterChips = false,
+    double topInset = 0,
+  }) {
     final state = ref.watch(searchPagedResultsProvider);
     final suggestionState = ref.watch(searchSuggestionControllerProvider);
     final typedLongEnough = suggestionState.query.trim().length >= 2;
@@ -764,7 +792,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         : const SizedBox.shrink();
 
     Widget belowHeader(Widget child) => Padding(
-      padding: const EdgeInsets.only(top: _floatingHeaderExtent),
+      padding: EdgeInsets.only(top: topInset),
       child: withFilterChips
           ? Column(
               mainAxisSize: MainAxisSize.min,
@@ -802,9 +830,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           controller: _resultsScrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            const SliverToBoxAdapter(
-              child: SizedBox(height: _floatingHeaderExtent + 16),
-            ),
+            SliverToBoxAdapter(child: SizedBox(height: topInset)),
             if (withFilterChips) SliverToBoxAdapter(child: chips),
             for (var index = 0; index < state.results.length; index++)
               SearchResultSection(

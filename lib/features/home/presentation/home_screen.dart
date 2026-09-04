@@ -25,7 +25,6 @@ import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/router/app_router.dart';
 
 import '../../../shared/widgets/cards_wrapper.dart';
-import '../../../shared/widgets/search_pill.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../shared/widgets/multimedia_card.dart';
@@ -283,20 +282,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             shadowColor: Colors.transparent,
             elevation: 0,
             scrolledUnderElevation: 0,
-            titleSpacing: LayoutConstants.spacingMd,
-            title: Focus(
-              focusNode: _firstActionFocusNode,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _openSearchPage(focusKeyboard: true),
-                child: SearchPill(
-                  onTap: () => _openSearchPage(focusKeyboard: true),
-                ),
-              ),
-            ),
+            // Just the magnifier, on the trailing edge. A full capsule here
+            // spent the whole width naming a screen the viewer is already on.
             actions: usePersistentGlass
                 ? const <Widget>[SizedBox(width: 58)]
-                : const <Widget>[SizedBox(width: LayoutConstants.spacingMd)],
+                : [
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: LayoutConstants.spacingSm,
+                      ),
+                      child: Focus(
+                        focusNode: _firstActionFocusNode,
+                        child: SizedBox.square(
+                          dimension: 42,
+                          child: AppleLiquidGlassToolbarButton(
+                            width: 42,
+                            tooltip: appText(
+                              context,
+                              english: 'Search',
+                              arabic: 'بحث',
+                            ),
+                            icon: Icons.search_rounded,
+                            color: Theme.of(context).colorScheme.onSurface,
+                            onPressed: () =>
+                                _openSearchPage(focusKeyboard: true),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
           ),
         ),
       ),
