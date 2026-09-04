@@ -106,39 +106,17 @@ jobs:
           }
           JSON_EOF
 
-      - name: Build Split APKs
-        run: flutter build apk --release --split-per-abi --dart-define-from-file=dart-defines.json
-
+      # One APK that installs on any device. The per-ABI splits only saved a
+      # download at the cost of making the reader pick their own CPU, and the
+      # debug build was never the one to hand anybody.
       - name: Build Universal APK
         run: flutter build apk --release --dart-define-from-file=dart-defines.json
 
-      - name: Build Debug APK
-        run: flutter build apk --debug --dart-define-from-file=dart-defines.json
-
-      - name: Rename APKs
+      - name: Rename APK
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           cd build/app/outputs/flutter-apk/
-          
-          # Universal Release
-          if [ -f "app-release.apk" ]; then
-            mv "app-release.apk" "../../../../animewitcher-android-universal-${VERSION}.apk"
-          fi
-          
-          # Universal Debug
-          if [ -f "app-debug.apk" ]; then
-            mv "app-debug.apk" "../../../../animewitcher-android-debug-${VERSION}.apk"
-          fi
-          
-          # Splits
-          for f in app-*-release.apk; do
-            if [ -f "$f" ]; then
-              # Extract ABI: app-<abi>-release.apk -> <abi>
-              abi="${f#app-}"
-              abi="${abi%-release.apk}"
-              mv "$f" "../../../../animewitcher-android-${abi}-${VERSION}.apk"
-            fi
-          done
+          mv "app-release.apk" "../../../../animewitcher-android-universal-${VERSION}.apk"
 
       - name: Upload Release Assets
         uses: ncipollo/release-action@v1

@@ -77,13 +77,13 @@ jobs:
           }
           JSON_EOF
 
-      - name: Build Split APKs
-        run: flutter build apk --release --split-per-abi --dart-define-from-file=dart-defines.json
+      - name: Build Universal APK
+        run: flutter build apk --release --dart-define-from-file=dart-defines.json
 
-      - name: Upload APKs
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apks
+          name: android-apk
           path: build/app/outputs/flutter-apk/*.apk
           retention-days: 7
 
