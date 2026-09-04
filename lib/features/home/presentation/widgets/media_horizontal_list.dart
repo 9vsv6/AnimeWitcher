@@ -129,11 +129,16 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     super.dispose();
   }
 
-  void _scrollBy(double delta) {
+  void _scrollPhysical({required bool right, required double amount}) {
     if (!_scrollController.hasClients) return;
-    final target = (_scrollController.offset + delta).clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
+    final position = _scrollController.position;
+    final increasesTowardRight = position.axisDirection == AxisDirection.right;
+    final increaseOffset = right == increasesTowardRight;
+    final target = (_scrollController.offset +
+            (increaseOffset ? amount : -amount))
+        .clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
     );
     _scrollController.animateTo(
       target,
@@ -167,6 +172,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     final double listHeight = MultimediaCardLayout.listHeight(
       cardWidth,
       isPortrait: isPortrait,
+      isDesktop: isDesktop,
     );
 
     return Directionality(
@@ -180,15 +186,21 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                 ? <Widget>[
                     const SizedBox(width: 8),
                     _HeaderArrowButton(
-                      icon: Icons.arrow_back_ios_new,
+                      icon: Icons.chevron_right,
                       // Stride-aligned (one card per click) so the rail's
                       // snap logic doesn't re-animate after an arrow click.
-                      onTap: () => _scrollBy(cardWidth + spacing),
+                      onTap: () => _scrollPhysical(
+                        right: true,
+                        amount: cardWidth + spacing,
+                      ),
                     ),
                     const SizedBox(width: 4),
                     _HeaderArrowButton(
-                      icon: Icons.arrow_forward_ios,
-                      onTap: () => _scrollBy(-(cardWidth + spacing)),
+                      icon: Icons.chevron_left,
+                      onTap: () => _scrollPhysical(
+                        right: false,
+                        amount: cardWidth + spacing,
+                      ),
                     ),
                   ]
                 : null,

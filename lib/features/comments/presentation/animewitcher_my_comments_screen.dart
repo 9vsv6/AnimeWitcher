@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
@@ -527,7 +528,7 @@ class _AnimeWitcherMyCommentsScreenState
       );
     }
     if (_comments.isEmpty) {
-      return RefreshIndicator(
+      return SecondaryMouseRefreshIndicator(
         onRefresh: _loadInitial,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -550,7 +551,7 @@ class _AnimeWitcherMyCommentsScreenState
       );
     }
 
-    return RefreshIndicator(
+    return SecondaryMouseRefreshIndicator(
       onRefresh: _loadInitial,
       child: ListView.separated(
         controller: _scrollController,
@@ -981,3 +982,4 @@ class _MyCommentsError extends StatelessWidget {
     );
   }
 }
+

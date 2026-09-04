@@ -109,6 +109,48 @@ Future<void> _pumpRtlDetailsPager(
 }
 
 void main() {
+  testWidgets('desktop switcher mounts only the active heavy tab', (
+    tester,
+  ) async {
+    var detailsBuilds = 0;
+    var episodeBuilds = 0;
+
+    Widget buildSwitcher(int selectedIndex) {
+      return MaterialApp(
+        home: DetailsDesktopTabSwitcher(
+          selectedIndex: selectedIndex,
+          transition: const AlwaysStoppedAnimation<double>(1),
+          slideFrom: Offset.zero,
+          detailsBuilder: (_) {
+            detailsBuilds++;
+            return const Text('desktop-details-body');
+          },
+          episodesBuilder: (_) {
+            episodeBuilds++;
+            return const Text('desktop-episodes-body');
+          },
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildSwitcher(0));
+
+    expect(find.text('desktop-details-body'), findsOneWidget);
+    expect(find.text('desktop-episodes-body'), findsNothing);
+    expect(find.byType(TabBarView), findsNothing);
+    expect(detailsBuilds, 1);
+    expect(episodeBuilds, 0);
+
+    await tester.pumpWidget(buildSwitcher(1));
+    await tester.pump();
+
+    expect(find.text('desktop-details-body'), findsNothing);
+    expect(find.text('desktop-episodes-body'), findsOneWidget);
+    expect(find.byType(TabBarView), findsNothing);
+    expect(detailsBuilds, 1);
+    expect(episodeBuilds, 1);
+  });
+
   test('extra-tabs swipe is ignored only while the details tab is showing', () {
     expect(
       ignoreDetailsEpisodesSwipe(

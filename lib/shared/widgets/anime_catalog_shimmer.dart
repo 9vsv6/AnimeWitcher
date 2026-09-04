@@ -7,25 +7,33 @@ import 'shimmer_placeholder.dart';
 
 /// Skeleton poster matching home-page card loading.
 class AnimePosterShimmer extends StatelessWidget {
-  const AnimePosterShimmer({super.key, this.isPortrait = true});
+  const AnimePosterShimmer({
+    super.key,
+    this.isPortrait = true,
+    this.characterCaptionSpace = false,
+  });
 
   final bool isPortrait;
+  final bool characterCaptionSpace;
 
   @override
   Widget build(BuildContext context) {
-    // Match home loading exactly: only the artwork rectangle shimmers. The
-    // rest of the grid tile remains empty for the caption that will appear
-    // after loading, so the placeholder never stretches into a giant card.
-    return Align(
-      alignment: Alignment.topCenter,
-      child: AspectRatio(
-        aspectRatio: MultimediaCardLayout.posterAspectRatio(
-          isPortrait: isPortrait,
+    // A real catalog card receives a bounded grid-cell height and lets its
+    // poster expand into all space left above the caption. Mirror that exact
+    // structure here so replacing the skeleton never changes poster/card size.
+    final captionExtent = characterCaptionSpace
+        ? MultimediaCardLayout.characterCaptionExtent(context)
+        : MultimediaCardLayout.animeCaptionExtent(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: ShimmerPlaceholder.rectangular(
+            borderRadius: MultimediaCardLayout.posterRadius,
+          ),
         ),
-        child: ShimmerPlaceholder.rectangular(
-          borderRadius: MultimediaCardLayout.posterRadius,
-        ),
-      ),
+        SizedBox(height: captionExtent),
+      ],
     );
   }
 }
@@ -91,6 +99,7 @@ class AnimeCatalogShimmer extends StatelessWidget {
         itemCount: count,
         itemBuilder: (context, index) => AnimePosterShimmer(
           key: ValueKey('anime-catalog-shimmer-$index'),
+          characterCaptionSpace: characterCaptionSpace,
         ),
       ),
     );

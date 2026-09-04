@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
@@ -443,19 +444,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     if (targetTab == _detailsTabController.index) return;
     _loadEpisodesIfNeeded(targetTab);
     _detailsTabController.animateTo(targetTab);
-  }
-
-  Widget _buildTabTransition({required Widget child}) {
-    return FadeTransition(
-      opacity: _tabTransitionAnimation,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: _tabSlideFrom,
-          end: Offset.zero,
-        ).animate(_tabTransitionAnimation),
-        child: child,
-      ),
-    );
   }
 
   bool _isPointerInExtraTabs(Offset globalPosition) {
@@ -1122,7 +1110,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 controller: _detailsTabController,
                 children: [
                   _KeepAliveDetailsTab(
-                    child: RefreshIndicator(
+                    child: SecondaryMouseRefreshIndicator(
                       onRefresh: _refreshDetails,
                       child: CustomScrollView(
                         key: const PageStorageKey<String>('details-info-tab'),
@@ -1142,7 +1130,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     ),
                   ),
                   _KeepAliveDetailsTab(
-                    child: RefreshIndicator(
+                    child: SecondaryMouseRefreshIndicator(
                       onRefresh: _refreshDetails,
                       child: CustomScrollView(
                         key: const PageStorageKey<String>(
@@ -1613,7 +1601,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       bottomNavigationBar: selectedEpisodeCount == 0 || _selectedDetailsTab != 1
           ? null
           : _buildEpisodeSelectionBar(context, selectedEpisodeCount),
-      extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: false,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: Directionality(
@@ -1653,29 +1641,60 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
           ),
         ),
       ),
-      body: _buildDetailsTabSwipeRegion(
-        enabled: true,
-        child: DetailsDesktopHero(
-          displayItem: item,
-          baseItem: widget.item,
-          details: item,
-          detailsState: detailsState,
-          isMovie: isMovie,
-          itemUrl: widget.item.url,
-          onRefresh: _refreshDetails,
-          onPosterTap: () => _showPosterViewer(context, item),
-          child: _buildDesktopContentBelow(
-            context,
-            item,
-            detailsState,
-            episodesState,
-            castState,
-            trailersState,
-            relatedState,
-            recommendationsState,
-            l10n,
+      body: Column(
+        children: [
+          _buildDetailsPageTabs(context, episodesState),
+          Expanded(
+            child: _buildDetailsTabSwipeRegion(
+              enabled: true,
+              child: Directionality(
+                textDirection: _detailsTabsTextDirection(context),
+                child: DetailsDesktopTabSwitcher(
+                  selectedIndex: _selectedDetailsTab,
+                  transition: _tabTransitionAnimation,
+                  slideFrom: _tabSlideFrom,
+                  detailsBuilder: (context) => DetailsDesktopHero(
+                    displayItem: item,
+                    baseItem: widget.item,
+                    details: item,
+                    detailsState: detailsState,
+                    isMovie: isMovie,
+                    itemUrl: widget.item.url,
+                    onRefresh: _refreshDetails,
+                    onPosterTap: () => _showPosterViewer(context, item),
+                    child: _buildDesktopDetailsContentBelow(
+                      context,
+                      item,
+                      detailsState,
+                      castState,
+                      trailersState,
+                      relatedState,
+                      recommendationsState,
+                      l10n,
+                    ),
+                  ),
+                  episodesBuilder: (context) {
+                    return SecondaryMouseRefreshIndicator(
+                      onRefresh: _refreshDetails,
+                      child: SingleChildScrollView(
+                        key: const PageStorageKey<String>(
+                          'desktop-details-episodes-tab',
+                        ),
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(60, 24, 60, 100),
+                        child: _buildDesktopEpisodesContent(
+                          context,
+                          item,
+                          episodesState,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1883,146 +1902,138 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     );
   }
 
-  /// Content rendered below the desktop hero.
-  Widget _buildDesktopContentBelow(
+  /// Details-only content rendered below the desktop hero. The poster, title,
+  /// metadata and every non-episode section stay inside the Details tab, just
+  /// like the handset layout.
+  Widget _buildDesktopDetailsContentBelow(
     BuildContext context,
     MultimediaItem item,
     AsyncValue<MultimediaItem?> detailsState,
-    AsyncValue<List<Episode>> episodesState,
     AsyncValue<List<Actor>> castState,
     AsyncValue<List<Trailer>> trailersState,
     AsyncValue<List<MultimediaItem>> relatedState,
     AsyncValue<List<MultimediaItem>> recommendationsState,
     AppLocalizations l10n,
   ) {
-    final tabContent = _selectedDetailsTab == 0
-        ? detailsState.hasError
-              ? <Widget>[
-                  SizedBox(
-                    height: 360,
-                    width: double.infinity,
-                    child: Center(
-                      child: _DetailsLoadFailure(
-                        onRetry: _refreshDetails,
-                        title: appText(
-                          context,
-                          english: 'Unable to load this anime',
-                          arabic: 'تعذر تحميل بيانات الأنمي',
-                        ),
-                        message: _detailsRecoveryMessage(context),
-                      ),
-                    ),
-                  ),
-                ]
-              : <Widget>[
-                  // Wide screens have plenty of horizontal room, so place
-                  // anime info on the LEFT and the synopsis/genres block on
-                  // the RIGHT side-by-side. Narrow layouts still stack
-                  // naturally because the side-by-side block falls back to
-                  // vertical orientation when [maxWidth] < 900.
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isWide = constraints.maxWidth >= 900;
-                      final infoColumn = [AnimeInformationSection(item: item)];
-                      final synopsisColumn = [
-                        DetailsCountdownAndStory(
-                          item: item,
-                          showCountdown: false,
-                          storyCard: _buildSynopsisAndGenres(
-                            context,
-                            item,
-                            l10n,
-                          ),
-                        ),
-                      ];
-
-                      if (isWide) {
-                        // No IntrinsicHeight here: the columns are aligned to
-                        // the start rather than stretched, so it changed
-                        // nothing visually while making the row measure its
-                        // subtree intrinsically — which throws in debug as
-                        // soon as any descendant uses a LayoutBuilder.
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // LEFT: anime information table.
-                            Expanded(
-                              flex: 5,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: infoColumn,
-                              ),
-                            ),
-                            const SizedBox(width: 28),
-                            // RIGHT: synopsis + genres card.
-                            Expanded(
-                              flex: 6,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: synopsisColumn,
-                              ),
-                            ),
-                          ],
-                        );
-                      }
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ...synopsisColumn,
-                          const SizedBox(height: 28),
-                          ...infoColumn,
-                        ],
-                      );
-                    },
-                  ),
-                  ..._buildTrailerSections(context, item, trailersState),
-                  const SizedBox(height: 24),
-                  _buildDetailsExtraTabs(
-                    context,
-                    item,
-                    castState,
-                    relatedState,
-                    recommendationsState,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ]
-        : <Widget>[
-            if (episodesState.hasValue &&
-                (episodesState.value?.isNotEmpty ?? false)) ...[
-              DetailsSeasonListWrapper(itemUrl: widget.item.url),
-              const SizedBox(height: 16),
-              DetailsDesktopEpisodeColumn(
-                parentItem: item,
-                itemUrl: widget.item.url,
-                isMovie: false,
-              ),
-            ] else
-              SizedBox(
-                height: 280,
-                width: double.infinity,
-                child: Center(
-                  child: _episodeLoadStatus(context, episodesState),
-                ),
-              ),
-          ];
+    if (detailsState.hasError) {
+      return SizedBox(
+        height: 360,
+        width: double.infinity,
+        child: Center(
+          child: _DetailsLoadFailure(
+            onRetry: _refreshDetails,
+            title: appText(
+              context,
+              english: 'Unable to load this anime',
+              arabic: 'تعذر تحميل بيانات الأنمي',
+            ),
+            message: _detailsRecoveryMessage(context),
+          ),
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildDetailsPageTabs(context, episodesState),
-        const SizedBox(height: 20),
-        _buildTabTransition(
-          child: Column(
-            key: ValueKey<int>(_selectedDetailsTab),
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: tabContent,
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 900;
+            final infoColumn = <Widget>[
+              if (item.nextAiring != null) ...[
+                NextAiringWidget(nextAiring: item.nextAiring!),
+                const SizedBox(height: 20),
+              ],
+              AnimeInformationSection(item: item),
+            ];
+            final synopsisColumn = <Widget>[
+              DetailsCountdownAndStory(
+                item: item,
+                showCountdown: false,
+                storyCard: _buildSynopsisAndGenres(context, item, l10n),
+              ),
+            ];
+
+            if (isWide) {
+              // Keep the newer desktop details layout, but avoid intrinsic
+              // measurement here: descendants can contain LayoutBuilder, which
+              // throws in debug when measured by IntrinsicHeight.
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // In RTL this first column is the right half. Keep the next
+                  // episode countdown directly above the anime information.
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: infoColumn,
+                    ),
+                  ),
+                  const SizedBox(width: 28),
+                  Expanded(
+                    flex: 6,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: synopsisColumn,
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...infoColumn,
+                const SizedBox(height: 28),
+                ...synopsisColumn,
+              ],
+            );
+          },
+        ),
+        ..._buildTrailerSections(context, item, trailersState),
+        const SizedBox(height: 24),
+        _buildDetailsExtraTabs(
+          context,
+          item,
+          castState,
+          relatedState,
+          recommendationsState,
+          contentPadding: EdgeInsets.zero,
         ),
         const SizedBox(height: 100),
       ],
+    );
+  }
+
+  Widget _buildDesktopEpisodesContent(
+    BuildContext context,
+    MultimediaItem item,
+    AsyncValue<List<Episode>> episodesState,
+  ) {
+    if (episodesState.hasValue &&
+        (episodesState.value?.isNotEmpty ?? false)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DetailsSeasonListWrapper(itemUrl: widget.item.url),
+          const SizedBox(height: 16),
+          DetailsDesktopEpisodeColumn(
+            parentItem: item,
+            itemUrl: widget.item.url,
+            isMovie: false,
+          ),
+        ],
+      );
+    }
+
+    return SizedBox(
+      height: 280,
+      width: double.infinity,
+      child: Center(child: _episodeLoadStatus(context, episodesState)),
     );
   }
 

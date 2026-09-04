@@ -45,7 +45,7 @@ void main() {
     );
   });
 
-  testWidgets('catalog loading shimmers only the 2:3 poster area', (
+  testWidgets('catalog skeleton poster matches the final bounded card size', (
     tester,
   ) async {
     await _pumpCatalog(tester);
@@ -61,16 +61,20 @@ void main() {
             MultimediaCardLayout.handsetPortraitGridHorizontalPadding * 2 -
             MultimediaCardLayout.handsetPortraitGridCrossAxisSpacing * 2) /
         MultimediaCardLayout.handsetPortraitGridColumns;
+    final context = tester.element(find.byType(AnimeCatalogShimmer));
+    final expectedCaption = MultimediaCardLayout.animeCaptionExtent(context);
+    const expectedCellHeight =
+        expectedWidth / MultimediaCardLayout.portraitGridAspectRatio;
 
     expect(first.width, closeTo(expectedWidth, 0.5));
-    expect(first.height / first.width, closeTo(1.5, 0.02));
+    expect(first.height, closeTo(expectedCellHeight - expectedCaption, 0.75));
 
     final rowStride = fourth.top - first.top;
     final reservedCaptionSpace =
         rowStride -
         first.height -
         MultimediaCardLayout.handsetPortraitGridMainAxisSpacing;
-    expect(reservedCaptionSpace, greaterThan(30));
+    expect(reservedCaptionSpace, closeTo(expectedCaption, 0.75));
   });
 
   testWidgets('character loading keeps a smaller empty caption area', (
@@ -97,8 +101,16 @@ void main() {
         characterFirst.height -
         MultimediaCardLayout.handsetPortraitGridMainAxisSpacing;
 
-    expect(characterFirst.size, equals(animeFirst.size));
-    expect(characterReserved, greaterThan(0));
+    final context = tester.element(find.byType(AnimeCatalogShimmer));
+    expect(
+      animeReserved,
+      closeTo(MultimediaCardLayout.animeCaptionExtent(context), 0.75),
+    );
+    expect(
+      characterReserved,
+      closeTo(MultimediaCardLayout.characterCaptionExtent(context), 0.75),
+    );
+    expect(characterFirst.width, closeTo(animeFirst.width, 0.5));
     expect(characterReserved, lessThan(animeReserved));
   });
 }

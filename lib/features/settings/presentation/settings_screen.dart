@@ -30,6 +30,8 @@ class SettingsScreen extends ConsumerWidget {
     final isTv = profile?.isTv == true || context.isTv;
     final isWidescreen = isTv || context.isTabletOrLarger;
     final canPop = Navigator.of(context).canPop();
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final showFlutterBack = !appleUsesPersistentLiquidGlassHeader && canPop;
 
     if (isWidescreen) {
       return Scaffold(
@@ -45,21 +47,25 @@ class SettingsScreen extends ConsumerWidget {
                   horizontal: LayoutConstants.dashboardContentPadding,
                 ),
                 alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    if (canPop) ...[
-                      BackButton(
-                        onPressed: () => Navigator.of(context).maybePop(),
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Row(
+                    children: [
+                      if (canPop) ...[
+                        AppleLiquidGlassBackButton(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        AppLocalizations.of(context)!.settings,
+                        textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      const SizedBox(width: 8),
                     ],
-                    Text(
-                      AppLocalizations.of(context)!.settings,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -74,20 +80,22 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        leading: showFlutterBack && !isRtl
+            ? const AppleLiquidGlassBackButton()
+            : null,
         title: ApplePersistentGlassHeaderScope(
           enabled: canPop,
           onBack: () => Navigator.of(context).maybePop(),
           child: Text(l10n.settings),
         ),
-        actions: appleUsesPersistentLiquidGlassHeader
-            ? const <Widget>[]
-            : [
-                if (canPop)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 8),
-                    child: AppleLiquidGlassBackButton(),
-                  ),
-              ],
+        actions: showFlutterBack && isRtl
+            ? const <Widget>[
+                Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: AppleLiquidGlassBackButton(),
+                ),
+              ]
+            : const <Widget>[],
       ),
       body: _buildSettingsList(context, ref, isTv),
     );

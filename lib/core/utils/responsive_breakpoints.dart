@@ -36,6 +36,15 @@ class ResponsiveBreakpoints {
   static const int desktopAnimeMinColumns = 4;
   static const int desktopAnimeMaxColumns = 24;
 
+  /// Layout reference used by the search results grid on wide screens.
+  ///
+  /// Every catalog and horizontal rail resolves its desktop column count
+  /// from this same viewport budget. Individual pages may still use different
+  /// outer padding or gaps, but they no longer disagree about whether the
+  /// current window should show seven or eight cards.
+  static const double desktopReferenceHorizontalPadding = 16;
+  static const double desktopReferenceSpacing = 12;
+
   /// Number of poster columns to use for [availableWidth] on a wide layout.
   ///
   /// [availableWidth] is the width already free of outer padding, and
@@ -70,6 +79,14 @@ class ResponsiveBreakpoints {
       }
     }
     return bestColumns;
+  }
+
+  static int desktopLandscapeColumnsForViewport(BuildContext context) {
+    return desktopLandscapeColumnsFor(
+      MediaQuery.sizeOf(context).width -
+          (desktopReferenceHorizontalPadding * 2),
+      spacing: desktopReferenceSpacing,
+    );
   }
 
   static bool isHandset(BuildContext context) {
@@ -135,7 +152,7 @@ class ResponsiveBreakpoints {
         MediaQuery.sizeOf(context).width - (horizontalPadding * 2);
     if (innerWidth <= 0) return desktopAnimeCardIdealWidth;
 
-    final columns = desktopLandscapeColumnsFor(innerWidth, spacing: spacing);
+    final columns = desktopLandscapeColumnsForViewport(context);
     final trackWidth = (innerWidth - spacing * (columns - 1)) / columns;
     return trackWidth.clamp(72.0, double.infinity).toDouble();
   }
@@ -156,7 +173,7 @@ class ResponsiveBreakpoints {
     final innerWidth =
         MediaQuery.sizeOf(context).width - (horizontalPadding * 2);
     if (isDesktopLandscape(context)) {
-      return desktopLandscapeColumnsFor(innerWidth, spacing: crossAxisSpacing);
+      return desktopLandscapeColumnsForViewport(context);
     }
     if (isHandsetLandscape(context)) return handsetLandscapeAnimeColumns;
     if (isHandset(context) && handsetPortraitCrossAxisCount != null) {
@@ -185,10 +202,7 @@ class ResponsiveBreakpoints {
     final resolvedCrossSpacing = animeGridSpacing(context, crossAxisSpacing);
     final resolvedMainSpacing = animeGridSpacing(context, mainAxisSpacing);
     final fixedCount = isDesktopLandscape(context)
-        ? desktopLandscapeColumnsFor(
-            MediaQuery.sizeOf(context).width - (horizontalPadding * 2),
-            spacing: crossAxisSpacing,
-          )
+        ? desktopLandscapeColumnsForViewport(context)
         : isHandsetLandscape(context)
         ? handsetLandscapeAnimeColumns
         : (isHandset(context) ? handsetPortraitCrossAxisCount : null);

@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -14,12 +15,12 @@ import 'package:animewitcher/core/services/notification_service.dart';
 
 /// Immersive desktop/TV hero for non-TMDB details.
 ///
-/// Layout: full-page banner-as-background extends across the entire
-/// details page (including the episodes / cast / recommendations
-/// sections), with title sitting above the poster-on-left row. Play /
+/// Layout: full-page banner-as-background for the Details tab, with the
+/// title and metadata sitting beside the poster like the handset header.
+/// Play /
 /// Resume action is intentionally omitted on desktop; on wide screens
-/// playback is driven from the episode grid below, matching the mobile
-/// app pattern. [child] renders below the hero section.
+/// playback is driven from the Episodes tab, matching the mobile app
+/// pattern. [child] renders the rest of the Details tab below the hero row.
 class DetailsDesktopHero extends ConsumerWidget {
   const DetailsDesktopHero({
     super.key,
@@ -189,56 +190,17 @@ class DetailsDesktopHero extends ConsumerWidget {
 
         // ── Layer 4: Scrollable content ──
         Positioned.fill(
-          child: RefreshIndicator(
+          child: SecondaryMouseRefreshIndicator(
             onRefresh: onRefresh,
             child: SingleChildScrollView(
+              key: const PageStorageKey<String>('desktop-details-info-tab'),
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 60),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Title block: sits ABOVE the poster row, aligned start so
-                  //    it visually clears the banner backdrop instead of
-                  //    hugging the poster. Title mirrors the mobile header
-                  //    where the logo sits on the banner before the poster
-                  //    overlaps the content below.
-                  Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onLongPress: () => _copyAnimeTitle(context),
-                      child: displayItem.logoUrl != null
-                          ? ArtworkDecode(
-                              paintedWidth: 400,
-                              builder:
-                                  (
-                                    BuildContext context,
-                                    int? decodeWidth,
-                                  ) => CachedNetworkImage(
-                                    imageUrl: displayItem.logoUrl!,
-                                    height: 200,
-                                    alignment: Alignment.centerLeft,
-                                    fit: BoxFit.contain,
-                                    memCacheWidth: decodeWidth,
-                                    placeholder: (_, _) =>
-                                        _buildTitle(textColor),
-                                    errorWidget: (_, _, _) =>
-                                        _buildTitle(textColor),
-                                  ),
-                            )
-                          : _buildTitle(textColor),
-                    ),
-                  ),
-
-                  if (displayItem.nextAiring != null) ...[
-                    const SizedBox(height: 20),
-                    NextAiringWidget(nextAiring: displayItem.nextAiring!),
-                  ],
-
-                  const SizedBox(height: 36),
-
                   // ── Poster on LEFT (mobile-style fixed-left anchor) +
-                  //    metadata + next-airing column to the right of it.
+                  //    compact title and metadata to the right of it.
                   //    Play/Resume ("آخر حلقة") action is intentionally
                   //    omitted on desktop per the desktop layout pass — the
                   //    user's media flow on wide screens is driven from
@@ -285,9 +247,42 @@ class DetailsDesktopHero extends ConsumerWidget {
                           const SizedBox(width: 32),
                         ],
                         Expanded(
-                          child: MetadataBar(
-                            item: displayItem,
-                            isLoading: detailsState is AsyncLoading,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onLongPress: () => _copyAnimeTitle(context),
+                                  child: displayItem.logoUrl != null
+                                      ? ArtworkDecode(
+                                          paintedWidth: 320,
+                                          builder:
+                                              (
+                                                BuildContext context,
+                                                int? decodeWidth,
+                                              ) => CachedNetworkImage(
+                                                imageUrl: displayItem.logoUrl!,
+                                                height: 88,
+                                                alignment: Alignment.centerLeft,
+                                                fit: BoxFit.contain,
+                                                memCacheWidth: decodeWidth,
+                                                placeholder: (_, _) =>
+                                                    _buildTitle(textColor),
+                                                errorWidget: (_, _, _) =>
+                                                    _buildTitle(textColor),
+                                              ),
+                                        )
+                                      : _buildTitle(textColor),
+                                ),
+                                const SizedBox(height: 18),
+                                MetadataBar(
+                                  item: displayItem,
+                                  isLoading: detailsState is AsyncLoading,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -323,11 +318,13 @@ class DetailsDesktopHero extends ConsumerWidget {
   Widget _buildTitle(Color textColor) {
     return Text(
       displayItem.title,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: textColor,
-        fontSize: 56,
+        fontSize: 36,
         fontWeight: FontWeight.bold,
-        height: 1.1,
+        height: 1.12,
       ),
     );
   }

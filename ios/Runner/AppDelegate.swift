@@ -1279,6 +1279,16 @@ private final class AnimeWitcherPassthroughToolbar: UIToolbar {
   private static let horizontalHitSlop: CGFloat = 22
   private static let verticalHitSlop: CGFloat = 10
 
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    // Liquid Glass can render the trailing capsule outside UIToolbar's private
+    // control bounds. Let the toolbar participate in hit testing across that
+    // visible overflow; [hitTest] below still rejects transparent empty space.
+    bounds.insetBy(
+      dx: -Self.horizontalHitSlop,
+      dy: -Self.verticalHitSlop
+    ).contains(point)
+  }
+
   private func descendantControls(in view: UIView) -> [UIControl] {
     view.subviews.flatMap { subview -> [UIControl] in
       let control = subview as? UIControl
@@ -1869,8 +1879,34 @@ private final class AppleSearchGlassActionsViewFactory: NSObject, FlutterPlatfor
   }
 }
 
+private final class AppleSearchActionsHitView: UIView {
+  weak var sortButton: UIControl?
+  weak var filterButton: UIControl?
+
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    if let hit = super.hitTest(point, with: event), hit !== self {
+      return hit
+    }
+    guard bounds.contains(point) else { return nil }
+
+    // UIKit can draw iOS 26 Liquid Glass outside the private UIButton content
+    // frame. Treat each half of the platform view as the hit target for its
+    // visible action so taps on the filter glass never land in an inert gap.
+    let target = point.x >= bounds.midX ? filterButton : sortButton
+    guard let target,
+          !target.isHidden,
+          target.alpha > 0.01,
+          target.isUserInteractionEnabled,
+          target.isEnabled else {
+      return nil
+    }
+    let localPoint = target.convert(point, from: self)
+    return target.hitTest(localPoint, with: event) ?? target
+  }
+}
+
 private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatformView {
-  private let rootView: UIView
+  private let rootView: AppleSearchActionsHitView
   private let channel: FlutterMethodChannel
   private let sortButton = UIButton(type: .system)
   private let filterButton = UIButton(type: .system)
@@ -1884,7 +1920,7 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
     messenger: FlutterBinaryMessenger,
     arguments args: Any?
   ) {
-    rootView = UIView(frame: frame)
+    rootView = AppleSearchActionsHitView(frame: frame)
     channel = FlutterMethodChannel(
       name: "com.animewitcher.app/search_glass_actions/\(viewId)",
       binaryMessenger: messenger
@@ -1893,6 +1929,8 @@ private final class AppleSearchGlassActionsPlatformView: NSObject, FlutterPlatfo
 
     rootView.backgroundColor = .clear
     rootView.isOpaque = false
+    rootView.sortButton = sortButton
+    rootView.filterButton = filterButton
     configureControls(arguments: args)
 
     channel.setMethodCallHandler { [weak self] call, result in

@@ -65,8 +65,11 @@ class _DesktopScrollWrapperState extends ConsumerState<DesktopScrollWrapper> {
     if (!widget.controller.hasClients) return;
 
     final position = widget.controller.position;
-    final showLeft = position.pixels > 0;
-    final showRight = position.pixels < position.maxScrollExtent;
+    final canDecrease = position.pixels > position.minScrollExtent;
+    final canIncrease = position.pixels < position.maxScrollExtent;
+    final increasesTowardRight = position.axisDirection == AxisDirection.right;
+    final showLeft = increasesTowardRight ? canDecrease : canIncrease;
+    final showRight = increasesTowardRight ? canIncrease : canDecrease;
 
     if (showLeft != _showLeft || showRight != _showRight) {
       if (mounted) {
@@ -90,13 +93,15 @@ class _DesktopScrollWrapperState extends ConsumerState<DesktopScrollWrapper> {
 
     if (!widget.controller.hasClients) return;
 
+    final position = widget.controller.position;
+    final increasesTowardRight = position.axisDirection == AxisDirection.right;
+    final increaseOffset = right == increasesTowardRight;
     final current = widget.controller.offset;
-    final target = right
-        ? current + widget.scrollAmount
-        : current - widget.scrollAmount;
+    final target = current +
+        (increaseOffset ? widget.scrollAmount : -widget.scrollAmount);
 
     widget.controller.animateTo(
-      target.clamp(0.0, widget.controller.position.maxScrollExtent),
+      target.clamp(position.minScrollExtent, position.maxScrollExtent),
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
