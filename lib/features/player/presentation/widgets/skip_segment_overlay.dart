@@ -144,7 +144,13 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
       // Auto-skip acts the moment a segment starts, and only once per
       // segment — seeking back into one the viewer already skipped past
       // must not yank them forward again.
+      //
+      // Credits are deliberately excluded: they run to the end of the file,
+      // so skipping them automatically ends the episode and fires the
+      // next-episode prompt, which reads as the player jumping to the end on
+      // its own. The button is still there for anyone who wants that.
       if (newSegment != null &&
+          newSegment.type != SkipType.outro &&
           !_autoSkipped.contains(_segmentKey(newSegment)) &&
           (ref
                   .read(playerSettingsProvider)

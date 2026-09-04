@@ -15,6 +15,11 @@ import 'package:device_info_plus/device_info_plus.dart';
 import '../domain/entity/multimedia_item.dart';
 import '../router/app_router.dart';
 import '../storage/storage_service.dart';
+import '../storage/settings_repository.dart';
+import '../../features/skip/data/aniskip_service.dart';
+import '../../features/skip/data/mal_id_resolver.dart';
+import '../../features/skip/data/skip_segment_cache.dart';
+
 import '../network/dio_client_provider.dart';
 import '../utils/download_resume.dart';
 import '../utils/download_cleanup.dart';
@@ -2081,6 +2086,73 @@ class DownloadService {
     }
   }
 
+  /// Stores an episode's intro/credits timestamps alongside the download so
+  /// the skip button still works with no connection. Best-effort: a failure
+  /// here must never affect the download itself.
+  Future<void> _cacheSkipSegmentsForDownload(
+    MultimediaItem item,
+    Episode? episode,
+  ) async {
+    if (episode == null) return;
+    final episodeUrl = episode.url.trim();
+    if (episodeUrl.isEmpty) return;
+
+    try {
+      final settings = _ref.read(settingsRepositoryProvider);
+      final enabled =
+          settings.getPlayerSetting<bool>(
+            'player_skip_segments',
+            defaultValue: true,
+          ) ??
+          true;
+      if (!enabled) return;
+
+      final cache = _ref.read(skipSegmentCacheProvider);
+      final keys = <String>[SkipSegmentCache.keyForEpisodeUrl(episodeUrl)];
+      if (cache.readAny(keys).isNotEmpty) return; // already stored
+
+      var malId = int.tryParse(
+        (item.syncData?['malId'] ?? item.syncData?['mal_id'] ?? '').trim(),
+      );
+      malId ??= item.title.trim().isEmpty
+          ? null
+          : await _ref.read(malIdResolverProvider).resolve(item.title);
+      if (malId == null) return;
+
+      final episodeNumber = episode.episode > 0 ? episode.episode : 1;
+      // The file isn't on disk yet, so its exact length is unknown; the
+      // catalog runtime (in minutes) is close enough for AniSkip to pick the
+      // submission that matches this release.
+      final runtimeMinutes = int.tryParse(
+        item.syncData?['awDuration']?.trim() ?? '',
+      );
+      final segments = await _ref
+          .read(aniSkipServiceProvider)
+          .getSkipSegments(
+            malId: malId,
+            season: 1,
+            episode: episodeNumber,
+            duration: (runtimeMinutes != null && runtimeMinutes > 0)
+                ? runtimeMinutes * 60
+                : null,
+          );
+      if (segments.isEmpty) return;
+
+      keys.add(SkipSegmentCache.keyForMal(malId, episodeNumber));
+      await cache.write(keys, segments);
+      if (kDebugMode) {
+        debugPrint(
+          '[DownloadService] Cached ${segments.length} skip segments for '
+          'episode $episodeNumber (mal $malId)',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[DownloadService] Skip segment caching skipped: $e');
+      }
+    }
+  }
+
   Future<bool> startDownload({
     required String url,
     required String filename,
@@ -2098,6 +2170,11 @@ class DownloadService {
       debugPrint('[DownloadService] - Filename: $filename');
       debugPrint('[DownloadService] - Directory: $directory');
     }
+
+    // Resolve the intro/credits timestamps now, while there is definitely a
+    // connection, and keep them on disk. Watching the file later is the one
+    // case where the skip sources are unreachable.
+    unawaited(_cacheSkipSegmentsForDownload(item, episode));
 
     // Industry Standard: Ask for battery optimization when a real download starts
     await requestIgnoreBatteryOptimizations();
