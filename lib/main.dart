@@ -18,6 +18,7 @@ import 'core/utils/app_utils.dart';
 import 'core/utils/artwork_host_fallback.dart';
 import 'core/utils/window_controls_visibility.dart';
 import 'core/utils/artwork_quality.dart';
+import 'core/utils/immersive_mode.dart';
 import 'core/utils/factory_reset.dart';
 import 'core/utils/localized_text.dart';
 import 'core/providers/update_provider.dart';
@@ -179,6 +180,7 @@ class _AppRootState extends State<AppRoot> {
       // Image widgets read the artwork quality switch directly, so publish it
       // (and the matching image cache budget) before the first screen paints.
       applyArtworkQuality(_storageService.isHighQualityPostersEnabled());
+      applyImmersiveFullScreen(_storageService.isImmersiveFullScreen());
 
       // Artwork mostly lives on MyAnimeList's CDN, which some networks block.
       // Publish last run's answer immediately so the first screen already

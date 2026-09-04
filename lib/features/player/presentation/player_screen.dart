@@ -17,6 +17,8 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/storage/settings_repository.dart';
+import '../../../../core/utils/immersive_mode.dart';
 import '../../../../core/utils/window_controls_visibility.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../features/settings/presentation/player_settings_provider.dart';
@@ -80,7 +82,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     windowControlsHidden.value = !_controlsVisible.value;
   }
 
-  final GlobalKey<AnimeWitcherPlayerControlsState> _controlsKeyFinal = GlobalKey();
+  final GlobalKey<AnimeWitcherPlayerControlsState> _controlsKeyFinal =
+      GlobalKey();
 
   // The persistent root key handler. It always stays focusable (it is the
   // parent of the ExcludeFocus'd chrome), so when the controls hide we route
@@ -173,18 +176,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
 
     _playerController = ref.read(playerControllerProvider.notifier);
-    _playerStateSub = ref.listenManual<PlayerState>(
-      playerControllerProvider,
-      (_, __) {
-        // The startup timeout is only for the period before the first real
-        // playback frame. Once position advances, runtime buffering/source
-        // switching must never be allowed to eject the user from the player.
-        if (_playerController.hasConfirmedPlaybackFrame) {
-          _startupTimeoutTimer?.cancel();
-          _startupTimeoutTimer = null;
-        }
-      },
-    );
+    _playerStateSub = ref.listenManual<PlayerState>(playerControllerProvider, (
+      _,
+      __,
+    ) {
+      // The startup timeout is only for the period before the first real
+      // playback frame. Once position advances, runtime buffering/source
+      // switching must never be allowed to eject the user from the player.
+      if (_playerController.hasConfirmedPlaybackFrame) {
+        _startupTimeoutTimer?.cancel();
+        _startupTimeoutTimer = null;
+      }
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _playerController.init(
@@ -252,10 +255,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ref.read(playerSettingsProvider).asData?.value.showPip ?? true;
       final isTv = ref.read(deviceProfileProvider).asData?.value.isTv ?? false;
       final allowAutoPip =
-          showPip &&
-          !isTv &&
-          Platform.isAndroid &&
-          _wasPlayingBeforeBackground;
+          showPip && !isTv && Platform.isAndroid && _wasPlayingBeforeBackground;
       if (allowAutoPip) {
         // Official auto-enter PiP (Android 12+) starts while the app is
         // backgrounding. Keep the stream playing so the system can snapshot
@@ -312,9 +312,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // still hidden. manual + SystemUiOverlay.values forces both bars back â
     // the expected default behaviour off the player.
     if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
+      // Back to whatever the viewer chose outside the player, which may be
+      // full screen — restoring the bars unconditionally would override it.
+      applyImmersiveFullScreen(
+        ref.read(settingsRepositoryProvider).isImmersiveFullScreen(),
       );
       if (!_isTv) {
         if (_isTablet) {
@@ -653,221 +654,228 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (errorMessage != null) {
       return PlayerLtr(
         child: Scaffold(
-        body: SafeArea(
-          child: Stack(
-            children: [
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: Colors.red,
-                        size: 56,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        AppLocalizations.of(context)!.playbackError,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+          body: SafeArea(
+            child: Stack(
+              children: [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.red,
+                          size: 56,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        errorMessage,
-                        style: Theme.of(context).textTheme.bodyLarge,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        autofocus: true,
-                        onPressed: _handleBack,
-                        icon: const Icon(Icons.arrow_back),
-                        label: Text(AppLocalizations.of(context)!.goBack),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        Text(
+                          AppLocalizations.of(context)!.playbackError,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          errorMessage,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          autofocus: true,
+                          onPressed: _handleBack,
+                          icon: const Icon(Icons.arrow_back),
+                          label: Text(AppLocalizations.of(context)!.goBack),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              // iOS uses the single route-independent native back control.
-              // Other platforms keep the existing local player affordance.
-              if (!appleUsesPersistentLiquidGlassHeader)
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: AppleLiquidGlassBackButton(
-                    size: 48,
-                    foregroundColor: Colors.white,
-                    fallbackColor: Colors.transparent,
-                    tooltip: AppLocalizations.of(context)!.goBack,
-                    onPressed: _handleBack,
+                // iOS uses the single route-independent native back control.
+                // Other platforms keep the existing local player affordance.
+                if (!appleUsesPersistentLiquidGlassHeader)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: AppleLiquidGlassBackButton(
+                      size: 48,
+                      foregroundColor: Colors.white,
+                      fallbackColor: Colors.transparent,
+                      tooltip: AppLocalizations.of(context)!.goBack,
+                      onPressed: _handleBack,
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
-      ));
+      );
     }
 
     return PlayerLtr(
       child: ValueListenableBuilder<bool>(
-      valueListenable: _controlsVisible,
-      builder: (context, controlsVisible, _) {
-        return PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, result) async {
-            if (didPop) return;
-            // Single guarded path (shared with the root key handler): close the
-            // sources panel, else hide TV controls. Only exit when nothing is
-            // left to dismiss. The de-dupe inside prevents the dual Back
-            // delivery (KeyEvent + route-pop) from skipping a step into exit.
-            if (_consumeBack()) return;
-            await _handleBack();
-          },
-          child: Scaffold(
-            body: Focus(
-              focusNode: _rootFocusNode,
-              autofocus: true,
-              onKeyEvent: _handleKey,
-              // Map the TV remote OK key (select) to ActivateIntent so the
-              // focused control activates natively (Enter/Space/gameButtonA are
-              // already mapped by WidgetsApp). When no control is focused this
-              // bubbles up to the root handler instead.
-              child: Shortcuts(
-                shortcuts: const <ShortcutActivator, Intent>{
-                  SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-                },
-                child: Stack(
-                  children: [
-                    RepaintBoundary(
-                      child: ValueListenableBuilder<BoxFit>(
-                        valueListenable: _videoFit,
-                        builder: (_, fit, child) => Center(
-                          // Phase 8: Switch engine based on stream type
-                          child: Consumer(
-                            builder: (context, ref, _) {
-                              final useExoPlayer = ref.watch(
-                                playerControllerProvider.select(
-                                  (s) => s.useExoPlayer,
-                                ),
-                              );
-                              if (useExoPlayer) {
-                                return vv.VideoView(
-                                  controller: _videoViewController,
-                                  videoFit: fit,
+        valueListenable: _controlsVisible,
+        builder: (context, controlsVisible, _) {
+          return PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, result) async {
+              if (didPop) return;
+              // Single guarded path (shared with the root key handler): close the
+              // sources panel, else hide TV controls. Only exit when nothing is
+              // left to dismiss. The de-dupe inside prevents the dual Back
+              // delivery (KeyEvent + route-pop) from skipping a step into exit.
+              if (_consumeBack()) return;
+              await _handleBack();
+            },
+            child: Scaffold(
+              body: Focus(
+                focusNode: _rootFocusNode,
+                autofocus: true,
+                onKeyEvent: _handleKey,
+                // Map the TV remote OK key (select) to ActivateIntent so the
+                // focused control activates natively (Enter/Space/gameButtonA are
+                // already mapped by WidgetsApp). When no control is focused this
+                // bubbles up to the root handler instead.
+                child: Shortcuts(
+                  shortcuts: const <ShortcutActivator, Intent>{
+                    SingleActivator(LogicalKeyboardKey.select):
+                        ActivateIntent(),
+                  },
+                  child: Stack(
+                    children: [
+                      RepaintBoundary(
+                        child: ValueListenableBuilder<BoxFit>(
+                          valueListenable: _videoFit,
+                          builder: (_, fit, child) => Center(
+                            // Phase 8: Switch engine based on stream type
+                            child: Consumer(
+                              builder: (context, ref, _) {
+                                final useExoPlayer = ref.watch(
+                                  playerControllerProvider.select(
+                                    (s) => s.useExoPlayer,
+                                  ),
                                 );
-                              }
-                              return Video(
-                                controller: _videoController,
-                                fit: fit,
-                                subtitleViewConfiguration:
-                                    const SubtitleViewConfiguration(
-                                      visible: false,
-                                      style: TextStyle(
-                                        color: Colors.transparent,
+                                if (useExoPlayer) {
+                                  return vv.VideoView(
+                                    controller: _videoViewController,
+                                    videoFit: fit,
+                                  );
+                                }
+                                return Video(
+                                  controller: _videoController,
+                                  fit: fit,
+                                  subtitleViewConfiguration:
+                                      const SubtitleViewConfiguration(
+                                        visible: false,
+                                        style: TextStyle(
+                                          color: Colors.transparent,
+                                        ),
                                       ),
+                                  controls: (state) => const SizedBox.shrink(),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final useExoPlayer = ref.watch(
+                            playerControllerProvider.select(
+                              (s) => s.useExoPlayer,
+                            ),
+                          );
+                          if (useExoPlayer) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final subtitleSettings = ref
+                              .watch(playerSettingsProvider)
+                              .asData
+                              ?.value;
+
+                          return Positioned(
+                            bottom:
+                                (controlsVisible
+                                    ? HotstarPlayerStyle.bottomChromeHeight
+                                    : 20.0) +
+                                ((100 -
+                                        (subtitleSettings?.subtitlePosition ??
+                                            100.0)) *
+                                    (MediaQuery.sizeOf(context).height *
+                                        0.008)),
+                            left: 20,
+                            right: 20,
+                            child: SubtitleView(
+                              controller: _videoController,
+                              configuration: SubtitleViewConfiguration(
+                                style: TextStyle(
+                                  fontSize:
+                                      subtitleSettings?.subtitleSize ?? 22.0,
+                                  color: Color(
+                                    subtitleSettings?.subtitleColor ??
+                                        0xFFFFFFFF,
+                                  ),
+                                  backgroundColor:
+                                      Color(
+                                        subtitleSettings
+                                                ?.subtitleBackgroundColor ??
+                                            0x00000000,
+                                      ).withValues(
+                                        alpha:
+                                            subtitleSettings
+                                                ?.subtitleBackgroundOpacity ??
+                                            0.0,
+                                      ),
+                                  shadows: const [
+                                    Shadow(
+                                      offset: Offset(0, 1),
+                                      blurRadius: 2,
+                                      color: Colors.black,
                                     ),
-                                controls: (state) => const SizedBox.shrink(),
+                                  ],
+                                ),
+                                padding: EdgeInsets.zero,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      Positioned.fill(
+                        child: RepaintBoundary(
+                          child: AnimeWitcherPlayerControls(
+                            key: _controlsKeyFinal,
+                            isLoading: isLoading,
+                            player: _player,
+                            videoViewController: _videoViewController,
+                            title: widget.item.title,
+                            backdropUrl: widget.item.backdropImageUrl,
+                            logoUrl: widget.item.logoUrl,
+                            onResize: _updateResizeMode,
+                            onBackPointer: _handleBack,
+                            onRequestRootFocus: () =>
+                                _rootFocusNode.requestFocus(),
+                            onVisibilityChanged: (v) {
+                              if (!mounted) return;
+                              _controlsVisible.value = v;
+                              _publishPersistentPlayerHeader(
+                                controlsVisible: v,
                               );
                             },
                           ),
                         ),
                       ),
-                    ),
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final useExoPlayer = ref.watch(
-                          playerControllerProvider.select(
-                            (s) => s.useExoPlayer,
-                          ),
-                        );
-                        if (useExoPlayer) {
-                          return const SizedBox.shrink();
-                        }
-
-                        final subtitleSettings = ref
-                            .watch(playerSettingsProvider)
-                            .asData
-                            ?.value;
-
-                        return Positioned(
-                          bottom:
-                              (controlsVisible
-                                  ? HotstarPlayerStyle.bottomChromeHeight
-                                  : 20.0) +
-                              ((100 -
-                                      (subtitleSettings?.subtitlePosition ??
-                                          100.0)) *
-                                  (MediaQuery.sizeOf(context).height * 0.008)),
-                          left: 20,
-                          right: 20,
-                          child: SubtitleView(
-                            controller: _videoController,
-                            configuration: SubtitleViewConfiguration(
-                              style: TextStyle(
-                                fontSize:
-                                    subtitleSettings?.subtitleSize ?? 22.0,
-                                color: Color(
-                                  subtitleSettings?.subtitleColor ?? 0xFFFFFFFF,
-                                ),
-                                backgroundColor:
-                                    Color(
-                                      subtitleSettings
-                                              ?.subtitleBackgroundColor ??
-                                          0x00000000,
-                                    ).withValues(
-                                      alpha:
-                                          subtitleSettings
-                                              ?.subtitleBackgroundOpacity ??
-                                          0.0,
-                                    ),
-                                shadows: const [
-                                  Shadow(
-                                    offset: Offset(0, 1),
-                                    blurRadius: 2,
-                                    color: Colors.black,
-                                  ),
-                                ],
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    Positioned.fill(
-                      child: RepaintBoundary(
-                        child: AnimeWitcherPlayerControls(
-                          key: _controlsKeyFinal,
-                          isLoading: isLoading,
-                          player: _player,
-                          videoViewController: _videoViewController,
-                          title: widget.item.title,
-                          backdropUrl: widget.item.backdropImageUrl,
-                          logoUrl: widget.item.logoUrl,
-                          onResize: _updateResizeMode,
-                          onBackPointer: _handleBack,
-                          onRequestRootFocus: () =>
-                              _rootFocusNode.requestFocus(),
-                          onVisibilityChanged: (v) {
-                            if (!mounted) return;
-                            _controlsVisible.value = v;
-                            _publishPersistentPlayerHeader(controlsVisible: v);
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-    ));
+          );
+        },
+      ),
+    );
   }
 }
 

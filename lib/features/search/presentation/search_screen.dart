@@ -622,23 +622,37 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   borderRadius: BorderRadius.circular(
                     LayoutConstants.radiusPill,
                   ),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.12,
+                    ),
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(
                     LayoutConstants.radiusPill,
                   ),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.12,
+                    ),
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(
                     LayoutConstants.radiusPill,
                   ),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.12,
+                    ),
+                  ),
                 ),
                 filled: true,
+                // Matches the capsule on the home bar and on desktop, so the
+                // control does not change appearance when search opens.
                 fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.92,
+                  alpha: 0.5,
                 ),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),
@@ -649,7 +663,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 prefixIcon: Icon(
                   Icons.search,
                   size: 18,
-                  color: theme.colorScheme.primary,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
                 prefixIconConstraints: const BoxConstraints(
                   minWidth: 44,
@@ -678,6 +692,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     final scaffold = Scaffold(
       appBar: AppBar(
+        // Centred like the desktop bar rather than pushed against the
+        // actions on one side.
+        centerTitle: true,
         titleSpacing: 12,
         leadingWidth: isArabic ? actionsSlotWidth : null,
         leading: isArabic

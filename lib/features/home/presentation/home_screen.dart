@@ -25,6 +25,7 @@ import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/router/app_router.dart';
 
 import '../../../shared/widgets/cards_wrapper.dart';
+import '../../../shared/widgets/search_pill.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../shared/widgets/multimedia_card.dart';
@@ -202,7 +203,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.build(context);
     final homeDataAsync = ref.watch(homeDataProvider);
     final continueWatching = ref.watch(continueWatchingProvider);
-    final l10n = AppLocalizations.of(context)!;
     final activeProvider = ref.watch(activeProviderProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -272,70 +272,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: Directionality(
           textDirection: TextDirection.ltr,
-          child: ValueListenableBuilder<double>(
-            valueListenable: _headerFadeOpacity,
-            builder: (context, fadeOpacity, _) {
-              return Stack(
-                children: [
-                  // Scroll-driven fade-to-black backdrop: fully transparent
-                  // when over the hero carousel, solid black once the user
-                  // scrolls even slightly. This is what tints the area
-                  // behind the "AnimeWitcher" title and the search button
-                  // as the user scrolls down.
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Container(
-                        color: Colors.black.withValues(alpha: fadeOpacity),
-                      ),
-                    ),
-                  ),
-                  AppBar(
-                    systemOverlayStyle: overlayStyle,
-                    forceMaterialTransparency: true,
-                    backgroundColor: Colors.transparent,
-                    surfaceTintColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    elevation: 0,
-                    scrolledUnderElevation: 0,
-                    title: Text(
-                      l10n.appTitle,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    actions: usePersistentGlass
-                        ? const <Widget>[SizedBox(width: 58)]
-                        : [
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                right: LayoutConstants.spacingSm,
-                              ),
-                              child: Focus(
-                                focusNode: _firstActionFocusNode,
-                                child: SizedBox.square(
-                                  dimension: 42,
-                                  child: AppleLiquidGlassToolbarButton(
-                                    width: 42,
-                                    tooltip: appText(
-                                      context,
-                                      english: 'Search',
-                                      arabic: 'بحث',
-                                    ),
-                                    icon: Icons.search_rounded,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    onPressed: () =>
-                                        _openSearchPage(focusKeyboard: true),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                  ),
-                ],
-              );
-            },
+          // Nothing is painted behind the bar: the hero runs to the top of
+          // the screen and the search capsule, which carries its own fill, is
+          // the only thing on it.
+          child: AppBar(
+            systemOverlayStyle: overlayStyle,
+            forceMaterialTransparency: true,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            titleSpacing: LayoutConstants.spacingMd,
+            title: Focus(
+              focusNode: _firstActionFocusNode,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openSearchPage(focusKeyboard: true),
+                child: SearchPill(
+                  onTap: () => _openSearchPage(focusKeyboard: true),
+                ),
+              ),
+            ),
+            actions: usePersistentGlass
+                ? const <Widget>[SizedBox(width: 58)]
+                : const <Widget>[SizedBox(width: LayoutConstants.spacingMd)],
           ),
         ),
       ),
