@@ -228,14 +228,8 @@ class DetailsDesktopHero extends ConsumerWidget {
                                         int? decodeWidth,
                                       ) => FallbackPosterImage(
                                         imageUrl: posterUrl,
-                                        malId: int.tryParse(
-                                          (displayItem.syncData?['malId'] ??
-                                                  displayItem
-                                                      .syncData?['mal_id'] ??
-                                                  '')
-                                              .trim(),
-                                        ),
-                                        title: displayItem.title,
+                                        malId: displayItem.artworkLookupMalId,
+                                        title: displayItem.artworkLookupTitle,
                                         fit: BoxFit.cover,
                                         memCacheWidth: decodeWidth,
                                         filterQuality: FilterQuality.medium,

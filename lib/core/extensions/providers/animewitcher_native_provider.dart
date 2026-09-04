@@ -1575,6 +1575,18 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       hitSync['malId'] = '$hitMalId';
       hitSync['mal_id'] = '$hitMalId';
     }
+    // The catalog search index carries no MyAnimeList id, so a card built
+    // from it has only a name to identify the anime by. The Arabic name is a
+    // transliteration and matches poorly; the English one the catalog stores
+    // alongside it is what other services actually know the anime as.
+    final hitEnglishTitle = _firstText(_map(source['details']), const <String>[
+      'english_title',
+      'englishTitle',
+      'en_title',
+    ]);
+    if (hitEnglishTitle.isNotEmpty) {
+      hitSync['englishTitle'] = hitEnglishTitle;
+    }
     final hitAniListId = _firstText(source, const <String>[
       'aniList_id',
       'anilist_id',

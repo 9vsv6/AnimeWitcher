@@ -168,6 +168,11 @@ class MultimediaCard extends StatelessWidget {
   /// catalog's poster host cannot be reached.
   final int? malId;
 
+  /// The name to search by when there is no id: the English title where the
+  /// catalog has one, since the displayed Arabic name is a transliteration
+  /// that other services do not index.
+  final String lookupTitle;
+
   const MultimediaCard({
     super.key,
     required this.imageUrl,
@@ -184,6 +189,7 @@ class MultimediaCard extends StatelessWidget {
     this.year,
     this.posterBadge,
     this.malId,
+    this.lookupTitle = '',
   });
 
   MultimediaCard.fromItem({
@@ -198,9 +204,8 @@ class MultimediaCard extends StatelessWidget {
     this.showImageLoadingShimmer = true,
     bool showRelationBadge = false,
   }) : imageUrl = AppImageFallbacks.poster(item.posterUrl, label: item.title),
-       malId = int.tryParse(
-         (item.syncData?['malId'] ?? item.syncData?['mal_id'] ?? '').trim(),
-       ),
+       malId = item.artworkLookupMalId,
+       lookupTitle = item.artworkLookupTitle,
        title = item.title,
        episodeBadge = item.episodeBadge,
        subtitle = multimediaCardSubtitle(item),
@@ -322,7 +327,7 @@ class MultimediaCard extends StatelessWidget {
     return FallbackPosterImage(
       imageUrl: imageUrl,
       malId: malId,
-      title: title,
+      title: lookupTitle.isNotEmpty ? lookupTitle : title,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
