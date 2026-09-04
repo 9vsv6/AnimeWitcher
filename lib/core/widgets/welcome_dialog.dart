@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/settings/presentation/account_screen.dart';
 import '../storage/settings_repository.dart';
+import '../../features/settings/presentation/player_settings_provider.dart';
 import '../theme/theme_provider.dart';
 import '../utils/layout_constants.dart';
 import '../utils/localized_text.dart';
 
-/// Shows the first-launch welcome dialog once per install: a theme picker
-/// followed by a sign-in prompt. No-ops on every later launch.
+/// Shows the first-launch welcome dialog once per install: a theme picker,
+/// the intro/credits skip options, then a sign-in prompt. No-ops on every
+/// later launch.
 Future<void> maybeShowWelcomeDialog(BuildContext context, WidgetRef ref) async {
   final repository = ref.read(settingsRepositoryProvider);
   if (repository.hasSeenWelcomeDialog()) return;
@@ -81,24 +83,30 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog> {
               ),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
-                child: _step == 0
-                    ? _ThemeStep(
-                        key: const ValueKey('theme'),
-                        onContinue: () => setState(() => _step = 1),
-                      )
-                    : _SignInStep(
-                        key: const ValueKey('signIn'),
-                        onSignIn: _openSignIn,
-                        onSkip: _close,
-                      ),
+                child: switch (_step) {
+                  0 => _ThemeStep(
+                    key: const ValueKey('theme'),
+                    onContinue: () => setState(() => _step = 1),
+                  ),
+                  1 => _SkipStep(
+                    key: const ValueKey('skip'),
+                    onContinue: () => setState(() => _step = 2),
+                  ),
+                  _ => _SignInStep(
+                    key: const ValueKey('signIn'),
+                    onSignIn: _openSignIn,
+                    onSkip: _close,
+                  ),
+                },
               ),
               const SizedBox(height: LayoutConstants.spacingMd),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _StepDot(active: _step == 0, color: colors.primary),
-                  const SizedBox(width: 6),
-                  _StepDot(active: _step == 1, color: colors.primary),
+                  for (var i = 0; i < 3; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    _StepDot(active: _step == i, color: colors.primary),
+                  ],
                 ],
               ),
             ],
@@ -203,6 +211,109 @@ class _ThemeStep extends ConsumerWidget {
             ],
           ),
         ),
+        const SizedBox(height: LayoutConstants.spacingSm),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: onContinue,
+            child: Text(
+              appText(context, english: 'Continue', arabic: 'متابعة'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Offers intro/credits skipping up front — it is on by default, but a first
+/// run is the only moment most people would learn the feature exists.
+class _SkipStep extends ConsumerWidget {
+  const _SkipStep({super.key, required this.onContinue});
+
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final settings =
+        ref.watch(playerSettingsProvider).asData?.value ??
+        const PlayerSettings();
+    final notifier = ref.read(playerSettingsProvider.notifier);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            color: colors.primary.withValues(alpha: 0.13),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.fast_forward_rounded,
+            size: 32,
+            color: colors.primary,
+          ),
+        ),
+        const SizedBox(height: LayoutConstants.spacingMd),
+        Text(
+          appText(
+            context,
+            english: 'Skip the opening and credits',
+            arabic: 'تخطي المقدمة والنهاية',
+          ),
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: LayoutConstants.spacingSm),
+        Text(
+          appText(
+            context,
+            english:
+                'Times come from the AniSkip community, so some episodes have '
+                'none. You can change this later in Settings.',
+            arabic:
+                'التوقيتات من مجتمع AniSkip، لذا لا تتوفر لكل الحلقات. يمكنك '
+                'تغيير ذلك لاحقًا من الإعدادات.',
+          ),
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: LayoutConstants.spacingMd),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: settings.skipSegmentsEnabled,
+          onChanged: notifier.setSkipSegmentsEnabled,
+          secondary: const Icon(Icons.fast_forward_rounded),
+          title: Text(
+            appText(
+              context,
+              english: 'Show a skip button',
+              arabic: 'إظهار زر التخطي',
+            ),
+          ),
+        ),
+        // Auto-skip only means anything once the button itself is on.
+        if (settings.skipSegmentsEnabled)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: settings.autoSkipSegments,
+            onChanged: notifier.setAutoSkipSegments,
+            secondary: const Icon(Icons.skip_next_rounded),
+            title: Text(
+              appText(
+                context,
+                english: 'Skip automatically',
+                arabic: 'التخطي التلقائي',
+              ),
+            ),
+          ),
         const SizedBox(height: LayoutConstants.spacingSm),
         SizedBox(
           width: double.infinity,
