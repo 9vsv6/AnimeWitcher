@@ -56,5 +56,34 @@ class MemoryStorageService extends StorageService {
   bool isEpisodeImagesFromAniZipEnabled() => true;
 
   @override
+  bool isArtworkFallbackEnabled() =>
+      (settings['artwork_fallback_enabled'] as bool?) ?? false;
+
+  @override
+  Future<void> setArtworkFallbackEnabled(bool enabled) async {
+    settings['artwork_fallback_enabled'] = enabled;
+  }
+
+  @override
+  bool isMalArtworkUnreachable() =>
+      (settings['mal_artwork_unreachable'] as bool?) ?? false;
+
+  @override
+  Future<void> setMalArtworkUnreachable(bool unreachable) async {
+    settings['mal_artwork_unreachable'] = unreachable;
+  }
+
+  @override
+  DateTime? malArtworkProbedAt() => null;
+
+  @override
+  Map<String, String> getFallbackPosters() => const <String, String>{};
+
+  @override
+  Future<void> setFallbackPosters(Map<String, String> value) async {
+    settings['artwork_fallback_posters_json'] = value;
+  }
+
+  @override
   Future<int> computeImageVideoCacheBytes() async => 0;
 }
