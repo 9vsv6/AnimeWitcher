@@ -272,33 +272,62 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                 ),
                 // Only meaningful once the skip button itself is on.
-                if (playerSettings.skipSegmentsEnabled)
+                if (playerSettings.skipSegmentsEnabled) ...[
                   SettingsTile(
                     icon: Icons.skip_next_rounded,
                     title: appText(
                       context,
-                      english: 'Skip automatically',
-                      arabic: 'التخطي التلقائي',
+                      english: 'Skip the opening automatically',
+                      arabic: 'تخطي المقدمة تلقائيًا',
                     ),
                     subtitle: appText(
                       context,
-                      english: playerSettings.autoSkipSegments
-                          ? 'The opening and credits are skipped without asking'
+                      english: playerSettings.autoSkipIntro
+                          ? 'Openings and recaps are skipped without asking'
                           : 'A skip button is shown instead',
-                      arabic: playerSettings.autoSkipSegments
-                          ? 'يتم تخطي المقدمة والنهاية تلقائيًا دون الضغط على الزر'
+                      arabic: playerSettings.autoSkipIntro
+                          ? 'يتم تخطي المقدمة والملخص تلقائيًا دون الضغط على الزر'
                           : 'يظهر زر التخطي بدلاً من ذلك',
                     ),
                     trailing: Switch(
-                      value: playerSettings.autoSkipSegments,
+                      value: playerSettings.autoSkipIntro,
                       onChanged: (val) => ref
                           .read(playerSettingsProvider.notifier)
-                          .setAutoSkipSegments(val),
+                          .setAutoSkipIntro(val),
                     ),
                     onTap: () => ref
                         .read(playerSettingsProvider.notifier)
-                        .setAutoSkipSegments(!playerSettings.autoSkipSegments),
+                        .setAutoSkipIntro(!playerSettings.autoSkipIntro),
                   ),
+                  SettingsTile(
+                    icon: Icons.playlist_play_rounded,
+                    title: appText(
+                      context,
+                      english: 'Skip the credits automatically',
+                      arabic: 'تخطي النهاية تلقائيًا',
+                    ),
+                    subtitle: appText(
+                      context,
+                      english: playerSettings.autoSkipCredits
+                          ? 'The credits run to the end, so the episode '
+                                'finishes and the next one is offered'
+                          : 'A skip button is shown instead',
+                      arabic: playerSettings.autoSkipCredits
+                          ? 'النهاية تمتد حتى آخر الحلقة، لذا تنتهي الحلقة '
+                                'ويتم عرض الحلقة التالية'
+                          : 'يظهر زر التخطي بدلاً من ذلك',
+                    ),
+                    trailing: Switch(
+                      value: playerSettings.autoSkipCredits,
+                      onChanged: (val) => ref
+                          .read(playerSettingsProvider.notifier)
+                          .setAutoSkipCredits(val),
+                    ),
+                    onTap: () => ref
+                        .read(playerSettingsProvider.notifier)
+                        .setAutoSkipCredits(!playerSettings.autoSkipCredits),
+                  ),
+                ],
                 SettingsTile(
                   icon: Icons.tune_rounded,
                   title: l10n.playerControls,

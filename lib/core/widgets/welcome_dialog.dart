@@ -300,20 +300,34 @@ class _SkipStep extends ConsumerWidget {
           ),
         ),
         // Auto-skip only means anything once the button itself is on.
-        if (settings.skipSegmentsEnabled)
+        if (settings.skipSegmentsEnabled) ...[
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            value: settings.autoSkipSegments,
-            onChanged: notifier.setAutoSkipSegments,
+            value: settings.autoSkipIntro,
+            onChanged: notifier.setAutoSkipIntro,
             secondary: const Icon(Icons.skip_next_rounded),
             title: Text(
               appText(
                 context,
-                english: 'Skip automatically',
-                arabic: 'التخطي التلقائي',
+                english: 'Skip the opening automatically',
+                arabic: 'تخطي المقدمة تلقائيًا',
               ),
             ),
           ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: settings.autoSkipCredits,
+            onChanged: notifier.setAutoSkipCredits,
+            secondary: const Icon(Icons.playlist_play_rounded),
+            title: Text(
+              appText(
+                context,
+                english: 'Skip the credits automatically',
+                arabic: 'تخطي النهاية تلقائيًا',
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: LayoutConstants.spacingSm),
         SizedBox(
           width: double.infinity,
