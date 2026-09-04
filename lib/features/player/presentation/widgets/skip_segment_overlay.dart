@@ -7,6 +7,7 @@ import 'package:video_view/video_view.dart' as vv;
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../../skip/data/skip_service.dart';
 import '../player_controller.dart';
+import '../../../settings/presentation/player_settings_provider.dart';
 import 'hotstar_player_style.dart';
 import 'player_prompt_placement.dart';
 
@@ -48,6 +49,16 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
   late final FocusNode _focusNode;
 
   SkipSegment? _activeSegment;
+
+  /// Segments already auto-skipped this session, so seeking back into one
+  /// doesn't immediately fling the viewer forward again.
+  /// Keyed by kind and start time rather than by instance: the segment list
+  /// is rebuilt whenever a source resolves, and a fresh instance of the same
+  /// opening must still count as already skipped.
+  final Set<String> _autoSkipped = <String>{};
+
+  static String _segmentKey(SkipSegment s) =>
+      '${s.type.name}:${s.startTime.round()}';
   StreamSubscription<Duration>? _mkPositionSub;
 
   @override
@@ -129,6 +140,21 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
         _activeSegment = newSegment;
       });
       widget.onActiveSegmentChanged?.call(newSegment != null);
+
+      // Auto-skip acts the moment a segment starts, and only once per
+      // segment — seeking back into one the viewer already skipped past
+      // must not yank them forward again.
+      if (newSegment != null &&
+          !_autoSkipped.contains(_segmentKey(newSegment)) &&
+          (ref
+                  .read(playerSettingsProvider)
+                  .asData
+                  ?.value
+                  .autoSkipSegments ??
+              false)) {
+        _autoSkipped.add(_segmentKey(newSegment));
+        _handleSkip(newSegment);
+      }
     }
   }
 

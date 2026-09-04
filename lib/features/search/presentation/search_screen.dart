@@ -70,7 +70,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
     _controller.addListener(_onTextChanged);
     _resultsScrollController.addListener(_onResultsScroll);
-    ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
+    // The filter provider outlives this screen, so reopening search resets it
+    // to the content tab. Deferred by a frame because initState runs while
+    // the tree is building, and Riverpod rejects writes during a build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(searchFilterProvider.notifier).set(SearchFilter.content);
+    });
 
     _focusNode.onKeyEvent = (node, event) {
       if (event is KeyDownEvent) {

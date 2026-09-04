@@ -127,22 +127,6 @@ class SettingsRepository {
     return _storageService.hasSeenWelcomeDialog();
   }
 
-  Future<void> setIntroDbIntegrationEnabled(bool enabled) async {
-    await _storageService.setIntroDbIntegrationEnabled(enabled);
-  }
-
-  bool isIntroDbIntegrationEnabled() {
-    return _storageService.isIntroDbIntegrationEnabled();
-  }
-
-  Future<void> setAnimeSkipIntegrationEnabled(bool enabled) async {
-    await _storageService.setAnimeSkipIntegrationEnabled(enabled);
-  }
-
-  bool isAnimeSkipIntegrationEnabled() {
-    return _storageService.isAnimeSkipIntegrationEnabled();
-  }
-
   Future<void> setPlayerSetting(String key, dynamic value) async {
     await _storageService.setPlayerSetting(key, value);
   }
