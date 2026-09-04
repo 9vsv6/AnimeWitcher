@@ -212,7 +212,13 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     final isCompactLandscape =
         context.isHandsetLandscape ||
         (context.isDesktopLandscape && size.height < 560);
-    final heroHeight = size.height * (isCompactLandscape ? 0.72 : 0.60);
+    // Phone hero artwork should read as a banner, not a tall poster crop.
+    // Keep the compact-landscape height guard, while portrait handsets use
+    // a true 16:9 rectangle. Desktop/TV preserve their existing viewport-based
+    // sizing because they are already wide by nature.
+    final heroHeight = isDesktop
+        ? size.height * (isCompactLandscape ? 0.72 : 0.60)
+        : (isCompactLandscape ? size.height * 0.72 : size.width * 9 / 16);
 
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv ?? context.isTv;
@@ -543,7 +549,12 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     required Color scaffoldColor,
     required ThemeData theme,
   }) {
-    final imageUrl = movie.backdropImageUrl;
+    // Prefer the anime banner explicitly for hero cards. Fall back to the
+    // poster only when a provider does not expose a banner.
+    final banner = movie.bannerUrl?.trim();
+    final imageUrl = banner == null || banner.isEmpty
+        ? movie.posterImageUrl
+        : banner;
     final title = movie.title;
 
     const bleed = 60.0;
@@ -804,7 +815,7 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: Colors.white,
-          fontSize: compactLandscape ? 22 : (isDesktop ? 34 : 30),
+          fontSize: compactLandscape ? 20 : (isDesktop ? 28 : 24),
           fontFamily: 'RobotoCondensed',
           fontWeight: FontWeight.w900,
           letterSpacing: 1.0,
