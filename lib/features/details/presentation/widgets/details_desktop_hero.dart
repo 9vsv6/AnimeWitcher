@@ -12,6 +12,7 @@ import 'premium_details_widgets.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+import '../../../../shared/widgets/fallback_poster_image.dart';
 
 /// Immersive desktop/TV hero for non-TMDB details.
 ///
@@ -225,17 +226,25 @@ class DetailsDesktopHero extends ConsumerWidget {
                                       (
                                         BuildContext context,
                                         int? decodeWidth,
-                                      ) => CachedNetworkImage(
+                                      ) => FallbackPosterImage(
                                         imageUrl: posterUrl,
+                                        malId: int.tryParse(
+                                          (displayItem.syncData?['malId'] ??
+                                                  displayItem
+                                                      .syncData?['mal_id'] ??
+                                                  '')
+                                              .trim(),
+                                        ),
+                                        title: displayItem.title,
                                         fit: BoxFit.cover,
                                         memCacheWidth: decodeWidth,
                                         filterQuality: FilterQuality.medium,
-                                        placeholder: (_, _) => ColoredBox(
+                                        placeholder: (_) => ColoredBox(
                                           color: theme
                                               .colorScheme
                                               .surfaceContainerHighest,
                                         ),
-                                        errorWidget: (_, _, _) =>
+                                        errorWidget: (_) =>
                                             ThumbnailErrorPlaceholder(
                                               label: displayItem.title,
                                             ),

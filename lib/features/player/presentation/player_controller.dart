@@ -36,6 +36,7 @@ import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/aniskip_service.dart';
 import '../../skip/data/chapter_skip_source.dart';
 import '../../skip/data/mal_id_resolver.dart';
+import '../../skip/data/skip_segment_cache.dart';
 import '../../skip/data/skip_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 import 'playback_recovery_policy.dart';
@@ -788,8 +789,29 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   void _maybeFetchSkipSegments() {
-    if (AppUtils.isLocalFile(_videoUrl)) return;
+    // Downloaded episodes used to bail out here, which left them with no skip
+    // button at all. They now go through the same path: the cache answers
+    // offline, and the online sources still run when there is a connection.
     unawaited(_fetchAndLogSkipSegments());
+  }
+
+  /// Cache keys for the episode playing, offline-safe key first.
+  List<String> _skipCacheKeys() {
+    final keys = <String>[];
+    final episode = _episode;
+    if (episode != null && episode.url.trim().isNotEmpty) {
+      keys.add(SkipSegmentCache.keyForEpisodeUrl(episode.url));
+    }
+    final malId = _resolvedMalId;
+    if (malId != null && episode != null) {
+      keys.add(
+        SkipSegmentCache.keyForMal(
+          malId,
+          episode.episode > 0 ? episode.episode : 1,
+        ),
+      );
+    }
+    return keys;
   }
 
   /// Episode length in seconds, or null while the media is still opening.
@@ -810,18 +832,31 @@ class PlayerController extends Notifier<PlayerState> {
   /// couple of seconds it takes for the duration to land gets the set that
   /// actually matches this file.
   Future<int?> _awaitDurationSeconds({
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 4),
   }) async {
     final immediate = _currentDurationSeconds();
     if (immediate != null) return immediate;
 
     final deadline = DateTime.now().add(timeout);
     while (!_isDisposed && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
       final value = _currentDurationSeconds();
       if (value != null) return value;
     }
-    return null;
+    // The engine is still opening the file. The catalog knows the runtime,
+    // which is close enough for AniSkip to match a submission, and beats
+    // making the viewer wait for a skip button that arrives after the
+    // opening has already played.
+    return _catalogRuntimeSeconds();
+  }
+
+  /// Episode runtime in seconds as published by the catalog (`awDuration` is
+  /// in minutes), or null when it isn't known.
+  int? _catalogRuntimeSeconds() {
+    final raw = _item.syncData?['awDuration']?.trim();
+    final minutes = raw == null ? null : int.tryParse(raw);
+    if (minutes == null || minutes <= 0) return null;
+    return minutes * 60;
   }
 
   Future<void> _fetchAndLogSkipSegments() async {
@@ -859,6 +894,18 @@ class PlayerController extends Notifier<PlayerState> {
         _item.syncData?['anilist'] == null &&
         _item.syncData?['anilistId'] == null &&
         _item.syncData?['anilist_id'] == null;
+
+    // Anything resolved on a previous play (or when the episode was
+    // downloaded) is on disk, so show it straight away. This is the only
+    // path that works with no connection.
+    final cache = ref.read(skipSegmentCacheProvider);
+    final cached = cache.readAny(_skipCacheKeys());
+    if (cached.isNotEmpty) {
+      state = state.copyWith(skipSegments: cached);
+      if (kDebugMode) {
+        debugPrint('Skip Segments: ${cached.length} restored from cache');
+      }
+    }
 
     // A title alone is still workable: AniSkip is keyed by MyAnimeList id,
     // and the title resolves to one through AniList. The catalog provider
@@ -1076,6 +1123,8 @@ class PlayerController extends Notifier<PlayerState> {
 
     if (merged.isNotEmpty && !_isDisposed) {
       state = state.copyWith(skipSegments: merged);
+      // Keep them for the next play, which may be offline.
+      unawaited(cache.write(_skipCacheKeys(), merged));
     }
   }
 

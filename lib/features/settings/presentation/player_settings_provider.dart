@@ -61,9 +61,15 @@ class PlayerSettings {
   /// and friends). When off, no lookup runs and no skip button appears.
   final bool skipSegmentsEnabled;
 
-  /// Skip the opening/credits automatically instead of showing a button.
+  /// Skip openings and recaps automatically instead of showing a button.
   /// Only meaningful while [skipSegmentsEnabled] is on.
-  final bool autoSkipSegments;
+  final bool autoSkipIntro;
+
+  /// Skip the credits automatically. Kept separate from [autoSkipIntro]
+  /// because the credits run to the end of the file, so skipping them
+  /// effectively ends the episode and raises the next-episode prompt —
+  /// wanted while bingeing, jarring otherwise.
+  final bool autoSkipCredits;
 
   const PlayerSettings({
     this.seekDuration = 10,
@@ -101,7 +107,8 @@ class PlayerSettings {
     this.showPlaybackSpeed = true,
     this.showEpisodes = true,
     this.skipSegmentsEnabled = true,
-    this.autoSkipSegments = false,
+    this.autoSkipIntro = false,
+    this.autoSkipCredits = false,
   });
 
   PlayerSettings copyWith({
@@ -141,7 +148,8 @@ class PlayerSettings {
     bool? showPlaybackSpeed,
     bool? showEpisodes,
     bool? skipSegmentsEnabled,
-    bool? autoSkipSegments,
+    bool? autoSkipIntro,
+    bool? autoSkipCredits,
   }) {
     return PlayerSettings(
       seekDuration: seekDuration ?? this.seekDuration,
@@ -189,7 +197,8 @@ class PlayerSettings {
       showPlaybackSpeed: showPlaybackSpeed ?? this.showPlaybackSpeed,
       showEpisodes: showEpisodes ?? this.showEpisodes,
       skipSegmentsEnabled: skipSegmentsEnabled ?? this.skipSegmentsEnabled,
-      autoSkipSegments: autoSkipSegments ?? this.autoSkipSegments,
+      autoSkipIntro: autoSkipIntro ?? this.autoSkipIntro,
+      autoSkipCredits: autoSkipCredits ?? this.autoSkipCredits,
     );
   }
 }
@@ -360,8 +369,24 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
           defaultValue: true,
         ) ??
         true;
-    final autoSkipSegments = storage.getPlayerSetting<bool>(
+    // Migration: the single auto-skip switch became two. Its old value
+    // carries over to openings, never to credits — auto-skipping those is
+    // what made episodes jump to the end.
+    final legacyAutoSkip =
+        storage.getPlayerSetting<bool>(
           'player_auto_skip_segments',
+          defaultValue: false,
+        ) ??
+        false;
+    final autoSkipIntro =
+        storage.getPlayerSetting<bool>(
+          'player_auto_skip_intro',
+          defaultValue: legacyAutoSkip,
+        ) ??
+        legacyAutoSkip;
+    final autoSkipCredits =
+        storage.getPlayerSetting<bool>(
+          'player_auto_skip_credits',
           defaultValue: false,
         ) ??
         false;
@@ -402,7 +427,8 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       showPlaybackSpeed: showPlaybackSpeed,
       showEpisodes: showEpisodes,
       skipSegmentsEnabled: skipSegmentsEnabled,
-      autoSkipSegments: autoSkipSegments,
+      autoSkipIntro: autoSkipIntro,
+      autoSkipCredits: autoSkipCredits,
     );
   }
 
@@ -549,9 +575,14 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     state = AsyncData(state.requireValue.copyWith(skipSegmentsEnabled: val));
   }
 
-  Future<void> setAutoSkipSegments(bool val) async {
-    await _repository.setPlayerSetting('player_auto_skip_segments', val);
-    state = AsyncData(state.requireValue.copyWith(autoSkipSegments: val));
+  Future<void> setAutoSkipIntro(bool val) async {
+    await _repository.setPlayerSetting('player_auto_skip_intro', val);
+    state = AsyncData(state.requireValue.copyWith(autoSkipIntro: val));
+  }
+
+  Future<void> setAutoSkipCredits(bool val) async {
+    await _repository.setPlayerSetting('player_auto_skip_credits', val);
+    state = AsyncData(state.requireValue.copyWith(autoSkipCredits: val));
   }
 
   Future<void> setSubtitleSettings(

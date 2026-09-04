@@ -1,0 +1,164 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/services/artwork_fallback_service.dart';
+import '../../core/utils/artwork_host_fallback.dart';
+
+/// A poster that looks elsewhere when its artwork will not load.
+///
+/// Catalog artwork mostly lives on MyAnimeList's CDN, which some networks
+/// block. The failure is what triggers the search, so this covers any
+/// unreachable host rather than a hardcoded list of them: when the image
+/// errors and the anime has a MyAnimeList id, AniZip and Kitsu are asked for
+/// a copy and the result is reused for every other card showing that title.
+class FallbackPosterImage extends ConsumerStatefulWidget {
+  const FallbackPosterImage({
+    super.key,
+    required this.imageUrl,
+    required this.malId,
+    this.title,
+    required this.placeholder,
+    required this.errorWidget,
+    this.fit = BoxFit.cover,
+    this.width,
+    this.height,
+    this.memCacheWidth,
+    this.filterQuality = FilterQuality.medium,
+    this.fadeInDuration = const Duration(milliseconds: 120),
+  });
+
+  final String imageUrl;
+
+  /// Identifies the anime for the lookup. Not every catalog entry carries
+  /// one, which is what [title] is for.
+  final int? malId;
+
+  /// Searched for when there is no [malId]. Less certain than an id, so it is
+  /// only used when there is no id to use.
+  final String? title;
+
+  final WidgetBuilder placeholder;
+  final WidgetBuilder errorWidget;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+  final int? memCacheWidth;
+  final FilterQuality filterQuality;
+  final Duration fadeInDuration;
+
+  @override
+  ConsumerState<FallbackPosterImage> createState() =>
+      _FallbackPosterImageState();
+}
+
+class _FallbackPosterImageState extends ConsumerState<FallbackPosterImage> {
+  String? _fallbackUrl;
+  bool _primaryFailed = false;
+  bool _lookedUp = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _adoptCachedFallback();
+    _resolveWhenNothingToShow();
+  }
+
+  @override
+  void didUpdateWidget(FallbackPosterImage old) {
+    super.didUpdateWidget(old);
+    if (old.imageUrl != widget.imageUrl ||
+        old.malId != widget.malId ||
+        old.title != widget.title) {
+      _fallbackUrl = null;
+      _primaryFailed = false;
+      _lookedUp = false;
+      _adoptCachedFallback();
+      _resolveWhenNothingToShow();
+    }
+  }
+
+  /// A title already resolved for another card is known synchronously, so its
+  /// poster is used from the first frame instead of failing once more first.
+  void _adoptCachedFallback() {
+    final service = ref.read(artworkFallbackServiceProvider);
+    final malId = widget.malId;
+    final title = widget.title?.trim() ?? '';
+
+    String? cached;
+    if (malId != null && malId > 0 && service.hasResolved(malId)) {
+      cached = service.cached(malId);
+      _lookedUp = true;
+    } else if (title.isNotEmpty && service.hasResolvedTitle(title)) {
+      cached = service.cachedForTitle(title);
+      _lookedUp = true;
+    }
+    if (cached == null || cached.isEmpty) return;
+    _fallbackUrl = cached;
+  }
+
+  /// Starts the lookup without waiting for a load to fail, when there is
+  /// either nothing to load or the only candidate sits on a host already
+  /// known to be unreachable. Waiting for that request to time out is the
+  /// difference between a poster appearing at once and appearing late.
+  void _resolveWhenNothingToShow() {
+    if (_fallbackUrl != null) return;
+    final url = widget.imageUrl.trim();
+    final doomed = url.isEmpty || (malArtworkUnreachable.value && isMalArtworkUrl(url));
+    if (!doomed) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _resolveFallback();
+    });
+  }
+
+  Future<void> _resolveFallback() async {
+    if (_lookedUp) return;
+    final service = ref.read(artworkFallbackServiceProvider);
+    final malId = widget.malId;
+    final title = widget.title?.trim() ?? '';
+
+    final String? url;
+    if (malId != null && malId > 0) {
+      _lookedUp = true;
+      url = await service.posterFor(malId);
+    } else if (title.isNotEmpty) {
+      _lookedUp = true;
+      url = await service.posterForTitle(title);
+    } else {
+      return;
+    }
+
+    if (!mounted || url == null || url.isEmpty) return;
+    setState(() => _fallbackUrl = url);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = _fallbackUrl ?? widget.imageUrl;
+    if (url.trim().isEmpty) return widget.errorWidget(context);
+
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: widget.fit,
+      width: widget.width,
+      height: widget.height,
+      memCacheWidth: widget.memCacheWidth,
+      filterQuality: widget.filterQuality,
+      placeholder: (context, _) => widget.placeholder(context),
+      errorWidget: (context, _, _) {
+        // Only the catalog's own URL is worth replacing; if the replacement
+        // fails too there is nothing further to try.
+        if (_fallbackUrl == null && !_primaryFailed) {
+          _primaryFailed = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _resolveFallback();
+          });
+        }
+        return widget.errorWidget(context);
+      },
+      fadeOutDuration: Duration.zero,
+      fadeInDuration: widget.fadeInDuration,
+      useOldImageOnUrlChange: true,
+    );
+  }
+}

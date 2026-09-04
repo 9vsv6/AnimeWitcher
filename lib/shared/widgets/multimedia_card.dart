@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import '../../core/domain/entity/multimedia_item.dart';
 import '../../core/utils/artwork_quality.dart';
@@ -7,6 +6,7 @@ import '../../core/utils/catalog_label.dart';
 import '../../core/utils/image_fallbacks.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import 'cards_wrapper.dart';
+import 'fallback_poster_image.dart';
 import 'shimmer_placeholder.dart';
 import 'thumbnail_error_placeholder.dart';
 
@@ -164,6 +164,10 @@ class MultimediaCard extends StatelessWidget {
   /// Optional yellow badge at the top-right (`مدبلج`, relation, …).
   final String? posterBadge;
 
+  /// MyAnimeList id, used only to find replacement artwork when the
+  /// catalog's poster host cannot be reached.
+  final int? malId;
+
   const MultimediaCard({
     super.key,
     required this.imageUrl,
@@ -179,6 +183,7 @@ class MultimediaCard extends StatelessWidget {
     this.subtitle,
     this.year,
     this.posterBadge,
+    this.malId,
   });
 
   MultimediaCard.fromItem({
@@ -193,6 +198,9 @@ class MultimediaCard extends StatelessWidget {
     this.showImageLoadingShimmer = true,
     bool showRelationBadge = false,
   }) : imageUrl = AppImageFallbacks.poster(item.posterUrl, label: item.title),
+       malId = int.tryParse(
+         (item.syncData?['malId'] ?? item.syncData?['mal_id'] ?? '').trim(),
+       ),
        title = item.title,
        episodeBadge = item.episodeBadge,
        subtitle = multimediaCardSubtitle(item),
@@ -234,13 +242,15 @@ class MultimediaCard extends StatelessWidget {
       tag: heroTag,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(MultimediaCardLayout.posterRadius),
-        child: hasImageUrl
+        // A title with no catalog artwork still goes through the fallback
+        // widget: an id is enough to find a poster elsewhere.
+        child: (hasImageUrl || (malId != null && malId! > 0))
             ? ArtworkDecode(
                 paintedWidth: cardWidth,
                 builder: (BuildContext context, int? decodeWidth) =>
                     _buildPoster(
                       context,
-                      normalizedImageUrl,
+                      normalizedImageUrl ?? '',
                       decodeWidth: decodeWidth,
                     ),
               )
@@ -312,20 +322,19 @@ class MultimediaCard extends StatelessWidget {
     String imageUrl, {
     required int? decodeWidth,
   }) {
-    return CachedNetworkImage(
+    return FallbackPosterImage(
       imageUrl: imageUrl,
+      malId: malId,
+      title: title,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
       memCacheWidth: decodeWidth,
       filterQuality: FilterQuality.medium,
-      placeholder: (context, url) => showImageLoadingShimmer
+      placeholder: (context) => showImageLoadingShimmer
           ? ShimmerPlaceholder(borderRadius: MultimediaCardLayout.posterRadius)
           : _buildImageLoadingCard(context),
-      errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(label: title),
-      fadeOutDuration: Duration.zero,
-      fadeInDuration: const Duration(milliseconds: 120),
-      useOldImageOnUrlChange: true,
+      errorWidget: (context) => ThumbnailErrorPlaceholder(label: title),
     );
   }
 

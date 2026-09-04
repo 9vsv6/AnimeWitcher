@@ -698,6 +698,48 @@ class StorageService {
         false;
   }
 
+  // --- Artwork hosts ---
+  // Remembers whether the MyAnimeList image CDN answered last time it was
+  // probed, so the first frame can pick reachable artwork without waiting.
+  Future<void> setMalArtworkUnreachable(bool unreachable) async {
+    await _settingsBox.put('mal_artwork_unreachable', unreachable);
+    await _settingsBox.put(
+      'mal_artwork_probed_at',
+      DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  bool isMalArtworkUnreachable() {
+    return (_settingsBox.get('mal_artwork_unreachable', defaultValue: false)
+            as bool?) ??
+        false;
+  }
+
+  DateTime? malArtworkProbedAt() {
+    final raw = _settingsBox.get('mal_artwork_probed_at');
+    if (raw is! int) return null;
+    return DateTime.fromMillisecondsSinceEpoch(raw);
+  }
+
+  // Posters resolved from AniZip/Kitsu for titles whose catalog artwork
+  // cannot be reached. Persisted so a restart paints them immediately
+  // instead of re-asking for every card.
+  Future<void> setFallbackPosters(Map<String, String> value) async {
+    await _settingsBox.put('artwork_fallback_posters_json', jsonEncode(value));
+  }
+
+  Map<String, String> getFallbackPosters() {
+    try {
+      final raw = _settingsBox.get('artwork_fallback_posters_json');
+      if (raw is! String || raw.trim().isEmpty) return <String, String>{};
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return <String, String>{};
+      return decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
+
   // --- Onboarding ---
   //
   // Windows ships as a plain extracted folder rather than an installer that

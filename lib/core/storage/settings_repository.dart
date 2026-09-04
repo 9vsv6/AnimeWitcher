@@ -119,6 +119,13 @@ class SettingsRepository {
     return _storageService.isAlwaysOnTop();
   }
 
+  Future<void> setMalArtworkUnreachable(bool unreachable) =>
+      _storageService.setMalArtworkUnreachable(unreachable);
+
+  bool isMalArtworkUnreachable() => _storageService.isMalArtworkUnreachable();
+
+  DateTime? malArtworkProbedAt() => _storageService.malArtworkProbedAt();
+
   Future<void> setWelcomeDialogSeen(bool seen) async {
     await _storageService.setWelcomeDialogSeen(seen);
   }

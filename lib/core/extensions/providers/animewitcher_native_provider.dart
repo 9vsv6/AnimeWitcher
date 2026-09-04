@@ -11,6 +11,7 @@ import '../../network/next_airing_timeout.dart';
 import '../../network/stale_connection_retry.dart';
 import '../../storage/settings_repository.dart';
 import '../../utils/episode_label.dart';
+import '../../utils/artwork_host_fallback.dart';
 import '../../utils/safe_uri.dart';
 import '../base_provider.dart';
 import 'mediafire_utils.dart';
@@ -1404,6 +1405,26 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     ]);
   }
 
+  /// Picks the first artwork URL that is worth trying.
+  ///
+  /// Candidate order is the catalog's preference, except that MyAnimeList
+  /// URLs drop to the back when that CDN is unreachable — otherwise every
+  /// poster resolves to a URL that simply never loads.
+  ///
+  /// [lastResort] holds artwork of a different shape, such as the wide cover
+  /// standing in for a missing poster. Those are only ever reached once the
+  /// real candidates are exhausted: promoting one because it happens to sit
+  /// on a reachable host puts the wrong image on the card.
+  String _pickArtwork(
+    List<dynamic> candidates, {
+    List<dynamic> lastResort = const <dynamic>[],
+  }) {
+    final urls = preferReachableArtwork(candidates.map(_text));
+    if (urls.isNotEmpty) return urls.first;
+    final fallback = preferReachableArtwork(lastResort.map(_text));
+    return fallback.isEmpty ? '' : fallback.first;
+  }
+
   String _highestQualityPosterFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
     final candidates = <dynamic>[
@@ -1411,13 +1432,11 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       _aniListPosterFromHit(source),
       source['poster_uri'],
       poster['medium'],
-      source['cover_uri'],
     ];
-    for (final candidate in candidates) {
-      final value = _text(candidate);
-      if (value.isNotEmpty) return value;
-    }
-    return '';
+    return _pickArtwork(
+      candidates,
+      lastResort: <dynamic>[source['cover_uri']],
+    );
   }
 
   String _posterFromHit(Map<String, dynamic> source) {
@@ -1431,26 +1450,20 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       poster['medium'],
       poster['large'],
       _aniListPosterFromHit(source),
-      source['cover_uri'],
     ];
-    for (final candidate in candidates) {
-      final value = _text(candidate);
-      if (value.isNotEmpty) return value;
-    }
-    return '';
+    return _pickArtwork(
+      candidates,
+      lastResort: <dynamic>[source['cover_uri']],
+    );
   }
 
   String _coverFromHit(Map<String, dynamic> source) {
     final poster = _map(source['poster']);
-    for (final candidate in <dynamic>[
+    return _pickArtwork(<dynamic>[
       source['cover_uri'],
       poster['large'],
       source['poster_uri'],
-    ]) {
-      final value = _text(candidate);
-      if (value.isNotEmpty) return value;
-    }
-    return '';
+    ]);
   }
 
   bool _isMovieType(dynamic raw) {
@@ -1553,9 +1566,31 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       }
     }
 
+    // Catalog cards carried no ids at all, so anything opened straight from
+    // a list reached the player and the artwork layer without a MyAnimeList
+    // id to look anything up with.
+    final hitSync = <String, String>{};
+    final hitMalId = _malId(source);
+    if (hitMalId > 0) {
+      hitSync['malId'] = '$hitMalId';
+      hitSync['mal_id'] = '$hitMalId';
+    }
+    final hitAniListId = _firstText(source, const <String>[
+      'aniList_id',
+      'anilist_id',
+      'aniListId',
+      'anilistId',
+    ]);
+    if (hitAniListId.isNotEmpty) {
+      hitSync['anilist'] = hitAniListId;
+      hitSync['anilistId'] = hitAniListId;
+      hitSync['anilist_id'] = hitAniListId;
+    }
+
     return MultimediaItem(
       title: title.isEmpty ? 'AnimeWitcher' : title,
       url: _makeAnimeUrl(source),
+      syncData: hitSync.isEmpty ? null : hitSync,
       posterUrl: _posterFromHit(source),
       fullPosterUrl: _highestQualityPosterFromHit(source),
       description: description.isEmpty ? null : description,
@@ -3470,6 +3505,7 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       source: 'AnimeWitcher',
       catalogType: item.catalogType,
       isDubbed: item.isDubbed,
+      syncData: item.syncData,
     );
   }
 
