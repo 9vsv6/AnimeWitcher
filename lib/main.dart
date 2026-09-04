@@ -15,6 +15,7 @@ import 'core/theme/app_theme.dart';
 import 'core/storage/storage_service.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'core/utils/app_utils.dart';
+import 'core/utils/artwork_host_fallback.dart';
 import 'core/utils/artwork_quality.dart';
 import 'core/utils/factory_reset.dart';
 import 'core/utils/localized_text.dart';
@@ -178,6 +179,12 @@ class _AppRootState extends State<AppRoot> {
       // (and the matching image cache budget) before the first screen paints.
       applyArtworkQuality(_storageService.isHighQualityPostersEnabled());
 
+      // Artwork mostly lives on MyAnimeList's CDN, which some networks block.
+      // Publish last run's answer immediately so the first screen already
+      // picks reachable artwork, then re-check in the background.
+      seedMalArtworkReachability(_storageService.isMalArtworkUnreachable());
+      unawaited(_refreshArtworkHostReachability());
+
       if (Platform.isMacOS || Platform.isWindows) {
         final alwaysOnTop = _storageService.isAlwaysOnTop();
         await windowManager.setAlwaysOnTop(alwaysOnTop);
@@ -196,6 +203,24 @@ class _AppRootState extends State<AppRoot> {
         });
       }
     }
+  }
+
+  /// Re-checks whether the MyAnimeList CDN answers, and remembers it. Runs off
+  /// the critical path: the seeded value already drives the first frame, and a
+  /// changed answer only needs to apply from the next screen onwards.
+  Future<void> _refreshArtworkHostReachability() async {
+    final probedAt = _storageService.malArtworkProbedAt();
+    if (probedAt != null &&
+        DateTime.now().difference(probedAt) < probeTtl &&
+        !_storageService.isMalArtworkUnreachable()) {
+      // Recently confirmed reachable; nothing to re-check. A previous
+      // "unreachable" is always re-probed so the app recovers on its own.
+      return;
+    }
+    final unreachable = await probeMalArtworkUnreachable();
+    if (!mounted) return;
+    seedMalArtworkReachability(unreachable);
+    await _storageService.setMalArtworkUnreachable(unreachable);
   }
 
   @override
