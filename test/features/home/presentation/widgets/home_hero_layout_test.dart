@@ -52,7 +52,7 @@ void main() {
 
     await check(const Size(390, 844), 44, 219.375);
     await check(const Size(844, 390), 0, 280.8);
-    await check(const Size(768, 1024), 0, 614.4);
+    await check(const Size(768, 1024), 0, 432);
     await check(const Size(1440, 900), 0, 540);
   });
 }

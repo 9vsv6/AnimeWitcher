@@ -14,8 +14,8 @@ class HomeHeroFrame extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final size = MediaQuery.sizeOf(context);
     final profile = ref.watch(deviceProfileProvider).asData?.value;
-    final isWide = profile?.isTv == true ||
-        context.isTv ||
+    final isTv = profile?.isTv ?? context.isTv;
+    final isWide = isTv ||
         profile?.isLargeScreen == true ||
         context.isTabletOrLarger;
     final isCompactLandscape = context.isHandsetLandscape ||
@@ -24,7 +24,7 @@ class HomeHeroFrame extends ConsumerWidget {
         ResponsiveBreakpoints.isHandset(context) &&
         size.height > size.width;
     final topGap = isPortraitPhone ? MediaQuery.viewPaddingOf(context).top : 0.0;
-    final height = isWide
+    final height = (context.isDesktop || isTv)
         ? size.height * (isCompactLandscape ? 0.72 : 0.60)
         : (isCompactLandscape ? size.height * 0.72 : size.width * 9 / 16);
 
