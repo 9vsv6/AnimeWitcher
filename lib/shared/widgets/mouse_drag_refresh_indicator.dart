@@ -1,14 +1,23 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-const secondaryMouseRefreshListenerKey =
-    ValueKey<String>('secondary-mouse-refresh-listener');
+const mouseDragRefreshListenerKey = ValueKey<String>(
+  'mouse-drag-refresh-listener',
+);
 
-/// A [RefreshIndicator] that also supports a desktop-style secondary-mouse
-/// pull gesture. Starting at the top of the scrollable, hold the right mouse
-/// button and drag downward to refresh.
-class SecondaryMouseRefreshIndicator extends StatefulWidget {
-  const SecondaryMouseRefreshIndicator({
+/// A [RefreshIndicator] that a mouse can also pull.
+///
+/// A phone refreshes by dragging the list down past its top, which a mouse
+/// wheel cannot express — a wheel at the top of a list simply does nothing.
+/// So the same gesture is offered to the pointer: press and hold at the top
+/// of the list and drag downward.
+///
+/// The listener is raw rather than a recognizer in the gesture arena, so
+/// whatever lies under the pointer keeps its own click. A tap is dropped as
+/// soon as the pointer travels further than a mouse's hair-thin slop, well
+/// before the pull is long enough to count.
+class MouseDragRefreshIndicator extends StatefulWidget {
+  const MouseDragRefreshIndicator({
     super.key,
     required this.onRefresh,
     required this.child,
@@ -18,24 +27,22 @@ class SecondaryMouseRefreshIndicator extends StatefulWidget {
   final Widget child;
 
   @override
-  State<SecondaryMouseRefreshIndicator> createState() =>
-      _SecondaryMouseRefreshIndicatorState();
+  State<MouseDragRefreshIndicator> createState() =>
+      _MouseDragRefreshIndicatorState();
 }
 
-class _SecondaryMouseRefreshIndicatorState
-    extends State<SecondaryMouseRefreshIndicator> {
+class _MouseDragRefreshIndicatorState extends State<MouseDragRefreshIndicator> {
   static const double _triggerDistance = 72;
 
   final GlobalKey<RefreshIndicatorState> _indicatorKey =
       GlobalKey<RefreshIndicatorState>();
-  int? _secondaryPointer;
+  int? _dragPointer;
   Offset? _dragStart;
   bool _isAtTop = true;
   bool _isRefreshing = false;
 
   bool _onScrollNotification(ScrollNotification notification) {
-    if (notification.depth == 0 &&
-        notification.metrics.axis == Axis.vertical) {
+    if (notification.depth == 0 && notification.metrics.axis == Axis.vertical) {
       _isAtTop = notification.metrics.extentBefore <= 0.5;
     }
     return false;
@@ -43,25 +50,25 @@ class _SecondaryMouseRefreshIndicatorState
 
   void _onPointerDown(PointerDownEvent event) {
     if (event.kind != PointerDeviceKind.mouse ||
-        event.buttons & kSecondaryMouseButton == 0 ||
+        event.buttons & kPrimaryMouseButton == 0 ||
         !_isAtTop ||
         _isRefreshing) {
       return;
     }
-    _secondaryPointer = event.pointer;
+    _dragPointer = event.pointer;
     _dragStart = event.position;
   }
 
   void _onPointerMove(PointerMoveEvent event) {
-    if (_secondaryPointer != event.pointer || _dragStart == null) return;
-    if (event.buttons & kSecondaryMouseButton == 0) {
+    if (_dragPointer != event.pointer || _dragStart == null) return;
+    if (event.buttons & kPrimaryMouseButton == 0) {
       _resetGesture(event.pointer);
       return;
     }
 
     final delta = event.position - _dragStart!;
     if (delta.dy >= _triggerDistance && delta.dy > delta.dx.abs()) {
-      _secondaryPointer = null;
+      _dragPointer = null;
       _dragStart = null;
       _showRefreshIndicator();
     }
@@ -78,15 +85,15 @@ class _SecondaryMouseRefreshIndicatorState
   }
 
   void _resetGesture(int pointer) {
-    if (_secondaryPointer != pointer) return;
-    _secondaryPointer = null;
+    if (_dragPointer != pointer) return;
+    _dragPointer = null;
     _dragStart = null;
   }
 
   @override
   Widget build(BuildContext context) {
     return Listener(
-      key: secondaryMouseRefreshListenerKey,
+      key: mouseDragRefreshListenerKey,
       behavior: HitTestBehavior.translucent,
       onPointerDown: _onPointerDown,
       onPointerMove: _onPointerMove,

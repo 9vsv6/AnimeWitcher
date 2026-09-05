@@ -6,7 +6,7 @@ import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/account/account_providers.dart';
@@ -363,7 +363,7 @@ class _ScheduleDayBody extends StatelessWidget {
       );
     }
     if (state.items.isEmpty) {
-      return SecondaryMouseRefreshIndicator(
+      return MouseDragRefreshIndicator(
         onRefresh: onRefresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -379,7 +379,7 @@ class _ScheduleDayBody extends StatelessWidget {
         ),
       );
     }
-    return SecondaryMouseRefreshIndicator(
+    return MouseDragRefreshIndicator(
       onRefresh: onRefresh,
       child: _ScheduleGrid(
         items: state.items,

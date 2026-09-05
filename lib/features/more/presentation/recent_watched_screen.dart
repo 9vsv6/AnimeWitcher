@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
@@ -56,7 +56,7 @@ class _RecentWatchedScreenState extends ConsumerState<RecentWatchedScreen> {
     if (_initialSyncRunning && history.isEmpty) {
       body = const AnimeCatalogShimmer();
     } else if (history.isEmpty) {
-      body = SecondaryMouseRefreshIndicator(
+      body = MouseDragRefreshIndicator(
         onRefresh: _refreshFromServer,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -69,7 +69,7 @@ class _RecentWatchedScreenState extends ConsumerState<RecentWatchedScreen> {
         ),
       );
     } else {
-      body = SecondaryMouseRefreshIndicator(
+      body = MouseDragRefreshIndicator(
         onRefresh: _refreshFromServer,
         child: _RecentWatchedGrid(
           items: history,

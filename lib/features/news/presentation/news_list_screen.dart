@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/extensions/base_provider.dart';
@@ -138,7 +138,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
           ),
         ),
       ),
-      body: SecondaryMouseRefreshIndicator(
+      body: MouseDragRefreshIndicator(
         onRefresh: _refresh,
         child: columns == 1
             ? ListView.separated(

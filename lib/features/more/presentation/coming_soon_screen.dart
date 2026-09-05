@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
@@ -185,7 +185,7 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
 
     final isDesktop = context.isDesktop;
     final extra = _loading || (_error != null && _hasMore) ? 1 : 0;
-    return SecondaryMouseRefreshIndicator(
+    return MouseDragRefreshIndicator(
       onRefresh: _refresh,
       child: CatalogLtr(
         child: GridView.builder(

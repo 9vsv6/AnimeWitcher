@@ -83,7 +83,7 @@ class _PagedRailState extends State<PagedRail> {
   /// [UserScrollNotification.direction] becomes idle on completion) and
   /// we'd recurse forever.
   bool _snapping = false;
-  int? _secondaryPointer;
+  int? _dragPointer;
 
   @override
   void initState() {
@@ -133,8 +133,10 @@ class _PagedRailState extends State<PagedRail> {
     }
 
     final rawPx = targetIdx * stride;
-    final clamped =
-        rawPx.clamp(position.minScrollExtent, position.maxScrollExtent);
+    final clamped = rawPx.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
     if ((clamped - px).abs() < 0.5) return;
 
     _snapping = true;
@@ -145,8 +147,8 @@ class _PagedRailState extends State<PagedRail> {
           curve: widget.snapCurve,
         )
         .whenComplete(() {
-      if (mounted) _snapping = false;
-    });
+          if (mounted) _snapping = false;
+        });
   }
 
   bool _onUserScroll(UserScrollNotification notification) {
@@ -159,17 +161,22 @@ class _PagedRailState extends State<PagedRail> {
     return false;
   }
 
+  // Dragging the rail sideways with the mouse held down. The listener is
+  // raw rather than a recognizer in the gesture arena, which is what lets a
+  // card underneath still take a plain click: a tap is dropped as soon as the
+  // pointer travels further than a mouse's hair-thin slop, so a drag scrolls
+  // and a click opens.
   void _onPointerDown(PointerDownEvent event) {
     if (event.kind != PointerDeviceKind.mouse ||
-        event.buttons & kSecondaryMouseButton == 0) {
+        event.buttons & kPrimaryMouseButton == 0) {
       return;
     }
-    _secondaryPointer = event.pointer;
+    _dragPointer = event.pointer;
   }
 
   void _onPointerMove(PointerMoveEvent event) {
-    if (_secondaryPointer != event.pointer ||
-        event.buttons & kSecondaryMouseButton == 0 ||
+    if (_dragPointer != event.pointer ||
+        event.buttons & kPrimaryMouseButton == 0 ||
         !_controller.hasClients) {
       return;
     }
@@ -187,9 +194,9 @@ class _PagedRailState extends State<PagedRail> {
     }
   }
 
-  void _finishSecondaryDrag(PointerEvent event) {
-    if (_secondaryPointer != event.pointer) return;
-    _secondaryPointer = null;
+  void _finishMouseDrag(PointerEvent event) {
+    if (_dragPointer != event.pointer) return;
+    _dragPointer = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _snapToNearest();
     });
@@ -225,8 +232,8 @@ class _PagedRailState extends State<PagedRail> {
       behavior: HitTestBehavior.translucent,
       onPointerDown: _onPointerDown,
       onPointerMove: _onPointerMove,
-      onPointerUp: _finishSecondaryDrag,
-      onPointerCancel: _finishSecondaryDrag,
+      onPointerUp: _finishMouseDrag,
+      onPointerCancel: _finishMouseDrag,
       child: NotificationListener<UserScrollNotification>(
         onNotification: _onUserScroll,
         child: listView,

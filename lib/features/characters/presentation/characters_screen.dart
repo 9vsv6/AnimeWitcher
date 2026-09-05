@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/account/account_providers.dart';
@@ -430,7 +430,7 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
     }
 
     final extra = _catalogLoading && _activeQuery.isEmpty ? 1 : 0;
-    return SecondaryMouseRefreshIndicator(
+    return MouseDragRefreshIndicator(
       onRefresh: _refreshVisible,
       child: CatalogLtr(
         child: GridView.builder(
@@ -521,7 +521,7 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
     }
 
     final extra = _favoritesLoading ? 1 : 0;
-    return SecondaryMouseRefreshIndicator(
+    return MouseDragRefreshIndicator(
       onRefresh: () => _loadFavorites(reset: true),
       child: CatalogLtr(
         child: GridView.builder(

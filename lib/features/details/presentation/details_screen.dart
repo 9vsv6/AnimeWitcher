@@ -1,6 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
@@ -1111,7 +1111,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 controller: _detailsTabController,
                 children: [
                   _KeepAliveDetailsTab(
-                    child: SecondaryMouseRefreshIndicator(
+                    child: MouseDragRefreshIndicator(
                       onRefresh: _refreshDetails,
                       child: CustomScrollView(
                         key: const PageStorageKey<String>('details-info-tab'),
@@ -1131,7 +1131,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     ),
                   ),
                   _KeepAliveDetailsTab(
-                    child: SecondaryMouseRefreshIndicator(
+                    child: MouseDragRefreshIndicator(
                       onRefresh: _refreshDetails,
                       child: CustomScrollView(
                         key: const PageStorageKey<String>(
@@ -1681,7 +1681,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     ),
                   ),
                   episodesBuilder: (context) {
-                    return SecondaryMouseRefreshIndicator(
+                    return MouseDragRefreshIndicator(
                       onRefresh: _refreshDetails,
                       child: SingleChildScrollView(
                         key: const PageStorageKey<String>(

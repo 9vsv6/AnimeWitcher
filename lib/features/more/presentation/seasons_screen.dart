@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:animewitcher/shared/widgets/underline_segment_tabs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -164,7 +164,7 @@ class _SeasonsScreenState extends ConsumerState<SeasonsScreen>
                       LazyTabChild(
                         controller: _tabController,
                         index: index,
-                        builder: (context) => SecondaryMouseRefreshIndicator(
+                        builder: (context) => MouseDragRefreshIndicator(
                           onRefresh: _refreshSeasons,
                           child: _tabBody(data, isArabic, index),
                         ),
