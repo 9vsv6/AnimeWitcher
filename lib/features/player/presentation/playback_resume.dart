@@ -54,6 +54,21 @@ class PlaybackResume {
     }
   }
 
+  /// Open only while the route/source that requested the bookmark is active.
+  /// Checking after the await is essential for fresh downloaded episodes: the
+  /// cloud lookup can finish after Back has already stopped the player.
+  static Future<bool> openWhenReady({
+    required bool Function() isActive,
+    required Future<int> Function() resolvePosition,
+    required Future<void> Function(int positionMs) open,
+  }) async {
+    if (!isActive()) return false;
+    final position = await resolvePosition();
+    if (!isActive()) return false;
+    await open(position);
+    return isActive();
+  }
+
   static bool isNear({
     required int currentMs,
     required int targetMs,

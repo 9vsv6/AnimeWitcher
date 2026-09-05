@@ -4,6 +4,94 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:animewitcher/features/player/presentation/playback_resume.dart';
 
 void main() {
+  group('PlaybackResume.openWhenReady', () {
+    test('exiting a fresh download during cloud lookup prevents autoplay', () async {
+      final cloud = Completer<int>();
+      var active = true;
+      var opens = 0;
+      final startup = PlaybackResume.openWhenReady(
+        isActive: () => active,
+        resolvePosition: () => PlaybackResume.resolveStartupPosition(
+          localPositionMs: 0,
+          cloudPositionMs: () => cloud.future,
+        ),
+        open: (_) async { opens++; },
+      );
+
+      // Back stops the engine while the no-bookmark path is still waiting.
+      active = false;
+      cloud.complete(0);
+      expect(await startup, isFalse);
+      expect(opens, 0);
+    });
+
+    test('a late bookmark cannot open over a replacement episode', () async {
+      final cloud = Completer<int>();
+      var currentSession = 1;
+      final requestedSession = currentSession;
+      var opens = 0;
+      final startup = PlaybackResume.openWhenReady(
+        isActive: () => currentSession == requestedSession,
+        resolvePosition: () => cloud.future,
+        open: (_) async { opens++; },
+      );
+      currentSession = 2;
+      cloud.complete(90000);
+      expect(await startup, isFalse);
+      expect(opens, 0);
+    });
+
+    test('cloud failure after leaving cannot fall back to autoplay', () async {
+      final cloud = Completer<int>();
+      var active = true;
+      var opens = 0;
+      final startup = PlaybackResume.openWhenReady(
+        isActive: () => active,
+        resolvePosition: () => PlaybackResume.resolveStartupPosition(
+          localPositionMs: 0,
+          cloudPositionMs: () => cloud.future,
+        ),
+        open: (_) async { opens++; },
+      );
+      active = false;
+      cloud.completeError(StateError('offline'));
+      expect(await startup, isFalse);
+      expect(opens, 0);
+    });
+
+    test('active playback keeps the existing resume position', () async {
+      int? openedAt;
+      final opened = await PlaybackResume.openWhenReady(
+        isActive: () => true,
+        resolvePosition: () => PlaybackResume.resolveStartupPosition(
+          localPositionMs: 120000,
+          cloudPositionMs: () async => throw StateError('must use local bookmark'),
+        ),
+        open: (position) async { openedAt = position; },
+      );
+      expect(opened, isTrue);
+      expect(openedAt, 120000);
+    });
+
+    test('exit during engine open skips subsequent resume work', () async {
+      final opening = Completer<void>();
+      final started = Completer<void>();
+      var active = true;
+      final startup = PlaybackResume.openWhenReady(
+        isActive: () => active,
+        resolvePosition: () async => 90000,
+        open: (_) {
+          started.complete();
+          return opening.future;
+        },
+      );
+      await started.future;
+      active = false;
+      opening.complete();
+      expect(await startup, isFalse);
+    });
+  });
+
   group('PlaybackResume.shouldHoldUntilSeeked', () {
     test('holds for a mid-episode bookmark', () {
       expect(PlaybackResume.shouldHoldUntilSeeked(15 * 60 * 1000), isTrue);

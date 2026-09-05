@@ -262,6 +262,7 @@ class PlayerController extends Notifier<PlayerState> {
   Episode? _episode;
   bool _isInitialized = false;
   bool _isDisposed = false;
+  int _sourceSessionSerial = 0;
 
   bool _hasMarkedWatched = false;
   bool _hasRefreshedCloudProgress = false;
@@ -553,7 +554,7 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   int _beginSourceSession({bool resetAttempts = false}) {
-    final nextSessionId = state.sourceSessionId + 1;
+    final nextSessionId = ++_sourceSessionSerial;
     _userDismissedOverlay = false;
     state = state.copyWith(
       sourceSessionId: nextSessionId,
@@ -563,7 +564,7 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   bool _isCurrentSourceSession(int sessionId) =>
-      state.sourceSessionId == sessionId;
+      !_isDisposed && _sourceSessionSerial == sessionId;
 
   void _setSourceAttemptsFromStreams(
     List<StreamResult> streams, {
@@ -622,6 +623,8 @@ class PlayerController extends Notifier<PlayerState> {
     // Safety net: if the provider is somehow disposed without
     // disposeController() being called, clean up subscriptions.
     ref.onDispose(() {
+      _isDisposed = true;
+      ++_sourceSessionSerial;
       _stallTimer?.cancel();
       _bufferWatchdogTimer?.cancel();
       _bufferingHideTimer?.cancel();
@@ -685,8 +688,9 @@ class PlayerController extends Notifier<PlayerState> {
     StreamResult? selectedSource,
     VideoController? videoViewController,
   }) async {
-    state = const PlayerState(); // Resets all fields including errorMessage
-    _isDisposed = false; // Reset disposal flag on re-initialization
+    _isDisposed = false;
+    // The provider survives routes. Never reuse a previous route's source ID.
+    state = PlayerState(sourceSessionId: ++_sourceSessionSerial);
     unawaited(_logSub?.cancel());
     _logSub = null;
     _hasConfirmedPlaybackFrame = false;
@@ -775,8 +779,9 @@ class PlayerController extends Notifier<PlayerState> {
       }
       await _initStream();
     }
-    if (_isDisposed) return;
+    if (_isDisposed || !identical(_player, player)) return;
     await applySubtitleSettings();
+    if (_isDisposed || !identical(_player, player)) return;
 
     // Restore the persisted default playback speed for this session.
     // Skipped at 1.0× (engine default — no-op) and on live streams (rate
@@ -2423,12 +2428,15 @@ class PlayerController extends Notifier<PlayerState> {
     required bool useVideoView,
     bool play = true,
   }) async {
+    final sourceSessionId = state.sourceSessionId;
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     _resolvedPlayUrl = playUrl;
     if (useVideoView) {
       // Pause media_kit so it stops consuming bandwidth while video_view plays.
       // (media_kit.open() will replace it if the user switches back.)
       if (!state.useExoPlayer) {
         await _player.pause();
+        if (!_isCurrentSourceSession(sourceSessionId)) return;
       }
       _videoViewController?.setAutoPlay(play);
 
@@ -2522,6 +2530,7 @@ class PlayerController extends Notifier<PlayerState> {
         headers,
         proxyOptions,
       );
+      if (!_isCurrentSourceSession(sourceSessionId)) return;
       if (simplified != null) {
         mediaKitUrl = LocalProxyService.instance.serveM3u8(simplified);
         if (kDebugMode) {
@@ -2544,7 +2553,9 @@ class PlayerController extends Notifier<PlayerState> {
       }
     }
 
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     await _player.open(Media(mediaKitUrl, httpHeaders: headers), play: play);
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     state = state.copyWith(useExoPlayer: false, isSeekable: true);
     _scheduleAutoSubtitleSelection();
   }
@@ -2575,9 +2586,12 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<void> play() async {
+    final sourceSessionId = state.sourceSessionId;
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     if (_shouldRefreshSignedUrl() && !_isReconnectingCurrentStream) {
       _pausedAt = null;
       await _triggerMidPlaybackReconnect(consumeRetryBudget: false);
+      if (!_isCurrentSourceSession(sourceSessionId)) return;
       if (isPlaying) return;
     } else {
       _pausedAt = null;
@@ -2786,8 +2800,10 @@ class PlayerController extends Notifier<PlayerState> {
     int? sourceSessionId,
     bool manualSelection = false,
   }) async {
+    sourceSessionId ??= state.sourceSessionId;
+    if (_isDisposed) return;
     if (index < 0 || index >= state.streams.length) return;
-    if (sourceSessionId != null && !_isCurrentSourceSession(sourceSessionId)) {
+    if (!_isCurrentSourceSession(sourceSessionId)) {
       return;
     }
 
@@ -2822,8 +2838,7 @@ class PlayerController extends Notifier<PlayerState> {
     try {
       final playUrl = await _resolveStreamUrl(stream);
       if (playUrl == null) throw Exception("Failed to resolve stream URL");
-      if (sourceSessionId != null &&
-          !_isCurrentSourceSession(sourceSessionId)) {
+      if (!_isCurrentSourceSession(sourceSessionId)) {
         return;
       }
 
@@ -2833,8 +2848,7 @@ class PlayerController extends Notifier<PlayerState> {
         stream,
         isLive: resolvedIsLive,
       );
-      if (sourceSessionId != null &&
-          !_isCurrentSourceSession(sourceSessionId)) {
+      if (!_isCurrentSourceSession(sourceSessionId)) {
         return;
       }
       state = state.copyWith(isLive: resolvedIsLive, isSeekable: !useVideoView);
@@ -2848,28 +2862,27 @@ class PlayerController extends Notifier<PlayerState> {
         stream,
         useVideoView: useVideoView,
       );
-      if (sourceSessionId != null &&
-          !_isCurrentSourceSession(sourceSessionId)) {
+      if (!_isCurrentSourceSession(sourceSessionId)) {
         return;
       }
 
-      final savedPos = await _resolveResumePosition(isLive: resolvedIsLive);
-      final holdForResume = PlaybackResume.shouldHoldUntilSeeked(savedPos);
-      if (holdForResume) {
-        _pendingResumeSeekPosition = savedPos;
-      }
-
-      await _openResolvedStream(
-        playUrl,
-        stream,
-        headers,
-        useVideoView: useVideoView,
-        play: !holdForResume,
+      var holdForResume = false;
+      final opened = await PlaybackResume.openWhenReady(
+        isActive: () => _isCurrentSourceSession(sourceSessionId!),
+        resolvePosition: () => _resolveResumePosition(isLive: resolvedIsLive),
+        open: (savedPos) async {
+          holdForResume = PlaybackResume.shouldHoldUntilSeeked(savedPos);
+          if (holdForResume) _pendingResumeSeekPosition = savedPos;
+          await _openResolvedStream(
+            playUrl,
+            stream,
+            headers,
+            useVideoView: useVideoView,
+            play: !holdForResume,
+          );
+        },
       );
-      if (sourceSessionId != null &&
-          !_isCurrentSourceSession(sourceSessionId)) {
-        return;
-      }
+      if (!opened) return;
       if (!_hasConfirmedPlaybackFrame) {
         _enterStartupPhase(kind: PlaybackUiPhaseKind.bufferingInitial);
       }
@@ -2877,8 +2890,7 @@ class PlayerController extends Notifier<PlayerState> {
         await _flushPendingResumeSeek();
       }
     } catch (e) {
-      if (sourceSessionId != null &&
-          !_isCurrentSourceSession(sourceSessionId)) {
+      if (!_isCurrentSourceSession(sourceSessionId)) {
         return;
       }
       if (kDebugMode) debugPrint("Stream $index failed: $e");
@@ -3442,8 +3454,13 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  void disposeController() {
+  void disposeController({Player? player}) {
+    // A departing route can finish its animation after another player opens.
+    if (player != null && _isInitialized && !identical(_player, player)) return;
+    if (_isDisposed) return;
     _isDisposed = true;
+    final closingSession = ++_sourceSessionSerial;
+    _pendingResumeSeekPosition = null;
     _stallTimer?.cancel();
     _stallTimer = null;
     _bufferWatchdogTimer?.cancel();
@@ -3475,9 +3492,11 @@ class PlayerController extends Notifier<PlayerState> {
     // will catch any leftovers. Fixes audit finding H5.
     unawaited(_cleanupSubtitleTempFiles());
 
-    saveProgress();
+    if (_isInitialized) saveProgress();
     Future.microtask(() {
-      state = const PlayerState();
+      if (ref.mounted && _isDisposed && _sourceSessionSerial == closingSession) {
+        state = const PlayerState();
+      }
     });
   }
 
@@ -4204,7 +4223,8 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<void> _safeSeekTo(int position) async {
-    if (position <= 0) return;
+    final sourceSessionId = state.sourceSessionId;
+    if (position <= 0 || !_isCurrentSourceSession(sourceSessionId)) return;
 
     // ExoPlayer path: wait until the item reports a duration, then seek.
     if (state.useExoPlayer && _videoViewController != null) {
@@ -4231,6 +4251,7 @@ class PlayerController extends Notifier<PlayerState> {
           }
           durationMs = controller.mediaInfo.value?.duration ?? 0;
         }
+        if (!_isCurrentSourceSession(sourceSessionId)) return;
         final targetMs = durationMs > 0
             ? position.clamp(0, durationMs)
             : position;
@@ -4250,6 +4271,7 @@ class PlayerController extends Notifier<PlayerState> {
             .timeout(const Duration(seconds: 8));
       }
 
+      if (!_isCurrentSourceSession(sourceSessionId)) return;
       final maxMs = duration.inMilliseconds;
       if (maxMs <= 0) return;
 
@@ -4262,6 +4284,7 @@ class PlayerController extends Notifier<PlayerState> {
 
       // Best-effort fallback: some streams can seek before duration is reported.
       try {
+        if (!_isCurrentSourceSession(sourceSessionId)) return;
         await _player.seek(Duration(milliseconds: position));
       } catch (seekError) {
         if (kDebugMode) {
@@ -4276,15 +4299,22 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<void> _seekThenPlay(int positionMs) async {
-    if (positionMs <= 0) return;
+    final sourceSessionId = state.sourceSessionId;
+    if (positionMs <= 0 || !_isCurrentSourceSession(sourceSessionId)) return;
     await pause();
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     await _safeSeekTo(positionMs);
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     await _waitUntilNearResumePosition(positionMs);
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     await play();
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     await _waitUntilNearResumePosition(positionMs);
   }
 
   Future<void> _flushPendingResumeSeek() async {
+    final sourceSessionId = state.sourceSessionId;
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     final pos = _pendingResumeSeekPosition;
     if (pos == null ||
         !PlaybackResume.shouldHoldUntilSeeked(pos) ||
@@ -4298,13 +4328,18 @@ class PlayerController extends Notifier<PlayerState> {
     } catch (e) {
       if (kDebugMode) debugPrint('Resume seek failed: $e');
     } finally {
-      _pendingResumeSeekPosition = null;
-      _isApplyingPendingResumeSeek = false;
+      if (_isCurrentSourceSession(sourceSessionId)) {
+        _pendingResumeSeekPosition = null;
+        _isApplyingPendingResumeSeek = false;
+      }
     }
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     _maybeConfirmPlaybackStarted(_currentPosition.inMilliseconds);
   }
 
   Future<void> _waitUntilNearResumePosition(int targetMs) async {
+    final sourceSessionId = state.sourceSessionId;
+    if (!_isCurrentSourceSession(sourceSessionId)) return;
     bool near() => PlaybackResume.isNear(
       currentMs: _currentPosition.inMilliseconds,
       targetMs: targetMs,
@@ -4312,7 +4347,8 @@ class PlayerController extends Notifier<PlayerState> {
     if (near()) return;
 
     final deadline = DateTime.now().add(PlaybackResume.seekSettleTimeout);
-    while (!_isDisposed && DateTime.now().isBefore(deadline)) {
+    while (_isCurrentSourceSession(sourceSessionId) &&
+        DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       if (near()) return;
     }
@@ -4322,21 +4358,24 @@ class PlayerController extends Notifier<PlayerState> {
     if (isLive) return 0;
 
     final historyRepo = ref.read(historyRepositoryProvider);
+    final account = ref.read(animeWitcherAccountServiceProvider);
+    final mainUrl = _item.url;
+    final progressUrl = _currentProgressUrl;
+    final episode = _resolveCurrentEpisode();
     final isSeries =
         _item.contentType == MultimediaContentType.series ||
         _item.contentType == MultimediaContentType.anime;
 
     int localPosition() {
       if (isSeries) {
-        final ep = _resolveCurrentEpisode();
         return historyRepo.getEpisodePosition(
-          _currentProgressUrl,
-          mainUrl: _item.url,
-          season: ep?.season,
-          episode: ep?.episode,
+          progressUrl,
+          mainUrl: mainUrl,
+          season: episode?.season,
+          episode: episode?.episode,
         );
       }
-      return historyRepo.getPosition(_item.url);
+      return historyRepo.getPosition(mainUrl);
     }
 
     final local = localPosition();
@@ -4350,9 +4389,7 @@ class PlayerController extends Notifier<PlayerState> {
       cloudPositionMs: () async {
         _hasRefreshedCloudProgress = true;
         try {
-          await ref
-              .read(animeWitcherAccountServiceProvider)
-              .syncContinueWatchingItem(_item.url);
+          await account.syncContinueWatchingItem(mainUrl);
         } catch (error) {
           if (kDebugMode) {
             debugPrint('[Player] Cloud progress sync deferred: $error');
@@ -4362,17 +4399,12 @@ class PlayerController extends Notifier<PlayerState> {
         if (PlaybackResume.shouldHoldUntilSeeked(afterSync)) {
           return afterSync;
         }
-        if (isSeries) {
-          final ep = _resolveCurrentEpisode();
-          if (ep != null) {
-            return ref
-                .read(animeWitcherAccountServiceProvider)
-                .remoteEpisodePosition(
-                  mainUrl: _item.url,
-                  episodeUrl: _currentProgressUrl,
-                  refresh: true,
-                );
-          }
+        if (isSeries && episode != null) {
+          return account.remoteEpisodePosition(
+            mainUrl: mainUrl,
+            episodeUrl: progressUrl,
+            refresh: true,
+          );
         }
         return afterSync;
       },
