@@ -309,11 +309,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // must always be cleared on exit (on FireTV, leaving it active also makes
     // the system swallow hardware back-button events).
     //
-    // Use manual + all overlays rather than edgeToEdge: leaving immersiveSticky
-    // for edgeToEdge does NOT reliably re-show the status/navigation bars on
-    // Android, so the user returns to a normal screen with the status bar
-    // still hidden. manual + SystemUiOverlay.values forces both bars back â
-    // the expected default behaviour off the player.
+    // Which calls that takes, and in which order, is decided per platform
+    // in immersive_mode.dart - the two phones answer different ones.
     if (Platform.isAndroid || Platform.isIOS) {
       // Back to whatever the viewer chose outside the player, which may be
       // full screen — restoring the bars unconditionally would override it.
@@ -327,7 +324,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       } catch (_) {
         restoreFullScreen = false;
       }
-      applyImmersiveFullScreen(restoreFullScreen);
+      // Held rather than simply applied: the orientation goes back on the
+      // very next line, and the window that comes back from that change
+      // carries the system bars in their default state — which would undo a
+      // full-screen setting a moment after honouring it.
+      holdImmersiveFullScreen(restoreFullScreen);
       if (!_isTv) {
         if (_isTablet) {
           SystemChrome.setPreferredOrientations([]);

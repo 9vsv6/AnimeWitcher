@@ -10,13 +10,30 @@ library;
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show immutable, kIsWeb, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show immutable, kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart';
-
-bool get _isPhone => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+import 'package:flutter/widgets.dart';
 
 /// Which phone the request is for. The two answer different calls.
 enum ImmersivePlatform { android, ios }
+
+/// Stands in for the host platform, for tests.
+///
+/// Everything here is a no-op off a phone, so without this a test on a
+/// desktop machine can only watch it decline to do anything.
+@visibleForTesting
+ImmersivePlatform? debugImmersivePlatformOverride;
+
+ImmersivePlatform? get _platform {
+  if (debugImmersivePlatformOverride != null) {
+    return debugImmersivePlatformOverride;
+  }
+  if (kIsWeb) return null;
+  if (Platform.isIOS) return ImmersivePlatform.ios;
+  if (Platform.isAndroid) return ImmersivePlatform.android;
+  return null;
+}
 
 /// One request to the system, as a mode and the overlays that go with it.
 @immutable
@@ -96,13 +113,9 @@ List<ImmersiveStep> immersivePlan(bool enabled, ImmersivePlatform platform) {
 
 /// Applies [enabled] now.
 void applyImmersiveFullScreen(bool enabled) {
-  if (!_isPhone) return;
-  unawaited(
-    _apply(
-      enabled,
-      Platform.isIOS ? ImmersivePlatform.ios : ImmersivePlatform.android,
-    ),
-  );
+  final platform = _platform;
+  if (platform == null) return;
+  unawaited(_apply(enabled, platform));
 }
 
 Future<void> _apply(bool enabled, ImmersivePlatform platform) async {
@@ -111,5 +124,64 @@ Future<void> _apply(bool enabled, ImmersivePlatform platform) async {
       step.mode,
       overlays: step.overlays,
     );
+  }
+}
+
+/// How long to keep re-asserting the choice after asking for it.
+///
+/// Long enough to cover a rotation and the relayout that follows it, short
+/// enough to be over before a viewer can ask for anything else.
+@visibleForTesting
+const Duration immersiveHoldWindow = Duration(seconds: 2);
+
+_ImmersiveHold? _currentHold;
+
+/// Applies [enabled] and holds it through the window changing shape.
+///
+/// Leaving the player also puts the orientation back, and a window that
+/// reconfigures for a new orientation comes back with the system bars in
+/// their default state — undoing a full-screen request made in the same
+/// breath. That is why turning the setting on and then closing an episode
+/// handed the status bar back: the request was made and then wiped, a few
+/// milliseconds apart.
+///
+/// So the choice is asked for again on every change of window metrics for a
+/// short while afterwards, and then let go of.
+void holdImmersiveFullScreen(bool enabled) {
+  applyImmersiveFullScreen(enabled);
+  if (_platform == null) return;
+
+  _currentHold?.stop();
+  _currentHold = _ImmersiveHold(enabled)..start();
+}
+
+/// Drops any hold in progress, so the next request is the last word.
+@visibleForTesting
+void cancelImmersiveHold() {
+  _currentHold?.stop();
+  _currentHold = null;
+}
+
+class _ImmersiveHold with WidgetsBindingObserver {
+  _ImmersiveHold(this.enabled);
+
+  final bool enabled;
+  Timer? _timeout;
+
+  void start() {
+    WidgetsBinding.instance.addObserver(this);
+    _timeout = Timer(immersiveHoldWindow, stop);
+  }
+
+  @override
+  void didChangeMetrics() {
+    applyImmersiveFullScreen(enabled);
+  }
+
+  void stop() {
+    _timeout?.cancel();
+    _timeout = null;
+    WidgetsBinding.instance.removeObserver(this);
+    if (identical(_currentHold, this)) _currentHold = null;
   }
 }
