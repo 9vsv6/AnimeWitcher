@@ -219,8 +219,12 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     // The portrait home hero should start below the iPhone status area, leaving
     // a clean black strip above the banner. Landscape, desktop and TV remain
     // edge-to-edge with no added top spacing.
+    // Use the raw device safe-area inset only. MediaQuery.padding can include
+    // scaffold/app-bar adjustments here, which doubled the portrait gap on iOS.
+    // viewPadding keeps the black strip to the status area only, so the banner
+    // starts exactly below it. Landscape, desktop and TV still add no gap.
     final portraitTopGap = isPortraitHandset
-        ? MediaQuery.paddingOf(context).top
+        ? MediaQuery.viewPaddingOf(context).top
         : 0.0;
 
     // Phone hero artwork should read as a banner, not a tall poster crop, so
@@ -791,7 +795,7 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     return Padding(
       padding: const EdgeInsets.only(bottom: LayoutConstants.spacingXs),
       child: Text(
-        title.toUpperCase(),
+        title,
         textDirection: TextDirection.ltr,
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
         maxLines: 1,
@@ -799,9 +803,10 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         style: TextStyle(
           color: Colors.white,
           fontSize: compactLandscape ? 18 : (isDesktop ? 26 : 19),
-          fontFamily: 'RobotoCondensed',
-          fontWeight: FontWeight.w900,
-          letterSpacing: 1.0,
+          // Match MultimediaCard title typography: use the app's default
+          // font face with the same semibold weight and line height.
+          fontWeight: FontWeight.w600,
+          height: 1.2,
           shadows: [Shadow(color: Colors.black, blurRadius: 10)],
         ),
       ),
