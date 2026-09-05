@@ -65,4 +65,62 @@ void main() {
     }
     expect(filterPresses, 6);
   });
+
+  testWidgets('alphabetical orders are spelled out in the sort menu', (
+    tester,
+  ) async {
+    var picked = '';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            appBar: AppBar(
+              leading: SearchActionButtons(
+                sortValue: 'favorites',
+                sortItems: const <AppleNativeMenuItem>[
+                  AppleNativeMenuItem(
+                    value: 'favorites',
+                    label: 'Most favorited',
+                    systemImage: 'star.fill',
+                  ),
+                  AppleNativeMenuItem(
+                    value: 'name_asc',
+                    label: 'Name A to Z',
+                    systemImage: 'animewitcher.abc',
+                  ),
+                  AppleNativeMenuItem(
+                    value: 'name_desc',
+                    label: 'Name Z to A',
+                    systemImage: 'animewitcher.zyx',
+                  ),
+                ],
+                onSortSelected: (value) => picked = value,
+                onFilterPressed: () {},
+                sortTooltip: 'Sort',
+                filterTooltip: 'Filters',
+                sortIcon: Icons.swap_vert_rounded,
+                sortSystemImage: 'star.fill',
+                height: 48,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Sort'));
+    await tester.pumpAndSettle();
+
+    // The two alphabetical orders read as letters rather than as an icon.
+    expect(find.text('ABC'), findsOneWidget);
+    expect(find.text('ZYX'), findsOneWidget);
+
+    // And the menu still reports what was chosen, which it does by hand now
+    // that the rows live inside one disabled popup item.
+    await tester.tap(find.text('Name Z to A'));
+    await tester.pumpAndSettle();
+    expect(picked, 'name_desc');
+  });
 }
