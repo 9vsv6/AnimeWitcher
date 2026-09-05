@@ -92,6 +92,41 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
     );
   }
 
+  String? _sortTextGlyph(String? systemImage) {
+    return switch (systemImage) {
+      'animewitcher.abc' => 'ABC',
+      'animewitcher.zyx' => 'ZYX',
+      _ => null,
+    };
+  }
+
+  Widget _buildSortGlyph(
+    Color tint, {
+    required IconData icon,
+    required String? systemImage,
+    double iconSize = 22,
+    double textSize = 15,
+  }) {
+    final textGlyph = _sortTextGlyph(systemImage);
+    if (textGlyph != null) {
+      return Directionality(
+        textDirection: TextDirection.ltr,
+        child: Text(
+          textGlyph,
+          maxLines: 1,
+          style: TextStyle(
+            color: tint,
+            fontSize: textSize,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
+            height: 1,
+          ),
+        ),
+      );
+    }
+    return Icon(icon, size: iconSize, color: tint);
+  }
+
   Widget _buildSortIcon(Color tint) {
     final visible = !_sortMenuOpen;
     return AnimatedOpacity(
@@ -106,10 +141,10 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
           offset: visible ? Offset.zero : const Offset(0, -0.18),
           duration: visible ? _showDuration : _hideDuration,
           curve: visible ? Curves.easeOutCubic : Curves.easeInCubic,
-          child: Icon(
-            widget.sortIcon,
-            size: 22,
-            color: tint,
+          child: _buildSortGlyph(
+            tint,
+            icon: widget.sortIcon,
+            systemImage: widget.sortSystemImage,
           ),
         ),
       ),
@@ -170,10 +205,12 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
                   width: 28,
                   child: widget.sortValue == item.value
                       ? Icon(Icons.check_rounded, size: 20, color: tint)
-                      : Icon(
-                          item.icon ?? Icons.swap_vert_rounded,
-                          size: 18,
-                          color: tint,
+                      : _buildSortGlyph(
+                          tint,
+                          icon: item.icon ?? Icons.swap_vert_rounded,
+                          systemImage: item.systemImage,
+                          iconSize: 18,
+                          textSize: 11.5,
                         ),
                 ),
                 Expanded(child: Text(item.label)),
