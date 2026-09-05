@@ -215,6 +215,13 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         (context.isDesktopLandscape && size.height < 560);
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv ?? context.isTv;
+    final isPortraitHandset = !isDesktop && !isTv && !isCompactLandscape;
+    // The portrait home hero should start below the iPhone status area, leaving
+    // a clean black strip above the banner. Landscape, desktop and TV remain
+    // edge-to-edge with no added top spacing.
+    final portraitTopGap = isPortraitHandset
+        ? MediaQuery.paddingOf(context).top
+        : 0.0;
 
     // Phone hero artwork should read as a banner, not a tall poster crop, so
     // portrait handsets use a true 16:9 rectangle. Desktop and TV run the hero
@@ -225,8 +232,12 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         ? size.height * (isCompactLandscape ? 0.72 : 0.60)
         : (isCompactLandscape ? size.height * 0.72 : size.width * 9 / 16);
 
-    return VisibilityDetector(
-      key: const Key('explore-carousel-visibility'),
+    return ColoredBox(
+      color: Colors.black,
+      child: Padding(
+        padding: EdgeInsets.only(top: portraitTopGap),
+        child: VisibilityDetector(
+          key: const Key('explore-carousel-visibility'),
       // Visibility is still tracked — but only to gate the 5s auto-advance
       // timer (so we don't fire page transitions for an audience that
       // isn't watching). Parallax offset updates ignore this flag; see
@@ -346,6 +357,8 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
                     ),
                   ),
                 ),
+        ),
+          ),
         ),
       ),
     );
@@ -676,7 +689,6 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
   }) {
     final logoUrl = movie.logoUrl;
     final title = movie.title;
-    final year = movie.year?.toString() ?? '';
     final genres = movie.tags?.join(' • ') ?? '';
     final size = MediaQuery.sizeOf(context);
     final compactLandscape =
@@ -708,43 +720,22 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
             isDesktop: isDesktop,
             compactLandscape: compactLandscape,
           ),
-        Wrap(
-          alignment: isDesktop ? WrapAlignment.start : WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8.0,
-          runSpacing: 4.0,
-          children: [
-            if (genres.isNotEmpty) ...[
-              Text(
+        if (genres.isNotEmpty)
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
                 genres,
+                textAlign: isDesktop ? TextAlign.left : TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: Colors.white.withValues(alpha: 0.7),
                 ),
               ),
-            ],
-            if (year.isNotEmpty) ...[
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    size: 10,
-                    color: Colors.white.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    year,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
+            ),
+          ),
       ],
     );
   }
@@ -803,11 +794,11 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         title.toUpperCase(),
         textDirection: TextDirection.ltr,
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
-        maxLines: compactLandscape ? 2 : (isDesktop ? 2 : 3),
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: Colors.white,
-          fontSize: compactLandscape ? 20 : (isDesktop ? 28 : 24),
+          fontSize: compactLandscape ? 18 : (isDesktop ? 26 : 19),
           fontFamily: 'RobotoCondensed',
           fontWeight: FontWeight.w900,
           letterSpacing: 1.0,
