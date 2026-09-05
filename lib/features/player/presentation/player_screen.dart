@@ -96,6 +96,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   // press performs exactly one back action â see [_consumeBack].
   DateTime? _lastBackAt;
 
+  bool _isExiting = false;
   bool _isTv = false;
   bool _isTablet = false;
   bool _wasPlayingBeforeBackground = false;
@@ -190,6 +191,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isExiting) return;
       _playerController.init(
         player: _player,
         item: widget.item,
@@ -328,7 +330,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     _settingsSub?.close();
     _playerStateSub?.close();
-    _playerController.disposeController();
+    _playerController.disposeController(player: _player);
 
     _player.dispose();
     _videoViewController.dispose();
@@ -595,7 +597,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   Future<void> _handleBack() async {
-    if (!context.mounted) return;
+    if (!context.mounted || _isExiting) return;
+    _isExiting = true;
+    _startupTimeoutTimer?.cancel();
+    // Invalidate startup/resume work BEFORE stop yields. A late cloud bookmark
+    // must not reopen the engine after stop, or target a subsequently opened route.
+    _playerController.disposeController(player: _player);
 
     // Silence the audio before leaving rather than relying on disposal to do
     // it. Player.dispose() reaches its own stop() only after awaiting player
