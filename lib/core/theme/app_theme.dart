@@ -1,3 +1,7 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -63,6 +67,9 @@ class AppTheme {
   ); // surfaceContainerHigh
   static const Color lightTextPrimary = Color(0xFF2C2521); // onSurface
   static const Color lightTextSecondary = Color(0xFF5C5C5C); // onSurfaceVariant
+
+  /// Icons and secondary text on the dark theme's pure-black surfaces.
+  static const Color darkIconNeutral = Color(0xFFD3D5DC);
   // Kept as a compatibility alias for existing callers/tests.
   static const Color lightCoral = animeWitcherAccent;
 
@@ -74,6 +81,60 @@ class AppTheme {
         color: isDark ? onSurface : colorScheme.onSurface,
       ),
       actionTextColor: colorScheme.primary,
+    );
+  }
+
+  /// The hairline every floating surface carries, matching the home search
+  /// capsule and the taskbar pill. It is what makes a menu read as part of
+  /// the app rather than a plain grey box dropped on top of it.
+  /// Extra height for a title bar on a desktop window.
+  ///
+  /// The window's own controls are painted over the top of the app rather
+  /// than in a bar of their own, so a toolbar of the usual height centres its
+  /// title exactly where the minimise and close buttons sit. The taller bar
+  /// drops the title clear of them; a phone has no such controls and keeps
+  /// the standard height.
+  static double? get _toolbarHeight {
+    if (kIsWeb) return null;
+    return Platform.isWindows || Platform.isMacOS ? 72 : null;
+  }
+
+  static BorderSide _hairline(ColorScheme scheme) =>
+      BorderSide(color: scheme.onSurfaceVariant.withValues(alpha: 0.12));
+
+  /// Menus, sheets and dialogs share one shape so they look like the same
+  /// object appearing in different places.
+  static const double _surfaceRadius = 16;
+
+  static PopupMenuThemeData _popupMenuTheme(ColorScheme scheme) {
+    return PopupMenuThemeData(
+      color: scheme.surfaceContainerHighest,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_surfaceRadius),
+        side: _hairline(scheme),
+      ),
+    );
+  }
+
+  static MenuThemeData _menuTheme(ColorScheme scheme) {
+    return MenuThemeData(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll<Color>(
+          scheme.surfaceContainerHighest,
+        ),
+        surfaceTintColor: const WidgetStatePropertyAll<Color>(
+          Colors.transparent,
+        ),
+        elevation: const WidgetStatePropertyAll<double>(0),
+        shape: WidgetStatePropertyAll<OutlinedBorder>(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_surfaceRadius),
+            side: _hairline(scheme),
+          ),
+        ),
+      ),
     );
   }
 
@@ -96,20 +157,32 @@ class AppTheme {
       tertiary: animeWitcherAccent,
       onTertiary: Colors.black,
       surface: const Color(0xFF000000),
+      // The seeded value is a dim grey that all but disappears against a pure
+      // black background. Icons and secondary labels are drawn in it
+      // throughout the app, so it is lifted to something legible rather than
+      // colouring each of them by hand.
+      onSurfaceVariant: darkIconNeutral,
     );
 
     return ThemeData(
       useMaterial3: true,
       pageTransitionsTheme: _pageTransitionsTheme,
       brightness: Brightness.dark,
+      // An icon that names no colour of its own still has to be visible on
+      // black; Material's default leans too dark for this background.
+      iconTheme: const IconThemeData(color: darkIconNeutral),
       scaffoldBackgroundColor: const Color(
         0xFF000000,
       ), // Pure Black Background for Screens
       // Dialog Theme (Premium Grey)
-      dialogTheme: const DialogThemeData(
-        backgroundColor: Color(0xFF18181F),
+      dialogTheme: DialogThemeData(
+        backgroundColor: const Color(0xFF18181F),
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: TextStyle(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_surfaceRadius),
+          side: _hairline(colorScheme),
+        ),
+        titleTextStyle: const TextStyle(
           fontFamily: 'Outfit',
           fontSize: 20,
           fontWeight: FontWeight.w600,
@@ -118,11 +191,21 @@ class AppTheme {
       ),
 
       // Bottom Sheet Theme (Premium Grey)
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: Color(0xFF18181F),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: const Color(0xFF18181F),
         surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: Color(0xFF18181F),
+        modalBackgroundColor: const Color(0xFF18181F),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(_surfaceRadius),
+          ),
+          side: _hairline(colorScheme),
+        ),
       ),
+
+      popupMenuTheme: _popupMenuTheme(colorScheme),
+      menuTheme: _menuTheme(colorScheme),
 
       // Card Theme (Pitch Black for List Items)
       cardTheme: const CardThemeData(
@@ -189,12 +272,13 @@ class AppTheme {
           ),
 
       // AppBar
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF000000),
+      appBarTheme: AppBarTheme(
+        backgroundColor: const Color(0xFF000000),
         elevation: 0,
         centerTitle: false,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
+        toolbarHeight: _toolbarHeight,
       ),
 
       // Bottom Navigation
@@ -344,6 +428,10 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_surfaceRadius),
+          side: _hairline(colorScheme),
+        ),
         titleTextStyle: TextStyle(
           fontFamily: 'Outfit',
           fontSize: 20,
@@ -357,7 +445,17 @@ class AppTheme {
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: colorScheme.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(_surfaceRadius),
+          ),
+          side: _hairline(colorScheme),
+        ),
       ),
+
+      popupMenuTheme: _popupMenuTheme(colorScheme),
+      menuTheme: _menuTheme(colorScheme),
 
       // Card Theme
       cardTheme: CardThemeData(
@@ -415,6 +513,7 @@ class AppTheme {
           fontWeight: FontWeight.w600,
           fontFamily: 'Outfit',
         ),
+        toolbarHeight: _toolbarHeight,
       ),
 
       // Bottom Navigation

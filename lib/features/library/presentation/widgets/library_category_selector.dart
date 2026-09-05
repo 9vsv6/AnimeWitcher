@@ -139,11 +139,7 @@ class _LibraryCategorySelectorState
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: primary,
-                size: 22,
-              ),
+              Icon(Icons.keyboard_arrow_down_rounded, color: primary, size: 22),
             ],
           ),
         ),
@@ -246,31 +242,33 @@ class _MaterialCategoryMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The popup still places and dismisses the menu; what is drawn is the
+    // blurred capsule the rest of the app uses.
     return PopupMenuButton<String>(
       tooltip: accessibilityLabel,
+      color: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      shape: const RoundedRectangleBorder(),
       onOpened: onOpened,
       onCanceled: onClosed,
-      onSelected: onSelected,
-      itemBuilder: (context) => [
-        for (final item in menuItems)
-          PopupMenuItem<String>(
-            value: item.value,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 28,
-                  child: selected.storageKey == item.value
-                      ? Icon(Icons.check_rounded, size: 20, color: tintColor)
-                      : Icon(
-                          iconForValue(item.value),
-                          size: 18,
-                          color: tintColor,
-                        ),
-                ),
-                Expanded(child: Text(item.label)),
-              ],
-            ),
+      itemBuilder: (menuContext) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: BlurredMenuPanel(
+            items: menuItems,
+            selectedValue: selected.storageKey,
+            tint: tintColor,
+            iconForValue: iconForValue,
+            onPick: (value) {
+              Navigator.of(menuContext).pop();
+              onClosed();
+              onSelected(value);
+            },
           ),
+        ),
       ],
       child: child,
     );

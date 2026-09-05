@@ -361,9 +361,15 @@ class _ProviderSearchFilterDialogState extends State<ProviderSearchFilterDialog>
             borderRadius: BorderRadius.circular(isHandsetLandscape ? 20 : 28),
             style: 'regular',
             interactive: true,
-            fallbackColor: colors.surfaceContainerHigh.withValues(alpha: 0.96),
+            // The same fill and hairline the home capsule and the taskbar
+            // carry, so the sheet belongs to them. It can afford to be
+            // translucent because the surface blurs what is behind it; the
+            // text stays off the posters without hiding them entirely.
+            fallbackColor: colors.surfaceContainerHighest.withValues(
+              alpha: 0.72,
+            ),
             fallbackBorder: BorderSide(
-              color: colors.outlineVariant.withValues(alpha: 0.34),
+              color: colors.onSurfaceVariant.withValues(alpha: 0.12),
             ),
             child: Material(
               color: Colors.transparent,

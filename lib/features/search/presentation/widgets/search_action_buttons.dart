@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:animewitcher/core/utils/layout_constants.dart';
+
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 
 /// Sort + filter controls — bare icons (no pill / circle chrome).
@@ -64,9 +66,21 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
     final tint = widget.tintColor ?? Theme.of(context).colorScheme.primary;
     final height = widget.height;
 
-    return SizedBox(
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
       width: SearchActionButtons.groupWidthForHeight(height),
       height: height,
+      // The same capsule the search bar and the taskbar wear, so the two
+      // controls beside the search field belong to it rather than floating
+      // as bare glyphs over whatever is behind them.
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
+        border: Border.all(
+          color: scheme.onSurfaceVariant.withValues(alpha: 0.12),
+        ),
+      ),
       // Keep sort on the left and filter on the right in Arabic and English.
       child: Directionality(
         textDirection: TextDirection.ltr,
@@ -80,8 +94,9 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
                 icon: Icons.tune_rounded,
                 color: tint,
                 size: height,
-                onPressed:
-                    widget.isFilterLoading ? null : widget.onFilterPressed,
+                onPressed: widget.isFilterLoading
+                    ? null
+                    : widget.onFilterPressed,
                 isLoading: widget.isFilterLoading,
                 badgeCount: widget.filterCount,
               ),
@@ -106,11 +121,7 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
           offset: visible ? Offset.zero : const Offset(0, -0.18),
           duration: visible ? _showDuration : _hideDuration,
           curve: visible ? Curves.easeOutCubic : Curves.easeInCubic,
-          child: Icon(
-            Icons.swap_vert_rounded,
-            size: 22,
-            color: tint,
-          ),
+          child: Icon(Icons.swap_vert_rounded, size: 22, color: tint),
         ),
       ),
     );
@@ -153,33 +164,37 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
       );
     }
 
+    // The menu carries its own blurred surface rather than the flat one a
+    // popup paints, so it matches the taskbar and the search capsule. The
+    // button still hosts it, which keeps the anchoring and dismissal that
+    // come with a popup; only what is drawn changes.
     return PopupMenuButton<String>(
       tooltip: widget.sortTooltip,
       padding: EdgeInsets.zero,
       offset: const Offset(0, 8),
+      color: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      shape: const RoundedRectangleBorder(),
       onOpened: () => _setSortMenuOpen(true),
       onCanceled: () => _setSortMenuOpen(false),
-      onSelected: _onSortSelected,
-      itemBuilder: (context) => [
-        for (final item in widget.sortItems)
-          PopupMenuItem<String>(
-            value: item.value,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 28,
-                  child: widget.sortValue == item.value
-                      ? Icon(Icons.check_rounded, size: 20, color: tint)
-                      : Icon(
-                          item.icon ?? Icons.swap_vert_rounded,
-                          size: 18,
-                          color: tint,
-                        ),
-                ),
-                Expanded(child: Text(item.label)),
-              ],
-            ),
+      itemBuilder: (menuContext) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: BlurredMenuPanel(
+            items: widget.sortItems,
+            selectedValue: widget.sortValue,
+            tint: tint,
+            fallbackIcon: Icons.swap_vert_rounded,
+            onPick: (value) {
+              Navigator.of(menuContext).pop();
+              _setSortMenuOpen(false);
+              _onSortSelected(value);
+            },
           ),
+        ),
       ],
       child: SizedBox(
         width: height,
@@ -254,7 +269,9 @@ class _ActionIcon extends StatelessWidget {
                                 minHeight: 16,
                               ),
                               alignment: Alignment.center,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: colors.primary,
                                 borderRadius: BorderRadius.circular(20),

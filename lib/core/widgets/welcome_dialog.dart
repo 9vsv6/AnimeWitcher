@@ -6,6 +6,7 @@ import '../storage/settings_repository.dart';
 import '../../features/settings/presentation/player_settings_provider.dart';
 import '../theme/theme_provider.dart';
 import '../utils/layout_constants.dart';
+import '../../shared/widgets/apple_liquid_glass.dart';
 import '../utils/localized_text.dart';
 
 /// Shows the first-launch welcome dialog once per install: a theme picker,
@@ -48,68 +49,82 @@ class _WelcomeDialogState extends ConsumerState<_WelcomeDialog> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
+    // The first thing a viewer sees is already the surface the rest of the
+    // app uses: the blurred capsule the taskbar, the menus and the filter
+    // sheet are drawn on, rather than a solid panel of its own.
     return Dialog(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
       insetPadding: const EdgeInsets.symmetric(
         horizontal: LayoutConstants.spacingLg,
         vertical: LayoutConstants.spacingLg,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(LayoutConstants.radiusXxl),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 440,
           maxHeight: MediaQuery.sizeOf(context).height * 0.85,
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            LayoutConstants.spacingLg,
-            LayoutConstants.spacingMd,
-            LayoutConstants.spacingLg,
-            LayoutConstants.spacingLg,
+        child: AppleLiquidGlassSurface(
+          borderRadius: BorderRadius.circular(20),
+          fallbackColor: colors.surfaceContainerHighest.withValues(alpha: 0.72),
+          fallbackBorder: BorderSide(
+            color: colors.onSurfaceVariant.withValues(alpha: 0.12),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    onPressed: _close,
-                    icon: const Icon(Icons.close_rounded),
-                    tooltip: appText(context, english: 'Close', arabic: 'إغلاق'),
-                  ),
-                ],
-              ),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: switch (_step) {
-                  0 => _ThemeStep(
-                    key: const ValueKey('theme'),
-                    onContinue: () => setState(() => _step = 1),
-                  ),
-                  1 => _SkipStep(
-                    key: const ValueKey('skip'),
-                    onContinue: () => setState(() => _step = 2),
-                  ),
-                  _ => _SignInStep(
-                    key: const ValueKey('signIn'),
-                    onSignIn: _openSignIn,
-                    onSkip: _close,
-                  ),
-                },
-              ),
-              const SizedBox(height: LayoutConstants.spacingMd),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < 3; i++) ...[
-                    if (i > 0) const SizedBox(width: 6),
-                    _StepDot(active: _step == i, color: colors.primary),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              LayoutConstants.spacingLg,
+              LayoutConstants.spacingMd,
+              LayoutConstants.spacingLg,
+              LayoutConstants.spacingLg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      onPressed: _close,
+                      icon: const Icon(Icons.close_rounded),
+                      tooltip: appText(
+                        context,
+                        english: 'Close',
+                        arabic: 'إغلاق',
+                      ),
+                    ),
                   ],
-                ],
-              ),
-            ],
+                ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: switch (_step) {
+                    0 => _ThemeStep(
+                      key: const ValueKey('theme'),
+                      onContinue: () => setState(() => _step = 1),
+                    ),
+                    1 => _SkipStep(
+                      key: const ValueKey('skip'),
+                      onContinue: () => setState(() => _step = 2),
+                    ),
+                    _ => _SignInStep(
+                      key: const ValueKey('signIn'),
+                      onSignIn: _openSignIn,
+                      onSkip: _close,
+                    ),
+                  },
+                ),
+                const SizedBox(height: LayoutConstants.spacingMd),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < 3; i++) ...[
+                      if (i > 0) const SizedBox(width: 6),
+                      _StepDot(active: _step == i, color: colors.primary),
+                    ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -157,11 +172,7 @@ class _ThemeStep extends ConsumerWidget {
             color: colors.primary.withValues(alpha: 0.13),
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            Icons.palette_rounded,
-            size: 32,
-            color: colors.primary,
-          ),
+          child: Icon(Icons.palette_rounded, size: 32, color: colors.primary),
         ),
         const SizedBox(height: LayoutConstants.spacingMd),
         Text(

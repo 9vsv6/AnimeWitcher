@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -17,7 +19,6 @@ const _appleNativeMenuButtonViewType =
 
 bool get _usesNativeAppleLiquidGlass =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-
 
 /// True on iOS where AnimeWitcher hosts the native Liquid Glass controls.
 /// Screens use this to hand their header actions to the persistent overlay
@@ -52,7 +53,8 @@ class ApplePersistentGlassHeaderConfig {
   bool instantRouteBoundary;
 
   bool visuallyMatches(ApplePersistentGlassHeaderConfig other) {
-    final sameCustomTrailing = trailing == null && other.trailing == null ||
+    final sameCustomTrailing =
+        trailing == null && other.trailing == null ||
         identical(trailing, other.trailing);
     return (onBack != null) == (other.onBack != null) &&
         backTooltip == other.backTooltip &&
@@ -295,7 +297,8 @@ class _ApplePersistentGlassHeaderScopeState
       applePersistentGlassHeaderController.hide(this);
       return;
     }
-    final hasTrailing = widget.trailing != null ||
+    final hasTrailing =
+        widget.trailing != null ||
         (widget.trailingButtons?.isNotEmpty ?? false);
     if (widget.onBack == null && !hasTrailing) {
       applePersistentGlassHeaderController.hide(this);
@@ -330,7 +333,6 @@ class _ApplePersistentGlassHeaderScopeState
     super.dispose();
   }
 }
-
 
 /// A single route-independent Liquid Glass header layer.
 ///
@@ -382,7 +384,10 @@ class _ApplePersistentGlassHeaderOverlayState
       case 'pressed':
         final index = call.arguments as int?;
         final buttons = config.trailingButtons;
-        if (index == null || buttons == null || index < 0 || index >= buttons.length) {
+        if (index == null ||
+            buttons == null ||
+            index < 0 ||
+            index >= buttons.length) {
           return;
         }
         buttons[index].onPressed?.call();
@@ -393,7 +398,11 @@ class _ApplePersistentGlassHeaderOverlayState
         final index = args['index'] as int?;
         final value = args['value'] as String?;
         final buttons = config.trailingButtons;
-        if (index == null || value == null || buttons == null || index < 0 || index >= buttons.length) {
+        if (index == null ||
+            value == null ||
+            buttons == null ||
+            index < 0 ||
+            index >= buttons.length) {
           return;
         }
         buttons[index].onMenuSelected?.call(value);
@@ -404,15 +413,18 @@ class _ApplePersistentGlassHeaderOverlayState
   Map<String, Object?> _nativeState() {
     final config = applePersistentGlassHeaderController.value;
     final colors = Theme.of(context).colorScheme;
-    final buttons = config?.trailingButtons ?? const <AppleLiquidGlassToolbarButton>[];
+    final buttons =
+        config?.trailingButtons ?? const <AppleLiquidGlassToolbarButton>[];
     final desiredActions = <Map<String, Object?>>[
       for (final button in buttons)
         <String, Object?>{
-          'systemName': button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
+          'systemName':
+              button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
           'title': button.title,
           'titleOnly': button.titleOnly,
           'width': button.width,
-          'enabled': button.onPressed != null ||
+          'enabled':
+              button.onPressed != null ||
               (button.menuItems.isNotEmpty && button.onMenuSelected != null),
           'color': (button.color ?? colors.onSurface).toARGB32(),
           'accessibilityLabel': button.tooltip,
@@ -519,7 +531,8 @@ class _ApplePersistentGlassHeaderOverlayState
               return const SizedBox.shrink();
             }
             return Positioned(
-              top: MediaQuery.paddingOf(context).top + (kToolbarHeight - 46) / 2,
+              top:
+                  MediaQuery.paddingOf(context).top + (kToolbarHeight - 46) / 2,
               right: 8,
               child: config!.trailing!,
             );
@@ -555,13 +568,25 @@ class AppleLiquidGlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!_usesNativeAppleLiquidGlass) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: fallbackColor,
-          borderRadius: borderRadius,
-          border: fallbackBorder == null ? null : Border.fromBorderSide(fallbackBorder!),
+      // Away from Apple's own glass, the nearest honest approximation is a
+      // blur behind a translucent fill — the same thing the taskbar and the
+      // search capsule do. A flat box was reading as a plain grey panel
+      // dropped on the artwork rather than a surface floating over it.
+      return ClipRRect(
+        borderRadius: borderRadius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: fallbackColor,
+              borderRadius: borderRadius,
+              border: fallbackBorder == null
+                  ? null
+                  : Border.fromBorderSide(fallbackBorder!),
+            ),
+            child: child,
+          ),
         ),
-        child: child,
       );
     }
 
@@ -690,7 +715,9 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
         children.every((child) => child is AppleLiquidGlassToolbarButton)) {
       final buttons = children.cast<AppleLiquidGlassToolbarButton>();
       final canUseNative = buttons.every(
-        (button) => (button.systemImage ?? _appleSystemSymbolForIcon(button.icon)) != null,
+        (button) =>
+            (button.systemImage ?? _appleSystemSymbolForIcon(button.icon)) !=
+            null,
       );
       if (canUseNative) {
         return _AppleNativeToolbar(
@@ -706,9 +733,14 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
     return AppleLiquidGlassSurface(
       borderRadius: BorderRadius.circular(height / 2),
       interactive: true,
-      fallbackColor: fallbackColor ?? colors.surfaceContainerHigh,
+      // The capsule the taskbar and the search bar wear. It was on its own
+      // heavier fill and border, which read as a different control from the
+      // ones sharing the screen with it.
+      fallbackColor:
+          fallbackColor ??
+          colors.surfaceContainerHighest.withValues(alpha: 0.5),
       fallbackBorder: BorderSide(
-        color: colors.outlineVariant.withValues(alpha: 0.28),
+        color: colors.onSurfaceVariant.withValues(alpha: 0.12),
       ),
       child: SizedBox(
         height: height,
@@ -725,6 +757,7 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
   final Color? color;
   final String? tooltip;
   final String? title;
+
   /// Render this toolbar action as a labeled control without its icon.
   /// Useful for persistent menu buttons whose current value is the primary UI.
   final bool titleOnly;
@@ -786,22 +819,26 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
           tooltip: tooltip,
           padding: EdgeInsets.zero,
           offset: const Offset(0, 8),
-          onSelected: onMenuSelected,
-          itemBuilder: (context) => [
-            for (final item in menuItems)
-              PopupMenuItem<String>(
-                value: item.value,
-                child: _appleMenuItemRow(
-                  context: context,
-                  label: item.label,
-                  selected: selectedMenuValue == item.value,
-                  destructive: item.destructive,
-                  tint: tint,
-                  icon: item.icon ??
-                      _materialIconForSystemImage(item.systemImage) ??
-                      icon,
-                ),
+          color: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          elevation: 0,
+          shape: const RoundedRectangleBorder(),
+          itemBuilder: (menuContext) => [
+            PopupMenuItem<String>(
+              enabled: false,
+              padding: EdgeInsets.zero,
+              child: BlurredMenuPanel(
+                items: menuItems,
+                selectedValue: selectedMenuValue ?? '',
+                tint: tint,
+                fallbackIcon: icon,
+                onPick: (value) {
+                  Navigator.of(menuContext).pop();
+                  onMenuSelected!(value);
+                },
               ),
+            ),
           ],
           child: Icon(icon, color: color),
         ),
@@ -825,42 +862,6 @@ class AppleLiquidGlassToolbarButton extends StatelessWidget {
   }
 }
 
-Widget _appleMenuItemRow({
-  required BuildContext context,
-  required String label,
-  required bool selected,
-  required bool destructive,
-  required Color tint,
-  required IconData icon,
-}) {
-  final isRtl = Directionality.of(context) == TextDirection.rtl;
-  final color = destructive ? Theme.of(context).colorScheme.error : tint;
-  return Directionality(
-    textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
-    child: Row(
-      children: [
-        SizedBox(
-          width: 28,
-          child: Icon(
-            selected ? Icons.check_rounded : icon,
-            size: selected ? 20 : 18,
-            color: color,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            label,
-            textAlign: TextAlign.start,
-            style: destructive
-                ? TextStyle(color: color, fontWeight: FontWeight.w600)
-                : null,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 IconData? _materialIconForSystemImage(String? name) {
   return switch (name) {
     'heart.fill' || 'heart' => Icons.favorite_rounded,
@@ -878,8 +879,6 @@ IconData? _materialIconForSystemImage(String? name) {
     _ => null,
   };
 }
-
-
 
 bool _sameToolbarButtons(
   List<AppleLiquidGlassToolbarButton>? a,
@@ -932,15 +931,13 @@ String? _appleSystemSymbolForIcon(IconData icon) {
   if (icon == Icons.favorite_rounded || icon == Icons.favorite) {
     return 'heart.fill';
   }
-  if (icon == Icons.favorite_border_rounded ||
-      icon == Icons.favorite_border) {
+  if (icon == Icons.favorite_border_rounded || icon == Icons.favorite_border) {
     return 'heart';
   }
   if (icon == Icons.bookmark_rounded || icon == Icons.bookmark) {
     return 'bookmark.fill';
   }
-  if (icon == Icons.bookmark_border_rounded ||
-      icon == Icons.bookmark_border) {
+  if (icon == Icons.bookmark_border_rounded || icon == Icons.bookmark_border) {
     return 'bookmark';
   }
   if (icon == Icons.sort_rounded || icon == Icons.sort) {
@@ -1097,7 +1094,8 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     'collapsed': widget.collapsed,
     'collapsedSystemImage': widget.collapsedSystemImage,
     'itemExtent': widget.height,
-    'hostWidth': widget.height *
+    'hostWidth':
+        widget.height *
             (widget.minimumCapacity > widget.buttons.length
                 ? widget.minimumCapacity
                 : widget.buttons.length) +
@@ -1105,9 +1103,11 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     'actions': <Map<String, Object?>>[
       for (final button in widget.buttons)
         <String, Object?>{
-          'systemName': button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
+          'systemName':
+              button.systemImage ?? _appleSystemSymbolForIcon(button.icon),
           'title': button.title,
-          'enabled': button.onPressed != null ||
+          'enabled':
+              button.onPressed != null ||
               (button.menuItems.isNotEmpty && button.onMenuSelected != null),
           'color': (button.color ?? Theme.of(context).colorScheme.onSurface)
               .toARGB32(),
@@ -1143,7 +1143,8 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     channel.setMethodCallHandler((call) async {
       if (call.method == 'pressed') {
         final index = call.arguments as int?;
-        if (index == null || index < 0 || index >= widget.buttons.length) return;
+        if (index == null || index < 0 || index >= widget.buttons.length)
+          return;
         widget.buttons[index].onPressed?.call();
         return;
       }
@@ -1151,7 +1152,10 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
         final args = Map<Object?, Object?>.from(call.arguments as Map);
         final index = args['index'] as int?;
         final value = args['value'] as String?;
-        if (index == null || value == null || index < 0 || index >= widget.buttons.length) {
+        if (index == null ||
+            value == null ||
+            index < 0 ||
+            index >= widget.buttons.length) {
           return;
         }
         widget.buttons[index].onMenuSelected?.call(value);
@@ -1193,8 +1197,6 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
     );
   }
 }
-
-
 
 /// A native iOS search field backed by Apple's UIGlassEffect + UISearchTextField.
 /// The entire editable control is one UIKit platform view, so the system glass
@@ -1240,15 +1242,15 @@ class _AppleNativeGlassSearchFieldState
   String? _lastSentSignature;
 
   Map<String, Object?> get _state => <String, Object?>{
-        'text': widget.controller.text,
-        'placeholder': widget.placeholder,
-        'tintColor': widget.tintColor.toARGB32(),
-        'textColor': widget.textColor.toARGB32(),
-        'placeholderColor': widget.placeholderColor.toARGB32(),
-        'rtl': widget.textDirection == TextDirection.rtl,
-        'loading': widget.loading,
-        'height': widget.height,
-      };
+    'text': widget.controller.text,
+    'placeholder': widget.placeholder,
+    'tintColor': widget.tintColor.toARGB32(),
+    'textColor': widget.textColor.toARGB32(),
+    'placeholderColor': widget.placeholderColor.toARGB32(),
+    'rtl': widget.textDirection == TextDirection.rtl,
+    'loading': widget.loading,
+    'height': widget.height,
+  };
 
   String get _signature => jsonEncode(_state);
 
@@ -1266,7 +1268,8 @@ class _AppleNativeGlassSearchFieldState
       widget.controller.addListener(_controllerChanged);
     }
     _sendStateIfChanged();
-    if (oldWidget.focusRequest != widget.focusRequest && widget.focusRequest > 0) {
+    if (oldWidget.focusRequest != widget.focusRequest &&
+        widget.focusRequest > 0) {
       _channel?.invokeMethod<void>('focus');
     }
   }
@@ -1285,7 +1288,9 @@ class _AppleNativeGlassSearchFieldState
   }
 
   void _onPlatformViewCreated(int id) {
-    final channel = MethodChannel('com.animewitcher.app/native_search_field/$id');
+    final channel = MethodChannel(
+      'com.animewitcher.app/native_search_field/$id',
+    );
     channel.setMethodCallHandler((call) async {
       if (call.method == 'changed' && call.arguments is String) {
         final text = call.arguments as String;
@@ -1352,6 +1357,7 @@ class AppleNativeMenuItem {
   final String value;
   final String label;
   final String? systemImage;
+
   /// Material icon used by Flutter popup-menu fallbacks (Android/desktop).
   final IconData? icon;
   final bool destructive;
@@ -1384,6 +1390,7 @@ class AppleNativeMenuButton extends StatefulWidget {
     this.size = 44,
     this.enabled = true,
     this.tintColor,
+
     /// When true, the native control is fully transparent and only presents
     /// the system UIMenu. Flutter renders the visible chrome above it.
     this.invisibleAnchor = false,
@@ -1486,27 +1493,30 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
       child: PopupMenuButton<String>(
         enabled: widget.enabled,
         tooltip: widget.accessibilityLabel,
+        color: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(),
         onOpened: widget.onMenuOpened,
         onCanceled: widget.onMenuClosed,
-        onSelected: (value) {
-          widget.onSelected(value);
-          widget.onMenuClosed?.call();
-        },
-        itemBuilder: (context) => [
-          for (final item in widget.items)
-            PopupMenuItem<String>(
-              value: item.value,
-              child: _appleMenuItemRow(
-                context: context,
-                label: item.label,
-                selected: widget.selectedValue == item.value,
-                destructive: item.destructive,
-                tint: widget.tintColor ?? Theme.of(context).colorScheme.primary,
-                icon: item.icon ??
-                    _materialIconForSystemImage(item.systemImage) ??
-                    widget.fallbackIcon,
-              ),
+        itemBuilder: (menuContext) => [
+          PopupMenuItem<String>(
+            enabled: false,
+            padding: EdgeInsets.zero,
+            child: BlurredMenuPanel(
+              items: widget.items,
+              selectedValue: widget.selectedValue ?? '',
+              tint:
+                  widget.tintColor ?? Theme.of(menuContext).colorScheme.primary,
+              fallbackIcon: widget.fallbackIcon,
+              onPick: (value) {
+                Navigator.of(menuContext).pop();
+                widget.onSelected(value);
+                widget.onMenuClosed?.call();
+              },
             ),
+          ),
         ],
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -1568,15 +1578,13 @@ Future<String?> showAppleNativeSearchSort({
   required bool isArabic,
   required Color tintColor,
 }) async {
-  return _appleLiquidGlassPresenterChannel.invokeMethod<String>(
-    'showSearchSort',
-    <String, Object?>{
-      'initialValue': initialValue,
-      'items': items,
-      'isArabic': isArabic,
-      'tintColor': tintColor.toARGB32(),
-    },
-  );
+  return _appleLiquidGlassPresenterChannel
+      .invokeMethod<String>('showSearchSort', <String, Object?>{
+        'initialValue': initialValue,
+        'items': items,
+        'isArabic': isArabic,
+        'tintColor': tintColor.toARGB32(),
+      });
 }
 
 /// Presents the full search filter UI inside the native iOS view hierarchy.
@@ -1591,15 +1599,13 @@ Future<Map<String, dynamic>?> showAppleNativeSearchFilters({
   required bool isArabic,
   required Color tintColor,
 }) async {
-  final response = await _appleLiquidGlassPresenterChannel.invokeMethod<Object?>(
-    'showSearchFilters',
-    <String, Object?>{
-      'options': options,
-      'initialValue': initialValue,
-      'isArabic': isArabic,
-      'tintColor': tintColor.toARGB32(),
-    },
-  );
+  final response = await _appleLiquidGlassPresenterChannel
+      .invokeMethod<Object?>('showSearchFilters', <String, Object?>{
+        'options': options,
+        'initialValue': initialValue,
+        'isArabic': isArabic,
+        'tintColor': tintColor.toARGB32(),
+      });
   if (response == null) return null;
   if (response is Map) return Map<String, dynamic>.from(response);
   return null;
@@ -1746,6 +1752,146 @@ class _AppleSearchGlassActionsState extends State<AppleSearchGlassActions> {
           onPressed: widget.isFilterLoading ? null : widget.onFilterPressed,
         ),
       ],
+    );
+  }
+}
+
+/// A menu drawn on the blurred capsule the taskbar and the search bar use,
+/// instead of the flat panel a popup paints by default.
+///
+/// Flutter's popup theming has no blur to give, so the menu keeps its popup
+/// for anchoring and dismissal while this draws what is actually seen. It is
+/// meant to sit inside a single disabled [PopupMenuItem]: disabled, because a
+/// popup that handled selection itself would also paint its own surface over
+/// this one. The rows therefore report their own taps through [onPick].
+class BlurredMenuPanel extends StatelessWidget {
+  const BlurredMenuPanel({
+    super.key,
+    required this.items,
+    required this.selectedValue,
+    required this.tint,
+    required this.onPick,
+    this.fallbackIcon = Icons.circle_outlined,
+    this.iconForValue,
+  });
+
+  final List<AppleNativeMenuItem> items;
+  final String selectedValue;
+  final Color tint;
+  final ValueChanged<String> onPick;
+
+  /// Drawn when an item names no icon of its own.
+  final IconData fallbackIcon;
+
+  /// Lets a caller pick an icon per value, for menus whose items carry none.
+  final IconData Function(String value)? iconForValue;
+
+  static const double _radius = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(_radius);
+
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: radius,
+            border: Border.all(
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final item in items)
+                _MenuRow(
+                  item: item,
+                  // A tick in the same colour as every other glyph was not
+                  // enough to pick out at a glance; the chosen row is filled
+                  // and coloured so it reads before the icons do.
+                  selected: selectedValue == item.value,
+                  tint: tint,
+                  // An item may name a Material icon, an iOS symbol that
+                  // maps to one, or neither; the caller's fallback is the
+                  // last resort so no row is left without a glyph.
+                  fallbackIcon:
+                      item.icon ??
+                      _materialIconForSystemImage(item.systemImage) ??
+                      iconForValue?.call(item.value) ??
+                      fallbackIcon,
+                  onTap: () => onPick(item.value),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({
+    required this.item,
+    required this.selected,
+    required this.tint,
+    required this.fallbackIcon,
+    required this.onTap,
+  });
+
+  final AppleNativeMenuItem item;
+  final bool selected;
+  final Color tint;
+  final IconData fallbackIcon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // A destructive entry keeps its warning colour whatever else is chosen.
+    final color = item.destructive
+        ? scheme.error
+        : (selected ? scheme.primary : tint);
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: selected
+            ? BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(10),
+              )
+            : null,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 28,
+              child: Icon(
+                selected ? Icons.check_rounded : fallbackIcon,
+                size: selected ? 20 : 18,
+                color: color,
+              ),
+            ),
+            Text(
+              item.label,
+              style: TextStyle(
+                color: item.destructive
+                    ? scheme.error
+                    : (selected ? scheme.primary : null),
+                fontWeight: selected || item.destructive
+                    ? FontWeight.w600
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
