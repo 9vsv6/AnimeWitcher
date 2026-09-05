@@ -126,8 +126,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     // Full screen for the duration, through the same helper the setting uses
     // — iOS answers only one of these calls, and asking it for Android's
-    // sticky mode left the bar sitting on the picture.
-    applyImmersiveFullScreen(true);
+    // sticky mode left the bar sitting on the picture. Held, because opening
+    // an episode turns the phone to landscape and the window that comes back
+    // from that carries the bars in their default state.
+    holdImmersiveFullScreen(true);
     WakelockPlus.enable();
 
     // Keep the renderer buffer bounded; mpv has its own adaptive demuxer cache.
@@ -324,11 +326,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       } catch (_) {
         restoreFullScreen = false;
       }
-      // Held rather than simply applied: the orientation goes back on the
-      // very next line, and the window that comes back from that change
-      // carries the system bars in their default state — which would undo a
-      // full-screen setting a moment after honouring it.
-      holdImmersiveFullScreen(restoreFullScreen);
+      // Orientation first, then the bars. Turning the phone back to portrait
+      // reconfigures the window, and the window that comes back carries the
+      // system bars in their default state — so a full-screen choice made
+      // before that change is made and then unmade. Asking after it is the
+      // right order, and the hold covers the rest: the reconfiguration is
+      // asynchronous, and Android drops a second request inside a second of
+      // the first.
       if (!_isTv) {
         if (_isTablet) {
           SystemChrome.setPreferredOrientations([]);
@@ -336,6 +340,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
         }
       }
+      holdImmersiveFullScreen(restoreFullScreen);
     }
 
     _settingsSub?.close();

@@ -127,32 +127,50 @@ Future<void> _apply(bool enabled, ImmersivePlatform platform) async {
   }
 }
 
-/// How long to keep re-asserting the choice after asking for it.
+/// The floor Android puts under changes to the system bars.
 ///
-/// Long enough to cover a rotation and the relayout that follows it, short
-/// enough to be over before a viewer can ask for anything else.
+/// "On Android, the system UI cannot be changed until 1 second after the
+/// previous change" — it is there so an app cannot permanently swallow the
+/// navigation buttons, and it applies to honest requests too. A second
+/// request sent inside that second is not queued, it is dropped, which is
+/// what made the first attempt at this look like it did nothing.
 @visibleForTesting
-const Duration immersiveHoldWindow = Duration(seconds: 2);
+const Duration immersiveChangeFloor = Duration(milliseconds: 1100);
+
+/// How long to keep watch after asking.
+///
+/// Long enough for several attempts once the floor is taken into account,
+/// and over well before a viewer settles into whatever screen they landed on.
+@visibleForTesting
+const Duration immersiveHoldWindow = Duration(seconds: 6);
 
 _ImmersiveHold? _currentHold;
 
-/// Applies [enabled] and holds it through the window changing shape.
+/// Applies [enabled] and holds it while the app settles.
 ///
-/// Leaving the player also puts the orientation back, and a window that
+/// Leaving the player puts the orientation back, and a window that
 /// reconfigures for a new orientation comes back with the system bars in
-/// their default state — undoing a full-screen request made in the same
-/// breath. That is why turning the setting on and then closing an episode
-/// handed the status bar back: the request was made and then wiped, a few
-/// milliseconds apart.
+/// their default state — so a full-screen choice can be honoured and then
+/// undone a moment later, which is how turning the setting on and closing an
+/// episode gave the status bar back.
 ///
-/// So the choice is asked for again on every change of window metrics for a
-/// short while afterwards, and then let go of.
+/// Asking again immediately does not help: that second request lands inside
+/// Android's one-second floor and is dropped. So this waits out the floor,
+/// and listens for both the window changing shape and the system reporting
+/// the bars visible again — the second of which is the direct signal that
+/// the request did not survive.
 void holdImmersiveFullScreen(bool enabled) {
   applyImmersiveFullScreen(enabled);
   if (_platform == null) return;
 
   _currentHold?.stop();
-  _currentHold = _ImmersiveHold(enabled)..start();
+  // Nothing to defend when the bars are meant to be visible: that is the
+  // state everything else in the system is trying to get back to anyway.
+  if (!enabled) {
+    _currentHold = null;
+    return;
+  }
+  _currentHold = _ImmersiveHold()..start();
 }
 
 /// Drops any hold in progress, so the next request is the last word.
@@ -163,25 +181,60 @@ void cancelImmersiveHold() {
 }
 
 class _ImmersiveHold with WidgetsBindingObserver {
-  _ImmersiveHold(this.enabled);
-
-  final bool enabled;
-  Timer? _timeout;
+  Timer? _retry;
+  Timer? _expiry;
+  DateTime _lastSent = DateTime.now();
+  bool _stopped = false;
 
   void start() {
     WidgetsBinding.instance.addObserver(this);
-    _timeout = Timer(immersiveHoldWindow, stop);
+    // The system saying the bars are visible again is the one signal that
+    // means exactly what it says, whatever put them there.
+    SystemChrome.setSystemUIChangeCallback((overlaysVisible) async {
+      if (overlaysVisible) _reassert();
+    });
+    _expiry = Timer(immersiveHoldWindow, stop);
+    // The relayout being waited for may raise neither signal, so try once on
+    // the far side of the floor regardless.
+    _scheduleRetry(immersiveChangeFloor);
   }
 
   @override
-  void didChangeMetrics() {
-    applyImmersiveFullScreen(enabled);
+  void didChangeMetrics() => _reassert();
+
+  void _reassert() {
+    if (_stopped) return;
+    final since = DateTime.now().difference(_lastSent);
+    if (since >= immersiveChangeFloor) {
+      _lastSent = DateTime.now();
+      applyImmersiveFullScreen(true);
+      // Something has just overwritten the choice once; it may do so again
+      // while the screen behind is still settling.
+      _scheduleRetry(immersiveChangeFloor);
+      return;
+    }
+    // Too soon — Android would drop it. Wait out what is left of the floor.
+    _scheduleRetry(immersiveChangeFloor - since);
+  }
+
+  void _scheduleRetry(Duration delay) {
+    _retry?.cancel();
+    _retry = Timer(delay, () {
+      if (_stopped) return;
+      _lastSent = DateTime.now();
+      applyImmersiveFullScreen(true);
+    });
   }
 
   void stop() {
-    _timeout?.cancel();
-    _timeout = null;
+    if (_stopped) return;
+    _stopped = true;
+    _retry?.cancel();
+    _retry = null;
+    _expiry?.cancel();
+    _expiry = null;
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(SystemChrome.setSystemUIChangeCallback(null));
     if (identical(_currentHold, this)) _currentHold = null;
   }
 }
