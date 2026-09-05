@@ -1773,6 +1773,7 @@ class BlurredMenuPanel extends StatelessWidget {
     required this.onPick,
     this.fallbackIcon = Icons.circle_outlined,
     this.iconForValue,
+    this.leadingBuilder,
   });
 
   final List<AppleNativeMenuItem> items;
@@ -1785,6 +1786,11 @@ class BlurredMenuPanel extends StatelessWidget {
 
   /// Lets a caller pick an icon per value, for menus whose items carry none.
   final IconData Function(String value)? iconForValue;
+
+  /// Draws the leading glyph itself, for menus whose markers are not icons —
+  /// the sort menu spells some of its orders out as letters. The selected
+  /// row still shows a tick, so this is only asked for the others.
+  final Widget Function(AppleNativeMenuItem item, Color color)? leadingBuilder;
 
   static const double _radius = 16;
 
@@ -1824,6 +1830,7 @@ class BlurredMenuPanel extends StatelessWidget {
                       _materialIconForSystemImage(item.systemImage) ??
                       iconForValue?.call(item.value) ??
                       fallbackIcon,
+                  leadingBuilder: leadingBuilder,
                   onTap: () => onPick(item.value),
                 ),
             ],
@@ -1840,6 +1847,7 @@ class _MenuRow extends StatelessWidget {
     required this.selected,
     required this.tint,
     required this.fallbackIcon,
+    required this.leadingBuilder,
     required this.onTap,
   });
 
@@ -1847,6 +1855,7 @@ class _MenuRow extends StatelessWidget {
   final bool selected;
   final Color tint;
   final IconData fallbackIcon;
+  final Widget Function(AppleNativeMenuItem item, Color color)? leadingBuilder;
   final VoidCallback onTap;
 
   @override
@@ -1872,11 +1881,10 @@ class _MenuRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 28,
-              child: Icon(
-                selected ? Icons.check_rounded : fallbackIcon,
-                size: selected ? 20 : 18,
-                color: color,
-              ),
+              child: selected
+                  ? Icon(Icons.check_rounded, size: 20, color: color)
+                  : (leadingBuilder?.call(item, color) ??
+                        Icon(fallbackIcon, size: 18, color: color)),
             ),
             Text(
               item.label,

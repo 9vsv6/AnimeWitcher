@@ -21,7 +21,7 @@ class SearchActionButtons extends StatefulWidget {
     required this.sortSystemImage,
     this.filterCount = 0,
     this.isFilterLoading = false,
-    this.height = 42,
+    this.height = 48,
     this.tintColor,
   });
 
@@ -68,43 +68,85 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
 
     final scheme = Theme.of(context).colorScheme;
 
-    return Container(
+    return SizedBox(
       width: SearchActionButtons.groupWidthForHeight(height),
       height: height,
       // The same capsule the search bar and the taskbar wear, so the two
       // controls beside the search field belong to it rather than floating
       // as bare glyphs over whatever is behind them.
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
-        border: Border.all(
-          color: scheme.onSurfaceVariant.withValues(alpha: 0.12),
+      //
+      // Painted rather than wrapped: a Container with a border insets its
+      // child by the border's width, which would shave a pixel off each edge
+      // of the buttons' hitboxes. The whole slot has to stay tappable.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
+          border: Border.all(
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.12),
+          ),
         ),
-      ),
-      // Keep sort on the left and filter on the right in Arabic and English.
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: Row(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            Expanded(child: _buildSortControl(tint)),
-            Expanded(
-              child: _ActionIcon(
-                tooltip: widget.filterTooltip,
-                icon: Icons.tune_rounded,
-                color: tint,
-                size: height,
-                onPressed: widget.isFilterLoading
-                    ? null
-                    : widget.onFilterPressed,
-                isLoading: widget.isFilterLoading,
-                badgeCount: widget.filterCount,
+        // Keep sort on the left and filter on the right in Arabic and English.
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _buildSortControl(tint)),
+              Expanded(
+                child: _ActionIcon(
+                  tooltip: widget.filterTooltip,
+                  icon: Icons.tune_rounded,
+                  color: tint,
+                  size: height,
+                  onPressed: widget.isFilterLoading
+                      ? null
+                      : widget.onFilterPressed,
+                  isLoading: widget.isFilterLoading,
+                  badgeCount: widget.filterCount,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  String? _sortTextGlyph(String? systemImage) {
+    return switch (systemImage) {
+      'animewitcher.abc' => 'ABC',
+      'animewitcher.zyx' => 'ZYX',
+      _ => null,
+    };
+  }
+
+  Widget _buildSortGlyph(
+    Color tint, {
+    required IconData icon,
+    required String? systemImage,
+    double iconSize = 22,
+    double textSize = 15,
+  }) {
+    final textGlyph = _sortTextGlyph(systemImage);
+    if (textGlyph != null) {
+      return Directionality(
+        textDirection: TextDirection.ltr,
+        child: Text(
+          textGlyph,
+          maxLines: 1,
+          style: TextStyle(
+            color: tint,
+            fontSize: textSize,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
+            height: 1,
+          ),
+        ),
+      );
+    }
+    return Icon(icon, size: iconSize, color: tint);
   }
 
   Widget _buildSortIcon(Color tint) {
@@ -121,7 +163,11 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
           offset: visible ? Offset.zero : const Offset(0, -0.18),
           duration: visible ? _showDuration : _hideDuration,
           curve: visible ? Curves.easeOutCubic : Curves.easeInCubic,
-          child: Icon(Icons.swap_vert_rounded, size: 22, color: tint),
+          child: _buildSortGlyph(
+            tint,
+            icon: widget.sortIcon,
+            systemImage: widget.sortSystemImage,
+          ),
         ),
       ),
     );
@@ -150,8 +196,8 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
                   onMenuOpened: () => _setSortMenuOpen(true),
                   onMenuClosed: () => _setSortMenuOpen(false),
                   accessibilityLabel: widget.sortTooltip,
-                  systemImage: 'arrow.up.arrow.down',
-                  fallbackIcon: Icons.swap_vert_rounded,
+                  systemImage: widget.sortSystemImage,
+                  fallbackIcon: widget.sortIcon,
                   selectedValue: widget.sortValue,
                   width: height,
                   size: height,
@@ -188,6 +234,15 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
             selectedValue: widget.sortValue,
             tint: tint,
             fallbackIcon: Icons.swap_vert_rounded,
+            // Some sort orders are spelled out as letters rather than drawn
+            // as icons, so the row asks for its own glyph.
+            leadingBuilder: (item, color) => _buildSortGlyph(
+              color,
+              icon: item.icon ?? Icons.swap_vert_rounded,
+              systemImage: item.systemImage,
+              iconSize: 18,
+              textSize: 11.5,
+            ),
             onPick: (value) {
               Navigator.of(menuContext).pop();
               _setSortMenuOpen(false);

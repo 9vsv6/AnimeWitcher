@@ -1,3 +1,4 @@
+import 'home_hero_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -208,144 +209,133 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
   Widget build(BuildContext context) {
     if (widget.movies.isEmpty) return const SizedBox.shrink();
 
-    final size = MediaQuery.sizeOf(context);
     final isDesktop = context.isDesktop;
-    final isCompactLandscape =
-        context.isHandsetLandscape ||
-        (context.isDesktopLandscape && size.height < 560);
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv ?? context.isTv;
 
-    // Phone hero artwork should read as a banner, not a tall poster crop, so
-    // portrait handsets use a true 16:9 rectangle. Desktop and TV run the hero
-    // edge to edge across the window but only part of the way down it, leaving
-    // the first row in view; the banner is cropped to fill that shape, which is
-    // what a hero of this proportion costs.
-    final heroHeight = (isDesktop || isTv)
-        ? size.height * (isCompactLandscape ? 0.72 : 0.60)
-        : (isCompactLandscape ? size.height * 0.72 : size.width * 9 / 16);
-
-    return VisibilityDetector(
-      key: const Key('explore-carousel-visibility'),
-      // Visibility is still tracked — but only to gate the 5s auto-advance
-      // timer (so we don't fire page transitions for an audience that
-      // isn't watching). Parallax offset updates ignore this flag; see
-      // [_onParentScroll] for the rationale.
-      onVisibilityChanged: (info) {
-        final visible = info.visibleFraction > 0.1;
-        if (visible != _isVisibleOnScreen && mounted) {
-          setState(() => _isVisibleOnScreen = visible);
-          if (visible) {
-            _fillController.forward();
-          } else {
-            _fillController.stop();
-          }
-        }
-      },
-      child: FocusableActionDetector(
-        focusNode: _carouselFocusNode,
-        // Only auto-focus on TV where D-pad is the primary input. On desktop
-        // we skip autofocus so the focus ring doesn't appear on app launch
-        // (Flutter defaults to 'traditional' highlight mode until a mouse
-        // event arrives, which would show the ring immediately).
-        autofocus: false,
-        mouseCursor: SystemMouseCursors.click,
-        // Arrow keys are wired as explicit Shortcuts/Actions at this level so
-        // they fire when _carouselFocusNode has focus. Using a nested
-        // Focus(onKeyEvent:) for arrows is unreliable here — that child Focus
-        // is a descendant of _carouselFocusNode, and key events only propagate
-        // UP from the focused node, so the child's handler never runs. Worse,
-        // unhandled arrow keys fall through to Flutter's default ScrollAction
-        // which then scrolls the outer vertical CustomScrollView — exactly the
-        // "Right pages carousel AND scrolls page vertically" bug we saw.
-        shortcuts: const <ShortcutActivator, Intent>{
-          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
-          SingleActivator(LogicalKeyboardKey.arrowUp): _CarouselUpIntent(),
-          SingleActivator(LogicalKeyboardKey.arrowLeft): _CarouselPrevIntent(),
-          SingleActivator(LogicalKeyboardKey.arrowRight): _CarouselNextIntent(),
-        },
-        actions: <Type, Action<Intent>>{
-          ActivateIntent: CallbackAction<ActivateIntent>(
-            onInvoke: (_) {
-              _activateCurrent();
-              return null;
-            },
-          ),
-          _CarouselUpIntent: CallbackAction<_CarouselUpIntent>(
-            onInvoke: (_) {
-              widget.onNavigateUp?.call();
-              return null;
-            },
-          ),
-          _CarouselPrevIntent: CallbackAction<_CarouselPrevIntent>(
-            onInvoke: (_) {
-              _goToPreviousSlide();
-              return null;
-            },
-          ),
-          _CarouselNextIntent: CallbackAction<_CarouselNextIntent>(
-            onInvoke: (_) {
-              _goToNextSlide();
-              return null;
-            },
-          ),
-        },
-        onShowFocusHighlight: (show) =>
-            setState(() => _isFocusHighlighted = show),
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onHorizontalDragEnd: (details) {
-            if (details.primaryVelocity == null) return;
-            if (details.primaryVelocity! < -300) {
-              _goToNextSlide();
-            } else if (details.primaryVelocity! > 300) {
-              _goToPreviousSlide();
+    return HomeHeroFrame(
+      builder: (context, heroHeight) => VisibilityDetector(
+        key: const Key('explore-carousel-visibility'),
+        // Visibility is still tracked — but only to gate the 5s auto-advance
+        // timer (so we don't fire page transitions for an audience that
+        // isn't watching). Parallax offset updates ignore this flag; see
+        // [_onParentScroll] for the rationale.
+        onVisibilityChanged: (info) {
+          final visible = info.visibleFraction > 0.1;
+          if (visible != _isVisibleOnScreen && mounted) {
+            setState(() => _isVisibleOnScreen = visible);
+            if (visible) {
+              _fillController.forward();
+            } else {
+              _fillController.stop();
             }
+          }
+        },
+        child: FocusableActionDetector(
+          focusNode: _carouselFocusNode,
+          // Only auto-focus on TV where D-pad is the primary input. On desktop
+          // we skip autofocus so the focus ring doesn't appear on app launch
+          // (Flutter defaults to 'traditional' highlight mode until a mouse
+          // event arrives, which would show the ring immediately).
+          autofocus: false,
+          mouseCursor: SystemMouseCursors.click,
+          // Arrow keys are wired as explicit Shortcuts/Actions at this level so
+          // they fire when _carouselFocusNode has focus. Using a nested
+          // Focus(onKeyEvent:) for arrows is unreliable here — that child Focus
+          // is a descendant of _carouselFocusNode, and key events only propagate
+          // UP from the focused node, so the child's handler never runs. Worse,
+          // unhandled arrow keys fall through to Flutter's default ScrollAction
+          // which then scrolls the outer vertical CustomScrollView — exactly the
+          // "Right pages carousel AND scrolls page vertically" bug we saw.
+          shortcuts: const <ShortcutActivator, Intent>{
+            SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.arrowUp): _CarouselUpIntent(),
+            SingleActivator(LogicalKeyboardKey.arrowLeft): _CarouselPrevIntent(),
+            SingleActivator(LogicalKeyboardKey.arrowRight): _CarouselNextIntent(),
           },
-          child: isDesktop
-              ? RepaintBoundary(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    decoration: BoxDecoration(
-                      border: _isFocusHighlighted
-                          ? Border.all(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 2.5,
-                            )
-                          : null,
+          actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                _activateCurrent();
+                return null;
+              },
+            ),
+            _CarouselUpIntent: CallbackAction<_CarouselUpIntent>(
+              onInvoke: (_) {
+                widget.onNavigateUp?.call();
+                return null;
+              },
+            ),
+            _CarouselPrevIntent: CallbackAction<_CarouselPrevIntent>(
+              onInvoke: (_) {
+                _goToPreviousSlide();
+                return null;
+              },
+            ),
+            _CarouselNextIntent: CallbackAction<_CarouselNextIntent>(
+              onInvoke: (_) {
+                _goToNextSlide();
+                return null;
+              },
+            ),
+          },
+          onShowFocusHighlight: (show) =>
+              setState(() => _isFocusHighlighted = show),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity == null) return;
+              if (details.primaryVelocity! < -300) {
+                _goToNextSlide();
+              } else if (details.primaryVelocity! > 300) {
+                _goToPreviousSlide();
+              }
+            },
+            child: isDesktop
+                ? RepaintBoundary(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        border: _isFocusHighlighted
+                            ? Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 2.5,
+                              )
+                            : null,
+                      ),
+                      child: SizedBox(
+                        height: heroHeight,
+                        child: _buildCarouselStack(
+                          heroHeight,
+                          isDesktop: isDesktop || isTv,
+                        ),
+                      ),
                     ),
-                    child: SizedBox(
-                      height: heroHeight,
-                      child: _buildCarouselStack(
-                        heroHeight,
-                        isDesktop: isDesktop || isTv,
+                  )
+                : Padding(
+                    padding: EdgeInsets.zero,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        border: _isFocusHighlighted
+                            ? Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 2.5,
+                              )
+                            : null,
+                      ),
+                      child: SizedBox(
+                        height: heroHeight,
+                        child: _buildCarouselStack(
+                          heroHeight,
+                          isDesktop: isDesktop || isTv,
+                        ),
                       ),
                     ),
                   ),
-                )
-              : Padding(
-                  padding: EdgeInsets.zero,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    decoration: BoxDecoration(
-                      border: _isFocusHighlighted
-                          ? Border.all(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 2.5,
-                            )
-                          : null,
-                    ),
-                    child: SizedBox(
-                      height: heroHeight,
-                      child: _buildCarouselStack(
-                        heroHeight,
-                        isDesktop: isDesktop || isTv,
-                      ),
-                    ),
-                  ),
-                ),
+          ),
         ),
       ),
     );
@@ -676,7 +666,6 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
   }) {
     final logoUrl = movie.logoUrl;
     final title = movie.title;
-    final year = movie.year?.toString() ?? '';
     final genres = movie.tags?.join(' • ') ?? '';
     final size = MediaQuery.sizeOf(context);
     final compactLandscape =
@@ -708,43 +697,22 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
             isDesktop: isDesktop,
             compactLandscape: compactLandscape,
           ),
-        Wrap(
-          alignment: isDesktop ? WrapAlignment.start : WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8.0,
-          runSpacing: 4.0,
-          children: [
-            if (genres.isNotEmpty) ...[
-              Text(
+        if (genres.isNotEmpty)
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
                 genres,
+                textAlign: isDesktop ? TextAlign.left : TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: Colors.white.withValues(alpha: 0.7),
                 ),
               ),
-            ],
-            if (year.isNotEmpty) ...[
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    size: 10,
-                    color: Colors.white.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    year,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
+            ),
+          ),
       ],
     );
   }
@@ -800,17 +768,18 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     return Padding(
       padding: const EdgeInsets.only(bottom: LayoutConstants.spacingXs),
       child: Text(
-        title.toUpperCase(),
+        title,
         textDirection: TextDirection.ltr,
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
-        maxLines: compactLandscape ? 2 : (isDesktop ? 2 : 3),
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: Colors.white,
-          fontSize: compactLandscape ? 20 : (isDesktop ? 28 : 24),
-          fontFamily: 'RobotoCondensed',
-          fontWeight: FontWeight.w900,
-          letterSpacing: 1.0,
+          fontSize: compactLandscape ? 18 : (isDesktop ? 26 : 19),
+          // Match MultimediaCard title typography: use the app's default
+          // font face with the same semibold weight and line height.
+          fontWeight: FontWeight.w600,
+          height: 1.2,
           shadows: [Shadow(color: Colors.black, blurRadius: 10)],
         ),
       ),
