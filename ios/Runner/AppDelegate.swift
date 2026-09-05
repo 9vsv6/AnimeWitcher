@@ -1720,6 +1720,8 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
     let invisibleAnchor = values["invisibleAnchor"] as? Bool ?? false
     let systemName = values["systemImage"] as? String ?? "arrow.up.arrow.down"
     let tintColor = animeWitcherUIColor(values["tintColor"], fallback: .label)
+    let cornerRadius = (values["cornerRadius"] as? NSNumber)?.doubleValue
+    let showsMenuIndicator = values["showsMenuIndicator"] as? Bool ?? false
     let title = (values["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
     if invisibleAnchor {
@@ -1738,10 +1740,7 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
       button.backgroundColor = .clear
       button.tintColor = tintColor
     } else {
-      let image = UIImage(
-        systemName: systemName,
-        withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-      )?.withTintColor(tintColor, renderingMode: .alwaysOriginal)
+      let image = animeWitcherMenuImage(named: systemName, tintColor: tintColor)
       animeWitcherConfigureGlassButton(button, image: image, foreground: tintColor)
       button.tintColor = tintColor
       if #available(iOS 15.0, *), var configuration = button.configuration {
@@ -1750,9 +1749,15 @@ private final class AppleNativeMenuButtonPlatformView: NSObject, FlutterPlatform
         configuration.contentInsets = (title?.isEmpty == false)
           ? NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14)
           : .zero
+        if #available(iOS 26.0, *) {
+          configuration.indicator = showsMenuIndicator ? .popup : .none
+        }
         button.configuration = configuration
       } else {
         button.setTitle((title?.isEmpty == false) ? title : nil, for: .normal)
+      }
+      if #available(iOS 26.0, *), let cornerRadius {
+        button.cornerConfiguration = .corners(radius: .fixed(cornerRadius))
       }
     }
     button.semanticContentAttribute = (values["isRtl"] as? Bool == true)

@@ -5,11 +5,11 @@ import '../../../../core/storage/library_category.dart';
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 import '../library_provider.dart';
 
-/// Library category picker — solid icon + label + chevron (no liquid glass).
+/// Library category picker.
 ///
-/// On iPhone the visible chrome stays Material; tapping opens the native
-/// UIMenu with Liquid Glass via an invisible [AppleNativeMenuButton] anchor.
-/// While the menu is open, the label/icons animate out and back in on dismiss.
+/// On iPhone the visible control is the native Liquid Glass menu button itself.
+/// UIKit therefore owns both the resting glass and the UIMenu transition, so the
+/// same surface morphs open and returns without a hidden duplicate underneath.
 class LibraryCategorySelector extends ConsumerStatefulWidget {
   const LibraryCategorySelector({
     super.key,
@@ -156,63 +156,47 @@ class _LibraryCategorySelectorState
     final width = isArabic ? 240.0 : 224.0;
     final menuItems = _menuItems(context);
     final accessibilityLabel = isArabic ? 'اختر قائمة' : 'Choose list';
-    final content = _buildAnimatedContent(primary: primary, label: label);
-
-    if (!appleUsesPersistentLiquidGlassHeader) {
-      return _MaterialCategoryMenu(
-        selected: widget.selected,
-        menuItems: menuItems,
-        tintColor: primary,
-        accessibilityLabel: accessibilityLabel,
-        iconForValue: (value) {
-          final category = LibraryCategory.values.firstWhere(
-            (candidate) => candidate.storageKey == value,
-            orElse: () => widget.selected,
-          );
-          return _categoryIcon(category);
-        },
-        onOpened: () => _setMenuOpen(true),
-        onClosed: () => _setMenuOpen(false),
-        onSelected: (value) {
-          _selectCategory(value, widget.selected);
-          _setMenuOpen(false);
-        },
-        child: content,
+    if (appleUsesPersistentLiquidGlassHeader) {
+      return Semantics(
+        button: true,
+        label: accessibilityLabel,
+        child: AppleNativeMenuButton(
+          items: menuItems,
+          onSelected: (value) => _selectCategory(value, widget.selected),
+          accessibilityLabel: accessibilityLabel,
+          systemImage: _categorySystemImage(widget.selected),
+          fallbackIcon: _categoryIcon(widget.selected),
+          selectedValue: widget.selected.storageKey,
+          title: label,
+          width: width,
+          size: 44,
+          tintColor: primary,
+          cornerRadius: 16,
+          showsMenuIndicator: true,
+        ),
       );
     }
 
-    return Semantics(
-      button: true,
-      label: accessibilityLabel,
-      child: SizedBox(
-        width: width,
-        height: 44,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            content,
-            Positioned.fill(
-              child: AppleNativeMenuButton(
-                invisibleAnchor: true,
-                items: menuItems,
-                onSelected: (value) {
-                  _selectCategory(value, widget.selected);
-                  _setMenuOpen(false);
-                },
-                onMenuOpened: () => _setMenuOpen(true),
-                onMenuClosed: () => _setMenuOpen(false),
-                accessibilityLabel: accessibilityLabel,
-                systemImage: _categorySystemImage(widget.selected),
-                fallbackIcon: _categoryIcon(widget.selected),
-                selectedValue: widget.selected.storageKey,
-                width: width,
-                size: 44,
-                tintColor: primary,
-              ),
-            ),
-          ],
-        ),
-      ),
+    final content = _buildAnimatedContent(primary: primary, label: label);
+    return _MaterialCategoryMenu(
+      selected: widget.selected,
+      menuItems: menuItems,
+      tintColor: primary,
+      accessibilityLabel: accessibilityLabel,
+      iconForValue: (value) {
+        final category = LibraryCategory.values.firstWhere(
+          (candidate) => candidate.storageKey == value,
+          orElse: () => widget.selected,
+        );
+        return _categoryIcon(category);
+      },
+      onOpened: () => _setMenuOpen(true),
+      onClosed: () => _setMenuOpen(false),
+      onSelected: (value) {
+        _selectCategory(value, widget.selected);
+        _setMenuOpen(false);
+      },
+      child: content,
     );
   }
 }
