@@ -124,9 +124,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     _isTv = deviceProfile?.isTv ?? false;
     _isTablet = deviceProfile?.isTablet ?? false;
 
-    if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    }
+    // Full screen for the duration, through the same helper the setting uses
+    // — iOS answers only one of these calls, and asking it for Android's
+    // sticky mode left the bar sitting on the picture.
+    applyImmersiveFullScreen(true);
     WakelockPlus.enable();
 
     // Keep the renderer buffer bounded; mpv has its own adaptive demuxer cache.
@@ -316,9 +317,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (Platform.isAndroid || Platform.isIOS) {
       // Back to whatever the viewer chose outside the player, which may be
       // full screen — restoring the bars unconditionally would override it.
-      applyImmersiveFullScreen(
-        ref.read(settingsRepositoryProvider).isImmersiveFullScreen(),
-      );
+      // If that choice cannot be read on the way out, show the bars: leaving
+      // a viewer in full screen they never asked for has no way back.
+      var restoreFullScreen = false;
+      try {
+        restoreFullScreen = ref
+            .read(settingsRepositoryProvider)
+            .isImmersiveFullScreen();
+      } catch (_) {
+        restoreFullScreen = false;
+      }
+      applyImmersiveFullScreen(restoreFullScreen);
       if (!_isTv) {
         if (_isTablet) {
           SystemChrome.setPreferredOrientations([]);
