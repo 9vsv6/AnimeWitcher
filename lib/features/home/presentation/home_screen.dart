@@ -9,13 +9,12 @@ import 'home_section_titles.dart';
 import 'home_state.dart';
 
 import 'package:animewitcher/features/home/presentation/widgets/continue_watching_section.dart';
-import 'package:animewitcher/features/search/presentation/search_provider.dart';
 import 'package:animewitcher/features/library/presentation/history_provider.dart';
 
 import 'widgets/home_hero_carousel.dart';
+import 'widgets/home_hero_layout.dart';
 import 'widgets/media_horizontal_list.dart';
 import 'view_all_screen.dart';
-import '../../../shared/widgets/desktop_scroll_wrapper.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
@@ -24,7 +23,6 @@ import 'package:animewitcher/core/extensions/extension_manager.dart';
 import 'package:animewitcher/core/extensions/base_provider.dart';
 import 'package:animewitcher/core/router/app_router.dart';
 
-import '../../../shared/widgets/cards_wrapper.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../shared/widgets/multimedia_card.dart';
@@ -33,15 +31,12 @@ import '../../../shared/widgets/recoverable_network_state.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
-import 'widgets/dashboard_header_bar.dart';
 import 'widgets/news_section.dart';
 import '../../../shared/widgets/taskbar_visibility.dart';
 
 import 'package:animewitcher/features/news/presentation/news_list_screen.dart';
 import 'package:animewitcher/features/news/presentation/news_utils.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
-
-import 'package:animewitcher/core/utils/localized_text.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -74,22 +69,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _showBottomFade = ValueNotifier(false);
 
-  /// Drives the AppBar background fade: 0.0 = fully transparent (over the
-  /// hero carousel), 1.0 = solid black (after a short scroll distance).
-  /// Fades in within the first [_kHeaderFadeTriggerDistance] pixels so the
-  /// title row gains a solid backdrop before reaching the next content
-  /// section below the hero.
-  final ValueNotifier<double> _headerFadeOpacity = ValueNotifier(0.0);
-
-  /// Scroll distance (px) over which the AppBar background transitions
-  /// from transparent to solid black.
-  static const double _kHeaderFadeTriggerDistance = 80.0;
-
-  final FocusNode _firstActionFocusNode = FocusNode();
-
-  /// Carousel controller exposed by HomeHeroCarousel via [onControllerReady].
-  /// Used by DashboardHeaderBar arrows.
-
   @override
   bool get wantKeepAlive => true;
 
@@ -110,16 +89,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _showBottomFade.value = showFade;
     }
 
-    // Drive the header background fade-in. The header sits over the hero
-    // carousel, so a short scroll transition (default 80px) is enough to
-    // take it from fully transparent to solid black.
-    final target = (currentScroll / _kHeaderFadeTriggerDistance).clamp(
-      0.0,
-      1.0,
-    );
-    if (target != _headerFadeOpacity.value) {
-      _headerFadeOpacity.value = target;
-    }
   }
 
   @override
@@ -127,8 +96,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _showBottomFade.dispose();
-    _headerFadeOpacity.dispose();
-    _firstActionFocusNode.dispose();
     super.dispose();
   }
 
@@ -179,149 +146,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  void _openSearchPage({bool focusKeyboard = false, bool clearQuery = false}) {
-    if (clearQuery) {
-      ref.read(searchQueryProvider.notifier).set('');
-      ref.read(searchSuggestionControllerProvider.notifier).clear();
-    }
-    const SearchRoute().go(context);
-    if (!focusKeyboard && !clearQuery) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (clearQuery) {
-        ref.read(searchClearRequestProvider.notifier).request();
-      }
-      if (focusKeyboard) {
-        ref.read(searchFocusRequestProvider.notifier).request();
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final homeDataAsync = ref.watch(homeDataProvider);
     final continueWatching = ref.watch(continueWatchingProvider);
-    final activeProvider = ref.watch(activeProviderProvider);
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final overlayStyle = isDark
-        ? SystemUiOverlayStyle.light
-        : SystemUiOverlayStyle.dark;
-
     final profile = ref.watch(deviceProfileProvider).asData?.value;
-    final isTv = profile?.isTv == true || context.isTv;
-    // Use profile?.isLargeScreen so this matches AppScaffold's sidebar
-    // decision even when the HomeScreen's context width is narrowed
-    // by the sidebar (e.g. iPad portrait).
-    final isWidescreen =
-        isTv || profile?.isLargeScreen == true || context.isTabletOrLarger;
+    final isWidescreen = profile?.isTv == true ||
+        context.isTv ||
+        profile?.isLargeScreen == true ||
+        context.isTabletOrLarger;
 
-    // On widescreen: no AppBar, no FAB — we use the DashboardHeaderBar instead.
-    // The header lives outside the scroll view in a plain Column so there is
-    // no SliverPersistentHeader / pinned-header interaction with scroll
-    // physics (which was causing scroll-direction-change jitter on iPad).
-    if (isWidescreen) {
-      // The hero runs edge to edge behind the header, so the header floats on
-      // top of it rather than taking a row above it, and stays put while the
-      // page scrolls under it. It paints no backdrop of its own: a bar that
-      // filled in on scroll read as a black band across the top.
-      return Scaffold(
-        extendBodyBehindAppBar: true,
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: _buildBody(
-                context,
-                homeDataAsync,
-                continueWatching,
-                isWidescreen: true,
-              ),
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: DashboardHeaderBar(
-                searchFocusNode: _firstActionFocusNode,
-                onShowSearch: () => _openSearchPage(focusKeyboard: true),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Mobile: keep the home controls in the app-wide native toolbar.
-    // The same UIKit toolbar instance later morphs into the details actions.
-    final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
-    final persistentButtons = <AppleLiquidGlassToolbarButton>[
-      AppleLiquidGlassToolbarButton(
-        width: 42,
-        tooltip: appText(context, english: 'Search', arabic: 'بحث'),
-        icon: Icons.search_rounded,
-        color: Theme.of(context).colorScheme.primary,
-        onPressed: () => _openSearchPage(focusKeyboard: true),
-      ),
-    ];
-    final mobileScaffold = Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          // Nothing is painted behind the bar: the hero runs to the top of
-          // the screen and the search capsule, which carries its own fill, is
-          // the only thing on it.
-          child: AppBar(
-            systemOverlayStyle: overlayStyle,
-            forceMaterialTransparency: true,
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            // Just the magnifier, on the trailing edge. A full capsule here
-            // spent the whole width naming a screen the viewer is already on.
-            actions: usePersistentGlass
-                ? const <Widget>[SizedBox(width: 58)]
-                : [
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        right: LayoutConstants.spacingSm,
-                      ),
-                      child: Focus(
-                        focusNode: _firstActionFocusNode,
-                        child: SizedBox.square(
-                          dimension: 42,
-                          child: AppleLiquidGlassToolbarButton(
-                            width: 42,
-                            tooltip: appText(
-                              context,
-                              english: 'Search',
-                              arabic: 'بحث',
-                            ),
-                            icon: Icons.search_rounded,
-                            color: Theme.of(context).colorScheme.onSurface,
-                            onPressed: () =>
-                                _openSearchPage(focusKeyboard: true),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-          ),
+    final scaffold = AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: _buildBody(
+          context,
+          homeDataAsync,
+          continueWatching,
+          isWidescreen: isWidescreen,
         ),
       ),
-      body: _buildBody(context, homeDataAsync, continueWatching),
     );
 
-    if (!usePersistentGlass) return mobileScaffold;
+    if (!appleUsesPersistentLiquidGlassHeader) return scaffold;
     return ApplePersistentGlassHeaderScope(
       branchIndex: TaskbarDestination.home.branchIndex,
-      trailingButtons: persistentButtons,
-      child: mobileScaffold,
+      trailingButtons: const <AppleLiquidGlassToolbarButton>[],
+      child: scaffold,
     );
   }
 
@@ -450,7 +303,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   child: HomeHeroCarousel(
                     movies: homeHeroMovies(data)!,
                     scrollController: _scrollController,
-                    onNavigateUp: () => _firstActionFocusNode.requestFocus(),
                     onTap: (item) {
                       DetailsRoute(
                         $extra: DetailsRouteExtra(item: item),
@@ -459,11 +311,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 )
               else if (!isWidescreen)
-                // No carousel — add top padding so content below doesn't
-                // overlap with the transparent app bar (mobile only).
+                // Keep content below the status area when no banner is present.
                 SliverPadding(
                   padding: EdgeInsets.only(
-                    top: MediaQuery.of(context).padding.top + kToolbarHeight,
+                    top: MediaQuery.viewPaddingOf(context).top,
                   ),
                 ),
 
@@ -590,33 +441,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Widget _buildCarouselShimmer(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final heroHeight = size.height * 0.60;
-    final isDesktop = context.isDesktop;
-
-    if (isDesktop) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: LayoutConstants.dashboardContentPadding,
-          vertical: LayoutConstants.spacingSm,
-        ),
-        child: SizedBox(
-          height: heroHeight,
-          width: double.infinity,
-          child: ShimmerPlaceholder(borderRadius: 18),
-        ),
-      );
-    } else {
-      return SizedBox(
-        height: heroHeight,
+    return HomeHeroFrame(
+      builder: (context, heroHeight) => ShimmerPlaceholder.rectangular(
         width: double.infinity,
-        child: ShimmerPlaceholder.rectangular(
-          width: double.infinity,
-          height: heroHeight,
-          borderRadius: 0,
-        ),
-      );
-    }
+        height: heroHeight,
+        borderRadius: 0,
+      ),
+    );
   }
 
   Widget _buildListShimmer(BuildContext context) {

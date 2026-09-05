@@ -15,7 +15,7 @@ void main() {
           textDirection: TextDirection.rtl,
           child: Scaffold(
             appBar: AppBar(
-              leadingWidth: 94,
+              leadingWidth: 106,
               leading: Padding(
                 padding: const EdgeInsets.only(right: 10),
                 child: SearchActionButtons(
@@ -29,7 +29,7 @@ void main() {
                   filterTooltip: 'Filters',
                   sortIcon: Icons.swap_vert_rounded,
                   sortSystemImage: 'arrow.up.arrow.down',
-                  height: 42,
+                  height: 48,
                 ),
               ),
             ),
@@ -48,9 +48,21 @@ void main() {
     await tester.pump();
     expect(filterPresses, 1);
 
-    // The entire right-hand 42px filter slot is intentionally tappable too.
+    // The entire right-hand 48px filter slot is intentionally tappable too.
     await tester.tapAt(Offset(groupRect.right - 2, groupRect.center.dy));
     await tester.pump();
     expect(filterPresses, 2);
+
+    // Include all corners of the AppBar slot, outside the small painted glyph.
+    for (final point in [
+      Offset(groupRect.right - 47, groupRect.top + 1),
+      Offset(groupRect.right - 1, groupRect.top + 1),
+      Offset(groupRect.right - 47, groupRect.bottom - 1),
+      Offset(groupRect.right - 1, groupRect.bottom - 1),
+    ]) {
+      await tester.tapAt(point);
+      await tester.pump();
+    }
+    expect(filterPresses, 6);
   });
 }

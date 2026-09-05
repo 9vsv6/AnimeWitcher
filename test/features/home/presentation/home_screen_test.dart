@@ -149,6 +149,8 @@ void main() {
     expect(find.text('Episode Show'), findsWidgets);
     expect(find.text('Added Show'), findsWidgets);
     expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byIcon(Icons.search_rounded), findsNothing);
+    expect(find.byType(AppBar), findsNothing);
   });
 
   testWidgets('home without New Chapters screenshot for walkthrough', (

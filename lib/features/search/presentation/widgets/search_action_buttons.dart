@@ -19,7 +19,7 @@ class SearchActionButtons extends StatefulWidget {
     required this.sortSystemImage,
     this.filterCount = 0,
     this.isFilterLoading = false,
-    this.height = 42,
+    this.height = 48,
     this.tintColor,
   });
 
@@ -72,6 +72,7 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
         textDirection: TextDirection.ltr,
         child: Row(
           mainAxisSize: MainAxisSize.max,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(child: _buildSortControl(tint)),
             Expanded(
