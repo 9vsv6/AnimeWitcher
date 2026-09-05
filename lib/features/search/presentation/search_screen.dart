@@ -526,24 +526,35 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return _buildMobileLayout(context);
   }
 
+  /// The height of the search field and of the sort and filter group, which
+  /// sit on one line and have to match.
+  static const double _mobileSearchControlHeight = 48;
+
   Widget _buildMobileSearchActionGroup(BuildContext context) {
     final activeFilters = ref.watch(searchProviderFiltersProvider);
     final sortOption = SearchSortOption.fromValue(activeFilters.sort);
 
-    return SearchActionButtons(
-      filterCount: activeFilters.count,
-      isFilterLoading: _isLoadingProviderFilters,
-      sortValue: activeFilters.sort,
-      sortItems: _searchSortMenuItems(context),
-      onSortSelected: _applySearchSort,
-      sortIcon: _searchSortFallbackIcon(sortOption),
-      sortSystemImage: _searchSortSystemImage(sortOption),
-      sortTooltip:
-          '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
-      filterTooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
-      tintColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      height: 48,
-      onFilterPressed: _showSearchFilters,
+    // Centred rather than handed straight to the AppBar slot: that slot hands
+    // down a tight height, and a SizedBox cannot be smaller than what it is
+    // given — the group was coming out at the toolbar's own 56 while the
+    // field beside it was 42.
+    return Center(
+      heightFactor: 1,
+      child: SearchActionButtons(
+        filterCount: activeFilters.count,
+        isFilterLoading: _isLoadingProviderFilters,
+        sortValue: activeFilters.sort,
+        sortItems: _searchSortMenuItems(context),
+        onSortSelected: _applySearchSort,
+        sortIcon: _searchSortFallbackIcon(sortOption),
+        sortSystemImage: _searchSortSystemImage(sortOption),
+        sortTooltip:
+            '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
+        filterTooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
+        tintColor: Theme.of(context).colorScheme.onSurfaceVariant,
+        height: _mobileSearchControlHeight,
+        onFilterPressed: _showSearchFilters,
+      ),
     );
   }
 
@@ -563,7 +574,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        height: 42,
+        // The same height as the sort and filter group beside it, so the two
+        // read as one strip rather than two controls of different sizes. 48
+        // is also the smallest a thumb should be asked to hit.
+        height: _mobileSearchControlHeight,
         child: ValueListenableBuilder<TextEditingValue>(
           valueListenable: _controller,
           builder: (context, value, child) {
@@ -692,9 +706,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
-    const actionHeight = 48.0;
     final actionsSlotWidth =
-        SearchActionButtons.groupWidthForHeight(actionHeight) + 10;
+        SearchActionButtons.groupWidthForHeight(_mobileSearchControlHeight) +
+        10;
 
     // The chips ride in the bar rather than below it, so they stay put while
     // the results scroll under both.
