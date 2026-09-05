@@ -4,10 +4,12 @@ import 'package:animewitcher/core/utils/layout_constants.dart';
 
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 
-/// Sort + filter controls — bare icons (no pill / circle chrome).
+/// Sort + filter controls.
 ///
-/// Layout is always [sort | filter] left-to-right. Opening sort hides the sort
-/// icon with the same fade/scale/slide motion as the library category picker.
+/// Layout is always [sort | filter] left-to-right. On iOS the sort trigger is
+/// the real native Liquid Glass menu button, so the system morphs that same
+/// control into the UIMenu and back instead of hiding Flutter chrome over an
+/// invisible native anchor.
 class SearchActionButtons extends StatefulWidget {
   const SearchActionButtons({
     super.key,
@@ -181,31 +183,17 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
       return Semantics(
         button: true,
         label: widget.sortTooltip,
-        child: SizedBox(
+        child: AppleNativeMenuButton(
+          items: widget.sortItems,
+          onSelected: widget.onSortSelected,
+          accessibilityLabel: widget.sortTooltip,
+          systemImage: widget.sortSystemImage,
+          fallbackIcon: widget.sortIcon,
+          selectedValue: widget.sortValue,
           width: height,
-          height: height,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              sortIcon,
-              Positioned.fill(
-                child: AppleNativeMenuButton(
-                  invisibleAnchor: true,
-                  items: widget.sortItems,
-                  onSelected: _onSortSelected,
-                  onMenuOpened: () => _setSortMenuOpen(true),
-                  onMenuClosed: () => _setSortMenuOpen(false),
-                  accessibilityLabel: widget.sortTooltip,
-                  systemImage: widget.sortSystemImage,
-                  fallbackIcon: widget.sortIcon,
-                  selectedValue: widget.sortValue,
-                  width: height,
-                  size: height,
-                  tintColor: tint,
-                ),
-              ),
-            ],
-          ),
+          size: height,
+          tintColor: tint,
+          cornerRadius: 14,
         ),
       );
     }
