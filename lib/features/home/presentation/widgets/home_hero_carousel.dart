@@ -537,7 +537,16 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         : banner;
     final title = movie.title;
 
-    const bleed = 60.0;
+    // The details-page banner is painted directly into its frame with no
+    // vertical overdraw. Keep the portrait-phone hero identical so the same
+    // banner has the same crop/scale on Home and Details. Retain the existing
+    // bleed elsewhere for the desktop/landscape parallax treatment.
+    final size = MediaQuery.sizeOf(context);
+    final isPortraitPhone =
+        !isDesktop &&
+        ResponsiveBreakpoints.isHandset(context) &&
+        size.height > size.width;
+    final bleed = isPortraitPhone ? 0.0 : 60.0;
 
     return ClipRect(
       child: Stack(
