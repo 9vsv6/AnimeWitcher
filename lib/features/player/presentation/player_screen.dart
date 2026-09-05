@@ -17,7 +17,6 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
-import '../../../../core/storage/settings_repository.dart';
 import '../../../../core/utils/immersive_mode.dart';
 import '../../../../core/utils/window_controls_visibility.dart';
 import '../../../../core/providers/device_info_provider.dart';
@@ -307,32 +306,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     WidgetsBinding.instance.removeObserver(this);
 
     // Restore the system UI FIRST, before any disposal that could throw and
-    // skip this. immersiveSticky is set for all mobile in initState, so it
-    // must always be cleared on exit (on FireTV, leaving it active also makes
-    // the system swallow hardware back-button events).
+    // skip this. Full screen is set for all mobile in initState, so it must
+    // always be cleared on exit (on FireTV, leaving it active also makes the
+    // system swallow hardware back-button events).
     //
-    // Which calls that takes, and in which order, is decided per platform
-    // in immersive_mode.dart - the two phones answer different ones.
+    // Which calls that takes, and in which order, is decided per platform in
+    // immersive_mode.dart - the two phones answer different ones.
     if (Platform.isAndroid || Platform.isIOS) {
-      // Back to whatever the viewer chose outside the player, which may be
-      // full screen — restoring the bars unconditionally would override it.
-      // If that choice cannot be read on the way out, show the bars: leaving
-      // a viewer in full screen they never asked for has no way back.
-      var restoreFullScreen = false;
-      try {
-        restoreFullScreen = ref
-            .read(settingsRepositoryProvider)
-            .isImmersiveFullScreen();
-      } catch (_) {
-        restoreFullScreen = false;
-      }
-      // Orientation first, then the bars. Turning the phone back to portrait
-      // reconfigures the window, and the window that comes back carries the
-      // system bars in their default state — so a full-screen choice made
-      // before that change is made and then unmade. Asking after it is the
-      // right order, and the hold covers the rest: the reconfiguration is
-      // asynchronous, and Android drops a second request inside a second of
-      // the first.
+      // Orientation first, then the bars: turning the phone back to portrait
+      // reconfigures the window, and asking after that change rather than
+      // before it means the request is not the one being overwritten.
       if (!_isTv) {
         if (_isTablet) {
           SystemChrome.setPreferredOrientations([]);
@@ -340,7 +323,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
         }
       }
-      holdImmersiveFullScreen(restoreFullScreen);
+      // The bars come back. Full screen belongs to watching an episode, and
+      // this is the end of one.
+      applyImmersiveFullScreen(false);
     }
 
     _settingsSub?.close();
