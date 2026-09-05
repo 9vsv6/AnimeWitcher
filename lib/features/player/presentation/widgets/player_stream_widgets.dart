@@ -14,6 +14,7 @@ import 'player_control_components.dart';
 import '../../../skip/data/skip_service.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
+
 /// A self-contained progress bar widget that uses StreamBuilder to avoid
 /// rebuilding the parent widget on every position update.
 class PlayerProgressBar extends ConsumerStatefulWidget {
@@ -552,7 +553,11 @@ class PlayerSeekButton extends StatelessWidget {
           decoration: backgroundColor != null
               ? BoxDecoration(shape: BoxShape.circle, color: backgroundColor)
               : null,
-          child: SeekIcon(forward: forward, seconds: seconds, size: size * 0.55),
+          child: SeekIcon(
+            forward: forward,
+            seconds: seconds,
+            size: size * 0.55,
+          ),
         ),
       ),
     );
@@ -575,6 +580,23 @@ class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
   double? _dragValue;
   double _lastNonZero = 1.0;
 
+  /// A level waiting for the engine to finish taking the previous one.
+  ///
+  /// A drag produces changes far faster than the engine can accept them, and
+  /// the point of following the drag is that the sound moves with the pointer.
+  /// Queueing every step would fall further behind the longer the drag ran,
+  /// so only the newest is kept and everything it overtook is dropped.
+  double? _pendingLevel;
+  bool _committing = false;
+
+  /// The loudest the engine will go, as a multiple of the track's own level.
+  ///
+  /// mpv can amplify past the level a recording carries; ExoPlayer cannot,
+  /// and asking it to would clip at its own ceiling under a slider that
+  /// pretended otherwise.
+  double get _maxVolume =>
+      ref.read(playerControllerProvider).supportsVolumeBoost ? 2.0 : 1.0;
+
   @override
   void initState() {
     super.initState();
@@ -586,7 +608,7 @@ class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
         .read(playerControllerProvider.notifier)
         .getVolumeLevel();
     if (!mounted) return;
-    final clamped = level.clamp(0.0, 1.0);
+    final clamped = level.clamp(0.0, _maxVolume);
     setState(() {
       _volume = clamped;
       if (clamped > 0) _lastNonZero = clamped;
@@ -594,7 +616,24 @@ class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
   }
 
   Future<void> _commit(double value) async {
-    await ref.read(playerControllerProvider.notifier).setVolumeLevel(value);
+    if (_committing) {
+      _pendingLevel = value;
+      return;
+    }
+    _committing = true;
+    try {
+      var next = value;
+      while (true) {
+        if (!mounted) return;
+        await ref.read(playerControllerProvider.notifier).setVolumeLevel(next);
+        final queued = _pendingLevel;
+        if (queued == null) return;
+        _pendingLevel = null;
+        next = queued;
+      }
+    } finally {
+      _committing = false;
+    }
   }
 
   void _toggleMute() {
@@ -609,12 +648,15 @@ class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
 
   IconData _iconFor(double value) {
     if (value <= 0.0) return Icons.volume_off_rounded;
+    // The mark the gesture OSD raises once the level is amplified rather than
+    // merely loud.
+    if (value > 1.0) return Icons.campaign_rounded;
     if (value < 0.5) return Icons.volume_down_rounded;
     return Icons.volume_up_rounded;
   }
 
   // Icons the gesture handler's OSD uses for a volume (not brightness)
-  // change — keyboard shortcuts and scroll/swipe volume adjustments only
+  // change - keyboard shortcuts and scroll/swipe volume adjustments only
   // surface through that OSD state, so this is how the slider notices them.
   static final Set<IconData> _volumeOsdIcons = {
     Icons.volume_off,
@@ -633,14 +675,19 @@ class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
       if (_dragValue != null) return; // don't fight an active drag
       if (!next.showOSD || next.osdValue == null) return;
       if (!_volumeOsdIcons.contains(next.osdIcon)) return;
-      final clamped = next.osdValue!.clamp(0.0, 1.0);
+      final clamped = next.osdValue!.clamp(0.0, _maxVolume);
       setState(() {
         _volume = clamped;
         if (clamped > 0) _lastNonZero = clamped;
       });
     });
 
-    final display = (_dragValue ?? _volume ?? 1.0).clamp(0.0, 1.0);
+    // Watched rather than read: a live stream hands playback to ExoPlayer,
+    // which has no amplification, and the ceiling has to come down with it.
+    final maxVolume = ref.watch(playerControllerProvider).supportsVolumeBoost
+        ? 2.0
+        : 1.0;
+    final display = (_dragValue ?? _volume ?? 1.0).clamp(0.0, maxVolume);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -649,36 +696,127 @@ class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
           tooltip: appText(context, english: 'Mute', arabic: 'كتم الصوت'),
           onPressed: _toggleMute,
         ),
-        SizedBox(
-          width: 64,
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 4,
-              activeTrackColor: Colors.white,
-              inactiveTrackColor: const Color(0x4DCFDEF6),
-              thumbColor: Colors.white,
-              overlayColor: Colors.white.withValues(alpha: 0.12),
-              thumbShape: const RoundSliderThumbShape(
-                enabledThumbRadius: 6,
-                elevation: 0,
+        // Held left to right so the track fills away from the speaker in
+        // Arabic too, the way a level reads.
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Tooltip(
+            message: '${(display * 100).round()}%',
+            child: SizedBox(
+              width: 92,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 4,
+                  activeTrackColor: Colors.white,
+                  inactiveTrackColor: const Color(0x4DCFDEF6),
+                  thumbColor: Colors.white,
+                  overlayColor: Colors.white.withValues(alpha: 0.12),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 6,
+                    elevation: 0,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 14,
+                  ),
+                  trackShape: _VolumeTrackShape(
+                    // Where on the track the recording's own level sits. With
+                    // amplification available that is the midpoint, and
+                    // everything past it is gain the recording never carried.
+                    boostStart: maxVolume > 1.0 ? 1.0 / maxVolume : 1.0,
+                    boostColor: const Color(0xFFE5484D),
+                  ),
+                ),
+                child: Slider(
+                  value: display,
+                  max: maxVolume,
+                  onChanged: (value) {
+                    setState(() => _dragValue = value);
+                    // The sound follows the pointer rather than waiting for it
+                    // to be let go.
+                    unawaited(_commit(value));
+                  },
+                  onChangeEnd: (value) {
+                    setState(() {
+                      _volume = value;
+                      if (value > 0) _lastNonZero = value;
+                      _dragValue = null;
+                    });
+                    unawaited(_commit(value));
+                  },
+                ),
               ),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-            ),
-            child: Slider(
-              value: display,
-              onChanged: (value) => setState(() => _dragValue = value),
-              onChangeEnd: (value) {
-                setState(() {
-                  _volume = value;
-                  _dragValue = null;
-                });
-                unawaited(_commit(value));
-              },
             ),
           ),
         ),
       ],
     );
+  }
+}
+
+/// The volume track, with everything past the recording's own level in red.
+///
+/// A [Slider] paints one colour either side of its thumb, and this track has
+/// three things to show: the level so far, how much of it is amplification,
+/// and the room left. The first two are both active track, so the boost is
+/// drawn over that segment rather than in place of it.
+class _VolumeTrackShape extends SliderTrackShape with BaseSliderTrackShape {
+  const _VolumeTrackShape({required this.boostStart, required this.boostColor});
+
+  /// Where amplification begins, as a fraction of the whole track.
+  final double boostStart;
+  final Color boostColor;
+
+  @override
+  bool get isRounded => true;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+    required TextDirection textDirection,
+  }) {
+    final rect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    if (rect.isEmpty) return;
+
+    final radius = Radius.circular(rect.height / 2);
+    final canvas = context.canvas;
+
+    void fill(double left, double right, Color color) {
+      if (right <= left) return;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(left, rect.top, right, rect.bottom),
+          radius,
+        ),
+        Paint()..color = color,
+      );
+    }
+
+    final thumbX = thumbCenter.dx.clamp(rect.left, rect.right);
+    fill(
+      rect.left,
+      rect.right,
+      sliderTheme.inactiveTrackColor ?? const Color(0x4DCFDEF6),
+    );
+    fill(
+      rect.left,
+      thumbX,
+      sliderTheme.activeTrackColor ?? const Color(0xFFFFFFFF),
+    );
+    fill(rect.left + rect.width * boostStart, thumbX, boostColor);
   }
 }
 
