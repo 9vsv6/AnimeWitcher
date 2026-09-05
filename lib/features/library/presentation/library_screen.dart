@@ -6,6 +6,7 @@ import '../../../core/providers/device_info_provider.dart';
 import '../../../core/storage/library_category.dart';
 import '../../../core/storage/library_repository.dart';
 import '../../../core/utils/layout_constants.dart';
+import '../../../core/utils/window_controls_inset.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import 'library_provider.dart';
@@ -42,8 +43,14 @@ class LibraryScreen extends ConsumerWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Container(
                 height: LayoutConstants.dashboardHeaderHeight,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: LayoutConstants.dashboardContentPadding,
+                // The window's caption buttons are painted over this same
+                // corner, and the selector sits against the trailing edge in
+                // Arabic — straight underneath them without this.
+                padding: EdgeInsets.only(
+                  left: LayoutConstants.dashboardContentPadding,
+                  right:
+                      LayoutConstants.dashboardContentPadding +
+                      windowControlsTrailingInset,
                 ),
                 alignment: Alignment.centerRight,
                 child: categorySelector,
@@ -57,9 +64,7 @@ class LibraryScreen extends ConsumerWidget {
 
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
     final mobileScaffold = Scaffold(
-      appBar: AppBar(
-        title: categorySelector,
-      ),
+      appBar: AppBar(title: categorySelector),
       body: const BookmarksTab(),
     );
 
