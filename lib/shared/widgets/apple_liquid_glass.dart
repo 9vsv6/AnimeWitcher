@@ -696,6 +696,7 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
   final bool collapsed;
   final String collapsedSystemImage;
   final int minimumCapacity;
+  final bool captureGestures;
 
   const AppleLiquidGlassActionGroup({
     super.key,
@@ -705,6 +706,7 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
     this.collapsed = false,
     this.collapsedSystemImage = 'arrow.up.arrow.down',
     this.minimumCapacity = 0,
+    this.captureGestures = false,
   });
 
   @override
@@ -726,6 +728,7 @@ class AppleLiquidGlassActionGroup extends StatelessWidget {
           collapsed: collapsed,
           collapsedSystemImage: collapsedSystemImage,
           minimumCapacity: minimumCapacity,
+          captureGestures: captureGestures,
         );
       }
     }
@@ -1074,6 +1077,7 @@ class _AppleNativeToolbar extends StatefulWidget {
     required this.collapsed,
     required this.collapsedSystemImage,
     required this.minimumCapacity,
+    required this.captureGestures,
   });
 
   final List<AppleLiquidGlassToolbarButton> buttons;
@@ -1081,6 +1085,7 @@ class _AppleNativeToolbar extends StatefulWidget {
   final bool collapsed;
   final String collapsedSystemImage;
   final int minimumCapacity;
+  final bool captureGestures;
 
   @override
   State<_AppleNativeToolbar> createState() => _AppleNativeToolbarState();
@@ -1188,7 +1193,14 @@ class _AppleNativeToolbarState extends State<_AppleNativeToolbar> {
       height: widget.height,
       child: UiKitView(
         viewType: _appleNativeToolbarViewType,
-        hitTestBehavior: PlatformViewHitTestBehavior.translucent,
+        hitTestBehavior: widget.captureGestures
+            ? PlatformViewHitTestBehavior.opaque
+            : PlatformViewHitTestBehavior.translucent,
+        gestureRecognizers: widget.captureGestures
+            ? <Factory<OneSequenceGestureRecognizer>>{
+                Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+              }
+            : const <Factory<OneSequenceGestureRecognizer>>{},
         layoutDirection: Directionality.of(context),
         creationParams: _state,
         creationParamsCodec: const StandardMessageCodec(),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:animewitcher/core/utils/layout_constants.dart';
+import 'search_glass_surface.dart';
 
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 
@@ -23,7 +23,7 @@ class SearchActionButtons extends StatefulWidget {
     required this.sortSystemImage,
     this.filterCount = 0,
     this.isFilterLoading = false,
-    this.height = 48,
+    this.height = SearchGlassSurface.height,
     this.tintColor,
   });
 
@@ -41,7 +41,8 @@ class SearchActionButtons extends StatefulWidget {
   final Color? tintColor;
 
   /// Sort + filter tap targets (no divider chrome).
-  static double groupWidthForHeight(double height) => height * 2;
+  static double groupWidthForHeight(double height) =>
+      height * 2 + (appleUsesPersistentLiquidGlassHeader ? 32 : 0);
 
   @override
   State<SearchActionButtons> createState() => _SearchActionButtonsState();
@@ -68,49 +69,98 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
     final tint = widget.tintColor ?? Theme.of(context).colorScheme.primary;
     final height = widget.height;
 
-    final scheme = Theme.of(context).colorScheme;
+    final native = appleUsesPersistentLiquidGlassHeader;
+    final badge = widget.filterCount > 0
+        ? SearchFilterBadge(count: widget.filterCount)
+        : null;
 
-    return SizedBox(
-      width: SearchActionButtons.groupWidthForHeight(height),
-      height: height,
-      // The same capsule the search bar and the taskbar wear, so the two
-      // controls beside the search field belong to it rather than floating
-      // as bare glyphs over whatever is behind them.
-      //
-      // Painted rather than wrapped: a Container with a border insets its
-      // child by the border's width, which would shave a pixel off each edge
-      // of the buttons' hitboxes. The whole slot has to stay tappable.
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
-          border: Border.all(
-            color: scheme.onSurfaceVariant.withValues(alpha: 0.12),
-          ),
-        ),
-        // Keep sort on the left and filter on the right in Arabic and English.
+    return Align(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: SizedBox(
+        key: const ValueKey('search-action-capsule'),
+        width: SearchActionButtons.groupWidthForHeight(height),
+        height: height,
         child: Directionality(
           textDirection: TextDirection.ltr,
-          child: Row(
-            mainAxisSize: MainAxisSize.max,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _buildSortControl(tint)),
-              Expanded(
-                child: _ActionIcon(
-                  tooltip: widget.filterTooltip,
-                  icon: Icons.tune_rounded,
-                  color: tint,
-                  size: height,
-                  onPressed: widget.isFilterLoading
-                      ? null
-                      : widget.onFilterPressed,
-                  isLoading: widget.isFilterLoading,
-                  badgeCount: widget.filterCount,
+          child: native
+              ? Stack(
+                  children: [
+                    AppleLiquidGlassActionGroup(
+                      height: height,
+                      captureGestures: true,
+                      children: [
+                        AppleLiquidGlassToolbarButton(
+                          icon: widget.sortIcon,
+                          systemImage: widget.sortSystemImage,
+                          tooltip: widget.sortTooltip,
+                          color: tint,
+                          menuTintColor: tint,
+                          menuItems: widget.sortItems,
+                          selectedMenuValue: widget.sortValue,
+                          onMenuSelected: widget.onSortSelected,
+                          onPressed: () {},
+                          width: height,
+                        ),
+                        AppleLiquidGlassToolbarButton(
+                          icon: Icons.tune_rounded,
+                          systemImage: widget.isFilterLoading
+                              ? 'hourglass'
+                              : 'slider.horizontal.3',
+                          tooltip: widget.filterTooltip,
+                          color: tint,
+                          onPressed: widget.isFilterLoading
+                              ? null
+                              : widget.onFilterPressed,
+                          width: height,
+                        ),
+                      ],
+                    ),
+                    if (badge != null)
+                      Positioned(
+                        top: 2,
+                        right: 14,
+                        child: IgnorePointer(child: badge),
+                      ),
+                  ],
+                )
+              : Stack(
+                  children: [
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: AppleLiquidGlassSurface(
+                          borderRadius: BorderRadius.circular(height / 2),
+                          fallbackColor: Theme.of(context).colorScheme
+                              .surfaceContainerHighest.withValues(alpha: 0.5),
+                          fallbackBorder: BorderSide(
+                            color: Theme.of(context).colorScheme
+                                .onSurfaceVariant.withValues(alpha: 0.12),
+                          ),
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _buildSortControl(tint)),
+                        Expanded(
+                          child: _ActionIcon(
+                            tooltip: widget.filterTooltip,
+                            icon: Icons.tune_rounded,
+                            color: tint,
+                            size: height,
+                            onPressed: widget.isFilterLoading
+                                ? null
+                                : widget.onFilterPressed,
+                            isLoading: widget.isFilterLoading,
+                            badgeCount: widget.filterCount,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -178,25 +228,6 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
   Widget _buildSortControl(Color tint) {
     final height = widget.height;
     final sortIcon = _buildSortIcon(tint);
-
-    if (appleUsesPersistentLiquidGlassHeader) {
-      return Semantics(
-        button: true,
-        label: widget.sortTooltip,
-        child: AppleNativeMenuButton(
-          items: widget.sortItems,
-          onSelected: widget.onSortSelected,
-          accessibilityLabel: widget.sortTooltip,
-          systemImage: widget.sortSystemImage,
-          fallbackIcon: widget.sortIcon,
-          selectedValue: widget.sortValue,
-          width: height,
-          size: height,
-          tintColor: tint,
-          cornerRadius: 14,
-        ),
-      );
-    }
 
     // The menu carries its own blurred surface rather than the flat one a
     // popup paints, so it matches the taskbar and the search capsule. The
@@ -269,7 +300,6 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final showBadge = badgeCount > 0 && !isLoading;
 
     return Tooltip(
@@ -306,36 +336,48 @@ class _ActionIcon extends StatelessWidget {
                           Positioned(
                             right: -6,
                             top: -6,
-                            child: Container(
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              alignment: Alignment.center,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colors.primary,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: colors.surface,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Text(
-                                badgeCount > 99 ? '99+' : '$badgeCount',
-                                style: TextStyle(
-                                  color: colors.onPrimary,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1,
-                                ),
-                              ),
-                            ),
+                            child: SearchFilterBadge(count: badgeCount),
                           ),
                       ],
                     ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Always yellow, including when the user chooses another theme accent.
+class SearchFilterBadge extends StatelessWidget {
+  const SearchFilterBadge({super.key, required this.count});
+
+  final int count;
+  static const Color backgroundColor = Color(0xFFEEC60A);
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$count',
+      child: Container(
+        width: 18,
+        height: 18,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 1.5),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            count > 99 ? '99+' : '$count',
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              height: 1,
             ),
           ),
         ),

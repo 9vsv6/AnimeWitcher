@@ -1,9 +1,135 @@
 import 'package:animewitcher/features/search/presentation/widgets/search_action_buttons.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
+import 'package:animewitcher/features/search/presentation/widgets/search_glass_surface.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('iOS uses one native toolbar with themed menu actions', (tester) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform_views, (_) async => null,
+    );
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(
+              title: SearchActionButtons(
+                sortValue: 'name_asc',
+                sortItems: const [
+                  AppleNativeMenuItem(value: 'name_asc', label: 'Name', systemImage: 'animewitcher.abc'),
+                ],
+                onSortSelected: (_) {},
+                onFilterPressed: () {},
+                sortTooltip: 'Sort',
+                filterTooltip: 'Filters',
+                sortIcon: Icons.sort_by_alpha,
+                sortSystemImage: 'animewitcher.abc',
+                tintColor: Colors.purple,
+                filterCount: 3,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(UiKitView), findsOneWidget);
+      final native = tester.widget<UiKitView>(find.byType(UiKitView));
+      expect(native.viewType, 'com.animewitcher.app/native_toolbar');
+      final params = native.creationParams! as Map<String, Object?>;
+      final actions = params['actions']! as List<Map<String, Object?>>;
+      expect(actions, hasLength(2));
+      expect(actions.first['systemName'], 'animewitcher.abc');
+      expect(actions.first['menuTintColor'], Colors.purple.toARGB32());
+      expect(actions.last['systemName'], 'slider.horizontal.3');
+      final recognizer = native.gestureRecognizers!.single.constructor();
+      expect(recognizer, isA<EagerGestureRecognizer>());
+      recognizer.dispose();
+      expect(find.text('3'), findsOneWidget);
+      expect(tester.getSize(find.byType(UiKitView)).height, SearchGlassSurface.height);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform_views, null,
+      );
+    }
+  });
+
+  testWidgets('search and actions align with a yellow count in a blue theme', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    var count = 2;
+    late StateSetter update;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue)),
+        home: Scaffold(
+          appBar: AppBar(
+            title: StatefulBuilder(
+              builder: (context, setState) {
+                update = setState;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: SearchGlassSurface(
+                        key: const ValueKey('search-field-glass'),
+                        child: TextField(controller: controller),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SearchActionButtons(
+                      sortValue: 'default',
+                      sortItems: const [AppleNativeMenuItem(value: 'default', label: 'Default')],
+                      onSortSelected: (_) {},
+                      onFilterPressed: () {},
+                      sortTooltip: 'Sort',
+                      filterTooltip: 'Filters',
+                      sortIcon: Icons.arrow_upward_rounded,
+                      sortSystemImage: 'arrow.up',
+                      filterCount: count,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    final field = tester.getRect(find.byKey(const ValueKey('search-field-glass')));
+    final actions = tester.getRect(find.byKey(const ValueKey('search-action-capsule')));
+    expect(field.height, SearchGlassSurface.height);
+    expect(actions.height, field.height);
+    expect(actions.top, field.top);
+    expect(actions.left - field.right, 10);
+    expect(find.byType(AppleLiquidGlassSurface), findsNWidgets(2));
+    expect(find.text('2'), findsOneWidget);
+    final badgeBox = tester.widget<Container>(find.descendant(
+      of: find.byType(SearchFilterBadge), matching: find.byType(Container),
+    ));
+    final decoration = badgeBox.decoration! as BoxDecoration;
+    expect(decoration.color, SearchFilterBadge.backgroundColor);
+    expect(decoration.shape, BoxShape.circle);
+    final icon = tester.widget<Icon>(find.byIcon(Icons.arrow_upward_rounded));
+    final theme = Theme.of(tester.element(find.byType(SearchActionButtons)));
+    expect(icon.color, theme.colorScheme.primary);
+
+    await tester.enterText(find.byType(TextField), 'Anime');
+    expect(controller.text, 'Anime');
+    update(() => count = 0);
+    await tester.pump();
+    expect(find.byType(SearchFilterBadge), findsNothing);
+    expect(tester.getRect(find.byKey(const ValueKey('search-action-capsule'))), actions);
+  });
+
   testWidgets('filter hitbox stays aligned with the icon in an RTL AppBar', (
     tester,
   ) async {
@@ -40,7 +166,7 @@ void main() {
 
     await tester.pump();
 
-    final groupRect = tester.getRect(find.byType(SearchActionButtons));
+    final groupRect = tester.getRect(find.byKey(const ValueKey('search-action-capsule')));
     final filterIconRect = tester.getRect(find.byIcon(Icons.tune_rounded));
 
     // Tapping the pixels that paint the icon must activate the filter itself.
