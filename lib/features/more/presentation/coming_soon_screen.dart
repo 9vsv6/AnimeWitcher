@@ -14,6 +14,7 @@ import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/catalog_ltr.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../details/presentation/details_screen.dart';
+import '../../../core/utils/window_controls_inset.dart';
 
 class ComingSoonScreen extends ConsumerStatefulWidget {
   const ComingSoonScreen({super.key});
@@ -131,6 +132,9 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
             automaticallyImplyLeading: false,
             centerTitle: false,
             titleSpacing: 16,
+            // Leave the window's caption buttons their corner; the
+            // title is aligned to that same edge in Arabic.
+            actions: const <Widget>[WindowControlsGap()],
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
@@ -208,9 +212,8 @@ class _ComingSoonScreenState extends ConsumerState<ComingSoonScreen> {
             ),
             handsetPortraitCrossAxisCount:
                 MultimediaCardLayout.handsetPortraitGridColumns,
-            horizontalPadding: MultimediaCardLayout.catalogGridHorizontalPadding(
-              context,
-            ),
+            horizontalPadding:
+                MultimediaCardLayout.catalogGridHorizontalPadding(context),
           ),
           itemCount: _items.length + extra,
           itemBuilder: (context, index) {
@@ -271,4 +274,3 @@ class _LoadError extends StatelessWidget {
     );
   }
 }
-

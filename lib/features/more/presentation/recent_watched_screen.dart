@@ -13,6 +13,7 @@ import '../../../shared/widgets/catalog_ltr.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../details/presentation/details_screen.dart';
 import '../../library/presentation/history_provider.dart';
+import '../../../core/utils/window_controls_inset.dart';
 
 class RecentWatchedScreen extends ConsumerStatefulWidget {
   const RecentWatchedScreen({super.key});
@@ -103,6 +104,9 @@ class _RecentWatchedScreenState extends ConsumerState<RecentWatchedScreen> {
             automaticallyImplyLeading: false,
             centerTitle: false,
             titleSpacing: 16,
+            // Leave the window's caption buttons their corner; the
+            // title is aligned to that same edge in Arabic.
+            actions: const <Widget>[WindowControlsGap()],
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
@@ -144,11 +148,11 @@ class _RecentWatchedGrid extends StatelessWidget {
     return CatalogLtr(
       child: GridView.builder(
         padding: EdgeInsets.fromLTRB(
-            MultimediaCardLayout.catalogGridHorizontalPadding(context),
-            16,
-            MultimediaCardLayout.catalogGridHorizontalPadding(context),
-            110,
-          ),
+          MultimediaCardLayout.catalogGridHorizontalPadding(context),
+          16,
+          MultimediaCardLayout.catalogGridHorizontalPadding(context),
+          110,
+        ),
         gridDelegate: ResponsiveBreakpoints.animeGridDelegate(
           context,
           maxCrossAxisExtent: isDesktop ? 240 : 150,
@@ -216,4 +220,3 @@ class _EmptyRecentWatched extends StatelessWidget {
     );
   }
 }
-

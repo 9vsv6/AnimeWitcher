@@ -18,6 +18,7 @@ import '../../../shared/widgets/anime_catalog_shimmer.dart';
 import '../../../shared/widgets/catalog_ltr.dart';
 import '../../../shared/widgets/multimedia_card.dart';
 import '../../details/presentation/details_screen.dart';
+import '../../../core/utils/window_controls_inset.dart';
 
 class BroadcastScheduleScreen extends ConsumerStatefulWidget {
   const BroadcastScheduleScreen({super.key});
@@ -232,6 +233,9 @@ class _BroadcastScheduleScreenState
             automaticallyImplyLeading: false,
             centerTitle: false,
             titleSpacing: 16,
+            // Leave the window's caption buttons their corner; the
+            // title is aligned to that same edge in Arabic.
+            actions: const <Widget>[WindowControlsGap()],
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
@@ -441,9 +445,8 @@ class _ScheduleGrid extends StatelessWidget {
             ),
             handsetPortraitCrossAxisCount:
                 MultimediaCardLayout.handsetPortraitGridColumns,
-            horizontalPadding: MultimediaCardLayout.catalogGridHorizontalPadding(
-              context,
-            ),
+            horizontalPadding:
+                MultimediaCardLayout.catalogGridHorizontalPadding(context),
           ),
           itemCount: items.length + (isLoadingMore ? 1 : 0),
           itemBuilder: (context, index) {
@@ -467,4 +470,3 @@ class _ScheduleGrid extends StatelessWidget {
     );
   }
 }
-

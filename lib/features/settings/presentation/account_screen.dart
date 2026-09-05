@@ -14,6 +14,7 @@ import 'account_management_screens.dart';
 import 'account_privacy_settings_screen.dart';
 import 'account_ui_helpers.dart';
 import 'widgets/settings_widgets.dart';
+import '../../../core/utils/window_controls_inset.dart';
 
 enum _AccountFormMode { signIn, createAccount }
 
@@ -62,9 +63,15 @@ class _AnimeWitcherAccountScreenState
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        leading: showFlutterBack && !isRtl
-            ? const AppleLiquidGlassBackButton()
-            : null,
+        // This bar follows the app's language rather than being pinned
+        // left-to-right, so in Arabic the title starts at the right edge —
+        // the corner the window paints its caption buttons over. The room
+        // for them belongs in the slot that sits there, which is the leading
+        // one while the language reads right to left.
+        leadingWidth: isRtl ? windowControlsTrailingInset : null,
+        leading: isRtl
+            ? const SizedBox.shrink()
+            : (showFlutterBack ? const AppleLiquidGlassBackButton() : null),
         actions: showFlutterBack && isRtl
             ? const <Widget>[
                 Padding(
@@ -193,11 +200,7 @@ class _AnimeWitcherAccountScreenState
                         value: _AccountFormMode.signIn,
                         icon: const Icon(Icons.login_rounded),
                         label: Text(
-                          appText(
-                            context,
-                            english: 'Sign in',
-                            arabic: 'دخول',
-                          ),
+                          appText(context, english: 'Sign in', arabic: 'دخول'),
                         ),
                       ),
                       ButtonSegment<_AccountFormMode>(
@@ -320,11 +323,7 @@ class _AnimeWitcherAccountScreenState
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           child: Text(
-                            appText(
-                              context,
-                              english: 'or',
-                              arabic: 'أو',
-                            ),
+                            appText(context, english: 'or', arabic: 'أو'),
                             style: TextStyle(color: colors.onSurfaceVariant),
                           ),
                         ),
@@ -384,10 +383,7 @@ class _AnimeWitcherAccountScreenState
     );
   }
 
-  Widget _buildSignedIn(
-    AnimeWitcherProfile profile,
-    bool busy,
-  ) {
+  Widget _buildSignedIn(AnimeWitcherProfile profile, bool busy) {
     final colors = Theme.of(context).colorScheme;
     final photoUrl = profile.photoUrl?.trim() ?? '';
     final coverUrl = profile.coverUrl?.trim() ?? '';
@@ -609,9 +605,7 @@ class _AnimeWitcherAccountScreenState
               title: appText(
                 context,
                 english: hasPassword ? 'Change password' : 'Add password',
-                arabic: hasPassword
-                    ? 'تغيير كلمة المرور'
-                    : 'إضافة كلمة مرور',
+                arabic: hasPassword ? 'تغيير كلمة المرور' : 'إضافة كلمة مرور',
               ),
               subtitle: appText(
                 context,
@@ -965,11 +959,7 @@ class _AnimeWitcherAccountScreenState
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
-          appText(
-            dialogContext,
-            english: 'Sign out?',
-            arabic: 'تسجيل الخروج؟',
-          ),
+          appText(dialogContext, english: 'Sign out?', arabic: 'تسجيل الخروج؟'),
         ),
         content: Text(
           appText(
@@ -999,9 +989,7 @@ class _AnimeWitcherAccountScreenState
     if (confirmed != true || !mounted) return;
     setState(() => _submitting = true);
     try {
-      await ref
-          .read(animeWitcherAccountControllerProvider.notifier)
-          .signOut();
+      await ref.read(animeWitcherAccountControllerProvider.notifier).signOut();
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -1068,39 +1056,41 @@ class _AnimeWitcherAccountScreenState
   }
 
   void _offerVerificationResend(String email, String password) {
-    ref.read(notificationServiceProvider).showToast(
-      message: appText(
-        context,
-        english: 'Verify your email before signing in.',
-        arabic: 'تحقق من بريدك الإلكتروني قبل تسجيل الدخول.',
-      ),
-      type: ToastType.info,
-      actionLabel: appText(
-        context,
-        english: 'Resend',
-        arabic: 'إعادة الإرسال',
-      ),
-      onAction: () async {
-        try {
-          await ref
-              .read(animeWitcherAccountControllerProvider.notifier)
-              .resendEmailVerification(email: email, password: password);
-          if (mounted) {
-            _showMessage(
-              appText(
-                context,
-                english: 'Verification email sent again.',
-                arabic: 'تم إرسال رسالة التحقق مرة ثانية.',
-              ),
-            );
-          }
-        } catch (error) {
-          if (mounted) {
-            _showMessage(_localizedError(error), isError: true);
-          }
-        }
-      },
-    );
+    ref
+        .read(notificationServiceProvider)
+        .showToast(
+          message: appText(
+            context,
+            english: 'Verify your email before signing in.',
+            arabic: 'تحقق من بريدك الإلكتروني قبل تسجيل الدخول.',
+          ),
+          type: ToastType.info,
+          actionLabel: appText(
+            context,
+            english: 'Resend',
+            arabic: 'إعادة الإرسال',
+          ),
+          onAction: () async {
+            try {
+              await ref
+                  .read(animeWitcherAccountControllerProvider.notifier)
+                  .resendEmailVerification(email: email, password: password);
+              if (mounted) {
+                _showMessage(
+                  appText(
+                    context,
+                    english: 'Verification email sent again.',
+                    arabic: 'تم إرسال رسالة التحقق مرة ثانية.',
+                  ),
+                );
+              }
+            } catch (error) {
+              if (mounted) {
+                _showMessage(_localizedError(error), isError: true);
+              }
+            }
+          },
+        );
   }
 
   String _localizedError(Object error) {
