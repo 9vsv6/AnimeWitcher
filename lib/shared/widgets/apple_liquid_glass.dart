@@ -1390,6 +1390,8 @@ class AppleNativeMenuButton extends StatefulWidget {
     this.size = 44,
     this.enabled = true,
     this.tintColor,
+    this.cornerRadius,
+    this.showsMenuIndicator = false,
 
     /// When true, the native control is fully transparent and only presents
     /// the system UIMenu. Flutter renders the visible chrome above it.
@@ -1409,6 +1411,13 @@ class AppleNativeMenuButton extends StatefulWidget {
   final double size;
   final bool enabled;
   final Color? tintColor;
+
+  /// Optional native Liquid Glass corner radius. Leaving this null keeps the
+  /// system capsule shape.
+  final double? cornerRadius;
+
+  /// Shows UIKit's native pop-up indicator at the trailing edge of the button.
+  final bool showsMenuIndicator;
   final bool invisibleAnchor;
   final VoidCallback? onMenuOpened;
   final VoidCallback? onMenuClosed;
@@ -1429,6 +1438,8 @@ class _AppleNativeMenuButtonState extends State<AppleNativeMenuButton> {
     'enabled': widget.enabled,
     'invisibleAnchor': widget.invisibleAnchor,
     'tintColor': widget.tintColor?.toARGB32(),
+    'cornerRadius': widget.cornerRadius,
+    'showsMenuIndicator': widget.showsMenuIndicator,
     'items': widget.items
         .map((item) => item.toPlatformValue())
         .toList(growable: false),
