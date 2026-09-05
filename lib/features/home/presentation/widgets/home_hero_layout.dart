@@ -27,13 +27,13 @@ class HomeHeroFrame extends ConsumerWidget {
     final topGap = isPortraitPhone ? MediaQuery.viewPaddingOf(context).top : 0.0;
     final height = (context.isDesktop || isTv)
         ? size.height * (isCompactLandscape ? 0.72 : 0.60)
-        : (
-            isCompactLandscape
-                ? size.height * 0.72
-                : size.width *
-                      LayoutConstants.detailsBannerHeightMobile /
-                      LayoutConstants.detailsSdpReferenceWidth
-          );
+        : isCompactLandscape
+        ? size.height * 0.72
+        : isPortraitPhone
+        ? size.width *
+              LayoutConstants.detailsBannerHeightMobile /
+              LayoutConstants.detailsSdpReferenceWidth
+        : size.width * 9 / 16;
 
     return ColoredBox(
       color: Colors.black,
