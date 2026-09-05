@@ -28,10 +28,9 @@ class MoreScreen extends ConsumerWidget {
     final accountPhotoUrl = accountProfile?.photoUrl?.trim() ?? '';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isArabic ? 'المزيد' : 'More'),
-        centerTitle: false,
-      ),
+      // No title: the window's caption buttons are painted over this same
+      // corner, and the two collided. The bar stays for its spacing.
+      appBar: AppBar(centerTitle: false),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
         children: [

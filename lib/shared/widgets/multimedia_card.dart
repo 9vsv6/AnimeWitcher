@@ -168,6 +168,11 @@ class MultimediaCard extends StatelessWidget {
   /// catalog's poster host cannot be reached.
   final int? malId;
 
+  /// The name to search by when there is no id: the English title where the
+  /// catalog has one, since the displayed Arabic name is a transliteration
+  /// that other services do not index.
+  final String lookupTitle;
+
   const MultimediaCard({
     super.key,
     required this.imageUrl,
@@ -184,6 +189,7 @@ class MultimediaCard extends StatelessWidget {
     this.year,
     this.posterBadge,
     this.malId,
+    this.lookupTitle = '',
   });
 
   MultimediaCard.fromItem({
@@ -198,9 +204,8 @@ class MultimediaCard extends StatelessWidget {
     this.showImageLoadingShimmer = true,
     bool showRelationBadge = false,
   }) : imageUrl = AppImageFallbacks.poster(item.posterUrl, label: item.title),
-       malId = int.tryParse(
-         (item.syncData?['malId'] ?? item.syncData?['mal_id'] ?? '').trim(),
-       ),
+       malId = item.artworkLookupMalId,
+       lookupTitle = item.artworkLookupTitle,
        title = item.title,
        episodeBadge = item.episodeBadge,
        subtitle = multimediaCardSubtitle(item),
@@ -236,25 +241,22 @@ class MultimediaCard extends StatelessWidget {
     final yearText = year == null || year! <= 0 ? null : '$year';
 
     final normalizedImageUrl = imageUrl?.trim();
-    final hasImageUrl =
-        normalizedImageUrl != null && normalizedImageUrl.isNotEmpty;
     final imageWidget = Hero(
       tag: heroTag,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(MultimediaCardLayout.posterRadius),
-        // A title with no catalog artwork still goes through the fallback
-        // widget: an id is enough to find a poster elsewhere.
-        child: (hasImageUrl || (malId != null && malId! > 0))
-            ? ArtworkDecode(
-                paintedWidth: cardWidth,
-                builder: (BuildContext context, int? decodeWidth) =>
-                    _buildPoster(
-                      context,
-                      normalizedImageUrl ?? '',
-                      decodeWidth: decodeWidth,
-                    ),
-              )
-            : ThumbnailErrorPlaceholder(label: title),
+        // Every card goes through the poster widget, including one with no
+        // catalog artwork at all: it falls back to the same placeholder this
+        // used to pick directly, and it is the piece that knows how to look
+        // a missing poster up and repaint when that switch is flipped.
+        child: ArtworkDecode(
+          paintedWidth: cardWidth,
+          builder: (BuildContext context, int? decodeWidth) => _buildPoster(
+            context,
+            normalizedImageUrl ?? '',
+            decodeWidth: decodeWidth,
+          ),
+        ),
       ),
     );
 
@@ -325,7 +327,7 @@ class MultimediaCard extends StatelessWidget {
     return FallbackPosterImage(
       imageUrl: imageUrl,
       malId: malId,
-      title: title,
+      title: lookupTitle.isNotEmpty ? lookupTitle : title,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,

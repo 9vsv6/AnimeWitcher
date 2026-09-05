@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../../../../core/utils/artwork_quality.dart';
 import '../../../../core/utils/layout_constants.dart';
+import '../../../../shared/widgets/fallback_poster_image.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -212,16 +213,17 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     final isCompactLandscape =
         context.isHandsetLandscape ||
         (context.isDesktopLandscape && size.height < 560);
-    // Phone hero artwork should read as a banner, not a tall poster crop.
-    // Keep the compact-landscape height guard, while portrait handsets use
-    // a true 16:9 rectangle. Desktop/TV preserve their existing viewport-based
-    // sizing because they are already wide by nature.
-    final heroHeight = isDesktop
-        ? size.height * (isCompactLandscape ? 0.72 : 0.60)
-        : (isCompactLandscape ? size.height * 0.72 : size.width * 9 / 16);
-
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv ?? context.isTv;
+
+    // Phone hero artwork should read as a banner, not a tall poster crop, so
+    // portrait handsets use a true 16:9 rectangle. Desktop and TV run the hero
+    // edge to edge across the window but only part of the way down it, leaving
+    // the first row in view; the banner is cropped to fill that shape, which is
+    // what a hero of this proportion costs.
+    final heroHeight = (isDesktop || isTv)
+        ? size.height * (isCompactLandscape ? 0.72 : 0.60)
+        : (isCompactLandscape ? size.height * 0.72 : size.width * 9 / 16);
 
     return VisibilityDetector(
       key: const Key('explore-carousel-visibility'),
@@ -304,33 +306,21 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
           },
           child: isDesktop
               ? RepaintBoundary(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      LayoutConstants.dashboardContentPadding,
-                      LayoutConstants.spacingSm,
-                      LayoutConstants.dashboardContentPadding,
-                      0,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: BoxDecoration(
+                      border: _isFocusHighlighted
+                          ? Border.all(
+                              color: Theme.of(context).colorScheme.primary,
+                              width: 2.5,
+                            )
+                          : null,
                     ),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: _isFocusHighlighted
-                            ? Border.all(
-                                color: Theme.of(context).colorScheme.primary,
-                                width: 2.5,
-                              )
-                            : null,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: SizedBox(
-                          height: heroHeight,
-                          child: _buildCarouselStack(
-                            heroHeight,
-                            isDesktop: isDesktop || isTv,
-                          ),
-                        ),
+                    child: SizedBox(
+                      height: heroHeight,
+                      child: _buildCarouselStack(
+                        heroHeight,
+                        isDesktop: isDesktop || isTv,
                       ),
                     ),
                   ),
@@ -572,15 +562,17 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
             child: ArtworkDecode(
               paintedWidth: MediaQuery.sizeOf(context).width,
               builder: (BuildContext context, int? decodeWidth) =>
-                  CachedNetworkImage(
+                  FallbackPosterImage(
                     imageUrl: imageUrl,
+                    malId: movie.artworkLookupMalId,
+                    title: movie.artworkLookupTitle,
                     fit: BoxFit.cover,
                     memCacheWidth: decodeWidth,
                     filterQuality: FilterQuality.medium,
-                    placeholder: (context, url) => Container(
+                    placeholder: (context) => Container(
                       color: theme.colorScheme.surfaceContainerHighest,
                     ),
-                    errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
+                    errorWidget: (context) => ThumbnailErrorPlaceholder(
                       label: title,
                       isBackdrop: true,
                     ),

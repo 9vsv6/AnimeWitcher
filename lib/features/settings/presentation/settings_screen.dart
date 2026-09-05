@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/foundation.dart';
@@ -59,7 +61,9 @@ class SettingsScreen extends ConsumerWidget {
                       ],
                       Text(
                         AppLocalizations.of(context)!.settings,
-                        textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+                        textDirection: isRtl
+                            ? TextDirection.rtl
+                            : TextDirection.ltr,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -163,8 +167,38 @@ class SettingsScreen extends ConsumerWidget {
                     generalSettings.taskbarOrder,
                     generalSettings.hiddenTaskbarItems,
                   ),
-                  isLast: true,
                 ),
+                // Phones have a status bar to reclaim; desktop windows do not.
+                if (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
+                  SettingsTile(
+                    icon: Icons.fullscreen_rounded,
+                    title: appText(
+                      context,
+                      english: 'Hide the status bar',
+                      arabic: 'إخفاء شريط الحالة',
+                    ),
+                    subtitle: appText(
+                      context,
+                      english:
+                          'Gives the clock and notification strip to the app. '
+                          'Swipe from the top edge to see it again.',
+                      arabic:
+                          'يمنح شريط الساعة والإشعارات للتطبيق. اسحب من أعلى '
+                          'الشاشة لإظهاره مؤقتًا.',
+                    ),
+                    trailing: Switch(
+                      value: generalSettings.immersiveFullScreen,
+                      onChanged: (val) => ref
+                          .read(generalSettingsProvider.notifier)
+                          .setImmersiveFullScreen(val),
+                    ),
+                    onTap: () => ref
+                        .read(generalSettingsProvider.notifier)
+                        .setImmersiveFullScreen(
+                          !generalSettings.immersiveFullScreen,
+                        ),
+                    isLast: true,
+                  ),
               ],
             ),
             const SizedBox(height: LayoutConstants.spacingLg),
@@ -413,12 +447,38 @@ class SettingsScreen extends ConsumerWidget {
                         .read(animeDataSourceSettingsProvider.notifier)
                         .setHighQualityPosters(value),
                   ),
-                  isLast: true,
                   onTap: () => ref
                       .read(animeDataSourceSettingsProvider.notifier)
                       .setHighQualityPosters(
                         !animeDataSettings.highQualityPosters,
                       ),
+                ),
+                SettingsTile(
+                  icon: Icons.image_search_rounded,
+                  title: appText(
+                    context,
+                    english: 'Find posters elsewhere',
+                    arabic: 'البحث عن البوسترات من مصدر آخر',
+                  ),
+                  subtitle: appText(
+                    context,
+                    english:
+                        'Turn on only if posters do not load: looks them up '
+                        'on AniList when the usual host is blocked',
+                    arabic:
+                        'فعّله فقط إذا كانت البوسترات لا تظهر: يبحث عنها في '
+                        'AniList عند حجب المصدر المعتاد',
+                  ),
+                  trailing: Switch(
+                    value: animeDataSettings.artworkFallback,
+                    onChanged: (value) => ref
+                        .read(animeDataSourceSettingsProvider.notifier)
+                        .setArtworkFallback(value),
+                  ),
+                  isLast: true,
+                  onTap: () => ref
+                      .read(animeDataSourceSettingsProvider.notifier)
+                      .setArtworkFallback(!animeDataSettings.artworkFallback),
                 ),
               ],
             ),

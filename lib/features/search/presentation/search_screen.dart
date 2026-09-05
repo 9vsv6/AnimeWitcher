@@ -457,11 +457,30 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
 
-            // Content layout in Column: Still header and Body directly below it
+            // The results run to the top of the window and scroll under the
+            // controls, so the strip the controls sit on shows the artwork
+            // moving behind them rather than a band of background colour.
             Positioned.fill(
+              child: _buildBody(
+                context,
+                withFilterChips: true,
+                topInset: _floatingHeaderExtent + 16,
+              ),
+            ),
+
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              // Nothing is painted behind the controls, so the results show
+              // through as they scroll past. The search field carries its own
+              // pill, which is what keeps it legible over the artwork.
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(height: 24),
+                  // Only the search field and its controls are pinned. The
+                  // chips for applied filters belong to the results and
+                  // scroll away with them.
                   SearchHeaderBar(
                     textController: _controller,
                     searchFocusNode: _focusNode,
@@ -495,17 +514,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           .onQueryChanged(val);
                     },
                   ),
-                  _ActiveSearchFilterChips(
-                    filters: ref.watch(searchProviderFiltersProvider),
-                    onRemove: _removeSearchFilter,
-                  ),
-                  Expanded(
-                    child: Padding(
-                      // Fixed top padding below the top search bar (24px)
-                      padding: const EdgeInsets.only(top: 24.0),
-                      child: _buildBody(context),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -533,7 +541,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       sortTooltip:
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
       filterTooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
-      tintColor: Theme.of(context).colorScheme.primary,
+      tintColor: Theme.of(context).colorScheme.onSurfaceVariant,
       height: 42,
       onFilterPressed: _showSearchFilters,
     );
@@ -620,23 +628,37 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   borderRadius: BorderRadius.circular(
                     LayoutConstants.radiusPill,
                   ),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.12,
+                    ),
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(
                     LayoutConstants.radiusPill,
                   ),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.12,
+                    ),
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(
                     LayoutConstants.radiusPill,
                   ),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.12,
+                    ),
+                  ),
                 ),
                 filled: true,
+                // Matches the capsule on the home bar and on desktop, so the
+                // control does not change appearance when search opens.
                 fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.92,
+                  alpha: 0.5,
                 ),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),
@@ -647,7 +669,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 prefixIcon: Icon(
                   Icons.search,
                   size: 18,
-                  color: theme.colorScheme.primary,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
                 prefixIconConstraints: const BoxConstraints(
                   minWidth: 44,
@@ -674,8 +696,37 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final actionsSlotWidth =
         SearchActionButtons.groupWidthForHeight(actionHeight) + 10;
 
+    // The chips ride in the bar rather than below it, so they stay put while
+    // the results scroll under both.
+    final activeFilterCount = ref.watch(searchProviderFiltersProvider).count;
+    const chipsHeight = 44.0;
+    final barExtent =
+        MediaQuery.paddingOf(context).top +
+        kToolbarHeight +
+        (activeFilterCount > 0 ? chipsHeight : 0);
+
     final scaffold = Scaffold(
+      // Nothing is painted behind the bar: the results show through it as
+      // they scroll past, the way the desktop one behaves.
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        bottom: activeFilterCount == 0
+            ? null
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(chipsHeight),
+                child: _ActiveSearchFilterChips(
+                  filters: ref.watch(searchProviderFiltersProvider),
+                  onRemove: _removeSearchFilter,
+                ),
+              ),
+        // Centred like the desktop bar rather than pushed against the
+        // actions on one side.
+        centerTitle: true,
         titleSpacing: 12,
         leadingWidth: isArabic ? actionsSlotWidth : null,
         leading: isArabic
@@ -702,15 +753,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           child: _buildMobileSearchField(context),
         ),
       ),
-      body: Column(
-        children: [
-          _ActiveSearchFilterChips(
-            filters: ref.watch(searchProviderFiltersProvider),
-            onRemove: _removeSearchFilter,
-          ),
-          Expanded(child: _buildBody(context)),
-        ],
-      ),
+      body: _buildBody(context, topInset: barExtent + 8),
     );
 
     // Keep the persistent glass chrome for back/system header only — search
@@ -723,7 +766,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildBody(BuildContext context) {
+  /// How far the floating search controls reach down the window. Content
+  /// starts below this and scrolls up under it.
+  static const double _floatingHeaderExtent = 56;
+
+  Widget _buildBody(
+    BuildContext context, {
+    bool withFilterChips = false,
+    double topInset = 0,
+  }) {
     final state = ref.watch(searchPagedResultsProvider);
     final suggestionState = ref.watch(searchSuggestionControllerProvider);
     final typedLongEnough = suggestionState.query.trim().length >= 2;
@@ -731,43 +782,69 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         suggestionState.isLoading || suggestionState.suggestions.isNotEmpty;
     final showSuggestions = typedLongEnough && hasSuggestionContent;
 
+    // Only the results scroll, so every other state is simply held clear of
+    // the floating controls rather than passing under them.
+    final chips = withFilterChips
+        ? _ActiveSearchFilterChips(
+            filters: ref.watch(searchProviderFiltersProvider),
+            onRemove: _removeSearchFilter,
+          )
+        : const SizedBox.shrink();
+
+    Widget belowHeader(Widget child) => Padding(
+      padding: EdgeInsets.only(top: topInset),
+      child: withFilterChips
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                chips,
+                Expanded(child: child),
+              ],
+            )
+          : child,
+    );
+
     if (showSuggestions) {
-      return _buildSuggestionsView(context, suggestionState);
+      return belowHeader(_buildSuggestionsView(context, suggestionState));
     }
 
     final allResults = state.results.expand((entry) => entry.results).toList();
     if (allResults.isEmpty && state.isLoading) {
-      return _buildLoadingIndicator(context);
+      return belowHeader(_buildLoadingIndicator(context));
     }
     if (allResults.isEmpty && state.errorMessage != null) {
-      return RecoverableNetworkState(
-        onRetry: _retrySearch,
-        onOpenDownloads: () => const DownloadsRoute().go(context),
+      return belowHeader(
+        RecoverableNetworkState(
+          onRetry: _retrySearch,
+          onOpenDownloads: () => const DownloadsRoute().go(context),
+        ),
       );
     }
     if (allResults.isEmpty) {
-      return _buildEmptyState(context);
+      return belowHeader(_buildEmptyState(context));
     }
 
     return RepaintBoundary(
       child: CatalogLtr(
         child: CustomScrollView(
-        controller: _resultsScrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          for (var index = 0; index < state.results.length; index++)
-            SearchResultSection(
-              key: ValueKey(state.results[index].providerId),
-              providerName: state.results[index].providerName,
-              providerId: state.results[index].providerId,
-              results: state.results[index].results,
-              isLoadingMore:
-                  state.isLoadingMore && index == state.results.length - 1,
-              firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
-            ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
-      ),
+          controller: _resultsScrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(child: SizedBox(height: topInset)),
+            if (withFilterChips) SliverToBoxAdapter(child: chips),
+            for (var index = 0; index < state.results.length; index++)
+              SearchResultSection(
+                key: ValueKey(state.results[index].providerId),
+                providerName: state.results[index].providerName,
+                providerId: state.results[index].providerId,
+                results: state.results[index].results,
+                isLoadingMore:
+                    state.isLoadingMore && index == state.results.length - 1,
+                firstCardFocusNode: index == 0 ? _firstResultFocusNode : null,
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
+        ),
       ),
     );
   }

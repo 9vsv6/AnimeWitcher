@@ -462,6 +462,22 @@ class MultimediaItem {
         : normalizedBanner;
   }
 
+  /// The MyAnimeList id, where the catalog supplied one. The search index
+  /// does not carry ids, so cards built from it have none.
+  int? get artworkLookupMalId {
+    final raw = (syncData?['malId'] ?? syncData?['mal_id'] ?? '').trim();
+    final id = int.tryParse(raw);
+    return id != null && id > 0 ? id : null;
+  }
+
+  /// The name to look artwork up by when there is no id. The displayed title
+  /// is an Arabic transliteration that other services do not index, so the
+  /// English title the catalog stores alongside it is preferred.
+  String get artworkLookupTitle {
+    final english = (syncData?['englishTitle'] ?? '').trim();
+    return english.isNotEmpty ? english : title;
+  }
+
   String get posterImageUrl => posterUrl;
   String get thumbnailImageUrl => posterUrl;
 

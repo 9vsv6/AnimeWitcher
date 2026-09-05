@@ -119,6 +119,16 @@ class SettingsRepository {
     return _storageService.isAlwaysOnTop();
   }
 
+  Future<void> setArtworkFallbackEnabled(bool enabled) =>
+      _storageService.setArtworkFallbackEnabled(enabled);
+
+  bool isArtworkFallbackEnabled() => _storageService.isArtworkFallbackEnabled();
+
+  Future<void> setImmersiveFullScreen(bool enabled) =>
+      _storageService.setImmersiveFullScreen(enabled);
+
+  bool isImmersiveFullScreen() => _storageService.isImmersiveFullScreen();
+
   Future<void> setMalArtworkUnreachable(bool unreachable) =>
       _storageService.setMalArtworkUnreachable(unreachable);
 

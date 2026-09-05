@@ -689,6 +689,17 @@ class StorageService {
   }
 
   // --- Window Settings ---
+  /// Hides the phone's status bar while the app is open. Off by default; a
+  /// viewer who wants the clock and battery back turns it off again.
+  Future<void> setImmersiveFullScreen(bool enabled) async {
+    await _settingsBox.put('immersive_full_screen', enabled);
+  }
+
+  bool isImmersiveFullScreen() {
+    final value = _settingsBox.get('immersive_full_screen');
+    return value is bool ? value : false;
+  }
+
   Future<void> setAlwaysOnTop(bool enabled) async {
     await _settingsBox.put('always_on_top', enabled);
   }
@@ -724,6 +735,17 @@ class StorageService {
   // Posters resolved from AniZip/Kitsu for titles whose catalog artwork
   // cannot be reached. Persisted so a restart paints them immediately
   // instead of re-asking for every card.
+  /// Off by default; only a viewer whose network blocks the artwork host
+  /// needs the app to look anywhere else.
+  Future<void> setArtworkFallbackEnabled(bool enabled) async {
+    await _settingsBox.put('artwork_fallback_enabled', enabled);
+  }
+
+  bool isArtworkFallbackEnabled() {
+    final value = _settingsBox.get('artwork_fallback_enabled');
+    return value is bool ? value : false;
+  }
+
   Future<void> setFallbackPosters(Map<String, String> value) async {
     await _settingsBox.put('artwork_fallback_posters_json', jsonEncode(value));
   }
