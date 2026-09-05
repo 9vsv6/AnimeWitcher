@@ -795,7 +795,7 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
     return Padding(
       padding: const EdgeInsets.only(bottom: LayoutConstants.spacingXs),
       child: Text(
-        title.toUpperCase(),
+        title,
         textDirection: TextDirection.ltr,
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
         maxLines: 1,
