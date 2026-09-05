@@ -13,6 +13,7 @@ import 'search_provider.dart';
 import 'search_text_direction.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'widgets/search_action_buttons.dart';
+import 'widgets/search_glass_surface.dart';
 import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
 import 'widgets/search_sort_dialog.dart';
@@ -541,8 +542,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       sortTooltip:
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
       filterTooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
-      tintColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      height: 48,
+      tintColor: Theme.of(context).colorScheme.primary,
+      height: SearchGlassSurface.height,
       onFilterPressed: _showSearchFilters,
     );
   }
@@ -562,8 +563,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         }
       },
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        height: 42,
+      child: SearchGlassSurface(
         child: ValueListenableBuilder<TextEditingValue>(
           valueListenable: _controller,
           builder: (context, value, child) {
@@ -624,42 +624,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               onSubmitted: _submitSearch,
               decoration: InputDecoration(
                 hintText: searchPlaceholder,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(
-                    LayoutConstants.radiusPill,
-                  ),
-                  borderSide: BorderSide(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(
-                      alpha: 0.12,
-                    ),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(
-                    LayoutConstants.radiusPill,
-                  ),
-                  borderSide: BorderSide(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(
-                      alpha: 0.12,
-                    ),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(
-                    LayoutConstants.radiusPill,
-                  ),
-                  borderSide: BorderSide(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(
-                      alpha: 0.12,
-                    ),
-                  ),
-                ),
-                filled: true,
-                // Matches the capsule on the home bar and on desktop, so the
-                // control does not change appearance when search opens.
-                fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.5,
-                ),
+                border: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                filled: false,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                 hintStyle: TextStyle(
@@ -673,12 +641,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
                 prefixIconConstraints: const BoxConstraints(
                   minWidth: 44,
-                  minHeight: 42,
+                  minHeight: SearchGlassSurface.height,
                 ),
                 suffixIcon: suffix,
                 suffixIconConstraints: const BoxConstraints(
                   minWidth: 42,
-                  minHeight: 42,
+                  minHeight: SearchGlassSurface.height,
                 ),
               ),
             );
@@ -689,12 +657,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildMobileLayout(BuildContext context) {
-    final isArabic =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
-    const actionHeight = 48.0;
-    final actionsSlotWidth =
-        SearchActionButtons.groupWidthForHeight(actionHeight) + 10;
 
     // The chips ride in the bar rather than below it, so they stay put while
     // the results scroll under both.
@@ -724,40 +687,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   onRemove: _removeSearchFilter,
                 ),
               ),
-        // Centred like the desktop bar rather than pushed against the
-        // actions on one side.
-        centerTitle: true,
+        automaticallyImplyLeading: false,
+        centerTitle: false,
         titleSpacing: 12,
-        leadingWidth: isArabic ? actionsSlotWidth : null,
-        leading: isArabic
-            ? Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: _buildMobileSearchActionGroup(context),
-              )
-            : null,
-        actions: isArabic
-            ? null
-            : [
-                SizedBox(
-                  width: actionsSlotWidth,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: _buildMobileSearchActionGroup(context),
-                  ),
-                ),
-              ],
-        // The field reads left-to-right in every locale: magnifier on the
-        // left, hint and caret starting there.
         title: Directionality(
           textDirection: TextDirection.ltr,
-          child: _buildMobileSearchField(context),
+          child: Row(
+            children: [
+              Expanded(child: _buildMobileSearchField(context)),
+              const SizedBox(width: 10),
+              _buildMobileSearchActionGroup(context),
+            ],
+          ),
         ),
       ),
       body: _buildBody(context, topInset: barExtent + 8),
     );
 
-    // Keep the persistent glass chrome for back/system header only — search
-    // field and sort/filter controls stay solid Material (no liquid glass).
+    // These glass controls belong to this row, not the persistent overlay.
     if (!usePersistentGlass) return scaffold;
     return ApplePersistentGlassHeaderScope(
       branchIndex: TaskbarDestination.search.branchIndex,
