@@ -1799,41 +1799,49 @@ class BlurredMenuPanel extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(_radius);
 
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: radius,
-            border: Border.all(
-              color: scheme.onSurfaceVariant.withValues(alpha: 0.12),
+    // The panel is carried inside a disabled menu item, which dims the icons
+    // around it to half opacity. `Icon` multiplies that into whatever colour
+    // it is given while `Text` ignores it entirely, so the sort menu's arrows
+    // came out at half the brightness of the ABC and ZYX spelled beside them.
+    // Every glyph in here is a live control regardless of what carries it.
+    return IconTheme.merge(
+      data: const IconThemeData(opacity: 1),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: radius,
+              border: Border.all(
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.12),
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final item in items)
-                _MenuRow(
-                  item: item,
-                  // A tick in the same colour as every other glyph was not
-                  // enough to pick out at a glance; the chosen row is filled
-                  // and coloured so it reads before the icons do.
-                  selected: selectedValue == item.value,
-                  tint: tint,
-                  // An item may name a Material icon, an iOS symbol that
-                  // maps to one, or neither; the caller's fallback is the
-                  // last resort so no row is left without a glyph.
-                  fallbackIcon:
-                      item.icon ??
-                      _materialIconForSystemImage(item.systemImage) ??
-                      iconForValue?.call(item.value) ??
-                      fallbackIcon,
-                  leadingBuilder: leadingBuilder,
-                  onTap: () => onPick(item.value),
-                ),
-            ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final item in items)
+                  _MenuRow(
+                    item: item,
+                    // A tick in the same colour as every other glyph was not
+                    // enough to pick out at a glance; the chosen row is filled
+                    // and coloured so it reads before the icons do.
+                    selected: selectedValue == item.value,
+                    tint: tint,
+                    // An item may name a Material icon, an iOS symbol that
+                    // maps to one, or neither; the caller's fallback is the
+                    // last resort so no row is left without a glyph.
+                    fallbackIcon:
+                        item.icon ??
+                        _materialIconForSystemImage(item.systemImage) ??
+                        iconForValue?.call(item.value) ??
+                        fallbackIcon,
+                    leadingBuilder: leadingBuilder,
+                    onTap: () => onPick(item.value),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
