@@ -1,4 +1,5 @@
 import 'package:animewitcher/core/providers/device_info_provider.dart';
+import 'package:animewitcher/core/utils/layout_constants.dart';
 import 'package:animewitcher/features/home/presentation/widgets/home_hero_layout.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -50,7 +51,13 @@ void main() {
 
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     try {
-      await check(const Size(390, 844), 44, 219.375);
+      await check(
+        const Size(390, 844),
+        44,
+        390 *
+            LayoutConstants.detailsBannerHeightMobile /
+            LayoutConstants.detailsSdpReferenceWidth,
+      );
       await check(const Size(844, 390), 0, 280.8);
       await check(const Size(768, 1024), 0, 432);
       await check(const Size(1440, 900), 0, 540);
