@@ -803,9 +803,10 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
         style: TextStyle(
           color: Colors.white,
           fontSize: compactLandscape ? 18 : (isDesktop ? 26 : 19),
-          fontFamily: 'RobotoCondensed',
-          fontWeight: FontWeight.w900,
-          letterSpacing: 1.0,
+          // Match MultimediaCard title typography: use the app's default
+          // font face with the same semibold weight and line height.
+          fontWeight: FontWeight.w600,
+          height: 1.2,
           shadows: [Shadow(color: Colors.black, blurRadius: 10)],
         ),
       ),
