@@ -65,4 +65,113 @@ void main() {
     }
     expect(filterPresses, 6);
   });
+
+  testWidgets('alphabetical orders are spelled out in the sort menu', (
+    tester,
+  ) async {
+    var picked = '';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            appBar: AppBar(
+              leading: SearchActionButtons(
+                sortValue: 'favorites',
+                sortItems: const <AppleNativeMenuItem>[
+                  AppleNativeMenuItem(
+                    value: 'favorites',
+                    label: 'Most favorited',
+                    systemImage: 'star.fill',
+                  ),
+                  AppleNativeMenuItem(
+                    value: 'name_asc',
+                    label: 'Name A to Z',
+                    systemImage: 'animewitcher.abc',
+                  ),
+                  AppleNativeMenuItem(
+                    value: 'name_desc',
+                    label: 'Name Z to A',
+                    systemImage: 'animewitcher.zyx',
+                  ),
+                ],
+                onSortSelected: (value) => picked = value,
+                onFilterPressed: () {},
+                sortTooltip: 'Sort',
+                filterTooltip: 'Filters',
+                sortIcon: Icons.swap_vert_rounded,
+                sortSystemImage: 'star.fill',
+                height: 48,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Sort'));
+    await tester.pumpAndSettle();
+
+    // The two alphabetical orders read as letters rather than as an icon.
+    expect(find.text('ABC'), findsOneWidget);
+    expect(find.text('ZYX'), findsOneWidget);
+
+    // And the menu still reports what was chosen, which it does by hand now
+    // that the rows live inside one disabled popup item.
+    await tester.tap(find.text('Name Z to A'));
+    await tester.pumpAndSettle();
+    expect(picked, 'name_desc');
+  });
+
+  testWidgets('a drawn sort mark is as bright as a spelled one', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(
+            leading: SearchActionButtons(
+              sortValue: 'favorites',
+              sortItems: const <AppleNativeMenuItem>[
+                AppleNativeMenuItem(
+                  value: 'favorites',
+                  label: 'Most favorited',
+                  systemImage: 'star.fill',
+                ),
+                AppleNativeMenuItem(
+                  value: 'date_asc',
+                  label: 'Oldest first',
+                  icon: Icons.arrow_upward_rounded,
+                  systemImage: 'arrow.up',
+                ),
+                AppleNativeMenuItem(
+                  value: 'name_asc',
+                  label: 'Name A to Z',
+                  systemImage: 'animewitcher.abc',
+                ),
+              ],
+              onSortSelected: (_) {},
+              onFilterPressed: () {},
+              sortTooltip: 'Sort',
+              filterTooltip: 'Filters',
+              sortIcon: Icons.swap_vert_rounded,
+              sortSystemImage: 'star.fill',
+              height: 48,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Sort'));
+    await tester.pumpAndSettle();
+
+    // The panel rides inside a disabled popup item, which dims the icons
+    // around it. `Icon` folds that opacity into its colour and `Text` does
+    // not, so an arrow row would paint at half the alpha of the ABC beside
+    // it while both were handed the very same colour.
+    final arrow = tester.element(find.byIcon(Icons.arrow_upward_rounded));
+    expect(IconTheme.of(arrow).opacity ?? 1.0, 1.0);
+  });
 }

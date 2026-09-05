@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/device_info_provider.dart';
 import '../../../core/utils/layout_constants.dart';
+import '../../../core/utils/window_controls_inset.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'widgets/downloads_tab.dart';
@@ -33,8 +34,13 @@ class DownloadsScreen extends ConsumerWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Container(
                 height: LayoutConstants.dashboardHeaderHeight,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: LayoutConstants.dashboardContentPadding,
+                // Clear of the window's caption buttons, which are painted
+                // over the same corner the title sits in.
+                padding: EdgeInsets.only(
+                  left: LayoutConstants.dashboardContentPadding,
+                  right:
+                      LayoutConstants.dashboardContentPadding +
+                      windowControlsTrailingInset,
                 ),
                 alignment: titleAlignment,
                 child: Directionality(

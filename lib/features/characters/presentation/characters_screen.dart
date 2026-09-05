@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/account/account_providers.dart';
@@ -21,6 +21,7 @@ import '../../search/presentation/search_text_direction.dart';
 import '../../settings/presentation/account_screen.dart';
 import 'character_card.dart';
 import 'character_details_screen.dart';
+import '../../../core/utils/window_controls_inset.dart';
 
 class CharactersScreen extends ConsumerStatefulWidget {
   const CharactersScreen({super.key});
@@ -192,7 +193,9 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
     final provider = _provider ??= _resolveProvider();
     if (provider == null) {
       if (mounted) {
-        setState(() => _catalogError = StateError('AnimeWitcher Native unavailable'));
+        setState(
+          () => _catalogError = StateError('AnimeWitcher Native unavailable'),
+        );
       }
       return;
     }
@@ -324,6 +327,9 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
             automaticallyImplyLeading: false,
             centerTitle: false,
             titleSpacing: 16,
+            // Leave the window's caption buttons their corner; the
+            // title is aligned to that same edge in Arabic.
+            actions: const <Widget>[WindowControlsGap()],
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
@@ -424,7 +430,7 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
     }
 
     final extra = _catalogLoading && _activeQuery.isEmpty ? 1 : 0;
-    return SecondaryMouseRefreshIndicator(
+    return MouseDragRefreshIndicator(
       onRefresh: _refreshVisible,
       child: CatalogLtr(
         child: GridView.builder(
@@ -450,9 +456,8 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
             ),
             handsetPortraitCrossAxisCount:
                 MultimediaCardLayout.handsetPortraitGridColumns,
-            horizontalPadding: MultimediaCardLayout.catalogGridHorizontalPadding(
-              context,
-            ),
+            horizontalPadding:
+                MultimediaCardLayout.catalogGridHorizontalPadding(context),
           ),
           itemCount: _catalog.length + extra,
           itemBuilder: (context, index) {
@@ -472,7 +477,9 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
   }
 
   Widget _buildFavoritesTab(bool isArabic) {
-    final signedIn = ref.watch(animeWitcherAccountControllerProvider)
+    final signedIn =
+        ref
+            .watch(animeWitcherAccountControllerProvider)
             .asData
             ?.value
             .isSignedIn ??
@@ -514,7 +521,7 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
     }
 
     final extra = _favoritesLoading ? 1 : 0;
-    return SecondaryMouseRefreshIndicator(
+    return MouseDragRefreshIndicator(
       onRefresh: () => _loadFavorites(reset: true),
       child: CatalogLtr(
         child: GridView.builder(
@@ -540,9 +547,8 @@ class _CharactersScreenState extends ConsumerState<CharactersScreen>
             ),
             handsetPortraitCrossAxisCount:
                 MultimediaCardLayout.handsetPortraitGridColumns,
-            horizontalPadding: MultimediaCardLayout.catalogGridHorizontalPadding(
-              context,
-            ),
+            horizontalPadding:
+                MultimediaCardLayout.catalogGridHorizontalPadding(context),
           ),
           itemCount: _favorites.length + extra,
           itemBuilder: (context, index) {
@@ -720,4 +726,3 @@ class _CharactersStatus extends StatelessWidget {
     );
   }
 }
-

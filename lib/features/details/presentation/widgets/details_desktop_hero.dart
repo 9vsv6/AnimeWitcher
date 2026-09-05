@@ -1,6 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -197,7 +197,7 @@ class DetailsDesktopHero extends ConsumerWidget {
 
         // ── Layer 4: Scrollable content ──
         Positioned.fill(
-          child: SecondaryMouseRefreshIndicator(
+          child: MouseDragRefreshIndicator(
             onRefresh: onRefresh,
             child: SingleChildScrollView(
               key: const PageStorageKey<String>('desktop-details-info-tab'),

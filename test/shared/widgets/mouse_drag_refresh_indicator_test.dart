@@ -1,17 +1,17 @@
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('secondary mouse pull from the top refreshes once', (
+  testWidgets('a held mouse drag from the top refreshes once', (
     tester,
   ) async {
     var refreshCount = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SecondaryMouseRefreshIndicator(
+          body: MouseDragRefreshIndicator(
             onRefresh: () async {
               refreshCount++;
             },
@@ -25,14 +25,14 @@ void main() {
     );
 
     final listener = tester.widget<Listener>(
-      find.byKey(secondaryMouseRefreshListenerKey),
+      find.byKey(mouseDragRefreshListenerKey),
     );
     listener.onPointerDown!(
       const PointerDownEvent(
         pointer: 1,
         kind: PointerDeviceKind.mouse,
         position: Offset(200, 100),
-        buttons: kSecondaryMouseButton,
+        buttons: kPrimaryMouseButton,
       ),
     );
     listener.onPointerMove!(
@@ -41,7 +41,7 @@ void main() {
         kind: PointerDeviceKind.mouse,
         position: Offset(200, 190),
         delta: Offset(0, 90),
-        buttons: kSecondaryMouseButton,
+        buttons: kPrimaryMouseButton,
       ),
     );
     await tester.pump();

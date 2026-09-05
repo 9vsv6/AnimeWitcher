@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:animewitcher/core/utils/layout_constants.dart';
+
 import '../../../../shared/widgets/apple_liquid_glass.dart';
 
 /// Sort + filter controls — bare icons (no pill / circle chrome).
@@ -64,30 +66,49 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
     final tint = widget.tintColor ?? Theme.of(context).colorScheme.primary;
     final height = widget.height;
 
+    final scheme = Theme.of(context).colorScheme;
+
     return SizedBox(
       width: SearchActionButtons.groupWidthForHeight(height),
       height: height,
-      // Keep sort on the left and filter on the right in Arabic and English.
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: Row(
-          mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: _buildSortControl(tint)),
-            Expanded(
-              child: _ActionIcon(
-                tooltip: widget.filterTooltip,
-                icon: Icons.tune_rounded,
-                color: tint,
-                size: height,
-                onPressed:
-                    widget.isFilterLoading ? null : widget.onFilterPressed,
-                isLoading: widget.isFilterLoading,
-                badgeCount: widget.filterCount,
+      // The same capsule the search bar and the taskbar wear, so the two
+      // controls beside the search field belong to it rather than floating
+      // as bare glyphs over whatever is behind them.
+      //
+      // Painted rather than wrapped: a Container with a border insets its
+      // child by the border's width, which would shave a pixel off each edge
+      // of the buttons' hitboxes. The whole slot has to stay tappable.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
+          border: Border.all(
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.12),
+          ),
+        ),
+        // Keep sort on the left and filter on the right in Arabic and English.
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _buildSortControl(tint)),
+              Expanded(
+                child: _ActionIcon(
+                  tooltip: widget.filterTooltip,
+                  icon: Icons.tune_rounded,
+                  color: tint,
+                  size: height,
+                  onPressed: widget.isFilterLoading
+                      ? null
+                      : widget.onFilterPressed,
+                  isLoading: widget.isFilterLoading,
+                  badgeCount: widget.filterCount,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -189,35 +210,46 @@ class _SearchActionButtonsState extends State<SearchActionButtons> {
       );
     }
 
+    // The menu carries its own blurred surface rather than the flat one a
+    // popup paints, so it matches the taskbar and the search capsule. The
+    // button still hosts it, which keeps the anchoring and dismissal that
+    // come with a popup; only what is drawn changes.
     return PopupMenuButton<String>(
       tooltip: widget.sortTooltip,
       padding: EdgeInsets.zero,
       offset: const Offset(0, 8),
+      color: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      shape: const RoundedRectangleBorder(),
       onOpened: () => _setSortMenuOpen(true),
       onCanceled: () => _setSortMenuOpen(false),
-      onSelected: _onSortSelected,
-      itemBuilder: (context) => [
-        for (final item in widget.sortItems)
-          PopupMenuItem<String>(
-            value: item.value,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 28,
-                  child: widget.sortValue == item.value
-                      ? Icon(Icons.check_rounded, size: 20, color: tint)
-                      : _buildSortGlyph(
-                          tint,
-                          icon: item.icon ?? Icons.swap_vert_rounded,
-                          systemImage: item.systemImage,
-                          iconSize: 18,
-                          textSize: 11.5,
-                        ),
-                ),
-                Expanded(child: Text(item.label)),
-              ],
+      itemBuilder: (menuContext) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: BlurredMenuPanel(
+            items: widget.sortItems,
+            selectedValue: widget.sortValue,
+            tint: tint,
+            fallbackIcon: Icons.swap_vert_rounded,
+            // Some sort orders are spelled out as letters rather than drawn
+            // as icons, so the row asks for its own glyph.
+            leadingBuilder: (item, color) => _buildSortGlyph(
+              color,
+              icon: item.icon ?? Icons.swap_vert_rounded,
+              systemImage: item.systemImage,
+              iconSize: 18,
+              textSize: 11.5,
             ),
+            onPick: (value) {
+              Navigator.of(menuContext).pop();
+              _setSortMenuOpen(false);
+              _onSortSelected(value);
+            },
           ),
+        ),
       ],
       child: SizedBox(
         width: height,
@@ -292,7 +324,9 @@ class _ActionIcon extends StatelessWidget {
                                 minHeight: 16,
                               ),
                               alignment: Alignment.center,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: colors.primary,
                                 borderRadius: BorderRadius.circular(20),

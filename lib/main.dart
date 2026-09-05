@@ -893,9 +893,13 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                           _TitleBarButton(
                             onPressed: () => windowManager.minimize(),
                             child: Center(
+                              // A one-pixel rule lands between device pixels
+                              // and renders half-lit, which made this the
+                              // faintest of the three. The maximise box and
+                              // the close cross are drawn a full pixel wide.
                               child: Container(
                                 width: 10,
-                                height: 1,
+                                height: 1.5,
                                 color: iconColor,
                               ),
                             ),

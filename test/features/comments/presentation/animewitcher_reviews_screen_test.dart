@@ -20,6 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../support/test_fonts.dart';
+import 'package:animewitcher/core/utils/window_controls_inset.dart';
 
 class _FakeAccountService extends AnimeWitcherAccountService {
   _FakeAccountService({
@@ -27,9 +28,9 @@ class _FakeAccountService extends AnimeWitcherAccountService {
     this.signedIn = true,
     this.myUserId = 'me',
   }) : super(
-          storage: StorageService(),
-          secureStorage: SecureTokenStorage(StorageService()),
-        );
+         storage: StorageService(),
+         secureStorage: SecureTokenStorage(StorageService()),
+       );
 
   final List<AnimeWitcherComment> reviews;
   final bool signedIn;
@@ -45,15 +46,15 @@ class _FakeAccountService extends AnimeWitcherAccountService {
 
   @override
   AnimeWitcherAccountSnapshot get snapshot => AnimeWitcherAccountSnapshot(
-        profile: signedIn
-            ? AnimeWitcherProfile(
-                documentId: myUserId,
-                uid: myUserId,
-                signInMethod: AnimeWitcherSignInMethod.google,
-                userName: 'Me',
-              )
-            : null,
-      );
+    profile: signedIn
+        ? AnimeWitcherProfile(
+            documentId: myUserId,
+            uid: myUserId,
+            signInMethod: AnimeWitcherSignInMethod.google,
+            userName: 'Me',
+          )
+        : null,
+  );
 
   @override
   bool ownsComment(AnimeWitcherComment comment) {
@@ -220,7 +221,9 @@ void _expectAccountSortHeader(
   expect(find.byIcon(Icons.sort_rounded), findsNothing);
 
   final titleRect = tester.getRect(find.byKey(kMyCommentsTitleKey));
-  final sortRect = tester.getRect(find.byKey(kAnimeWitcherCommentSortControlKey));
+  final sortRect = tester.getRect(
+    find.byKey(kAnimeWitcherCommentSortControlKey),
+  );
   final backRect = tester.getRect(find.byType(AppleLiquidGlassBackButton));
 
   expect(
@@ -277,7 +280,9 @@ void main() {
     expect(service.lastLimit, kAnimeWitcherReviewsPageSize);
   });
 
-  testWidgets('empty published reviews show the APK empty copy', (tester) async {
+  testWidgets('empty published reviews show the APK empty copy', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _app(
         service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
@@ -321,6 +326,11 @@ void main() {
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      // A phone-sized surface, and a phone has no caption buttons for
+      // the header to leave room for - the machine running the test
+      // does, and that is what the measurement would report.
+      debugWindowControlsInsetOverride = 0;
+      addTearDown(() => debugWindowControlsInsetOverride = null);
       await tester.pumpWidget(
         _app(
           service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
@@ -342,6 +352,11 @@ void main() {
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      // A phone-sized surface, and a phone has no caption buttons for
+      // the header to leave room for - the machine running the test
+      // does, and that is what the measurement would report.
+      debugWindowControlsInsetOverride = 0;
+      addTearDown(() => debugWindowControlsInsetOverride = null);
       await tester.pumpWidget(
         _app(
           service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
@@ -388,11 +403,18 @@ void main() {
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      // A phone-sized surface, and a phone has no caption buttons for
+      // the header to leave room for - the machine running the test
+      // does, and that is what the measurement would report.
+      debugWindowControlsInsetOverride = 0;
+      addTearDown(() => debugWindowControlsInsetOverride = null);
 
       Future<AppleNativeMenuButton> pumpAndRead(Widget home) async {
         await tester.pumpWidget(
           _app(
-            service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
+            service: _FakeAccountService(
+              reviews: const <AnimeWitcherComment>[],
+            ),
             home: home,
           ),
         );
@@ -411,7 +433,9 @@ void main() {
       final myReviews = await pumpAndRead(
         const AnimeWitcherMyCommentsScreen(isReviews: true),
       );
-      final myComments = await pumpAndRead(const AnimeWitcherMyCommentsScreen());
+      final myComments = await pumpAndRead(
+        const AnimeWitcherMyCommentsScreen(),
+      );
 
       for (final button in <AppleNativeMenuButton>[
         details,
@@ -421,7 +445,10 @@ void main() {
         expect(button.size, AnimeWitcherCommentSortControl.size);
         expect(button.width, AnimeWitcherCommentSortControl.width);
         expect(button.systemImage, AnimeWitcherCommentSortControl.systemImage);
-        expect(button.fallbackIcon, AnimeWitcherCommentSortControl.fallbackIcon);
+        expect(
+          button.fallbackIcon,
+          AnimeWitcherCommentSortControl.fallbackIcon,
+        );
       }
     },
   );
@@ -472,7 +499,9 @@ void main() {
     },
   );
 
-  testWidgets('my reviews screen lists unpublished review_text', (tester) async {
+  testWidgets('my reviews screen lists unpublished review_text', (
+    tester,
+  ) async {
     final service = _FakeAccountService(
       reviews: <AnimeWitcherComment>[
         _review(
@@ -502,6 +531,11 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    // A phone-sized surface, and a phone has no caption buttons for
+    // the header to leave room for - the machine running the test
+    // does, and that is what the measurement would report.
+    debugWindowControlsInsetOverride = 0;
+    addTearDown(() => debugWindowControlsInsetOverride = null);
     await tester.pumpWidget(
       _app(
         service: _FakeAccountService(reviews: const <AnimeWitcherComment>[]),
@@ -519,47 +553,53 @@ void main() {
     expect(find.byIcon(Icons.visibility_off_rounded), findsNothing);
   });
 
-  testWidgets('editing a published review uses the review title without spoiler', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      _app(
-        service: _FakeAccountService(
-          reviews: <AnimeWitcherComment>[
-            _review(id: 'mine', text: 'زمان', userId: 'me'),
-          ],
+  testWidgets(
+    'editing a published review uses the review title without spoiler',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      // A phone-sized surface, and a phone has no caption buttons for
+      // the header to leave room for - the machine running the test
+      // does, and that is what the measurement would report.
+      debugWindowControlsInsetOverride = 0;
+      addTearDown(() => debugWindowControlsInsetOverride = null);
+      await tester.pumpWidget(
+        _app(
+          service: _FakeAccountService(
+            reviews: <AnimeWitcherComment>[
+              _review(id: 'mine', text: 'زمان', userId: 'me'),
+            ],
+          ),
+          home: const AnimeWitcherCommentsScreen(target: _target),
         ),
-        home: const AnimeWitcherCommentsScreen(target: _target),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    await _openOwnReviewEditor(tester);
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await _openOwnReviewEditor(tester);
 
-    expect(find.text('تعديل المراجعة'), findsOneWidget);
-    expect(find.text('تعديل التعليق'), findsNothing);
-    expect(find.text('يحتوي على حرق'), findsNothing);
-    expect(find.byType(CheckboxListTile), findsNothing);
-    expect(find.text('حفظ'), findsOneWidget);
-  });
+      expect(find.text('تعديل المراجعة'), findsOneWidget);
+      expect(find.text('تعديل التعليق'), findsNothing);
+      expect(find.text('يحتوي على حرق'), findsNothing);
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(find.text('حفظ'), findsOneWidget);
+    },
+  );
 
   testWidgets('my reviews edit dialog uses تعديل المراجعة without spoiler', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    // A phone-sized surface, and a phone has no caption buttons for
+    // the header to leave room for - the machine running the test
+    // does, and that is what the measurement would report.
+    debugWindowControlsInsetOverride = 0;
+    addTearDown(() => debugWindowControlsInsetOverride = null);
     await tester.pumpWidget(
       _app(
         service: _FakeAccountService(
           reviews: <AnimeWitcherComment>[
-            _review(
-              id: 'mine',
-              text: 'زمان',
-              published: false,
-              userId: 'me',
-            ),
+            _review(id: 'mine', text: 'زمان', published: false, userId: 'me'),
           ],
         ),
         home: const AnimeWitcherMyCommentsScreen(isReviews: true),
@@ -584,7 +624,11 @@ void main() {
       artifacts.createSync(recursive: true);
     }
 
-    Future<void> shot(String name, Widget home, _FakeAccountService service) async {
+    Future<void> shot(
+      String name,
+      Widget home,
+      _FakeAccountService service,
+    ) async {
       final key = ValueKey(name);
       await tester.pumpWidget(
         _app(
@@ -602,20 +646,27 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File('${artifacts.path}/$name.png').writeAsBytesSync(
-          bytes!.buffer.asUint8List(),
-        );
+        File(
+          '${artifacts.path}/$name.png',
+        ).writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
 
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    // A phone-sized surface, and a phone has no caption buttons for
+    // the header to leave room for - the machine running the test
+    // does, and that is what the measurement would report.
+    debugWindowControlsInsetOverride = 0;
+    addTearDown(() => debugWindowControlsInsetOverride = null);
 
     await shot(
       'reviews_published_list',
       const AnimeWitcherCommentsScreen(target: _target),
       _FakeAccountService(
-        reviews: <AnimeWitcherComment>[_review(id: 'r1', text: 'مراجعة منشورة')],
+        reviews: <AnimeWitcherComment>[
+          _review(id: 'r1', text: 'مراجعة منشورة'),
+        ],
       ),
     );
     await shot(
@@ -667,9 +718,9 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File('${artifacts.path}/account_my_reviews_sort_menu.png').writeAsBytesSync(
-        bytes!.buffer.asUint8List(),
-      );
+      File(
+        '${artifacts.path}/account_my_reviews_sort_menu.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
 
     const iosKey = ValueKey<String>('sort_control_ios_trailing_fallback');
@@ -711,14 +762,14 @@ void main() {
                             height: AnimeWitcherCommentSortControl.size,
                             child: AppleLiquidGlassActionGroup(
                               height: AnimeWitcherCommentSortControl.size,
-                              children: AnimeWitcherCommentSortControl
-                                  .persistentButtons(
-                                context: context,
-                                isArabic: true,
-                                tooltip: 'ترتيب المراجعات',
-                                sort: AnimeWitcherCommentSort.newest,
-                                onSelected: (_) {},
-                              ),
+                              children:
+                                  AnimeWitcherCommentSortControl.persistentButtons(
+                                    context: context,
+                                    isArabic: true,
+                                    tooltip: 'ترتيب المراجعات',
+                                    sort: AnimeWitcherCommentSort.newest,
+                                    onSelected: (_) {},
+                                  ),
                             ),
                           );
                         },
@@ -740,8 +791,9 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File('${artifacts.path}/sort_control_ios_trailing_fallback.png')
-          .writeAsBytesSync(bytes!.buffer.asUint8List());
+      File(
+        '${artifacts.path}/sort_control_ios_trailing_fallback.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
 
     const editShot = ValueKey('review_edit_dialog');
@@ -749,12 +801,7 @@ void main() {
       _app(
         service: _FakeAccountService(
           reviews: <AnimeWitcherComment>[
-            _review(
-              id: 'mine',
-              text: 'زمان',
-              published: false,
-              userId: 'me',
-            ),
+            _review(id: 'mine', text: 'زمان', published: false, userId: 'me'),
           ],
         ),
         home: const AnimeWitcherMyCommentsScreen(isReviews: true),
@@ -771,9 +818,9 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File('${artifacts.path}/review_edit_dialog.png').writeAsBytesSync(
-        bytes!.buffer.asUint8List(),
-      );
+      File(
+        '${artifacts.path}/review_edit_dialog.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
 }

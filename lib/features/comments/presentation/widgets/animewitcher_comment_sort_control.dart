@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
+import '../../../../core/utils/window_controls_inset.dart';
 
 /// Shared key for the details comments/reviews trailing sort control.
 ///
@@ -131,6 +132,10 @@ class AnimeWitcherCommentSortControl extends StatelessWidget {
           onSelected: onSelected,
         ),
       ),
+      // Every header that takes these holds itself left to right, so this is
+      // the corner the window paints its caption buttons over — the sort
+      // control would sit underneath them, where it cannot be clicked.
+      const WindowControlsGap(),
     ];
   }
 

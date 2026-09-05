@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/secondary_mouse_refresh_indicator.dart';
+import 'package:animewitcher/shared/widgets/mouse_drag_refresh_indicator.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
@@ -285,7 +285,7 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
           ),
         ),
         child: hasProviderLoadError && items.isEmpty
-            ? SecondaryMouseRefreshIndicator(
+            ? MouseDragRefreshIndicator(
                 onRefresh: _loadNextProviderPage,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
