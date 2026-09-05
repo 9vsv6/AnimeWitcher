@@ -9,8 +9,6 @@ void main() {
   testWidgets('hero frame follows phone rotation and omits tablet spacing', (
     tester,
   ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     Future<void> check(Size size, double top, double height) async {
@@ -50,9 +48,15 @@ void main() {
       expect(rect.height, closeTo(height, 0.01));
     }
 
-    await check(const Size(390, 844), 44, 219.375);
-    await check(const Size(844, 390), 0, 280.8);
-    await check(const Size(768, 1024), 0, 432);
-    await check(const Size(1440, 900), 0, 540);
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await check(const Size(390, 844), 44, 219.375);
+      await check(const Size(844, 390), 0, 280.8);
+      await check(const Size(768, 1024), 0, 432);
+      await check(const Size(1440, 900), 0, 540);
+    } finally {
+      // Flutter verifies debug globals before addTearDown callbacks run.
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }
