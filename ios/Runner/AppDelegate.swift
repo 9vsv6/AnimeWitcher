@@ -714,6 +714,8 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
   private func setToolbarVisible(_ visible: Bool, animated: Bool = true) {
     guard toolbarVisible != visible else { return }
     toolbarVisible = visible
+    // Stop intercepting touches as soon as hiding starts, including its fade.
+    toolbar.isUserInteractionEnabled = visible
     toolbar.layer.removeAllAnimations()
     if visible {
       toolbar.isHidden = false
@@ -1297,6 +1299,11 @@ private final class AnimeWitcherPassthroughToolbar: UIToolbar {
   }
 
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    // UIKit's default hitTest rejects hidden/disabled views, but the expanded
+    // fallback below must honor the same gate. Otherwise an old hidden toolbar
+    // can steal taps from Flutter's search/filter controls underneath it.
+    guard !isHidden, alpha > 0.01, isUserInteractionEnabled,
+          self.point(inside: point, with: event) else { return nil }
     if let hit = super.hitTest(point, with: event) {
       var candidate: UIView? = hit
       while let view = candidate, view !== self {

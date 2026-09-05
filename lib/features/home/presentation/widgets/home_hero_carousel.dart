@@ -1,3 +1,4 @@
+import 'home_hero_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -208,160 +209,132 @@ class _HomeHeroCarouselState extends ConsumerState<HomeHeroCarousel>
   Widget build(BuildContext context) {
     if (widget.movies.isEmpty) return const SizedBox.shrink();
 
-    final size = MediaQuery.sizeOf(context);
     final isDesktop = context.isDesktop;
-    final isCompactLandscape =
-        context.isHandsetLandscape ||
-        (context.isDesktopLandscape && size.height < 560);
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv ?? context.isTv;
-    final isPortraitHandset = !isDesktop && !isTv && !isCompactLandscape;
-    // The portrait home hero should start below the iPhone status area, leaving
-    // a clean black strip above the banner. Landscape, desktop and TV remain
-    // edge-to-edge with no added top spacing.
-    // Use the raw device safe-area inset only. MediaQuery.padding can include
-    // scaffold/app-bar adjustments here, which doubled the portrait gap on iOS.
-    // viewPadding keeps the black strip to the status area only, so the banner
-    // starts exactly below it. Landscape, desktop and TV still add no gap.
-    final portraitTopGap = isPortraitHandset
-        ? MediaQuery.viewPaddingOf(context).top
-        : 0.0;
 
-    // Phone hero artwork should read as a banner, not a tall poster crop, so
-    // portrait handsets use a true 16:9 rectangle. Desktop and TV run the hero
-    // edge to edge across the window but only part of the way down it, leaving
-    // the first row in view; the banner is cropped to fill that shape, which is
-    // what a hero of this proportion costs.
-    final heroHeight = (isDesktop || isTv)
-        ? size.height * (isCompactLandscape ? 0.72 : 0.60)
-        : (isCompactLandscape ? size.height * 0.72 : size.width * 9 / 16);
-
-    return ColoredBox(
-      color: Colors.black,
-      child: Padding(
-        padding: EdgeInsets.only(top: portraitTopGap),
-        child: VisibilityDetector(
-          key: const Key('explore-carousel-visibility'),
-      // Visibility is still tracked — but only to gate the 5s auto-advance
-      // timer (so we don't fire page transitions for an audience that
-      // isn't watching). Parallax offset updates ignore this flag; see
-      // [_onParentScroll] for the rationale.
-      onVisibilityChanged: (info) {
-        final visible = info.visibleFraction > 0.1;
-        if (visible != _isVisibleOnScreen && mounted) {
-          setState(() => _isVisibleOnScreen = visible);
-          if (visible) {
-            _fillController.forward();
-          } else {
-            _fillController.stop();
-          }
-        }
-      },
-      child: FocusableActionDetector(
-        focusNode: _carouselFocusNode,
-        // Only auto-focus on TV where D-pad is the primary input. On desktop
-        // we skip autofocus so the focus ring doesn't appear on app launch
-        // (Flutter defaults to 'traditional' highlight mode until a mouse
-        // event arrives, which would show the ring immediately).
-        autofocus: false,
-        mouseCursor: SystemMouseCursors.click,
-        // Arrow keys are wired as explicit Shortcuts/Actions at this level so
-        // they fire when _carouselFocusNode has focus. Using a nested
-        // Focus(onKeyEvent:) for arrows is unreliable here — that child Focus
-        // is a descendant of _carouselFocusNode, and key events only propagate
-        // UP from the focused node, so the child's handler never runs. Worse,
-        // unhandled arrow keys fall through to Flutter's default ScrollAction
-        // which then scrolls the outer vertical CustomScrollView — exactly the
-        // "Right pages carousel AND scrolls page vertically" bug we saw.
-        shortcuts: const <ShortcutActivator, Intent>{
-          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
-          SingleActivator(LogicalKeyboardKey.arrowUp): _CarouselUpIntent(),
-          SingleActivator(LogicalKeyboardKey.arrowLeft): _CarouselPrevIntent(),
-          SingleActivator(LogicalKeyboardKey.arrowRight): _CarouselNextIntent(),
-        },
-        actions: <Type, Action<Intent>>{
-          ActivateIntent: CallbackAction<ActivateIntent>(
-            onInvoke: (_) {
-              _activateCurrent();
-              return null;
-            },
-          ),
-          _CarouselUpIntent: CallbackAction<_CarouselUpIntent>(
-            onInvoke: (_) {
-              widget.onNavigateUp?.call();
-              return null;
-            },
-          ),
-          _CarouselPrevIntent: CallbackAction<_CarouselPrevIntent>(
-            onInvoke: (_) {
-              _goToPreviousSlide();
-              return null;
-            },
-          ),
-          _CarouselNextIntent: CallbackAction<_CarouselNextIntent>(
-            onInvoke: (_) {
-              _goToNextSlide();
-              return null;
-            },
-          ),
-        },
-        onShowFocusHighlight: (show) =>
-            setState(() => _isFocusHighlighted = show),
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onHorizontalDragEnd: (details) {
-            if (details.primaryVelocity == null) return;
-            if (details.primaryVelocity! < -300) {
-              _goToNextSlide();
-            } else if (details.primaryVelocity! > 300) {
-              _goToPreviousSlide();
+    return HomeHeroFrame(
+      builder: (context, heroHeight) => VisibilityDetector(
+        key: const Key('explore-carousel-visibility'),
+        // Visibility is still tracked — but only to gate the 5s auto-advance
+        // timer (so we don't fire page transitions for an audience that
+        // isn't watching). Parallax offset updates ignore this flag; see
+        // [_onParentScroll] for the rationale.
+        onVisibilityChanged: (info) {
+          final visible = info.visibleFraction > 0.1;
+          if (visible != _isVisibleOnScreen && mounted) {
+            setState(() => _isVisibleOnScreen = visible);
+            if (visible) {
+              _fillController.forward();
+            } else {
+              _fillController.stop();
             }
+          }
+        },
+        child: FocusableActionDetector(
+          focusNode: _carouselFocusNode,
+          // Only auto-focus on TV where D-pad is the primary input. On desktop
+          // we skip autofocus so the focus ring doesn't appear on app launch
+          // (Flutter defaults to 'traditional' highlight mode until a mouse
+          // event arrives, which would show the ring immediately).
+          autofocus: false,
+          mouseCursor: SystemMouseCursors.click,
+          // Arrow keys are wired as explicit Shortcuts/Actions at this level so
+          // they fire when _carouselFocusNode has focus. Using a nested
+          // Focus(onKeyEvent:) for arrows is unreliable here — that child Focus
+          // is a descendant of _carouselFocusNode, and key events only propagate
+          // UP from the focused node, so the child's handler never runs. Worse,
+          // unhandled arrow keys fall through to Flutter's default ScrollAction
+          // which then scrolls the outer vertical CustomScrollView — exactly the
+          // "Right pages carousel AND scrolls page vertically" bug we saw.
+          shortcuts: const <ShortcutActivator, Intent>{
+            SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.arrowUp): _CarouselUpIntent(),
+            SingleActivator(LogicalKeyboardKey.arrowLeft): _CarouselPrevIntent(),
+            SingleActivator(LogicalKeyboardKey.arrowRight): _CarouselNextIntent(),
           },
-          child: isDesktop
-              ? RepaintBoundary(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    decoration: BoxDecoration(
-                      border: _isFocusHighlighted
-                          ? Border.all(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 2.5,
-                            )
-                          : null,
+          actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                _activateCurrent();
+                return null;
+              },
+            ),
+            _CarouselUpIntent: CallbackAction<_CarouselUpIntent>(
+              onInvoke: (_) {
+                widget.onNavigateUp?.call();
+                return null;
+              },
+            ),
+            _CarouselPrevIntent: CallbackAction<_CarouselPrevIntent>(
+              onInvoke: (_) {
+                _goToPreviousSlide();
+                return null;
+              },
+            ),
+            _CarouselNextIntent: CallbackAction<_CarouselNextIntent>(
+              onInvoke: (_) {
+                _goToNextSlide();
+                return null;
+              },
+            ),
+          },
+          onShowFocusHighlight: (show) =>
+              setState(() => _isFocusHighlighted = show),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity == null) return;
+              if (details.primaryVelocity! < -300) {
+                _goToNextSlide();
+              } else if (details.primaryVelocity! > 300) {
+                _goToPreviousSlide();
+              }
+            },
+            child: isDesktop
+                ? RepaintBoundary(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        border: _isFocusHighlighted
+                            ? Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 2.5,
+                              )
+                            : null,
+                      ),
+                      child: SizedBox(
+                        height: heroHeight,
+                        child: _buildCarouselStack(
+                          heroHeight,
+                          isDesktop: isDesktop || isTv,
+                        ),
+                      ),
                     ),
-                    child: SizedBox(
-                      height: heroHeight,
-                      child: _buildCarouselStack(
-                        heroHeight,
-                        isDesktop: isDesktop || isTv,
+                  )
+                : Padding(
+                    padding: EdgeInsets.zero,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        border: _isFocusHighlighted
+                            ? Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 2.5,
+                              )
+                            : null,
+                      ),
+                      child: SizedBox(
+                        height: heroHeight,
+                        child: _buildCarouselStack(
+                          heroHeight,
+                          isDesktop: isDesktop || isTv,
+                        ),
                       ),
                     ),
                   ),
-                )
-              : Padding(
-                  padding: EdgeInsets.zero,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    decoration: BoxDecoration(
-                      border: _isFocusHighlighted
-                          ? Border.all(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 2.5,
-                            )
-                          : null,
-                    ),
-                    child: SizedBox(
-                      height: heroHeight,
-                      child: _buildCarouselStack(
-                        heroHeight,
-                        isDesktop: isDesktop || isTv,
-                      ),
-                    ),
-                  ),
-                ),
-        ),
           ),
         ),
       ),

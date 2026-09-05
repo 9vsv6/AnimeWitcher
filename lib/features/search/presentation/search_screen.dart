@@ -542,7 +542,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           '${appText(context, english: 'Sort by', arabic: 'الترتيب حسب')}: ${sortOption.label(context)}',
       filterTooltip: appText(context, english: 'Filters', arabic: 'الفلاتر'),
       tintColor: Theme.of(context).colorScheme.onSurfaceVariant,
-      height: 42,
+      height: 48,
       onFilterPressed: _showSearchFilters,
     );
   }
@@ -692,7 +692,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     final usePersistentGlass = appleUsesPersistentLiquidGlassHeader;
-    const actionHeight = 42.0;
+    const actionHeight = 48.0;
     final actionsSlotWidth =
         SearchActionButtons.groupWidthForHeight(actionHeight) + 10;
 
