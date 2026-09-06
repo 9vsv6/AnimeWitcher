@@ -12,8 +12,8 @@ import 'coming_soon_screen.dart';
 import 'global_statistics_screen.dart';
 import 'recent_watched_screen.dart';
 import 'seasons_screen.dart';
-import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../core/utils/localized_text.dart';
+import '../../../core/utils/layout_constants.dart';
 import 'more_sidebar_shell.dart';
 
 class MoreScreen extends ConsumerWidget {
@@ -65,11 +65,22 @@ class MoreScreen extends ConsumerWidget {
     // screen beside the one being read, and opens on the account rather than
     // on a page of links to press.
     //
-    // Measured in pixels rather than asked of the device class: the sidebar
-    // takes 272 of them, and what is left has to be a page in its own right.
-    // A tablet in portrait is "tablet or larger" and has no such room.
-    const twoPaneMinimumWidth = 1000.0;
-    if (MediaQuery.sizeOf(context).width >= twoPaneMinimumWidth) {
+    // A tablet gets the desktop layout in both orientations, upright
+    // included: the sidebar takes 272 points, which still leaves a 10-inch
+    // tablet's 800 with 528 for the page — the measure a settings pane keeps
+    // to on a desktop anyway.
+    //
+    // Both dimensions are asked for, not the device class. A phone in
+    // landscape is wide enough to pass a width test and far too short to
+    // read two columns; the shortest side is what separates it from a
+    // tablet, whatever platform reports it.
+    const twoPaneMinimumWidth = 740.0;
+    // Above a 4:3 desktop window's 600: two columns need height as much as
+    // width, and a short window is better served by the single list.
+    const twoPaneMinimumShortestSide = 640.0;
+    final size = MediaQuery.sizeOf(context);
+    if (size.width >= twoPaneMinimumWidth &&
+        size.shortestSide >= twoPaneMinimumShortestSide) {
       return Scaffold(
         appBar: AppBar(centerTitle: false),
         body: MoreSidebarShell(
@@ -166,134 +177,144 @@ class MoreScreen extends ConsumerWidget {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
         children: [
-          _MoreTile(
-            icon: accountProfile == null
-                ? Icons.account_circle_rounded
-                : Icons.cloud_done_rounded,
-            leading: accountPhotoUrl.isEmpty
-                ? null
-                : CircleAvatar(
-                    radius: 24,
-                    backgroundColor: theme.colorScheme.primaryContainer,
-                    foregroundImage: NetworkImage(accountPhotoUrl),
-                    onForegroundImageError: (_, _) {},
-                    child: Icon(
-                      Icons.person_rounded,
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
+          _MorePanel(
+            children: [
+              _MoreTile(
+                icon: accountProfile == null
+                    ? Icons.account_circle_rounded
+                    : Icons.cloud_done_rounded,
+                leading: accountPhotoUrl.isEmpty
+                    ? null
+                    : CircleAvatar(
+                        radius: 24,
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        foregroundImage: NetworkImage(accountPhotoUrl),
+                        onForegroundImageError: (_, _) {},
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                title: accountProfile == null
+                    ? (isArabic
+                          ? 'تسجيل الدخول أو إنشاء حساب'
+                          : 'Sign in or create an account')
+                    : _accountDisplayName(accountProfile),
+                subtitle: accountState.isLoading
+                    ? (isArabic
+                          ? 'جارٍ التحقق من الحساب...'
+                          : 'Checking account...')
+                    : accountProfile == null
+                    ? (isArabic
+                          ? 'مزامنة القوائم والحلقات المشاهدة '
+                                'وتقدم التشغيل'
+                          : 'Sync lists, watched episodes, and playback progress')
+                    : accountProfile.email ??
+                          (isArabic
+                              ? 'المزامنة مفعلة'
+                              : 'Synchronization enabled'),
+                trailing: accountState.isLoading
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AnimeWitcherAccountScreen(),
                   ),
-            title: accountProfile == null
-                ? (isArabic
-                      ? 'تسجيل الدخول أو إنشاء حساب'
-                      : 'Sign in or create an account')
-                : _accountDisplayName(accountProfile),
-            subtitle: accountState.isLoading
-                ? (isArabic
-                      ? 'جارٍ التحقق من الحساب...'
-                      : 'Checking account...')
-                : accountProfile == null
-                ? (isArabic
-                      ? 'مزامنة القوائم والحلقات المشاهدة '
-                            'وتقدم التشغيل'
-                      : 'Sync lists, watched episodes, and playback progress')
-                : accountProfile.email ??
-                      (isArabic ? 'المزامنة مفعلة' : 'Synchronization enabled'),
-            trailing: accountState.isLoading
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : null,
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const AnimeWitcherAccountScreen(),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _MoreTile(
-            icon: Icons.history_rounded,
-            title: isArabic ? 'آخر المشاهدات' : 'Recently watched',
-            subtitle: isArabic
-                ? 'آخر الأنميات والأفلام التي شاهدتها'
-                : 'Anime and movies you watched recently',
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const RecentWatchedScreen(),
+              _MoreTile(
+                icon: Icons.history_rounded,
+                title: isArabic ? 'آخر المشاهدات' : 'Recently watched',
+                subtitle: isArabic
+                    ? 'آخر الأنميات والأفلام التي شاهدتها'
+                    : 'Anime and movies you watched recently',
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const RecentWatchedScreen(),
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _MoreTile(
-            icon: Icons.groups_rounded,
-            title: isArabic ? 'الشخصيات' : 'Characters',
-            subtitle: isArabic
-                ? 'تصفح الشخصيات وابحث عنها وأدر المفضلة'
-                : 'Browse, search, and favorite characters',
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(builder: (_) => const CharactersScreen()),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _MoreTile(
-            icon: Icons.upcoming_rounded,
-            title: isArabic ? 'القادم قريبًا' : 'Coming soon',
-            subtitle: isArabic
-                ? 'أنميات لم يتم بثها بعد حسب بيانات AnimeWitcher'
-                : 'Anime that has not aired yet, from AnimeWitcher',
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(builder: (_) => const ComingSoonScreen()),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _MoreTile(
-            icon: Icons.query_stats_rounded,
-            title: isArabic ? 'الإحصائيات العالمية' : 'Global statistics',
-            subtitle: isArabic
-                ? 'إحصائيات المشاهدات والحلقات والأفلام'
-                : 'Global viewing, episode, and movie statistics',
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const GlobalStatisticsScreen(),
+              _MoreTile(
+                icon: Icons.groups_rounded,
+                title: isArabic ? 'الشخصيات' : 'Characters',
+                subtitle: isArabic
+                    ? 'تصفح الشخصيات وابحث عنها وأدر المفضلة'
+                    : 'Browse, search, and favorite characters',
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const CharactersScreen(),
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _MoreTile(
-            icon: Icons.calendar_month_rounded,
-            title: isArabic ? 'المواسم' : 'Seasons',
-            subtitle: isArabic
-                ? 'الموسم السابق والحالي والقادم وجميع المواسم'
-                : 'Previous, current, next, and all seasons',
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(builder: (_) => const SeasonsScreen()),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _MoreTile(
-            icon: Icons.calendar_view_week_rounded,
-            title: isArabic ? 'جدول البث' : 'Broadcast schedule',
-            subtitle: isArabic
-                ? 'الأنميات موزعة على أيام الأسبوع السبعة'
-                : 'Anime grouped across the seven weekdays',
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const BroadcastScheduleScreen(),
+              _MoreTile(
+                icon: Icons.upcoming_rounded,
+                title: isArabic ? 'القادم قريبًا' : 'Coming soon',
+                subtitle: isArabic
+                    ? 'أنميات لم يتم بثها بعد حسب بيانات AnimeWitcher'
+                    : 'Anime that has not aired yet, from AnimeWitcher',
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ComingSoonScreen(),
+                  ),
+                ),
               ),
-            ),
+              _MoreTile(
+                icon: Icons.query_stats_rounded,
+                title: isArabic ? 'الإحصائيات العالمية' : 'Global statistics',
+                subtitle: isArabic
+                    ? 'إحصائيات المشاهدات والحلقات والأفلام'
+                    : 'Global viewing, episode, and movie statistics',
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const GlobalStatisticsScreen(),
+                  ),
+                ),
+              ),
+              _MoreTile(
+                icon: Icons.calendar_month_rounded,
+                title: isArabic ? 'المواسم' : 'Seasons',
+                subtitle: isArabic
+                    ? 'الموسم السابق والحالي والقادم وجميع المواسم'
+                    : 'Previous, current, next, and all seasons',
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SeasonsScreen(),
+                  ),
+                ),
+              ),
+              _MoreTile(
+                icon: Icons.calendar_view_week_rounded,
+                title: isArabic ? 'جدول البث' : 'Broadcast schedule',
+                subtitle: isArabic
+                    ? 'الأنميات موزعة على أيام الأسبوع السبعة'
+                    : 'Anime grouped across the seven weekdays',
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const BroadcastScheduleScreen(),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
-          Divider(color: theme.dividerColor.withValues(alpha: 0.55)),
-          const SizedBox(height: 8),
-          _MoreTile(
-            icon: Icons.settings_rounded,
-            title: isArabic ? 'الإعدادات' : 'Settings',
-            subtitle: isArabic
-                ? 'إعدادات التطبيق والمشغل'
-                : 'App and player settings',
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-            ),
+          const SizedBox(height: 16),
+          _MorePanel(
+            children: [
+              _MoreTile(
+                icon: Icons.settings_rounded,
+                title: isArabic ? 'الإعدادات' : 'Settings',
+                subtitle: isArabic
+                    ? 'إعدادات التطبيق والمشغل'
+                    : 'App and player settings',
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SettingsScreen(),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -301,6 +322,60 @@ class MoreScreen extends ConsumerWidget {
   }
 }
 
+/// The name to show for a signed-in account, falling back to the address.
+String _accountDisplayName(AnimeWitcherProfile profile) {
+  final userName = profile.userName?.trim() ?? '';
+  if (userName.isNotEmpty) return userName;
+  final email = profile.email?.trim() ?? '';
+  return email.isEmpty ? 'AnimeWitcher' : email;
+}
+
+/// The destinations, in one panel.
+///
+/// Eight rounded cards down a phone screen is eight objects to take in before
+/// you have read a word. One panel with hairlines between its rows is a list,
+/// which is what this is.
+class _MorePanel extends StatelessWidget {
+  const _MorePanel({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      // The same neutral grey the settings panels use — mixed from the page,
+      // since the amber-seeded surface tokens carry a brown tint.
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          colors.onSurface.withValues(alpha: 0.06),
+          colors.surface,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.onSurface.withValues(alpha: 0.1)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  indent: 54,
+                  endIndent: 14,
+                  color: colors.onSurface.withValues(alpha: 0.1),
+                ),
+              children[i],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One destination: its glyph, its name, and what it holds.
 class _MoreTile extends StatelessWidget {
   final IconData icon;
   final Widget? leading;
@@ -321,62 +396,59 @@ class _MoreTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    // The same glass every other surface in the app wears — the taskbar, the
-    // menus, the buttons on an anime's page. These rows were the last flat
-    // panels left, each with its glyph in a filled square of the accent,
-    // which made a column of eight read as eight badges rather than a list.
-    return AppleLiquidGlassSurface(
-      borderRadius: BorderRadius.circular(18),
-      interactive: true,
-      // One blur per row, in a list that scrolls: the cost lands on every
-      // frame and buys a blurred copy of the flat page behind it.
-      fallbackBlur: false,
-      fallbackColor: colors.surfaceContainerHighest.withValues(alpha: 0.75),
-      fallbackBorder: BorderSide(
-        color: colors.onSurfaceVariant.withValues(alpha: 0.1),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                leading ?? Icon(icon, size: 24, color: colors.onSurface),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant.withValues(
-                            alpha: 0.75,
-                          ),
-                        ),
-                      ),
-                    ],
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              // The glyph on its own, as the settings rows draw theirs: one
+              // list style across the app rather than a second one here.
+              leading ??
+                  SizedBox.square(
+                    dimension: 26,
+                    child: Icon(icon, size: 22, color: colors.primary),
                   ),
-                ),
-                const SizedBox(width: 8),
-                trailing ??
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 20,
-                      color: colors.onSurfaceVariant.withValues(alpha: 0.6),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-              ],
-            ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              trailing ??
+                  Icon(
+                    isRtl
+                        ? Icons.chevron_left_rounded
+                        : Icons.chevron_right_rounded,
+                    size: 20,
+                    color: colors.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+            ],
           ),
         ),
       ),
@@ -384,18 +456,6 @@ class _MoreTile extends StatelessWidget {
   }
 }
 
-String _accountDisplayName(AnimeWitcherProfile profile) {
-  final userName = profile.userName?.trim() ?? '';
-  if (userName.isNotEmpty) return userName;
-  final email = profile.email?.trim() ?? '';
-  return email.isEmpty ? 'AnimeWitcher' : email;
-}
-
-/// One settings group, filling the pane beside the sidebar.
-///
-/// Read from the settings screen on every build rather than captured once:
-/// these rows show live values — the theme, the concurrency, the cache size —
-/// and a captured widget would go stale the moment one changed.
 class _SettingsGroupPane extends ConsumerWidget {
   const _SettingsGroupPane({required this.index});
 
@@ -409,14 +469,24 @@ class _SettingsGroupPane extends ConsumerWidget {
         .toList(growable: false);
     if (index >= groups.length) return const SizedBox.shrink();
 
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        8,
-        16,
-        8,
-        MediaQuery.viewPaddingOf(context).bottom + 96,
+    // Settings rows are a label at one end and its value at the other. Left
+    // to fill a 1600-point pane they put the two on opposite sides of the
+    // desk, so they keep to the shared reading measure.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: LayoutConstants.contentMaxWidth,
+        ),
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            8,
+            16,
+            8,
+            MediaQuery.viewPaddingOf(context).bottom + 96,
+          ),
+          children: [groups[index]],
+        ),
       ),
-      children: [groups[index]],
     );
   }
 }

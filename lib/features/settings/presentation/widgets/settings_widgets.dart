@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 import '../../../../core/utils/layout_constants.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
-import '../../../../shared/widgets/apple_liquid_glass.dart';
 
-/// A run of settings under a quiet heading.
+/// A run of settings in one panel, under a quiet heading.
 ///
-/// Harbor's shape, on the phone and the desktop alike: no card around the
-/// rows, no fill behind them, just a small grey label and the settings
-/// themselves separated by hairlines. The panel had been drawing a box around
-/// content that was already a list, and an accent-coloured heading shouting
-/// over settings nobody needs shouted at.
+/// The same shape on the phone and the desktop: a small grey label naming the
+/// group, then its settings as rows of one panel rather than a stack of
+/// separate cards — eight cards down a page is eight objects to take in
+/// before a word has been read, where one panel is a list.
 class SettingsGroup extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -40,64 +38,31 @@ class SettingsGroup extends StatelessWidget {
               ),
             ),
           ),
-        Column(children: children),
-      ],
-    );
-  }
-}
-
-/// The ground the option panels stand on.
-///
-/// One flat fill at four-tenths opacity vanished into the app's black page:
-/// the rows read as printed straight onto the background rather than sitting
-/// on a panel. A fuller fill, a lit top edge, and a border you can actually
-/// see make the panel a panel again.
-class SettingsPanel extends StatelessWidget {
-  const SettingsPanel({
-    super.key,
-    required this.child,
-    this.radius = 16,
-    this.fill,
-    this.border,
-  });
-
-  final Widget child;
-  final double radius;
-
-  /// Overrides the fill — a hover state or a warning, in practice.
-  final Color? fill;
-  final Color? border;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return AppleLiquidGlassSurface(
-      borderRadius: BorderRadius.circular(radius),
-      // Six of these stack up a settings page, and each blur is a layer the
-      // GPU re-reads on every scrolled frame — for a picture of the flat page
-      // behind them. The fill alone looks the same and costs nothing.
-      fallbackBlur: false,
-      fallbackColor:
-          fill ?? colors.surfaceContainerHighest.withValues(alpha: 0.82),
-      fallbackBorder: BorderSide(
-        color: border ?? colors.onSurfaceVariant.withValues(alpha: 0.18),
-      ),
-      // A sheen rather than a second colour: it lifts the top edge on the
-      // fallback fill and still reads correctly over Apple's own glass.
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(radius),
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.white.withValues(alpha: 0.07),
-              Colors.white.withValues(alpha: 0.01),
-            ],
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: LayoutConstants.spacingMd,
+          ),
+          child: DecoratedBox(
+            // A neutral grey, mixed from the page rather than taken from
+            // surfaceContainerHighest: the scheme is seeded from the app's
+            // amber, so that token carries a brown tint the mock did not.
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                colors.onSurface.withValues(alpha: 0.06),
+                colors.surface,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: colors.onSurface.withValues(alpha: 0.1),
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Column(children: children),
+            ),
           ),
         ),
-        child: child,
-      ),
+      ],
     );
   }
 }
@@ -132,6 +97,22 @@ class SettingsTile extends StatefulWidget {
 
 class _SettingsTileState extends State<SettingsTile> {
   bool _isFocused = false;
+
+  /// Longest a subtitle can be and still read as the setting's current value.
+  ///
+  /// "داكن", "10 ثانية", "3 دقيقة" are values and belong on the pill at the
+  /// end of the row, where a column of them can be read down. A sentence
+  /// explaining what a switch does is not a value and stays under its title,
+  /// where it has the width to be read.
+  static const int _valueLengthLimit = 28;
+
+  bool get _showsValuePill {
+    final subtitle = widget.subtitle?.trim();
+    if (subtitle == null || subtitle.isEmpty) return false;
+    // A row with its own control has its answer there already.
+    if (widget.trailing != null) return false;
+    return subtitle.length <= _valueLengthLimit && !subtitle.contains('\n');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -186,18 +167,11 @@ class _SettingsTileState extends State<SettingsTile> {
                   horizontal: LayoutConstants.spacingMd,
                   vertical: LayoutConstants.spacingXs,
                 ),
-                // The glyph without a tile around it. A filled square on
-                // every row made a column of settings read as a column of
-                // badges; Harbor draws the mark and nothing else.
                 leading:
                     widget.leading ??
                     SizedBox.square(
                       dimension: 24,
-                      child: Icon(
-                        widget.icon,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        size: 21,
-                      ),
+                      child: Icon(widget.icon, color: primary, size: 21),
                     ),
                 minLeadingWidth: 24,
                 title: Row(
@@ -237,7 +211,9 @@ class _SettingsTileState extends State<SettingsTile> {
                     ],
                   ],
                 ),
-                subtitle: widget.subtitle != null
+                subtitle: _showsValuePill
+                    ? null
+                    : widget.subtitle != null
                     ? Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
@@ -252,9 +228,10 @@ class _SettingsTileState extends State<SettingsTile> {
                         ),
                       )
                     : null,
-                trailing:
-                    widget.trailing ??
-                    const Icon(Icons.chevron_right_rounded, size: 20),
+                trailing: _showsValuePill
+                    ? _ValuePill(text: widget.subtitle!)
+                    : widget.trailing ??
+                          const Icon(Icons.chevron_right_rounded, size: 20),
                 onTap: widget.onTap,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -264,16 +241,45 @@ class _SettingsTileState extends State<SettingsTile> {
           ),
         ),
         if (!widget.isLast && !_isFocused)
-          // A hairline between rows, not a box around them.
+          // Starting where the text starts, so the glyphs read as one column
+          // rather than each row as a box of its own.
           Divider(
             height: 1,
-            indent: LayoutConstants.spacingMd,
+            indent: 56,
             endIndent: LayoutConstants.spacingMd,
             color: Theme.of(
               context,
-            ).colorScheme.onSurfaceVariant.withValues(alpha: 0.12),
+            ).colorScheme.onSurface.withValues(alpha: 0.1),
           ),
       ],
+    );
+  }
+}
+
+/// A setting's current value, at the end of its row.
+class _ValuePill extends StatelessWidget {
+  const _ValuePill({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 168),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.onSurface.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colors.onSurface.withValues(alpha: 0.85),
+        ),
+      ),
     );
   }
 }

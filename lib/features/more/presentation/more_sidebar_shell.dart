@@ -140,7 +140,19 @@ class _MoreSidebarShellState extends State<MoreSidebarShell> {
   }
 }
 
-class _SidebarRow extends StatelessWidget {
+/// One destination in the sidebar.
+///
+/// A column of thirteen filled cards is thirteen things shouting at once, and
+/// the one you are reading has to shout louder still to be found. So the list
+/// is quiet — glyph and name, nothing drawn around them — and everything the
+/// row has to say is spent on which one is current: a bar at the edge you
+/// read from, an accent tint behind it, and its name in full white. One loud
+/// element in a calm column is easier to find than the loudest of thirteen.
+///
+/// The pointer gets its own answer, a shade lighter than the page, and both
+/// states fade rather than snap, which is the difference between a list that
+/// responds and one that flickers.
+class _SidebarRow extends StatefulWidget {
   const _SidebarRow({
     required this.destination,
     required this.selected,
@@ -152,38 +164,86 @@ class _SidebarRow extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_SidebarRow> createState() => _SidebarRowState();
+}
+
+class _SidebarRowState extends State<_SidebarRow> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final foreground = selected ? colors.onSurface : colors.onSurfaceVariant;
+    final selected = widget.selected;
+    final accent = colors.primary;
+
+    final background = selected
+        ? accent.withValues(alpha: 0.13)
+        : _hovered
+        ? colors.onSurface.withValues(alpha: 0.06)
+        : Colors.transparent;
+    final foreground = selected
+        ? colors.onSurface
+        : _hovered
+        ? colors.onSurface.withValues(alpha: 0.9)
+        : colors.onSurfaceVariant;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
-      child: Material(
-        color: selected
-            ? colors.onSurface.withValues(alpha: 0.08)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            child: Row(
-              children: [
-                Icon(destination.icon, size: 20, color: foreground),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: foreground,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: widget.destination.label,
+          child: GestureDetector(
+            onTap: widget.onTap,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 130),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+              child: Row(
+                children: [
+                  // The mark of where you are, at the edge the language starts
+                  // from. It holds its width when absent so the names below it
+                  // do not shift as the selection moves.
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 130),
+                    curve: Curves.easeOut,
+                    width: 3,
+                    height: selected ? 18 : 0,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 9),
+                  Icon(
+                    widget.destination.icon,
+                    size: 20,
+                    color: selected ? accent : foreground,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.destination.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: foreground,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

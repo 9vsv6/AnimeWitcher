@@ -403,22 +403,21 @@ class _AnimeWitcherAccountScreenState
           padding: const EdgeInsets.symmetric(
             horizontal: LayoutConstants.spacingMd,
           ),
-          child: _buildIdentityCard(profile),
+          child: _buildIdentityBanner(profile),
         ),
-        const SizedBox(height: LayoutConstants.spacingLg),
         _buildManageGroup(profile, busy),
-        const SizedBox(height: LayoutConstants.spacingLg),
+        const SizedBox(height: LayoutConstants.spacingSm),
         _buildDangerGroup(profile, busy),
       ],
     );
   }
 
   /// The account on a wide window: who you are across the top, and what you
-  /// can do about it laid out underneath.
+  /// can do about it underneath.
   ///
-  /// A column of full-width rows left most of the page empty and still ran off
-  /// the bottom. The identity belongs at the top of its own page, and the
-  /// actions read as a board of cards rather than a list to scroll.
+  /// The actions are the same rows the settings panes use — one panel, a
+  /// glyph, a name, a hairline between. A board of cards here made one section
+  /// of the app look like a different app to the section beside it.
   Widget _buildSignedInWide(AnimeWitcherProfile profile, bool busy) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
@@ -427,53 +426,20 @@ class _AnimeWitcherAccountScreenState
         LayoutConstants.spacingMd,
         100,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildIdentityBanner(profile),
-          const SizedBox(height: LayoutConstants.spacingLg),
-          _sectionHeading(
-            appText(context, english: 'Manage account', arabic: 'إدارة الحساب'),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: LayoutConstants.contentMaxWidth,
           ),
-          const SizedBox(height: LayoutConstants.spacingSm),
-          _buildActionGrid(profile, busy),
-          const SizedBox(height: LayoutConstants.spacingLg),
-          _sectionHeading(
-            appText(context, english: 'Danger zone', arabic: 'منطقة حساسة'),
-            danger: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildIdentityBanner(profile),
+              _buildManageGroup(profile, busy),
+              const SizedBox(height: LayoutConstants.spacingSm),
+              _buildDangerGroup(profile, busy),
+            ],
           ),
-          const SizedBox(height: LayoutConstants.spacingSm),
-          _AccountActionCard(
-            icon: Icons.delete_forever_rounded,
-            title: appText(
-              context,
-              english: 'Delete account',
-              arabic: 'حذف الحساب',
-            ),
-            subtitle: appText(
-              context,
-              english: 'Request permanent deletion from AnimeWitcher',
-              arabic: 'طلب حذف الحساب نهائيًا من AnimeWitcher',
-            ),
-            danger: true,
-            onTap: busy ? null : () => _deleteAccount(profile),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionHeading(String text, {bool danger = false}) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: LayoutConstants.spacingXs,
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: danger ? colors.error : colors.primary,
-          fontWeight: FontWeight.bold,
         ),
       ),
     );
@@ -628,283 +594,6 @@ class _AnimeWitcherAccountScreenState
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  /// The management actions as a board of cards.
-  ///
-  /// Three to a row on a normal window, two when the pane is narrower — the
-  /// same seven things the list held, without seven full-width rows of mostly
-  /// empty space.
-  Widget _buildActionGrid(AnimeWitcherProfile profile, bool busy) {
-    final hasPassword =
-        profile.hasPasswordProvider ||
-        (profile.providerIds.isEmpty &&
-            profile.signInMethod == AnimeWitcherSignInMethod.email);
-
-    final actions = <_AccountActionCard>[
-      _AccountActionCard(
-        icon: Icons.manage_accounts_rounded,
-        title: appText(
-          context,
-          english: 'Edit profile',
-          arabic: 'تعديل الملف الشخصي',
-        ),
-        subtitle: appText(
-          context,
-          english: 'Picture, cover, name, bio, country, and birth year',
-          arabic: 'الصورة والغلاف والاسم والنبذة والدولة وسنة الميلاد',
-        ),
-        onTap: busy ? null : () => _openProfileEditor(profile),
-      ),
-      _AccountActionCard(
-        icon: Icons.privacy_tip_outlined,
-        title: appText(
-          context,
-          english: 'Privacy and content',
-          arabic: 'الخصوصية والمحتوى',
-        ),
-        subtitle: appText(
-          context,
-          english: 'Profile visibility and ecchi content filtering',
-          arabic: 'ظهور الملف الشخصي وفلترة محتوى الإيتشي',
-        ),
-        onTap: busy ? null : () => _openPrivacySettings(profile),
-      ),
-      _AccountActionCard(
-        icon: Icons.forum_rounded,
-        title: appText(context, english: 'My comments', arabic: 'تعليقاتي'),
-        subtitle: appText(
-          context,
-          english: 'Edit, delete, or disable replies',
-          arabic: 'تعديل التعليقات أو حذفها أو منع الردود',
-        ),
-        onTap: busy ? null : _openMyComments,
-      ),
-      _AccountActionCard(
-        icon: Icons.rate_review_outlined,
-        title: appText(context, english: 'My reviews', arabic: 'مراجعاتي'),
-        subtitle: appText(
-          context,
-          english: 'Edit, delete, or disable replies on your reviews',
-          arabic: 'تعديل المراجعات أو حذفها أو منع الردود',
-        ),
-        onTap: busy ? null : _openMyReviews,
-      ),
-      _AccountActionCard(
-        icon: Icons.alternate_email_rounded,
-        title: appText(
-          context,
-          english: 'Change email',
-          arabic: 'تغيير البريد الإلكتروني',
-        ),
-        subtitle: appText(
-          context,
-          english: 'The new address must be verified',
-          arabic: 'يجب التحقق من البريد الجديد',
-        ),
-        onTap: busy ? null : () => _openEmailEditor(profile),
-      ),
-      _AccountActionCard(
-        icon: Icons.password_rounded,
-        title: appText(
-          context,
-          english: hasPassword ? 'Change password' : 'Add password',
-          arabic: hasPassword ? 'تغيير كلمة المرور' : 'إضافة كلمة مرور',
-        ),
-        subtitle: appText(
-          context,
-          english: hasPassword
-              ? 'Confirm your current password first'
-              : 'Also sign in with email after Google verification',
-          arabic: hasPassword
-              ? 'أكد كلمة المرور الحالية أولًا'
-              : 'استخدم الدخول بالبريد بعد تأكيد Google',
-        ),
-        onTap: busy ? null : () => _openPasswordEditor(profile),
-      ),
-      _AccountActionCard(
-        icon: Icons.logout_rounded,
-        title: appText(context, english: 'Sign out', arabic: 'تسجيل الخروج'),
-        subtitle: appText(
-          context,
-          english: 'Local data will stay on this device',
-          arabic: 'ستبقى البيانات المحلية محفوظة على هذا الجهاز',
-        ),
-        onTap: busy ? null : _signOut,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = LayoutConstants.spacingMd;
-        final columns = constraints.maxWidth >= 1100 ? 3 : 2;
-        final cardWidth =
-            (constraints.maxWidth - gap * (columns - 1)) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final action in actions)
-              SizedBox(width: cardWidth, child: action),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Cover, avatar, name and profile details on the same blurred surface the
-  /// settings groups wear -- they were bare widgets sitting on the page
-  /// background while everything around them had become glass.
-  Widget _buildIdentityCard(AnimeWitcherProfile profile) {
-    final colors = Theme.of(context).colorScheme;
-    final photoUrl = profile.photoUrl?.trim() ?? '';
-    final coverUrl = profile.coverUrl?.trim() ?? '';
-    final bio = profile.bio?.trim() ?? '';
-    final country = profile.country?.trim() ?? '';
-    final birthYear = profile.birthYear?.trim() ?? '';
-
-    return SettingsPanel(
-      radius: 20,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 152,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  bottom: 46,
-                  child: coverUrl.isEmpty
-                      ? DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                colors.primaryContainer,
-                                colors.secondaryContainer,
-                              ],
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.landscape_rounded,
-                            size: 44,
-                            color: colors.onPrimaryContainer.withValues(
-                              alpha: 0.5,
-                            ),
-                          ),
-                        )
-                      : ArtworkDecode(
-                          paintedWidth: MediaQuery.sizeOf(context).width,
-                          builder: (context, decodeWidth) => Image.network(
-                            coverUrl,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            cacheWidth: decodeWidth,
-                            errorBuilder: (_, _, _) => DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: colors.primaryContainer,
-                              ),
-                              child: Icon(
-                                Icons.landscape_rounded,
-                                size: 44,
-                                color: colors.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Center(
-                    // A ring in the card's own colour, so the avatar reads as
-                    // sitting on the card rather than cut out of the cover.
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: colors.surface.withValues(alpha: 0.85),
-                      ),
-                      child: CircleAvatar(
-                        radius: 44,
-                        backgroundColor: colors.primaryContainer,
-                        foregroundImage: photoUrl.isEmpty
-                            ? null
-                            : NetworkImage(photoUrl),
-                        onForegroundImageError: photoUrl.isEmpty
-                            ? null
-                            : (_, _) {},
-                        child: Icon(
-                          Icons.person_rounded,
-                          size: 42,
-                          color: colors.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: LayoutConstants.spacingSm),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              LayoutConstants.spacingMd,
-              0,
-              LayoutConstants.spacingMd,
-              LayoutConstants.spacingMd,
-            ),
-            child: Column(
-              children: [
-                Text(
-                  profile.userName ?? profile.email ?? 'AnimeWitcher',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                if (profile.email != null) ...[
-                  const SizedBox(height: 2),
-                  _RevealableEmail(email: profile.email!),
-                ],
-                if (bio.isNotEmpty) ...[
-                  const SizedBox(height: LayoutConstants.spacingSm),
-                  Text(
-                    bio,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                if (country.isNotEmpty || birthYear.isNotEmpty) ...[
-                  const SizedBox(height: LayoutConstants.spacingMd),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: LayoutConstants.spacingSm,
-                    runSpacing: LayoutConstants.spacingSm,
-                    children: [
-                      if (country.isNotEmpty)
-                        Chip(
-                          avatar: const Icon(Icons.public_rounded, size: 18),
-                          label: Text(country),
-                        ),
-                      if (birthYear.isNotEmpty)
-                        Chip(
-                          avatar: const Icon(Icons.cake_rounded, size: 18),
-                          label: Text(birthYear),
-                        ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1597,102 +1286,6 @@ class _BannerFact extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// One account action as a card.
-///
-/// The same blurred surface the settings groups wear, sized to sit beside its
-/// neighbours instead of spanning a row of its own.
-class _AccountActionCard extends StatefulWidget {
-  const _AccountActionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.danger = false,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-  final bool danger;
-
-  @override
-  State<_AccountActionCard> createState() => _AccountActionCardState();
-}
-
-class _AccountActionCardState extends State<_AccountActionCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final accent = widget.danger ? colors.error : colors.primary;
-    final enabled = widget.onTap != null;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: SettingsPanel(
-        fill: _hovered && enabled
-            ? Color.alphaBlend(
-                accent.withValues(alpha: 0.18),
-                colors.surfaceContainerHighest.withValues(alpha: 0.82),
-              )
-            : null,
-        border: _hovered && enabled ? accent.withValues(alpha: 0.55) : null,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: widget.onTap,
-            child: Opacity(
-              opacity: enabled ? 1 : 0.5,
-              child: Padding(
-                padding: const EdgeInsets.all(LayoutConstants.spacingMd),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(LayoutConstants.spacingSm),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(widget.icon, size: 22, color: accent),
-                    ),
-                    const SizedBox(width: LayoutConstants.spacingMd),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            widget.subtitle,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colors.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
