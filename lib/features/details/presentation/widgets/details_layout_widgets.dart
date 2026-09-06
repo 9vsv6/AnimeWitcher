@@ -1072,10 +1072,16 @@ class DetailsDesktopEpisodeColumn extends ConsumerWidget {
                             ScrollViewKeyboardDismissBehavior.onDrag,
                         itemCount: rowCount,
                         separatorBuilder: (_, _) => const SizedBox(height: 16),
+                        // The same rows the shorter lists get: without these
+                        // a long series fell back to the defaults and drew
+                        // the old boxed card, so One Piece looked like a
+                        // different app to a twelve-episode season.
                         itemBuilder: (context, rowIndex) => _buildEpisodeRow(
                           displayedEpisodes,
                           rowIndex,
                           crossAxisCount,
+                          plain: true,
+                          vertical: mode == EpisodeViewMode.grid,
                         ),
                       ),
                     ),

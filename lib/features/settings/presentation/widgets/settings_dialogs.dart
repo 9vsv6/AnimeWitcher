@@ -16,6 +16,7 @@ import '../../../../shared/widgets/loading_indicator.dart';
 import '../player_settings_provider.dart';
 import '../general_settings_provider.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 import '../cache_provider.dart';
 import '../../../../core/services/download_concurrency.dart';
 import '../../../../core/services/download_parallel.dart';
@@ -808,6 +809,88 @@ void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
           ],
         );
       },
+    ),
+  );
+}
+
+/// Picks what playback does when the next episode is filler.
+void showFillerBehaviourDialog(BuildContext context, WidgetRef ref) {
+  final current =
+      ref.read(playerSettingsProvider).asData?.value.fillerBehaviour ??
+      FillerBehaviour.note;
+
+  showGlassDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      surfaceTintColor: Colors.transparent,
+      title: Text(
+        appText(
+          context,
+          english: 'Skip filler episodes',
+          arabic: 'تخطي حلقات الفلر',
+        ),
+      ),
+      content: RadioGroup<FillerBehaviour>(
+        groupValue: current,
+        onChanged: (value) {
+          if (value == null) return;
+          ref.read(playerSettingsProvider.notifier).setFillerBehaviour(value);
+          Navigator.pop<void>(context);
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final option in FillerBehaviour.values)
+              ListTile(
+                title: Text(switch (option) {
+                  FillerBehaviour.off => appText(
+                    context,
+                    english: 'Play them',
+                    arabic: 'تشغيلها',
+                  ),
+                  FillerBehaviour.note => appText(
+                    context,
+                    english: 'Tell me, with a skip button',
+                    arabic: 'تنبيهي مع زر تخطي',
+                  ),
+                  FillerBehaviour.skip => appText(
+                    context,
+                    english: 'Skip them',
+                    arabic: 'تخطيها',
+                  ),
+                }),
+                subtitle: Text(switch (option) {
+                  FillerBehaviour.off => appText(
+                    context,
+                    english: 'Filler is played like any other episode',
+                    arabic: 'تُشغّل حلقات الفلر كغيرها',
+                  ),
+                  FillerBehaviour.note => appText(
+                    context,
+                    english:
+                        'The next-episode card says so and offers the '
+                        'episode after it',
+                    arabic:
+                        'تظهر ملاحظة على بطاقة الحلقة التالية مع الانتقال '
+                        'إلى ما بعدها',
+                  ),
+                  FillerBehaviour.skip => appText(
+                    context,
+                    english: 'Playback continues at the next story episode',
+                    arabic: 'يكمل التشغيل عند أول حلقة من القصة',
+                  ),
+                }),
+                leading: Radio<FillerBehaviour>(value: option),
+                onTap: () {
+                  ref
+                      .read(playerSettingsProvider.notifier)
+                      .setFillerBehaviour(option);
+                  Navigator.pop<void>(context);
+                },
+              ),
+          ],
+        ),
+      ),
     ),
   );
 }

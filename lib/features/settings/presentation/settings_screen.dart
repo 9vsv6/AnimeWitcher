@@ -346,6 +346,60 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
           SettingsTile(
+            icon: Icons.fast_forward_rounded,
+            title: appText(
+              context,
+              english: 'Skip filler episodes',
+              arabic: 'تخطي حلقات الفلر',
+            ),
+            subtitle: switch (playerSettings.fillerBehaviour) {
+              FillerBehaviour.skip => appText(
+                context,
+                english: 'Skipped',
+                arabic: 'يتم تخطيها',
+              ),
+              FillerBehaviour.note => appText(
+                context,
+                english: 'A note with a skip button',
+                arabic: 'تنبيه مع زر تخطي',
+              ),
+              FillerBehaviour.off => appText(
+                context,
+                english: 'Played like any other',
+                arabic: 'تشغيلها كغيرها',
+              ),
+            },
+            onTap: () => showFillerBehaviourDialog(context, ref),
+          ),
+          SettingsTile(
+            icon: Icons.bolt_rounded,
+            title: appText(
+              context,
+              english: 'Prepare the next episode',
+              arabic: 'تحضير الحلقة التالية',
+            ),
+            subtitle: appText(
+              context,
+              english: playerSettings.prefetchNextEpisode
+                  ? 'Its sources are fetched while this one plays, so '
+                        '"next" opens without a wait'
+                  : 'Its sources are fetched only when you ask for them',
+              arabic: playerSettings.prefetchNextEpisode
+                  ? 'تُجلب مصادرها أثناء تشغيل الحالية، فتفتح "التالية" '
+                        'بلا انتظار'
+                  : 'تُجلب مصادرها عند طلبها فقط',
+            ),
+            trailing: Switch(
+              value: playerSettings.prefetchNextEpisode,
+              onChanged: (val) => ref
+                  .read(playerSettingsProvider.notifier)
+                  .setPrefetchNextEpisode(val),
+            ),
+            onTap: () => ref
+                .read(playerSettingsProvider.notifier)
+                .setPrefetchNextEpisode(!playerSettings.prefetchNextEpisode),
+          ),
+          SettingsTile(
             icon: Icons.tune_rounded,
             title: l10n.playerControls,
             subtitle: l10n.playerControlsSubtitle,
