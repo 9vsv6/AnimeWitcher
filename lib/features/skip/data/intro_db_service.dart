@@ -30,8 +30,47 @@ class IntroDbService implements SkipService {
   // instances. Avoids amplifying rate-limits.
   static DateTime? _rateLimitUntil;
 
-  String _key(String imdbId, int season, int episode) =>
-      '$imdbId:$season:$episode';
+  /// v2 of the API. The one this used to call answered with a single object
+  /// per kind and seconds; this one answers with a list per kind and
+  /// milliseconds, and an open-ended span leaves one end null — an intro
+  /// that starts at the first frame, credits that run to the last.
+  static const String _endpoint = 'https://api.theintrodb.org/v2/media';
+
+  String _key(String id, int season, int episode) => '$id:$season:$episode';
+
+  /// Reads the spans out of a v2 response.
+  static List<SkipSegment> parseSegments(Object? body, {double? durationSec}) {
+    final root = body is Map ? body : null;
+    if (root == null) return const <SkipSegment>[];
+
+    final out = <SkipSegment>[];
+    void collect(String key, SkipType type) {
+      final spans = root[key];
+      if (spans is! List) return;
+      for (final raw in spans) {
+        if (raw is! Map) continue;
+        final startMs = (raw['start_ms'] as num?)?.toDouble() ?? 0;
+        final endMs =
+            (raw['end_ms'] as num?)?.toDouble() ??
+            (durationSec != null ? durationSec * 1000 : null);
+        if (endMs == null || endMs <= startMs) continue;
+        out.add(
+          SkipSegment(
+            startTime: startMs / 1000,
+            endTime: endMs / 1000,
+            type: type,
+          ),
+        );
+      }
+    }
+
+    collect('intro', SkipType.intro);
+    collect('recap', SkipType.recap);
+    collect('credits', SkipType.outro);
+    collect('preview', SkipType.outro);
+    out.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return out;
+  }
 
   List<SkipSegment>? _lookupCached(String key) {
     final entry = _cache[key];
@@ -64,12 +103,13 @@ class IntroDbService implements SkipService {
     required int episode,
     int? duration,
   }) async {
-    // The new API seems to only support imdb_id
-    if (imdbId == null) {
+    // Either id opens the door: v2 takes a TMDB id as readily as an IMDb
+    // one, and anime reach us with whichever ani.zip happens to carry.
+    if (imdbId == null && tmdbId == null) {
       return [];
     }
 
-    final key = _key(imdbId, season, episode);
+    final key = _key(imdbId ?? 'tmdb:$tmdbId', season, episode);
     final cached = _lookupCached(key);
     if (cached != null) return cached;
 
@@ -80,43 +120,18 @@ class IntroDbService implements SkipService {
     }
 
     try {
-      final queryParams = <String, dynamic>{
-        'season': season,
-        'episode': episode,
-        'imdb_id': imdbId,
-      };
-
       final response = await _dio.get<Map<String, dynamic>>(
-        'https://api.introdb.app/segments',
-        queryParameters: queryParams,
+        _endpoint,
+        queryParameters: <String, dynamic>{
+          if (tmdbId != null) 'tmdb_id': tmdbId else 'imdb_id': imdbId,
+          'season': season,
+          'episode': episode,
+        },
       );
 
       if (response.statusCode == 200 && response.data != null) {
-        final data = response.data!;
-        final segments = <SkipSegment>[];
-
-        void addSegment(String k, SkipType type) {
-          final segmentData = data[k];
-          // If we use 'is Map' it's safer for dynamic JSON maps
-          if (segmentData != null && segmentData is Map) {
-            segments.add(
-              SkipSegment(
-                startTime: (segmentData['start_sec'] as num).toDouble(),
-                endTime: (segmentData['end_sec'] as num).toDouble(),
-                type: type,
-              ),
-            );
-          }
-        }
-
-        addSegment('intro', SkipType.intro);
-        addSegment('recap', SkipType.recap);
-        addSegment('outro', SkipType.outro);
-
-        // Sanitize before caching — IntroDB occasionally returns
-        // zero-length or out-of-range entries.
         final cleaned = SkipSegment.sanitize(
-          segments,
+          parseSegments(response.data, durationSec: duration?.toDouble()),
           durationSec: duration?.toDouble(),
         );
         _store(key, cleaned);
