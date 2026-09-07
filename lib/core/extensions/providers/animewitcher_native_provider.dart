@@ -1116,6 +1116,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     'tags',
     'mal_id',
     'malId',
+    'imdb_rate',
+    'imdbRate',
+    'imdb_score',
+    'imdbScore',
     'rating',
     'dubbed',
     'poster',
@@ -1157,6 +1161,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     'type',
     'poster',
     'details',
+    'imdb_rate',
+    'imdbRate',
+    'imdb_score',
+    'imdbScore',
     'cover_uri',
     'tags',
   ];
@@ -1594,6 +1602,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
           hitDetails['imdbRate'] ??
           hitDetails['imdb_score'] ??
           hitDetails['imdbScore'] ??
+          hitRating['imdb_rate'] ??
+          hitRating['imdbRate'] ??
+          hitRating['imdb_score'] ??
+          hitRating['imdbScore'] ??
           source['imdb_rate'] ??
           source['imdbRate'] ??
           source['imdb_score'] ??

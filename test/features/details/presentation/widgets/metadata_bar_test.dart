@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/test_fonts.dart';
 
 void main() {
-  testWidgets('header metadata no longer shows the poster-side star score', (
+  testWidgets('header metadata shows the compact poster-side rating', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -49,7 +49,8 @@ void main() {
     );
 
     expect(find.text('9.08'), findsNothing);
-    expect(find.byIcon(Icons.star_rounded), findsNothing);
+    expect(find.text('8.5'), findsOneWidget);
+    expect(find.byIcon(Icons.star_rounded), findsOneWidget);
     expect(find.text('+17'), findsOneWidget);
     expect(find.text('مسلسل'), findsOneWidget);
 
@@ -57,7 +58,7 @@ void main() {
     if (loaded != true) return;
     final artifacts = Directory('/opt/cursor/artifacts');
     artifacts.createSync(recursive: true);
-    const shotKey = ValueKey<String>('metadata-bar-no-star');
+    const shotKey = ValueKey<String>('metadata-bar-with-rating');
     await tester.pumpWidget(
       ProviderScope(
         child: RepaintBoundary(
@@ -112,7 +113,7 @@ void main() {
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       File(
-        '${artifacts.path}/details_header_metadata_without_star.png',
+        '${artifacts.path}/details_header_metadata_with_rating.png',
       ).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
