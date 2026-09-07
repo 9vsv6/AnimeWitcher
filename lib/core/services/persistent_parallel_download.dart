@@ -42,9 +42,10 @@ class PersistentParallelDownload {
   final Map<String, _ParallelSession> _sessions = {};
   final Map<String, _ParallelSession> _children = {};
   final Set<String> _activeConnectionIds = {};
-  bool _pumpScheduled = false;
+  Future<void>? _pumpFuture;
+  bool _disposed = false;
 
-  bool isActive(String id) => _sessions[id]?.active ?? false;
+  bool isActive(String id) => !_disposed && (_sessions[id]?.active ?? false);
 
   /// Includes native tasks that were handed to the OS but are still waiting
   /// for a socket. Counting them is deliberate: the manager never queues more
@@ -57,24 +58,71 @@ class PersistentParallelDownload {
   Future<File> _manifest(DownloadTask task) async =>
       File('${await task.filePath()}.parts/manifest.json');
 
-  Future<bool> restore(ParallelDownloadTask task) async {
-    if (_sessions.containsKey(task.taskId)) return true;
-    final file = await _manifest(task);
-    if (!await file.exists()) return false;
-    final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    final session = _ParallelSession(
-      task,
-      file,
-      (json['parts'] as List)
-          .map(
-            (part) => _DownloadPart.fromJson(
-              Map<String, dynamic>.from(part as Map),
-            ),
-          )
-          .toList(),
+  /// Stops this Dart coordinator without pausing/canceling native children.
+  ///
+  /// URLSession/background_downloader may legitimately keep transferring after
+  /// the ProviderScope is gone. We only stop scheduling new children and wait
+  /// for already-queued manifest writes to settle, so the next process can
+  /// restore those same ranges instead of racing an old coordinator.
+  Future<void> dispose() async {
+    if (_disposed) {
+      final pump = _pumpFuture;
+      if (pump != null) await pump;
+      await Future.wait<void>(
+        _sessions.values.map((session) => session.idle),
+      );
+      return;
+    }
+    _disposed = true;
+    final pump = _pumpFuture;
+    if (pump != null) await pump;
+    await Future.wait<void>(
+      _sessions.values.map((session) => session.idle),
     );
-    _register(session);
-    return true;
+  }
+
+  Future<bool> restore(ParallelDownloadTask task) async {
+    if (_disposed) return false;
+    if (_sessions.containsKey(task.taskId)) return true;
+    final manifest = await _manifest(task);
+    final temp = File('${manifest.path}.tmp');
+
+    for (final candidate in <File>[manifest, temp]) {
+      try {
+        if (!await candidate.exists()) continue;
+        final raw = await candidate.readAsString();
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        final partJson = json['parts'];
+        if (partJson is! List || partJson.isEmpty) continue;
+        final parts = partJson
+            .map(
+              (part) => _DownloadPart.fromJson(
+                Map<String, dynamic>.from(part as Map),
+              ),
+            )
+            .toList(growable: false);
+        if (parts.length > kDownloadPartsMax ||
+            parts.any((part) => part.from < 0 || part.to < part.from)) {
+          continue;
+        }
+        final session = _ParallelSession(task, manifest, parts);
+        _register(session);
+
+        // A kill can happen after the durable .tmp write and before rename.
+        // Recover that checkpoint instead of throwing all saved ranges away.
+        if (candidate.path == temp.path) {
+          await manifest.parent.create(recursive: true);
+          await manifest.writeAsString(raw, flush: true);
+          try {
+            if (await temp.exists()) await temp.delete();
+          } catch (_) {}
+        }
+        return true;
+      } catch (_) {
+        // Try the .tmp checkpoint when the primary manifest was torn/corrupt.
+      }
+    }
+    return false;
   }
 
   void _register(_ParallelSession session) {
@@ -91,6 +139,7 @@ class PersistentParallelDownload {
     ParallelDownloadTask task,
     String resumeData,
   ) async {
+    if (_disposed) return;
     if (await restore(task)) return;
     final chunks = jsonDecode(resumeData) as List;
     if (chunks.isEmpty) throw const FormatException('Empty chunk checkpoint');
@@ -113,6 +162,7 @@ class PersistentParallelDownload {
   }
 
   Future<bool> start(ParallelDownloadTask task, int totalBytes) async {
+    if (_disposed) return false;
     final restored = await restore(task);
     if (!restored) {
       if (totalBytes <= 0) return false;
@@ -155,11 +205,18 @@ class PersistentParallelDownload {
 
     final session = _sessions[task.taskId]!;
     return session.serialize(() async {
+      if (_disposed) return false;
       if (session.active) return true;
       session.active = true;
       session.resetRamp();
       try {
         await _status(session, TaskStatus.enqueued);
+
+        // Crash window: assembly may already have atomically renamed the final
+        // file before the parent complete record/cleanup was persisted. Adopt
+        // that exact-size target instead of assembling or downloading again.
+        if (await _adoptCompletedTarget(session)) return true;
+
         for (final part in session.parts) {
           part.launched = false;
           part.speed = 0;
@@ -204,9 +261,9 @@ class PersistentParallelDownload {
   /// have produced a running/progress/completion signal, matching Gopeed's
   /// response-driven slow-start controller.
   Future<bool> _pumpSession(_ParallelSession session) async {
-    if (!session.active || session.deleted) return true;
+    if (_disposed || !session.active || session.deleted) return true;
 
-    while (session.active && !session.deleted) {
+    while (!_disposed && session.active && !session.deleted) {
       if (session.currentBatchRemaining == 0) {
         if (session.currentBatchPendingIds.isNotEmpty) return true;
         if (session.rampBatchIndex >= session.rampBatches.length) return true;
@@ -231,6 +288,7 @@ class PersistentParallelDownload {
       }
 
       for (final part in parts) {
+        if (_disposed) return true;
         final record = await recordForId(part.task.taskId);
         final progress = record?.progress ?? 0;
         if (progress > part.progress && progress <= 1) {
@@ -286,36 +344,39 @@ class PersistentParallelDownload {
   }
 
   void _schedulePumpAll() {
-    if (_pumpScheduled) return;
-    _pumpScheduled = true;
-    unawaited(
-      Future<void>.microtask(() async {
-        try {
-          final sessions = List<_ParallelSession>.from(_sessions.values);
-          for (final session in sessions) {
-            if (!session.active || session.deleted) continue;
-            await session.serialize(() async {
-              if (!session.active || session.deleted) return;
-              if (!await _pumpSession(session)) {
-                await _pause(session);
-              } else {
-                await _persist(session);
-              }
-            });
+    if (_disposed || _pumpFuture != null) return;
+
+    late final Future<void> pump;
+    pump = Future<void>.microtask(() async {
+      final sessions = List<_ParallelSession>.from(_sessions.values);
+      for (final session in sessions) {
+        if (_disposed) return;
+        if (!session.active || session.deleted) continue;
+        await session.serialize(() async {
+          if (_disposed || !session.active || session.deleted) return;
+          if (!await _pumpSession(session)) {
+            await _pause(session);
+          } else {
+            await _persist(session);
           }
-        } finally {
-          _pumpScheduled = false;
-          if (_activeConnectionIds.length < _connectionBudget &&
-              _sessions.values.any(_hasImmediatelyPumpableWork)) {
-            _schedulePumpAll();
-          }
-        }
-      }),
-    );
+        });
+      }
+    }).catchError((Object _, StackTrace _) {
+      // Session-level failures park their parent. An unexpected lifecycle race
+      // must not become an unhandled asynchronous exception.
+    }).whenComplete(() {
+      if (identical(_pumpFuture, pump)) _pumpFuture = null;
+      if (!_disposed &&
+          _activeConnectionIds.length < _connectionBudget &&
+          _sessions.values.any(_hasImmediatelyPumpableWork)) {
+        _schedulePumpAll();
+      }
+    });
+    _pumpFuture = pump;
   }
 
   bool _hasImmediatelyPumpableWork(_ParallelSession session) {
-    if (!session.active || session.deleted) return false;
+    if (_disposed || !session.active || session.deleted) return false;
     if (session.currentBatchRemaining > 0) return true;
     return session.currentBatchPendingIds.isEmpty &&
         session.rampBatchIndex < session.rampBatches.length;
@@ -323,13 +384,14 @@ class PersistentParallelDownload {
 
   bool handleUpdate(TaskUpdate update) {
     if (update.task.group != kPersistentDownloadChunkGroup) return false;
+    if (_disposed) return true;
     final session = _children[update.task.taskId];
     if (session == null) return true; // recovery reads the child's DB record
 
     unawaited(
       session.serialize(() async {
         try {
-          if (session.deleted) return;
+          if (_disposed || session.deleted) return;
           final part = session.parts.firstWhere(
             (part) => part.task.taskId == update.task.taskId,
           );
@@ -380,14 +442,17 @@ class PersistentParallelDownload {
 
           if (update is! TaskStatusUpdate) return;
           if (update.status == TaskStatus.complete) {
-            _markConnectionReady(session, part);
-            _releaseConnection(part);
+            // Validate the byte range before freeing its connection or
+            // expanding. Gopeed treats invalid/incomplete range responses as
+            // terminal for that connection and never lets them unlock more IO.
             final file = File(await part.task.filePath());
             if (!await file.exists() || await file.length() != part.size) {
               throw StateError(
                 'Invalid byte count for part ${part.task.taskId}',
               );
             }
+            _markConnectionReady(session, part);
+            _releaseConnection(part);
             part.complete = true;
             part.progress = 1;
             onPartProgress(session.task.taskId, part.task.taskId, 1);
@@ -425,7 +490,7 @@ class PersistentParallelDownload {
             await _pause(session);
           }
         } catch (_) {
-          if (!session.deleted) await _pause(session);
+          if (!_disposed && !session.deleted) await _pause(session);
         }
       }),
     );
@@ -433,6 +498,7 @@ class PersistentParallelDownload {
   }
 
   Future<void> pause(ParallelDownloadTask task) async {
+    if (_disposed) return;
     if (!await restore(task)) return;
     final session = _sessions[task.taskId]!;
     await session.serialize(() => _pause(session));
@@ -447,16 +513,18 @@ class PersistentParallelDownload {
       try {
         await pausePart(part.task);
       } catch (_) {}
-      _activeConnectionIds.remove(part.task.taskId);
       part.launched = false;
       part.speed = 0;
     }
+    final ids = session.parts.map((part) => part.task.taskId).toSet();
+    _activeConnectionIds.removeWhere(ids.contains);
     await _persist(session);
     await _status(session, TaskStatus.paused);
     _schedulePumpAll();
   }
 
   Future<void> cancel(ParallelDownloadTask task) async {
+    if (_disposed) return;
     if (!await restore(task)) return;
     final session = _sessions[task.taskId]!;
     session.deleted = true;
@@ -492,14 +560,54 @@ class PersistentParallelDownload {
   Future<void> _persist(_ParallelSession session) async {
     if (session.deleted) return;
     await session.manifest.parent.create(recursive: true);
+    final payload = jsonEncode({
+      'parts': session.parts.map((part) => part.toJson()).toList(),
+    });
     final temp = File('${session.manifest.path}.tmp');
-    await temp.writeAsString(
-      jsonEncode({
-        'parts': session.parts.map((part) => part.toJson()).toList(),
-      }),
-      flush: true,
-    );
-    await temp.rename(session.manifest.path);
+    await temp.writeAsString(payload, flush: true);
+    try {
+      await temp.rename(session.manifest.path);
+    } on FileSystemException {
+      // Some Windows filesystems do not replace an existing target on rename.
+      // Keep the old manifest until the new checkpoint is fully written, then
+      // fall back to an in-place flushed replacement.
+      await session.manifest.writeAsString(payload, flush: true);
+      try {
+        if (await temp.exists()) await temp.delete();
+      } catch (_) {}
+    }
+  }
+
+  Future<bool> _adoptCompletedTarget(_ParallelSession session) async {
+    final target = File(await session.task.filePath());
+    if (!await target.exists()) return false;
+    if (await target.length() != session.size) return false;
+    await _finishCompleteSession(session);
+    return true;
+  }
+
+  Future<void> _finishCompleteSession(_ParallelSession session) async {
+    session.active = false;
+    session.resetRamp();
+    for (final part in session.parts) {
+      _activeConnectionIds.remove(part.task.taskId);
+    }
+    onUpdate(TaskProgressUpdate(session.task, 1, session.size));
+    await _status(session, TaskStatus.complete);
+
+    // Delete child checkpoints only after the final file and parent complete
+    // record are durable. A kill before this point leaves enough state to adopt
+    // the completed target on the next launch.
+    for (final part in session.parts) {
+      _children.remove(part.task.taskId);
+      final file = File(await part.task.filePath());
+      if (await file.exists()) await file.delete();
+    }
+    if (await session.manifest.parent.exists()) {
+      await session.manifest.parent.delete(recursive: true);
+    }
+    _sessions.remove(session.task.taskId);
+    _schedulePumpAll();
   }
 
   Future<void> _assemble(_ParallelSession session) async {
@@ -525,23 +633,9 @@ class PersistentParallelDownload {
     if (await staging.length() != session.size) {
       throw StateError('Incomplete assembly');
     }
+    if (await target.exists()) await target.delete();
     await staging.rename(target.path);
-    session.active = false;
-    session.resetRamp();
-    for (final part in session.parts) {
-      _activeConnectionIds.remove(part.task.taskId);
-    }
-    onUpdate(TaskProgressUpdate(session.task, 1, session.size));
-    await _status(session, TaskStatus.complete);
-    // Delete only after the complete file and record are durable.
-    for (final part in session.parts) {
-      _children.remove(part.task.taskId);
-      final file = File(await part.task.filePath());
-      if (await file.exists()) await file.delete();
-    }
-    await session.manifest.parent.delete(recursive: true);
-    _sessions.remove(session.task.taskId);
-    _schedulePumpAll();
+    await _finishCompleteSession(session);
   }
 }
 
@@ -563,6 +657,7 @@ class _ParallelSession {
   double get progress =>
       parts.fold<double>(0, (sum, part) => sum + part.size * part.progress) /
       size;
+  Future<void> get idle => _pending;
 
   void resetRamp() {
     rampBatches = const <int>[];
