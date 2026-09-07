@@ -38,6 +38,8 @@ class ApplePersistentGlassHeaderConfig {
     this.branchIndex,
     this.deferTrailingMorphUntilRouteSettles = false,
     this.instantRouteBoundary = false,
+    this.toolbarTrailingInset,
+    this.allowInstantBoundaryMorph = false,
   });
 
   final Object owner;
@@ -51,6 +53,8 @@ class ApplePersistentGlassHeaderConfig {
   int? branchIndex;
   bool deferTrailingMorphUntilRouteSettles;
   bool instantRouteBoundary;
+  double? toolbarTrailingInset;
+  bool allowInstantBoundaryMorph;
 
   bool visuallyMatches(ApplePersistentGlassHeaderConfig other) {
     final sameCustomTrailing =
@@ -64,6 +68,8 @@ class ApplePersistentGlassHeaderConfig {
         deferTrailingMorphUntilRouteSettles ==
             other.deferTrailingMorphUntilRouteSettles &&
         instantRouteBoundary == other.instantRouteBoundary &&
+        toolbarTrailingInset == other.toolbarTrailingInset &&
+        allowInstantBoundaryMorph == other.allowInstantBoundaryMorph &&
         sameCustomTrailing &&
         _sameToolbarButtons(trailingButtons, other.trailingButtons);
   }
@@ -80,6 +86,8 @@ class ApplePersistentGlassHeaderConfig {
     deferTrailingMorphUntilRouteSettles =
         other.deferTrailingMorphUntilRouteSettles;
     instantRouteBoundary = other.instantRouteBoundary;
+    toolbarTrailingInset = other.toolbarTrailingInset;
+    allowInstantBoundaryMorph = other.allowInstantBoundaryMorph;
   }
 }
 
@@ -272,6 +280,7 @@ class ApplePersistentGlassHeaderScope extends StatefulWidget {
     this.trailingButtons,
     this.branchIndex,
     this.deferTrailingMorphUntilRouteSettles = false,
+    this.toolbarTrailingInset,
   });
 
   final Widget child;
@@ -284,6 +293,7 @@ class ApplePersistentGlassHeaderScope extends StatefulWidget {
   final List<AppleLiquidGlassToolbarButton>? trailingButtons;
   final int? branchIndex;
   final bool deferTrailingMorphUntilRouteSettles;
+  final double? toolbarTrailingInset;
 
   @override
   State<ApplePersistentGlassHeaderScope> createState() =>
@@ -317,6 +327,7 @@ class _ApplePersistentGlassHeaderScopeState
         branchIndex: widget.branchIndex,
         deferTrailingMorphUntilRouteSettles:
             widget.deferTrailingMorphUntilRouteSettles,
+        toolbarTrailingInset: widget.toolbarTrailingInset,
       ),
     );
   }
@@ -441,7 +452,14 @@ class _ApplePersistentGlassHeaderOverlayState
     final lastWasInstantRoute = lastConfig?.instantRouteBoundary == true;
     final crossesInstantBoundary =
         lastConfig != null && isInstantRoute != lastWasInstantRoute;
-    final involvesInstantRoute = isInstantRoute || lastWasInstantRoute;
+    final allowInstantBoundaryMorph =
+        config?.allowInstantBoundaryMorph == true ||
+        lastConfig?.allowInstantBoundaryMorph == true;
+    final hardCutInstantBoundary =
+        crossesInstantBoundary && !allowInstantBoundaryMorph;
+    final involvesInstantRoute =
+        (isInstantRoute || lastWasInstantRoute) &&
+        !allowInstantBoundaryMorph;
 
     // Anime Details is intentionally isolated from the persistent Liquid Glass
     // used by Home/Search/Library. Crossing that boundary is a hard cut: send
@@ -454,10 +472,11 @@ class _ApplePersistentGlassHeaderOverlayState
       // persistent button on the active theme color regardless of page artwork.
       'backColor': colors.primary.toARGB32(),
       'backAccessibilityLabel': config?.backTooltip,
-      'toolbarTrailingInset': isInstantRoute ? 34.0 : 18.0,
+      'toolbarTrailingInset':
+          config?.toolbarTrailingInset ?? (isInstantRoute ? 34.0 : 18.0),
       'animateToolbarChanges': !involvesInstantRoute,
       'instantVisibilityChanges': involvesInstantRoute,
-      'hardCutToolbar': crossesInstantBoundary,
+      'hardCutToolbar': hardCutInstantBoundary,
       'actions': desiredActions,
     };
   }
@@ -466,12 +485,16 @@ class _ApplePersistentGlassHeaderOverlayState
     if (!mounted) return;
     final next = applePersistentGlassHeaderController.value;
     final nextIsInstant = next?.instantRouteBoundary == true;
-    final previousWasInstant =
-        _lastRenderedActionConfig?.instantRouteBoundary == true;
+    final previousConfig = _lastRenderedActionConfig;
+    final previousWasInstant = previousConfig?.instantRouteBoundary == true;
+    final allowInstantBoundaryMorph =
+        next?.allowInstantBoundaryMorph == true ||
+        previousConfig?.allowInstantBoundaryMorph == true;
 
-    // Do not wait for another Flutter frame when entering/leaving Anime Details.
-    // The UIKit overlay is updated in the same route-animation tick.
-    if (nextIsInstant != previousWasInstant &&
+    // Root <-> Anime Details remains a hard cut. Comments opt into the normal
+    // Liquid Glass morph so opening and closing them matches character pages.
+    if (!allowInstantBoundaryMorph &&
+        nextIsInstant != previousWasInstant &&
         (nextIsInstant || previousWasInstant)) {
       _syncNativeNow();
       return;
