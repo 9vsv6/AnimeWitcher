@@ -1,6 +1,9 @@
+<div align="center">
+
 # AnimeWitcher
 
-<div align="center">
+**تطبيق أنمي عربي لمشاهدة الحلقات وتحميلها، مبني بـ Flutter ويعمل على الهاتف والحاسب والتلفاز.**
+
   <a href="https://github.com/Fares669/AnimeWitcher/releases">
     <img src="https://img.shields.io/github/downloads/Fares669/AnimeWitcher/total?style=for-the-badge&color=1f6feb" />
   </a>
@@ -13,58 +16,32 @@
   <a href="https://github.com/Fares669/AnimeWitcher/issues">
     <img src="https://img.shields.io/github/issues/Fares669/AnimeWitcher?style=for-the-badge&color=e74c3c" />
   </a>
-  <a href="https://github.com/Fares669/AnimeWitcher/issues?q=is%3Aissue+is%3Aclosed">
-    <img src="https://img.shields.io/github/issues-search/Fares669/AnimeWitcher?query=is%3Aissue+is%3Aclosed&style=for-the-badge&color=2ecc71" />
-  </a>
   <a href="https://github.com/Fares669/AnimeWitcher/commits/main">
     <img src="https://img.shields.io/github/last-commit/Fares669/AnimeWitcher?style=for-the-badge&color=17a2b8" />
   </a>
+
 </div>
 
+<div dir="rtl">
 
+## عن التطبيق
 
-**⚠️ Warning: By default, this app doesn't provide any video sources; you have to install extensions to add functionality to the app.**
+**AnimeWitcher** تطبيق مفتوح المصدر لمشاهدة الأنمي بالعربية. يعرض مكتبة [animewitcher.com](https://animewitcher.com) داخل واجهة عربية كاملة الاتجاه من اليمين إلى اليسار، ويشغّل الحلقات في مشغّل مدمج، ويحفظ قوائمك وتقدّم مشاهدتك في حسابك لتنتقل معك بين أجهزتك.
 
-**A new, cross-platform media streaming application inspired by CloudStream.**
+المصدر مدمج في التطبيق ولا يحتاج إلى إضافات أو إعدادات: تفتحه وتشاهد. وواجهة واحدة مبنية بـ Flutter تخدم الهاتف والحاسب والتلفاز، فكل منصّة تحصل على التخطيط الذي يناسب شاشتها وطريقة التحكم بها.
 
-> **Note**: This project is an independent application built with Flutter. While it supports similar extension formats, it is a simplified, modern re-imagining and is **not** a direct clone or fork of the official client.
+> **تنبيه:** التطبيق عميل بث فقط ولا يستضيف أي محتوى. كل ما يُعرض فيه يأتي من مصادر خارجية، والمشروع لا يشجّع على انتهاك حقوق النشر.
 
-**Please don't create illegal extensions or use any that host any copyrighted media.** This project does not condone copyright infringement.
+## لقطات من التطبيق
 
-## Community
-
-Join the discussion, get help, or find new extensions on our Telegram channel or Discord server:
-
-<a href="https://t.me/+Ez5Vsv2pUUFjZmNl">
-  <img src="https://img.shields.io/badge/Telegram-Channel-blue?style=for-the-badge&logo=telegram">
-</a>
-
-<br>
-
-
-<a href="https://discord.gg/73XGA8Mxn9">
-  <img src="https://invidget.switchblade.xyz/73XGA8Mxn9">
-</a>
-
-
-## Overview
-
-AnimeWitcher is a modern, media streaming client. It draws inspiration from the versatile architecture of CloudStream but implements a custom, cross-platform JavaScript engine for extensions, enabling support for Android, iOS, and Desktop from a single codebase.
-
-### Built With
-
-![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white) ![Dart](https://img.shields.io/badge/dart-%230175C2.svg?style=for-the-badge&logo=dart&logoColor=white) ![Riverpod](https://img.shields.io/badge/Riverpod-%232D3748.svg?style=for-the-badge&logo=riverpod&logoColor=white) ![Hive](https://img.shields.io/badge/Hive-%23DE3027.svg?style=for-the-badge&logo=hive&logoColor=white)
-
-### Screenshots
-
-#### 📱 Mobile
+#### 📱 الهاتف
 
 <p align="center">
   <img src="screenshots/mobile/home.png" width="320" />
   <img src="screenshots/mobile/more.png" width="320" />
 </p>
 
-#### 🖥️ Desktop
+#### 🖥️ الحاسب
 
 <p align="center">
   <img src="screenshots/desktop/home.png" width="800" />
@@ -78,160 +55,189 @@ AnimeWitcher is a modern, media streaming client. It draws inspiration from the 
   <img src="screenshots/desktop/settings.png" width="800" />
 </p>
 
-## Supported Platforms
+## المميزات
 
-| Platform       |         Support          |
-|:---------------|:------------------------:|
-| **Android**    |            ✅             |
-| **Android TV** |            ✅             |
-| **iOS**        | ✅ (Sideloading required) |
-| **Windows**    |            ✅             |
-| **macOS**      |            ✅             |
+### 🏠 التصفّح والاكتشاف
 
-## ✨ Features
+- **الرئيسية** – عرض مميّز متحرّك، الحلقات الجديدة، وآخر الأعمال المضافة.
+- **المواسم** – الموسم السابق والحالي والقادم، وأرشيف المواسم كاملًا.
+- **جدول البث** – الأنميات موزّعة على أيام الأسبوع السبعة.
+- **القادم قريبًا** – أعمال لم تُبَث بعد.
+- **الإحصائيات العالمية** – ترتيب MyAnimeList: أفضل الأنميات، المستمرة، الأفلام، المسلسلات، OVA، وONA.
+- **الشخصيات** – تصفّح الشخصيات والبحث عنها وإدارة المفضّلة منها.
+- **البحث** – بحث فوري داخل المكتبة.
 
-💡 **AnimeWitcher** is designed as a **scalable, plugin-driven, cross-platform streaming platform**—delivering flexibility, performance, and a seamless viewing experience across all devices.
+### 👤 الحساب والمزامنة
 
-### 🔎 Powerful Search & Discovery
-- 🔍 **Plugin-wise Search** – Search within specific providers for more accurate results  
-- 💡 **Smart Search Suggestions** – Get real-time suggestions while typing  
-- 🌐 **Advanced Discovery (TMDB Integration)** – Explore trending, popular, and filtered content  
-- 🎯 **Custom Home Experience** – Set Explore as your default landing screen  
-- 🌍 **Multi-language Filtering** – Discover content across 40+ languages
+- **تسجيل الدخول بحساب Google** – أو استخدام التطبيق بلا حساب.
+- **مكتبة مزامَنة** – المفضلة، أشاهده حاليًا، أكملها لاحقًا، أرغب بمشاهدته، تمت مشاهدته، لا أرغب بمشاهدته.
+- **تقدّم المشاهدة** – الحلقات المشاهَدة وموضع التوقّف ينتقلان بين أجهزتك.
+- **التقييمات والتعليقات** – قيّم الأعمال، واكتب التعليقات والردود.
+- **الملف الشخصي** – صورة شخصية، شخصيات مفضّلة، وإعدادات خصوصية (منها إخفاء محتوى الإيتشي).
 
-### 🎬 Advanced Streaming Experience
-- 📺 **Live Streaming Support** – Watch live content with improved reliability  
-- ▶️ **Resume Playback** – Continue watching from where you left off  
-- ⏩ **Playback Speed Control** – Adjust speed to your preference  
-- 🎚️ **Default Quality Selection** – Set preferred streaming quality  
-- 📑 **Episode Overlay** – Browse and switch episodes inside the player  
-- 🔍 **Detailed Loading Insights** – View source details while content loads
+### ▶️ المشغّل
 
-### 🔗 Integrations & Tracking
-- 🔄 **Multi-Tracker Sync** – Keep your watch list and progress synchronized across **Trakt**, **Simkl**, **MyAnimeList (MAL)**, and **AniList**
-- ⏭️ **Smart Skip (Intro/Outro)** – Seamlessly skip intro and outro sequences using **IntroDB** and **Anime Skip** integration
+- مبني على **media_kit** مع فك ترميز بالعتاد.
+- **استئناف التشغيل** من حيث توقّفت.
+- تحكّم بـ **سرعة التشغيل**، و**أوضاع ملء الشاشة**، و**عمق التخزين المؤقت**، و**مدّة التقديم والتأخير**.
+- **إيماءات** السطوع ومستوى الصوت، ووضع **صورة داخل صورة (PiP)**.
+- **لوحة الحلقات داخل المشغّل** مع بحث برقم الحلقة — مفيد في الأعمال الطويلة التي تتجاوز ألف حلقة.
+- **بطاقة الحلقة التالية**، مع تحضير مصادر الحلقة التالية مسبقًا كخيار.
+- **ترجمات خارجية** من OpenSubtitles وSubDL وSubSource، مع تحكّم بحجم الخط وألوانه.
+- **تشغيل عبر مشغّل خارجي** إن فضّلته على المشغّل المدمج.
 
-### 🌐 Multi-Provider & Plugin System
-- 🔌 **Plugin-Based Architecture** – Extend functionality with custom plugins  
-- 🔁 **Multi-Provider Support** – Access multiple content sources within a single plugin  
-- 🌍 **Domain Switching** – Switch domains seamlessly for better availability  
-- 🪵 **In-App Logs (Developer Tools)** – Debug plugins directly inside the app
+### ⏭️ تخطّي المقدمة والنهاية والفلر
 
-### 💬 Subtitles & Content Flexibility
-- 🌍 **External Subtitles Support** – Integrated with:
-  - OpenSubtitles  
-  - SubDL  
-  - Subsource  
-- 📝 **Subtitle Styling** – Customizable font size and colors
+- توقيتات من **AniSkip** و**IntroDB**، مع ربط المعرّفات عبر **ani.zip** للوصول إلى قواعد بيانات لا تعرف معرّفات الأنمي أصلًا.
+- **تخطّي حلقات الفلر** بثلاثة أوضاع: إيقاف، أو تنبيه مع زر تخطٍّ، أو تخطٍّ تلقائي.
 
-### 📥 Offline & External Playback
-- ⬇️ **Download Content** – Watch offline anytime  
-- 🎥 **External Player Support** – Play content in your preferred media player
+### ⬇️ التنزيلات
 
-### 📺 Cross-Platform Support
-- 📱 Android & iOS  
-- 💻 macOS & Windows  
-- 📺 Android TV + tvOS (Apple TV) support
+- **تنزيل متوازٍ متعدّد الأجزاء** مع تحكّم بعدد المهام وعدد الأجزاء.
+- **إشعارات التقدّم** ومتابعة التنزيل في الخلفية.
+- **مشاهدة دون اتصال** مع مزامنة سجلّ المشاهدة للحلقات المحمَّلة.
 
-### ⚡ Performance & Reliability
-- 🚀 **Optimized Performance** – Faster load times and smoother UI  
-- 🧠 **New JavaScript Engine (`quick_js_ng`)** – Better execution and compatibility  
-- 🌐 **DNS over HTTPS** – Bypass ISP restrictions for improved access  
-- 📉 **Reduced App Size** – Lightweight and efficient  
-- 🔧 **Stability Improvements** – Enhanced reliability across all platforms
+### 🎨 الواجهة
 
-### 🎨 Modern UI/UX
-- 🎨 **Clean & Modern Interface** – Redesigned Home and Details screens  
-- 🧭 **Improved Navigation** – Explore-based content discovery  
-- 🌗 **Theme Improvements** – Better light mode and UI consistency  
-- 🖥️ **Enhanced Desktop Experience** – Improved windowed mode support
+- **عربية بالكامل** باتجاه RTL.
+- **مظهر داكن أو فاتح أو حسب النظام**.
+- **تخصيص شريط المهام** — ترتيب العناصر وإخفاؤها، واختيار الشاشة الافتتاحية.
+- **تخطيط بلوحتين** على الحاسب واللوحي، وتخطيط لوحة واحدة على الهاتف.
+- **دعم التنقّل بالريموت (D-pad)** على التلفاز.
 
-### 🌍 Global Accessibility
-- 🌐 **40+ Language Support** – Fully localized experience  
-- 🎯 **Region-aware Discovery** – Content tailored to global audiences
+## المنصات المدعومة
 
-## 📥 Installation
+| المنصة          |          الدعم           |
+|:----------------|:------------------------:|
+| **أندرويد**     |            ✅             |
+| **أندرويد تي في** |            ✅             |
+| **iOS**         | ✅ (يتطلّب Sideloading)   |
+| **ويندوز**      |            ✅             |
+| **ماك**         |            ✅             |
 
-Download the latest version from the **[Releases Page](https://github.com/Fares669/AnimeWitcher/releases/latest)**.
+## 📥 التثبيت
 
-### 🤖 Android / Android TV
-1. Download the `animewitcher-android-arm64-v8a-v2.5.0.apk` (recommended for most modern phones) or `animewitcher-android-armeabi-v7a-v2.5.0.apk` (for TV) from Releases.
-2. Open the file and tap **Install**.
-   - *Note: You may need to allow "Install from Unknown Sources" in your browser settings.*
-3. Open AnimeWitcher and install extensions via **Settings > Extensions**.
+نزّل أحدث إصدار من **[صفحة الإصدارات](https://github.com/Fares669/AnimeWitcher/releases/latest)**.
+
+### 🤖 أندرويد / أندرويد تي في
+
+1. نزّل ملف `.apk` المناسب لجهازك: نسخة `arm64-v8a` لمعظم الهواتف الحديثة، ونسخة `armeabi-v7a` لأجهزة التلفاز والأجهزة الأقدم.
+2. افتح الملف واضغط **تثبيت**.
+   - *قد تحتاج إلى السماح بالتثبيت من "مصادر غير معروفة" في إعدادات المتصفّح.*
 
 ### 🍏 iOS (Sideloading)
-AnimeWitcher is not on the App Store. You must **sideload** it using a computer.
 
-**Requirements:**
-- A Computer (Windows or macOS)
-- [Impactor](https://impactor.khcrysalis.dev/) (Free and OpenSource) or [Sideloadly](https://sideloadly.io/) (Free)
-- [iTunes](https://support.apple.com/en-us/106372) (if on Windows)
+التطبيق غير متوفّر على App Store، ويُثبَّت عبر **Sideloading** من حاسب.
 
-**Guide**
-- [Impactor Guide](https://impactor.khcrysalis.dev/docs/getting-started/installing/)
-- [Sideloadly Video Guide](https://www.youtube.com/watch?v=vqTsavQc3lQ)
+**المتطلبات:**
+- حاسب ويندوز أو ماك.
+- [Impactor](https://impactor.khcrysalis.dev/) (مجاني ومفتوح المصدر) أو [Sideloadly](https://sideloadly.io/) (مجاني).
+- [iTunes](https://support.apple.com/en-us/106372) إذا كنت على ويندوز.
 
-**Steps:**
-1. Download `animewitcher-ios-unsigned-v2.5.0.ipa` from the [Releases Page](https://github.com/Fares669/AnimeWitcher/releases/latest).
-2. Open **Impactor** or **Sideloadly** on your computer.
-3. Connect your iPhone/iPad via USB.
-4. Drag the `.ipa` file into the Sideloadly window.
-5. Enter your **Apple ID** in the configured field.
-6. Click **Start**.
-7. Once finished, the app will appear on your home screen.
-8. On your device, go to **Settings > General > VPN & Device Management**, tap your email, and select **Trust**.
-9. Set up Wi-Fi sync to automatically refresh your apps in the background
+**الخطوات:**
+1. نزّل ملف `.ipa` من [صفحة الإصدارات](https://github.com/Fares669/AnimeWitcher/releases/latest).
+2. افتح **Impactor** أو **Sideloadly** على الحاسب.
+3. وصّل الآيفون أو الآيباد عبر USB.
+4. اسحب ملف `.ipa` إلى نافذة البرنامج.
+5. أدخل **Apple ID** في الحقل المخصّص له، ثم اضغط **Start**.
+6. بعد انتهاء التثبيت، افتح **الإعدادات > عام > إدارة VPN والأجهزة**، اضغط على بريدك، ثم اختر **الوثوق**.
 
-### 💻 Windows / macOS
-1. Download the appropriate file for your OS (`animewitcher-windows.exe`, `animewitcher-macos.dmg`, etc.).
-2. Install the app.
-3. Run the application from your app launcher or terminal.
-   - *macOS Note: If you see an “Unidentified Developer” warning, go to Settings → Privacy & Security and click Open Anyway to allow the app (one-time step).*
+**أدلّة مصوّرة:** [دليل Impactor](https://impactor.khcrysalis.dev/docs/getting-started/installing/) — [شرح Sideloadly بالفيديو](https://www.youtube.com/watch?v=vqTsavQc3lQ)
 
-## 🛠️ Build from Source
+### 💻 ويندوز / ماك
 
-To set up the development environment, clone the repository and run the setup commands. Detailed instructions for environment configuration, platform-specific builds, and project architecture can be found in our contributor guide:
+1. نزّل الملف المناسب لنظامك (`.exe` لويندوز، `.dmg` للماك).
+2. ثبّت التطبيق وشغّله.
+   - *على الماك: إن ظهرت رسالة "مطوّر غير معروف"، افتح **الإعدادات → الخصوصية والأمان** واضغط **Open Anyway** مرة واحدة.*
 
-👉 **[CONTRIBUTING.md](docs/CONTRIBUTING.md)**
+## 🛠️ البناء من المصدر
 
-### Quick Start
+</div>
+
 ```bash
 git clone https://github.com/Fares669/AnimeWitcher.git
-cd animewitcher
+cd AnimeWitcher
 flutter pub get
 flutter gen-l10n
 dart run build_runner build --delete-conflicting-outputs
 flutter run
 ```
 
-## 🤝 Contributing
+<div dir="rtl">
 
-We welcome contributions of all kinds! Whether you are fixing a bug, adding a feature, or helping with translations, your help is appreciated.
+تفاصيل تهيئة البيئة والبناء لكل منصّة وبنية المشروع موجودة في دليل المساهمين: **[CONTRIBUTING.md](docs/CONTRIBUTING.md)**
 
-- **Found a bug?** Report it on our **[GitHub Issues](https://github.com/Fares669/AnimeWitcher/issues)** page.
-- **Want to translate?** See our **[Translation Guide](docs/CONTRIBUTING_TRANSLATIONS.md)**.
-- **Want to build a plugin?** Check the **[Extension Guide](https://github.com/Fares669/AnimeWitcher-tools/blob/main/DEVELOPER.md)**.
-- **Need help?** Join the community on **[Discord](https://discord.gg/73XGA8Mxn9)** or **[Telegram](https://t.me/+Ez5Vsv2pUUFjZmNl)**.
+### مبني بـ
 
----
+</div>
 
-## FAQ
+![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white) ![Dart](https://img.shields.io/badge/dart-%230175C2.svg?style=for-the-badge&logo=dart&logoColor=white) ![Riverpod](https://img.shields.io/badge/Riverpod-%232D3748.svg?style=for-the-badge&logo=riverpod&logoColor=white) ![Hive](https://img.shields.io/badge/Hive-%23DE3027.svg?style=for-the-badge&logo=hive&logoColor=white)
+
+<div dir="rtl">
+
+## 🤝 المساهمة
+
+كل مساهمة مرحّب بها، سواء كانت إصلاح خلل أو إضافة ميزة أو تحسين الترجمة.
+
+- **وجدت مشكلة؟** أبلغ عنها في صفحة **[GitHub Issues](https://github.com/Fares669/AnimeWitcher/issues)**.
+- **تريد المساعدة في الترجمة؟** راجع **[دليل الترجمة](docs/CONTRIBUTING_TRANSLATIONS.md)**.
+- **تحتاج مساعدة؟** انضم إلى المجتمع على **[ديسكورد](https://discord.gg/73XGA8Mxn9)** أو **[تيليجرام](https://t.me/+Ez5Vsv2pUUFjZmNl)**.
+
+## ❓ الأسئلة الشائعة
 
 <details>
-<summary><b>How do I install extensions?</b></summary>
-AnimeWitcher uses `.sky` or `.js` extension files. You can install them by navigating to <b>Settings > Extensions > Add Repository</b> and entering a repository URL (e.g., using a shortcode).
+<summary><b>هل أحتاج إلى حساب لاستخدام التطبيق؟</b></summary>
+<br>
+لا. يمكنك التصفّح والمشاهدة والتحميل من دون تسجيل دخول. الحساب يضيف المزامنة بين الأجهزة، والمكتبة، والتقييمات، والتعليقات، والشخصيات المفضّلة.
 </details>
 
 <details>
-<summary><b>Where is the media stored?</b></summary>
-AnimeWitcher is a streaming client and does not host any content. All media is streamed directly from the third-party extensions you install.
+<summary><b>أين يُخزَّن المحتوى؟</b></summary>
+<br>
+لا يستضيف AnimeWitcher أي محتوى. التطبيق عميل بث يعرض ما توفّره المصادر الخارجية.
 </details>
 
+<details>
+<summary><b>لماذا لا تظهر مؤقّتات تخطّي المقدمة في بعض الحلقات؟</b></summary>
+<br>
+لأن التوقيتات تأتي من قواعد بيانات مجتمعية (AniSkip وIntroDB)، ولا تحتوي كل حلقة على مساهمة فيها. تظهر البطاقة عند توفّر توقيت للحلقة فقط.
+</details>
 
-## Star History
+<details>
+<summary><b>هل يدعم التطبيق لغات أخرى؟</b></summary>
+<br>
+الواجهة عربية حاليًا. المشروع يستخدم ملفات ARB القياسية في <code>lib/l10n</code>، فإضافة لغة جديدة ممكنة عبر دليل الترجمة أعلاه.
+</details>
 
-## Star History
+## 📮 التواصل والدعم
+
+- **الموقع** – [animewitcher.com](https://animewitcher.com)
+- **قناة الدعم** – [t.me/animewitcher_support](https://t.me/animewitcher_support)
+- **قناة التحديثات** – [t.me/AnimeWitcherUpdates](https://t.me/AnimeWitcherUpdates)
+- **البريد الإلكتروني** – animewitcher1@gmail.com
+
+</div>
+
+<div align="center">
+
+<a href="https://t.me/+Ez5Vsv2pUUFjZmNl">
+  <img src="https://img.shields.io/badge/Telegram-Channel-blue?style=for-the-badge&logo=telegram">
+</a>
+
+<br>
+<br>
+
+<a href="https://discord.gg/73XGA8Mxn9">
+  <img src="https://invidget.switchblade.xyz/73XGA8Mxn9">
+</a>
+
+</div>
+
+<div dir="rtl">
+
+## ⭐ تاريخ النجوم
+
+</div>
 
 <a href="https://www.star-history.com/#Fares669/AnimeWitcher&Date">
  <picture>
@@ -241,13 +247,20 @@ AnimeWitcher is a streaming client and does not host any content. All media is s
  </picture>
 </a>
 
+<div dir="rtl">
 
-## Contributors
+## 👥 المساهمون
+
+</div>
 
 <a href="https://github.com/Fares669/AnimeWitcher/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=Fares669/AnimeWitcher" />
 </a>
 
-## License
+<div dir="rtl">
+
+## 📄 الترخيص
 
 [MIT](LICENSE)
+
+</div>
