@@ -69,6 +69,31 @@ void main() {
       );
     });
 
+    test('large ranges keep spare tail work without adding connections', () {
+      const mib = 1024 * 1024;
+      expect(
+        selectDownloadWorkUnitCount(connections: 4, totalBytes: 4 * mib),
+        8,
+      );
+      expect(
+        selectDownloadWorkUnitCount(connections: 16, totalBytes: 16 * mib),
+        32,
+      );
+      expect(kDownloadWorkUnitsMax, 32);
+    });
+
+    test('tail work never creates tiny extra ranges', () {
+      const mib = 1024 * 1024;
+      expect(
+        selectDownloadWorkUnitCount(connections: 16, totalBytes: 4 * mib),
+        16,
+      );
+      expect(
+        selectDownloadWorkUnitCount(connections: 1, totalBytes: 2 * 1024 * mib),
+        1,
+      );
+    });
+
     test('Gopeed-style ramp reaches sixteen as 1, 2, 4, 8, 1', () {
       expect(downloadConnectionRampBatches(1), [1]);
       expect(downloadConnectionRampBatches(4), [1, 2, 1]);
