@@ -167,8 +167,6 @@ void main() {
         expect(starts.length, 1);
 
         // Follow the production 1, 2, 4, 8, 1 response-gated ramp explicitly.
-        // This avoids a generic helper racing the serialized scheduler at the
-        // final 15 -> 16 transition while still proving the same slow start.
         await markRunning(starts.take(1));
         await waitUntil(() => starts.length == 3);
         await markRunning(starts.skip(1).take(2));
@@ -177,6 +175,12 @@ void main() {
         await waitUntil(() => starts.length == 15);
         await markRunning(starts.skip(7).take(8));
         await waitUntil(() => starts.length == 16);
+
+        // The last +1 connection is itself a response-gated batch. Mark it
+        // healthy before freeing an earlier slot; otherwise the scheduler is
+        // correctly waiting for that response and must not launch tail work.
+        await markRunning(starts.skip(15).take(1));
+        await waitUntil(() => coordinator.activeConnectionCount == 16);
 
         expect(starts, hasLength(16));
         expect(coordinator.activeConnectionCount, 16);
