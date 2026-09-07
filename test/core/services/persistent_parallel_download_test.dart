@@ -57,7 +57,11 @@ void main() {
   });
 
   tearDown(() async {
-    await directory.delete(recursive: true);
+    // Drain response-gated pump/update microtasks before deleting the durable
+    // checkpoint directory. This mirrors a ProviderScope shutdown and catches
+    // scheduler work that would otherwise escape after test completion.
+    await coordinator.dispose();
+    if (await directory.exists()) await directory.delete(recursive: true);
   });
 
   Future<void> waitUntil(bool Function() predicate) async {
@@ -131,6 +135,7 @@ void main() {
       await coordinator.pause(parent);
       expect(pauses, isNot(contains(original.first.taskId)));
       starts.clear();
+      await coordinator.dispose();
       coordinator = create();
       expect(await coordinator.start(parent, 25), isTrue);
       await expandFreshTo(4);
@@ -225,6 +230,48 @@ void main() {
       expect(await coordinator.start(parent, 3), isTrue);
       expect(starts, isEmpty);
       expect(await File(await parent.filePath()).readAsBytes(), [1, 2, 3]);
+    },
+  );
+
+  test('recovers a durable temp manifest left by process termination', () async {
+    expect(await coordinator.start(parent, 25), isTrue);
+    await coordinator.pause(parent);
+    await coordinator.dispose();
+
+    final manifest = File('${await parent.filePath()}.parts/manifest.json');
+    final temp = File('${manifest.path}.tmp');
+    expect(await manifest.exists(), isTrue);
+    await manifest.rename(temp.path);
+
+    starts.clear();
+    coordinator = create();
+    expect(await coordinator.start(parent, 25), isTrue);
+    expect(await manifest.exists(), isTrue);
+    expect(await temp.exists(), isFalse);
+    expect(starts.length, 1);
+  });
+
+  test(
+    'adopts an already assembled target after a crash without redownloading',
+    () async {
+      expect(await coordinator.start(parent, 25), isTrue);
+      await coordinator.pause(parent);
+      await coordinator.dispose();
+
+      final target = File(await parent.filePath());
+      await target.writeAsBytes(List<int>.generate(25, (i) => i), flush: true);
+
+      starts.clear();
+      statuses.clear();
+      coordinator = create();
+      expect(await coordinator.start(parent, 25), isTrue);
+      expect(starts, isEmpty);
+      expect(statuses, contains(TaskStatus.complete));
+      expect(records[parent.taskId]!.status, TaskStatus.complete);
+      expect(
+        await File('${target.path}.parts/manifest.json').exists(),
+        isFalse,
+      );
     },
   );
 
