@@ -212,23 +212,6 @@ flutter run
 
 </div>
 
-<div align="center">
-
-<a href="https://t.me/+Ez5Vsv2pUUFjZmNl">
-  <img src="https://img.shields.io/badge/Telegram-Channel-blue?style=for-the-badge&logo=telegram">
-</a>
-
-<br>
-<br>
-
-<a href="https://discord.gg/73XGA8Mxn9">
-  <img src="https://invidget.switchblade.xyz/73XGA8Mxn9">
-</a>
-
-</div>
-
-<div dir="rtl">
-
 ## ⭐ تاريخ النجوم
 
 </div>
