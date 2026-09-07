@@ -77,10 +77,14 @@ class DetailsRatingsSummary extends StatelessWidget {
     final scoreFontSize = scoreStyle?.fontSize ?? 14;
     final badgeFontSize = (scoreFontSize - 3).clamp(10.0, 12.0).toDouble();
 
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: Align(
-        alignment: Alignment.centerLeft,
+    // The alignment is taken before the direction is forced: the scores read
+    // left to right whatever the page does, but the block itself belongs at
+    // the edge the page starts from — pinned to the left, it flew away from
+    // the title it describes and sat alone against the artwork.
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Directionality(
+        textDirection: TextDirection.ltr,
         child: FittedBox(
           key: kDetailsRatingsCompactKey,
           fit: BoxFit.scaleDown,

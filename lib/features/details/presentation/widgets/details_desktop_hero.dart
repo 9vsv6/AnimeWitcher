@@ -268,12 +268,14 @@ class DetailsDesktopHero extends ConsumerWidget {
                                   : _buildTitle(textColor),
                             ),
                             const SizedBox(height: 16),
+                            // The scores ride with the metadata, in the same
+                            // compact form the phone header uses: one line of
+                            // "★ 7.34 · MAL 6.37" reads faster than two pills,
+                            // and it keeps both layouts saying it one way.
                             MetadataBar(
                               item: displayItem,
                               isLoading: detailsState is AsyncLoading,
                             ),
-                            const SizedBox(height: 12),
-                            DetailsHeroRatings(item: displayItem),
                             if (heroActions != null) ...[
                               const SizedBox(height: 24),
                               heroActions!,
