@@ -34,7 +34,14 @@ class SegmentedDownloadProgress extends StatelessWidget {
             .map((value) => value.clamp(0.0, 1.0).toDouble())
             .toList(growable: false) ??
         const <double>[];
-    final hasRealChunkProgress = parts > 1 && realValues.isNotEmpty;
+
+    // Large files may have more immutable queued work units than active
+    // connections for Gopeed-style tail balancing. Those units do not map
+    // one-to-one to the user-selected connection lanes, so rendering the first
+    // N child values would be misleading. Switch to the honest weighted parent
+    // aggregate as soon as telemetry contains more work units than lanes.
+    final hasRealChunkProgress =
+        parts > 1 && realValues.isNotEmpty && realValues.length <= parts;
 
     return Semantics(
       label: parts > 1
