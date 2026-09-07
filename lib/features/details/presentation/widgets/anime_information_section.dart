@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/extensions/extension_manager.dart';
+import '../../../../core/extensions/providers/animewitcher_native_provider.dart';
+import '../../../home/presentation/view_all_screen.dart';
 
 /// Trims empty, unknown, and "?" placeholders out of details metadata.
 String? cleanAnimeInfoValue(dynamic raw) {
@@ -35,10 +39,35 @@ String? displayableAnimeSource({String? syncSource, String? itemSource}) {
   return null;
 }
 
+/// Splits the provider's studio value while preserving order and removing
+/// duplicates. AnimeWitcher details may contain one studio or a comma/pipe
+/// separated list.
+List<String> normalizedAnimeStudios(String? raw) {
+  final cleaned = cleanAnimeInfoValue(raw);
+  if (cleaned == null) return const <String>[];
+
+  final seen = <String>{};
+  final studios = <String>[];
+  for (final candidate in cleaned.split(RegExp(r'[,،|]'))) {
+    final studio = candidate.trim();
+    if (studio.isEmpty) continue;
+    if (seen.add(studio.toLowerCase())) studios.add(studio);
+  }
+  return studios;
+}
+
 class AnimeInformationSection extends StatelessWidget {
   final MultimediaItem item;
 
-  const AnimeInformationSection({super.key, required this.item});
+  /// Optional override used by focused widget tests and embedders. The normal
+  /// details screen uses AnimeWitcher's native studio browser automatically.
+  final ValueChanged<String>? onStudioTap;
+
+  const AnimeInformationSection({
+    super.key,
+    required this.item,
+    this.onStudioTap,
+  });
 
   String? _read(Map<String, String> data, List<String> keys) {
     for (final key in keys) {
@@ -60,6 +89,36 @@ class AnimeInformationSection extends StatelessWidget {
     final isArabic =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
     return isArabic ? '$minutes دقيقة' : '$minutes minutes';
+  }
+
+  void _openStudioResults(BuildContext context, String studio) {
+    final override = onStudioTap;
+    if (override != null) {
+      override(studio);
+      return;
+    }
+
+    final provider = ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(activeProviderProvider);
+    if (provider is! AnimeWitcherNativeProvider) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ViewAllScreen(
+          title: studio,
+          initialMediaList: const <MultimediaItem>[],
+          category: ViewAllCategory.providerContent,
+          forcePortrait: true,
+          loadPage: (offset) => provider.getStudioPage(
+            studio,
+            offset: offset,
+            limit: provider.viewAllPageSize,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -90,6 +149,7 @@ class AnimeInformationSection extends StatelessWidget {
     );
     final startDate = _read(data, const ['awStartDate']);
     final endDate = _read(data, const ['awEndDate']);
+    final studios = normalizedAnimeStudios(_read(data, const ['awStudio']));
 
     final entries = <_AnimeInfoEntry?>[
       entry('المصدر', 'Source', source),
@@ -104,7 +164,13 @@ class AnimeInformationSection extends StatelessWidget {
           value: endDate ?? '?',
         ),
       ],
-      entry('الاستديو', 'Studio', _read(data, const ['awStudio'])),
+      if (studios.isNotEmpty)
+        _AnimeInfoEntry(
+          label: isArabic ? 'الاستديو' : 'Studio',
+          value: studios.join(', '),
+          actionValues: studios,
+          onValueTap: (studio) => _openStudioResults(context, studio),
+        ),
       entry(
         'العنوان الإنجليزي',
         'English title',
@@ -150,11 +216,15 @@ class _AnimeInfoEntry {
   final String label;
   final String value;
   final bool showFullValue;
+  final List<String> actionValues;
+  final ValueChanged<String>? onValueTap;
 
   const _AnimeInfoEntry({
     required this.label,
     required this.value,
     this.showFullValue = false,
+    this.actionValues = const <String>[],
+    this.onValueTap,
   });
 }
 
@@ -167,6 +237,9 @@ class _AnimeInfoValue extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final hasActions =
+        entry.actionValues.isNotEmpty && entry.onValueTap != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -181,17 +254,46 @@ class _AnimeInfoValue extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          entry.value,
-          maxLines: entry.showFullValue ? null : 2,
-          overflow: entry.showFullValue
-              ? TextOverflow.visible
-              : TextOverflow.ellipsis,
-          style: textTheme.bodyMedium?.copyWith(
-            color: colors.onSurfaceVariant,
-            height: 1.25,
+        if (hasActions)
+          Wrap(
+            spacing: 8,
+            runSpacing: 2,
+            children: [
+              for (final value in entry.actionValues)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => entry.onValueTap!(value),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        value,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colors.primary,
+                          fontWeight: FontWeight.w600,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          )
+        else
+          Text(
+            entry.value,
+            maxLines: entry.showFullValue ? null : 2,
+            overflow: entry.showFullValue
+                ? TextOverflow.visible
+                : TextOverflow.ellipsis,
+            style: textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+              height: 1.25,
+            ),
           ),
-        ),
       ],
     );
   }
