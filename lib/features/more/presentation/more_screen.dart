@@ -396,7 +396,6 @@ class _MoreTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
 
     return Material(
       color: Colors.transparent,
@@ -440,14 +439,7 @@ class _MoreTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              trailing ??
-                  Icon(
-                    isRtl
-                        ? Icons.chevron_left_rounded
-                        : Icons.chevron_right_rounded,
-                    size: 20,
-                    color: colors.onSurfaceVariant.withValues(alpha: 0.7),
-                  ),
+              trailing ?? const Icon(Icons.chevron_right_rounded, size: 20),
             ],
           ),
         ),
