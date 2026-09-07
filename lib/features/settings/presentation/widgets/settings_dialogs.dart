@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
+import '../../../../shared/widgets/glass_dialog.dart';
 import '../../../../core/account/account_providers.dart';
 import '../../../../core/storage/secure_token_storage.dart';
 import '../../../../core/services/external_player_service.dart';
@@ -15,6 +16,7 @@ import '../../../../shared/widgets/loading_indicator.dart';
 import '../player_settings_provider.dart';
 import '../general_settings_provider.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 import '../cache_provider.dart';
 import '../../../../core/services/download_concurrency.dart';
 import '../../../../core/services/download_parallel.dart';
@@ -61,7 +63,7 @@ void showDefaultHomeScreenDialog(
           )
           .toList(growable: false);
 
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -129,7 +131,7 @@ void showDurationDialog(BuildContext context, WidgetRef ref, int current) {
   final l10n = AppLocalizations.of(context)!;
   final options = <int>[5, 10, 15, 20, 30, 60, 120];
 
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -171,7 +173,7 @@ void showResizeDialog(BuildContext context, WidgetRef ref, String current) {
     {'label': l10n.zoom, 'value': 'Zoom'},
     {'label': l10n.stretch, 'value': 'Stretch'},
   ];
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -224,7 +226,7 @@ void showDownloadConcurrencyDialog(
     (i) => kDownloadConcurrencyMin + i,
   );
 
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -270,7 +272,7 @@ String downloadPartsSubtitle(int value) {
 
 void showDownloadPartsDialog(BuildContext context, WidgetRef ref, int current) {
   final selected = normalizeDownloadPartPreference(current);
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -328,7 +330,7 @@ void showDownloadNotificationsDialog(BuildContext context, WidgetRef ref) {
   var prefs = ref.read(generalSettingsProvider).downloadNotifications;
   final l10n = AppLocalizations.of(context)!;
 
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (context, setState) {
@@ -411,7 +413,7 @@ void showReadaheadDialog(BuildContext context, WidgetRef ref, int current) {
   // 1 to 20 minutes in 1-minute steps
   final options = List.generate(20, (i) => (1 + i) * 60);
 
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -455,7 +457,7 @@ void showSubtitleDialog(
   double size = settings.subtitleSize;
   bool showBackground = settings.subtitleBackgroundColor != 0;
 
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (context, setState) {
@@ -522,7 +524,7 @@ void showDefaultPlayerDialog(
   final platformPlayers = ExternalPlayerService.instance
       .getPlayersForPlatform();
 
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -589,7 +591,7 @@ void showThemeDialog(
   ThemeMode currentTheme,
 ) {
   final l10n = AppLocalizations.of(context)!;
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -646,7 +648,7 @@ void showThemeDialog(
 void showFactoryResetDialog(BuildContext context, WidgetRef ref) {
   final l10n = AppLocalizations.of(context)!;
   final callerContext = context;
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -698,7 +700,7 @@ void showFactoryResetDialog(BuildContext context, WidgetRef ref) {
 void showClearCacheDialog(BuildContext context, WidgetRef ref) {
   final l10n = AppLocalizations.of(context)!;
   final callerContext = context;
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       surfaceTintColor: Colors.transparent,
@@ -770,7 +772,7 @@ void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
     settings.showEpisodes,
   ];
 
-  showDialog<void>(
+  showGlassDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (context, setState) {
@@ -807,6 +809,88 @@ void showPlayerControlsDialog(BuildContext context, WidgetRef ref) {
           ],
         );
       },
+    ),
+  );
+}
+
+/// Picks what playback does when the next episode is filler.
+void showFillerBehaviourDialog(BuildContext context, WidgetRef ref) {
+  final current =
+      ref.read(playerSettingsProvider).asData?.value.fillerBehaviour ??
+      FillerBehaviour.note;
+
+  showGlassDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      surfaceTintColor: Colors.transparent,
+      title: Text(
+        appText(
+          context,
+          english: 'Skip filler episodes',
+          arabic: 'تخطي حلقات الفلر',
+        ),
+      ),
+      content: RadioGroup<FillerBehaviour>(
+        groupValue: current,
+        onChanged: (value) {
+          if (value == null) return;
+          ref.read(playerSettingsProvider.notifier).setFillerBehaviour(value);
+          Navigator.pop<void>(context);
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final option in FillerBehaviour.values)
+              ListTile(
+                title: Text(switch (option) {
+                  FillerBehaviour.off => appText(
+                    context,
+                    english: 'Play them',
+                    arabic: 'تشغيلها',
+                  ),
+                  FillerBehaviour.note => appText(
+                    context,
+                    english: 'Tell me, with a skip button',
+                    arabic: 'تنبيهي مع زر تخطي',
+                  ),
+                  FillerBehaviour.skip => appText(
+                    context,
+                    english: 'Skip them',
+                    arabic: 'تخطيها',
+                  ),
+                }),
+                subtitle: Text(switch (option) {
+                  FillerBehaviour.off => appText(
+                    context,
+                    english: 'Filler is played like any other episode',
+                    arabic: 'تُشغّل حلقات الفلر كغيرها',
+                  ),
+                  FillerBehaviour.note => appText(
+                    context,
+                    english:
+                        'The next-episode card says so and offers the '
+                        'episode after it',
+                    arabic:
+                        'تظهر ملاحظة على بطاقة الحلقة التالية مع الانتقال '
+                        'إلى ما بعدها',
+                  ),
+                  FillerBehaviour.skip => appText(
+                    context,
+                    english: 'Playback continues at the next story episode',
+                    arabic: 'يكمل التشغيل عند أول حلقة من القصة',
+                  ),
+                }),
+                leading: Radio<FillerBehaviour>(value: option),
+                onTap: () {
+                  ref
+                      .read(playerSettingsProvider.notifier)
+                      .setFillerBehaviour(option);
+                  Navigator.pop<void>(context);
+                },
+              ),
+          ],
+        ),
+      ),
     ),
   );
 }

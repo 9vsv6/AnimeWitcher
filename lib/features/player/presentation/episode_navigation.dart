@@ -32,3 +32,26 @@ Episode? adjacentEpisode({
   }
   return sequence[adjacentIndex];
 }
+
+/// The next episode that carries story, skipping any the provider marked
+/// filler.
+///
+/// Returns null when everything after the current episode is filler — there
+/// is nothing to jump to, so the caller should fall back to the plain next
+/// episode rather than refusing to continue.
+Episode? nextStoryEpisode({
+  required List<Episode>? episodes,
+  required Episode? currentEpisode,
+  required String currentEpisodeUrl,
+}) {
+  for (var offset = 1; ; offset++) {
+    final candidate = adjacentEpisode(
+      episodes: episodes,
+      currentEpisode: currentEpisode,
+      currentEpisodeUrl: currentEpisodeUrl,
+      offset: offset,
+    );
+    if (candidate == null) return null;
+    if (!candidate.isFiller) return candidate;
+  }
+}

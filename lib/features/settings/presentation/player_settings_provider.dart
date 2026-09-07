@@ -5,6 +5,28 @@ part 'player_settings_provider.g.dart';
 
 enum PlayerGesture { brightness, volume, none }
 
+/// What playback does when the next episode is filler.
+///
+/// The catalog marks filler episodes, and until now the player walked into
+/// one without a word. A viewer following the story wants to be told, and
+/// some want it stepped over entirely.
+enum FillerBehaviour {
+  /// Treat a filler episode like any other.
+  off,
+
+  /// Say so on the next-episode card, with a button to jump past it.
+  note,
+
+  /// Continue at the next episode that is not filler.
+  skip;
+
+  static FillerBehaviour fromName(String? raw) => switch (raw) {
+    'note' => FillerBehaviour.note,
+    'skip' => FillerBehaviour.skip,
+    _ => FillerBehaviour.off,
+  };
+}
+
 class PlayerSettings {
   final int seekDuration;
   final String defaultResizeMode;
@@ -71,7 +93,18 @@ class PlayerSettings {
   /// wanted while bingeing, jarring otherwise.
   final bool autoSkipCredits;
 
+  /// What to do when the next episode is marked filler.
+  final FillerBehaviour fillerBehaviour;
+
+  /// Ask the provider for the next episode's sources while this one plays.
+  ///
+  /// Costs one request per episode and saves the wait that lands the moment
+  /// a viewer has decided to keep watching.
+  final bool prefetchNextEpisode;
+
   const PlayerSettings({
+    this.fillerBehaviour = FillerBehaviour.note,
+    this.prefetchNextEpisode = true,
     this.seekDuration = 10,
     this.defaultResizeMode = 'Fit',
     this.subtitleSize = 22.0,
@@ -148,6 +181,8 @@ class PlayerSettings {
     bool? showPlaybackSpeed,
     bool? showEpisodes,
     bool? skipSegmentsEnabled,
+    FillerBehaviour? fillerBehaviour,
+    bool? prefetchNextEpisode,
     bool? autoSkipIntro,
     bool? autoSkipCredits,
   }) {
@@ -197,6 +232,8 @@ class PlayerSettings {
       showPlaybackSpeed: showPlaybackSpeed ?? this.showPlaybackSpeed,
       showEpisodes: showEpisodes ?? this.showEpisodes,
       skipSegmentsEnabled: skipSegmentsEnabled ?? this.skipSegmentsEnabled,
+      fillerBehaviour: fillerBehaviour ?? this.fillerBehaviour,
+      prefetchNextEpisode: prefetchNextEpisode ?? this.prefetchNextEpisode,
       autoSkipIntro: autoSkipIntro ?? this.autoSkipIntro,
       autoSkipCredits: autoSkipCredits ?? this.autoSkipCredits,
     );
@@ -339,32 +376,35 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
         0.5;
     final subAlignment = storage.getPlayerSetting<int>('player_sub_alignment');
 
-    final showPip = storage.getPlayerSetting<bool>(
-          'player_show_pip',
-          defaultValue: true,
-        ) ??
+    final showPip =
+        storage.getPlayerSetting<bool>('player_show_pip', defaultValue: true) ??
         true;
-    final showResize = storage.getPlayerSetting<bool>(
+    final showResize =
+        storage.getPlayerSetting<bool>(
           'player_show_resize',
           defaultValue: true,
         ) ??
         true;
-    final showRotate = storage.getPlayerSetting<bool>(
+    final showRotate =
+        storage.getPlayerSetting<bool>(
           'player_show_rotate',
           defaultValue: true,
         ) ??
         true;
-    final showPlaybackSpeed = storage.getPlayerSetting<bool>(
+    final showPlaybackSpeed =
+        storage.getPlayerSetting<bool>(
           'player_show_playback_speed',
           defaultValue: true,
         ) ??
         true;
-    final showEpisodes = storage.getPlayerSetting<bool>(
+    final showEpisodes =
+        storage.getPlayerSetting<bool>(
           'player_show_episodes',
           defaultValue: true,
         ) ??
         true;
-    final skipSegmentsEnabled = storage.getPlayerSetting<bool>(
+    final skipSegmentsEnabled =
+        storage.getPlayerSetting<bool>(
           'player_skip_segments',
           defaultValue: true,
         ) ??
@@ -384,6 +424,18 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
           defaultValue: legacyAutoSkip,
         ) ??
         legacyAutoSkip;
+    final prefetchNextEpisode =
+        storage.getPlayerSetting<bool>(
+          'player_prefetch_next_episode',
+          defaultValue: true,
+        ) ??
+        true;
+    final fillerBehaviour = FillerBehaviour.fromName(
+      storage.getPlayerSetting<String>(
+        'player_filler_behaviour',
+        defaultValue: FillerBehaviour.note.name,
+      ),
+    );
     final autoSkipCredits =
         storage.getPlayerSetting<bool>(
           'player_auto_skip_credits',
@@ -428,6 +480,8 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       showEpisodes: showEpisodes,
       skipSegmentsEnabled: skipSegmentsEnabled,
       autoSkipIntro: autoSkipIntro,
+      fillerBehaviour: fillerBehaviour,
+      prefetchNextEpisode: prefetchNextEpisode,
       autoSkipCredits: autoSkipCredits,
     );
   }
@@ -580,6 +634,16 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     state = AsyncData(state.requireValue.copyWith(autoSkipIntro: val));
   }
 
+  Future<void> setPrefetchNextEpisode(bool val) async {
+    await _repository.setPlayerSetting('player_prefetch_next_episode', val);
+    state = AsyncData(state.requireValue.copyWith(prefetchNextEpisode: val));
+  }
+
+  Future<void> setFillerBehaviour(FillerBehaviour val) async {
+    await _repository.setPlayerSetting('player_filler_behaviour', val.name);
+    state = AsyncData(state.requireValue.copyWith(fillerBehaviour: val));
+  }
+
   Future<void> setAutoSkipCredits(bool val) async {
     await _repository.setPlayerSetting('player_auto_skip_credits', val);
     state = AsyncData(state.requireValue.copyWith(autoSkipCredits: val));
@@ -634,6 +698,4 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
     await _repository.setPlayerSetting('player_default_speed', speed);
     state = AsyncData(state.requireValue.copyWith(defaultPlaybackSpeed: speed));
   }
-
-
 }

@@ -28,7 +28,18 @@ class NextEpisodeOverlay extends StatefulWidget {
   final bool nextEpisodeIsFinal;
   final String? nextEpisodeServerName;
 
+  /// The provider marked the next episode as filler.
+  final bool nextEpisodeIsFiller;
+
+  /// Label of the next episode that carries story, when there is one to jump
+  /// to. Null hides the jump entirely — there is no point offering it when
+  /// everything after this is filler as well.
+  final String? skipFillerLabel;
+
   final VoidCallback onPlayNext;
+
+  /// Continue at the next episode that is not filler.
+  final VoidCallback? onSkipFiller;
   final VoidCallback onDismiss;
   final bool isTv;
   final FocusNode? focusNode;
@@ -46,7 +57,10 @@ class NextEpisodeOverlay extends StatefulWidget {
     this.nextEpisodeDescription,
     this.nextEpisodeIsFinal = false,
     this.nextEpisodeServerName,
+    this.nextEpisodeIsFiller = false,
+    this.skipFillerLabel,
     required this.onPlayNext,
+    this.onSkipFiller,
     required this.onDismiss,
     this.isTv = false,
     this.focusNode,
@@ -438,6 +452,10 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
               ),
             ),
           ],
+          if (widget.nextEpisodeIsFiller) ...[
+            const SizedBox(height: 6),
+            _buildFillerNote(isCompact),
+          ],
           if (hasRating) ...[
             const SizedBox(height: 4),
             _buildRating(isCompact),
@@ -460,6 +478,66 @@ class _NextEpisodeOverlayState extends State<NextEpisodeOverlay>
             ),
         ],
       ),
+    );
+  }
+
+  /// Says the next one is filler, and offers the story episode after it.
+  ///
+  /// Shown rather than acted on: whether filler is worth watching is the
+  /// viewer's call, and the setting decides whether they are asked at all.
+  Widget _buildFillerNote(bool isCompact) {
+    final canSkip =
+        widget.onSkipFiller != null &&
+        (widget.skipFillerLabel?.isNotEmpty ?? false);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFFD32F2F).withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            'فلر',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: isCompact ? 10 : 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (canSkip) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Material(
+              color: Colors.white.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(999),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: widget.onSkipFiller,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    'تخطي إلى ${widget.skipFillerLabel}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isCompact ? 11 : 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 

@@ -9,6 +9,11 @@ import '../../../../core/services/notification_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../comments/presentation/animewitcher_comments_screen.dart';
 import '../details_ratings.dart';
+// The two toast strings moved with the actions that show them. They are
+// still part of this file's surface: the panel is what a caller looks at.
+import 'details_rating_actions.dart';
+export 'details_rating_actions.dart'
+    show kRateLoginRequiredToast, kReviewsClosedToast;
 import 'scale_rating_bar.dart';
 
 const Key kDetailsRatingsRowKey = Key('details-ratings-row');
@@ -37,9 +42,6 @@ const Key kDetailsRatingsCompactExternalBadgeKey = Key(
 
 const Color kMalBadgeBlue = Color(0xFF2E51A2);
 const Color kImdbBadgeYellow = Color(0xFFF5C518);
-
-const String kRateLoginRequiredToast = 'يجب تسجيل الدخول';
-const String kReviewsClosedToast = 'تم ايقاف المراجعات علي هذا الأنمي';
 
 bool hasDetailsRatingsSummary(MultimediaItem item) {
   final ratings = AnimeDetailsRatings.fromItem(item);
@@ -100,7 +102,10 @@ class DetailsRatingsSummary extends StatelessWidget {
                           color: AppTheme.animeWitcherAccent,
                         ),
                         const SizedBox(width: 4),
-                        Text(formatRatingScore(witcherScore!), style: scoreStyle),
+                        Text(
+                          formatRatingScore(witcherScore!),
+                          style: scoreStyle,
+                        ),
                       ],
                     ),
                   ),
@@ -146,7 +151,10 @@ class DetailsRatingsSummary extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Text(formatRatingScore(externalScore!), style: scoreStyle),
+                        Text(
+                          formatRatingScore(externalScore!),
+                          style: scoreStyle,
+                        ),
                       ],
                     ),
                   ),
@@ -354,7 +362,9 @@ class _DetailsRatingsRowState extends ConsumerState<DetailsRatingsRow> {
                           child: VerticalDivider(
                             width: 1,
                             thickness: 1,
-                            color: colors.outlineVariant.withValues(alpha: 0.55),
+                            color: colors.outlineVariant.withValues(
+                              alpha: 0.55,
+                            ),
                           ),
                         ),
                       ),

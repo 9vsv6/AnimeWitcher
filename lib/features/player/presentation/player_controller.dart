@@ -27,6 +27,7 @@ import '../../../../core/providers/device_info_provider.dart';
 import '../../../../core/utils/app_utils.dart';
 import '../../../core/utils/episode_label.dart';
 import 'episode_navigation.dart';
+import '../../details/presentation/stream_source_prefetch.dart';
 import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/stream_response_validator.dart';
 import '../../settings/presentation/player_settings_provider.dart';
@@ -35,6 +36,7 @@ import '../../../../core/network/http_defaults.dart';
 import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/aniskip_service.dart';
 import '../../skip/data/chapter_skip_source.dart';
+import '../../skip/data/anime_id_mappings.dart';
 import '../../skip/data/mal_id_resolver.dart';
 import '../../skip/data/skip_segment_cache.dart';
 import '../../skip/data/skip_service.dart';
@@ -665,6 +667,19 @@ class PlayerController extends Notifier<PlayerState> {
     return _adjacentEpisode(-1);
   }
 
+  /// The next episode the provider has not marked filler.
+  ///
+  /// Null when the rest of the list is filler, which the callers read as
+  /// "nothing to jump to" and fall back to the plain next episode.
+  Episode? get nextStoryEpisodeOrNull {
+    if (!isSeries) return null;
+    return nextStoryEpisode(
+      episodes: _item.episodes,
+      currentEpisode: currentEpisode,
+      currentEpisodeUrl: _videoUrl,
+    );
+  }
+
   Episode? _adjacentEpisode(int offset) {
     if (!isSeries) return null;
     return adjacentEpisode(
@@ -877,9 +892,13 @@ class PlayerController extends Notifier<PlayerState> {
 
     // A single master switch for the whole feature — AniSkip and the legacy
     // sources all feed the same skip button, so one "off" means no lookups.
-    final skipEnabled = ref
-        .read(settingsRepositoryProvider)
-        .getPlayerSetting<bool>('player_skip_segments', defaultValue: true) ??
+    final skipEnabled =
+        ref
+            .read(settingsRepositoryProvider)
+            .getPlayerSetting<bool>(
+              'player_skip_segments',
+              defaultValue: true,
+            ) ??
         true;
     if (!skipEnabled) {
       if (kDebugMode) {
@@ -996,8 +1015,6 @@ class PlayerController extends Notifier<PlayerState> {
       // The provider usually hands us a title and nothing else, so fall
       // back to resolving the MyAnimeList id from it.
       var resolvedMalId = malId;
-      // Kept for the neighbour estimate and for submitting marks later.
-      _resolvedMalId = resolvedMalId;
       if (resolvedMalId == null && _item.title.trim().isNotEmpty) {
         resolvedMalId = await ref
             .read(malIdResolverProvider)
@@ -1010,6 +1027,12 @@ class PlayerController extends Notifier<PlayerState> {
           );
         }
       }
+      // Recorded after the fallback, not before it: the catalog hands us a
+      // title and no ids for most anime, so an id assigned before this line
+      // was null exactly when the lookup had just succeeded — which left the
+      // MAL-keyed segment cache and the IntroDB lookup below switched off
+      // for every episode whose id came from its title.
+      _resolvedMalId = resolvedMalId;
 
       if (resolvedMalId != null) {
         try {
@@ -1049,6 +1072,41 @@ class PlayerController extends Notifier<PlayerState> {
 
       if (_isDisposed) return;
 
+      // 2b. IntroDB, reached through the ids ani.zip keeps against the
+      // MyAnimeList one. It is a separate database from AniSkip — where
+      // AniSkip waits for a viewer to submit an episode, this one carries
+      // the licensed catalogue — and anime never reached it before, because
+      // no anime source hands out a TMDB or IMDb id.
+      if (introDbSegments.isEmpty && resolvedMalId != null) {
+        try {
+          final ids = await ref
+              .read(animeIdMappingsProvider)
+              .byMalId(resolvedMalId);
+          if (_isDisposed) return;
+          if (ids != null && (ids.imdbId != null || ids.tmdbId != null)) {
+            final durationSec = await _awaitDurationSeconds();
+            if (_isDisposed) return;
+            introDbSegments = await ref
+                .read(introDbServiceProvider)
+                .getSkipSegments(
+                  imdbId: ids.imdbId,
+                  tmdbId: ids.tmdbId,
+                  season: season,
+                  episode: episodeNum,
+                  duration: durationSec,
+                );
+            if (_isDisposed) return;
+            if (kDebugMode) {
+              debugPrint(
+                'IntroDB via ani.zip ($ids) returned '
+                '${introDbSegments.length} segments',
+              );
+            }
+          }
+        } catch (e) {
+          if (kDebugMode) debugPrint('IntroDB via ani.zip error: $e');
+        }
+      }
     } else {
       if (kDebugMode) {
         debugPrint('AniSkip: Bypassed lookup (media is not anime/animated)');
@@ -1074,49 +1132,14 @@ class PlayerController extends Notifier<PlayerState> {
       if (kDebugMode) debugPrint('Chapters error: $e');
     }
 
-    // 4. Nothing online had this episode: derive it from the episodes around
-    // it, and only when those agree closely (see estimateFromNeighbours).
-    var estimatedSegments = const <SkipSegment>[];
-    final needsEstimate =
-        aniSkipSegments.isEmpty &&
-        introDbSegments.isEmpty &&
-        chapterSegments.isEmpty;
-    final estimateMalId = _resolvedMalId;
-    if (needsEstimate && estimateMalId != null && durationSec != null) {
-      try {
-        estimatedSegments = await ref
-            .read(aniSkipServiceProvider)
-            .estimateFromNeighbours(
-              malId: estimateMalId,
-              episode: episodeNum,
-              episodeLength: durationSec,
-            );
-        if (_isDisposed) return;
-        if (kDebugMode) {
-          debugPrint(
-            'Neighbour estimate returned ${estimatedSegments.length} segments:',
-          );
-          for (final s in estimatedSegments) {
-            debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) debugPrint('Neighbour estimate error: $e');
-      }
-    }
-
     // Best source first. Anything overlapping a segment an earlier source
     // already supplied is dropped, so the later ones only fill gaps.
     // viewer's own marks outrank every database.
-    final merged = SkipSegment.merge(
-      <List<SkipSegment>>[
-        aniSkipSegments,
-        introDbSegments,
-        chapterSegments,
-        estimatedSegments,
-      ],
-      durationSec: durationSec?.toDouble(),
-    );
+    final merged = SkipSegment.merge(<List<SkipSegment>>[
+      aniSkipSegments,
+      introDbSegments,
+      chapterSegments,
+    ], durationSec: durationSec?.toDouble());
 
     if (kDebugMode) {
       debugPrint('Merged ${merged.length} skip segments:');
@@ -1393,6 +1416,9 @@ class PlayerController extends Notifier<PlayerState> {
                 nextEpisodeServerName: next.serverName,
               );
             }
+            // After the card, never before it: a prefetch that throws must
+            // not be able to take the next-episode prompt down with it.
+            _warmNextEpisodeSources(next);
             // Ensure it persists if video completes and resets position
             _isNextEpisodeOverlayForced = true;
           }
@@ -2162,6 +2188,9 @@ class PlayerController extends Notifier<PlayerState> {
                 nextEpisodeServerName: next.serverName,
               );
             }
+            // After the card, never before it: a prefetch that throws must
+            // not be able to take the next-episode prompt down with it.
+            _warmNextEpisodeSources(next);
             // Ensure it persists if video completes and resets position
             _isNextEpisodeOverlayForced = true;
           }
@@ -3167,9 +3196,52 @@ class PlayerController extends Notifier<PlayerState> {
         );
   }
 
+  /// Asks the provider for the next episode's sources while this one is
+  /// still playing, so choosing "next" does not begin with a wait.
+  ///
+  /// The episode the viewer actually reaches depends on the filler setting,
+  /// so warm that one rather than the one merely adjacent.
+  void _warmNextEpisodeSources(Episode next) {
+    if (_isDisposed) return;
+    // Nothing here is worth an exception reaching the caller: this is work
+    // done ahead of a request nobody has made yet, and the real request
+    // reports its own failures.
+    try {
+      final settings = ref.read(playerSettingsProvider).asData?.value;
+      if (settings != null && !settings.prefetchNextEpisode) return;
+
+      final behaviour = settings?.fillerBehaviour ?? FillerBehaviour.note;
+      final target = behaviour == FillerBehaviour.skip && next.isFiller
+          ? (nextStoryEpisodeOrNull ?? next)
+          : next;
+      if (target.url.trim().isEmpty) return;
+
+      final provider = ref.read(activeProviderProvider);
+      if (provider == null) return;
+      ref.read(streamSourcePrefetchProvider).warm(provider, target.url);
+    } catch (e) {
+      if (kDebugMode) debugPrint('Next-episode prefetch skipped: $e');
+    }
+  }
+
   Future<void> playNextEpisode({StreamResult? selectedSource}) async {
-    final nextEpisode = this.nextEpisode;
+    // Filler is stepped over only when the viewer asked for that, and only
+    // when a story episode actually follows — a season that ends in filler
+    // still plays on rather than stopping dead.
+    final behaviour =
+        ref.read(playerSettingsProvider).asData?.value.fillerBehaviour ??
+        FillerBehaviour.note;
+    final skipsFiller = behaviour == FillerBehaviour.skip;
+    final nextEpisode =
+        (skipsFiller && (this.nextEpisode?.isFiller ?? false)
+            ? nextStoryEpisodeOrNull
+            : null) ??
+        this.nextEpisode;
     if (nextEpisode == null) return;
+
+    // A source chosen for the episode we were about to play does not apply
+    // to the one filler-skipping landed on.
+    if (nextEpisode.url != this.nextEpisode?.url) selectedSource = null;
 
     // Smart Next Episode: downloaded files bypass network source selection.
     final downloadService = ref.read(downloadServiceProvider);
@@ -3494,7 +3566,9 @@ class PlayerController extends Notifier<PlayerState> {
 
     if (_isInitialized) saveProgress();
     Future.microtask(() {
-      if (ref.mounted && _isDisposed && _sourceSessionSerial == closingSession) {
+      if (ref.mounted &&
+          _isDisposed &&
+          _sourceSessionSerial == closingSession) {
         state = const PlayerState();
       }
     });

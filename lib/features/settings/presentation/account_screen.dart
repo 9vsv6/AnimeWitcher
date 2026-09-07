@@ -7,8 +7,10 @@ import '../../../core/account/animewitcher_account_config.dart';
 import '../../../core/account/animewitcher_account_models.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/utils/localized_text.dart';
+import '../../../core/utils/artwork_quality.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../shared/widgets/custom_widgets.dart';
+import '../../../shared/widgets/glass_dialog.dart';
 import '../../comments/presentation/animewitcher_my_comments_screen.dart';
 import 'account_management_screens.dart';
 import 'account_privacy_settings_screen.dart';
@@ -92,20 +94,30 @@ class _AnimeWitcherAccountScreenState
           ),
         ),
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 100),
-            children: [
-              const SizedBox(height: LayoutConstants.spacingMd),
-              if (profile != null)
-                _buildSignedIn(profile, busy)
-              else
-                _buildSignedOut(busy, asyncError),
-            ],
-          ),
-        ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // A window with a second column to put the management rows in shows
+          // the whole account at once; stacked in one column they ran past the
+          // bottom of the screen and sign out had to be scrolled to.
+          if (profile != null && constraints.maxWidth >= 900) {
+            return _buildSignedInWide(profile, busy);
+          }
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 100),
+                children: [
+                  const SizedBox(height: LayoutConstants.spacingMd),
+                  if (profile != null)
+                    _buildSignedIn(profile, busy)
+                  else
+                    _buildSignedOut(busy, asyncError),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -383,282 +395,334 @@ class _AnimeWitcherAccountScreenState
     );
   }
 
+  /// The account in one column, for a handset or a narrow window.
   Widget _buildSignedIn(AnimeWitcherProfile profile, bool busy) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: LayoutConstants.spacingMd,
+          ),
+          child: _buildIdentityBanner(profile),
+        ),
+        _buildManageGroup(profile, busy),
+        const SizedBox(height: LayoutConstants.spacingSm),
+        _buildDangerGroup(profile, busy),
+      ],
+    );
+  }
+
+  /// The account on a wide window: who you are across the top, and what you
+  /// can do about it underneath.
+  ///
+  /// The actions are the same rows the settings panes use — one panel, a
+  /// glyph, a name, a hairline between. A board of cards here made one section
+  /// of the app look like a different app to the section beside it.
+  Widget _buildSignedInWide(AnimeWitcherProfile profile, bool busy) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        LayoutConstants.spacingMd,
+        LayoutConstants.spacingSm,
+        LayoutConstants.spacingMd,
+        100,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: LayoutConstants.contentMaxWidth,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildIdentityBanner(profile),
+              _buildManageGroup(profile, busy),
+              const SizedBox(height: LayoutConstants.spacingSm),
+              _buildDangerGroup(profile, busy),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The account across the top of its page: cover behind, avatar and name on
+  /// it, the way a profile header reads everywhere else.
+  Widget _buildIdentityBanner(AnimeWitcherProfile profile) {
     final colors = Theme.of(context).colorScheme;
     final photoUrl = profile.photoUrl?.trim() ?? '';
     final coverUrl = profile.coverUrl?.trim() ?? '';
     final bio = profile.bio?.trim() ?? '';
     final country = profile.country?.trim() ?? '';
     final birthYear = profile.birthYear?.trim() ?? '';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: SizedBox(
+        height: 168,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (coverUrl.isEmpty)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: AlignmentDirectional.topStart,
+                    end: AlignmentDirectional.bottomEnd,
+                    colors: [
+                      colors.primaryContainer,
+                      colors.secondaryContainer,
+                    ],
+                  ),
+                ),
+              )
+            else
+              // A profile cover can be four thousand pixels wide. Decoded
+              // whole it is tens of megabytes of RAM to paint a strip a few
+              // hundred pixels tall, and every paint rescales it.
+              ArtworkDecode(
+                paintedWidth: MediaQuery.sizeOf(context).width,
+                builder: (context, decodeWidth) => Image.network(
+                  coverUrl,
+                  fit: BoxFit.cover,
+                  cacheWidth: decodeWidth,
+                  errorBuilder: (_, _, _) => DecoratedBox(
+                    decoration: BoxDecoration(color: colors.primaryContainer),
+                  ),
+                ),
+              ),
+            // The name and address sit on artwork nobody chose for legibility,
+            // so they get their own ground rather than trusting the cover.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.centerStart,
+                  end: AlignmentDirectional.centerEnd,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.78),
+                    Colors.black.withValues(alpha: 0.35),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: LayoutConstants.spacingLg,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.22),
+                    ),
+                    child: CircleAvatar(
+                      radius: 46,
+                      backgroundColor: colors.primaryContainer,
+                      foregroundImage: photoUrl.isEmpty
+                          ? null
+                          : NetworkImage(photoUrl),
+                      onForegroundImageError: photoUrl.isEmpty
+                          ? null
+                          : (_, _) {},
+                      child: Icon(
+                        Icons.person_rounded,
+                        size: 44,
+                        color: colors.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: LayoutConstants.spacingMd),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.userName ?? profile.email ?? 'AnimeWitcher',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        if (profile.email != null) ...[
+                          const SizedBox(height: 2),
+                          _RevealableEmail(
+                            email: profile.email!,
+                            color: Colors.white.withValues(alpha: 0.82),
+                          ),
+                        ],
+                        if (bio.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            bio,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.78),
+                                ),
+                          ),
+                        ],
+                        if (country.isNotEmpty || birthYear.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              if (country.isNotEmpty)
+                                _BannerFact(
+                                  icon: Icons.public_rounded,
+                                  label: country,
+                                ),
+                              if (country.isNotEmpty && birthYear.isNotEmpty)
+                                const SizedBox(width: 8),
+                              if (birthYear.isNotEmpty)
+                                _BannerFact(
+                                  icon: Icons.cake_rounded,
+                                  label: birthYear,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildManageGroup(AnimeWitcherProfile profile, bool busy) {
     final hasPassword =
         profile.hasPasswordProvider ||
         (profile.providerIds.isEmpty &&
             profile.signInMethod == AnimeWitcherSignInMethod.email);
-    return Column(
+    return SettingsGroup(
+      title: appText(
+        context,
+        english: 'Manage account',
+        arabic: 'إدارة الحساب',
+      ),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            LayoutConstants.spacingLg,
-            LayoutConstants.spacingMd,
-            LayoutConstants.spacingLg,
-            LayoutConstants.spacingLg,
-          ),
-          child: Column(
-            children: [
-              SizedBox(
-                height: 214,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned.fill(
-                      bottom: 46,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: coverUrl.isEmpty
-                            ? DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      colors.primaryContainer,
-                                      colors.secondaryContainer,
-                                    ],
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.landscape_rounded,
-                                  size: 56,
-                                  color: colors.onPrimaryContainer.withValues(
-                                    alpha: 0.5,
-                                  ),
-                                ),
-                              )
-                            : Image.network(
-                                coverUrl,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                errorBuilder: (_, _, _) => DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: colors.primaryContainer,
-                                  ),
-                                  child: Icon(
-                                    Icons.landscape_rounded,
-                                    size: 56,
-                                    color: colors.onPrimaryContainer,
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: CircleAvatar(
-                          radius: 55,
-                          backgroundColor: colors.primaryContainer,
-                          foregroundImage: photoUrl.isEmpty
-                              ? null
-                              : NetworkImage(photoUrl),
-                          onForegroundImageError: photoUrl.isEmpty
-                              ? null
-                              : (_, _) {},
-                          child: Icon(
-                            Icons.person_rounded,
-                            size: 52,
-                            color: colors.onPrimaryContainer,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: LayoutConstants.spacingSm),
-              Text(
-                profile.userName ?? profile.email ?? 'AnimeWitcher',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (profile.email != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  profile.email!,
-                  textDirection: TextDirection.ltr,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              ],
-              if (bio.isNotEmpty) ...[
-                const SizedBox(height: LayoutConstants.spacingSm),
-                Text(
-                  bio,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-              if (country.isNotEmpty || birthYear.isNotEmpty) ...[
-                const SizedBox(height: LayoutConstants.spacingMd),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: LayoutConstants.spacingSm,
-                  runSpacing: LayoutConstants.spacingSm,
-                  children: [
-                    if (country.isNotEmpty)
-                      Chip(
-                        avatar: const Icon(Icons.public_rounded, size: 18),
-                        label: Text(country),
-                      ),
-                    if (birthYear.isNotEmpty)
-                      Chip(
-                        avatar: const Icon(Icons.cake_rounded, size: 18),
-                        label: Text(birthYear),
-                      ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-        SettingsGroup(
+        SettingsTile(
+          icon: Icons.manage_accounts_rounded,
           title: appText(
             context,
-            english: 'Manage account',
-            arabic: 'إدارة الحساب',
+            english: 'Edit profile',
+            arabic: 'تعديل الملف الشخصي',
           ),
-          children: [
-            SettingsTile(
-              icon: Icons.manage_accounts_rounded,
-              title: appText(
-                context,
-                english: 'Edit profile',
-                arabic: 'تعديل الملف الشخصي',
-              ),
-              subtitle: appText(
-                context,
-                english: 'Picture, cover, name, bio, country, and birth year',
-                arabic: 'الصورة والغلاف والاسم والنبذة والدولة وسنة الميلاد',
-              ),
-              onTap: busy ? null : () => _openProfileEditor(profile),
-            ),
-            SettingsTile(
-              icon: Icons.privacy_tip_outlined,
-              title: appText(
-                context,
-                english: 'Privacy and content',
-                arabic: 'الخصوصية والمحتوى',
-              ),
-              subtitle: appText(
-                context,
-                english: 'Profile visibility and ecchi content filtering',
-                arabic: 'ظهور الملف الشخصي وفلترة محتوى الإيتشي',
-              ),
-              onTap: busy ? null : () => _openPrivacySettings(profile),
-            ),
-            SettingsTile(
-              icon: Icons.forum_rounded,
-              title: appText(
-                context,
-                english: 'My comments',
-                arabic: 'تعليقاتي',
-              ),
-              subtitle: appText(
-                context,
-                english: 'Edit, delete, or disable replies',
-                arabic: 'تعديل التعليقات أو حذفها أو منع الردود',
-              ),
-              onTap: busy ? null : _openMyComments,
-            ),
-            SettingsTile(
-              icon: Icons.rate_review_outlined,
-              title: appText(
-                context,
-                english: 'My reviews',
-                arabic: 'مراجعاتي',
-              ),
-              subtitle: appText(
-                context,
-                english: 'Edit, delete, or disable replies on your reviews',
-                arabic: 'تعديل المراجعات أو حذفها أو منع الردود',
-              ),
-              onTap: busy ? null : _openMyReviews,
-            ),
-            SettingsTile(
-              icon: Icons.alternate_email_rounded,
-              title: appText(
-                context,
-                english: 'Change email',
-                arabic: 'تغيير البريد الإلكتروني',
-              ),
-              subtitle: appText(
-                context,
-                english: 'The new address must be verified',
-                arabic: 'يجب التحقق من البريد الجديد',
-              ),
-              onTap: busy ? null : () => _openEmailEditor(profile),
-            ),
-            SettingsTile(
-              icon: Icons.password_rounded,
-              title: appText(
-                context,
-                english: hasPassword ? 'Change password' : 'Add password',
-                arabic: hasPassword ? 'تغيير كلمة المرور' : 'إضافة كلمة مرور',
-              ),
-              subtitle: appText(
-                context,
-                english: hasPassword
-                    ? 'Confirm your current password first'
-                    : 'Also sign in with email after Google verification',
-                arabic: hasPassword
-                    ? 'أكد كلمة المرور الحالية أولًا'
-                    : 'استخدم الدخول بالبريد بعد تأكيد Google',
-              ),
-              onTap: busy ? null : () => _openPasswordEditor(profile),
-            ),
-            SettingsTile(
-              icon: Icons.logout_rounded,
-              title: appText(
-                context,
-                english: 'Sign out',
-                arabic: 'تسجيل الخروج',
-              ),
-              subtitle: appText(
-                context,
-                english: 'Local data will stay on this device',
-                arabic: 'ستبقى البيانات المحلية محفوظة على هذا الجهاز',
-              ),
-              isLast: true,
-              onTap: busy ? null : _signOut,
-            ),
-          ],
+          subtitle: appText(
+            context,
+            english: 'Picture, cover, name, bio, country, and birth year',
+            arabic: 'الصورة والغلاف والاسم والنبذة والدولة وسنة الميلاد',
+          ),
+          onTap: busy ? null : () => _openProfileEditor(profile),
         ),
-        const SizedBox(height: LayoutConstants.spacingLg),
-        SettingsGroup(
+        SettingsTile(
+          icon: Icons.privacy_tip_outlined,
           title: appText(
             context,
-            english: 'Danger zone',
-            arabic: 'منطقة حساسة',
+            english: 'Privacy and content',
+            arabic: 'الخصوصية والمحتوى',
           ),
-          children: [
-            SettingsTile(
-              icon: Icons.delete_forever_rounded,
-              title: appText(
-                context,
-                english: 'Delete account',
-                arabic: 'حذف الحساب',
-              ),
-              subtitle: appText(
-                context,
-                english: 'Request permanent deletion from AnimeWitcher',
-                arabic: 'طلب حذف الحساب نهائيًا من AnimeWitcher',
-              ),
-              isLast: true,
-              onTap: busy ? null : () => _deleteAccount(profile),
-            ),
-          ],
+          subtitle: appText(
+            context,
+            english: 'Profile visibility and ecchi content filtering',
+            arabic: 'ظهور الملف الشخصي وفلترة محتوى الإيتشي',
+          ),
+          onTap: busy ? null : () => _openPrivacySettings(profile),
+        ),
+        SettingsTile(
+          icon: Icons.forum_rounded,
+          title: appText(context, english: 'My comments', arabic: 'تعليقاتي'),
+          subtitle: appText(
+            context,
+            english: 'Edit, delete, or disable replies',
+            arabic: 'تعديل التعليقات أو حذفها أو منع الردود',
+          ),
+          onTap: busy ? null : _openMyComments,
+        ),
+        SettingsTile(
+          icon: Icons.rate_review_outlined,
+          title: appText(context, english: 'My reviews', arabic: 'مراجعاتي'),
+          subtitle: appText(
+            context,
+            english: 'Edit, delete, or disable replies on your reviews',
+            arabic: 'تعديل المراجعات أو حذفها أو منع الردود',
+          ),
+          onTap: busy ? null : _openMyReviews,
+        ),
+        SettingsTile(
+          icon: Icons.alternate_email_rounded,
+          title: appText(
+            context,
+            english: 'Change email',
+            arabic: 'تغيير البريد الإلكتروني',
+          ),
+          subtitle: appText(
+            context,
+            english: 'The new address must be verified',
+            arabic: 'يجب التحقق من البريد الجديد',
+          ),
+          onTap: busy ? null : () => _openEmailEditor(profile),
+        ),
+        SettingsTile(
+          icon: Icons.password_rounded,
+          title: appText(
+            context,
+            english: hasPassword ? 'Change password' : 'Add password',
+            arabic: hasPassword ? 'تغيير كلمة المرور' : 'إضافة كلمة مرور',
+          ),
+          subtitle: appText(
+            context,
+            english: hasPassword
+                ? 'Confirm your current password first'
+                : 'Also sign in with email after Google verification',
+            arabic: hasPassword
+                ? 'أكد كلمة المرور الحالية أولًا'
+                : 'استخدم الدخول بالبريد بعد تأكيد Google',
+          ),
+          onTap: busy ? null : () => _openPasswordEditor(profile),
+        ),
+        SettingsTile(
+          icon: Icons.logout_rounded,
+          title: appText(context, english: 'Sign out', arabic: 'تسجيل الخروج'),
+          subtitle: appText(
+            context,
+            english: 'Local data will stay on this device',
+            arabic: 'ستبقى البيانات المحلية محفوظة على هذا الجهاز',
+          ),
+          isLast: true,
+          onTap: busy ? null : _signOut,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDangerGroup(AnimeWitcherProfile profile, bool busy) {
+    return SettingsGroup(
+      title: appText(context, english: 'Danger zone', arabic: 'منطقة حساسة'),
+      children: [
+        SettingsTile(
+          icon: Icons.delete_forever_rounded,
+          title: appText(
+            context,
+            english: 'Delete account',
+            arabic: 'حذف الحساب',
+          ),
+          subtitle: appText(
+            context,
+            english: 'Request permanent deletion from AnimeWitcher',
+            arabic: 'طلب حذف الحساب نهائيًا من AnimeWitcher',
+          ),
+          isLast: true,
+          onTap: busy ? null : () => _deleteAccount(profile),
         ),
       ],
     );
@@ -758,7 +822,7 @@ class _AnimeWitcherAccountScreenState
 
   Future<void> _deleteAccount(AnimeWitcherProfile profile) async {
     final displayName = profile.userName ?? profile.email ?? 'AnimeWitcher';
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         icon: Icon(
@@ -955,7 +1019,7 @@ class _AnimeWitcherAccountScreenState
   }
 
   Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
@@ -997,7 +1061,7 @@ class _AnimeWitcherAccountScreenState
 
   Future<void> _showPasswordResetDialog() async {
     final controller = TextEditingController(text: _emailController.text);
-    final email = await showDialog<String>(
+    final email = await showGlassDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
@@ -1124,6 +1188,101 @@ class _ErrorBanner extends StatelessWidget {
             child: Text(
               message,
               style: TextStyle(color: colors.onErrorContainer),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// An address kept covered until its owner asks for it.
+///
+/// This page is opened in front of other people — a shared screen, a stream,
+/// a screenshot of a bug — and an address on it is the one thing here worth
+/// keeping to yourself. It starts hidden and the eye shows it.
+class _RevealableEmail extends StatefulWidget {
+  const _RevealableEmail({required this.email, this.color});
+
+  final String email;
+
+  /// Set when the address is drawn over artwork rather than over a surface.
+  final Color? color;
+
+  @override
+  State<_RevealableEmail> createState() => _RevealableEmailState();
+}
+
+class _RevealableEmailState extends State<_RevealableEmail> {
+  bool _shown = false;
+
+  /// Enough of it to recognise as yours, not enough to read out: the first
+  /// letter and the domain, with the rest covered.
+  String get _masked {
+    final at = widget.email.indexOf('@');
+    if (at <= 0) return '•' * widget.email.length.clamp(4, 12);
+    final name = widget.email.substring(0, at);
+    final domain = widget.email.substring(at);
+    final hidden = '•' * (name.length - 1).clamp(3, 8);
+    return '${name[0]}$hidden$domain';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final color = widget.color ?? colors.onSurfaceVariant;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _shown ? widget.email : _masked,
+          textDirection: TextDirection.ltr,
+          style: TextStyle(color: color),
+        ),
+        const SizedBox(width: 6),
+        IconButton(
+          onPressed: () => setState(() => _shown = !_shown),
+          iconSize: 18,
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          tooltip: _shown
+              ? appText(context, english: 'Hide email', arabic: 'إخفاء البريد')
+              : appText(context, english: 'Show email', arabic: 'إظهار البريد'),
+          icon: Icon(
+            _shown ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One fact about the account, worn on the cover banner.
+class _BannerFact extends StatelessWidget {
+  const _BannerFact({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: Colors.white.withValues(alpha: 0.9)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Colors.white.withValues(alpha: 0.9),
             ),
           ),
         ],

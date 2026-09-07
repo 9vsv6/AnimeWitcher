@@ -508,7 +508,23 @@ class AnimeWitcherPlayerControlsState
   Future<void> _playPreviousEpisodeWithSourcePicker() =>
       _playAdjacentEpisodeWithSourcePicker(next: false);
 
-  Future<void> _playAdjacentEpisodeWithSourcePicker({required bool next}) async {
+  /// Jumps past a run of filler to the next episode that carries story.
+  Future<void> _playStoryEpisodeWithSourcePicker() async {
+    final controller = ref.read(playerControllerProvider.notifier);
+    final episode = controller.nextStoryEpisodeOrNull;
+    final item = controller.multimediaItem;
+    if (episode == null || item == null) return;
+
+    final selected = await ref
+        .read(playbackLauncherProvider)
+        .chooseSourceForItem(context, item, episode.url, episode: episode);
+    if (selected == null || !mounted) return;
+    await controller.loadEpisode(episode, selectedSource: selected);
+  }
+
+  Future<void> _playAdjacentEpisodeWithSourcePicker({
+    required bool next,
+  }) async {
     final controller = ref.read(playerControllerProvider.notifier);
     final episode = next ? controller.nextEpisode : controller.previousEpisode;
     final item = controller.multimediaItem;
@@ -1037,6 +1053,21 @@ class AnimeWitcherPlayerControlsState
     final isSeries = playerNotifier.isSeries;
     final previousEpisode = playerNotifier.previousEpisode;
     final nextEpisode = playerNotifier.nextEpisode;
+    // The note is the viewer's to act on; the setting decides whether they
+    // are told at all, and "skip" has already stepped past it by the time
+    // the card is built.
+    final fillerBehaviour =
+        ref.watch(playerSettingsProvider).asData?.value.fillerBehaviour ??
+        FillerBehaviour.note;
+    final showsFillerNote =
+        fillerBehaviour == FillerBehaviour.note &&
+        (nextEpisode?.isFiller ?? false);
+    final storyEpisode = showsFillerNote
+        ? playerNotifier.nextStoryEpisodeOrNull
+        : null;
+    final storyEpisodeLabel = storyEpisode == null
+        ? null
+        : 'الحلقة ${storyEpisode.episode}';
     final hasEpisodePicker = playerNotifier.hasEpisodePicker;
     final episodeLabel = _buildEpisodeLine(
       context,
@@ -1254,6 +1285,11 @@ class AnimeWitcherPlayerControlsState
                     nextEpisodeDescription: nextEpDescription,
                     nextEpisodeIsFinal: nextEpIsFinal,
                     nextEpisodeServerName: nextEpServerName,
+                    nextEpisodeIsFiller: showsFillerNote,
+                    skipFillerLabel: showsFillerNote ? storyEpisodeLabel : null,
+                    onSkipFiller: showsFillerNote && storyEpisodeLabel != null
+                        ? () => unawaited(_playStoryEpisodeWithSourcePicker())
+                        : null,
                     onPlayNext: () =>
                         unawaited(_playNextEpisodeWithSourcePicker()),
                     onDismiss: () => ref

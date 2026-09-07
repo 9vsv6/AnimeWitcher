@@ -13,6 +13,7 @@ import 'package:animewitcher/features/comments/presentation/animewitcher_comment
 import 'package:animewitcher/core/storage/history_repository.dart';
 import 'package:animewitcher/core/storage/episode_watch_repository.dart';
 import 'package:animewitcher/core/services/download_service.dart';
+import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/utils/artwork_quality.dart';
 import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:animewitcher/core/utils/image_fallbacks.dart';
@@ -23,6 +24,7 @@ import '../../../library/presentation/history_provider.dart';
 import '../details_controller.dart';
 import '../download_launcher.dart';
 import '../downloaded_file_provider.dart';
+import 'episode_action_chip.dart';
 import 'download_progress_dialog.dart';
 import 'download_management_dialog.dart';
 import '../../../../l10n/generated/app_localizations.dart';
@@ -45,11 +47,37 @@ class EpisodeCard extends HookConsumerWidget {
   final MultimediaItem parentItem;
   final double? width;
 
+  /// Drops the panel and the outline, leaving the still and the words on the
+  /// page itself.
+  ///
+  /// A column of cards down a whole page is a column of boxes; read as a
+  /// list, the episodes want nothing drawn around them. Being chosen or
+  /// focused still fills the row, since that has to be visible.
+  final bool plain;
+
+  /// Whether the episode's own summary is shown under its title.
+  ///
+  /// A row to flick along has a fixed height, and a summary that runs to two
+  /// lines on one episode and none on the next would either overflow it or
+  /// leave it padded out for the worst case.
+  final bool showDescription;
+
+  /// Stacks the still above the words instead of setting them side by side.
+  ///
+  /// Side by side is right for a list read top to bottom, where the still is
+  /// a thumbnail beside the title. In a row to flick along or a wall of
+  /// cards, the still is the thing being looked at and wants the full width
+  /// of the card, with the title underneath it.
+  final bool vertical;
+
   const EpisodeCard({
     super.key,
     required this.episode,
     required this.parentItem,
     this.width,
+    this.plain = false,
+    this.vertical = false,
+    this.showDescription = true,
   });
 
   @override
@@ -298,6 +326,8 @@ class EpisodeCard extends HookConsumerWidget {
                   ? primary.withValues(alpha: 0.24)
                   : isFocused.value
                   ? primary.withValues(alpha: 0.18)
+                  : plain
+                  ? Colors.transparent
                   : isWatched
                   ? watchedCardColor
                   : normalCardColor,
@@ -305,6 +335,8 @@ class EpisodeCard extends HookConsumerWidget {
               border: Border.all(
                 color: isSelected || isFocused.value
                     ? primary
+                    : plain
+                    ? Colors.transparent
                     : Theme.of(context).dividerColor.withValues(
                         alpha: Theme.of(context).brightness == Brightness.dark
                             ? 0.1
@@ -319,16 +351,27 @@ class EpisodeCard extends HookConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (vertical)
+                  _buildThumbnail(
+                    context,
+                    displayedProgress,
+                    statusBadge,
+                    isWatched: isWatched,
+                    width: double.infinity,
+                  ),
+                if (vertical) const SizedBox(height: LayoutConstants.spacingSm),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildThumbnail(
-                      context,
-                      displayedProgress,
-                      statusBadge,
-                      isWatched: isWatched,
-                    ),
-                    const SizedBox(width: LayoutConstants.spacingMd),
+                    if (!vertical) ...[
+                      _buildThumbnail(
+                        context,
+                        displayedProgress,
+                        statusBadge,
+                        isWatched: isWatched,
+                      ),
+                      const SizedBox(width: LayoutConstants.spacingMd),
+                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,7 +445,8 @@ class EpisodeCard extends HookConsumerWidget {
                       ),
                   ],
                 ),
-                if (episode.description != null &&
+                if (showDescription &&
+                    episode.description != null &&
                     episode.description!.isNotEmpty) ...[
                   const SizedBox(height: LayoutConstants.spacingSm),
                   Padding(
@@ -469,18 +513,12 @@ class EpisodeCard extends HookConsumerWidget {
         : null;
     if (commentsTarget == null) return downloadAction;
 
-    final commentsButton = IconButton(
+    final commentsButton = EpisodeActionChip(
       tooltip:
           Localizations.localeOf(context).languageCode.toLowerCase() == 'ar'
           ? 'تعليقات الحلقة'
           : 'Episode comments',
-      icon: Icon(
-        Icons.chat_bubble_outline_rounded,
-        size: 27,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      icon: Icons.forum_outlined,
       onPressed: () {
         Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -494,7 +532,7 @@ class EpisodeCard extends HookConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         downloadAction,
-        const SizedBox(height: 2),
+        const SizedBox(height: 8),
         ExcludeFocus(child: commentsButton),
       ],
     );
@@ -510,14 +548,10 @@ class EpisodeCard extends HookConsumerWidget {
     MultimediaItem? details,
   ) {
     if (downloadedFile != null) {
-      return IconButton(
-        icon: const Icon(
-          Icons.download_done_sharp,
-          color: Colors.green,
-          size: 32,
-        ),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
+      return EpisodeActionChip(
+        tooltip: appText(context, english: 'Downloaded', arabic: 'تم التنزيل'),
+        icon: Icons.download_done_rounded,
+        color: const Color(0xFF4CAF50),
         onPressed: () {
           DownloadManagementDialog.show(
             context,
@@ -528,52 +562,51 @@ class EpisodeCard extends HookConsumerWidget {
         },
       );
     } else if (isDownloading) {
-      return SizedBox(
-        width: 32,
-        height: 32,
-        child: InkWell(
-          onTap: () => DownloadProgressDialog.show(
-            context,
-            _downloadDialogTitle(parentItem, episode),
-            episode.url,
-          ),
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: downloadProgressData?.status == TaskStatus.paused
-                ? Icon(
-                    Icons.pause_rounded,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  )
-                : Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: downloadProgress > 0 ? downloadProgress : null,
-                        strokeWidth: 2,
+      return EpisodeActionChip(
+        tooltip: appText(
+          context,
+          english: 'Downloading',
+          arabic: 'جارٍ التنزيل',
+        ),
+        onPressed: () => DownloadProgressDialog.show(
+          context,
+          _downloadDialogTitle(parentItem, episode),
+          episode.url,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(4.0),
+          child: downloadProgressData?.status == TaskStatus.paused
+              ? Icon(
+                  Icons.pause_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                )
+              : Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      value: downloadProgress > 0 ? downloadProgress : null,
+                      strokeWidth: 2,
+                    ),
+                    Text(
+                      "${(downloadProgress * 100).toInt()}%", // Display the percentage
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
-                      Text(
-                        "${(downloadProgress * 100).toInt()}%", // Display the percentage
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
+                    ),
+                  ],
+                ),
         ),
       );
     } else {
-      return IconButton(
-        icon: Icon(
-          Icons.file_download_outlined,
-          size: 32,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+      return EpisodeActionChip(
+        tooltip: appText(
+          context,
+          english: 'Download episode',
+          arabic: 'تنزيل الحلقة',
         ),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
+        icon: Icons.save_alt_rounded,
         onPressed: () {
           ref
               .read(downloadLauncherProvider)
@@ -611,6 +644,7 @@ class EpisodeCard extends HookConsumerWidget {
     double progress,
     String? statusBadge, {
     required bool isWatched,
+    double? width,
   }) {
     final episodePosterUrl = AppImageFallbacks.optional(episode.posterUrl);
     // Prefer the episode still (AniZip). Falling back through CachedNetworkImage
@@ -657,7 +691,7 @@ class EpisodeCard extends HookConsumerWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
-            width: 140,
+            width: width ?? 140,
             child: AspectRatio(
               aspectRatio: 16 / 9,
               child: buildThumbnailImage(),
