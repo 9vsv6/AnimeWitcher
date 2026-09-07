@@ -8,6 +8,17 @@ const int kDownloadPartsAuto = 0;
 const int kDownloadPartsMin = 1;
 const int kDownloadPartsMax = 16;
 const int kDownloadGlobalConnectionBudget = 16;
+
+/// Gopeed lets an idle connection steal half of a slow connection's remaining
+/// range. Native URLSession/background_downloader children cannot safely change
+/// their Range header after launch, so AnimeWitcher uses a conservative work
+/// queue instead: large transfers are pre-split into at most twice as many
+/// immutable work units while no more than [kDownloadPartsMax] are active.
+/// Finished connections can then pick up queued tail work without touching an
+/// in-flight native request.
+const int kDownloadWorkUnitsMax = kDownloadPartsMax * 2;
+const int kDownloadTailBalanceMinUnitBytes = 512 * 1024;
+
 const List<int> kDownloadPartChoices = <int>[
   0,
   1,
@@ -74,6 +85,29 @@ int selectAdaptiveDownloadParts({
   if (totalBytes < 400 * mib) return 4;
   if (totalBytes < 800 * mib) return 8;
   return 16;
+}
+
+/// Number of immutable byte ranges kept in the tail work queue.
+///
+/// This never raises the active connection ceiling. It only creates spare work
+/// for a connection that finishes early. Extra units are used only when they
+/// remain at least 512 KiB, matching Gopeed's minimum useful stolen range. For
+/// tiny files we preserve the requested connection split instead of creating
+/// even smaller extra ranges.
+int selectDownloadWorkUnitCount({
+  required int connections,
+  required int totalBytes,
+}) {
+  final active = connections
+      .clamp(kDownloadPartsMin, kDownloadPartsMax)
+      .toInt();
+  if (active <= 1 || totalBytes <= 0) return active;
+
+  final desired = (active * 2)
+      .clamp(active, kDownloadWorkUnitsMax)
+      .toInt();
+  final sizeBound = totalBytes ~/ kDownloadTailBalanceMinUnitBytes;
+  return sizeBound.clamp(active, desired).toInt();
 }
 
 const String kLogicalDownloadGroup = 'downloads';
