@@ -41,7 +41,6 @@ const Color kImdbBadgeYellow = Color(0xFFF5C518);
 const String kRateLoginRequiredToast = 'يجب تسجيل الدخول';
 const String kReviewsClosedToast = 'تم ايقاف المراجعات علي هذا الأنمي';
 
-
 bool hasDetailsRatingsSummary(MultimediaItem item) {
   final ratings = AnimeDetailsRatings.fromItem(item);
   return ratings.witcherScore != null ||
@@ -68,12 +67,13 @@ class DetailsRatingsSummary extends StatelessWidget {
     final isImdb = source == ExternalRatingSource.imdb;
     final externalBadgeColor = isImdb ? kImdbBadgeYellow : kMalBadgeBlue;
     final externalBadgeTextColor = isImdb ? Colors.black : Colors.white;
-    final scoreStyle = theme.textTheme.labelMedium?.copyWith(
-      color: colors.onSurface,
-      fontSize: 11,
-      fontWeight: FontWeight.w800,
-      height: 1,
+    final scoreStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: colors.onSurface.withValues(alpha: 0.76),
+      fontWeight: FontWeight.w700,
+      height: 1.2,
     );
+    final scoreFontSize = scoreStyle?.fontSize ?? 14;
+    final badgeFontSize = (scoreFontSize - 3).clamp(10.0, 12.0).toDouble();
 
     return Directionality(
       textDirection: TextDirection.ltr,
@@ -94,12 +94,12 @@ class DetailsRatingsSummary extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.star_rounded,
-                          size: 14,
+                          size: scoreFontSize + 3,
                           color: AppTheme.animeWitcherAccent,
                         ),
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 4),
                         Text(formatRatingScore(witcherScore!), style: scoreStyle),
                       ],
                     ),
@@ -109,10 +109,9 @@ class DetailsRatingsSummary extends StatelessWidget {
                 const SizedBox(width: 5),
                 Text(
                   '•',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colors.onSurfaceVariant.withValues(alpha: 0.72),
-                    fontWeight: FontWeight.w700,
-                    height: 1,
+                  style: scoreStyle?.copyWith(
+                    color: colors.onSurfaceVariant.withValues(alpha: 0.55),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(width: 5),
@@ -128,25 +127,25 @@ class DetailsRatingsSummary extends StatelessWidget {
                         Container(
                           key: kDetailsRatingsCompactExternalBadgeKey,
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 1.5,
+                            horizontal: 5,
+                            vertical: 2.5,
                           ),
                           decoration: BoxDecoration(
                             color: externalBadgeColor,
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
                             isImdb ? 'IMDb' : 'MAL',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: externalBadgeTextColor,
-                              fontSize: 8.5,
+                              fontSize: badgeFontSize,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.3,
                               height: 1,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 4),
                         Text(formatRatingScore(externalScore!), style: scoreStyle),
                       ],
                     ),
