@@ -233,6 +233,40 @@ class _CharacterDetailsScreenState
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  List<AppleLiquidGlassToolbarButton> _buildHeaderButtons(
+    BuildContext context,
+  ) {
+    const favoriteRed = Color(0xFFFF3B30);
+    final colors = Theme.of(context).colorScheme;
+    final isArabic = _isArabic(context);
+    final hasDocument = _document != null;
+
+    return <AppleLiquidGlassToolbarButton>[
+      AppleLiquidGlassToolbarButton(
+        tooltip: isArabic ? 'التعليقات' : 'Comments',
+        icon: Icons.chat_bubble_outline_rounded,
+        color: colors.onSurface,
+        onPressed: hasDocument ? _openComments : null,
+      ),
+      AppleLiquidGlassToolbarButton(
+        tooltip: _favorite
+            ? (isArabic ? 'إزالة من المفضلة' : 'Remove favorite')
+            : (isArabic ? 'إضافة إلى المفضلة' : 'Add to favorites'),
+        icon: _favorite
+            ? Icons.favorite_rounded
+            : Icons.favorite_border_rounded,
+        color: _favorite ? favoriteRed : colors.onSurface,
+        onPressed: _favoriteBusy ? null : _toggleFavorite,
+      ),
+      AppleLiquidGlassToolbarButton(
+        tooltip: isArabic ? 'المزيد' : 'More',
+        icon: Icons.more_horiz_rounded,
+        color: colors.onSurface,
+        onPressed: hasDocument ? _openMal : null,
+      ),
+    ];
+  }
+
   void _openAnime(MultimediaItem item) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -262,6 +296,8 @@ class _CharacterDetailsScreenState
         : (widget.initialName ?? '');
     final imageUrl = document?.imageUrl ?? widget.initialImageUrl;
     final likes = document?.likes ?? 0;
+    final colors = Theme.of(context).colorScheme;
+    final headerButtons = _buildHeaderButtons(context);
 
     return Scaffold(
       appBar: PreferredSize(
@@ -271,29 +307,32 @@ class _CharacterDetailsScreenState
           child: AppBar(
             automaticallyImplyLeading: false,
             centerTitle: false,
-            titleSpacing: 16,
+            titleSpacing: 0,
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
-              child: Align(
-                alignment: isArabic
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    name.isEmpty
-                        ? (isArabic ? 'الشخصية' : 'Character')
-                        : name,
-                  ),
-                ),
-              ),
+              backForegroundColor: colors.onSurface,
+              backFallbackColor: colors.surfaceContainerHigh,
+              trailingButtons: headerButtons,
+              child: const SizedBox.shrink(),
             ),
             leading: appleUsesPersistentLiquidGlassHeader
                 ? null
                 : AppleLiquidGlassBackButton(
                     onPressed: () => Navigator.of(context).pop(),
                   ),
+            actions: appleUsesPersistentLiquidGlassHeader
+                ? const <Widget>[]
+                : <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: AppleLiquidGlassActionGroup(
+                        height: 46,
+                        fallbackColor: colors.surfaceContainerHigh,
+                        children: headerButtons,
+                      ),
+                    ),
+                  ],
             elevation: 0,
           ),
         ),
@@ -379,32 +418,6 @@ class _CharacterDetailsScreenState
                                   .colorScheme
                                   .onSurfaceVariant,
                             ),
-                      ),
-                      const SizedBox(height: 20),
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _CharacterActionButton(
-                            icon: Icons.chat_bubble_outline_rounded,
-                            label: isArabic ? 'التعليقات' : 'Comments',
-                            onPressed: _openComments,
-                          ),
-                          _CharacterActionButton(
-                            icon: _favorite
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            label: isArabic ? 'المفضلة' : 'Favorite',
-                            selected: _favorite,
-                            onPressed: _favoriteBusy ? null : _toggleFavorite,
-                          ),
-                          _CharacterActionButton(
-                            icon: Icons.open_in_new_rounded,
-                            label: isArabic ? 'المزيد' : 'More',
-                            onPressed: _openMal,
-                          ),
-                        ],
                       ),
                       const SizedBox(height: 28),
                       if (_animesLoading)
@@ -501,38 +514,3 @@ class _CharacterDetailsScreenState
     );
   }
 }
-
-class _CharacterActionButton extends StatelessWidget {
-  const _CharacterActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.selected = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return selected
-        ? FilledButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: 18),
-            label: Text(label),
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.primary,
-              foregroundColor: colors.onPrimary,
-            ),
-          )
-        : FilledButton.tonalIcon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: 18),
-            label: Text(label),
-          );
-  }
-}
-
