@@ -96,6 +96,10 @@ end
 
 post_install do |installer|
   patch_background_downloader_chunk_updates
+  require_relative 'downloader_resume_patch'
+  patch_background_downloader_resumable_failures(File.expand_path(
+    '.symlinks/plugins/background_downloader/ios/background_downloader/Sources/background_downloader', __dir__
+  ))
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
   end

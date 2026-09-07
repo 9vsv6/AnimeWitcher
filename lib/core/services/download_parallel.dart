@@ -31,8 +31,11 @@ int selectAdaptiveDownloadParts({
   return 5;
 }
 
+const kPersistentDownloadChunkGroup = 'animewitcher_parts';
+
 bool isInternalDownloaderChunk(Task task) =>
-    task.group == FileDownloader.chunkGroup;
+    task.group == FileDownloader.chunkGroup ||
+    task.group == kPersistentDownloadChunkGroup;
 
 bool isLogicalEpisodeDownloadTask(Task task) =>
     task is DownloadTask && !isInternalDownloaderChunk(task);
