@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/account/animewitcher_character_models.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/network/dio_client_provider.dart';
+import '../../../../core/utils/catalog_metadata_enricher.dart';
+import '../../../../core/utils/catalog_rating.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
@@ -63,7 +67,7 @@ ExtraTabGridPreview extraTabGridPreview(
   );
 }
 
-class DetailsPosterGrid extends StatelessWidget {
+class DetailsPosterGrid extends ConsumerStatefulWidget {
   const DetailsPosterGrid({
     super.key,
     required this.items,
@@ -82,13 +86,68 @@ class DetailsPosterGrid extends StatelessWidget {
   final String keyPrefix;
 
   @override
+  ConsumerState<DetailsPosterGrid> createState() => _DetailsPosterGridState();
+}
+
+class _DetailsPosterGridState extends ConsumerState<DetailsPosterGrid> {
+  late List<MultimediaItem> _displayItems;
+  late String _inputSignature;
+  var _requestGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayItems = widget.items;
+    _inputSignature = _signature(widget.items);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _enrichMetadata());
+  }
+
+  @override
+  void didUpdateWidget(covariant DetailsPosterGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final signature = _signature(widget.items);
+    if (signature == _inputSignature) return;
+    _inputSignature = signature;
+    _displayItems = widget.items;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _enrichMetadata());
+  }
+
+  String _signature(List<MultimediaItem> items) {
+    return items.map((item) {
+      final rating = preferredCatalogRating(item);
+      return '${item.url}|${item.year ?? ''}|${rating?.score ?? ''}|${rating?.source.name ?? ''}';
+    }).join('\n');
+  }
+
+  Future<void> _enrichMetadata() async {
+    if (!mounted) return;
+    final source = List<MultimediaItem>.from(widget.items);
+    final needsMetadata = source.any(
+      (item) => item.year == null || preferredCatalogRating(item) == null,
+    );
+    if (!needsMetadata) return;
+
+    final generation = ++_requestGeneration;
+    final enriched = await CatalogMetadataEnricher.enrich(
+      ref.read(dioClientProvider),
+      source,
+    );
+    if (!mounted || generation != _requestGeneration) return;
+    final enrichedSignature = _signature(enriched);
+    if (enrichedSignature == _signature(_displayItems)) return;
+    setState(() {
+      _displayItems = enriched;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDesktop = context.isDesktop;
-    final extra = hasMore && onShowMore != null ? 1 : 0;
+    final extra = widget.hasMore && widget.onShowMore != null ? 1 : 0;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: GridView.builder(
-        key: ValueKey('$keyPrefix-grid'),
+        key: ValueKey('${widget.keyPrefix}-grid'),
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         padding: EdgeInsets.zero,
@@ -110,21 +169,21 @@ class DetailsPosterGrid extends StatelessWidget {
           handsetPortraitCrossAxisCount:
               MultimediaCardLayout.handsetPortraitGridColumns,
         ),
-        itemCount: items.length + extra,
+        itemCount: _displayItems.length + extra,
         itemBuilder: (context, index) {
-          if (index >= items.length) {
+          if (index >= _displayItems.length) {
             return DetailsShowMoreTile(
-              key: ValueKey('$keyPrefix-more'),
-              onTap: onShowMore!,
+              key: ValueKey('${widget.keyPrefix}-more'),
+              onTap: widget.onShowMore!,
             );
           }
-          final item = items[index];
+          final item = _displayItems[index];
           return MultimediaCard.fromItem(
-            key: ValueKey('$keyPrefix-$index'),
+            key: ValueKey('${widget.keyPrefix}-$index'),
             item: item,
-            heroTag: '${keyPrefix}_${item.url}_$index',
-            showRelationBadge: showRelationBadge,
-            onTap: () => onItemTap(item),
+            heroTag: '${widget.keyPrefix}_${item.url}_$index',
+            showRelationBadge: widget.showRelationBadge,
+            onTap: () => widget.onItemTap(item),
           );
         },
       ),
