@@ -8,6 +8,27 @@ class RunnerTests: XCTestCase {
     super.tearDown()
   }
 
+  func testNativePartsDoNotOccupyEpisodeSlotsOrCompleteEpisodes() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: [
+      "maxConcurrent": 1, "transferringTaskIds": ["parent"], "waiters": [],
+    ])
+    let session = URLSession(configuration: .ephemeral)
+    defer { session.invalidateAndCancel() }
+    for group in ["chunk", "animewitcher_parts"] {
+      let task = session.downloadTask(with: URL(string: "https://127.0.0.1:1/part")!)
+      task.taskDescription = "{\"taskId\":\"part\",\"group\":\"\(group)\"}"
+      XCTAssertTrue(DownloadNativeWaitingQueue.isDownloadPart(task))
+      DownloadNativeWaitingQueue.handleBytesWritten(task, totalWritten: 10, totalExpected: 20)
+      DownloadNativeWaitingQueue.markPluginTaskCompleted(task: task)
+      DownloadNativeWaitingQueue.parkFailedTask(task: task)
+    }
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.transferringTaskIds, ["parent"])
+    XCTAssertFalse(state.completedTaskIds.contains("part"))
+    XCTAssertFalse(state.pausedTaskIds.contains("part"))
+  }
+
   func testWaiterKeepsResumeDataAndSavedProgress() {
     DownloadNativeWaitingQueue.resetForTests()
     DownloadNativeWaitingQueue.persist(from: [
@@ -36,6 +57,8 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(waiter.savedExpectedBytes, 8000)
     XCTAssertEqual(waiter.transferredBytes, 3360)
   }
+
+  func testIncompleteWaiterPayloadIsRejected() {
     DownloadNativeWaitingQueue.resetForTests()
     DownloadNativeWaitingQueue.persist(from: [
       "maxConcurrent": 1,

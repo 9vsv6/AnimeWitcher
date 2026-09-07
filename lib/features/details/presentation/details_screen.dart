@@ -2204,6 +2204,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   DetailsCountdownAndStory(
                     item: item,
                     storyCard: _buildSynopsisAndGenres(context, item, l10n),
+                    showRatingsSummary: false,
                   ),
                   const SizedBox(height: 28),
                   AnimeInformationSection(item: item),

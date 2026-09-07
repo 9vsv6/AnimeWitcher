@@ -1116,6 +1116,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     'tags',
     'mal_id',
     'malId',
+    'imdb_rate',
+    'imdbRate',
+    'imdb_score',
+    'imdbScore',
     'rating',
     'dubbed',
     'poster',
@@ -1157,6 +1161,10 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     'type',
     'poster',
     'details',
+    'imdb_rate',
+    'imdbRate',
+    'imdb_score',
+    'imdbScore',
     'cover_uri',
     'tags',
   ];
@@ -1578,6 +1586,33 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     // a list reached the player and the artwork layer without a MyAnimeList
     // id to look anything up with.
     final hitSync = <String, String>{};
+    final hitDetails = _map(source['details']);
+    final hitRating = _map(source['rating']);
+    void putHitSync(String key, dynamic raw) {
+      final value = _text(raw);
+      if (value.isNotEmpty) hitSync[key] = value;
+    }
+
+    // Keep the same source priority used by the details screen available on
+    // catalog cards without another HTTP request: MAL -> IMDb -> AnimeWitcher.
+    putHitSync('awMalScore', hitDetails['mal_mean'] ?? hitDetails['mal_score']);
+    putHitSync(
+      'awImdbScore',
+      hitDetails['imdb_rate'] ??
+          hitDetails['imdbRate'] ??
+          hitDetails['imdb_score'] ??
+          hitDetails['imdbScore'] ??
+          hitRating['imdb_rate'] ??
+          hitRating['imdbRate'] ??
+          hitRating['imdb_score'] ??
+          hitRating['imdbScore'] ??
+          source['imdb_rate'] ??
+          source['imdbRate'] ??
+          source['imdb_score'] ??
+          source['imdbScore'],
+    );
+    putHitSync('awScore', hitRating['rate']);
+
     final hitMalId = _malId(source);
     if (hitMalId > 0) {
       hitSync['malId'] = '$hitMalId';
@@ -2075,6 +2110,47 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
       equalTo: value,
       offset: safeOffset,
       limit: safeLimit,
+    );
+  }
+
+  /// Loads anime that belong to exactly the same AnimeWitcher studio.
+  /// Uses the studio facet directly instead of a fuzzy text search.
+  Future<ProviderMediaPage> getStudioPage(
+    String studio, {
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    final value = studio.trim();
+    final safeOffset = offset < 0 ? 0 : offset;
+    if (value.isEmpty) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
+
+    await _refreshRemoteConstants();
+    if (_algoliaBrowseApiKey.isEmpty) {
+      throw StateError('AnimeWitcher studio catalog request failed.');
+    }
+
+    final safeLimit = limit.clamp(1, _mainListBrowseHitsPerPage).toInt();
+    final pageNumber = safeOffset ~/ safeLimit;
+    final payload = await _algoliaBrowseGet(
+      index: 'series',
+      appId: _algoliaAppId,
+      apiKey: _algoliaBrowseApiKey,
+      page: pageNumber,
+      hitsPerPage: safeLimit,
+      filters: _filterGroup('details.studio', <String>[value], 'OR'),
+      attributes: _searchAttributes,
+      throwOnFailure: true,
+    );
+    return _mediaPageFromAlgolia(
+      payload,
+      pageNumber: pageNumber,
+      hitsPerPage: safeLimit,
     );
   }
 

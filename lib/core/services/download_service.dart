@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:background_downloader/background_downloader.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -26,6 +27,8 @@ import '../utils/download_cleanup.dart';
 import '../utils/episode_label.dart';
 import 'download_concurrency.dart';
 import 'download_parallel.dart';
+import 'persistent_parallel_download.dart';
+import 'download_range_transfer.dart';
 import 'download_continued_processing_service.dart';
 
 part 'download_service.g.dart';
@@ -139,6 +142,10 @@ class DownloadService {
   final _updatesController = StreamController<TaskUpdate>.broadcast();
   StreamSubscription<TaskUpdate>? _updatesSubscription;
   bool _isInitialized = false;
+  bool _disposed = false;
+  Future<void>? _initializing;
+  late final PersistentParallelDownload _parallel;
+  late final DownloadRangeTransfer _rangeTransfers;
   Future<void> _queueChain = Future<void>.value();
   final Set<String> _queueWaitingIds = {};
   final Set<String> _startingTaskIds = {};
@@ -150,6 +157,33 @@ class DownloadService {
   final Map<String, Map<String, Object>> _waitingPayloads = {};
 
   DownloadService(this._ref) : _dio = _ref.read(dioClientProvider) {
+    _rangeTransfers = DownloadRangeTransfer(_dio);
+    _parallel = PersistentParallelDownload(
+      startPart: _startPart,
+      pausePart: _pauseTransfer,
+      cancelParts: (ids) async {
+        for (final id in ids) {
+          await _rangeTransfers.stop(id);
+        }
+        await FileDownloader().cancelTasksWithIds(ids);
+        for (final id in ids) {
+          await FileDownloader().database.deleteRecordWithId(id);
+        }
+      },
+      saveRecord: (record) => FileDownloader().database.updateRecord(record),
+      recordForId: (id) => FileDownloader().database.recordForId(id),
+      onUpdate: (update) {
+        if (!_disposed) _sharedEvents.add(update);
+      },
+      onPartProgress: (parent, child, progress) {
+        if (!_disposed)
+          _handleNativeChunkUpdate(
+            parentTaskId: parent,
+            chunkTaskId: child,
+            progress: progress,
+          );
+      },
+    );
     _continuedProcessing = DownloadContinuedProcessingService(
       onSystemCancel: _cancelFromSystemUI,
       onChunkUpdate: _handleNativeChunkUpdate,
@@ -175,6 +209,8 @@ class DownloadService {
   }
 
   void dispose() {
+    _disposed = true;
+    _rangeTransfers.dispose();
     _updatesSubscription?.cancel();
     unawaited(_continuedProcessing.dispose());
     _updatesController.close();
@@ -182,7 +218,15 @@ class DownloadService {
     // lifetime and cannot be re-subscribed after cancellation.
   }
 
-  Future<void> init() async {
+  Future<void> init() => _initializing ??= _initialize().catchError((
+    Object error,
+    StackTrace stack,
+  ) {
+    _initializing = null;
+    Error.throwWithStackTrace(error, stack);
+  });
+
+  Future<void> _initialize() async {
     if (_isInitialized) {
       if (kDebugMode) debugPrint('[DownloadService] Already initialized.');
       return;
@@ -222,6 +266,7 @@ class DownloadService {
     //    then let this instance listen to that broadcast proxy.
     _fdSubscription ??= FileDownloader().updates.listen(_sharedEvents.add);
     _updatesSubscription = _sharedEvents.stream.listen((update) {
+      if (_parallel.handleUpdate(update)) return;
       if (isInternalDownloaderChunk(update.task)) return;
       final trackingUrl = update.task.metaData.isNotEmpty
           ? update.task.metaData
@@ -273,6 +318,18 @@ class DownloadService {
       }
 
       _updatesController.add(update);
+
+      if (update is TaskStatusUpdate && update.task is ParallelDownloadTask) {
+        // Custom multipart parents are not enqueued through FileDownloader,
+        // so the plugin never receives their synthetic status automatically.
+        // Updating the parent explicitly gives one notification per episode
+        // while the child parts stay silent.
+        // ignore: invalid_use_of_visible_for_testing_member
+        FileDownloader().downloaderForTesting.updateNotification(
+          update.task,
+          update.status,
+        );
+      }
 
       switch (update) {
         case TaskProgressUpdate():
@@ -458,11 +515,23 @@ class DownloadService {
     // 5. Catch up on native tasks. Do not reschedule killed tasks with a
     //    fresh enqueue — that restarts the file from byte 0. Interrupted
     //    transfers are resumed from leftover bytes below.
-    await FileDownloader().start(doRescheduleKilledTasks: false);
+    // Restore part identities before replaying native callbacks.
+    for (final record in await FileDownloader().database.allRecords()) {
+      if (record.task is ParallelDownloadTask &&
+          record.status != TaskStatus.complete) {
+        try {
+          await _parallel.restore(record.task as ParallelDownloadTask);
+        } catch (_) {}
+      }
+    }
+    await FileDownloader().start(
+      doRescheduleKilledTasks: false,
+      markDownloadedComplete: false,
+    );
 
     // 6. Restore UI rows and continue any download that was running when
     //    the process died, keeping already-written bytes.
-    await _recoverPersistedDownloads();
+    await _serializeQueue(_recoverPersistedDownloads);
 
     _isInitialized = true;
   }
@@ -502,12 +571,13 @@ class DownloadService {
   }
 
   void _configureDownloadNotifications(DownloadNotificationPrefs prefs) {
-    if (shouldClearDownloadNotificationConfigs(prefs)) {
-      // Plugin requires at least one notification in a config.
-      // ignore: invalid_use_of_visible_for_testing_member
-      FileDownloader().downloaderForTesting.notificationConfigs.clear();
-      return;
-    }
+    // A default notification config applies to every DownloadTask, including
+    // the internal multipart children. Clear legacy/default configs first and
+    // install only the logical-episode group so four parts still emit one
+    // user-visible notification for their parent episode.
+    // ignore: invalid_use_of_visible_for_testing_member
+    FileDownloader().downloaderForTesting.notificationConfigs.clear();
+    if (shouldClearDownloadNotificationConfigs(prefs)) return;
     const title = '{displayName}';
     final running = downloadNotificationIfEnabled(
       enabled: prefs.running,
@@ -537,24 +607,15 @@ class DownloadService {
       body: kDownloadCanceledNotificationBody,
     );
     final progressBar = !Platform.isIOS && prefs.running;
-    FileDownloader()
-        .configureNotification(
-          running: running,
-          complete: complete,
-          error: error,
-          paused: paused,
-          canceled: canceled,
-          progressBar: progressBar,
-        )
-        .configureNotificationForGroup(
-          'downloads',
-          running: running,
-          complete: complete,
-          error: error,
-          paused: paused,
-          canceled: canceled,
-          progressBar: progressBar,
-        );
+    FileDownloader().configureNotificationForGroup(
+      kLogicalDownloadGroup,
+      running: running,
+      complete: complete,
+      error: error,
+      paused: paused,
+      canceled: canceled,
+      progressBar: progressBar,
+    );
   }
 
   Future<T> _serializeQueue<T>(Future<T> Function() action) {
@@ -573,7 +634,7 @@ class DownloadService {
   Future<void> _recoverPersistedDownloads() async {
     final records = await FileDownloader().database.allRecords();
     final nativeIds = <String>{
-      for (final task in await FileDownloader().allTasks(allGroups: true))
+      for (final task in await _liveTransferTasks())
         if (isLogicalEpisodeDownloadTask(task)) task.taskId,
     };
     final storage = _ref.read(storageServiceProvider);
@@ -587,7 +648,9 @@ class DownloadService {
       if (record.status == TaskStatus.complete) {
         continue;
       }
-      if (record.status == TaskStatus.canceled && !userPausedMeta) {
+      if (record.status == TaskStatus.canceled &&
+          metadata == null &&
+          !userPausedMeta) {
         continue;
       }
       final queueWaiting = isQueueWaitingMetadata(metadata);
@@ -603,6 +666,7 @@ class DownloadService {
 
       final isFailed =
           record.status == TaskStatus.failed ||
+          record.status == TaskStatus.canceled ||
           record.status == TaskStatus.notFound;
       var progress = record.progress;
       if (progress < 0 || progress > 1) progress = 0.0;
@@ -611,7 +675,8 @@ class DownloadService {
           record.status == TaskStatus.running ||
           record.status == TaskStatus.enqueued ||
           record.status == TaskStatus.waitingToRetry;
-      final stillNative = nativeIds.contains(task.taskId);
+      final stillNative =
+          nativeIds.contains(task.taskId) || _parallel.isActive(task.taskId);
       final userPaused =
           isUserPausedMetadata(metadata) ||
           _userPausedIds.contains(task.taskId);
@@ -626,7 +691,7 @@ class DownloadService {
           stillInNativeQueue: stillNative,
         )) {
           try {
-            await FileDownloader().pause(task);
+            await _pauseTransfer(task);
           } catch (_) {}
         }
         await FileDownloader().database.updateRecord(
@@ -675,7 +740,9 @@ class DownloadService {
         queueWaiting: queueWaiting || shouldReenqueue,
       );
       if (shouldContinue) {
-        unawaited(_resumeDownloadTask(task));
+        // Recovery uses the same capped queue as a user start, so a batch of
+        // interrupted episodes cannot all resume at once after relaunch.
+        await _enqueueExistingTaskAsWaiterUnlocked(task);
       }
 
       final showAsWaiting = _queueWaitingIds.contains(task.taskId);
@@ -1040,16 +1107,17 @@ class DownloadService {
         paused.add(task.taskId);
         continue;
       }
+      // Swift's fallback waiter starts one raw URLSession task.
+      // Never pass it a ParallelDownloadTask: doing so silently turns a
+      // requested four-part episode into one part. Dart/PersistentParallelDownload
+      // owns multipart promotion and all child checkpoint/assembly semantics.
       if (isNativeWaitingSnapshotWaiter(
             status: record.status,
             queueWaiting: leftoverWaiting,
             userPaused: false,
           ) &&
           task is! ParallelDownloadTask) {
-        waiters.add(
-          _waitingPayloads[task.taskId] ??
-              await _waitingPayloadPreservingBytes(task),
-        );
+        waiters.add(await _waitingPayloadPreservingBytes(task));
         waiterIds.add(task.taskId);
         continue;
       }
@@ -1071,7 +1139,19 @@ class DownloadService {
           completedIds.contains(entry.key)) {
         continue;
       }
-      waiters.add(entry.value);
+      final record = records.firstWhereOrNull(
+        (record) => record.task.taskId == entry.key,
+      );
+      if (record?.task is ParallelDownloadTask ||
+          _rangeTransfers.isActive(entry.key))
+        continue;
+      waiters.add(
+        await _waitingPayloadPreservingBytes(
+          record?.task as DownloadTask? ??
+              Task.createFromJsonString(entry.value['taskJson'] as String)
+                  as DownloadTask,
+        ),
+      );
     }
     waiters.sort((a, b) {
       final idA = a['taskId'] as String? ?? '';
@@ -1196,10 +1276,8 @@ class DownloadService {
     required String taskId,
     String? trackingUrl,
   }) async {
-    final byId = await FileDownloader().taskForId(taskId);
-    if (byId is DownloadTask && !isInternalDownloaderChunk(byId)) return byId;
     final track = trackingUrl ?? '';
-    for (final task in await FileDownloader().allTasks(allGroups: true)) {
+    for (final task in await _liveTransferTasks()) {
       if (!isLogicalEpisodeDownloadTask(task)) continue;
       final downloadTask = task as DownloadTask;
       if (downloadTask.taskId == taskId) return downloadTask;
@@ -1253,7 +1331,7 @@ class DownloadService {
     final byId = <String, TaskRecord>{
       for (final record in records) record.task.taskId: record,
     };
-    for (final task in await FileDownloader().allTasks(allGroups: true)) {
+    for (final task in await _liveTransferTasks()) {
       if (!isLogicalEpisodeDownloadTask(task)) continue;
       _queueWaitingIds.remove(task.taskId);
       await _ref
@@ -1289,7 +1367,7 @@ class DownloadService {
         taskId: update.task.taskId,
         trackingUrl: trackingUrl,
       );
-      if (live != null) {
+      if (live != null && update.task is! ParallelDownloadTask) {
         await _attachToLiveNativeTask(update.task as DownloadTask, live: live);
         return;
       }
@@ -1579,6 +1657,7 @@ class DownloadService {
     bool notifyContinuedProcessing = true,
   }) async {
     _cancellingUrls.add(trackingUrl);
+    await _rangeTransfers.stop(taskId);
     try {
       await _serializeQueue(() async {
         _queueWaitingIds.remove(taskId);
@@ -1591,7 +1670,15 @@ class DownloadService {
             ids.add(task.taskId);
           }
         }
+        final parentRecord = await FileDownloader().database.recordForId(
+          taskId,
+        );
+        if (parentRecord?.task is ParallelDownloadTask) {
+          await _parallel.cancel(parentRecord!.task as ParallelDownloadTask);
+        }
         await FileDownloader().cancelTasksWithIds(ids.toList());
+        _userPausedIds.remove(taskId);
+        _dequeuingPausedIds.remove(taskId);
         _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
         _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
         // Proactive cleanup
@@ -1611,6 +1698,7 @@ class DownloadService {
   }
 
   Future<void> pauseDownload(String taskId) async {
+    await _rangeTransfers.stop(taskId);
     await _serializeQueue(() async {
       _userPausedIds.add(taskId);
       _queueWaitingIds.remove(taskId);
@@ -1636,7 +1724,7 @@ class DownloadService {
         // transferring task so it no longer occupies a slot. Never cancel —
         // cancel deletes the temp file and forces a restart from byte 0.
         try {
-          await FileDownloader().pause(downloadTask);
+          await _pauseTransfer(downloadTask);
         } catch (_) {}
         final trackingUrl = downloadTrackingUrl(downloadTask);
         final current = _ref.read(downloadProgressProvider)[trackingUrl];
@@ -1765,7 +1853,28 @@ class DownloadService {
         await _ref
             .read(storageServiceProvider)
             .patchDownloadMetadata(taskId, queueWaiting: false);
-        await _resumeDownloadTask(downloadTask);
+        final started = await _resumeDownloadTask(downloadTask);
+        if (!started) {
+          final saved = await _savedProgressFor(downloadTask);
+          await FileDownloader().database.updateRecord(
+            TaskRecord(
+              downloadTask,
+              TaskStatus.paused,
+              saved.progress,
+              saved.totalSize,
+            ),
+          );
+          _publishProgress(
+            trackingUrl: downloadTrackingUrl(downloadTask),
+            taskId: taskId,
+            progress: saved.progress,
+            totalSize: saved.totalSize,
+            status: TaskStatus.paused,
+          );
+          _updatesController.add(
+            TaskStatusUpdate(downloadTask, TaskStatus.paused),
+          );
+        }
       } else {
         await _enqueueExistingTaskAsWaiterUnlocked(downloadTask);
       }
@@ -1908,10 +2017,13 @@ class DownloadService {
         ),
       );
     }
-    return FileDownloader().enqueue(task);
+    return _enqueueTransfer(task, knownTotalBytes);
   }
 
   Future<bool> _resumeDownloadTask(DownloadTask task) async {
+    if (_parallel.isActive(task.taskId) ||
+        _rangeTransfers.isActive(task.taskId))
+      return true;
     final live = await _liveNativeTaskFor(
       taskId: task.taskId,
       trackingUrl: downloadTrackingUrl(task),
@@ -1937,22 +2049,32 @@ class DownloadService {
     }
 
     if (task is ParallelDownloadTask) {
-      // A started parallel parent may only continue from the plugin's chunk
-      // ResumeData. Never reinterpret it as a single partial file and never
-      // fresh-enqueue the parent after bytes may have been written.
-      try {
-        // ignore: invalid_use_of_visible_for_testing_member
-        final resumeData = await FileDownloader().downloaderForTesting
-            .getResumeData(task.taskId);
-        if (resumeData != null && resumeData.data.isNotEmpty) {
-          return await FileDownloader().resume(task);
-        }
-      } catch (_) {}
-      return false;
+      if (await _parallel.restore(task))
+        return _parallel.start(task, saved.totalSize);
+      // Import completed/paused legacy chunks without using resumeChunkTasks,
+      // which cancels all siblings when one completed child cannot be resumed.
+      // ignore: invalid_use_of_visible_for_testing_member
+      final data = await FileDownloader().downloaderForTesting.getResumeData(
+        task.taskId,
+      );
+      if (data != null && data.data.isNotEmpty) {
+        await _parallel.importLegacy(task, data.data);
+        return _parallel.start(task, saved.totalSize);
+      }
+      if (saved.progress > 0 || saved.partialBytes > 0) return false;
+      return _enqueueTransfer(task, saved.totalSize);
     }
 
     return resumeOrRestartDownload(
-      canResume: () => FileDownloader().taskCanResume(task),
+      canResume: () async {
+        // Unlike taskCanResume, a stored-data lookup cannot wait forever for
+        // a response from a task that died before its first network callback.
+        // ignore: invalid_use_of_visible_for_testing_member
+        return await FileDownloader().downloaderForTesting.getResumeData(
+              task.taskId,
+            ) !=
+            null;
+      },
       resume: () => FileDownloader().resume(task),
       resumeFromPartial: () => _resumeUsingPartialFile(task),
       restart: () =>
@@ -1993,25 +2115,6 @@ class DownloadService {
       await partial.copy(dest.path);
     }
 
-    final tempPath = '$destinationPath.download';
-    try {
-      if (p.normalize(dest.path) != p.normalize(tempPath)) {
-        await dest.copy(tempPath);
-      }
-      // Plugin resume data is stored on BaseDownloader. After a kill the
-      // temp file is often still on disk even when native resume blobs are
-      // gone; reuse that prefix instead of downloading from byte 0.
-      // ignore: invalid_use_of_visible_for_testing_member
-      await FileDownloader().downloaderForTesting.setResumeData(
-        ResumeData(task, tempPath, existingBytes, null),
-      );
-      if (await FileDownloader().resume(task)) {
-        return true;
-      }
-    } catch (_) {
-      // Fall through to a Range append when native resume data is rejected.
-    }
-
     return _appendRemainingWithDio(
       task,
       dest: dest,
@@ -2025,86 +2128,109 @@ class DownloadService {
     required File dest,
     required int existingBytes,
     required int expectedBytes,
-  }) async {
-    final trackingUrl = downloadTrackingUrl(task);
-    try {
-      final response = await _dio.get<ResponseBody>(
-        task.url,
-        options: Options(
-          headers: rangeResumeHeaders(
-            existing: task.headers,
-            existingBytes: existingBytes,
-          ),
-          followRedirects: true,
-          responseType: ResponseType.stream,
-          validateStatus: (status) =>
-              status != null && (status == 206 || status == 200),
-        ),
-      );
-
-      // A 200 means the host ignored Range and sent the whole file. Do not
-      // append that onto the prefix, and do not delete the prefix either.
-      if (response.statusCode != 206) return false;
-
-      final body = response.data;
-      if (body is! ResponseBody) return false;
-
-      var totalSize = expectedBytes;
-      final contentRange = response.headers.value('content-range');
-      if (contentRange != null) {
-        final total = contentRange.split('/').last;
-        totalSize = int.tryParse(total) ?? totalSize;
-      }
-
-      await dest.parent.create(recursive: true);
-      _rememberSessionTask(task.taskId);
-      await _syncSessionOverlay(
-        preferTaskId: task.taskId,
-        progress: existingBytes > 0 && expectedBytes > 0
-            ? existingBytes / expectedBytes
-            : 0,
-        totalBytes: expectedBytes,
-      );
-      final written = await appendDownloadChunks(
-        dest: dest,
-        chunks: body.stream,
-        existingBytes: existingBytes,
-        onBytes: (written) {
-          final progress = totalSize > 0 ? written / totalSize : 0.0;
-          _publishProgress(
-            trackingUrl: trackingUrl,
-            taskId: task.taskId,
-            progress: progress,
-            totalSize: totalSize,
-            status: TaskStatus.running,
-          );
-          unawaited(
-            _syncSessionOverlay(
-              preferTaskId: task.taskId,
-              progress: progress,
-              totalBytes: totalSize,
-            ),
-          );
-        },
-      );
-
+  }) => _rangeTransfers.start(
+    id: task.taskId,
+    url: task.url,
+    headers: task.headers,
+    file: dest,
+    existingBytes: existingBytes,
+    expectedBytes: expectedBytes,
+    onState: (written, total, complete) async {
+      if (_disposed) return;
+      final status = complete ? TaskStatus.complete : TaskStatus.running;
       await FileDownloader().database.updateRecord(
-        TaskRecord(task, TaskStatus.complete, 1.0, written),
+        TaskRecord(task, status, written / total, total),
       );
-      unawaited(_persistCompletedFilePath(task));
-      unawaited(_syncSessionOverlay(completedSuccess: true));
-      _updatesController.add(TaskStatusUpdate(task, TaskStatus.complete));
-      _handleStatusUpdate(
-        TaskStatusUpdate(task, TaskStatus.complete),
-        trackingUrl,
+      _sharedEvents.add(
+        TaskProgressUpdate(task, written / total, total),
       );
-      return true;
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('[DownloadService] Range append failed: $error');
+      if (complete)
+        _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
+    },
+    onPaused: (written, total) async {
+      if (_disposed) return;
+      await FileDownloader().database.updateRecord(
+        TaskRecord(task, TaskStatus.paused, written / total, total),
+      );
+      _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.paused));
+    },
+  );
+
+  Future<List<Task>> _liveTransferTasks() async {
+    // allTasks/taskForId include persisted paused tasks. They are not proof
+    // that URLSession or a worker currently owns a transfer. Use the public
+    // tracked-task database to exclude durable paused records instead of the
+    // plugin's testing-only downloader API.
+    final paused = (await FileDownloader().database.allRecordsWithStatus(
+      TaskStatus.paused,
+    )).map((record) => record.taskId).toSet();
+    return (await FileDownloader().allTasks(allGroups: true))
+        .where((task) => !paused.contains(task.taskId))
+        .toList();
+  }
+
+  Future<void> _pauseTransfer(DownloadTask task) async {
+    if (_rangeTransfers.isActive(task.taskId)) {
+      await _rangeTransfers.stop(task.taskId);
+    } else if (task is ParallelDownloadTask && await _parallel.restore(task)) {
+      await _parallel.pause(task);
+    } else {
+      final settled = Completer<void>();
+      final listener = _sharedEvents.stream.listen((update) {
+        if (update.task.taskId == task.taskId &&
+            update is TaskStatusUpdate &&
+            (update.status == TaskStatus.paused ||
+                update.status.isFinalState)) {
+          if (!settled.isCompleted) settled.complete();
+        }
+      });
+      try {
+        if (await FileDownloader().pause(task)) {
+          // pause() only acknowledges the command; native resume data arrives
+          // with a later callback. Wait before letting a subsequent resume run.
+          await settled.future.timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {},
+          );
+        }
+      } finally {
+        await listener.cancel();
       }
-      return false;
     }
+  }
+
+  Future<bool> _startPart(DownloadTask task, double progress, int size) async {
+    if (_rangeTransfers.isActive(task.taskId)) return true;
+    if ((await _liveTransferTasks()).any((live) => live.taskId == task.taskId))
+      return true;
+    // ignore: invalid_use_of_visible_for_testing_member
+    final resume = await FileDownloader().downloaderForTesting.getResumeData(
+      task.taskId,
+    );
+    if (resume != null && await FileDownloader().resume(task)) return true;
+    final partial = await findPartialDownloadFile(
+      destinationPath: await task.filePath(),
+    );
+    final bytes = partial == null ? 0 : await partial.length();
+    if (bytes > 0 && bytes < size) {
+      return _appendRemainingWithDio(
+        task,
+        dest: partial!,
+        existingBytes: bytes,
+        expectedBytes: size,
+      );
+    }
+    if (progress > 0 || bytes > 0) return false;
+    return FileDownloader().enqueue(task);
+  }
+
+  Future<bool> _enqueueTransfer(DownloadTask task, int totalBytes) async {
+    if (task is! ParallelDownloadTask) return FileDownloader().enqueue(task);
+    if (totalBytes <= 0) {
+      totalBytes =
+          (await getMetadata(task.url, headers: task.headers))?.size ?? -1;
+    }
+    return _parallel.start(task, totalBytes);
   }
 
   Future<DownloadMetadata?> getMetadata(
@@ -2132,7 +2258,8 @@ class DownloadService {
       // A 206 response is stronger evidence than Accept-Ranges and also covers
       // hosts that reject HEAD. Stream and cancel immediately so a bad server
       // that ignores Range cannot buffer a whole episode into memory.
-      if (size == null || !supportsRanges) {
+      {
+        supportsRanges = false;
         try {
           final response = await _dio
               .get<dynamic>(
@@ -2148,9 +2275,9 @@ class DownloadService {
               .timeout(const Duration(seconds: 10));
           final contentRange = response.headers.value('content-range');
           if (response.statusCode == 206 && contentRange != null) {
-            supportsRanges = true;
-            final total = contentRange.split('/').last;
-            size = int.tryParse(total) ?? size;
+            final match = RegExp(r'^bytes 0-0/(\d+)$').firstMatch(contentRange);
+            supportsRanges = match != null;
+            if (match != null) size = int.tryParse(match[1]!);
           } else {
             final contentLength = int.tryParse(
               response.headers.value('content-length') ?? '',
@@ -2295,7 +2422,10 @@ class DownloadService {
       final records = await FileDownloader().database.allRecords();
       final existingRecord = records.firstWhereOrNull(
         (r) =>
-            (r.status == TaskStatus.enqueued ||
+            (isLogicalEpisodeDownloadTask(r.task)) &&
+            (r.status == TaskStatus.failed ||
+                r.status == TaskStatus.notFound ||
+                r.status == TaskStatus.enqueued ||
                 r.status == TaskStatus.running ||
                 r.status == TaskStatus.paused ||
                 r.status == TaskStatus.waitingToRetry) &&
@@ -2314,7 +2444,11 @@ class DownloadService {
           status: existingRecord.status,
           queueWaiting: _queueWaitingIds.contains(existingRecord.task.taskId),
         );
-        if (occupying) {
+        if (occupying &&
+            (_parallel.isActive(existingRecord.task.taskId) ||
+                _rangeTransfers.isActive(existingRecord.task.taskId) ||
+                await _liveNativeTaskFor(taskId: existingRecord.task.taskId) !=
+                    null)) {
           _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
           return true;
         }
@@ -2333,17 +2467,7 @@ class DownloadService {
           _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
           return true;
         }
-        _queueWaitingIds.remove(existingTask.taskId);
-        _waitingPayloads.remove(existingTask.taskId);
-        await _ref
-            .read(storageServiceProvider)
-            .patchDownloadMetadata(existingTask.taskId, queueWaiting: false);
-        final resumedOrRestarted = await _resumeDownloadTask(existingTask);
-        if (!resumedOrRestarted) {
-          return false;
-        }
-
-        _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
+        await _resumeUserPausedUnlocked(existingTask.taskId);
         return true;
       }
 
@@ -2423,6 +2547,7 @@ class DownloadService {
         updates: Updates.statusAndProgress,
         retries: kDownloadTaskRetries,
         allowPause: true,
+        group: kLogicalDownloadGroup,
         metaData: trackingUrl ?? url,
       );
 
@@ -2458,9 +2583,16 @@ class DownloadService {
         );
         final startNow = occupied < maxConcurrent;
         final expectedBytes = totalBytes > 0 ? totalBytes : -1;
+        // Freeze the chosen transfer shape before queueing. This preserves a
+        // manual/Auto multipart choice for episode 2+ instead of converting
+        // only the first episode and leaving later FIFO rows single-part.
+        final transferTask = await _adaptiveTaskForFreshStart(
+          task,
+          knownTotalBytes: expectedBytes,
+        );
 
-        _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
-        _rememberSessionTask(task.taskId);
+        _waitingPayloads[transferTask.taskId] = _waitingPayloadFor(transferTask);
+        _rememberSessionTask(transferTask.taskId);
         await storage.saveDownloadMetadata(
           task.taskId,
           item,
@@ -2474,7 +2606,7 @@ class DownloadService {
         if (!startNow) {
           _queueWaitingIds.add(task.taskId);
           await FileDownloader().database.updateRecord(
-            TaskRecord(task, TaskStatus.paused, 0, expectedBytes),
+            TaskRecord(transferTask, TaskStatus.paused, 0, expectedBytes),
           );
           _publishProgress(
             trackingUrl: trackingUrl ?? url,
@@ -2483,21 +2615,19 @@ class DownloadService {
             totalSize: expectedBytes,
             status: TaskStatus.enqueued,
           );
-          _updatesController.add(TaskStatusUpdate(task, TaskStatus.enqueued));
+          _updatesController.add(
+            TaskStatusUpdate(transferTask, TaskStatus.enqueued),
+          );
           await _persistNativeWaitingSnapshot();
           unawaited(_syncSessionOverlay());
           return true;
         }
 
-        _startingTaskIds.add(task.taskId);
-        final transferTask = await _adaptiveTaskForFreshStart(
-          task,
-          knownTotalBytes: expectedBytes,
-        );
+        _startingTaskIds.add(transferTask.taskId);
         _updatesController.add(
           TaskStatusUpdate(transferTask, TaskStatus.enqueued),
         );
-        final success = await FileDownloader().enqueue(transferTask);
+        final success = await _enqueueTransfer(transferTask, expectedBytes);
         if (kDebugMode) {
           debugPrint(
             '[DownloadService] Enqueue result: $success '
@@ -2507,13 +2637,18 @@ class DownloadService {
 
         if (!success) {
           _waitingPayloads.remove(task.taskId);
-          _forgetSessionTask(task.taskId);
-          await storage.removeDownloadMetadata(task.taskId);
-          _ref
-              .read(activeDownloadsProvider.notifier)
-              .remove(trackingUrl ?? url);
+          await FileDownloader().database.updateRecord(
+            TaskRecord(transferTask, TaskStatus.paused, 0, expectedBytes),
+          );
+          _publishProgress(
+            trackingUrl: trackingUrl ?? url,
+            taskId: task.taskId,
+            progress: 0,
+            totalSize: expectedBytes,
+            status: TaskStatus.paused,
+          );
           _updatesController.add(
-            TaskStatusUpdate(transferTask, TaskStatus.canceled),
+            TaskStatusUpdate(transferTask, TaskStatus.paused),
           );
           return false;
         }

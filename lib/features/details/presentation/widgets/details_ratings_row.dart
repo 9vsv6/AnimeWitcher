@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../core/account/account_providers.dart';
+import '../../../../core/account/animewitcher_account_models.dart';
+import '../../../../core/account/animewitcher_comment_models.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../comments/presentation/animewitcher_comments_screen.dart';
 import '../details_ratings.dart';
-import 'details_rating_actions.dart';
 // The two toast strings moved with the actions that show them. They are
 // still part of this file's surface: the panel is what a caller looks at.
+import 'details_rating_actions.dart';
 export 'details_rating_actions.dart'
     show kRateLoginRequiredToast, kReviewsClosedToast;
 import 'scale_rating_bar.dart';
@@ -25,14 +29,153 @@ const Key kDetailsRatingsMalBadgeKey = Key('details-ratings-mal-badge');
 const Key kDetailsRatingsMalStarKey = Key('details-ratings-mal-star');
 const Key kDetailsRatingsImdbBadgeKey = Key('details-ratings-imdb-badge');
 const Key kDetailsRatingsImdbStarKey = Key('details-ratings-imdb-star');
+const Key kDetailsRatingsCompactKey = Key('details-ratings-compact');
+const Key kDetailsRatingsCompactWitcherKey = Key(
+  'details-ratings-compact-witcher',
+);
+const Key kDetailsRatingsCompactExternalKey = Key(
+  'details-ratings-compact-external',
+);
+const Key kDetailsRatingsCompactExternalBadgeKey = Key(
+  'details-ratings-compact-external-badge',
+);
 
 const Color kMalBadgeBlue = Color(0xFF2E51A2);
 const Color kImdbBadgeYellow = Color(0xFFF5C518);
 
-class DetailsRatingsRow extends ConsumerStatefulWidget {
-  const DetailsRatingsRow({super.key, required this.item});
+bool hasDetailsRatingsSummary(MultimediaItem item) {
+  final ratings = AnimeDetailsRatings.fromItem(item);
+  return ratings.witcherScore != null ||
+      (ratings.externalSource != null && ratings.externalScore != null);
+}
+
+class DetailsRatingsSummary extends StatelessWidget {
+  const DetailsRatingsSummary({super.key, required this.item});
 
   final MultimediaItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratings = AnimeDetailsRatings.fromItem(item);
+    final witcherScore = ratings.witcherScore;
+    final externalScore = ratings.externalScore;
+    final source = ratings.externalSource;
+    final showWitcher = witcherScore != null;
+    final showExternal = source != null && externalScore != null;
+    if (!hasDetailsRatingsSummary(item)) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final isImdb = source == ExternalRatingSource.imdb;
+    final externalBadgeColor = isImdb ? kImdbBadgeYellow : kMalBadgeBlue;
+    final externalBadgeTextColor = isImdb ? Colors.black : Colors.white;
+    final scoreStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: colors.onSurface.withValues(alpha: 0.76),
+      fontWeight: FontWeight.w700,
+      height: 1.2,
+    );
+    final scoreFontSize = scoreStyle?.fontSize ?? 14;
+    final badgeFontSize = (scoreFontSize - 3).clamp(10.0, 12.0).toDouble();
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FittedBox(
+          key: kDetailsRatingsCompactKey,
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showWitcher)
+                Semantics(
+                  label: 'تقييم انمي ويتشر',
+                  child: KeyedSubtree(
+                    key: kDetailsRatingsCompactWitcherKey,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.star_rounded,
+                          size: scoreFontSize + 3,
+                          color: AppTheme.animeWitcherAccent,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          formatRatingScore(witcherScore!),
+                          style: scoreStyle,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (showWitcher && showExternal) ...[
+                const SizedBox(width: 5),
+                Text(
+                  '•',
+                  style: scoreStyle?.copyWith(
+                    color: colors.onSurfaceVariant.withValues(alpha: 0.55),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 5),
+              ],
+              if (showExternal)
+                Semantics(
+                  label: isImdb ? 'IMDb' : 'MAL',
+                  child: KeyedSubtree(
+                    key: kDetailsRatingsCompactExternalKey,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          key: kDetailsRatingsCompactExternalBadgeKey,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: externalBadgeColor,
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: Text(
+                            isImdb ? 'IMDb' : 'MAL',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: externalBadgeTextColor,
+                              fontSize: badgeFontSize,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          formatRatingScore(externalScore!),
+                          style: scoreStyle,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DetailsRatingsRow extends ConsumerStatefulWidget {
+  const DetailsRatingsRow({
+    super.key,
+    required this.item,
+    this.showSummary = true,
+  });
+
+  final MultimediaItem item;
+  final bool showSummary;
 
   @override
   ConsumerState<DetailsRatingsRow> createState() => _DetailsRatingsRowState();
@@ -97,19 +240,77 @@ class _DetailsRatingsRowState extends ConsumerState<DetailsRatingsRow> {
     }
   }
 
+  void _toast(String message, {bool info = true}) {
+    final notifications = ref.read(notificationServiceProvider);
+    if (info) {
+      notifications.showInfo(message);
+    } else {
+      notifications.showError(message);
+    }
+  }
+
   Future<void> _onRatePressed() async {
-    final outcome = await openAnimeRatingDialog(
+    final service = ref.read(animeWitcherAccountServiceProvider);
+    if (!service.isSignedIn) {
+      _toast(kRateLoginRequiredToast);
+      return;
+    }
+    if (!_ratings.canRate) return;
+    final selected = await showAnimeRatingDialog(
       context,
-      ref,
-      ratings: _ratings,
       initialRating: _userRating ?? 0,
     );
-    if (!mounted || !outcome.changed) return;
-    setState(() => _userRating = outcome.rating);
+    if (!mounted || selected == null) return;
+    try {
+      if (selected == 0) {
+        await service.clearAnimeUserRating(_ratings.animeId);
+        if (!mounted) return;
+        setState(() => _userRating = null);
+      } else {
+        final saved = await service.saveAnimeUserRating(
+          _ratings.animeId,
+          selected,
+        );
+        if (!mounted) return;
+        setState(() => _userRating = saved);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      if (error is AnimeWitcherAccountException &&
+          error.code == 'not-signed-in') {
+        _toast(kRateLoginRequiredToast);
+      } else {
+        _toast(error.toString(), info: false);
+      }
+    }
   }
 
   Future<void> _onReviewsPressed() async {
-    await openAnimeReviews(context, ref, item: widget.item, ratings: _ratings);
+    final ratings = _ratings;
+    if (ratings.reviewsClosed) {
+      _toast(kReviewsClosedToast);
+      return;
+    }
+    final service = ref.read(animeWitcherAccountServiceProvider);
+    if (service.isSignedIn && ratings.animeId.isNotEmpty) {
+      try {
+        final closed = await service.isAnimeReviewsClosed(ratings.animeId);
+        if (!mounted) return;
+        if (closed) {
+          _toast(kReviewsClosedToast);
+          return;
+        }
+      } catch (_) {
+        // Keep the local details flag as the fallback.
+      }
+    }
+    final target = animeWitcherAnimeReviewTarget(widget.item);
+    if (target == null || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AnimeWitcherCommentsScreen(target: target),
+      ),
+    );
   }
 
   @override
@@ -146,30 +347,33 @@ class _DetailsRatingsRowState extends ConsumerState<DetailsRatingsRow> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Directionality(
-              textDirection: TextDirection.ltr,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _witcherColumn(context, ratings)),
-                  if (showExternal) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: SizedBox(
-                        height: 72,
-                        child: VerticalDivider(
-                          width: 1,
-                          thickness: 1,
-                          color: colors.outlineVariant.withValues(alpha: 0.55),
+            if (widget.showSummary)
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _witcherColumn(context, ratings)),
+                    if (showExternal) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: SizedBox(
+                          height: 72,
+                          child: VerticalDivider(
+                            width: 1,
+                            thickness: 1,
+                            color: colors.outlineVariant.withValues(
+                              alpha: 0.55,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    Expanded(child: _externalColumn(context, ratings)),
+                      Expanded(child: _externalColumn(context, ratings)),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+            if (widget.showSummary) const SizedBox(height: 12),
             Directionality(
               textDirection: TextDirection.ltr,
               child: Row(
@@ -184,7 +388,9 @@ class _DetailsRatingsRowState extends ConsumerState<DetailsRatingsRow> {
                         iconColor: (_userRating ?? 0) > 0
                             ? AppTheme.animeWitcherAccent
                             : null,
-                        label: 'قيّم',
+                        label: (_userRating ?? 0) > 0
+                            ? '${_userRating!}/10'
+                            : 'قيّم',
                         onPressed: _onRatePressed,
                       ),
                     ),
@@ -396,4 +602,65 @@ class _RatingsActionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<int?> showAnimeRatingDialog(
+  BuildContext context, {
+  required int initialRating,
+}) {
+  var rating = initialRating.clamp(0, 10);
+  return showDialog<int>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('قيّم'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$rating /10',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: ScaleRatingBar(
+                      rating: rating,
+                      starSize: 30,
+                      onChanged: (value) {
+                        setDialogState(() => rating = value);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              if (initialRating > 0)
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, 0),
+                  child: const Text('مسح التقييم'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('إلغاء'),
+              ),
+              FilledButton(
+                onPressed: rating <= 0
+                    ? null
+                    : () => Navigator.pop(dialogContext, rating),
+                child: const Text('تأكيد'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }

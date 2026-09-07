@@ -5,10 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('adaptive parallel downloads', () {
     test('normalizes supported manual values and junk to Auto', () {
-      for (final value in <int>[0, 1, 2, 3, 4, 5]) {
+      for (final value in <int>[0, 1, 2, 3, 4]) {
         expect(normalizeDownloadPartPreference(value), value);
       }
       expect(normalizeDownloadPartPreference(null), 0);
+      expect(normalizeDownloadPartPreference(5), 0);
       expect(normalizeDownloadPartPreference(6), 0);
       expect(normalizeDownloadPartPreference(8), 0);
       expect(normalizeDownloadPartPreference(99), 0);
@@ -17,7 +18,7 @@ void main() {
     test('never splits without proven Range support and size', () {
       expect(
         selectAdaptiveDownloadParts(
-          preference: 5,
+          preference: 4,
           totalBytes: 900 * 1024 * 1024,
           supportsRanges: false,
         ),
@@ -25,7 +26,7 @@ void main() {
       );
       expect(
         selectAdaptiveDownloadParts(
-          preference: 5,
+          preference: 4,
           totalBytes: -1,
           supportsRanges: true,
         ),
@@ -33,12 +34,13 @@ void main() {
       );
     });
 
-    test('Auto scales conservatively up to five parts', () {
+    test('Auto follows the 100/200/300 MB thresholds up to four parts', () {
       const mib = 1024 * 1024;
+
       expect(
         selectAdaptiveDownloadParts(
           preference: 0,
-          totalBytes: 40 * mib,
+          totalBytes: 99 * mib,
           supportsRanges: true,
         ),
         1,
@@ -54,7 +56,15 @@ void main() {
       expect(
         selectAdaptiveDownloadParts(
           preference: 0,
-          totalBytes: 400 * mib,
+          totalBytes: 199 * mib,
+          supportsRanges: true,
+        ),
+        2,
+      );
+      expect(
+        selectAdaptiveDownloadParts(
+          preference: 0,
+          totalBytes: 200 * mib,
           supportsRanges: true,
         ),
         3,
@@ -62,7 +72,15 @@ void main() {
       expect(
         selectAdaptiveDownloadParts(
           preference: 0,
-          totalBytes: 900 * mib,
+          totalBytes: 299 * mib,
+          supportsRanges: true,
+        ),
+        3,
+      );
+      expect(
+        selectAdaptiveDownloadParts(
+          preference: 0,
+          totalBytes: 300 * mib,
           supportsRanges: true,
         ),
         4,
@@ -73,19 +91,27 @@ void main() {
           totalBytes: 2 * 1024 * mib,
           supportsRanges: true,
         ),
-        5,
+        4,
       );
     });
 
-    test('manual preferences cannot exceed five parts', () {
+    test('manual preferences cannot exceed four parts', () {
       const mib = 1024 * 1024;
+      expect(
+        selectAdaptiveDownloadParts(
+          preference: 4,
+          totalBytes: 2 * 1024 * mib,
+          supportsRanges: true,
+        ),
+        4,
+      );
       expect(
         selectAdaptiveDownloadParts(
           preference: 5,
           totalBytes: 2 * 1024 * mib,
           supportsRanges: true,
         ),
-        5,
+        4,
       );
       expect(
         selectAdaptiveDownloadParts(
@@ -93,7 +119,7 @@ void main() {
           totalBytes: 2 * 1024 * mib,
           supportsRanges: true,
         ),
-        5,
+        4,
       );
     });
 
@@ -107,6 +133,7 @@ void main() {
         headers: const {'Referer': 'https://example.com'},
         updates: Updates.statusAndProgress,
         allowPause: true,
+        group: kLogicalDownloadGroup,
         metaData: 'episode:12',
       );
       final parallel = buildAdaptiveDownloadTask(template: normal, parts: 4);
@@ -114,6 +141,7 @@ void main() {
       expect(parallel.taskId, normal.taskId);
       expect(parallel.filename, normal.filename);
       expect(parallel.metaData, normal.metaData);
+      expect(parallel.group, kLogicalDownloadGroup);
       expect(downloadTaskPartCount(parallel), 4);
     });
 
@@ -128,6 +156,7 @@ void main() {
       );
       expect(isInternalDownloaderChunk(child), isTrue);
       expect(isLogicalEpisodeDownloadTask(child), isFalse);
+      expect(kPersistentDownloadChunkGroup, isNot(kLogicalDownloadGroup));
       expect(isLogicalEpisodeDownloadTask(parent), isTrue);
     });
   });

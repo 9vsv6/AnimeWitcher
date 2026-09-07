@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:animewitcher/shared/widgets/multimedia_card.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'countdown_unit_visibility.dart';
+import 'details_ratings_row.dart';
 
 bool _isArabicDetailsLocale(BuildContext context) => true;
 
@@ -257,8 +258,12 @@ class MetadataBar extends ConsumerWidget {
       children: [
         _buildMetadataRow(firstRow, separatorStyle),
         if (secondRow.isNotEmpty) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           _buildMetadataRow(secondRow, separatorStyle),
+        ],
+        if (hasDetailsRatingsSummary(item)) ...[
+          const SizedBox(height: 2),
+          DetailsRatingsSummary(item: item),
         ],
       ],
     );

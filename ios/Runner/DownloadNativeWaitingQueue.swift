@@ -360,6 +360,16 @@ enum DownloadNativeWaitingQueue {
     task: URLSessionTask,
     error: Error?
   ) {
+    // A native part is not an episode. Dart owns its parent and only frees
+    // that slot after all parts are safely assembled.
+    guard !isDownloadPart(task) else { return }
+    if let response = task.response as? HTTPURLResponse,
+       !(200...299).contains(response.statusCode) {
+      parkFailedTask(task: task)
+      promoteNext(on: session)
+      refreshSessionOverlay(success: false)
+      return
+    }
     if error != nil {
       parkFailedTask(task: task)
     } else {
@@ -375,6 +385,7 @@ enum DownloadNativeWaitingQueue {
   /// Keep a failed episode in the batch as paused and free its slot so the
   /// next waiter can start. Do not treat it as a successful completion.
   static func parkFailedTask(task: URLSessionTask) {
+    guard !isDownloadPart(task) else { return }
     let failedId = taskId(from: task)
     lock.lock()
     var state = loadLocked()
@@ -406,6 +417,7 @@ enum DownloadNativeWaitingQueue {
   /// Record native completion without starting the next file. Used from
   /// `didFinishDownloadingToURL` so ep2 is not created before `didComplete`.
   static func markPluginTaskCompleted(task: URLSessionTask) {
+    guard !isDownloadPart(task) else { return }
     let completedId = taskId(from: task)
     lock.lock()
     var state = loadLocked()
@@ -585,6 +597,19 @@ enum DownloadNativeWaitingQueue {
     episodeKey key: String? = nil
   ) {
     let logicalKey = key ?? episodeKey(for: waiter)
+    // Progress without a native resume blob belongs to Dart's Range recovery.
+    // Never silently start that episode from byte zero in the background.
+    if waiter.savedProgress > 0 && (waiter.resumeDataBase64?.isEmpty ?? true) {
+      lock.lock()
+      var state = loadLocked()
+      state.transferringTaskIds.removeAll { $0 == waiter.taskId }
+      if !state.pausedTaskIds.contains(waiter.taskId) { state.pausedTaskIds.append(waiter.taskId) }
+      startingEpisodeKeys.remove(logicalKey)
+      activeEpisodeKeysByTaskId.removeValue(forKey: waiter.taskId)
+      saveLocked(state)
+      lock.unlock()
+      return
+    }
     guard let url = URL(string: waiter.url) else {
       lock.lock()
       startingEpisodeKeys.remove(logicalKey)
@@ -743,6 +768,7 @@ enum DownloadNativeWaitingQueue {
     totalWritten: Int64,
     totalExpected: Int64
   ) {
+    guard !isDownloadPart(downloadTask) else { return }
     guard let id = taskId(from: downloadTask) else { return }
     let json = downloadTask.taskDescription?
       .components(separatedBy: "***<<<|>>>***").first ?? ""
@@ -1065,6 +1091,12 @@ enum DownloadNativeWaitingQueue {
     return nil
   }
 
+  static func isDownloadPart(_ task: URLSessionTask) -> Bool {
+    let json = task.taskDescription?.components(separatedBy: "***<<<|>>>***").first ?? ""
+    let group = stringFromTaskJson(json, key: "group")
+    return group == "chunk" || group == "animewitcher_parts"
+  }
+
   private static func urlFromTaskJson(_ taskJson: String) -> String {
     stringFromTaskJson(taskJson, key: "url")
   }
@@ -1216,11 +1248,9 @@ private enum DownloadUrlSessionHook {
     guard let method = class_getInstanceMethod(cls, completeSelector) else { return }
     originalComplete = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionTask, Error?) -> Void = { slf, session, task, error in
-      DownloadNativeWaitingQueue.handlePluginTaskCompleted(
-        session: session,
-        task: task,
-        error: error
-      )
+      // The plugin owns URLSession bookkeeping, retries, resume data and its
+      // holding queue. Let it settle the failed task before AnimeWitcher frees
+      // the logical episode slot and promotes another one.
       if let original = DownloadUrlSessionHook.originalComplete {
         let fn = unsafeBitCast(
           original,
@@ -1228,6 +1258,15 @@ private enum DownloadUrlSessionHook {
         )
         fn(slf, completeSelector, session, task, error)
       }
+      // A successful URLSessionDownloadTask already went through
+      // didFinishDownloadingTo, where the plugin moved the file and we mark
+      // the logical episode complete. Do not process success twice.
+      guard error != nil else { return }
+      DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+        session: session,
+        task: task,
+        error: error
+      )
     }
     method_setImplementation(method, imp_implementationWithBlock(block))
   }
