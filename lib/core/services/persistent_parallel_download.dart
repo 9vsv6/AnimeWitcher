@@ -48,7 +48,9 @@ class PersistentParallelDownload {
       file,
       (json['parts'] as List)
           .map(
-            (part) => _DownloadPart.fromJson(Map<String, dynamic>.from(part)),
+            (part) => _DownloadPart.fromJson(
+              Map<String, dynamic>.from(part as Map),
+            ),
           )
           .toList(),
     );
@@ -74,9 +76,9 @@ class PersistentParallelDownload {
     final chunks = jsonDecode(resumeData) as List;
     if (chunks.isEmpty) throw const FormatException('Empty chunk checkpoint');
     final parts = chunks.map((raw) {
-      final chunk = Map<String, dynamic>.from(raw);
+      final chunk = Map<String, dynamic>.from(raw as Map);
       final child = Task.createFromJson(
-        Map<String, dynamic>.from(chunk['task']),
+        Map<String, dynamic>.from(chunk['task'] as Map),
       ) as DownloadTask;
       return _DownloadPart(
         child.copyWith(group: kPersistentDownloadChunkGroup),
@@ -145,8 +147,9 @@ class PersistentParallelDownload {
           if (part.complete) throw StateError('A completed part is missing');
           final record = await recordForId(part.task.taskId);
           final progress = record?.progress ?? 0;
-          if (progress > part.progress && progress <= 1)
+          if (progress > part.progress && progress <= 1) {
             part.progress = progress;
+          }
           if (!await startPart(part.task, part.progress, part.size)) {
             throw StateError('Could not resume part ${part.task.taskId}');
           }
@@ -201,8 +204,8 @@ class PersistentParallelDownload {
                 TaskProgressUpdate(
                   session.task,
                   progress,
-                  expectedFileSize: session.size,
-                  networkSpeed: session.parts.fold<double>(
+                  session.size,
+                  session.parts.fold<double>(
                     0,
                     (sum, part) => sum + part.speed,
                   ),
@@ -274,8 +277,9 @@ class PersistentParallelDownload {
         final file = File(await part.task.filePath());
         if (await file.exists()) await file.delete();
       }
-      if (await session.manifest.parent.exists())
+      if (await session.manifest.parent.exists()) {
         await session.manifest.parent.delete(recursive: true);
+      }
       final staging = File('${await task.filePath()}.assembling');
       if (await staging.exists()) await staging.delete();
       _sessions.remove(task.taskId);
@@ -309,8 +313,9 @@ class PersistentParallelDownload {
     try {
       for (final part in session.parts) {
         final file = File(await part.task.filePath());
-        if (await file.length() != part.size)
+        if (await file.length() != part.size) {
           throw StateError('Part size changed');
+        }
         await for (final bytes in file.openRead()) {
           if (session.deleted) return;
           await output.writeFrom(bytes);
@@ -321,13 +326,12 @@ class PersistentParallelDownload {
       await output.close();
     }
     if (session.deleted) return;
-    if (await staging.length() != session.size)
+    if (await staging.length() != session.size) {
       throw StateError('Incomplete assembly');
+    }
     await staging.rename(target.path);
     session.active = false;
-    onUpdate(
-      TaskProgressUpdate(session.task, 1, expectedFileSize: session.size),
-    );
+    onUpdate(TaskProgressUpdate(session.task, 1, session.size));
     await _status(session, TaskStatus.complete);
     // Delete only after the complete file and record are durable.
     for (final part in session.parts) {
@@ -375,7 +379,9 @@ class _DownloadPart {
   double speed = 0;
   int get size => to - from + 1;
   factory _DownloadPart.fromJson(Map<String, dynamic> json) => _DownloadPart(
-    Task.createFromJson(Map<String, dynamic>.from(json['task']))
+    Task.createFromJson(
+          Map<String, dynamic>.from(json['task'] as Map),
+        )
         as DownloadTask,
     json['from'] as int,
     json['to'] as int,
