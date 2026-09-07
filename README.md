@@ -209,12 +209,6 @@ flutter run
 الواجهة عربية حاليًا. المشروع يستخدم ملفات ARB القياسية في <code>lib/l10n</code>، فإضافة لغة جديدة ممكنة عبر دليل الترجمة أعلاه.
 </details>
 
-## 📮 التواصل والدعم
-
-- **الموقع** – [animewitcher.com](https://animewitcher.com)
-- **قناة الدعم** – [t.me/animewitcher_support](https://t.me/animewitcher_support)
-- **قناة التحديثات** – [t.me/AnimeWitcherUpdates](https://t.me/AnimeWitcherUpdates)
-- **البريد الإلكتروني** – animewitcher1@gmail.com
 
 </div>
 
