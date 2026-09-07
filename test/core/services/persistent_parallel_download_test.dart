@@ -347,4 +347,73 @@ void main() {
       1,
     );
   });
+
+  test(
+    '429 during slow start falls back to last healthy level and teaches host',
+    () async {
+      final pressured = ParallelDownloadTask(
+        taskId: 'pressured-16',
+        url: 'https://cdn.example.com/episode-a',
+        filename: 'pressured.mp4',
+        directory: directory.path,
+        baseDirectory: BaseDirectory.root,
+        chunks: 16,
+        allowPause: true,
+      );
+
+      expect(await coordinator.start(pressured, 160), isTrue);
+      expect(starts.length, 1);
+      await markRunning(starts.take(1));
+      await waitUntil(() => starts.length == 3);
+      await markRunning(starts.skip(1).take(2));
+      await waitUntil(() => starts.length == 7);
+
+      final fourthBatch = starts.skip(3).take(4).toList(growable: false);
+      coordinator.handleUpdate(
+        TaskStatusUpdate(
+          fourthBatch.first,
+          TaskStatus.waitingToRetry,
+          TaskHttpException('rate limited', 429),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await markRunning(fourthBatch);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      // The 1 + 2 batch was healthy (3 total). The failing 4-connection batch
+      // may keep retrying, but it must not unlock the 8-connection expansion.
+      expect(starts.length, 7);
+
+      // Drain below the learned cap. Only one replacement should start to keep
+      // exactly three connections active for this host.
+      for (var i = 0; i < 5; i++) {
+        await completePart(starts[i], List<int>.filled(10, i));
+      }
+      await waitUntil(() => starts.length == 8);
+      expect(coordinator.activeConnectionCount, 3);
+
+      final sibling = ParallelDownloadTask(
+        taskId: 'sibling-16',
+        url: 'https://cdn.example.com/episode-b',
+        filename: 'sibling.mp4',
+        directory: directory.path,
+        baseDirectory: BaseDirectory.root,
+        chunks: 16,
+        allowPause: true,
+      );
+      final beforeSibling = starts.length;
+      expect(await coordinator.start(sibling, 160), isTrue);
+      await waitUntil(() => starts.length == beforeSibling + 1);
+      await markRunning(starts.skip(beforeSibling).take(1));
+      await waitUntil(() => starts.length == beforeSibling + 3);
+      await markRunning(starts.skip(beforeSibling + 1).take(2));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      // Host memory prevents the sibling from trying 7/15/16 again.
+      expect(
+        starts.where((task) => task.taskId.startsWith('sibling-16.part.')).length,
+        3,
+      );
+    },
+  );
 }
