@@ -319,6 +319,18 @@ class DownloadService {
 
       _updatesController.add(update);
 
+      if (update is TaskStatusUpdate && update.task is ParallelDownloadTask) {
+        // Custom multipart parents are not enqueued through FileDownloader,
+        // so the plugin never receives their synthetic status automatically.
+        // Updating the parent explicitly gives one notification per episode
+        // while the child parts stay silent.
+        // ignore: invalid_use_of_visible_for_testing_member
+        FileDownloader().downloaderForTesting.updateNotification(
+          update.task,
+          update.status,
+        );
+      }
+
       switch (update) {
         case TaskProgressUpdate():
           final current = _ref.read(downloadProgressProvider)[trackingUrl];
@@ -559,12 +571,13 @@ class DownloadService {
   }
 
   void _configureDownloadNotifications(DownloadNotificationPrefs prefs) {
-    if (shouldClearDownloadNotificationConfigs(prefs)) {
-      // Plugin requires at least one notification in a config.
-      // ignore: invalid_use_of_visible_for_testing_member
-      FileDownloader().downloaderForTesting.notificationConfigs.clear();
-      return;
-    }
+    // A default notification config applies to every DownloadTask, including
+    // the internal multipart children. Clear legacy/default configs first and
+    // install only the logical-episode group so four parts still emit one
+    // user-visible notification for their parent episode.
+    // ignore: invalid_use_of_visible_for_testing_member
+    FileDownloader().downloaderForTesting.notificationConfigs.clear();
+    if (shouldClearDownloadNotificationConfigs(prefs)) return;
     const title = '{displayName}';
     final running = downloadNotificationIfEnabled(
       enabled: prefs.running,
@@ -594,24 +607,15 @@ class DownloadService {
       body: kDownloadCanceledNotificationBody,
     );
     final progressBar = !Platform.isIOS && prefs.running;
-    FileDownloader()
-        .configureNotification(
-          running: running,
-          complete: complete,
-          error: error,
-          paused: paused,
-          canceled: canceled,
-          progressBar: progressBar,
-        )
-        .configureNotificationForGroup(
-          'downloads',
-          running: running,
-          complete: complete,
-          error: error,
-          paused: paused,
-          canceled: canceled,
-          progressBar: progressBar,
-        );
+    FileDownloader().configureNotificationForGroup(
+      kLogicalDownloadGroup,
+      running: running,
+      complete: complete,
+      error: error,
+      paused: paused,
+      canceled: canceled,
+      progressBar: progressBar,
+    );
   }
 
   Future<T> _serializeQueue<T>(Future<T> Function() action) {
@@ -1103,6 +1107,10 @@ class DownloadService {
         paused.add(task.taskId);
         continue;
       }
+      // Swift's fallback waiter starts one raw URLSession task.
+      // Never pass it a ParallelDownloadTask: doing so silently turns a
+      // requested four-part episode into one part. Dart/PersistentParallelDownload
+      // owns multipart promotion and all child checkpoint/assembly semantics.
       if (isNativeWaitingSnapshotWaiter(
             status: record.status,
             queueWaiting: leftoverWaiting,
@@ -2539,6 +2547,7 @@ class DownloadService {
         updates: Updates.statusAndProgress,
         retries: kDownloadTaskRetries,
         allowPause: true,
+        group: kLogicalDownloadGroup,
         metaData: trackingUrl ?? url,
       );
 
@@ -2574,9 +2583,16 @@ class DownloadService {
         );
         final startNow = occupied < maxConcurrent;
         final expectedBytes = totalBytes > 0 ? totalBytes : -1;
+        // Freeze the chosen transfer shape before queueing. This preserves a
+        // manual/Auto multipart choice for episode 2+ instead of converting
+        // only the first episode and leaving later FIFO rows single-part.
+        final transferTask = await _adaptiveTaskForFreshStart(
+          task,
+          knownTotalBytes: expectedBytes,
+        );
 
-        _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
-        _rememberSessionTask(task.taskId);
+        _waitingPayloads[transferTask.taskId] = _waitingPayloadFor(transferTask);
+        _rememberSessionTask(transferTask.taskId);
         await storage.saveDownloadMetadata(
           task.taskId,
           item,
@@ -2590,7 +2606,7 @@ class DownloadService {
         if (!startNow) {
           _queueWaitingIds.add(task.taskId);
           await FileDownloader().database.updateRecord(
-            TaskRecord(task, TaskStatus.paused, 0, expectedBytes),
+            TaskRecord(transferTask, TaskStatus.paused, 0, expectedBytes),
           );
           _publishProgress(
             trackingUrl: trackingUrl ?? url,
@@ -2599,17 +2615,15 @@ class DownloadService {
             totalSize: expectedBytes,
             status: TaskStatus.enqueued,
           );
-          _updatesController.add(TaskStatusUpdate(task, TaskStatus.enqueued));
+          _updatesController.add(
+            TaskStatusUpdate(transferTask, TaskStatus.enqueued),
+          );
           await _persistNativeWaitingSnapshot();
           unawaited(_syncSessionOverlay());
           return true;
         }
 
-        _startingTaskIds.add(task.taskId);
-        final transferTask = await _adaptiveTaskForFreshStart(
-          task,
-          knownTotalBytes: expectedBytes,
-        );
+        _startingTaskIds.add(transferTask.taskId);
         _updatesController.add(
           TaskStatusUpdate(transferTask, TaskStatus.enqueued),
         );

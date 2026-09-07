@@ -133,6 +133,7 @@ void main() {
         headers: const {'Referer': 'https://example.com'},
         updates: Updates.statusAndProgress,
         allowPause: true,
+        group: kLogicalDownloadGroup,
         metaData: 'episode:12',
       );
       final parallel = buildAdaptiveDownloadTask(template: normal, parts: 4);
@@ -140,6 +141,7 @@ void main() {
       expect(parallel.taskId, normal.taskId);
       expect(parallel.filename, normal.filename);
       expect(parallel.metaData, normal.metaData);
+      expect(parallel.group, kLogicalDownloadGroup);
       expect(downloadTaskPartCount(parallel), 4);
     });
 
@@ -154,6 +156,7 @@ void main() {
       );
       expect(isInternalDownloaderChunk(child), isTrue);
       expect(isLogicalEpisodeDownloadTask(child), isFalse);
+      expect(kPersistentDownloadChunkGroup, isNot(kLogicalDownloadGroup));
       expect(isLogicalEpisodeDownloadTask(parent), isTrue);
     });
   });
