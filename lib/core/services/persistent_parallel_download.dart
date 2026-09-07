@@ -99,7 +99,7 @@ class PersistentParallelDownload {
               ),
             )
             .toList(growable: false);
-        if (parts.length > kDownloadPartsMax ||
+        if (parts.length > kDownloadWorkUnitsMax ||
             parts.any((part) => part.from < 0 || part.to < part.from)) {
           continue;
         }
@@ -164,10 +164,13 @@ class PersistentParallelDownload {
     final restored = await restore(task);
     if (!restored) {
       if (totalBytes <= 0) return false;
-      final count = task.chunks
-          .clamp(1, totalBytes)
+      final requestedConnections = task.chunks
           .clamp(kDownloadPartsMin, kDownloadPartsMax)
           .toInt();
+      final count = selectDownloadWorkUnitCount(
+        connections: requestedConnections,
+        totalBytes: totalBytes,
+      );
       final parts = <_DownloadPart>[];
       for (var index = 0; index < count; index++) {
         final from = totalBytes * index ~/ count;
@@ -233,7 +236,10 @@ class PersistentParallelDownload {
           return true;
         }
 
-        final requested = pending.clamp(1, kDownloadPartsMax).toInt();
+        final configured = task.chunks
+            .clamp(kDownloadPartsMin, kDownloadPartsMax)
+            .toInt();
+        final requested = pending < configured ? pending : configured;
         session.connectionCeiling = _connectionGovernor.connectionCeilingFor(
           session.task.url,
           requested: requested,
