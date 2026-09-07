@@ -14,6 +14,8 @@ import '../../../core/extensions/extension_manager.dart';
 import '../../../core/extensions/providers/animewitcher_native_provider.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/utils/artwork_quality.dart';
+import '../../../core/utils/responsive_breakpoints.dart';
+import '../../../core/utils/window_controls_inset.dart';
 import '../../../shared/widgets/apple_liquid_glass.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/shimmer_placeholder.dart';
@@ -298,6 +300,7 @@ class _CharacterDetailsScreenState
     final likes = document?.likes ?? 0;
     final colors = Theme.of(context).colorScheme;
     final headerButtons = _buildHeaderButtons(context);
+    final isLarge = context.isTabletOrLarger;
 
     return Scaffold(
       appBar: PreferredSize(
@@ -307,7 +310,7 @@ class _CharacterDetailsScreenState
           child: AppBar(
             automaticallyImplyLeading: false,
             centerTitle: false,
-            titleSpacing: 0,
+            titleSpacing: 8,
             title: ApplePersistentGlassHeaderScope(
               enabled: Navigator.of(context).canPop(),
               onBack: () => Navigator.of(context).pop(),
@@ -316,16 +319,25 @@ class _CharacterDetailsScreenState
               trailingButtons: headerButtons,
               child: const SizedBox.shrink(),
             ),
+            leadingWidth: appleUsesPersistentLiquidGlassHeader ? 0 : 64,
             leading: appleUsesPersistentLiquidGlassHeader
                 ? null
-                : AppleLiquidGlassBackButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                : Padding(
+                    padding: EdgeInsets.only(
+                      left: 8 + windowControlsLeadingInset,
+                    ),
+                    child: AppleLiquidGlassBackButton(
+                      size: 46,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
                   ),
-            actions: appleUsesPersistentLiquidGlassHeader
+            actions: appleUsesPersistentLiquidGlassHeader || isLarge
                 ? const <Widget>[]
                 : <Widget>[
                     Padding(
-                      padding: const EdgeInsets.only(right: 8),
+                      padding: EdgeInsets.only(
+                        right: 8 + windowControlsTrailingInset,
+                      ),
                       child: AppleLiquidGlassActionGroup(
                         height: 46,
                         fallbackColor: colors.surfaceContainerHigh,
@@ -334,6 +346,7 @@ class _CharacterDetailsScreenState
                     ),
                   ],
             elevation: 0,
+            scrolledUnderElevation: 0,
           ),
         ),
       ),
@@ -419,6 +432,16 @@ class _CharacterDetailsScreenState
                                   .onSurfaceVariant,
                             ),
                       ),
+                      if (!appleUsesPersistentLiquidGlassHeader && isLarge) ...[
+                        const SizedBox(height: 20),
+                        Center(
+                          child: AppleLiquidGlassActionGroup(
+                            height: 46,
+                            fallbackColor: colors.surfaceContainerHigh,
+                            children: headerButtons,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 28),
                       if (_animesLoading)
                         const Padding(
