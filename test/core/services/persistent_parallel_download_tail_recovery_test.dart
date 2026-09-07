@@ -161,25 +161,23 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       }
 
-      Future<void> expandTo(int target) async {
-        final acknowledged = <String>{};
-        while (starts.length < target) {
-          final before = starts.length;
-          final batch = starts
-              .where((task) => acknowledged.add(task.taskId))
-              .toList(growable: false);
-          expect(batch, isNotEmpty);
-          await markRunning(batch);
-          await waitUntil(
-            () => starts.length > before || starts.length >= target,
-          );
-        }
-      }
-
       try {
         const mib = 1024 * 1024;
         expect(await coordinator.start(parent, 16 * mib), isTrue);
-        await expandTo(16);
+        expect(starts.length, 1);
+
+        // Follow the production 1, 2, 4, 8, 1 response-gated ramp explicitly.
+        // This avoids a generic helper racing the serialized scheduler at the
+        // final 15 -> 16 transition while still proving the same slow start.
+        await markRunning(starts.take(1));
+        await waitUntil(() => starts.length == 3);
+        await markRunning(starts.skip(1).take(2));
+        await waitUntil(() => starts.length == 7);
+        await markRunning(starts.skip(3).take(4));
+        await waitUntil(() => starts.length == 15);
+        await markRunning(starts.skip(7).take(8));
+        await waitUntil(() => starts.length == 16);
+
         expect(starts, hasLength(16));
         expect(coordinator.activeConnectionCount, 16);
 
