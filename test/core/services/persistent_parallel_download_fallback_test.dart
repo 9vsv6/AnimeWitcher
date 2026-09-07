@@ -67,10 +67,12 @@ void main() {
       );
 
       final target = File(await parent.filePath());
+      final manifest = File('${target.path}.parts/manifest.json');
       await waitUntil(
         () =>
             target.existsSync() &&
-            records[parent.taskId]?.status == TaskStatus.complete,
+            records[parent.taskId]?.status == TaskStatus.complete &&
+            !manifest.existsSync(),
       );
 
       expect(await target.readAsBytes(), payload);
@@ -85,10 +87,7 @@ void main() {
           'episode-fallback.part.3',
         },
       );
-      expect(
-        await File('${target.path}.parts/manifest.json').exists(),
-        isFalse,
-      );
+      expect(await manifest.exists(), isFalse);
     } finally {
       await coordinator.dispose();
       if (await directory.exists()) await directory.delete(recursive: true);
