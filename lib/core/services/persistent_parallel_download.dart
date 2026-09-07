@@ -114,7 +114,6 @@ class PersistentParallelDownload {
 
   Future<bool> start(ParallelDownloadTask task, int totalBytes) async {
     final restored = await restore(task);
-    var freshSession = false;
     if (!restored) {
       if (totalBytes <= 0) return false;
       final count = task.chunks
@@ -152,7 +151,6 @@ class PersistentParallelDownload {
       final session = _ParallelSession(task, await _manifest(task), parts);
       await _persist(session);
       _register(session);
-      freshSession = true;
     }
 
     final session = _sessions[task.taskId]!;
@@ -182,12 +180,11 @@ class PersistentParallelDownload {
           return true;
         }
 
-        // A restored manifest is already split and some children may still be
-        // owned by URLSession. Reattach it as one batch, while the global
-        // budget still prevents more than 16 children from being handed out.
-        session.rampBatches = freshSession
-            ? downloadConnectionRampBatches(pending)
-            : <int>[pending];
+        // Use the same response-gated slow start for fresh and resumed files.
+        // A child already owned by URLSession is recognized below from its
+        // running database record, so process recovery can advance without
+        // reopening all persisted ranges at once.
+        session.rampBatches = downloadConnectionRampBatches(pending);
 
         if (!await _pumpSession(session)) {
           throw StateError('Could not start initial download connection');
@@ -253,6 +250,15 @@ class PersistentParallelDownload {
           _activeConnectionIds.remove(part.task.taskId);
           session.currentBatchPendingIds.remove(part.task.taskId);
           return false;
+        }
+
+        // On process recovery a native child can already be transferring, in
+        // which case no fresh `running` callback is guaranteed. Treat an
+        // existing running/retrying record as Gopeed's connect-success signal.
+        if (record != null &&
+            (record.status == TaskStatus.running ||
+                record.status == TaskStatus.waitingToRetry)) {
+          session.currentBatchPendingIds.remove(part.task.taskId);
         }
       }
 
