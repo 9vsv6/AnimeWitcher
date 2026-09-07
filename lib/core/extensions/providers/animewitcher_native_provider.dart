@@ -2113,6 +2113,47 @@ class AnimeWitcherNativeProvider extends AnimeWitcherProvider {
     );
   }
 
+  /// Loads anime that belong to exactly the same AnimeWitcher studio.
+  /// Uses the studio facet directly instead of a fuzzy text search.
+  Future<ProviderMediaPage> getStudioPage(
+    String studio, {
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    final value = studio.trim();
+    final safeOffset = offset < 0 ? 0 : offset;
+    if (value.isEmpty) {
+      return ProviderMediaPage(
+        items: const <MultimediaItem>[],
+        nextOffset: safeOffset,
+        hasMore: false,
+      );
+    }
+
+    await _refreshRemoteConstants();
+    if (_algoliaBrowseApiKey.isEmpty) {
+      throw StateError('AnimeWitcher studio catalog request failed.');
+    }
+
+    final safeLimit = limit.clamp(1, _mainListBrowseHitsPerPage).toInt();
+    final pageNumber = safeOffset ~/ safeLimit;
+    final payload = await _algoliaBrowseGet(
+      index: 'series',
+      appId: _algoliaAppId,
+      apiKey: _algoliaBrowseApiKey,
+      page: pageNumber,
+      hitsPerPage: safeLimit,
+      filters: _filterGroup('details.studio', <String>[value], 'OR'),
+      attributes: _searchAttributes,
+      throwOnFailure: true,
+    );
+    return _mediaPageFromAlgolia(
+      payload,
+      pageNumber: pageNumber,
+      hitsPerPage: safeLimit,
+    );
+  }
+
   Future<ProviderMediaPage> _mediaPageFromAlgolia(
     Map<String, dynamic> payload, {
     required int pageNumber,
