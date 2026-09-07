@@ -47,6 +47,9 @@ final class DownloadContinuedProcessingManager {
     var currentIndex: Int
   }
 
+  /// Reserved for a real explicit cancel action. BGContinuedProcessingTask
+  /// expiration is only the end of the OS processing lease and must never be
+  /// translated into pausing the independent background URLSession transfer.
   var cancellationHandler: ((String) -> Void)?
 
   private let scheduler = BGTaskScheduler.shared
@@ -272,10 +275,13 @@ final class DownloadContinuedProcessingManager {
     task.expirationHandler = { [weak self, weak task] in
       Task { @MainActor in
         guard let self else { return }
-        let cancelId = self.currentEpisodeTaskId.isEmpty
-          ? Self.sessionKey
-          : self.currentEpisodeTaskId
-        self.cancellationHandler?(cancelId)
+
+        // Expiration only revokes the BGContinuedProcessingTask lease / system
+        // overlay. The actual episode is owned by background URLSession (or by
+        // PersistentParallelDownload's child URLSession tasks), which is
+        // intentionally independent and must keep transferring. Mapping this
+        // callback to `cancellationHandler` used to mark the logical parent
+        // paused and promote the next episode while its parts were still live.
         task?.setTaskCompleted(success: false)
         self.activeTask = nil
         self.snapshot = nil
