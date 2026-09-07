@@ -15,6 +15,14 @@ const Duration kDownloadRangeProgressUpdateInterval = Duration(
   milliseconds: 250,
 );
 
+/// Keep the first request as tolerant as the old implementation. Once a host
+/// has answered successfully, reconnects can fail much faster using the same
+/// max(observed RTT, minimum) + safety-margin idea as Gopeed.
+const Duration kDownloadRangeDefaultResponseTimeout = Duration(seconds: 30);
+const Duration kDownloadRangeMinFastFailTimeout = Duration(seconds: 3);
+const Duration kDownloadRangeMaxFastFailTimeout = Duration(seconds: 30);
+const Duration kDownloadRangeStreamIdleTimeout = Duration(seconds: 30);
+
 bool isRetryableDownloadHttpStatus(int? status) {
   if (status == null) return false;
   if (status == 408 || status == 425 || status == 429) return true;
@@ -31,6 +39,27 @@ Duration downloadRangeRetryDelay({
   }
   final shift = retryIndex.clamp(0, 4);
   return kDownloadRangeRetryBaseDelay * (1 << shift);
+}
+
+/// Gopeed measures a successful connection and then gives later attempts a
+/// 50% safety margin, with a three-second floor. AnimeWitcher keeps the old
+/// 30-second timeout until it has a baseline so a first request on a slow
+/// mobile network is never made more aggressive by this optimization.
+Duration downloadRangeFastFailTimeout(Duration? maxSuccessfulConnectTime) {
+  if (maxSuccessfulConnectTime == null ||
+      maxSuccessfulConnectTime <= Duration.zero) {
+    return kDownloadRangeDefaultResponseTimeout;
+  }
+
+  final observedMicros = maxSuccessfulConnectTime.inMicroseconds;
+  final minimumMicros = kDownloadRangeMinFastFailTimeout.inMicroseconds;
+  final maximumMicros = kDownloadRangeMaxFastFailTimeout.inMicroseconds;
+  final withMargin = observedMicros >= minimumMicros
+      ? observedMicros * 3 ~/ 2
+      : minimumMicros;
+  return Duration(
+    microseconds: withMargin.clamp(minimumMicros, maximumMicros).toInt(),
+  );
 }
 
 bool shouldEmitDownloadRangeProgress({
@@ -75,6 +104,7 @@ class DownloadRangeTransfer {
   DownloadRangeTransfer(this.dio);
   final Dio dio;
   final _operations = <String, _RangeOperation>{};
+  final _maxConnectTimesByOrigin = <String, Duration>{};
   bool isActive(String id) => _operations.containsKey(id);
 
   Future<void> stop(String id) async {
@@ -224,24 +254,12 @@ class DownloadRangeTransfer {
           );
         requestHeaders['Range'] = 'bytes=$probeStart-$probeEnd';
         requestHeaders['Accept-Encoding'] = 'identity';
-        response = await dio
-            .get<ResponseBody>(
-              url,
-              cancelToken: operation.token,
-              options: Options(
-                headers: requestHeaders,
-                responseType: ResponseType.stream,
-                receiveTimeout: const Duration(seconds: 30),
-                sendTimeout: const Duration(seconds: 15),
-                validateStatus: (_) => true,
-              ),
-            )
-            .timeout(
-              const Duration(seconds: 30),
-              onTimeout: () {
-                throw TimeoutException('Resume probe timeout');
-              },
-            );
+        response = await _getRangeResponse(
+          operation: operation,
+          url: url,
+          headers: requestHeaders,
+          timeoutMessage: 'Resume probe timeout',
+        );
         stream = response.data?.stream;
         final status = response.statusCode;
         if (isRetryableDownloadHttpStatus(status)) {
@@ -311,24 +329,12 @@ class DownloadRangeTransfer {
           ..removeWhere((key, _) => key.toLowerCase() == 'range');
         requestHeaders['Range'] = 'bytes=$start-${spec.limit ?? ''}';
         requestHeaders['Accept-Encoding'] = 'identity';
-        response = await dio
-            .get<ResponseBody>(
-              url,
-              cancelToken: operation.token,
-              options: Options(
-                headers: requestHeaders,
-                responseType: ResponseType.stream,
-                receiveTimeout: const Duration(seconds: 30),
-                sendTimeout: const Duration(seconds: 15),
-                validateStatus: (_) => true,
-              ),
-            )
-            .timeout(
-              const Duration(seconds: 30),
-              onTimeout: () {
-                throw TimeoutException('Response timeout');
-              },
-            );
+        response = await _getRangeResponse(
+          operation: operation,
+          url: url,
+          headers: requestHeaders,
+          timeoutMessage: 'Range response timeout',
+        );
         stream = response.data?.stream;
         final status = response.statusCode;
         if (isRetryableDownloadHttpStatus(status)) {
@@ -350,7 +356,8 @@ class DownloadRangeTransfer {
           return null;
         }
         final ifRange = _usableIfRange(_headerValue(requestHeaders, 'if-range'));
-        if (ifRange != null && !_responseMatchesIfRange(response.headers, ifRange)) {
+        if (ifRange != null &&
+            !_responseMatchesIfRange(response.headers, ifRange)) {
           await _discard(stream);
           return null;
         }
@@ -383,6 +390,76 @@ class DownloadRangeTransfer {
       }
     }
     return null;
+  }
+
+  /// Uses a short-lived child token for each HTTP attempt. Future.timeout by
+  /// itself does not cancel Dio, which could otherwise leave the old socket
+  /// alive while a retry opens another one. Cancelling the child token keeps
+  /// the connection count honest and mirrors Gopeed's fast-fail client.
+  Future<Response<ResponseBody>> _getRangeResponse({
+    required _RangeOperation operation,
+    required String url,
+    required Map<String, String> headers,
+    required String timeoutMessage,
+  }) async {
+    final requestToken = CancelToken();
+    unawaited(
+      operation.token.whenCancel.then((_) {
+        if (!requestToken.isCancelled) {
+          requestToken.cancel('Parent range transfer stopped');
+        }
+      }),
+    );
+
+    final responseTimeout = _responseTimeoutFor(url);
+    final clock = Stopwatch()..start();
+    try {
+      final response = await dio
+          .get<ResponseBody>(
+            url,
+            cancelToken: requestToken,
+            options: Options(
+              headers: headers,
+              responseType: ResponseType.stream,
+              receiveTimeout: kDownloadRangeStreamIdleTimeout,
+              sendTimeout: const Duration(seconds: 15),
+              validateStatus: (_) => true,
+            ),
+          )
+          .timeout(
+            responseTimeout,
+            onTimeout: () {
+              requestToken.cancel(timeoutMessage);
+              throw TimeoutException(timeoutMessage);
+            },
+          );
+      _rememberConnectTime(url, clock.elapsed);
+      return response;
+    } finally {
+      clock.stop();
+    }
+  }
+
+  Duration _responseTimeoutFor(String url) => downloadRangeFastFailTimeout(
+    _maxConnectTimesByOrigin[_originKey(url)],
+  );
+
+  void _rememberConnectTime(String url, Duration elapsed) {
+    if (elapsed <= Duration.zero) return;
+    final key = _originKey(url);
+    final previous = _maxConnectTimesByOrigin[key];
+    if (previous == null || elapsed > previous) {
+      _maxConnectTimesByOrigin[key] = elapsed;
+    }
+  }
+
+  String _originKey(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.host.isEmpty) return url;
+    if (uri.scheme == 'http' || uri.scheme == 'https') {
+      return uri.origin.toLowerCase();
+    }
+    return '${uri.scheme.toLowerCase()}://${uri.host.toLowerCase()}';
   }
 
   bool _isRetryableDownloadError(Object error) {
@@ -438,7 +515,7 @@ class DownloadRangeTransfer {
         Object? streamError;
         try {
           await for (final bytes in current.stream.timeout(
-            const Duration(seconds: 30),
+            kDownloadRangeStreamIdleTimeout,
           )) {
             if (operation.token.isCancelled) break;
             if (written + bytes.length > total) {
@@ -521,7 +598,7 @@ class DownloadRangeTransfer {
   Future<List<int>?> _readExactStream(Stream<List<int>> stream, int length) async {
     final bytes = <int>[];
     try {
-      await for (final chunk in stream.timeout(const Duration(seconds: 30))) {
+      await for (final chunk in stream.timeout(kDownloadRangeStreamIdleTimeout)) {
         if (bytes.length + chunk.length > length) return null;
         bytes.addAll(chunk);
       }
