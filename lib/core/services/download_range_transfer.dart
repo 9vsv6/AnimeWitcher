@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 
@@ -7,6 +8,7 @@ import 'package:dio/dio.dart';
 /// slot, while transient CDN/radio failures should not force a manual resume.
 const int kDownloadRangeRequestAttempts = 3;
 const int kDownloadRangeReconnectAttempts = 2;
+const int kDownloadResumeProbeBytes = 64 * 1024;
 const Duration kDownloadRangeRetryBaseDelay = Duration(milliseconds: 250);
 
 bool isRetryableDownloadHttpStatus(int? status) {
@@ -27,6 +29,21 @@ Duration downloadRangeRetryDelay({
   return kDownloadRangeRetryBaseDelay * (1 << shift);
 }
 
+/// Strong ETags are preferred for `If-Range`; HTTP dates are the standards-
+/// compliant fallback. Weak ETags are intentionally ignored because RFC range
+/// validation does not allow them for If-Range.
+String? downloadIfRangeValidator(Headers headers) {
+  final etag = headers.value('etag')?.trim();
+  if (etag != null &&
+      etag.isNotEmpty &&
+      !etag.toLowerCase().startsWith('w/')) {
+    return etag;
+  }
+  final lastModified = headers.value('last-modified')?.trim();
+  if (lastModified != null && lastModified.isNotEmpty) return lastModified;
+  return null;
+}
+
 /// A cancellable append. Starting returns after the response is validated,
 /// leaving the download service's control queue free for pause/cancel.
 ///
@@ -34,6 +51,14 @@ Duration downloadRangeRetryDelay({
 /// worker. This keeps AnimeWitcher's native/background architecture, but uses
 /// the same principle for the Dart fallback path: if a response stream dies,
 /// reconnect from the last durable byte instead of pausing the whole episode.
+///
+/// Before appending to an existing partial file we also verify a saved prefix
+/// against the current resource. If the origin exposes a strong ETag or
+/// Last-Modified validator, all remaining requests carry it as `If-Range`.
+/// This closes the dangerous case where a CDN changes the file behind the same
+/// URL and a resumed suffix would otherwise be appended to bytes from the old
+/// object. background_downloader already keeps ETags in native ResumeData;
+/// this provides the equivalent protection for AnimeWitcher's Dio fallback.
 class DownloadRangeTransfer {
   DownloadRangeTransfer(this.dio);
   final Dio dio;
@@ -74,10 +99,19 @@ class DownloadRangeTransfer {
       if (!await file.exists() || await file.length() != existingBytes) {
         return false;
       }
-      opened = await _openWithRetries(
+      final guardedHeaders = await _guardResumeHeaders(
         operation: operation,
         url: url,
         headers: headers,
+        spec: spec,
+        file: file,
+        written: existingBytes,
+      );
+      if (guardedHeaders == null) return false;
+      opened = await _openWithRetries(
+        operation: operation,
+        url: url,
+        headers: guardedHeaders,
         spec: spec,
         written: existingBytes,
         expectedBytes: expectedBytes,
@@ -90,7 +124,7 @@ class DownloadRangeTransfer {
           id: id,
           operation: operation,
           url: url,
-          headers: headers,
+          headers: guardedHeaders,
           spec: spec,
           file: file,
           opened: opened,
@@ -111,6 +145,139 @@ class DownloadRangeTransfer {
         if (!operation.done.isCompleted) operation.done.complete();
       }
     }
+  }
+
+  /// Legacy/native partial files may not have a validator persisted in their
+  /// task headers. Verify a small byte prefix first, then promote the origin's
+  /// strong validator into If-Range for the actual suffix request. This means
+  /// existing users get safe resume semantics without throwing away progress.
+  Future<Map<String, String>?> _guardResumeHeaders({
+    required _RangeOperation operation,
+    required String url,
+    required Map<String, String> headers,
+    required _RangeSpec spec,
+    required File file,
+    required int written,
+  }) async {
+    final guarded = Map<String, String>.from(headers);
+    if (written <= 0) return guarded;
+
+    final existing = _headerValue(guarded, 'if-range');
+    if (_usableIfRange(existing) != null) return guarded;
+    guarded.removeWhere((key, _) => key.toLowerCase() == 'if-range');
+
+    final probe = await _probeSavedPrefix(
+      operation: operation,
+      url: url,
+      headers: guarded,
+      spec: spec,
+      file: file,
+      written: written,
+    );
+    if (probe == null) return null;
+    if (probe.validator != null) {
+      guarded['If-Range'] = probe.validator!;
+    }
+    return guarded;
+  }
+
+  Future<_ResumeProbe?> _probeSavedPrefix({
+    required _RangeOperation operation,
+    required String url,
+    required Map<String, String> headers,
+    required _RangeSpec spec,
+    required File file,
+    required int written,
+  }) async {
+    final boundedSize = spec.limit == null
+        ? written
+        : math.min(written, spec.limit! - spec.origin + 1);
+    final probeLength = math.min(boundedSize, kDownloadResumeProbeBytes);
+    if (probeLength <= 0) return null;
+    final probeStart = spec.origin;
+    final probeEnd = probeStart + probeLength - 1;
+    final localPrefix = await _readPrefix(file, probeLength);
+    if (localPrefix.length != probeLength) return null;
+
+    for (var attempt = 0; attempt < kDownloadRangeRequestAttempts; attempt++) {
+      if (operation.token.isCancelled) return null;
+      Response<ResponseBody>? response;
+      Stream<List<int>>? stream;
+      try {
+        final requestHeaders = Map<String, String>.from(headers)
+          ..removeWhere(
+            (key, _) =>
+                key.toLowerCase() == 'range' ||
+                key.toLowerCase() == 'if-range',
+          );
+        requestHeaders['Range'] = 'bytes=$probeStart-$probeEnd';
+        requestHeaders['Accept-Encoding'] = 'identity';
+        response = await dio
+            .get<ResponseBody>(
+              url,
+              cancelToken: operation.token,
+              options: Options(
+                headers: requestHeaders,
+                responseType: ResponseType.stream,
+                receiveTimeout: const Duration(seconds: 30),
+                sendTimeout: const Duration(seconds: 15),
+                validateStatus: (_) => true,
+              ),
+            )
+            .timeout(
+              const Duration(seconds: 30),
+              onTimeout: () {
+                throw TimeoutException('Resume probe timeout');
+              },
+            );
+        stream = response.data?.stream;
+        final status = response.statusCode;
+        if (isRetryableDownloadHttpStatus(status)) {
+          await _discard(stream);
+          if (attempt + 1 >= kDownloadRangeRequestAttempts) return null;
+          await Future<void>.delayed(
+            downloadRangeRetryDelay(
+              retryIndex: attempt,
+              retryAfter: response.headers.value('retry-after'),
+            ),
+          );
+          continue;
+        }
+
+        final range = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$')
+            .firstMatch(response.headers.value('content-range') ?? '');
+        if (status != 206 || range == null || stream == null) {
+          await _discard(stream);
+          return null;
+        }
+        final responseStart = int.parse(range[1]!);
+        final responseEnd = int.parse(range[2]!);
+        final resourceSize = int.parse(range[3]!);
+        if (responseStart != probeStart ||
+            responseEnd != probeEnd ||
+            responseEnd >= resourceSize) {
+          await _discard(stream);
+          return null;
+        }
+
+        final remotePrefix = await _readExactStream(stream, probeLength);
+        if (remotePrefix == null || !_bytesEqual(localPrefix, remotePrefix)) {
+          return null;
+        }
+        return _ResumeProbe(downloadIfRangeValidator(response.headers));
+      } catch (error) {
+        await _discard(stream);
+        if (operation.token.isCancelled ||
+            !_isRetryableDownloadError(error) ||
+            attempt + 1 >= kDownloadRangeRequestAttempts) {
+          return null;
+        }
+        await Future<void>.delayed(
+          downloadRangeRetryDelay(retryIndex: attempt),
+        );
+      }
+    }
+    return null;
   }
 
   Future<_OpenedRange?> _openWithRetries({
@@ -167,6 +334,11 @@ class DownloadRangeTransfer {
         final range = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$')
             .firstMatch(response.headers.value('content-range') ?? '');
         if (status != 206 || range == null || stream == null) {
+          await _discard(stream);
+          return null;
+        }
+        final ifRange = _usableIfRange(_headerValue(requestHeaders, 'if-range'));
+        if (ifRange != null && !_responseMatchesIfRange(response.headers, ifRange)) {
           await _discard(stream);
           return null;
         }
@@ -316,6 +488,61 @@ class DownloadRangeTransfer {
     }
   }
 
+  Future<List<int>> _readPrefix(File file, int length) async {
+    final bytes = <int>[];
+    await for (final chunk in file.openRead(0, length)) {
+      bytes.addAll(chunk);
+    }
+    return bytes;
+  }
+
+  Future<List<int>?> _readExactStream(Stream<List<int>> stream, int length) async {
+    final bytes = <int>[];
+    try {
+      await for (final chunk in stream.timeout(const Duration(seconds: 30))) {
+        if (bytes.length + chunk.length > length) return null;
+        bytes.addAll(chunk);
+      }
+    } catch (_) {
+      return null;
+    }
+    return bytes.length == length ? bytes : null;
+  }
+
+  bool _bytesEqual(List<int> first, List<int> second) {
+    if (first.length != second.length) return false;
+    for (var index = 0; index < first.length; index++) {
+      if (first[index] != second[index]) return false;
+    }
+    return true;
+  }
+
+  String? _headerValue(Map<String, String> headers, String name) {
+    final lower = name.toLowerCase();
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == lower) return entry.value.trim();
+    }
+    return null;
+  }
+
+  String? _usableIfRange(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (trimmed.toLowerCase().startsWith('w/')) return null;
+    return trimmed;
+  }
+
+  bool _responseMatchesIfRange(Headers headers, String validator) {
+    if (validator.startsWith('"')) {
+      final etag = headers.value('etag')?.trim();
+      return etag == null || etag.isEmpty || etag == validator;
+    }
+    final lastModified = headers.value('last-modified')?.trim();
+    return lastModified == null ||
+        lastModified.isEmpty ||
+        lastModified == validator;
+  }
+
   Future<void> _discard(Stream<List<int>>? stream) async {
     if (stream == null) return;
     try {
@@ -347,6 +574,11 @@ class _OpenedRange {
 
   final Stream<List<int>> stream;
   final int total;
+}
+
+class _ResumeProbe {
+  const _ResumeProbe(this.validator);
+  final String? validator;
 }
 
 class _RangeOperation {
