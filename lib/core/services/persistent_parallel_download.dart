@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
 
+import 'download_connection_governor.dart';
 import 'download_parallel.dart';
 
 /// Native DownloadTasks transfer the parts; this coordinator persists their
@@ -13,9 +14,10 @@ import 'download_parallel.dart';
 ///
 /// Fresh sessions use Gopeed-style slow start: 1, 2, 4, 8... connections. A
 /// batch is not expanded until every child in that batch has actually reached
-/// running/progress (or completed). This is intentionally response-gated rather
-/// than timer-gated: if iOS/Android or the origin can only admit four requests,
-/// the remaining connections stay queued instead of causing a connection storm.
+/// running/progress (or completed). If a batch hits rate limiting, server
+/// overload, or a retryable connection failure, growth is stopped and the
+/// episode falls back to the last healthy connection level instead of forcing
+/// the requested 16 connections.
 class PersistentParallelDownload {
   PersistentParallelDownload({
     required this.startPart,
@@ -42,6 +44,8 @@ class PersistentParallelDownload {
   final Map<String, _ParallelSession> _sessions = {};
   final Map<String, _ParallelSession> _children = {};
   final Set<String> _activeConnectionIds = {};
+  final DownloadConnectionGovernor _connectionGovernor =
+      DownloadConnectionGovernor();
   Future<void>? _pumpFuture;
   bool _disposed = false;
 
@@ -58,12 +62,6 @@ class PersistentParallelDownload {
   Future<File> _manifest(DownloadTask task) async =>
       File('${await task.filePath()}.parts/manifest.json');
 
-  /// Stops this Dart coordinator without pausing/canceling native children.
-  ///
-  /// URLSession/background_downloader may legitimately keep transferring after
-  /// the ProviderScope is gone. We only stop scheduling new children and wait
-  /// for already-queued manifest writes to settle, so the next process can
-  /// restore those same ranges instead of racing an old coordinator.
   Future<void> dispose() async {
     if (_disposed) {
       final pump = _pumpFuture;
@@ -226,8 +224,6 @@ class PersistentParallelDownload {
             part.progress = 1;
             continue;
           }
-          // A previously completed file that vanished must not be silently
-          // downloaded again. Keep the episode paused for an explicit delete.
           if (part.complete) throw StateError('A completed part is missing');
         }
 
@@ -237,11 +233,15 @@ class PersistentParallelDownload {
           return true;
         }
 
-        // Use the same response-gated slow start for fresh and resumed files.
-        // A child already owned by URLSession is recognized below from its
-        // running database record, so process recovery can advance without
-        // reopening all persisted ranges at once.
-        session.rampBatches = downloadConnectionRampBatches(pending);
+        final requested = pending.clamp(1, kDownloadPartsMax).toInt();
+        session.connectionCeiling = _connectionGovernor.connectionCeilingFor(
+          session.task.url,
+          requested: requested,
+        );
+        final slowStartTarget = pending < session.connectionCeiling
+            ? pending
+            : session.connectionCeiling;
+        session.rampBatches = downloadConnectionRampBatches(slowStartTarget);
 
         if (!await _pumpSession(session)) {
           throw StateError('Could not start initial download connection');
@@ -256,22 +256,49 @@ class PersistentParallelDownload {
     });
   }
 
-  /// Launches as much of the current slow-start batch as the global budget
-  /// permits. Once a full batch is launched, expansion stops until all members
-  /// have produced a running/progress/completion signal, matching Gopeed's
-  /// response-driven slow-start controller.
+  int _activeConnectionsForSession(_ParallelSession session) => session.parts
+      .where(
+        (part) =>
+            part.launched &&
+            !part.complete &&
+            _activeConnectionIds.contains(part.task.taskId),
+      )
+      .length;
+
+  int _unlaunchedPartCount(_ParallelSession session) => session.parts
+      .where((part) => !part.complete && !part.launched)
+      .length;
+
   Future<bool> _pumpSession(_ParallelSession session) async {
     if (_disposed || !session.active || session.deleted) return true;
 
     while (!_disposed && session.active && !session.deleted) {
       if (session.currentBatchRemaining == 0) {
         if (session.currentBatchPendingIds.isNotEmpty) return true;
-        if (session.rampBatchIndex >= session.rampBatches.length) return true;
-        session.currentBatchRemaining =
-            session.rampBatches[session.rampBatchIndex++];
+        if (session.rampBatchIndex < session.rampBatches.length) {
+          session.currentBatchRemaining =
+              session.rampBatches[session.rampBatchIndex++];
+        } else {
+          // Slow start reached its safe ceiling. Keep the pipeline full by
+          // replacing completed ranges one-for-one, never exceeding that cap.
+          session.slowStartComplete = true;
+          final sessionAvailable =
+              session.connectionCeiling - _activeConnectionsForSession(session);
+          if (sessionAvailable <= 0) return true;
+          final remaining = _unlaunchedPartCount(session);
+          if (remaining <= 0) return true;
+          session.currentBatchRemaining = remaining < sessionAvailable
+              ? remaining
+              : sessionAvailable;
+        }
       }
 
-      final available = _connectionBudget - _activeConnectionIds.length;
+      final globalAvailable = _connectionBudget - _activeConnectionIds.length;
+      final sessionAvailable =
+          session.connectionCeiling - _activeConnectionsForSession(session);
+      final available = globalAvailable < sessionAvailable
+          ? globalAvailable
+          : sessionAvailable;
       if (available <= 0) return true;
 
       final launchCount = session.currentBatchRemaining < available
@@ -295,9 +322,8 @@ class PersistentParallelDownload {
           part.progress = progress;
         }
 
-        // Reserve before enqueueing to close the same enqueue->running race as
-        // the logical episode queue. This is also what keeps 5 episodes x 16
-        // parts from turning into 80 native requests.
+        // Reserve before enqueueing to close the enqueue->running race. This
+        // also keeps 5 episodes x 16 parts from becoming 80 native requests.
         part.launched = true;
         _activeConnectionIds.add(part.task.taskId);
         session.currentBatchPendingIds.add(part.task.taskId);
@@ -310,9 +336,8 @@ class PersistentParallelDownload {
           return false;
         }
 
-        // On process recovery a native child can already be transferring, in
-        // which case no fresh `running` callback is guaranteed. Treat an
-        // existing running/retrying record as Gopeed's connect-success signal.
+        // On process recovery a child may already be owned by native IO, so a
+        // fresh running callback is not guaranteed.
         if (record != null &&
             (record.status == TaskStatus.running ||
                 record.status == TaskStatus.waitingToRetry)) {
@@ -320,8 +345,6 @@ class PersistentParallelDownload {
         }
       }
 
-      // A partially launched batch is waiting for capacity. A completed/paused
-      // child in any session will schedule the global pump again.
       if (session.currentBatchRemaining > 0) return true;
       if (session.currentBatchPendingIds.isNotEmpty) return true;
     }
@@ -332,6 +355,15 @@ class PersistentParallelDownload {
     if (!session.currentBatchPendingIds.remove(part.task.taskId)) return;
     if (session.currentBatchRemaining == 0 &&
         session.currentBatchPendingIds.isEmpty) {
+      if (!session.slowStartComplete) {
+        final active = _activeConnectionsForSession(session);
+        if (active > session.lastHealthyConnections) {
+          session.lastHealthyConnections = active;
+        }
+        if (session.rampBatchIndex >= session.rampBatches.length) {
+          session.slowStartComplete = true;
+        }
+      }
       _schedulePumpAll();
     }
   }
@@ -341,6 +373,60 @@ class PersistentParallelDownload {
     part.launched = false;
     part.speed = 0;
     _schedulePumpAll();
+  }
+
+  void _capSessionAt(_ParallelSession session, int ceiling) {
+    final safe = ceiling
+        .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)
+        .toInt();
+    if (safe >= session.connectionCeiling) return;
+    session.connectionCeiling = safe;
+    session.slowStartComplete = true;
+    session.rampBatches = const <int>[];
+    session.rampBatchIndex = 0;
+    // Do not clear pending IDs: already-launched native children must prove
+    // they recovered before the scheduler considers opening replacements.
+    session.currentBatchRemaining = 0;
+  }
+
+  void _applyConnectionPressure(
+    _ParallelSession session,
+    TaskStatusUpdate update,
+  ) {
+    final pressure = downloadConnectionPressureFor(update);
+    if (pressure == DownloadConnectionPressure.none) return;
+
+    final active = _activeConnectionsForSession(session).clamp(1, 1 << 30);
+    final growthInFlight = session.currentBatchPendingIds.isNotEmpty ||
+        session.currentBatchRemaining > 0;
+    var fallback = growthInFlight && session.lastHealthyConnections > 0
+        ? session.lastHealthyConnections
+        : (active <= 1 ? 1 : (active + 1) ~/ 2);
+    if (fallback > session.connectionCeiling) {
+      fallback = session.connectionCeiling;
+    }
+
+    if (pressure == DownloadConnectionPressure.host) {
+      final learned = _connectionGovernor.learnHostCeiling(
+        session.task.url,
+        fallback,
+      );
+      for (final sibling in _sessions.values) {
+        if (!sibling.active || sibling.deleted) continue;
+        if (_connectionGovernor.sameOrigin(
+          sibling.task.url,
+          session.task.url,
+        )) {
+          _capSessionAt(sibling, learned);
+        }
+      }
+    } else {
+      final learned = _connectionGovernor.learnTransferCeiling(
+        session.task.url,
+        fallback,
+      );
+      _capSessionAt(session, learned);
+    }
   }
 
   void _schedulePumpAll() {
@@ -377,16 +463,20 @@ class PersistentParallelDownload {
 
   bool _hasImmediatelyPumpableWork(_ParallelSession session) {
     if (_disposed || !session.active || session.deleted) return false;
+    if (_activeConnectionsForSession(session) >= session.connectionCeiling) {
+      return false;
+    }
     if (session.currentBatchRemaining > 0) return true;
-    return session.currentBatchPendingIds.isEmpty &&
-        session.rampBatchIndex < session.rampBatches.length;
+    if (session.currentBatchPendingIds.isNotEmpty) return false;
+    if (session.rampBatchIndex < session.rampBatches.length) return true;
+    return _unlaunchedPartCount(session) > 0;
   }
 
   bool handleUpdate(TaskUpdate update) {
     if (update.task.group != kPersistentDownloadChunkGroup) return false;
     if (_disposed) return true;
     final session = _children[update.task.taskId];
-    if (session == null) return true; // recovery reads the child's DB record
+    if (session == null) return true;
 
     unawaited(
       session.serialize(() async {
@@ -441,10 +531,20 @@ class PersistentParallelDownload {
           }
 
           if (update is! TaskStatusUpdate) return;
+
+          if (session.active && update.status == TaskStatus.waitingToRetry) {
+            // The native task keeps its reserved slot while it retries. Stop
+            // opening more connections when this is an overload/connection
+            // pressure signal, exactly where Gopeed pauses slow-start growth.
+            part.launched = true;
+            part.speed = 0;
+            _activeConnectionIds.add(part.task.taskId);
+            _applyConnectionPressure(session, update);
+            await _persist(session);
+            return;
+          }
+
           if (update.status == TaskStatus.complete) {
-            // Validate the byte range before freeing its connection or
-            // expanding. Gopeed treats invalid/incomplete range responses as
-            // terminal for that connection and never lets them unlock more IO.
             final file = File(await part.task.filePath());
             if (!await file.exists() || await file.length() != part.size) {
               throw StateError(
@@ -480,13 +580,14 @@ class PersistentParallelDownload {
                   update.status == TaskStatus.notFound ||
                   update.status == TaskStatus.canceled ||
                   update.status == TaskStatus.paused)) {
+            if (update.status == TaskStatus.failed) {
+              // Preserve the learned cap even when the child's bounded native
+              // retries were exhausted, so explicit resume does not repeat the
+              // same connection storm.
+              _applyConnectionPressure(session, update);
+            }
             _markConnectionReady(session, part);
             _releaseConnection(part);
-            // Each child already had three bounded native attempts. Unlike
-            // Gopeed we cannot safely steal this fixed byte range without
-            // mutating an in-flight URLSession task, so preserve every byte and
-            // pause the parent for an exact-range resume instead of corrupting
-            // the file or spinning on retries.
             await _pause(session);
           }
         } catch (_) {
@@ -568,9 +669,6 @@ class PersistentParallelDownload {
     try {
       await temp.rename(session.manifest.path);
     } on FileSystemException {
-      // Some Windows filesystems do not replace an existing target on rename.
-      // Keep the old manifest until the new checkpoint is fully written, then
-      // fall back to an in-place flushed replacement.
       await session.manifest.writeAsString(payload, flush: true);
       try {
         if (await temp.exists()) await temp.delete();
@@ -595,9 +693,6 @@ class PersistentParallelDownload {
     onUpdate(TaskProgressUpdate(session.task, 1, session.size));
     await _status(session, TaskStatus.complete);
 
-    // Delete child checkpoints only after the final file and parent complete
-    // record are durable. A kill before this point leaves enough state to adopt
-    // the completed target on the next launch.
     for (final part in session.parts) {
       _children.remove(part.task.taskId);
       final file = File(await part.task.filePath());
@@ -647,6 +742,9 @@ class _ParallelSession {
   final List<_DownloadPart> parts;
   bool active = false;
   bool deleted = false;
+  int connectionCeiling = kDownloadPartsMin;
+  int lastHealthyConnections = 0;
+  bool slowStartComplete = false;
   List<int> rampBatches = const <int>[];
   int rampBatchIndex = 0;
   int currentBatchRemaining = 0;
@@ -660,6 +758,9 @@ class _ParallelSession {
   Future<void> get idle => _pending;
 
   void resetRamp() {
+    connectionCeiling = kDownloadPartsMin;
+    lastHealthyConnections = 0;
+    slowStartComplete = false;
     rampBatches = const <int>[];
     rampBatchIndex = 0;
     currentBatchRemaining = 0;
