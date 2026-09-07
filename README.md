@@ -57,20 +57,25 @@ AnimeWitcher is a modern, media streaming client. It draws inspiration from the 
 
 ### Screenshots
 
-### 📱 Mobile
+#### 📱 Mobile
 
 <p align="center">
-  <img src="screenshots/mobile/home.png" width="360" />
-    <img src="screenshots/mobile/discover.png" width="360" />
-  <img src="screenshots/mobile/details.png" width="360" />
-  <img src="screenshots/mobile/settings.png" width="360" />
+  <img src="screenshots/mobile/home.png" width="320" />
+  <img src="screenshots/mobile/more.png" width="320" />
 </p>
 
-### 📺 Large screen
+#### 🖥️ Desktop
 
 <p align="center">
-  <img src="screenshots/tv/details_1.png" width="720" />
-  <img src="screenshots/tv/details_2.png" width="720" />
+  <img src="screenshots/desktop/home.png" width="800" />
+</p>
+
+<p align="center">
+  <img src="screenshots/desktop/details.png" width="800" />
+</p>
+
+<p align="center">
+  <img src="screenshots/desktop/settings.png" width="800" />
 </p>
 
 ## Supported Platforms
