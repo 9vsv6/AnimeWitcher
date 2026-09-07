@@ -370,6 +370,32 @@ void main() {
     expect(star1.left, lessThan(star10.left));
   });
 
+  testWidgets('metadata bar places compact ratings below episode and type', (
+    tester,
+  ) async {
+    final item = _item(
+      syncData: <String, String>{
+        ..._ratedSync(),
+        'awEpisodes': '20',
+        'awType': 'مسلسل',
+      },
+    );
+    expect(hasDetailsRatingsSummary(item), isTrue);
+
+    await tester.pumpWidget(
+      _app(
+        service: _FakeAccountService(),
+        child: MetadataBar(item: item),
+      ),
+    );
+
+    final typeRect = tester.getRect(find.text('مسلسل'));
+    final ratingRect = tester.getRect(find.byKey(kDetailsRatingsCompactKey));
+    expect(ratingRect.top, greaterThanOrEqualTo(typeRect.bottom));
+    expect(find.text('9.1'), findsOneWidget);
+    expect(find.text('8.73'), findsOneWidget);
+  });
+
   testWidgets('compact summary puts Witcher left, source right, with one dot', (
     tester,
   ) async {

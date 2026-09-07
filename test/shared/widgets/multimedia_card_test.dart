@@ -1,5 +1,6 @@
 import 'package:animewitcher/shared/widgets/multimedia_card.dart';
 import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/utils/catalog_rating.dart';
 import 'package:animewitcher/core/theme/app_theme.dart';
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -229,6 +230,68 @@ void main() {
     final type = tester.widget<Text>(find.text('خاصة'));
     expect(title.style?.color, Colors.white.withValues(alpha: 0.92));
     expect(type.style?.color, Colors.white.withValues(alpha: 0.45));
+  });
+
+  testWidgets('renders MAL as a compact filled blue badge', (tester) async {
+    await tester.pumpWidget(
+      _cardApp(
+        card: MultimediaCard(
+          imageUrl: null,
+          title: 'MAL card',
+          subtitle: 'مسلسل',
+          catalogRating: const CatalogRating(
+            source: CatalogRatingSource.mal,
+            score: 8.73,
+          ),
+          heroTag: 'mal-rating-card',
+          onTap: () {},
+        ),
+      ),
+    );
+
+    final badge = tester.widget<Container>(
+      find.byKey(const Key('catalog-rating-mal-source')),
+    );
+    expect((badge.decoration as BoxDecoration).color, const Color(0xFF2E51A2));
+    final label = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('catalog-rating-mal-source')),
+        matching: find.text('MAL'),
+      ),
+    );
+    expect(label.style?.color, Colors.white);
+    expect(find.text('8.73'), findsOneWidget);
+  });
+
+  testWidgets('renders IMDb as a compact filled yellow badge', (tester) async {
+    await tester.pumpWidget(
+      _cardApp(
+        card: MultimediaCard(
+          imageUrl: null,
+          title: 'IMDb card',
+          subtitle: 'مسلسل',
+          catalogRating: const CatalogRating(
+            source: CatalogRatingSource.imdb,
+            score: 8.4,
+          ),
+          heroTag: 'imdb-rating-card',
+          onTap: () {},
+        ),
+      ),
+    );
+
+    final badge = tester.widget<Container>(
+      find.byKey(const Key('catalog-rating-imdb-source')),
+    );
+    expect((badge.decoration as BoxDecoration).color, const Color(0xFFF5C518));
+    final label = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('catalog-rating-imdb-source')),
+        matching: find.text('IMDb'),
+      ),
+    );
+    expect(label.style?.color, Colors.black);
+    expect(find.text('8.4'), findsOneWidget);
   });
 
   test('catalog cards shimmer posters by default while artwork loads', () {

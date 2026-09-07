@@ -449,6 +449,37 @@ class MultimediaCard extends StatelessWidget {
     );
   }
 
+  Widget _buildCatalogSourceBadge({
+    required Key key,
+    required String label,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    required TextStyle subtitleTextStyle,
+  }) {
+    final sourceSize = ((subtitleTextStyle.fontSize ?? 11) - 2)
+        .clamp(7.5, 10.0)
+        .toDouble();
+    return Container(
+      key: key,
+      padding: const EdgeInsets.symmetric(horizontal: 3.5, vertical: 1),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(3.5),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        style: subtitleTextStyle.copyWith(
+          color: foregroundColor,
+          fontSize: sourceSize,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.25,
+          height: 1,
+        ),
+      ),
+    );
+  }
+
   Widget _buildCatalogRating(TextStyle subtitleTextStyle) {
     final rating = catalogRating!;
     final score = Text(
@@ -456,35 +487,28 @@ class MultimediaCard extends StatelessWidget {
       maxLines: 1,
       style: subtitleTextStyle,
     );
-    final sourceSize = ((subtitleTextStyle.fontSize ?? 11) - 1)
-        .clamp(8.0, 12.0)
-        .toDouble();
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: switch (rating.source) {
         CatalogRatingSource.mal => <Widget>[
-          Text(
-            'MAL',
+          _buildCatalogSourceBadge(
             key: const Key('catalog-rating-mal-source'),
-            style: subtitleTextStyle.copyWith(
-              color: const Color(0xFF2E51A2),
-              fontSize: sourceSize,
-              fontWeight: FontWeight.w800,
-            ),
+            label: 'MAL',
+            backgroundColor: const Color(0xFF2E51A2),
+            foregroundColor: Colors.white,
+            subtitleTextStyle: subtitleTextStyle,
           ),
           const SizedBox(width: 4),
           score,
         ],
         CatalogRatingSource.imdb => <Widget>[
-          Text(
-            'IMDb',
+          _buildCatalogSourceBadge(
             key: const Key('catalog-rating-imdb-source'),
-            style: subtitleTextStyle.copyWith(
-              color: const Color(0xFFF5C518),
-              fontSize: sourceSize,
-              fontWeight: FontWeight.w800,
-            ),
+            label: 'IMDb',
+            backgroundColor: const Color(0xFFF5C518),
+            foregroundColor: Colors.black,
+            subtitleTextStyle: subtitleTextStyle,
           ),
           const SizedBox(width: 4),
           score,

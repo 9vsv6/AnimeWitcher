@@ -68,8 +68,9 @@ class DetailsRatingsSummary extends StatelessWidget {
     final isImdb = source == ExternalRatingSource.imdb;
     final externalBadgeColor = isImdb ? kImdbBadgeYellow : kMalBadgeBlue;
     final externalBadgeTextColor = isImdb ? Colors.black : Colors.white;
-    final scoreStyle = theme.textTheme.titleMedium?.copyWith(
+    final scoreStyle = theme.textTheme.labelMedium?.copyWith(
       color: colors.onSurface,
+      fontSize: 11,
       fontWeight: FontWeight.w800,
       height: 1,
     );
@@ -77,11 +78,11 @@ class DetailsRatingsSummary extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Align(
-        alignment: Alignment.center,
+        alignment: Alignment.centerLeft,
         child: FittedBox(
           key: kDetailsRatingsCompactKey,
           fit: BoxFit.scaleDown,
-          alignment: Alignment.center,
+          alignment: Alignment.centerLeft,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -95,26 +96,26 @@ class DetailsRatingsSummary extends StatelessWidget {
                       children: [
                         const Icon(
                           Icons.star_rounded,
-                          size: 20,
+                          size: 14,
                           color: AppTheme.animeWitcherAccent,
                         ),
-                        const SizedBox(width: 5),
+                        const SizedBox(width: 3),
                         Text(formatRatingScore(witcherScore!), style: scoreStyle),
                       ],
                     ),
                   ),
                 ),
               if (showWitcher && showExternal) ...[
-                const SizedBox(width: 10),
+                const SizedBox(width: 5),
                 Text(
                   '•',
-                  style: theme.textTheme.titleMedium?.copyWith(
+                  style: theme.textTheme.labelMedium?.copyWith(
                     color: colors.onSurfaceVariant.withValues(alpha: 0.72),
                     fontWeight: FontWeight.w700,
                     height: 1,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 5),
               ],
               if (showExternal)
                 Semantics(
@@ -127,24 +128,25 @@ class DetailsRatingsSummary extends StatelessWidget {
                         Container(
                           key: kDetailsRatingsCompactExternalBadgeKey,
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
+                            horizontal: 4,
+                            vertical: 1.5,
                           ),
                           decoration: BoxDecoration(
                             color: externalBadgeColor,
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             isImdb ? 'IMDb' : 'MAL',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: externalBadgeTextColor,
+                              fontSize: 8.5,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: 0.4,
+                              letterSpacing: 0.3,
                               height: 1,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 3),
                         Text(formatRatingScore(externalScore!), style: scoreStyle),
                       ],
                     ),
