@@ -316,6 +316,7 @@ class _CharacterDetailsScreenState
               onBack: () => Navigator.of(context).pop(),
               backForegroundColor: colors.onSurface,
               backFallbackColor: colors.surfaceContainerHigh,
+              toolbarTrailingInset: 34,
               trailingButtons: headerButtons,
               child: const SizedBox.shrink(),
             ),

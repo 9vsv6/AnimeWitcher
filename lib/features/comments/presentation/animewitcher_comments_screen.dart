@@ -537,6 +537,7 @@ class _AnimeWitcherCommentsScreenState
             onBack: () => Navigator.of(context).pop(),
             backForegroundColor: colors.onSurface,
             backFallbackColor: colors.surfaceContainerHigh,
+            allowInstantBoundaryMorph: true,
             trailingButtons: AnimeWitcherCommentSortControl.persistentButtons(
               context: context,
               isArabic: isArabic,
