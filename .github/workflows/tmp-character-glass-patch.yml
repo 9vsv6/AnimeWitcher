@@ -1,0 +1,109 @@
+name: Temporary Character Glass Patch
+
+on:
+  push:
+    branches:
+      - ui/align-character-glass-and-animate-comments
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ui/align-character-glass-and-animate-comments
+      - name: Apply targeted patch
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count} for {old[:80]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          glass = 'lib/shared/widgets/apple_liquid_glass.dart'
+          replace_once(
+              glass,
+              "    this.deferTrailingMorphUntilRouteSettles = false,\n    this.instantRouteBoundary = false,\n  });",
+              "    this.deferTrailingMorphUntilRouteSettles = false,\n    this.instantRouteBoundary = false,\n    this.toolbarTrailingInset,\n    this.allowInstantBoundaryMorph = false,\n  });",
+          )
+          replace_once(
+              glass,
+              "  bool deferTrailingMorphUntilRouteSettles;\n  bool instantRouteBoundary;",
+              "  bool deferTrailingMorphUntilRouteSettles;\n  bool instantRouteBoundary;\n  double? toolbarTrailingInset;\n  bool allowInstantBoundaryMorph;",
+          )
+          replace_once(
+              glass,
+              "        instantRouteBoundary == other.instantRouteBoundary &&\n        sameCustomTrailing &&",
+              "        instantRouteBoundary == other.instantRouteBoundary &&\n        toolbarTrailingInset == other.toolbarTrailingInset &&\n        allowInstantBoundaryMorph == other.allowInstantBoundaryMorph &&\n        sameCustomTrailing &&",
+          )
+          replace_once(
+              glass,
+              "    instantRouteBoundary = other.instantRouteBoundary;\n  }",
+              "    instantRouteBoundary = other.instantRouteBoundary;\n    toolbarTrailingInset = other.toolbarTrailingInset;\n    allowInstantBoundaryMorph = other.allowInstantBoundaryMorph;\n  }",
+          )
+          replace_once(
+              glass,
+              "    this.branchIndex,\n    this.deferTrailingMorphUntilRouteSettles = false,\n  });",
+              "    this.branchIndex,\n    this.deferTrailingMorphUntilRouteSettles = false,\n    this.toolbarTrailingInset,\n  });",
+          )
+          replace_once(
+              glass,
+              "  final int? branchIndex;\n  final bool deferTrailingMorphUntilRouteSettles;",
+              "  final int? branchIndex;\n  final bool deferTrailingMorphUntilRouteSettles;\n  final double? toolbarTrailingInset;",
+          )
+          replace_once(
+              glass,
+              "        deferTrailingMorphUntilRouteSettles:\n            widget.deferTrailingMorphUntilRouteSettles,\n      ),",
+              "        deferTrailingMorphUntilRouteSettles:\n            widget.deferTrailingMorphUntilRouteSettles,\n        toolbarTrailingInset: widget.toolbarTrailingInset,\n      ),",
+          )
+          replace_once(
+              glass,
+              "    final crossesInstantBoundary =\n        lastConfig != null && isInstantRoute != lastWasInstantRoute;\n    final involvesInstantRoute = isInstantRoute || lastWasInstantRoute;",
+              "    final crossesInstantBoundary =\n        lastConfig != null && isInstantRoute != lastWasInstantRoute;\n    final allowInstantBoundaryMorph =\n        config?.allowInstantBoundaryMorph == true ||\n        lastConfig?.allowInstantBoundaryMorph == true;\n    final hardCutInstantBoundary =\n        crossesInstantBoundary && !allowInstantBoundaryMorph;\n    final involvesInstantRoute =\n        (isInstantRoute || lastWasInstantRoute) &&\n        !allowInstantBoundaryMorph;",
+          )
+          replace_once(
+              glass,
+              "      'toolbarTrailingInset': isInstantRoute ? 34.0 : 18.0,\n      'animateToolbarChanges': !involvesInstantRoute,\n      'instantVisibilityChanges': involvesInstantRoute,\n      'hardCutToolbar': crossesInstantBoundary,",
+              "      'toolbarTrailingInset':\n          config?.toolbarTrailingInset ?? (isInstantRoute ? 34.0 : 18.0),\n      'animateToolbarChanges': !involvesInstantRoute,\n      'instantVisibilityChanges': involvesInstantRoute,\n      'hardCutToolbar': hardCutInstantBoundary,",
+          )
+          replace_once(
+              glass,
+              "    final nextIsInstant = next?.instantRouteBoundary == true;\n    final previousWasInstant =\n        _lastRenderedActionConfig?.instantRouteBoundary == true;\n\n    // Do not wait for another Flutter frame when entering/leaving Anime Details.\n    // The UIKit overlay is updated in the same route-animation tick.\n    if (nextIsInstant != previousWasInstant &&\n        (nextIsInstant || previousWasInstant)) {",
+              "    final nextIsInstant = next?.instantRouteBoundary == true;\n    final previousConfig = _lastRenderedActionConfig;\n    final previousWasInstant = previousConfig?.instantRouteBoundary == true;\n    final allowInstantBoundaryMorph =\n        next?.allowInstantBoundaryMorph == true ||\n        previousConfig?.allowInstantBoundaryMorph == true;\n\n    // Root <-> Anime Details remains a hard cut. Comments opt into the normal\n    // Liquid Glass morph so opening and closing them matches character pages.\n    if (!allowInstantBoundaryMorph &&\n        nextIsInstant != previousWasInstant &&\n        (nextIsInstant || previousWasInstant)) {",
+          )
+
+          character = 'lib/features/characters/presentation/character_details_screen.dart'
+          replace_once(
+              character,
+              "              backFallbackColor: colors.surfaceContainerHigh,\n              trailingButtons: headerButtons,",
+              "              backFallbackColor: colors.surfaceContainerHigh,\n              toolbarTrailingInset: 34,\n              trailingButtons: headerButtons,",
+          )
+
+          comments = 'lib/features/comments/presentation/animewitcher_comments_screen.dart'
+          replace_once(
+              comments,
+              "            backFallbackColor: colors.surfaceContainerHigh,\n            trailingButtons: AnimeWitcherCommentSortControl.persistentButtons(",
+              "            backFallbackColor: colors.surfaceContainerHigh,\n            allowInstantBoundaryMorph: true,\n            trailingButtons: AnimeWitcherCommentSortControl.persistentButtons(",
+          )
+          PY
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/tmp-character-glass-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/shared/widgets/apple_liquid_glass.dart \
+                  lib/features/characters/presentation/character_details_screen.dart \
+                  lib/features/comments/presentation/animewitcher_comments_screen.dart \
+                  .github/workflows/tmp-character-glass-patch.yml
+          git commit -m "fix(ui): align character glass and animate comment transitions"
+          git push origin HEAD:ui/align-character-glass-and-animate-comments
