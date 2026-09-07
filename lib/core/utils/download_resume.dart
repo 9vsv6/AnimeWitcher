@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
 
+import '../services/download_concurrency.dart';
 import 'download_cleanup.dart';
 
 /// How an interrupted download should be continued.
@@ -64,16 +66,19 @@ bool shouldRestartDownloadFromZero({
   return true;
 }
 
-/// Unpause / retry / overlay ticks must not flash 0% over saved bytes.
+/// Progress is monotonic. Late native callbacks after pause/reconnect can report
+/// an older percentage; accepting that regression can make restart recovery
+/// think fewer bytes exist than are actually durable on disk.
 double keepLastKnownDownloadProgress({
   required double incoming,
   double? lastKnown,
 }) {
-  if (incoming > 0 && incoming <= 1) return incoming;
-  final last = lastKnown ?? 0;
-  if (last > 0 && last <= 1 && incoming <= 0) return last;
-  if (incoming < 0) return last > 0 ? last : 0;
-  return incoming.clamp(0.0, 1.0);
+  final last = (lastKnown ?? 0).clamp(0.0, 1.0).toDouble();
+  if (incoming > 0 && incoming <= 1) {
+    return incoming > last ? incoming : last;
+  }
+  if (incoming <= 0) return last;
+  return last;
 }
 
 /// Continue a download that was killed mid-transfer. User-paused rows stay
@@ -86,6 +91,39 @@ bool shouldAutoResumeInterruptedDownload({
 }) {
   if (stillInNativeQueue || userPaused || queueWaiting) return false;
   return wasRunningOrFailed;
+}
+
+/// Decide which persisted rows must be restored to AnimeWitcher's logical
+/// waiting queue after process death. A parked failure is deliberately paused
+/// while this process stays alive so the next episode can run, but after an app
+/// relaunch it is an interrupted transfer, not a user pause. Gopeed likewise
+/// allows Start from both paused/error state while retaining completed ranges.
+bool shouldRequeueInterruptedDownloadAfterRelaunch({
+  required TaskStatus persisted,
+  required bool queueWaiting,
+  required bool userPaused,
+  required bool stillInNativeQueue,
+  required bool hasMetadata,
+}) {
+  if (stillInNativeQueue || userPaused) return false;
+  if (queueWaiting) return true;
+  switch (persisted) {
+    case TaskStatus.enqueued:
+    case TaskStatus.running:
+    case TaskStatus.waitingToRetry:
+      return true;
+    case TaskStatus.paused:
+    case TaskStatus.failed:
+    case TaskStatus.notFound:
+      return hasMetadata;
+    case TaskStatus.canceled:
+      // Explicit user delete removes metadata before recovery. A canceled row
+      // with metadata is therefore a system/native interruption and is safe to
+      // restore without turning delete into redownload.
+      return hasMetadata;
+    case TaskStatus.complete:
+      return false;
+  }
 }
 
 /// HTTP headers that continue a download from [existingBytes].
@@ -128,6 +166,25 @@ Future<File?> findPartialDownloadFile({
     await consider(File(p.join(dir.path, '$name$suffix')));
   }
   return best;
+}
+
+/// Copy the largest saved prefix into the canonical task destination before
+/// resuming. Native downloaders may leave `.tmp`/`.download` siblings; custom
+/// multipart validation always checks the canonical child path.
+Future<({File file, int bytes})?> canonicalizePartialDownloadFile({
+  required String destinationPath,
+}) async {
+  final partial = await findPartialDownloadFile(
+    destinationPath: destinationPath,
+  );
+  if (partial == null) return null;
+  final bytes = await partial.length();
+  final destination = File(destinationPath);
+  if (partial.path != destination.path) {
+    await destination.parent.create(recursive: true);
+    await partial.copy(destination.path);
+  }
+  return (file: destination, bytes: bytes);
 }
 
 /// Appends [chunks] onto [dest] without rewriting the existing prefix.
