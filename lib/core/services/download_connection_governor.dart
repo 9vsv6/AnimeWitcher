@@ -61,28 +61,31 @@ String downloadOriginKey(String url) {
   return '$scheme://$host$port';
 }
 
-/// Session-lifetime memory of safe host connection ceilings.
+/// Session-lifetime memory of safe connection ceilings.
 ///
-/// A learned ceiling only moves downward. We deliberately keep this in memory
-/// for the first implementation: a bad CDN moment must not permanently poison
-/// downloads after the app/network is restarted. A later confidence-based
-/// probing phase can raise a learned value after sustained healthy transfers.
+/// Host ceilings are shared by sibling/future transfers after an explicit
+/// overload signal. Transient failures only teach the exact transfer URL, so a
+/// flaky connection cannot unnecessarily throttle every episode on the CDN.
+/// Both memories intentionally reset when the app process restarts; a later
+/// confidence/probing phase can make upward recovery more sophisticated.
 class DownloadConnectionGovernor {
   final Map<String, int> _learnedHostCeilings = <String, int>{};
+  final Map<String, int> _learnedTransferCeilings = <String, int>{};
 
   int connectionCeilingFor(String url, {required int requested}) {
     final safeRequested = requested
         .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)
         .toInt();
-    final learned = _learnedHostCeilings[downloadOriginKey(url)];
-    if (learned == null) return safeRequested;
-    return safeRequested < learned ? safeRequested : learned;
+    final host = _learnedHostCeilings[downloadOriginKey(url)];
+    final transfer = _learnedTransferCeilings[url];
+    var ceiling = safeRequested;
+    if (host != null && host < ceiling) ceiling = host;
+    if (transfer != null && transfer < ceiling) ceiling = transfer;
+    return ceiling;
   }
 
   int learnHostCeiling(String url, int ceiling) {
-    final safe = ceiling
-        .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)
-        .toInt();
+    final safe = _safeCeiling(ceiling);
     final key = downloadOriginKey(url);
     final previous = _learnedHostCeilings[key];
     final learned = previous == null || safe < previous ? safe : previous;
@@ -90,9 +93,23 @@ class DownloadConnectionGovernor {
     return learned;
   }
 
+  int learnTransferCeiling(String url, int ceiling) {
+    final safe = _safeCeiling(ceiling);
+    final previous = _learnedTransferCeilings[url];
+    final learned = previous == null || safe < previous ? safe : previous;
+    _learnedTransferCeilings[url] = learned;
+    return learned;
+  }
+
   int? learnedHostCeilingFor(String url) =>
       _learnedHostCeilings[downloadOriginKey(url)];
 
+  int? learnedTransferCeilingFor(String url) => _learnedTransferCeilings[url];
+
   bool sameOrigin(String first, String second) =>
       downloadOriginKey(first) == downloadOriginKey(second);
+
+  int _safeCeiling(int value) => value
+      .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)
+      .toInt();
 }
