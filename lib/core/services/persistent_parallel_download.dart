@@ -19,6 +19,7 @@ class PersistentParallelDownload {
     required this.recordForId,
     required this.onUpdate,
     required this.onPartProgress,
+    this.connectionRampDelay = kDownloadConnectionRampDelay,
   });
 
   final Future<bool> Function(DownloadTask task, double progress, int size)
@@ -30,6 +31,7 @@ class PersistentParallelDownload {
   final void Function(TaskUpdate update) onUpdate;
   final void Function(String parent, String child, double progress)
   onPartProgress;
+  final Duration connectionRampDelay;
   final Map<String, _ParallelSession> _sessions = {};
   final Map<String, _ParallelSession> _children = {};
 
@@ -94,7 +96,9 @@ class PersistentParallelDownload {
   }
 
   Future<bool> start(ParallelDownloadTask task, int totalBytes) async {
-    if (!await restore(task)) {
+    final restored = await restore(task);
+    var freshSession = false;
+    if (!restored) {
       if (totalBytes <= 0) return false;
       final count = task.chunks.clamp(1, totalBytes);
       final parts = <_DownloadPart>[];
@@ -115,7 +119,7 @@ class PersistentParallelDownload {
               baseDirectory: task.baseDirectory,
               headers: headers,
               updates: Updates.statusAndProgress,
-              retries: 0,
+              retries: kDownloadPartRetries,
               allowPause: true,
               group: kPersistentDownloadChunkGroup,
               metaData: jsonEncode({'parentTaskId': task.taskId}),
@@ -128,14 +132,18 @@ class PersistentParallelDownload {
       final session = _ParallelSession(task, await _manifest(task), parts);
       await _persist(session);
       _register(session);
+      freshSession = true;
     }
     final session = _sessions[task.taskId]!;
     return session.serialize(() async {
       if (session.active) return true;
       session.active = true;
+      session.rampGeneration++;
+      final generation = session.rampGeneration;
       try {
         await _status(session, TaskStatus.enqueued);
         for (final part in session.parts) {
+          part.launched = false;
           final file = File(await part.task.filePath());
           if (await file.exists() && await file.length() == part.size) {
             part.complete = true;
@@ -145,18 +153,30 @@ class PersistentParallelDownload {
           // A previously completed file that vanished must not be silently
           // downloaded again. Keep the episode paused for an explicit delete.
           if (part.complete) throw StateError('A completed part is missing');
-          final record = await recordForId(part.task.taskId);
-          final progress = record?.progress ?? 0;
-          if (progress > part.progress && progress <= 1) {
-            part.progress = progress;
-          }
-          if (!await startPart(part.task, part.progress, part.size)) {
-            throw StateError('Could not resume part ${part.task.taskId}');
-          }
+        }
+
+        final pending = session.parts.where((part) => !part.complete).length;
+        if (pending == 0) {
+          await _assemble(session);
+          return true;
+        }
+
+        // Fresh multipart downloads follow Gopeed's slow-start idea: one
+        // connection first, then exponentially larger batches. A restored or
+        // explicitly resumed manifest attaches every persisted child at once;
+        // those children may already be owned by URLSession after a restart.
+        session.rampBatches = freshSession
+            ? downloadConnectionRampBatches(pending)
+            : <int>[pending];
+        session.rampBatchIndex = 0;
+        if (!await _launchNextBatch(session)) {
+          throw StateError('Could not start initial download connection');
         }
         await _persist(session);
         if (session.parts.every((part) => part.complete)) {
           await _assemble(session);
+        } else {
+          _scheduleNextRamp(session, generation);
         }
         return true;
       } catch (_) {
@@ -164,6 +184,66 @@ class PersistentParallelDownload {
         return false;
       }
     });
+  }
+
+  Future<bool> _launchNextBatch(_ParallelSession session) async {
+    if (!session.active || session.deleted) return false;
+    if (session.rampBatchIndex >= session.rampBatches.length) return true;
+    final requested = session.rampBatches[session.rampBatchIndex++];
+    final pending = session.parts
+        .where((part) => !part.complete && !part.launched)
+        .take(requested)
+        .toList(growable: false);
+    for (final part in pending) {
+      final record = await recordForId(part.task.taskId);
+      final progress = record?.progress ?? 0;
+      if (progress > part.progress && progress <= 1) {
+        part.progress = progress;
+      }
+      if (!await startPart(part.task, part.progress, part.size)) {
+        return false;
+      }
+      part.launched = true;
+    }
+    return true;
+  }
+
+  void _scheduleNextRamp(_ParallelSession session, int generation) {
+    if (!session.active ||
+        session.deleted ||
+        session.rampBatchIndex >= session.rampBatches.length) {
+      return;
+    }
+    unawaited(
+      Future<void>.delayed(connectionRampDelay, () async {
+        if (session.deleted ||
+            !session.active ||
+            generation != session.rampGeneration) {
+          return;
+        }
+        await session.serialize(() async {
+          if (session.deleted ||
+              !session.active ||
+              generation != session.rampGeneration) {
+            return;
+          }
+          try {
+            if (!await _launchNextBatch(session)) {
+              await _pause(session);
+              return;
+            }
+            await _persist(session);
+            if (session.parts.every((part) => part.complete)) {
+              await _assemble(session);
+              return;
+            }
+            _scheduleNextRamp(session, generation);
+          } catch (_) {
+            if (!session.deleted) await _pause(session);
+          }
+        });
+      }),
+    );
   }
 
   bool handleUpdate(TaskUpdate update) {
@@ -180,6 +260,7 @@ class PersistentParallelDownload {
           if (update is TaskProgressUpdate &&
               update.progress >= 0 &&
               update.progress <= 1) {
+            part.launched = true;
             part.progress = update.progress > part.progress
                 ? update.progress
                 : part.progress;
@@ -214,6 +295,7 @@ class PersistentParallelDownload {
             }
           } else if (update is TaskStatusUpdate) {
             if (update.status == TaskStatus.complete) {
+              part.launched = false;
               final file = File(await part.task.filePath());
               if (!await file.exists() || await file.length() != part.size) {
                 throw StateError(
@@ -234,8 +316,10 @@ class PersistentParallelDownload {
                     update.status == TaskStatus.notFound ||
                     update.status == TaskStatus.canceled ||
                     update.status == TaskStatus.paused)) {
+              part.launched = false;
               await _pause(session);
             } else if (session.active && update.status == TaskStatus.running) {
+              part.launched = true;
               await _status(session, TaskStatus.running);
             }
           }
@@ -255,10 +339,16 @@ class PersistentParallelDownload {
 
   Future<void> _pause(_ParallelSession session) async {
     session.active = false;
-    for (final part in session.parts.where((part) => !part.complete)) {
+    session.rampGeneration++;
+    session.rampBatches = const <int>[];
+    session.rampBatchIndex = 0;
+    for (final part in session.parts.where(
+      (part) => !part.complete && part.launched,
+    )) {
       try {
         await pausePart(part.task);
       } catch (_) {}
+      part.launched = false;
       part.speed = 0;
     }
     await _persist(session);
@@ -270,6 +360,7 @@ class PersistentParallelDownload {
     final session = _sessions[task.taskId]!;
     session.deleted = true;
     session.active = false;
+    session.rampGeneration++;
     await session.serialize(() async {
       await cancelParts(session.parts.map((part) => part.task.taskId).toList());
       for (final part in session.parts) {
@@ -331,6 +422,7 @@ class PersistentParallelDownload {
     }
     await staging.rename(target.path);
     session.active = false;
+    session.rampGeneration++;
     onUpdate(TaskProgressUpdate(session.task, 1, session.size));
     await _status(session, TaskStatus.complete);
     // Delete only after the complete file and record are durable.
@@ -351,6 +443,9 @@ class _ParallelSession {
   final List<_DownloadPart> parts;
   bool active = false;
   bool deleted = false;
+  List<int> rampBatches = const <int>[];
+  int rampBatchIndex = 0;
+  int rampGeneration = 0;
   Future<void> _pending = Future<void>.value();
   int get size => parts.fold(0, (sum, part) => sum + part.size);
   double get progress =>
@@ -376,6 +471,7 @@ class _DownloadPart {
   final int to;
   double progress;
   bool complete;
+  bool launched = false;
   double speed = 0;
   int get size => to - from + 1;
   factory _DownloadPart.fromJson(Map<String, dynamic> json) => _DownloadPart(
