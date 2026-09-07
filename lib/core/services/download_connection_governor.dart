@@ -2,6 +2,15 @@ import 'package:background_downloader/background_downloader.dart';
 
 import 'download_parallel.dart';
 
+/// Wait before cautiously testing one connection above a learned host ceiling.
+/// The learned value is intentionally process-local, so this is a short-lived
+/// recovery policy rather than permanent CDN profiling.
+const Duration kDownloadHostProbeCooldown = Duration(minutes: 2);
+
+/// A probe that survives this long without another host-pressure signal is
+/// considered stable and becomes the new learned ceiling on the next transfer.
+const Duration kDownloadHostProbeStabilityWindow = Duration(seconds: 45);
+
 /// How strongly a child transfer failure should influence connection growth.
 enum DownloadConnectionPressure {
   /// Not a signal that parallelism is stressing the origin/network.
@@ -66,18 +75,37 @@ String downloadOriginKey(String url) {
 /// Host ceilings are shared by sibling/future transfers after an explicit
 /// overload signal. Transient failures only teach the exact transfer URL, so a
 /// flaky connection cannot unnecessarily throttle every episode on the CDN.
-/// Both memories intentionally reset when the app process restarts; a later
-/// confidence/probing phase can make upward recovery more sophisticated.
+///
+/// A host ceiling is not allowed to stay artificially low forever. After a
+/// cooldown, exactly one transfer is allowed to probe one connection above the
+/// learned value. Other sibling transfers keep the old safe ceiling while that
+/// probe is settling. If no new host-pressure signal arrives during the
+/// stability window, the probe is promoted on the next transfer. Any pressure
+/// immediately discards the probe and restarts the cooldown.
 class DownloadConnectionGovernor {
+  DownloadConnectionGovernor({DateTime Function()? now})
+    : _now = now ?? DateTime.now;
+
+  final DateTime Function() _now;
   final Map<String, int> _learnedHostCeilings = <String, int>{};
   final Map<String, int> _learnedTransferCeilings = <String, int>{};
+  final Map<String, _HostProbeState> _hostProbeStates =
+      <String, _HostProbeState>{};
 
   int connectionCeilingFor(String url, {required int requested}) {
     final safeRequested = requested
         .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)
         .toInt();
-    final host = _learnedHostCeilings[downloadOriginKey(url)];
     final transfer = _learnedTransferCeilings[url];
+    final transferBound = transfer != null && transfer < safeRequested
+        ? transfer
+        : safeRequested;
+    final host = _hostCeilingFor(
+      url,
+      requested: safeRequested,
+      effectiveRequested: transferBound,
+    );
+
     var ceiling = safeRequested;
     if (host != null && host < ceiling) ceiling = host;
     if (transfer != null && transfer < ceiling) ceiling = transfer;
@@ -90,6 +118,12 @@ class DownloadConnectionGovernor {
     final previous = _learnedHostCeilings[key];
     final learned = previous == null || safe < previous ? safe : previous;
     _learnedHostCeilings[key] = learned;
+
+    // A fresh pressure signal invalidates any optimistic probe, even when the
+    // computed fallback equals the already-learned ceiling.
+    _hostProbeStates[key] = _HostProbeState(
+      nextProbeAt: _now().add(kDownloadHostProbeCooldown),
+    );
     return learned;
   }
 
@@ -109,7 +143,70 @@ class DownloadConnectionGovernor {
   bool sameOrigin(String first, String second) =>
       downloadOriginKey(first) == downloadOriginKey(second);
 
+  int? _hostCeilingFor(
+    String url, {
+    required int requested,
+    required int effectiveRequested,
+  }) {
+    final key = downloadOriginKey(url);
+    var learned = _learnedHostCeilings[key];
+    if (learned == null) return null;
+
+    final now = _now();
+    final state = _hostProbeStates.putIfAbsent(
+      key,
+      () => _HostProbeState(
+        nextProbeAt: now.add(kDownloadHostProbeCooldown),
+      ),
+    );
+
+    final probeCeiling = state.probeCeiling;
+    final probeStartedAt = state.probeStartedAt;
+    if (probeCeiling != null &&
+        probeStartedAt != null &&
+        !now.isBefore(
+          probeStartedAt.add(kDownloadHostProbeStabilityWindow),
+        )) {
+      if (probeCeiling > learned) {
+        learned = _safeCeiling(probeCeiling);
+        _learnedHostCeilings[key] = learned;
+      }
+      state
+        ..probeCeiling = null
+        ..probeStartedAt = null
+        ..nextProbeAt = now.add(kDownloadHostProbeCooldown);
+    }
+
+    // Only one transfer gets the extra connection. A URL-specific transient
+    // cap can also block a host probe; do not mark a probe as in-flight when
+    // that transfer could not actually exercise it.
+    if (state.probeCeiling == null &&
+        learned < effectiveRequested &&
+        !now.isBefore(state.nextProbeAt)) {
+      final candidate = learned + 1;
+      final probe = candidate < effectiveRequested
+          ? candidate
+          : effectiveRequested;
+      if (probe > learned) {
+        state
+          ..probeCeiling = probe
+          ..probeStartedAt = now;
+        return probe < requested ? probe : requested;
+      }
+    }
+
+    return learned < requested ? learned : requested;
+  }
+
   int _safeCeiling(int value) => value
       .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)
       .toInt();
+}
+
+class _HostProbeState {
+  _HostProbeState({required this.nextProbeAt});
+
+  DateTime nextProbeAt;
+  int? probeCeiling;
+  DateTime? probeStartedAt;
 }
