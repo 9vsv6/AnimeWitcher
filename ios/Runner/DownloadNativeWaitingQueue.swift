@@ -1248,11 +1248,9 @@ private enum DownloadUrlSessionHook {
     guard let method = class_getInstanceMethod(cls, completeSelector) else { return }
     originalComplete = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionTask, Error?) -> Void = { slf, session, task, error in
-      DownloadNativeWaitingQueue.handlePluginTaskCompleted(
-        session: session,
-        task: task,
-        error: error
-      )
+      // The plugin owns URLSession bookkeeping, retries, resume data and its
+      // holding queue. Let it settle the failed task before AnimeWitcher frees
+      // the logical episode slot and promotes another one.
       if let original = DownloadUrlSessionHook.originalComplete {
         let fn = unsafeBitCast(
           original,
@@ -1260,6 +1258,15 @@ private enum DownloadUrlSessionHook {
         )
         fn(slf, completeSelector, session, task, error)
       }
+      // A successful URLSessionDownloadTask already went through
+      // didFinishDownloadingTo, where the plugin moved the file and we mark
+      // the logical episode complete. Do not process success twice.
+      guard error != nil else { return }
+      DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+        session: session,
+        task: task,
+        error: error
+      )
     }
     method_setImplementation(method, imp_implementationWithBlock(block))
   }

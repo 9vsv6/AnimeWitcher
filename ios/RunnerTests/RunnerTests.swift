@@ -57,6 +57,8 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(waiter.savedExpectedBytes, 8000)
     XCTAssertEqual(waiter.transferredBytes, 3360)
   }
+
+  func testIncompleteWaiterPayloadIsRejected() {
     DownloadNativeWaitingQueue.resetForTests()
     DownloadNativeWaitingQueue.persist(from: [
       "maxConcurrent": 1,
