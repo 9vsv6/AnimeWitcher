@@ -13,14 +13,17 @@ const List<int> kDownloadPartChoices = <int>[0, 1, 2, 3, 4];
 const int kDownloadPartRetries = 1;
 
 /// Gopeed grows HTTP connections 1, 2, 4... instead of opening the full set at
-/// once. Four is AnimeWitcher's mobile ceiling, so the same ramp becomes
+/// once. Four is AnimeWitcher's normal mobile ceiling, so the common ramp is
 /// 1 -> 2 -> remaining. The short delay lets a rejected/rate-limited first
 /// request fail before the rest of the connections hit the same origin.
 const Duration kDownloadConnectionRampDelay = Duration(milliseconds: 160);
 
+/// Batches for controlled connection growth. Do not clamp here: old manifests
+/// and imported checkpoints may contain more parts than today's UI allows, and
+/// recovery must still start every persisted byte range.
 List<int> downloadConnectionRampBatches(int parts) {
-  var remaining = parts.clamp(0, kDownloadPartsMax).toInt();
-  if (remaining <= 0) return const <int>[];
+  var remaining = parts > 0 ? parts : 0;
+  if (remaining == 0) return const <int>[];
   final batches = <int>[];
   var next = 1;
   while (remaining > 0) {
