@@ -39,7 +39,9 @@ class ResettableIoHttpClientAdapter implements HttpClientAdapter {
       createHttpClient: () {
         final client = HttpClient();
         client.idleTimeout = const Duration(seconds: 10);
-        client.maxConnectionsPerHost = 10;
+        // Keep Dart range-recovery on the same 16-connection ceiling as the
+        // native slow-start manager. This is a ceiling, not an eager fan-out.
+        client.maxConnectionsPerHost = 16;
         return client;
       },
     );
