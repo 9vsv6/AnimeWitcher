@@ -546,7 +546,24 @@ class PersistentParallelDownload {
 
           if (update.status == TaskStatus.complete) {
             final file = File(await part.task.filePath());
-            if (!await file.exists() || await file.length() != part.size) {
+            final exists = await file.exists();
+            final length = exists ? await file.length() : -1;
+
+            // Some origins advertise/probe as range-capable, then answer the
+            // real ranged child with a full HTTP 200. background_downloader
+            // writes that full body to the child file. Gopeed keeps its resolve
+            // response as a sequential fallback in this exact situation. Do
+            // the equivalent here: if the child already contains the complete
+            // episode, promote those bytes directly instead of throwing them
+            // away and downloading the file again with one connection.
+            if (exists &&
+                length == session.size &&
+                length != part.size &&
+                await _adoptIgnoredRangeFullBody(session, part, update)) {
+              return;
+            }
+
+            if (!exists || length != part.size) {
               throw StateError(
                 'Invalid byte count for part ${part.task.taskId}',
               );
@@ -680,6 +697,59 @@ class PersistentParallelDownload {
     final target = File(await session.task.filePath());
     if (!await target.exists()) return false;
     if (await target.length() != session.size) return false;
+    await _finishCompleteSession(session);
+    return true;
+  }
+
+  bool _requestedByteRange(_DownloadPart part) => part.task.headers.entries.any(
+        (entry) =>
+            entry.key.toLowerCase() == 'range' &&
+            entry.value.toLowerCase().startsWith('bytes='),
+      );
+
+  Future<bool> _adoptIgnoredRangeFullBody(
+    _ParallelSession session,
+    _DownloadPart sourcePart,
+    TaskStatusUpdate update,
+  ) async {
+    if (update.responseStatusCode != 200 || !_requestedByteRange(sourcePart)) {
+      return false;
+    }
+
+    final source = File(await sourcePart.task.filePath());
+    if (!await source.exists() || await source.length() != session.size) {
+      return false;
+    }
+    final target = File(await session.task.filePath());
+    // An unexpected existing target is user-visible state. Never overwrite it
+    // during an automatic fallback. Exact-size targets are adopted earlier in
+    // start(); any other target remains untouched and the parent is paused.
+    if (await target.exists()) return false;
+
+    session.active = false;
+    session.resetRamp();
+    for (final part in session.parts) {
+      _activeConnectionIds.remove(part.task.taskId);
+      part.launched = false;
+      part.speed = 0;
+    }
+
+    final siblings = session.parts
+        .where((part) => part.task.taskId != sourcePart.task.taskId)
+        .map((part) => part.task.taskId)
+        .toList(growable: false);
+    if (siblings.isNotEmpty) {
+      try {
+        await cancelParts(siblings);
+      } catch (_) {
+        // The full source body is already durable. Late sibling callbacks are
+        // swallowed after _finishCompleteSession removes child mappings.
+      }
+    }
+
+    await source.rename(target.path);
+    sourcePart.complete = true;
+    sourcePart.progress = 1;
     await _finishCompleteSession(session);
     return true;
   }
