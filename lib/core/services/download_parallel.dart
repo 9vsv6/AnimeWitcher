@@ -1,28 +1,44 @@
 import 'package:background_downloader/background_downloader.dart';
 
-/// 0 = Auto. Manual choices intentionally stay conservative on mobile.
+/// 0 = Auto. Manual connection counts are allowed up to Gopeed's default
+/// ceiling, but fresh transfers still open them gradually instead of all at
+/// once.
 const String kDownloadPartsSettingKey = 'download_parallel_parts';
 const int kDownloadPartsAuto = 0;
 const int kDownloadPartsMin = 1;
-const int kDownloadPartsMax = 4;
-const List<int> kDownloadPartChoices = <int>[0, 1, 2, 3, 4];
+const int kDownloadPartsMax = 16;
+const int kDownloadGlobalConnectionBudget = 16;
+const List<int> kDownloadPartChoices = <int>[
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+];
 
-/// Internal range children get one native retry. The logical episode itself
-/// still has zero retries, so a permanently dead episode yields its queue slot
-/// quickly instead of blocking every episode behind it.
-const int kDownloadPartRetries = 1;
+/// Two retries plus the initial native request gives each child range three
+/// attempts, matching Gopeed's bounded per-connection failure budget. The
+/// logical episode itself still has zero retries so a permanently dead file
+/// yields its queue slot instead of blocking every episode behind it.
+const int kDownloadPartRetries = 2;
 
-/// Gopeed grows HTTP connections 1, 2, 4... instead of opening the full set at
-/// once. Four is AnimeWitcher's normal mobile ceiling, so the common ramp is
-/// 1 -> 2 -> remaining. The short delay lets a rejected/rate-limited first
-/// request fail before the rest of the connections hit the same origin.
-const Duration kDownloadConnectionRampDelay = Duration(milliseconds: 160);
-
-/// Batches for controlled connection growth. Do not clamp here: old manifests
-/// and imported checkpoints may contain more parts than today's UI allows, and
-/// recovery must still start every persisted byte range.
+/// Gopeed expands 1, 2, 4, 8... and waits for the current batch's HTTP
+/// responses before opening the next batch. This helper only describes those
+/// batch sizes; [PersistentParallelDownload] owns the response-gated control.
 List<int> downloadConnectionRampBatches(int parts) {
-  var remaining = parts > 0 ? parts : 0;
+  var remaining = parts.clamp(0, kDownloadPartsMax).toInt();
   if (remaining == 0) return const <int>[];
   final batches = <int>[];
   var next = 1;
@@ -40,8 +56,9 @@ int normalizeDownloadPartPreference(Object? raw) {
   return kDownloadPartChoices.contains(value) ? value! : kDownloadPartsAuto;
 }
 
-/// Pick the actual connection count. Parallel mode is never attempted unless
-/// the origin proved byte-range support and exposed a trustworthy total size.
+/// Pick the requested connection ceiling. Parallel mode is never attempted
+/// unless the origin proved byte-range support and exposed a trustworthy size.
+/// Auto stays size-aware so small episodes do not pay for 16 tiny requests.
 int selectAdaptiveDownloadParts({
   required int preference,
   required int totalBytes,
@@ -54,8 +71,9 @@ int selectAdaptiveDownloadParts({
   const mib = 1024 * 1024;
   if (totalBytes < 100 * mib) return 1;
   if (totalBytes < 200 * mib) return 2;
-  if (totalBytes < 300 * mib) return 3;
-  return 4;
+  if (totalBytes < 400 * mib) return 4;
+  if (totalBytes < 800 * mib) return 8;
+  return 16;
 }
 
 const String kLogicalDownloadGroup = 'downloads';
