@@ -144,9 +144,11 @@ void main() {
     },
   );
 
-  test('keeps last known percent instead of flashing zero', () {
+  test('keeps progress monotonic across stale callbacks', () {
     expect(keepLastKnownDownloadProgress(incoming: 0, lastKnown: 0.37), 0.37);
+    expect(keepLastKnownDownloadProgress(incoming: 0.2, lastKnown: 0.37), 0.37);
     expect(keepLastKnownDownloadProgress(incoming: 0.5, lastKnown: 0.37), 0.5);
+    expect(keepLastKnownDownloadProgress(incoming: -1, lastKnown: 0.37), 0.37);
     expect(keepLastKnownDownloadProgress(incoming: 0, lastKnown: 0), 0);
   });
 
@@ -266,6 +268,57 @@ void main() {
     );
   });
 
+  test('relaunch restores failures and system pauses but not user pauses', () {
+    for (final status in <TaskStatus>[
+      TaskStatus.failed,
+      TaskStatus.notFound,
+      TaskStatus.canceled,
+      TaskStatus.paused,
+    ]) {
+      expect(
+        shouldRequeueInterruptedDownloadAfterRelaunch(
+          persisted: status,
+          queueWaiting: false,
+          userPaused: false,
+          stillInNativeQueue: false,
+          hasMetadata: true,
+        ),
+        isTrue,
+        reason: '$status should be recoverable with metadata',
+      );
+    }
+    expect(
+      shouldRequeueInterruptedDownloadAfterRelaunch(
+        persisted: TaskStatus.paused,
+        queueWaiting: false,
+        userPaused: true,
+        stillInNativeQueue: false,
+        hasMetadata: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldRequeueInterruptedDownloadAfterRelaunch(
+        persisted: TaskStatus.canceled,
+        queueWaiting: false,
+        userPaused: false,
+        stillInNativeQueue: false,
+        hasMetadata: false,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldRequeueInterruptedDownloadAfterRelaunch(
+        persisted: TaskStatus.failed,
+        queueWaiting: false,
+        userPaused: false,
+        stillInNativeQueue: true,
+        hasMetadata: true,
+      ),
+      isFalse,
+    );
+  });
+
   test(
     'kill recovery re-enqueues native holding-queue waiters, not user-paused',
     () {
@@ -313,6 +366,23 @@ void main() {
     expect(found, isNotNull);
     expect(p.basename(found!.path), 'ep.mp4.download');
     expect(await found.length(), 40);
+  });
+
+  test('canonicalizes the largest temp prefix before range append', () async {
+    final root = await Directory.systemTemp.createTemp('aw-canonical-');
+    addTearDown(() => root.delete(recursive: true));
+    final dest = File(p.join(root.path, '0.part'));
+    await dest.writeAsBytes(List<int>.filled(10, 1));
+    final temp = File('${dest.path}.download');
+    await temp.writeAsBytes(List<int>.filled(40, 2));
+
+    final result = await canonicalizePartialDownloadFile(
+      destinationPath: dest.path,
+    );
+    expect(result, isNotNull);
+    expect(result!.file.path, dest.path);
+    expect(result.bytes, 40);
+    expect(await dest.length(), 40);
   });
 
   test('append keeps the existing prefix and adds the rest', () async {
