@@ -1,8 +1,14 @@
+import 'dart:async';
+
+import 'package:animewitcher/core/account/account_providers.dart';
+import 'package:animewitcher/core/domain/entity/multimedia_item.dart';
+import 'package:animewitcher/core/network/dio_client_provider.dart';
+import 'package:animewitcher/core/utils/catalog_metadata_enricher.dart';
+import 'package:animewitcher/core/utils/catalog_rating.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:animewitcher/core/account/account_providers.dart';
+
 import '../../../../core/storage/history_repository.dart';
-import '../../../../core/domain/entity/multimedia_item.dart';
 
 export '../../../../core/storage/history_repository.dart' show HistoryItem;
 
@@ -10,16 +16,99 @@ part 'history_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class WatchHistory extends _$WatchHistory {
+  final Map<String, MultimediaItem> _metadataCache = <String, MultimediaItem>{};
+  final Set<String> _metadataInFlight = <String>{};
+
   @override
   List<HistoryItem> build() {
     ref.watch(accountDataRevisionProvider);
     final repository = ref.watch(historyRepositoryProvider);
-    return repository.getWatchHistory();
+    final items = _withCachedMetadata(repository.getWatchHistory());
+    _scheduleMetadataEnrichment(items);
+    return items;
   }
 
   void refresh() {
     final repository = ref.read(historyRepositoryProvider);
-    state = repository.getWatchHistory();
+    final items = _withCachedMetadata(repository.getWatchHistory());
+    state = items;
+    _scheduleMetadataEnrichment(items);
+  }
+
+  HistoryItem _withItem(HistoryItem source, MultimediaItem item) {
+    return HistoryItem(
+      item: item,
+      position: source.position,
+      duration: source.duration,
+      lastStreamUrl: source.lastStreamUrl,
+      lastEpisodeUrl: source.lastEpisodeUrl,
+      season: source.season,
+      episode: source.episode,
+      episodeTitle: source.episodeTitle,
+      episodeServerName: source.episodeServerName,
+      episodePosterUrl: source.episodePosterUrl,
+      timestamp: source.timestamp,
+      progressPercentage: source.progressPercentage,
+    );
+  }
+
+  List<HistoryItem> _withCachedMetadata(List<HistoryItem> items) {
+    return items
+        .map((history) {
+          final metadata = _metadataCache[history.item.url];
+          if (metadata == null) return history;
+          return _withItem(
+            history,
+            CatalogMetadataEnricher.merge(history.item, metadata),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  void _scheduleMetadataEnrichment(List<HistoryItem> items) {
+    final pending = items
+        .where(
+          (history) =>
+              !_metadataInFlight.contains(history.item.url) &&
+              (history.item.year == null ||
+                  preferredCatalogRating(history.item) == null),
+        )
+        .toList(growable: false);
+    if (pending.isEmpty) return;
+
+    _metadataInFlight.addAll(pending.map((history) => history.item.url));
+    unawaited(_enrichMetadata(pending));
+  }
+
+  Future<void> _enrichMetadata(List<HistoryItem> pending) async {
+    try {
+      final beforeItems = pending
+          .map((history) => history.item)
+          .toList(growable: false);
+      final enriched = await CatalogMetadataEnricher.enrich(
+        ref.read(dioClientProvider),
+        beforeItems,
+      );
+
+      var changed = false;
+      for (var index = 0; index < enriched.length; index++) {
+        final before = beforeItems[index];
+        final after = enriched[index];
+        final gainedYear = before.year == null && after.year != null;
+        final gainedRating =
+            preferredCatalogRating(before) == null &&
+            preferredCatalogRating(after) != null;
+        if (!gainedYear && !gainedRating) continue;
+        _metadataCache[before.url] = after;
+        changed = true;
+      }
+      if (!changed) return;
+
+      final repository = ref.read(historyRepositoryProvider);
+      state = _withCachedMetadata(repository.getWatchHistory());
+    } finally {
+      _metadataInFlight.removeAll(pending.map((history) => history.item.url));
+    }
   }
 
   Future<void> refreshFromServer() async {
@@ -88,7 +177,6 @@ class WatchHistory extends _$WatchHistory {
     String? episodeServerName,
     String? episodePosterUrl,
   }) async {
-
     // For livestreams, we don't save progress but we still want it in history
     final isLivestream = item.contentType == MultimediaContentType.livestream;
     final finalPosition = isLivestream ? 0 : position;
@@ -173,4 +261,3 @@ final continueWatchingProvider =
     NotifierProvider<ContinueWatchingNotifier, List<HistoryItem>>(
       ContinueWatchingNotifier.new,
     );
-
