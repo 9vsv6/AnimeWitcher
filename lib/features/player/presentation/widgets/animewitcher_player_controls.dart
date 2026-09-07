@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
@@ -100,7 +101,25 @@ class AnimeWitcherPlayerControlsState
   late AnimationController _seekAnimController;
   bool _isSeekingLeft = false;
 
+  /// Which of fit / zoom / stretch the picture is currently drawn with.
+  ///
+  /// Synced from the setting rather than assumed: the screen honours the
+  /// default resize mode at startup while this counter began at fit, so on
+  /// any other default the first press "changed" the mode to the one already
+  /// showing and the button looked dead.
   int _resizeMode = 0;
+
+  static const List<BoxFit> _resizeModes = <BoxFit>[
+    BoxFit.contain,
+    BoxFit.cover,
+    BoxFit.fill,
+  ];
+
+  int _resizeIndexFor(String? mode) => switch (mode) {
+    'Zoom' => 1,
+    'Stretch' => 2,
+    _ => 0,
+  };
   bool _touchHeldForSpeed = false;
   double? _speedBeforeTouchHold;
 
@@ -132,6 +151,9 @@ class AnimeWitcherPlayerControlsState
     super.initState();
     final deviceProfile = ref.read(deviceProfileProvider).asData?.value;
     _isTv = deviceProfile?.isTv ?? false;
+    _resizeMode = _resizeIndexFor(
+      ref.read(playerSettingsProvider).asData?.value.defaultResizeMode,
+    );
     _isIpad = Platform.isIOS && (deviceProfile?.isTablet ?? false);
 
     _platformService = PlayerPlatformService();
@@ -592,7 +614,7 @@ class AnimeWitcherPlayerControlsState
     );
     ref
         .read(playerGestureHandlerProvider.notifier)
-        .showToast("2.0x", Icons.fast_forward_rounded);
+        .showToast("2.0x", LucideIcons.fastForward200);
   }
 
   void _endTouchSpeedHold() {
@@ -609,7 +631,7 @@ class AnimeWitcherPlayerControlsState
         .read(playerGestureHandlerProvider.notifier)
         .showToast(
           "${previousSpeed.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}x",
-          Icons.play_arrow_rounded,
+          LucideIcons.play200,
         );
   }
 
@@ -846,28 +868,31 @@ class AnimeWitcherPlayerControlsState
         const PlayerSettings();
     final seconds = settings.seekDuration;
 
+    // The engine first, the flourish after. Rebuilding this tree before
+    // asking the player to move put a whole layout pass between the press
+    // and the picture, which is felt as a delay on the button — the keyboard
+    // hid it because the key repeats.
+    _seekRelative(Duration(seconds: isLeft ? -seconds : seconds));
+
     setState(() {
       _isSeekingLeft = isLeft;
       // Set tap position for animation to appear on correct side
       _tapPosition = Offset(isLeft ? width * 0.25 : width * 0.75, 100);
     });
     _seekAnimController.forward(from: 0.0);
-
-    _seekRelative(Duration(seconds: isLeft ? -seconds : seconds));
   }
 
   void cycleResize() {
     setState(() {
-      _resizeMode = (_resizeMode + 1) % 3;
+      _resizeMode = (_resizeMode + 1) % _resizeModes.length;
 
-      final modes = [BoxFit.contain, BoxFit.cover, BoxFit.fill];
       final l10n = AppLocalizations.of(context)!;
       final labels = [l10n.fit, l10n.zoom, l10n.stretch];
 
-      widget.onResize?.call(modes[_resizeMode]);
+      widget.onResize?.call(_resizeModes[_resizeMode]);
       ref
           .read(playerGestureHandlerProvider.notifier)
-          .showToast(labels[_resizeMode], Icons.aspect_ratio);
+          .showToast(labels[_resizeMode], LucideIcons.ratio200);
     });
   }
 
@@ -963,7 +988,7 @@ class AnimeWitcherPlayerControlsState
           children: [
             if (_isSeekingLeft)
               const Icon(
-                Icons.keyboard_double_arrow_left_rounded,
+                LucideIcons.chevronsLeft200,
                 color: Colors.white,
                 size: 34,
               ),
@@ -978,7 +1003,7 @@ class AnimeWitcherPlayerControlsState
             ),
             if (!_isSeekingLeft)
               const Icon(
-                Icons.keyboard_double_arrow_right_rounded,
+                LucideIcons.chevronsRight200,
                 color: Colors.white,
                 size: 34,
               ),
@@ -1200,9 +1225,7 @@ class AnimeWitcherPlayerControlsState
                                   english: 'Rewind ${seekDuration}s',
                                   arabic: 'إرجاع $seekDuration ثوانٍ',
                                 ),
-                                onPressed: () => _seekRelative(
-                                  Duration(seconds: -seekDuration),
-                                ),
+                                onPressed: () => triggerSeek(true),
                                 backgroundColor: Colors.black.withValues(
                                   alpha: 0.32,
                                 ),
@@ -1228,9 +1251,7 @@ class AnimeWitcherPlayerControlsState
                                   english: 'Forward ${seekDuration}s',
                                   arabic: 'تقديم $seekDuration ثوانٍ',
                                 ),
-                                onPressed: () => _seekRelative(
-                                  Duration(seconds: seekDuration),
-                                ),
+                                onPressed: () => triggerSeek(false),
                                 backgroundColor: Colors.black.withValues(
                                   alpha: 0.32,
                                 ),
@@ -1404,7 +1425,7 @@ class AnimeWitcherPlayerControlsState
           duration: const Duration(milliseconds: 180),
           child: Center(
             child: _buildActionButton(
-              icon: Icons.lock,
+              icon: LucideIcons.lock200,
               label: AppLocalizations.of(context)!.unlock,
               onTap: _toggleLock,
               highlight: false,
@@ -1441,12 +1462,19 @@ class AnimeWitcherPlayerControlsState
     // Playback placement: touch keeps the big thumb-reach triplet centered;
     // TV and desktop fold compact playback into the start of the controls row
     // (where the focus anchor lives).
+    // Play, back and forward are one trio, drawn at one size: a big play
+    // button flanked by two smaller marks read as one control and two
+    // afterthoughts.
+    const transportGlyph = 30.0;
+
     final playPause = PlayerPlayPauseButton(
       player: widget.player,
       videoViewController: widget.videoViewController,
       isLoading: widget.isLoading,
       isTv: _isTv,
       size: 52,
+      iconSize: transportGlyph,
+      hoverColor: Theme.of(context).colorScheme.primary,
       focusNode: _playFocusNode,
       onPressed: _togglePlay,
       // Corner button (desktop/TV) â let the centered indicator show buffering.
@@ -1463,7 +1491,7 @@ class AnimeWitcherPlayerControlsState
       if (isDesktop) const PlayerVolumeControl(),
       if (isTouch) ...[
         PlayerIconButton(
-          icon: _isLocked ? Icons.lock : Icons.lock_open,
+          icon: _isLocked ? LucideIcons.lock200 : LucideIcons.lockOpen200,
           tooltip: _isLocked ? l10n.unlock : l10n.lock,
           onPressed: _toggleLock,
           isTv: _isTv,
@@ -1471,14 +1499,14 @@ class AnimeWitcherPlayerControlsState
         ),
         if (isSeries && hasPreviousEpisode)
           PlayerIconButton(
-            icon: Icons.skip_previous_rounded,
+            icon: LucideIcons.chevronsLeft200,
             tooltip: appText(context, english: 'Previous', arabic: 'السابق'),
             onPressed: () => unawaited(_playPreviousEpisodeWithSourcePicker()),
             isTv: _isTv,
           ),
         if (isSeries && hasNextEpisode)
           PlayerIconButton(
-            icon: Icons.skip_next_rounded,
+            icon: LucideIcons.chevronsRight200,
             tooltip: l10n.next,
             onPressed: () => unawaited(_playNextEpisodeWithSourcePicker()),
             isTv: _isTv,
@@ -1486,13 +1514,14 @@ class AnimeWitcherPlayerControlsState
       ] else if (_isTv) ...[
         if (isSeries && hasPreviousEpisode)
           PlayerIconButton(
-            icon: Icons.skip_previous_rounded,
+            icon: LucideIcons.chevronsLeft200,
             tooltip: appText(context, english: 'Previous', arabic: 'السابق'),
             onPressed: () => unawaited(_playPreviousEpisodeWithSourcePicker()),
             isTv: _isTv,
           ),
         PlayerIconButton(
-          icon: Icons.replay_10_rounded,
+          icon: LucideIcons.rotateCcw200,
+          iconSize: transportGlyph,
           iconBuilder: (color, size) => SeekIcon(
             forward: false,
             seconds: playerSettings.seekDuration,
@@ -1504,13 +1533,16 @@ class AnimeWitcherPlayerControlsState
             english: 'Rewind ${playerSettings.seekDuration}s',
             arabic: 'إرجاع ${playerSettings.seekDuration} ثوانٍ',
           ),
-          onPressed: () =>
-              _seekRelative(Duration(seconds: -playerSettings.seekDuration)),
+          // The same call the arrow keys make, so pressing the button
+          // raises the "10 »" mark and the ripple with it. Going straight to
+          // _seekRelative moved the position and said nothing.
+          onPressed: () => triggerSeek(true),
           isTv: _isTv,
         ),
         playPause,
         PlayerIconButton(
-          icon: Icons.forward_10_rounded,
+          icon: LucideIcons.rotateCw200,
+          iconSize: transportGlyph,
           iconBuilder: (color, size) => SeekIcon(
             forward: true,
             seconds: playerSettings.seekDuration,
@@ -1522,13 +1554,12 @@ class AnimeWitcherPlayerControlsState
             english: 'Forward ${playerSettings.seekDuration}s',
             arabic: 'تقديم ${playerSettings.seekDuration} ثوانٍ',
           ),
-          onPressed: () =>
-              _seekRelative(Duration(seconds: playerSettings.seekDuration)),
+          onPressed: () => triggerSeek(false),
           isTv: _isTv,
         ),
         if (isSeries && hasNextEpisode)
           PlayerIconButton(
-            icon: Icons.skip_next_rounded,
+            icon: LucideIcons.chevronsRight200,
             tooltip: l10n.next,
             onPressed: () => unawaited(_playNextEpisodeWithSourcePicker()),
             isTv: _isTv,
@@ -1545,7 +1576,7 @@ class AnimeWitcherPlayerControlsState
             mainAxisSize: MainAxisSize.min,
             children: [
               PlayerIconButton(
-                icon: Icons.replay_10_rounded,
+                icon: LucideIcons.rotateCcw200,
                 iconBuilder: (color, size) => SeekIcon(
                   forward: false,
                   seconds: playerSettings.seekDuration,
@@ -1557,13 +1588,11 @@ class AnimeWitcherPlayerControlsState
                   english: 'Rewind ${playerSettings.seekDuration}s',
                   arabic: 'إرجاع ${playerSettings.seekDuration} ثوانٍ',
                 ),
-                onPressed: () => _seekRelative(
-                  Duration(seconds: -playerSettings.seekDuration),
-                ),
+                onPressed: () => triggerSeek(true),
               ),
               playPause,
               PlayerIconButton(
-                icon: Icons.forward_10_rounded,
+                icon: LucideIcons.rotateCw200,
                 iconBuilder: (color, size) => SeekIcon(
                   forward: true,
                   seconds: playerSettings.seekDuration,
@@ -1575,9 +1604,7 @@ class AnimeWitcherPlayerControlsState
                   english: 'Forward ${playerSettings.seekDuration}s',
                   arabic: 'تقديم ${playerSettings.seekDuration} ثوانٍ',
                 ),
-                onPressed: () => _seekRelative(
-                  Duration(seconds: playerSettings.seekDuration),
-                ),
+                onPressed: () => triggerSeek(false),
               ),
             ],
           );
@@ -1609,7 +1636,7 @@ class AnimeWitcherPlayerControlsState
       for (final action in chromeActions)
         switch (action) {
           PlayerChromeAction.playbackSpeed => PlayerIconButton(
-            icon: Icons.speed,
+            icon: LucideIcons.gauge200,
             tooltip:
                 "${playbackSpeed.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}x",
             onPressed: () => PlayerBottomSheets.showSpeedSelection(
@@ -1624,33 +1651,33 @@ class AnimeWitcherPlayerControlsState
           ),
           PlayerChromeAction.pip => PlayerIconButton(
             key: const ValueKey<String>('playerPipButton'),
-            icon: Icons.picture_in_picture_alt_rounded,
+            icon: LucideIcons.pictureInPicture2200,
             tooltip: l10n.pip,
             onPressed: () => unawaited(_enterPip()),
             isTv: _isTv,
           ),
           PlayerChromeAction.rotate => PlayerIconButton(
-            icon: Icons.screen_rotation,
+            icon: LucideIcons.rotate3d200,
             tooltip: l10n.rotate,
             onPressed: _toggleOrientation,
             isTv: _isTv,
           ),
           PlayerChromeAction.episodes => PlayerIconButton(
-            icon: Icons.playlist_play_rounded,
+            icon: LucideIcons.listVideo200,
             tooltip: l10n.episodes,
             onPressed: openEpisodesPanel,
             isTv: _isTv,
           ),
           PlayerChromeAction.resize => PlayerIconButton(
-            icon: Icons.aspect_ratio_rounded,
+            icon: LucideIcons.ratio200,
             tooltip: l10n.resize,
             onPressed: cycleResize,
             isTv: _isTv,
           ),
           PlayerChromeAction.desktopFullscreen => PlayerIconButton(
             icon: _isFullscreen
-                ? Icons.fullscreen_exit_rounded
-                : Icons.fullscreen_rounded,
+                ? LucideIcons.minimize200
+                : LucideIcons.maximize200,
             tooltip: _isFullscreen ? l10n.windowed : l10n.fullscreen,
             onPressed: toggleFullscreen,
             isTv: _isTv,

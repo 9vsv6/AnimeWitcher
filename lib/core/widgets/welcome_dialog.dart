@@ -339,6 +339,36 @@ class _SkipStep extends ConsumerWidget {
             ),
           ),
         ],
+        // Filler is its own question — it is about which episodes to watch
+        // rather than which part of one to sit through — but it belongs on
+        // the same step: it is the other thing a viewer skips.
+        const Divider(height: LayoutConstants.spacingLg),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: settings.fillerBehaviour == FillerBehaviour.skip,
+          onChanged: (value) => notifier.setFillerBehaviour(
+            value ? FillerBehaviour.skip : FillerBehaviour.note,
+          ),
+          secondary: const Icon(Icons.playlist_remove_rounded),
+          title: Text(
+            appText(
+              context,
+              english: 'Skip filler episodes',
+              arabic: 'تخطي حلقات الفلر',
+            ),
+          ),
+          subtitle: Text(
+            appText(
+              context,
+              english: settings.fillerBehaviour == FillerBehaviour.skip
+                  ? 'Playback continues at the next story episode'
+                  : 'You are told which are filler, with a button to skip them',
+              arabic: settings.fillerBehaviour == FillerBehaviour.skip
+                  ? 'يكمل التشغيل عند أول حلقة من القصة'
+                  : 'يتم تنبيهك إلى حلقات الفلر مع زر لتخطيها',
+            ),
+          ),
+        ),
         const SizedBox(height: LayoutConstants.spacingSm),
         SizedBox(
           width: double.infinity,

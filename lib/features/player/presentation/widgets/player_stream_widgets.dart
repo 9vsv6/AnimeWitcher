@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -440,6 +441,19 @@ class PlayerPlayPauseButton extends StatelessWidget {
   /// button so it reads as a tappable target over bright video).
   final Color? backgroundColor;
 
+  /// The glyph's own size, when it should differ from the button's circle.
+  ///
+  /// The transport row draws play, back and forward at one size and gives
+  /// each a target wider than the mark.
+  final double? iconSize;
+
+  /// The glyph's colour. The row that carries the transport paints it in the
+  /// app's accent; the centred touch button stays white over the picture.
+  ///
+  /// [hoverColor] is what it becomes under a pointer, if anything.
+  final Color? foregroundColor;
+  final Color? hoverColor;
+
   const PlayerPlayPauseButton({
     super.key,
     required this.player,
@@ -447,6 +461,9 @@ class PlayerPlayPauseButton extends StatelessWidget {
     this.isLoading = false,
     this.isTv = false,
     this.size = 82,
+    this.iconSize,
+    this.foregroundColor,
+    this.hoverColor,
     this.focusNode,
     this.onPressed,
     this.showBufferingSpinner = true,
@@ -508,10 +525,11 @@ class PlayerPlayPauseButton extends StatelessWidget {
             : null,
         child: isSpinning
             ? const _PlayerSpinner()
-            : Icon(
-                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                color: Colors.white,
-                size: size * 0.88,
+            : _HoverTintedIcon(
+                icon: isPlaying ? LucideIcons.pause200 : LucideIcons.play200,
+                color: foregroundColor ?? Colors.white,
+                hoverColor: hoverColor,
+                size: iconSize ?? size * 0.88,
               ),
       ),
     );
@@ -646,13 +664,39 @@ class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
     unawaited(_commit(target));
   }
 
-  IconData _iconFor(double value) {
-    if (value <= 0.0) return Icons.volume_off_rounded;
-    // The mark the gesture OSD raises once the level is amplified rather than
-    // merely loud.
-    if (value > 1.0) return Icons.campaign_rounded;
-    if (value < 0.5) return Icons.volume_down_rounded;
-    return Icons.volume_up_rounded;
+  IconData _iconFor(double value) =>
+      value <= 0.0 ? LucideIcons.volumeX200 : LucideIcons.volume2200;
+
+  /// Where on the track the recording's own level sits.
+  ///
+  /// Not proportional: with amplification available, the range a viewer
+  /// actually adjusts in — silence to full — takes the first 60% of the
+  /// track and the gain beyond it shares the rest. A linear split would put
+  /// every ordinary level in the left half of a short slider.
+  static const double _normalFraction = 0.6;
+
+  double _fractionFor(double value, double maxVolume) {
+    if (maxVolume <= 1.0) return (value / maxVolume).clamp(0.0, 1.0);
+    if (value <= 1.0) return (value * _normalFraction).clamp(0.0, 1.0);
+    return (_normalFraction +
+            ((value - 1.0) / (maxVolume - 1.0)) * (1 - _normalFraction))
+        .clamp(0.0, 1.0);
+  }
+
+  double _valueFor(double fraction, double maxVolume) {
+    final f = fraction.clamp(0.0, 1.0);
+    if (maxVolume <= 1.0) return f * maxVolume;
+    if (f <= _normalFraction) return (f / _normalFraction).clamp(0.0, 1.0);
+    return 1.0 +
+        ((f - _normalFraction) / (1 - _normalFraction)) * (maxVolume - 1.0);
+  }
+
+  /// White until the recording's own level, then warming through amber into
+  /// red — the further past it, the hotter.
+  Color _boostColor(double value, double maxVolume) {
+    if (value <= 1.0 || maxVolume <= 1.0) return Colors.white;
+    final t = ((value - 1.0) / (maxVolume - 1.0)).clamp(0.0, 1.0);
+    return Color.lerp(const Color(0xFFF97316), const Color(0xFFDC2626), t)!;
   }
 
   // Icons the gesture handler's OSD uses for a volume (not brightness)
@@ -702,127 +746,46 @@ class _PlayerVolumeControlState extends ConsumerState<PlayerVolumeControl> {
           textDirection: TextDirection.ltr,
           child: Tooltip(
             message: '${(display * 100).round()}%',
-            child: SizedBox(
-              width: 92,
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 4,
-                  activeTrackColor: Colors.white,
-                  inactiveTrackColor: const Color(0x4DCFDEF6),
-                  thumbColor: Colors.white,
-                  overlayColor: Colors.white.withValues(alpha: 0.12),
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 6,
-                    elevation: 0,
-                  ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 14,
-                  ),
-                  trackShape: _VolumeTrackShape(
-                    // Where on the track the recording's own level sits. With
-                    // amplification available that is the midpoint, and
-                    // everything past it is gain the recording never carried.
-                    boostStart: maxVolume > 1.0 ? 1.0 / maxVolume : 1.0,
-                    boostColor: const Color(0xFFE5484D),
-                  ),
-                ),
-                child: Slider(
-                  value: display,
-                  max: maxVolume,
-                  onChanged: (value) {
-                    setState(() => _dragValue = value);
-                    // The sound follows the pointer rather than waiting for it
-                    // to be let go.
-                    unawaited(_commit(value));
-                  },
-                  onChangeEnd: (value) {
-                    setState(() {
-                      _volume = value;
-                      if (value > 0) _lastNonZero = value;
-                      _dragValue = null;
-                    });
-                    unawaited(_commit(value));
-                  },
-                ),
-              ),
+            child: _VolumeTrack(
+              fraction: _fractionFor(display, maxVolume),
+              boostFraction: maxVolume > 1.0 ? _normalFraction : 1.0,
+              boostColor: _boostColor(display, maxVolume),
+              boosting: display > 1.0,
+              onFraction: (fraction) {
+                final value = _valueFor(fraction, maxVolume);
+                setState(() => _dragValue = value);
+                // The sound follows the pointer rather than waiting for it to
+                // be let go.
+                unawaited(_commit(value));
+              },
+              onFractionEnd: (fraction) {
+                final value = _valueFor(fraction, maxVolume);
+                setState(() {
+                  _volume = value;
+                  if (value > 0) _lastNonZero = value;
+                  _dragValue = null;
+                });
+                unawaited(_commit(value));
+              },
             ),
           ),
         ),
+        if (display > 1.0) ...[
+          const SizedBox(width: 8),
+          Text(
+            '${(display * 100).round()}%',
+            style: TextStyle(
+              color: _boostColor(display, maxVolume),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
-/// The volume track, with everything past the recording's own level in red.
-///
-/// A [Slider] paints one colour either side of its thumb, and this track has
-/// three things to show: the level so far, how much of it is amplification,
-/// and the room left. The first two are both active track, so the boost is
-/// drawn over that segment rather than in place of it.
-class _VolumeTrackShape extends SliderTrackShape with BaseSliderTrackShape {
-  const _VolumeTrackShape({required this.boostStart, required this.boostColor});
-
-  /// Where amplification begins, as a fraction of the whole track.
-  final double boostStart;
-  final Color boostColor;
-
-  @override
-  bool get isRounded => true;
-
-  @override
-  void paint(
-    PaintingContext context,
-    Offset offset, {
-    required RenderBox parentBox,
-    required SliderThemeData sliderTheme,
-    required Animation<double> enableAnimation,
-    required Offset thumbCenter,
-    Offset? secondaryOffset,
-    bool isEnabled = false,
-    bool isDiscrete = false,
-    required TextDirection textDirection,
-  }) {
-    final rect = getPreferredRect(
-      parentBox: parentBox,
-      offset: offset,
-      sliderTheme: sliderTheme,
-      isEnabled: isEnabled,
-      isDiscrete: isDiscrete,
-    );
-    if (rect.isEmpty) return;
-
-    final radius = Radius.circular(rect.height / 2);
-    final canvas = context.canvas;
-
-    void fill(double left, double right, Color color) {
-      if (right <= left) return;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(left, rect.top, right, rect.bottom),
-          radius,
-        ),
-        Paint()..color = color,
-      );
-    }
-
-    final thumbX = thumbCenter.dx.clamp(rect.left, rect.right);
-    fill(
-      rect.left,
-      rect.right,
-      sliderTheme.inactiveTrackColor ?? const Color(0x4DCFDEF6),
-    );
-    fill(
-      rect.left,
-      thumbX,
-      sliderTheme.activeTrackColor ?? const Color(0xFFFFFFFF),
-    );
-    fill(rect.left + rect.width * boostStart, thumbX, boostColor);
-  }
-}
-
-/// The single shared player spinner — used by the centered buffering indicator
-/// and by the play/pause button so they look identical (they both appear in the
-/// screen centre on touch).
 class _PlayerSpinner extends StatelessWidget {
   const _PlayerSpinner();
 
@@ -1517,6 +1480,172 @@ class _SeekBarState extends State<_SeekBar> {
                   : Colors.white,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The volume track, drawn rather than themed.
+///
+/// A [Slider] paints one colour either side of its thumb, and this track has
+/// three things to say: the level so far, how much of that is amplification
+/// the recording never carried, and the room left. Two rounded bars and a dot
+/// say all three, and the whole strip answers a click anywhere along it.
+class _VolumeTrack extends StatelessWidget {
+  const _VolumeTrack({
+    required this.fraction,
+    required this.boostFraction,
+    required this.boostColor,
+    required this.boosting,
+    required this.onFraction,
+    required this.onFractionEnd,
+  });
+
+  final double fraction;
+
+  /// Where the recording's own level sits along the track.
+  final double boostFraction;
+  final Color boostColor;
+  final bool boosting;
+  final ValueChanged<double> onFraction;
+  final ValueChanged<double> onFractionEnd;
+
+  static const double _width = 108;
+  static const double _height = 8;
+  static const double _thumb = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = (_width * fraction).clamp(0.0, _width);
+    final breakStop = fraction <= 0
+        ? 0.0
+        : (boostFraction / fraction).clamp(0.0, 1.0);
+
+    // The whole strip is the target, not the eight-point bar: a level is
+    // worth hitting without aiming.
+    return SizedBox(
+      width: _width,
+      height: _thumb + 12,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (details) => onFractionEnd(_at(details.localPosition.dx)),
+        onHorizontalDragUpdate: (details) =>
+            onFraction(_at(details.localPosition.dx)),
+        onHorizontalDragEnd: (_) => onFractionEnd(fraction),
+        child: Stack(
+          alignment: Alignment.centerLeft,
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              height: _height,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            // The stretch of track that is amplification, marked before it is
+            // reached. A viewer should be able to see where the recording's
+            // own level ends without having to push past it first.
+            if (boostFraction < 1)
+              Positioned(
+                left: _width * boostFraction,
+                right: 0,
+                child: Container(
+                  height: _height,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626).withValues(alpha: 0.32),
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(999),
+                    ),
+                  ),
+                ),
+              ),
+            SizedBox(
+              width: filled,
+              child: Container(
+                height: _height,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: boosting ? null : Colors.white.withValues(alpha: 0.92),
+                  gradient: boosting
+                      ? LinearGradient(
+                          stops: <double>[breakStop, breakStop, 1],
+                          colors: <Color>[
+                            Colors.white.withValues(alpha: 0.92),
+                            const Color(0xFFF97316),
+                            boostColor,
+                          ],
+                        )
+                      : null,
+                ),
+              ),
+            ),
+            Positioned(
+              left: filled - _thumb / 2,
+              child: Container(
+                width: _thumb,
+                height: _thumb,
+                decoration: BoxDecoration(
+                  color: boosting ? boostColor : Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x99000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _at(double dx) => (dx / _width).clamp(0.0, 1.0);
+}
+
+/// An icon that answers the pointer with a colour.
+///
+/// The buttons around it are [PlayerIconButton]s, which do this for
+/// themselves; play and pause draw their own glyph and had nothing to say
+/// when the pointer arrived.
+class _HoverTintedIcon extends StatefulWidget {
+  const _HoverTintedIcon({
+    required this.icon,
+    required this.color,
+    required this.size,
+    this.hoverColor,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color? hoverColor;
+  final double size;
+
+  @override
+  State<_HoverTintedIcon> createState() => _HoverTintedIconState();
+}
+
+class _HoverTintedIconState extends State<_HoverTintedIcon> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final hover = widget.hoverColor;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 120),
+        child: Icon(
+          widget.icon,
+          key: ValueKey<bool>(_hovered && hover != null),
+          color: _hovered && hover != null ? hover : widget.color,
+          size: widget.size,
         ),
       ),
     );

@@ -1,15 +1,23 @@
 import 'dart:math' as math;
 
+import 'dart:ui' show FontFeature;
+
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/services.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import 'hotstar_player_style.dart';
 
-/// A ±N second seek glyph: [Icons.replay_rounded] (mirrored for the forward
-/// direction) with the actual configured duration overlaid, since Material
-/// only ships fixed replay_5/10/30 icons — not every value the seek-duration
-/// setting allows (15s, 20s, 1 min, 2 min, ...).
+/// A ±N second seek glyph: lucide's rotate arrows with the configured
+/// duration inside them, the way Harbor draws its seek buttons.
+///
+/// The two directions are separate glyphs rather than one mirrored: lucide
+/// puts the arrowhead at the top of both, and mirroring moved it to the
+/// wrong side of the circle.
+///
+/// The number is drawn rather than baked in because Material only ships
+/// replay_5/10/30 — not every value the seek-duration setting allows.
 class SeekIcon extends StatelessWidget {
   final bool forward;
   final int seconds;
@@ -26,31 +34,32 @@ class SeekIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final arrow = Icon(Icons.replay_rounded, size: size, color: color);
+    final arrow = Icon(
+      forward ? LucideIcons.rotateCw200 : LucideIcons.rotateCcw200,
+      size: size,
+      color: color,
+    );
     final label = seconds.toString();
-    final double fontSize = size * (label.length >= 3 ? 0.24 : 0.32);
+    final double fontSize = size * (label.length >= 3 ? 0.26 : 0.34);
     return SizedBox(
       width: size,
       height: size,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          forward
-              ? Transform(
-                  alignment: Alignment.center,
-                  transform: Matrix4.rotationY(math.pi),
-                  child: arrow,
-                )
-              : arrow,
+          arrow,
           Padding(
-            padding: EdgeInsets.only(top: size * 0.1),
+            // Sits a touch below centre: the arrowhead takes the top of the
+            // ring, so centring the number in the box reads as high.
+            padding: EdgeInsets.only(top: size * 0.08),
             child: Text(
               label,
               style: TextStyle(
                 color: color,
                 fontSize: fontSize,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 height: 1.0,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -105,18 +114,17 @@ class PlayerTopBar extends StatelessWidget {
                 // back control lives in the route-independent overlay.
                 const SizedBox(width: 60)
               else ...[
-                AppleLiquidGlassSurface(
-                  borderRadius: BorderRadius.circular(999),
-                  interactive: true,
-                  child: PlayerIconButton(
-                    icon: Icons.arrow_back_rounded,
-                    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                    onPressed: onBack,
-                    isTv: isTv,
-                    focusNode: backFocusNode,
-                    iconSize: isTv ? 34 : 30,
-                    foregroundColor: Theme.of(context).colorScheme.primary,
-                  ),
+                // The glyph alone, with no pill behind it: the top scrim
+                // already separates it from the picture, and a blurred disc
+                // over artwork read as a smudge.
+                PlayerIconButton(
+                  icon: LucideIcons.chevronLeft200,
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  onPressed: onBack,
+                  isTv: isTv,
+                  focusNode: backFocusNode,
+                  iconSize: isTv ? 34 : 30,
+                  foregroundColor: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 12),
               ],
@@ -248,10 +256,7 @@ class PlayerBottomBar extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(leftPadding, 2, rightPadding, 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            progressBar,
-            _buildRow(),
-          ],
+          children: [progressBar, _buildRow()],
         ),
       ),
     );
@@ -291,7 +296,10 @@ class PlayerBottomBar extends StatelessWidget {
     // center regardless of how wide leading/actions are on either side.
     return Stack(
       alignment: Alignment.center,
-      children: [row, Center(child: center!)],
+      children: [
+        row,
+        Center(child: center!),
+      ],
     );
   }
 }
