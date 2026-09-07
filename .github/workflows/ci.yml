@@ -1,20 +1,15 @@
-name: Flutter Checks
+name: Apply PR181 fixes
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - fix/download-resume-stalls
 
 permissions:
   contents: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  apply-pr181-fixes:
-    name: Apply PR181 fixes
-    if: github.event.pull_request.head.ref == 'fix/download-resume-stalls'
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -22,92 +17,12 @@ jobs:
           ref: fix/download-resume-stalls
           fetch-depth: 0
 
-      - name: Patch analyzer errors and restore CI
+      - name: Apply fixes
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path('lib/core/services/persistent_parallel_download.dart')
-          s = p.read_text()
-          replacements = [
-              ("_DownloadPart.fromJson(Map<String, dynamic>.from(part))",
-               "_DownloadPart.fromJson(Map<String, dynamic>.from(part as Map))"),
-              ("final chunk = Map<String, dynamic>.from(raw);",
-               "final chunk = Map<String, dynamic>.from(raw as Map);"),
-              ("Map<String, dynamic>.from(chunk['task']),",
-               "Map<String, dynamic>.from(chunk['task'] as Map),"),
-              ("""TaskProgressUpdate(
-                  session.task,
-                  progress,
-                  expectedFileSize: session.size,
-                  networkSpeed: session.parts.fold<double>(
-                    0,
-                    (sum, part) => sum + part.speed,
-                  ),
-                )""",
-               """TaskProgressUpdate(
-                  session.task,
-                  progress,
-                  session.size,
-                  session.parts.fold<double>(
-                    0,
-                    (sum, part) => sum + part.speed,
-                  ),
-                )"""),
-              ("TaskProgressUpdate(session.task, 1, expectedFileSize: session.size)",
-               "TaskProgressUpdate(session.task, 1, session.size)"),
-              ("Task.createFromJson(Map<String, dynamic>.from(json['task']))",
-               """Task.createFromJson(
-      Map<String, dynamic>.from(json['task'] as Map),
-    )"""),
-          ]
-          for old, new in replacements:
-              if old not in s:
-                  raise SystemExit(f'missing persistent marker: {old[:80]!r}')
-              s = s.replace(old, new, 1)
-          p.write_text(s)
-
-          p = Path('lib/core/services/download_service.dart')
-          s = p.read_text()
-          old = "TaskProgressUpdate(task, written / total, expectedFileSize: total)"
-          if old not in s:
-              raise SystemExit('missing range progress marker')
-          s = s.replace(old, "TaskProgressUpdate(task, written / total, total)", 1)
-
-          old = '''  Future<List<Task>> _liveTransferTasks() async {
-    // allTasks/taskForId include persisted paused tasks. They are not proof
-    // that URLSession or a worker currently owns a transfer.
-    // ignore: invalid_use_of_visible_for_testing_member
-    final paused =
-        (await FileDownloader().downloaderForTesting.getPausedTasks())
-            .map((task) => task.taskId)
-            .toSet();
-    return (await FileDownloader().allTasks(allGroups: true))
-        .where((task) => !paused.contains(task.taskId))
-        .toList();
-  }
-'''
-          new = '''  Future<List<Task>> _liveTransferTasks() async {
-    // allTasks/taskForId include persisted paused tasks. They are not proof
-    // that URLSession or a worker currently owns a transfer. Use the public
-    // tracked-task database to exclude durable paused records instead of the
-    // plugin's testing-only downloader API.
-    final paused = (await FileDownloader().database.allRecordsWithStatus(
-      TaskStatus.paused,
-    )).map((record) => record.taskId).toSet();
-    return (await FileDownloader().allTasks(allGroups: true))
-        .where((task) => !paused.contains(task.taskId))
-        .toList();
-  }
-'''
-          if old not in s:
-              raise SystemExit('missing live-transfer marker')
-          s = s.replace(old, new, 1)
-          p.write_text(s)
-          PY
-
+          echo 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKcCA9IFBhdGgoImxpYi9jb3JlL3NlcnZpY2VzL3BlcnNpc3RlbnRfcGFyYWxsZWxfZG93bmxvYWQuZGFydCIpCnMgPSBwLnJlYWRfdGV4dCgpCnJlcGxhY2VtZW50cyA9IFsKICAgICgiX0Rvd25sb2FkUGFydC5mcm9tSnNvbihNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKHBhcnQpKSIsCiAgICAgIl9Eb3dubG9hZFBhcnQuZnJvbUpzb24oTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShwYXJ0IGFzIE1hcCkpIiksCiAgICAoImZpbmFsIGNodW5rID0gTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShyYXcpOyIsCiAgICAgImZpbmFsIGNodW5rID0gTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShyYXcgYXMgTWFwKTsiKSwKICAgICgiTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShjaHVua1sndGFzayddKSwiLAogICAgICJNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKGNodW5rWyd0YXNrJ10gYXMgTWFwKSwiKSwKICAgICgiIiJUYXNrUHJvZ3Jlc3NVcGRhdGUoCiAgICAgICAgICAgICAgICAgIHNlc3Npb24udGFzaywKICAgICAgICAgICAgICAgICAgcHJvZ3Jlc3MsCiAgICAgICAgICAgICAgICAgIGV4cGVjdGVkRmlsZVNpemU6IHNlc3Npb24uc2l6ZSwKICAgICAgICAgICAgICAgICAgbmV0d29ya1NwZWVkOiBzZXNzaW9uLnBhcnRzLmZvbGQ8ZG91YmxlPigKICAgICAgICAgICAgICAgICAgICAwLAogICAgICAgICAgICAgICAgICAgIChzdW0sIHBhcnQpID0+IHN1bSArIHBhcnQuc3BlZWQsCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICApIiIiLAogICAgICIiIlRhc2tQcm9ncmVzc1VwZGF0ZSgKICAgICAgICAgICAgICAgICAgc2Vzc2lvbi50YXNrLAogICAgICAgICAgICAgICAgICBwcm9ncmVzcywKICAgICAgICAgICAgICAgICAgc2Vzc2lvbi5zaXplLAogICAgICAgICAgICAgICAgICBzZXNzaW9uLnBhcnRzLmZvbGQ8ZG91YmxlPigKICAgICAgICAgICAgICAgICAgICAwLAogICAgICAgICAgICAgICAgICAgIChzdW0sIHBhcnQpID0+IHN1bSArIHBhcnQuc3BlZWQsCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICApIiIiKSwKICAgICgiVGFza1Byb2dyZXNzVXBkYXRlKHNlc3Npb24udGFzaywgMSwgZXhwZWN0ZWRGaWxlU2l6ZTogc2Vzc2lvbi5zaXplKSIsCiAgICAgIlRhc2tQcm9ncmVzc1VwZGF0ZShzZXNzaW9uLnRhc2ssIDEsIHNlc3Npb24uc2l6ZSkiKSwKICAgICgiVGFzay5jcmVhdGVGcm9tSnNvbihNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKGpzb25bJ3Rhc2snXSkpIiwKICAgICAiIiJUYXNrLmNyZWF0ZUZyb21Kc29uKAogICAgICBNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKGpzb25bJ3Rhc2snXSBhcyBNYXApLAogICAgKSIiIiksCl0KZm9yIG9sZCwgbmV3IGluIHJlcGxhY2VtZW50czoKICAgIHMgPSBzLnJlcGxhY2Uob2xkLCBuZXcpCnAud3JpdGVfdGV4dChzKQoKcCA9IFBhdGgoImxpYi9jb3JlL3NlcnZpY2VzL2Rvd25sb2FkX3NlcnZpY2UuZGFydCIpCnMgPSBwLnJlYWRfdGV4dCgpCnMgPSBzLnJlcGxhY2UoCiAgICAiVGFza1Byb2dyZXNzVXBkYXRlKHRhc2ssIHdyaXR0ZW4gLyB0b3RhbCwgZXhwZWN0ZWRGaWxlU2l6ZTogdG90YWwpIiwKICAgICJUYXNrUHJvZ3Jlc3NVcGRhdGUodGFzaywgd3JpdHRlbiAvIHRvdGFsLCB0b3RhbCkiLAopCm9sZCA9ICIiIiAgRnV0dXJlPExpc3Q8VGFzaz4+IF9saXZlVHJhbnNmZXJUYXNrcygpIGFzeW5jIHsKICAgIC8vIGFsbFRhc2tzL3Rhc2tGb3JJZCBpbmNsdWRlIHBlcnNpc3RlZCBwYXVzZWQgdGFza3MuIFRoZXkgYXJlIG5vdCBwcm9vZgogICAgLy8gdGhhdCBVUkxTZXNzaW9uIG9yIGEgd29ya2VyIGN1cnJlbnRseSBvd25zIGEgdHJhbnNmZXIuCiAgICAvLyBpZ25vcmU6IGludmFsaWRfdXNlX29mX3Zpc2libGVfZm9yX3Rlc3RpbmdfbWVtYmVyCiAgICBmaW5hbCBwYXVzZWQgPQogICAgICAgIChhd2FpdCBGaWxlRG93bmxvYWRlcigpLmRvd25sb2FkZXJGb3JUZXN0aW5nLmdldFBhdXNlZFRhc2tzKCkpCiAgICAgICAgICAgIC5tYXAoKHRhc2spID0+IHRhc2sudGFza0lkKQogICAgICAgICAgICAudG9TZXQoKTsKICAgIHJldHVybiAoYXdhaXQgRmlsZURvd25sb2FkZXIoKS5hbGxUYXNrcyhhbGxHcm91cHM6IHRydWUpKQogICAgICAgIC53aGVyZSgodGFzaykgPT4gIXBhdXNlZC5jb250YWlucyh0YXNrLnRhc2tJZCkpCiAgICAgICAgLnRvTGlzdCgpOwogIH0KIiIiCm5ldyA9ICIiIiAgRnV0dXJlPExpc3Q8VGFzaz4+IF9saXZlVHJhbnNmZXJUYXNrcygpIGFzeW5jIHsKICAgIC8vIGFsbFRhc2tzL3Rhc2tGb3JJZCBpbmNsdWRlIHBlcnNpc3RlZCBwYXVzZWQgdGFza3MuIFRoZXkgYXJlIG5vdCBwcm9vZgogICAgLy8gdGhhdCBVUkxTZXNzaW9uIG9yIGEgd29ya2VyIGN1cnJlbnRseSBvd25zIGEgdHJhbnNmZXIuIFVzZSB0aGUgcHVibGljCiAgICAvLyB0cmFja2VkLXRhc2sgZGF0YWJhc2UgdG8gZXhjbHVkZSBkdXJhYmxlIHBhdXNlZCByZWNvcmRzIGluc3RlYWQgb2YgdGhlCiAgICAvLyBwbHVnaW4ncyB0ZXN0aW5nLW9ubHkgZG93bmxvYWRlciBBUEkuCiAgICBmaW5hbCBwYXVzZWQgPSAoYXdhaXQgRmlsZURvd25sb2FkZXIoKS5kYXRhYmFzZS5hbGxSZWNvcmRzV2l0aFN0YXR1cygKICAgICAgVGFza1N0YXR1cy5wYXVzZWQsCiAgICApKS5tYXAoKHJlY29yZCkgPT4gcmVjb3JkLnRhc2tJZCkudG9TZXQoKTsKICAgIHJldHVybiAoYXdhaXQgRmlsZURvd25sb2FkZXIoKS5hbGxUYXNrcyhhbGxHcm91cHM6IHRydWUpKQogICAgICAgIC53aGVyZSgodGFzaykgPT4gIXBhdXNlZC5jb250YWlucyh0YXNrLnRhc2tJZCkpCiAgICAgICAgLnRvTGlzdCgpOwogIH0KIiIiCmlmIG9sZCBpbiBzOgogICAgcyA9IHMucmVwbGFjZShvbGQsIG5ldywgMSkKcC53cml0ZV90ZXh0KHMpCgojIEZhaWwgbG91ZGx5IGlmIHRoZSBrbm93biBhbmFseXplci1icmVha2luZyBmb3JtcyBzdXJ2aXZlZC4Kam9pbmVkID0gUGF0aCgibGliL2NvcmUvc2VydmljZXMvcGVyc2lzdGVudF9wYXJhbGxlbF9kb3dubG9hZC5kYXJ0IikucmVhZF90ZXh0KCkgKyAiXG4iICsgcC5yZWFkX3RleHQoKQpiYWQgPSBbCiAgICAiZXhwZWN0ZWRGaWxlU2l6ZTogc2Vzc2lvbi5zaXplIiwKICAgICJuZXR3b3JrU3BlZWQ6IHNlc3Npb24ucGFydHMuZm9sZCIsCiAgICAiVGFza1Byb2dyZXNzVXBkYXRlKHRhc2ssIHdyaXR0ZW4gLyB0b3RhbCwgZXhwZWN0ZWRGaWxlU2l6ZTogdG90YWwpIiwKICAgICJkb3dubG9hZGVyRm9yVGVzdGluZy5nZXRQYXVzZWRUYXNrcygpIiwKICAgICJNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKHJhdyk7IiwKICAgICJNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKGNodW5rWyd0YXNrJ10pIiwKXQpsZWZ0ID0gW3ggZm9yIHggaW4gYmFkIGlmIHggaW4gam9pbmVkXQppZiBsZWZ0OgogICAgcmFpc2UgU3lzdGVtRXhpdChmIktub3duIGFuYWx5emVyIGVycm9ycyByZW1haW46IHtsZWZ0fSIpCg==' | base64 --decode > /tmp/fix_pr181.py
+          python3 /tmp/fix_pr181.py
           rm -f .github/workflows/fix-pr181-analyzer.yml
           git fetch origin main
           git checkout origin/main -- .github/workflows/ci.yml
@@ -115,5 +30,5 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
           git diff --cached --check
-          git commit -m 'fix: resolve multipart downloader analyzer errors'
+          git commit -m 'fix: resolve PR 181 analyzer errors'
           git push origin HEAD:fix/download-resume-stalls
