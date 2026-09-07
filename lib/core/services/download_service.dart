@@ -2134,7 +2134,7 @@ class DownloadService {
         TaskRecord(task, status, written / total, total),
       );
       _sharedEvents.add(
-        TaskProgressUpdate(task, written / total, expectedFileSize: total),
+        TaskProgressUpdate(task, written / total, total),
       );
       if (complete)
         _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
@@ -2150,12 +2150,12 @@ class DownloadService {
 
   Future<List<Task>> _liveTransferTasks() async {
     // allTasks/taskForId include persisted paused tasks. They are not proof
-    // that URLSession or a worker currently owns a transfer.
-    // ignore: invalid_use_of_visible_for_testing_member
-    final paused =
-        (await FileDownloader().downloaderForTesting.getPausedTasks())
-            .map((task) => task.taskId)
-            .toSet();
+    // that URLSession or a worker currently owns a transfer. Use the public
+    // tracked-task database to exclude durable paused records instead of the
+    // plugin's testing-only downloader API.
+    final paused = (await FileDownloader().database.allRecordsWithStatus(
+      TaskStatus.paused,
+    )).map((record) => record.taskId).toSet();
     return (await FileDownloader().allTasks(allGroups: true))
         .where((task) => !paused.contains(task.taskId))
         .toList();

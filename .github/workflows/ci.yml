@@ -1,34 +1,46 @@
-name: Apply PR181 fixes
+name: Flutter Checks
 
 on:
+  pull_request:
+    branches: [main]
   push:
-    branches:
-      - fix/download-resume-stalls
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  apply:
+  analyze-and-test:
+    name: Analyze and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: fix/download-resume-stalls
-          fetch-depth: 0
 
-      - name: Apply fixes
-        shell: bash
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Install dependencies and generate sources
         run: |
-          set -euo pipefail
-          echo 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKcCA9IFBhdGgoImxpYi9jb3JlL3NlcnZpY2VzL3BlcnNpc3RlbnRfcGFyYWxsZWxfZG93bmxvYWQuZGFydCIpCnMgPSBwLnJlYWRfdGV4dCgpCnJlcGxhY2VtZW50cyA9IFsKICAgICgiX0Rvd25sb2FkUGFydC5mcm9tSnNvbihNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKHBhcnQpKSIsCiAgICAgIl9Eb3dubG9hZFBhcnQuZnJvbUpzb24oTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShwYXJ0IGFzIE1hcCkpIiksCiAgICAoImZpbmFsIGNodW5rID0gTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShyYXcpOyIsCiAgICAgImZpbmFsIGNodW5rID0gTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShyYXcgYXMgTWFwKTsiKSwKICAgICgiTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShjaHVua1sndGFzayddKSwiLAogICAgICJNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKGNodW5rWyd0YXNrJ10gYXMgTWFwKSwiKSwKICAgICgiIiJUYXNrUHJvZ3Jlc3NVcGRhdGUoCiAgICAgICAgICAgICAgICAgIHNlc3Npb24udGFzaywKICAgICAgICAgICAgICAgICAgcHJvZ3Jlc3MsCiAgICAgICAgICAgICAgICAgIGV4cGVjdGVkRmlsZVNpemU6IHNlc3Npb24uc2l6ZSwKICAgICAgICAgICAgICAgICAgbmV0d29ya1NwZWVkOiBzZXNzaW9uLnBhcnRzLmZvbGQ8ZG91YmxlPigKICAgICAgICAgICAgICAgICAgICAwLAogICAgICAgICAgICAgICAgICAgIChzdW0sIHBhcnQpID0+IHN1bSArIHBhcnQuc3BlZWQsCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICApIiIiLAogICAgICIiIlRhc2tQcm9ncmVzc1VwZGF0ZSgKICAgICAgICAgICAgICAgICAgc2Vzc2lvbi50YXNrLAogICAgICAgICAgICAgICAgICBwcm9ncmVzcywKICAgICAgICAgICAgICAgICAgc2Vzc2lvbi5zaXplLAogICAgICAgICAgICAgICAgICBzZXNzaW9uLnBhcnRzLmZvbGQ8ZG91YmxlPigKICAgICAgICAgICAgICAgICAgICAwLAogICAgICAgICAgICAgICAgICAgIChzdW0sIHBhcnQpID0+IHN1bSArIHBhcnQuc3BlZWQsCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICApIiIiKSwKICAgICgiVGFza1Byb2dyZXNzVXBkYXRlKHNlc3Npb24udGFzaywgMSwgZXhwZWN0ZWRGaWxlU2l6ZTogc2Vzc2lvbi5zaXplKSIsCiAgICAgIlRhc2tQcm9ncmVzc1VwZGF0ZShzZXNzaW9uLnRhc2ssIDEsIHNlc3Npb24uc2l6ZSkiKSwKICAgICgiVGFzay5jcmVhdGVGcm9tSnNvbihNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKGpzb25bJ3Rhc2snXSkpIiwKICAgICAiIiJUYXNrLmNyZWF0ZUZyb21Kc29uKAogICAgICBNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKGpzb25bJ3Rhc2snXSBhcyBNYXApLAogICAgKSIiIiksCl0KZm9yIG9sZCwgbmV3IGluIHJlcGxhY2VtZW50czoKICAgIHMgPSBzLnJlcGxhY2Uob2xkLCBuZXcpCnAud3JpdGVfdGV4dChzKQoKcCA9IFBhdGgoImxpYi9jb3JlL3NlcnZpY2VzL2Rvd25sb2FkX3NlcnZpY2UuZGFydCIpCnMgPSBwLnJlYWRfdGV4dCgpCnMgPSBzLnJlcGxhY2UoCiAgICAiVGFza1Byb2dyZXNzVXBkYXRlKHRhc2ssIHdyaXR0ZW4gLyB0b3RhbCwgZXhwZWN0ZWRGaWxlU2l6ZTogdG90YWwpIiwKICAgICJUYXNrUHJvZ3Jlc3NVcGRhdGUodGFzaywgd3JpdHRlbiAvIHRvdGFsLCB0b3RhbCkiLAopCm9sZCA9ICIiIiAgRnV0dXJlPExpc3Q8VGFzaz4+IF9saXZlVHJhbnNmZXJUYXNrcygpIGFzeW5jIHsKICAgIC8vIGFsbFRhc2tzL3Rhc2tGb3JJZCBpbmNsdWRlIHBlcnNpc3RlZCBwYXVzZWQgdGFza3MuIFRoZXkgYXJlIG5vdCBwcm9vZgogICAgLy8gdGhhdCBVUkxTZXNzaW9uIG9yIGEgd29ya2VyIGN1cnJlbnRseSBvd25zIGEgdHJhbnNmZXIuCiAgICAvLyBpZ25vcmU6IGludmFsaWRfdXNlX29mX3Zpc2libGVfZm9yX3Rlc3RpbmdfbWVtYmVyCiAgICBmaW5hbCBwYXVzZWQgPQogICAgICAgIChhd2FpdCBGaWxlRG93bmxvYWRlcigpLmRvd25sb2FkZXJGb3JUZXN0aW5nLmdldFBhdXNlZFRhc2tzKCkpCiAgICAgICAgICAgIC5tYXAoKHRhc2spID0+IHRhc2sudGFza0lkKQogICAgICAgICAgICAudG9TZXQoKTsKICAgIHJldHVybiAoYXdhaXQgRmlsZURvd25sb2FkZXIoKS5hbGxUYXNrcyhhbGxHcm91cHM6IHRydWUpKQogICAgICAgIC53aGVyZSgodGFzaykgPT4gIXBhdXNlZC5jb250YWlucyh0YXNrLnRhc2tJZCkpCiAgICAgICAgLnRvTGlzdCgpOwogIH0KIiIiCm5ldyA9ICIiIiAgRnV0dXJlPExpc3Q8VGFzaz4+IF9saXZlVHJhbnNmZXJUYXNrcygpIGFzeW5jIHsKICAgIC8vIGFsbFRhc2tzL3Rhc2tGb3JJZCBpbmNsdWRlIHBlcnNpc3RlZCBwYXVzZWQgdGFza3MuIFRoZXkgYXJlIG5vdCBwcm9vZgogICAgLy8gdGhhdCBVUkxTZXNzaW9uIG9yIGEgd29ya2VyIGN1cnJlbnRseSBvd25zIGEgdHJhbnNmZXIuIFVzZSB0aGUgcHVibGljCiAgICAvLyB0cmFja2VkLXRhc2sgZGF0YWJhc2UgdG8gZXhjbHVkZSBkdXJhYmxlIHBhdXNlZCByZWNvcmRzIGluc3RlYWQgb2YgdGhlCiAgICAvLyBwbHVnaW4ncyB0ZXN0aW5nLW9ubHkgZG93bmxvYWRlciBBUEkuCiAgICBmaW5hbCBwYXVzZWQgPSAoYXdhaXQgRmlsZURvd25sb2FkZXIoKS5kYXRhYmFzZS5hbGxSZWNvcmRzV2l0aFN0YXR1cygKICAgICAgVGFza1N0YXR1cy5wYXVzZWQsCiAgICApKS5tYXAoKHJlY29yZCkgPT4gcmVjb3JkLnRhc2tJZCkudG9TZXQoKTsKICAgIHJldHVybiAoYXdhaXQgRmlsZURvd25sb2FkZXIoKS5hbGxUYXNrcyhhbGxHcm91cHM6IHRydWUpKQogICAgICAgIC53aGVyZSgodGFzaykgPT4gIXBhdXNlZC5jb250YWlucyh0YXNrLnRhc2tJZCkpCiAgICAgICAgLnRvTGlzdCgpOwogIH0KIiIiCmlmIG9sZCBpbiBzOgogICAgcyA9IHMucmVwbGFjZShvbGQsIG5ldywgMSkKcC53cml0ZV90ZXh0KHMpCgojIEZhaWwgbG91ZGx5IGlmIHRoZSBrbm93biBhbmFseXplci1icmVha2luZyBmb3JtcyBzdXJ2aXZlZC4Kam9pbmVkID0gUGF0aCgibGliL2NvcmUvc2VydmljZXMvcGVyc2lzdGVudF9wYXJhbGxlbF9kb3dubG9hZC5kYXJ0IikucmVhZF90ZXh0KCkgKyAiXG4iICsgcC5yZWFkX3RleHQoKQpiYWQgPSBbCiAgICAiZXhwZWN0ZWRGaWxlU2l6ZTogc2Vzc2lvbi5zaXplIiwKICAgICJuZXR3b3JrU3BlZWQ6IHNlc3Npb24ucGFydHMuZm9sZCIsCiAgICAiVGFza1Byb2dyZXNzVXBkYXRlKHRhc2ssIHdyaXR0ZW4gLyB0b3RhbCwgZXhwZWN0ZWRGaWxlU2l6ZTogdG90YWwpIiwKICAgICJkb3dubG9hZGVyRm9yVGVzdGluZy5nZXRQYXVzZWRUYXNrcygpIiwKICAgICJNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKHJhdyk7IiwKICAgICJNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKGNodW5rWyd0YXNrJ10pIiwKXQpsZWZ0ID0gW3ggZm9yIHggaW4gYmFkIGlmIHggaW4gam9pbmVkXQppZiBsZWZ0OgogICAgcmFpc2UgU3lzdGVtRXhpdChmIktub3duIGFuYWx5emVyIGVycm9ycyByZW1haW46IHtsZWZ0fSIpCg==' | base64 --decode > /tmp/fix_pr181.py
-          python3 /tmp/fix_pr181.py
-          rm -f .github/workflows/fix-pr181-analyzer.yml
-          git fetch origin main
-          git checkout origin/main -- .github/workflows/ci.yml
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git diff --cached --check
-          git commit -m 'fix: resolve PR 181 analyzer errors'
-          git push origin HEAD:fix/download-resume-stalls
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze
+        # Existing warnings and infos remain visible in the log, but only
+        # analyzer errors block this first enforcement step. Warnings can be
+        # reduced safely in dedicated cleanup PRs rather than masking real
+        # build/test regressions behind a large baseline migration.
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Test
+        # A mock Firestore client test exercises the configured REST path. This
+        # harmless value satisfies its build-time configuration guard; it is
+        # never sent to an external service by the test suite.
+        run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
