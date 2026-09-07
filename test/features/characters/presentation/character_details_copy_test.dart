@@ -48,6 +48,24 @@ void main() {
     );
   });
 
+  test('character iOS glass matches anime inset and comments can morph', () {
+    final characterSource = File(
+      'lib/features/characters/presentation/character_details_screen.dart',
+    ).readAsStringSync();
+    final commentsSource = File(
+      'lib/features/comments/presentation/animewitcher_comments_screen.dart',
+    ).readAsStringSync();
+    final glassSource = File(
+      'lib/shared/widgets/apple_liquid_glass.dart',
+    ).readAsStringSync();
+
+    expect(characterSource, contains('toolbarTrailingInset: 34'));
+    expect(commentsSource, contains('allowInstantBoundaryMorph: true'));
+    expect(glassSource, contains('config?.toolbarTrailingInset ??'));
+    expect(glassSource, contains('hardCutInstantBoundary'));
+    expect(glassSource, contains('!allowInstantBoundaryMorph'));
+  });
+
   test('details screen hides the empty characters copy', () {
     final source = File(
       'lib/features/details/presentation/details_screen.dart',
