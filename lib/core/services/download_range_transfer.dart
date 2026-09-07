@@ -9,7 +9,11 @@ import 'package:dio/dio.dart';
 const int kDownloadRangeRequestAttempts = 3;
 const int kDownloadRangeReconnectAttempts = 2;
 const int kDownloadResumeProbeBytes = 64 * 1024;
+const int kDownloadRangeProgressUpdateBytes = 512 * 1024;
 const Duration kDownloadRangeRetryBaseDelay = Duration(milliseconds: 250);
+const Duration kDownloadRangeProgressUpdateInterval = Duration(
+  milliseconds: 250,
+);
 
 bool isRetryableDownloadHttpStatus(int? status) {
   if (status == null) return false;
@@ -28,6 +32,14 @@ Duration downloadRangeRetryDelay({
   final shift = retryIndex.clamp(0, 4);
   return kDownloadRangeRetryBaseDelay * (1 << shift);
 }
+
+bool shouldEmitDownloadRangeProgress({
+  required int written,
+  required int lastReportedWritten,
+  required Duration elapsed,
+}) =>
+    written - lastReportedWritten >= kDownloadRangeProgressUpdateBytes ||
+    elapsed >= kDownloadRangeProgressUpdateInterval;
 
 /// Strong ETags are preferred for `If-Range`; HTTP dates are the standards-
 /// compliant fallback. Weak ETags are intentionally ignored because RFC range
@@ -417,6 +429,8 @@ class DownloadRangeTransfer {
     var complete = false;
     var current = opened;
     var reconnects = 0;
+    var lastReportedWritten = written;
+    final progressClock = Stopwatch()..start();
     final total = opened.total;
     try {
       output = await file.open(mode: FileMode.append);
@@ -432,7 +446,15 @@ class DownloadRangeTransfer {
             }
             await output.writeFrom(bytes);
             written += bytes.length;
-            await onState(written, total, false);
+            if (shouldEmitDownloadRangeProgress(
+              written: written,
+              lastReportedWritten: lastReportedWritten,
+              elapsed: progressClock.elapsed,
+            )) {
+              await onState(written, total, false);
+              lastReportedWritten = written;
+              progressClock.reset();
+            }
           }
         } catch (error) {
           streamError = error;
