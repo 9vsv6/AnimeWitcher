@@ -8,6 +8,12 @@ import 'package:path/path.dart' as p;
 import 'download_connection_governor.dart';
 import 'download_parallel.dart';
 
+/// Child connections tend to report progress in a tight burst at the native
+/// progress cadence. Collapse that burst into one parent/UI sample so four or
+/// sixteen connections do not make the displayed bytes and speed jump several
+/// times back-to-back for the same measurement interval.
+const Duration kParallelProgressCoalesceDelay = Duration(milliseconds: 350);
+
 /// Native DownloadTasks transfer the parts; this coordinator persists their
 /// identity before starting them. A process restart must not create new parts
 /// or ask the plugin to resume an already completed part.
@@ -72,6 +78,9 @@ class PersistentParallelDownload {
       return;
     }
     _disposed = true;
+    for (final session in _sessions.values) {
+      session.cancelAggregateProgress();
+    }
     final pump = _pumpFuture;
     if (pump != null) await pump;
     await Future.wait<void>(
@@ -208,6 +217,7 @@ class PersistentParallelDownload {
     return session.serialize(() async {
       if (_disposed) return false;
       if (session.active) return true;
+      session.cancelAggregateProgress();
       session.active = true;
       session.resetRamp();
       try {
@@ -435,6 +445,70 @@ class PersistentParallelDownload {
     }
   }
 
+  void _scheduleAggregateProgress(_ParallelSession session) {
+    if (_disposed || !session.active || session.deleted) return;
+    session.aggregateProgressDirty = true;
+    if (session.aggregateProgressTimer != null) return;
+
+    session.aggregateProgressTimer = Timer(kParallelProgressCoalesceDelay, () {
+      session.aggregateProgressTimer = null;
+      if (_disposed) return;
+      unawaited(
+        session.serialize(() async {
+          if (_disposed ||
+              !session.active ||
+              session.deleted ||
+              !session.aggregateProgressDirty) {
+            return;
+          }
+          session.aggregateProgressDirty = false;
+          await _emitAggregateProgress(session);
+        }),
+      );
+    });
+  }
+
+  Future<void> _emitAggregateProgress(_ParallelSession session) async {
+    final progress = session.progress;
+    final speed = session.parts.fold<double>(
+      0,
+      (sum, child) => sum + (child.complete ? 0 : child.speed),
+    );
+    final timeRemaining = _aggregateTimeRemaining(session, speed);
+
+    await saveRecord(
+      TaskRecord(
+        session.task,
+        TaskStatus.running,
+        progress,
+        session.size,
+      ),
+    );
+    onUpdate(
+      TaskProgressUpdate(
+        session.task,
+        progress,
+        session.size,
+        speed,
+        timeRemaining,
+      ),
+    );
+  }
+
+  Duration _aggregateTimeRemaining(_ParallelSession session, double speedMb) {
+    if (speedMb <= 0 || session.progress >= 1) {
+      return const Duration(seconds: -1);
+    }
+    final remainingBytes = session.parts.fold<double>(
+      0,
+      (sum, part) => sum + part.size * (1 - part.progress),
+    );
+    if (remainingBytes <= 0) return Duration.zero;
+
+    final seconds = (remainingBytes / (speedMb * 1000 * 1000)).ceil();
+    return Duration(seconds: seconds < 1 ? 1 : seconds);
+  }
+
   void _schedulePumpAll() {
     if (_disposed || _pumpFuture != null) return;
 
@@ -511,26 +585,7 @@ class PersistentParallelDownload {
             );
             await _persist(session);
             if (session.active) {
-              final progress = session.progress;
-              await saveRecord(
-                TaskRecord(
-                  session.task,
-                  TaskStatus.running,
-                  progress,
-                  session.size,
-                ),
-              );
-              onUpdate(
-                TaskProgressUpdate(
-                  session.task,
-                  progress,
-                  session.size,
-                  session.parts.fold<double>(
-                    0,
-                    (sum, child) => sum + child.speed,
-                  ),
-                ),
-              );
+              _scheduleAggregateProgress(session);
             }
             _schedulePumpAll();
             return;
@@ -584,6 +639,7 @@ class PersistentParallelDownload {
                 session.parts.every((child) => child.complete)) {
               await _assemble(session);
             } else {
+              _scheduleAggregateProgress(session);
               _schedulePumpAll();
             }
             return;
@@ -630,6 +686,7 @@ class PersistentParallelDownload {
 
   Future<void> _pause(_ParallelSession session) async {
     session.active = false;
+    session.cancelAggregateProgress();
     session.resetRamp();
     for (final part in session.parts.where(
       (part) => !part.complete && part.launched,
@@ -653,6 +710,7 @@ class PersistentParallelDownload {
     final session = _sessions[task.taskId]!;
     session.deleted = true;
     session.active = false;
+    session.cancelAggregateProgress();
     session.resetRamp();
     await session.serialize(() async {
       for (final part in session.parts) {
@@ -733,6 +791,7 @@ class PersistentParallelDownload {
     if (await target.exists()) return false;
 
     session.active = false;
+    session.cancelAggregateProgress();
     session.resetRamp();
     for (final part in session.parts) {
       _activeConnectionIds.remove(part.task.taskId);
@@ -762,11 +821,20 @@ class PersistentParallelDownload {
 
   Future<void> _finishCompleteSession(_ParallelSession session) async {
     session.active = false;
+    session.cancelAggregateProgress();
     session.resetRamp();
     for (final part in session.parts) {
       _activeConnectionIds.remove(part.task.taskId);
     }
-    onUpdate(TaskProgressUpdate(session.task, 1, session.size));
+    onUpdate(
+      TaskProgressUpdate(
+        session.task,
+        1,
+        session.size,
+        0,
+        Duration.zero,
+      ),
+    );
     await _status(session, TaskStatus.complete);
 
     for (final part in session.parts) {
@@ -825,6 +893,8 @@ class _ParallelSession {
   int rampBatchIndex = 0;
   int currentBatchRemaining = 0;
   final Set<String> currentBatchPendingIds = {};
+  Timer? aggregateProgressTimer;
+  bool aggregateProgressDirty = false;
   Future<void> _pending = Future<void>.value();
 
   int get size => parts.fold(0, (sum, part) => sum + part.size);
@@ -832,6 +902,12 @@ class _ParallelSession {
       parts.fold<double>(0, (sum, part) => sum + part.size * part.progress) /
       size;
   Future<void> get idle => _pending;
+
+  void cancelAggregateProgress() {
+    aggregateProgressTimer?.cancel();
+    aggregateProgressTimer = null;
+    aggregateProgressDirty = false;
+  }
 
   void resetRamp() {
     connectionCeiling = kDownloadPartsMin;
