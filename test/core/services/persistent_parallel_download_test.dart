@@ -109,6 +109,7 @@ void main() {
       starts.clear();
       acceptStarts = true;
       expect(await coordinator.start(parent, 23), isTrue);
+      await expandFreshTo(5);
       expect(starts.map((task) => task.headers['Range']), [
         'bytes=0-3',
         'bytes=4-8',
@@ -132,6 +133,7 @@ void main() {
       starts.clear();
       coordinator = create();
       expect(await coordinator.start(parent, 25), isTrue);
+      await expandFreshTo(4);
       expect(
         starts.map((task) => task.taskId),
         original.skip(1).map((task) => task.taskId),
@@ -161,6 +163,7 @@ void main() {
       expect(records[parent.taskId]!.status, TaskStatus.paused);
       starts.clear();
       expect(await coordinator.start(parent, 25), isTrue);
+      await expandFreshTo(4);
       expect(starts.length, 4);
     },
   );
@@ -174,7 +177,9 @@ void main() {
       for (var i = 4; i >= 0; i--) {
         await completePart(original[i], List.generate(5, (j) => i * 5 + j));
       }
-      await waitUntil(() => statuses.contains(TaskStatus.complete));
+      await waitUntil(
+        () => statuses.contains(TaskStatus.complete),
+      );
       await waitUntil(
         () => !File('${directory.path}/video.mp4.parts/manifest.json').existsSync(),
       );
@@ -247,7 +252,10 @@ void main() {
     await waitUntil(() => starts.length == 16);
 
     expect(coordinator.activeConnectionCount, 16);
-    expect(starts.map((task) => task.headers['Range']).last, 'bytes=150-159');
+    expect(
+      starts.map((task) => task.headers['Range']).last,
+      'bytes=150-159',
+    );
   });
 
   test('global budget never hands more than sixteen children to native IO', () async {
