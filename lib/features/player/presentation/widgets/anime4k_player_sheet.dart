@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
@@ -22,6 +24,7 @@ class Anime4kPlayerSheet {
     required ValueChanged<Anime4kMode> onModeSelected,
     required ValueChanged<Anime4kQuality> onQualitySelected,
     required Future<String> Function() appliedValue,
+    required Future<void> Function(bool bypassed) onCompareHeld,
   }) {
     var mode = currentMode;
     var quality = currentQuality;
@@ -198,6 +201,9 @@ class Anime4kPlayerSheet {
                                   ],
                                 ),
                                 SizedBox(height: isCompact ? 14 : 18),
+                                if (mode != Anime4kMode.off)
+                                  _CompareButton(onHeld: onCompareHeld),
+                                SizedBox(height: isCompact ? 10 : 14),
                                 _AppliedLine(read: appliedValue, mode: mode),
                               ],
                             ),
@@ -325,6 +331,96 @@ class _AppliedLineState extends State<_AppliedLine> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Hold to see the picture without the shaders.
+///
+/// A settings screen cannot show what a mode does. The shaders run inside
+/// mpv, on the frame being played, so the only truthful comparison is that
+/// frame with them and without them — which means taking them away while a
+/// finger is down and putting them back when it lifts. Pausing first makes it
+/// easiest to see.
+class _CompareButton extends StatefulWidget {
+  const _CompareButton({required this.onHeld});
+
+  final Future<void> Function(bool bypassed) onHeld;
+
+  @override
+  State<_CompareButton> createState() => _CompareButtonState();
+}
+
+class _CompareButtonState extends State<_CompareButton> {
+  bool _held = false;
+
+  Future<void> _set(bool held) async {
+    if (_held == held) return;
+    setState(() => _held = held);
+    await widget.onHeld(held);
+  }
+
+  @override
+  void dispose() {
+    // Releasing by closing the sheet must not leave the shaders switched off
+    // with nothing on screen saying so.
+    if (_held) unawaited(widget.onHeld(false));
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _set(true),
+      onPointerUp: (_) => _set(false),
+      onPointerCancel: (_) => _set(false),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        decoration: BoxDecoration(
+          color: _held
+              ? HotstarPlayerStyle.accent.withValues(alpha: 0.22)
+              : Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _held
+                ? HotstarPlayerStyle.accent
+                : Colors.white.withValues(alpha: 0.12),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _held ? Icons.visibility_off_rounded : Icons.compare_rounded,
+              size: 17,
+              color: HotstarPlayerStyle.primaryText,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                _held
+                    ? appText(
+                        context,
+                        english: 'Shaders off — release to restore',
+                        arabic: 'بدون تحسين — ارفع إصبعك للعودة',
+                      )
+                    : appText(
+                        context,
+                        english: 'Hold to compare with the original',
+                        arabic: 'اضغط مع الاستمرار للمقارنة بالأصل',
+                      ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: HotstarPlayerStyle.primaryText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -2608,6 +2608,22 @@ class PlayerController extends Notifier<PlayerState> {
   ///
   /// Called when a file opens and again when the setting changes, so turning
   /// a mode on takes effect on what is already playing.
+  /// Suspends the shaders without changing the setting, so the picture can
+  /// be seen as the source made it.
+  ///
+  /// This is the only honest way to show what a mode does. The shaders live
+  /// inside mpv and run on the frame being played, so a difference cannot be
+  /// printed in a settings screen — it can only be looked at, on this frame,
+  /// by taking them away for a moment and putting them back.
+  Future<void> setAnime4kBypassed(bool bypassed) async {
+    if (_anime4kBypassed == bypassed) return;
+    _anime4kBypassed = bypassed;
+    await applyAnime4kShaders();
+  }
+
+  bool _anime4kBypassed = false;
+  bool get isAnime4kBypassed => _anime4kBypassed;
+
   Future<void> applyAnime4kShaders() async {
     if (_isDisposed) return;
     if (state.useExoPlayer) return;
@@ -2616,13 +2632,15 @@ class PlayerController extends Notifier<PlayerState> {
 
     try {
       final settings = ref.read(playerSettingsProvider).asData?.value;
-      final pipeline = await ref
-          .read(anime4kShaderLibraryProvider)
-          .pipeline(
-            mode: settings?.anime4kMode ?? Anime4kMode.off,
-            quality: settings?.anime4kQuality ?? Anime4kQuality.m,
-            directory: settings?.anime4kShaderDirectory ?? '',
-          );
+      final pipeline = _anime4kBypassed
+          ? const Anime4kPipeline.none()
+          : await ref
+                .read(anime4kShaderLibraryProvider)
+                .pipeline(
+                  mode: settings?.anime4kMode ?? Anime4kMode.off,
+                  quality: settings?.anime4kQuality ?? Anime4kQuality.m,
+                  directory: settings?.anime4kShaderDirectory ?? '',
+                );
       if (_isDisposed) return;
       // An empty string is how mpv is told to run no shaders, so this both
       // applies a mode and turns one off.
@@ -2637,7 +2655,7 @@ class PlayerController extends Notifier<PlayerState> {
       if (kDebugMode) {
         debugPrint(
           'Anime4K: asked for ${pipeline.files.length} shaders, '
-          'mpv holds "${_anime4kApplied}"'
+          'mpv holds "$_anime4kApplied"'
           '${pipeline.missing.isEmpty ? '' : ', missing '
               '${pipeline.missing.join(", ")}'}',
         );

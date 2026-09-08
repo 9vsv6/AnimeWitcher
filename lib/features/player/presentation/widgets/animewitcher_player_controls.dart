@@ -1742,6 +1742,9 @@ class AnimeWitcherPlayerControlsState
               appliedValue: () async => ref
                   .read(playerControllerProvider.notifier)
                   .anime4kAppliedValue,
+              onCompareHeld: (bypassed) => ref
+                  .read(playerControllerProvider.notifier)
+                  .setAnime4kBypassed(bypassed),
             ),
             isTv: _isTv,
           ),
