@@ -84,13 +84,21 @@ class _RealChunkProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final separator = Theme.of(
-      context,
-    ).colorScheme.surface.withValues(alpha: 0.72);
+    final theme = Theme.of(context);
+    final progressColor =
+        ProgressIndicatorTheme.of(context).color ?? theme.colorScheme.primary;
+    final separator = theme.colorScheme.surface.withValues(alpha: 0.72);
+
     return Row(
       children: List<Widget>.generate(parts * 2 - 1, (index) {
         if (index.isOdd) {
-          return ColoredBox(color: separator, child: const SizedBox(width: 1));
+          final completedPart = index ~/ 2;
+          final connectsToNext =
+              completedPart < values.length && values[completedPart] >= 1.0;
+          return ColoredBox(
+            color: connectsToNext ? progressColor : separator,
+            child: const SizedBox(width: 1),
+          );
         }
         final part = index ~/ 2;
         return Expanded(
@@ -117,6 +125,11 @@ class _AggregateProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progressColor =
+        ProgressIndicatorTheme.of(context).color ?? theme.colorScheme.primary;
+    final separator = theme.colorScheme.surface.withValues(alpha: 0.72);
+
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -128,11 +141,12 @@ class _AggregateProgress extends StatelessWidget {
           Row(
             children: List<Widget>.generate(parts * 2 - 1, (index) {
               if (index.isEven) return const Expanded(child: SizedBox());
+
+              final completedPart = index ~/ 2;
+              final boundaryProgress = (completedPart + 1) / parts;
               return Container(
                 width: 1,
-                color: Theme.of(
-                  context,
-                ).colorScheme.surface.withValues(alpha: 0.72),
+                color: progress >= boundaryProgress ? progressColor : separator,
               );
             }),
           ),
