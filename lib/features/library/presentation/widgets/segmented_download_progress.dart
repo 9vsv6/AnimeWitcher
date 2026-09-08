@@ -1,11 +1,11 @@
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../core/services/download_parallel.dart';
-
-/// Shows independent progress for each real ParallelDownloadTask child when
-/// native chunk telemetry is available. Otherwise it falls back to the parent
-/// aggregate progress with boundaries, never inventing per-chunk percentages.
+/// Shows one continuous progress bar for the whole download.
+///
+/// Parallel connections remain an implementation detail of the download
+/// engine. The bar intentionally uses only the parent task's aggregate
+/// progress instead of splitting the track or calculating per-part progress.
 class SegmentedDownloadProgress extends StatelessWidget {
   const SegmentedDownloadProgress({
     super.key,
@@ -17,140 +17,37 @@ class SegmentedDownloadProgress extends StatelessWidget {
     this.height = 4,
   }) : assert(height > 0);
 
+  /// Retained for source compatibility with existing download tiles. Parallel
+  /// task details do not affect how the progress bar is rendered.
   final Task task;
+
+  /// Aggregate progress for the entire download, from 0 to 1.
   final double value;
   final Color backgroundColor;
   final BorderRadius borderRadius;
+
+  /// Retained for source compatibility. Per-chunk progress is deliberately
+  /// ignored so the UI never performs segment calculations.
   final Map<String, double>? chunkProgress;
   final double height;
 
   @override
   Widget build(BuildContext context) {
-    final parts = downloadTaskPartCount(task);
     final progress = value.clamp(0.0, 1.0).toDouble();
-    final realValues =
-        chunkProgress?.values
-            .where((value) => value >= 0 && value <= 1)
-            .map((value) => value.clamp(0.0, 1.0).toDouble())
-            .toList(growable: false) ??
-        const <double>[];
-
-    // Large files may have more immutable queued work units than active
-    // connections for Gopeed-style tail balancing. Those units do not map
-    // one-to-one to the user-selected connection lanes, so rendering the first
-    // N child values would be misleading. Switch to the honest weighted parent
-    // aggregate as soon as telemetry contains more work units than lanes.
-    final hasRealChunkProgress =
-        parts > 1 && realValues.isNotEmpty && realValues.length <= parts;
 
     return Semantics(
-      label: parts > 1
-          ? hasRealChunkProgress
-                ? 'Download progress, $parts live parallel parts'
-                : 'Download progress, $parts parallel parts'
-          : null,
+      label: 'Download progress',
       value: '${(progress * 100).floor()}%',
       child: ClipRRect(
         borderRadius: borderRadius,
         child: SizedBox(
           height: height,
-          child: hasRealChunkProgress
-              ? _RealChunkProgress(
-                  parts: parts,
-                  values: realValues,
-                  backgroundColor: backgroundColor,
-                )
-              : _AggregateProgress(
-                  parts: parts,
-                  progress: progress,
-                  backgroundColor: backgroundColor,
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RealChunkProgress extends StatelessWidget {
-  const _RealChunkProgress({
-    required this.parts,
-    required this.values,
-    required this.backgroundColor,
-  });
-
-  final int parts;
-  final List<double> values;
-  final Color backgroundColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final progressColor =
-        ProgressIndicatorTheme.of(context).color ?? theme.colorScheme.primary;
-    final separator = theme.colorScheme.surface.withValues(alpha: 0.72);
-
-    return Row(
-      children: List<Widget>.generate(parts * 2 - 1, (index) {
-        if (index.isOdd) {
-          final completedPart = index ~/ 2;
-          final connectsToNext =
-              completedPart < values.length && values[completedPart] >= 1.0;
-          return ColoredBox(
-            color: connectsToNext ? progressColor : separator,
-            child: const SizedBox(width: 1),
-          );
-        }
-        final part = index ~/ 2;
-        return Expanded(
           child: LinearProgressIndicator(
-            value: part < values.length ? values[part] : 0.0,
+            value: progress,
             backgroundColor: backgroundColor,
           ),
-        );
-      }),
-    );
-  }
-}
-
-class _AggregateProgress extends StatelessWidget {
-  const _AggregateProgress({
-    required this.parts,
-    required this.progress,
-    required this.backgroundColor,
-  });
-
-  final int parts;
-  final double progress;
-  final Color backgroundColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final progressColor =
-        ProgressIndicatorTheme.of(context).color ?? theme.colorScheme.primary;
-    final separator = theme.colorScheme.surface.withValues(alpha: 0.72);
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        LinearProgressIndicator(
-          value: progress,
-          backgroundColor: backgroundColor,
         ),
-        if (parts > 1)
-          Row(
-            children: List<Widget>.generate(parts * 2 - 1, (index) {
-              if (index.isEven) return const Expanded(child: SizedBox());
-
-              final completedPart = index ~/ 2;
-              final boundaryProgress = (completedPart + 1) / parts;
-              return Container(
-                width: 1,
-                color: progress >= boundaryProgress ? progressColor : separator,
-              );
-            }),
-          ),
-      ],
+      ),
     );
   }
 }
