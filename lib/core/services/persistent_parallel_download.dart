@@ -22,6 +22,12 @@ const Duration kParallelProgressCoalesceDelay = Duration(milliseconds: 350);
 /// the attempt counter back to zero.
 const int kParallelRecoveryMaxBackoffMultiplier = 15;
 
+/// background_downloader deliberately keeps a child just below 1.0 until its
+/// final status callback is delivered. If iOS loses that callback while the
+/// exact range bytes are already durable, this sentinel lets us verify the file
+/// on disk and finish it ourselves instead of leaving the episode at 99%.
+const double kParallelNativeCompletionSentinel = 0.999;
+
 /// Native DownloadTasks transfer the parts; this coordinator persists their
 /// identity before starting them. A process restart must not create new parts
 /// or ask the plugin to resume an already completed part.
@@ -263,8 +269,22 @@ class PersistentParallelDownload {
         for (final part in session.parts) {
           part.speed = 0;
           part.recoveryAttempts = 0;
-          // Never copy or adopt a file while a native worker still owns it.
-          if (part.launched) continue;
+
+          // iOS can leave a completed range reported as live/running if the
+          // final native callback is lost. Exact on-disk bytes are stronger
+          // evidence than that stale status. Settle the worker first, verify the
+          // bytes again, then adopt the range without downloading it twice.
+          if (part.launched) {
+            if (await _adoptExactSizePart(
+              session,
+              part,
+              settleNativeOwner: true,
+            )) {
+              continue;
+            }
+            continue;
+          }
+
           final saved = await canonicalizePartialDownloadFile(
             destinationPath: await part.task.filePath(),
           );
@@ -274,6 +294,9 @@ class PersistentParallelDownload {
             part.progress = 1;
             _activeConnectionIds.remove(part.task.taskId);
             part.launched = false;
+            await saveRecord(
+              TaskRecord(part.task, TaskStatus.complete, 1, part.size),
+            );
             continue;
           }
           if (part.complete) throw StateError('A completed part is missing');
@@ -441,6 +464,41 @@ class PersistentParallelDownload {
     part.launched = false;
     part.speed = 0;
     _schedulePumpAll();
+  }
+
+  /// Adopt a range whose complete callback was lost after every requested byte
+  /// already reached the destination file. If native still owns the task, ask
+  /// it to pause/finalize first; then verify the exact byte count again before
+  /// changing durable state. Never infer completion from 99% alone.
+  Future<bool> _adoptExactSizePart(
+    _ParallelSession session,
+    _DownloadPart part, {
+    required bool settleNativeOwner,
+  }) async {
+    if (part.complete || session.deleted) return part.complete;
+
+    final path = await part.task.filePath();
+    final file = File(path);
+    if (!await file.exists() || await file.length() != part.size) return false;
+
+    if (settleNativeOwner) {
+      try {
+        await pausePart(part.task);
+      } catch (_) {
+        // A task that has already finished natively may no longer be pausable.
+        // The second exact-size verification below remains the source of truth.
+      }
+    }
+
+    if (!await file.exists() || await file.length() != part.size) return false;
+
+    _markConnectionReady(session, part);
+    _releaseConnection(part);
+    part.complete = true;
+    part.progress = 1;
+    await saveRecord(TaskRecord(part.task, TaskStatus.complete, 1, part.size));
+    onPartProgress(session.task.taskId, part.task.taskId, 1);
+    return true;
   }
 
   void _capSessionAt(_ParallelSession session, int ceiling) {
@@ -666,6 +724,29 @@ class PersistentParallelDownload {
               part.recoveryAttempts = 0;
             }
             part.speed = update.networkSpeed > 0 ? update.networkSpeed : 0;
+
+            // URLSession occasionally writes the complete range and reports
+            // 0.999, then never delivers TaskStatus.complete. Only take over
+            // when the exact requested byte count is already on disk; pausing
+            // the child here settles native ownership before assembly deletes
+            // the .part files.
+            if (session.active &&
+                part.progress >= kParallelNativeCompletionSentinel &&
+                await _adoptExactSizePart(
+                  session,
+                  part,
+                  settleNativeOwner: part.launched,
+                )) {
+              await _persist(session);
+              if (session.parts.every((child) => child.complete)) {
+                await _assemble(session);
+              } else {
+                _scheduleAggregateProgress(session);
+                _schedulePumpAll();
+              }
+              return;
+            }
+
             onPartProgress(
               session.task.taskId,
               part.task.taskId,
@@ -861,25 +942,28 @@ class PersistentParallelDownload {
         final live = await liveTaskIds();
         var recovering = false;
         for (final part in session.parts) {
-          if (part.complete ||
-              !part.launched ||
-              part.recoveryTimer != null ||
-              live.contains(part.task.taskId)) {
+          if (part.complete || !part.launched || part.recoveryTimer != null) {
             continue;
           }
-          final file = File(await part.task.filePath());
-          if (await file.exists() && await file.length() == part.size) {
-            _markConnectionReady(session, part);
-            _releaseConnection(part);
-            part.complete = true;
-            part.progress = 1;
-          } else {
-            // URLSession can temporarily drop a worker during hand-off without
-            // delivering its final callback to Dart. Recover that one child;
-            // never pause healthy siblings just because ownership vanished.
-            _stabilizeSessionForRecovery(session);
-            recovering = _schedulePartRecovery(session, part) || recovering;
+
+          final nativeOwnsPart = live.contains(part.task.taskId);
+          if (await _adoptExactSizePart(
+            session,
+            part,
+            settleNativeOwner: nativeOwnsPart,
+          )) {
+            continue;
           }
+
+          // A genuinely live worker that does not yet have every byte should
+          // continue normally. Only a vanished owner enters recovery.
+          if (nativeOwnsPart) continue;
+
+          // URLSession can temporarily drop a worker during hand-off without
+          // delivering its final callback to Dart. Recover that one child;
+          // never pause healthy siblings just because ownership vanished.
+          _stabilizeSessionForRecovery(session);
+          recovering = _schedulePartRecovery(session, part) || recovering;
         }
         if (session.parts.every((part) => part.complete)) {
           await _assemble(session);
