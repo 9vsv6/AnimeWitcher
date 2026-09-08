@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -25,9 +26,13 @@ class Anime4kPlayerSheet {
     required ValueChanged<Anime4kQuality> onQualitySelected,
     required Future<String> Function() appliedValue,
     required Future<void> Function(bool bypassed) onCompareHeld,
+    required Future<Uint8List?> Function() captureSource,
   }) {
     var mode = currentMode;
     var quality = currentQuality;
+    // Remembered so the switch can put back what was chosen rather than
+    // resetting to a default every time it is flicked.
+    var lastMode = currentMode;
 
     showPlayerDialog<void>(
       context: context,
@@ -122,89 +127,122 @@ class Anime4kPlayerSheet {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _label(
-                                  context,
-                                  appText(
-                                    context,
-                                    english: 'Mode',
-                                    arabic: 'النمط',
+                                // On or off first, and nothing else until it
+                                // is on. "Off" was one chip among seven
+                                // modes, which made switching the feature
+                                // off look like choosing a kind of
+                                // enhancement.
+                                SwitchListTile(
+                                  value: mode != Anime4kMode.off,
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  title: Text(
+                                    appText(
+                                      context,
+                                      english: 'Enhance the picture',
+                                      arabic: 'تحسين الصورة',
+                                    ),
+                                    style: const TextStyle(
+                                      color: HotstarPlayerStyle.primaryText,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
+                                  onChanged: (on) {
+                                    // Turning it back on returns to whatever
+                                    // was last chosen, not to a default that
+                                    // undoes the choosing.
+                                    final next = on
+                                        ? (lastMode == Anime4kMode.off
+                                              ? Anime4kMode.a
+                                              : lastMode)
+                                        : Anime4kMode.off;
+                                    setState(() {
+                                      if (mode != Anime4kMode.off) {
+                                        lastMode = mode;
+                                      }
+                                      mode = next;
+                                    });
+                                    onModeSelected(next);
+                                  },
                                 ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    for (final value in Anime4kMode.values)
-                                      ChoiceChip(
-                                        label: Text(
-                                          value == Anime4kMode.off
-                                              ? appText(
-                                                  context,
-                                                  english: 'Off',
-                                                  arabic: 'إيقاف',
-                                                )
-                                              : value.label,
+                                if (mode != Anime4kMode.off) ...[
+                                  SizedBox(height: isCompact ? 8 : 12),
+                                  _label(
+                                    context,
+                                    appText(
+                                      context,
+                                      english: 'Mode',
+                                      arabic: 'النمط',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      for (final value in Anime4kMode.values)
+                                        if (value != Anime4kMode.off)
+                                          ChoiceChip(
+                                            label: Text(value.label),
+                                            selected: mode == value,
+                                            onSelected: (_) {
+                                              setState(() {
+                                                mode = value;
+                                                lastMode = value;
+                                              });
+                                              onModeSelected(value);
+                                            },
+                                          ),
+                                    ],
+                                  ),
+                                  SizedBox(height: isCompact ? 16 : 22),
+                                  _label(
+                                    context,
+                                    appText(
+                                      context,
+                                      english: 'Quality',
+                                      arabic: 'الجودة',
+                                    ),
+                                  ),
+                                  Text(
+                                    appText(
+                                      context,
+                                      english:
+                                          'Each step up roughly doubles the '
+                                          'work the GPU does.',
+                                      arabic:
+                                          'كل درجة أعلى تضاعف تقريبًا الحِمل '
+                                          'على كرت الشاشة.',
+                                    ),
+                                    style: const TextStyle(
+                                      color: HotstarPlayerStyle.secondaryText,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      for (final value in Anime4kQuality.values)
+                                        ChoiceChip(
+                                          label: Text(value.suffix),
+                                          selected: quality == value,
+                                          onSelected: (_) {
+                                            setState(() => quality = value);
+                                            onQualitySelected(value);
+                                          },
                                         ),
-                                        selected: mode == value,
-                                        onSelected: (_) {
-                                          setState(() => mode = value);
-                                          onModeSelected(value);
-                                        },
-                                      ),
-                                  ],
-                                ),
-                                SizedBox(height: isCompact ? 16 : 22),
-                                _label(
-                                  context,
-                                  appText(
-                                    context,
-                                    english: 'Quality',
-                                    arabic: 'الجودة',
+                                    ],
                                   ),
-                                ),
-                                Text(
-                                  appText(
-                                    context,
-                                    english:
-                                        'Each step up roughly doubles the '
-                                        'work the GPU does.',
-                                    arabic:
-                                        'كل درجة أعلى تضاعف تقريبًا الحِمل '
-                                        'على كرت الشاشة.',
-                                  ),
-                                  style: const TextStyle(
-                                    color: HotstarPlayerStyle.secondaryText,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    for (final value in Anime4kQuality.values)
-                                      ChoiceChip(
-                                        label: Text(value.suffix),
-                                        selected: quality == value,
-                                        // Turned off, the size decides
-                                        // nothing, so it is left inert rather
-                                        // than inviting a change that does
-                                        // not show.
-                                        onSelected: mode == Anime4kMode.off
-                                            ? null
-                                            : (_) {
-                                                setState(() => quality = value);
-                                                onQualitySelected(value);
-                                              },
-                                      ),
-                                  ],
-                                ),
-                                SizedBox(height: isCompact ? 14 : 18),
-                                if (mode != Anime4kMode.off)
+                                  SizedBox(height: isCompact ? 14 : 18),
                                   _CompareButton(onHeld: onCompareHeld),
-                                SizedBox(height: isCompact ? 10 : 14),
-                                _AppliedLine(read: appliedValue, mode: mode),
+                                  SizedBox(height: isCompact ? 10 : 14),
+                                  _SourceFramePreview(capture: captureSource),
+                                  SizedBox(height: isCompact ? 10 : 14),
+                                  _AppliedLine(read: appliedValue, mode: mode),
+                                ],
                               ],
                             ),
                           ),
@@ -229,6 +267,151 @@ class Anime4kPlayerSheet {
         fontSize: 14,
         fontWeight: FontWeight.w700,
       ),
+    );
+  }
+}
+
+/// This moment as the source encoded it, beside the screen showing it
+/// enhanced.
+///
+/// mpv's `video` screenshot is taken before the GPU pipeline the shaders run
+/// in, so this still is genuinely without Anime4K however hard the shaders
+/// are working behind the panel. Pause first and the two are the same frame:
+/// the still untouched, the picture around it enhanced.
+///
+/// There is deliberately no second still. mpv can save its own rendered
+/// window, but media_kit only ever asks for the `video` variant and a window
+/// capture is not available under the render API this app draws through — so
+/// a two-panel before-and-after would have to fake one side, and a faked
+/// "after" is worse than none.
+class _SourceFramePreview extends StatefulWidget {
+  const _SourceFramePreview({required this.capture});
+
+  final Future<Uint8List?> Function() capture;
+
+  @override
+  State<_SourceFramePreview> createState() => _SourceFramePreviewState();
+}
+
+class _SourceFramePreviewState extends State<_SourceFramePreview> {
+  Uint8List? _frame;
+  bool _busy = false;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_grab());
+  }
+
+  Future<void> _grab() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _failed = false;
+    });
+    final bytes = await widget.capture();
+    if (!mounted) return;
+    setState(() {
+      _frame = bytes;
+      _failed = bytes == null;
+      _busy = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final frame = _frame;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                appText(
+                  context,
+                  english: 'This frame, before enhancing',
+                  arabic: 'هذه اللقطة قبل التحسين',
+                ),
+                style: const TextStyle(
+                  color: HotstarPlayerStyle.primaryText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _busy ? null : _grab,
+              icon: const Icon(Icons.refresh_rounded, size: 15),
+              label: Text(
+                appText(context, english: 'Refresh', arabic: 'تحديث'),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            // Fixed rather than 16:9 across the panel's width: a full-width
+            // frame is a third of the dialog's height on its own and pushes
+            // the controls below the fold on the phone.
+            height: 132,
+            width: double.infinity,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.04),
+              ),
+              child: frame != null
+                  ? Image.memory(
+                      frame,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                    )
+                  : Center(
+                      child: _busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              _failed
+                                  ? appText(
+                                      context,
+                                      english: 'No frame to show yet',
+                                      arabic: 'لا توجد لقطة بعد',
+                                    )
+                                  : '',
+                              style: const TextStyle(
+                                color: HotstarPlayerStyle.secondaryText,
+                                fontSize: 12,
+                              ),
+                            ),
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          appText(
+            context,
+            english:
+                'Pause, then compare this with the picture behind — same '
+                'moment, enhanced.',
+            arabic:
+                'أوقف التشغيل ثم قارنها بالصورة خلف هذه النافذة — اللقطة '
+                'نفسها بعد التحسين.',
+          ),
+          style: const TextStyle(
+            color: HotstarPlayerStyle.secondaryText,
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -277,12 +460,10 @@ class _AppliedLineState extends State<_AppliedLine> {
     if (value == null) return const SizedBox.shrink();
 
     final running = value.trim().isNotEmpty;
-    final count = running
-        ? value
-              .split(RegExp(r'(?<!\)[:;]'))
-              .where((p) => p.trim().isNotEmpty)
-              .length
-        : 0;
+    // Counted by the extension rather than by splitting on mpv's separator:
+    // that separator differs by platform and can be backslash-escaped inside
+    // a path, and every shader in the list ends in .glsl regardless.
+    final count = running ? value.toLowerCase().split('.glsl').length - 1 : 0;
 
     if (widget.mode == Anime4kMode.off) {
       return Text(
@@ -371,6 +552,8 @@ class _CompareButtonState extends State<_CompareButton> {
   @override
   Widget build(BuildContext context) {
     return Listener(
+      // The whole bar is the control, not just the words on it.
+      behavior: HitTestBehavior.opaque,
       onPointerDown: (_) => _set(true),
       onPointerUp: (_) => _set(false),
       onPointerCancel: (_) => _set(false),

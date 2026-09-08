@@ -2624,6 +2624,28 @@ class PlayerController extends Notifier<PlayerState> {
   bool _anime4kBypassed = false;
   bool get isAnime4kBypassed => _anime4kBypassed;
 
+  /// A still of the frame being played, as the source encoded it.
+  ///
+  /// mpv's `video` screenshot is the decoded frame, taken before the GPU
+  /// pipeline the shaders live in — so this is the picture *without* Anime4K,
+  /// whatever the shaders are doing on screen. That is exactly what makes it
+  /// useful next to the live picture: pause, and the still and the screen
+  /// behind it are the same moment, one untouched and one enhanced.
+  ///
+  /// There is no matching call for the enhanced side. mpv can save its own
+  /// rendered window, but media_kit only ever asks for the `video` variant,
+  /// and a window capture is not available under the render API this app
+  /// draws through anyway.
+  Future<Uint8List?> captureSourceFrame() async {
+    if (_isDisposed || state.useExoPlayer) return null;
+    try {
+      return await _player.screenshot(format: 'image/png');
+    } catch (e) {
+      if (kDebugMode) debugPrint('Source frame capture failed: $e');
+      return null;
+    }
+  }
+
   Future<void> applyAnime4kShaders() async {
     if (_isDisposed) return;
     if (state.useExoPlayer) return;

@@ -1745,6 +1745,9 @@ class AnimeWitcherPlayerControlsState
               onCompareHeld: (bypassed) => ref
                   .read(playerControllerProvider.notifier)
                   .setAnime4kBypassed(bypassed),
+              captureSource: () => ref
+                  .read(playerControllerProvider.notifier)
+                  .captureSourceFrame(),
             ),
             isTv: _isTv,
           ),

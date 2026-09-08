@@ -39,9 +39,14 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
   String? _downloadError;
   int? _downloaded;
 
+  /// The mode to come back to when the switch is turned on again.
+  Anime4kMode _lastMode = Anime4kMode.a;
+
   @override
   void initState() {
     super.initState();
+    final saved = _settings.anime4kMode;
+    if (saved != Anime4kMode.off) _lastMode = saved;
     _refreshPipeline();
   }
 
@@ -296,43 +301,75 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
 
               const Divider(height: 28),
 
-              // --- the pipeline ----------------------------------------------
-              Text(
-                appText(context, english: 'Mode', arabic: 'النمط'),
-                style: theme.textTheme.labelLarge,
-              ),
-              RadioGroup<Anime4kMode>(
-                groupValue: settings.anime4kMode,
-                onChanged: (value) async {
-                  if (value == null) return;
+              // --- on, then what kind ----------------------------------------
+              //
+              // Off used to be one option among seven modes, which made
+              // switching the feature off read as choosing a kind of
+              // enhancement. It is a state of the feature, not a flavour of
+              // it, so it gets the switch and the modes appear underneath.
+              SwitchListTile(
+                value: settings.anime4kMode != Anime4kMode.off,
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  appText(
+                    context,
+                    english: 'Enhance the picture',
+                    arabic: 'تحسين الصورة',
+                  ),
+                  style: theme.textTheme.titleSmall,
+                ),
+                onChanged: (on) async {
+                  final next = on
+                      ? (_lastMode == Anime4kMode.off
+                            ? Anime4kMode.a
+                            : _lastMode)
+                      : Anime4kMode.off;
+                  if (settings.anime4kMode != Anime4kMode.off) {
+                    _lastMode = settings.anime4kMode;
+                  }
                   await ref
                       .read(playerSettingsProvider.notifier)
-                      .setAnime4kMode(value);
+                      .setAnime4kMode(next);
                   await _refreshPipeline();
                   await _reapply();
                 },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final mode in Anime4kMode.values)
-                      RadioListTile<Anime4kMode>(
-                        value: mode,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          mode == Anime4kMode.off
-                              ? appText(
-                                  context,
-                                  english: 'Off',
-                                  arabic: 'إيقاف',
-                                )
-                              : '${appText(context, english: "Mode", arabic: "النمط")} ${mode.label}',
-                        ),
-                        subtitle: Text(_modeHint(context, mode)),
-                      ),
-                  ],
-                ),
               ),
+
+              if (settings.anime4kMode != Anime4kMode.off) ...[
+                const SizedBox(height: 8),
+                Text(
+                  appText(context, english: 'Mode', arabic: 'النمط'),
+                  style: theme.textTheme.labelLarge,
+                ),
+                RadioGroup<Anime4kMode>(
+                  groupValue: settings.anime4kMode,
+                  onChanged: (value) async {
+                    if (value == null) return;
+                    _lastMode = value;
+                    await ref
+                        .read(playerSettingsProvider.notifier)
+                        .setAnime4kMode(value);
+                    await _refreshPipeline();
+                    await _reapply();
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final mode in Anime4kMode.values)
+                        if (mode != Anime4kMode.off)
+                          RadioListTile<Anime4kMode>(
+                            value: mode,
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              '${appText(context, english: "Mode", arabic: "النمط")} ${mode.label}',
+                            ),
+                            subtitle: Text(_modeHint(context, mode)),
+                          ),
+                    ],
+                  ),
+                ),
+              ],
 
               if (settings.anime4kMode != Anime4kMode.off) ...[
                 const Divider(height: 28),
