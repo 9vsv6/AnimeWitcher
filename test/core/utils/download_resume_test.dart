@@ -7,6 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
+  test('unknown native size cannot hide a durable expected length', () {
+    expect(knownDownloadSize([-1, 0, 1024]), 1024);
+    expect(knownDownloadSize([null, 2048, 1024]), 2048);
+    expect(knownDownloadSize([4096, -1, 1024]), 4096);
+    expect(knownDownloadSize([null, -1, 0]), -1);
+  });
   test('complete or oversized saved files never restart from zero', () async {
     for (final bytes in [10, 11]) {
       var restarts = 0;

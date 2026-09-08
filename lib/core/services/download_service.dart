@@ -1250,10 +1250,11 @@ class DownloadService {
       incoming: progress,
       lastKnown: downloadMetadataProgress(metadata),
     );
-    final totalSize =
-        current?.totalSize ??
-        record?.expectedFileSize ??
-        downloadMetadataExpectedBytes(metadata);
+    final totalSize = knownDownloadSize([
+      current?.totalSize,
+      record?.expectedFileSize,
+      downloadMetadataExpectedBytes(metadata),
+    ]);
     var partialBytes = 0;
     try {
       final path = await task.filePath();
@@ -1536,10 +1537,11 @@ class DownloadService {
       lastKnown: downloadMetadataProgress(metadata),
     );
 
-    final totalSize =
-        current?.totalSize ??
-        record?.expectedFileSize ??
-        downloadMetadataExpectedBytes(metadata);
+    final totalSize = knownDownloadSize([
+      current?.totalSize,
+      record?.expectedFileSize,
+      downloadMetadataExpectedBytes(metadata),
+    ]);
 
     // Never delete the DB record, metadata, or partial file here — only mark
     // paused so retry/unpause can continue from the saved offset.
@@ -1745,10 +1747,11 @@ class DownloadService {
           incoming: progress,
           lastKnown: downloadMetadataProgress(metadata),
         );
-        final totalSize =
-            current?.totalSize ??
-            record?.expectedFileSize ??
-            downloadMetadataExpectedBytes(metadata);
+        final totalSize = knownDownloadSize([
+          current?.totalSize,
+          record?.expectedFileSize,
+          downloadMetadataExpectedBytes(metadata),
+        ]);
         await FileDownloader().database.updateRecord(
           TaskRecord(downloadTask, TaskStatus.paused, progress, totalSize),
         );
@@ -2106,8 +2109,7 @@ class DownloadService {
     );
     if (partial == null) return false;
     final existingBytes = partial.bytes;
-    final record = await FileDownloader().database.recordForId(task.taskId);
-    final expectedBytes = record?.expectedFileSize ?? -1;
+    final expectedBytes = (await _savedProgressFor(task)).totalSize;
     if (expectedBytes > 0 && existingBytes == expectedBytes) {
       await FileDownloader().database.updateRecord(
         TaskRecord(task, TaskStatus.complete, 1, expectedBytes),
