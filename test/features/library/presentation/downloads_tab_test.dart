@@ -718,12 +718,15 @@ void main() {
       TextDirection.rtl,
     );
     expect(find.text('الحلقة 20'), findsOneWidget);
-    expect(find.text('Kuroneko'), findsNothing);
+    // TabBarView keeps its adjacent page mounted offstage. Verify that the
+    // completed anime group is not interactable before the RTL swipe instead
+    // of assuming it is absent from the widget tree.
+    expect(find.text('Kuroneko').hitTestable(), findsNothing);
 
     await tester.fling(find.byType(TabBarView), const Offset(400, 0), 2000);
     await tester.pumpAndSettle();
 
-    expect(find.text('Kuroneko'), findsOneWidget);
+    expect(find.text('Kuroneko').hitTestable(), findsOneWidget);
     expect(find.byType(ExpansionTile), findsOneWidget);
     expect(find.text('حلقة'), findsOneWidget);
     expect(find.text('الحلقة 9'), findsNothing);
