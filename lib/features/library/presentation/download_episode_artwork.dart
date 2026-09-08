@@ -28,6 +28,34 @@ Future<File?> existingDownloadedEpisodeArtwork(String taskId) async {
   }
 }
 
+Future<File?> _persistDownloadedEpisodeArtwork(
+  String taskId,
+  String url,
+) async {
+  final target = await downloadedEpisodeArtworkFile(taskId);
+  if (target == null) return null;
+  final temp = File('${target.path}.tmp');
+  try {
+    await target.parent.create(recursive: true);
+    final cached = await DefaultCacheManager()
+        .getSingleFile(url)
+        .timeout(const Duration(seconds: 20));
+    if (!await cached.exists() || await cached.length() <= 0) return null;
+
+    if (await temp.exists()) await temp.delete();
+    await cached.copy(temp.path);
+    if (!await temp.exists() || await temp.length() <= 0) return null;
+    if (await target.exists()) await target.delete();
+    await temp.rename(target.path);
+    return target;
+  } catch (_) {
+    try {
+      if (await temp.exists()) await temp.delete();
+    } catch (_) {}
+    return null;
+  }
+}
+
 /// Copies an episode still out of the temporary image cache into application
 /// support storage. Completed downloads therefore keep their episode artwork
 /// even after the normal image cache is cleared or the device is offline.
@@ -44,37 +72,15 @@ Future<File?> ensureDownloadedEpisodeArtwork({
   final inFlight = _artworkWrites[taskId];
   if (inFlight != null) return inFlight;
 
-  late final Future<File?> operation;
-  operation = () async {
-    final target = await downloadedEpisodeArtworkFile(taskId);
-    if (target == null) return null;
-    final temp = File('${target.path}.tmp');
-    try {
-      await target.parent.create(recursive: true);
-      final cached = await DefaultCacheManager()
-          .getSingleFile(url)
-          .timeout(const Duration(seconds: 20));
-      if (!await cached.exists() || await cached.length() <= 0) return null;
-
-      if (await temp.exists()) await temp.delete();
-      await cached.copy(temp.path);
-      if (!await temp.exists() || await temp.length() <= 0) return null;
-      if (await target.exists()) await target.delete();
-      await temp.rename(target.path);
-      return target;
-    } catch (_) {
-      try {
-        if (await temp.exists()) await temp.delete();
-      } catch (_) {}
-      return null;
-    } finally {
-      if (identical(_artworkWrites[taskId], operation)) {
-        _artworkWrites.remove(taskId);
-      }
-    }
-  }();
+  final operation = _persistDownloadedEpisodeArtwork(taskId, url);
   _artworkWrites[taskId] = operation;
-  return operation;
+  try {
+    return await operation;
+  } finally {
+    if (identical(_artworkWrites[taskId], operation)) {
+      _artworkWrites.remove(taskId);
+    }
+  }
 }
 
 Future<void> deleteDownloadedEpisodeArtwork(String taskId) async {
