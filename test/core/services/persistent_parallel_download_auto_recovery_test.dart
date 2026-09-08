@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:animewitcher/core/services/download_parallel.dart';
 import 'package:animewitcher/core/services/persistent_parallel_download.dart';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +17,7 @@ void main() {
   late List<String> pauses;
   late List<TaskStatus> parentStatuses;
   late Map<String, TaskRecord> records;
+  late Set<String> livePartIds;
 
   Future<void> waitUntil(bool Function() predicate) async {
     for (var i = 0; i < 400; i++) {
@@ -35,6 +38,7 @@ void main() {
       },
       pausePart: (task) async {
         pauses.add(task.taskId);
+        livePartIds.remove(task.taskId);
       },
       cancelParts: (_) async {},
       saveRecord: (record) async {
@@ -47,7 +51,7 @@ void main() {
         }
       },
       onPartProgress: (_, _, _) {},
-      livePartIds: () async => <String>{},
+      livePartIds: () async => Set<String>.from(livePartIds),
       recoveryDelay: recoveryDelay,
       maxActiveConnections: maxActiveConnections,
     );
@@ -68,6 +72,7 @@ void main() {
     pauses = <String>[];
     parentStatuses = <TaskStatus>[];
     records = <String, TaskRecord>{};
+    livePartIds = <String>{};
     coordinator = buildCoordinator();
   });
 
@@ -136,6 +141,7 @@ void main() {
     pauses.clear();
     parentStatuses.clear();
     records.clear();
+    livePartIds.clear();
     parent = ParallelDownloadTask(
       taskId: 'episode-two-connections',
       url: 'https://cdn.example.test/video-2.mp4',
@@ -197,6 +203,111 @@ void main() {
     expect(parentStatuses.last, TaskStatus.running);
     expect(parentStatuses, isNot(contains(TaskStatus.waitingToRetry)));
     expect(parentStatuses, isNot(contains(TaskStatus.paused)));
+  });
+
+  test('0.999 exact-size child finalizes without waiting forever for native complete', () async {
+    expect(await coordinator.start(parent, 32), isTrue);
+    final child = starts.single;
+    livePartIds.add(child.taskId);
+    coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
+    await Future<void>.delayed(Duration.zero);
+
+    final childFile = File(await child.filePath());
+    await childFile.parent.create(recursive: true);
+    await childFile.writeAsBytes(List<int>.generate(32, (index) => index), flush: true);
+
+    coordinator.handleUpdate(
+      TaskProgressUpdate(
+        child,
+        0.999,
+        32,
+        0,
+        const Duration(seconds: -1),
+      ),
+    );
+
+    await waitUntil(() => parentStatuses.contains(TaskStatus.complete));
+    final target = File(await parent.filePath());
+    expect(await target.exists(), isTrue);
+    expect(await target.length(), 32);
+    expect(await target.readAsBytes(), List<int>.generate(32, (index) => index));
+    expect(pauses, contains(child.taskId));
+    expect(records[parent.taskId]?.status, TaskStatus.complete);
+  });
+
+  test('restored 32-part manifest assembles when two exact files are stuck at 0.999', () async {
+    await coordinator.dispose();
+    starts.clear();
+    pauses.clear();
+    parentStatuses.clear();
+    records.clear();
+    livePartIds.clear();
+
+    parent = ParallelDownloadTask(
+      taskId: 'manifest-episode',
+      url: 'https://pixeldrain.example/file',
+      filename: 'manifest-video.mp4',
+      directory: directory.path,
+      baseDirectory: BaseDirectory.root,
+      chunks: 16,
+      allowPause: true,
+    );
+
+    final targetPath = await parent.filePath();
+    final partsDirectory = Directory('$targetPath.parts');
+    await partsDirectory.create(recursive: true);
+    final manifestParts = <Map<String, dynamic>>[];
+    final expectedBytes = <int>[];
+
+    for (var index = 0; index < 32; index++) {
+      final child = DownloadTask(
+        taskId: '${parent.taskId}.part.$index',
+        url: parent.url,
+        filename: '$index.part',
+        directory: partsDirectory.path,
+        baseDirectory: BaseDirectory.root,
+        headers: <String, String>{
+          'Range': 'bytes=$index-$index',
+          'Accept-Encoding': 'identity',
+        },
+        updates: Updates.statusAndProgress,
+        retries: 0,
+        allowPause: true,
+        group: kPersistentDownloadChunkGroup,
+        metaData: jsonEncode(<String, String>{'parentTaskId': parent.taskId}),
+      );
+      await File(await child.filePath()).writeAsBytes(<int>[index], flush: true);
+      final stuck = index == 11 || index == 12;
+      if (stuck) livePartIds.add(child.taskId);
+      manifestParts.add(<String, dynamic>{
+        'task': child.toJson(),
+        'from': index,
+        'to': index,
+        'progress': stuck ? 0.999 : 1.0,
+        'complete': !stuck,
+      });
+      expectedBytes.add(index);
+    }
+
+    await File('$targetPath.parts/manifest.json').writeAsString(
+      jsonEncode(<String, dynamic>{'parts': manifestParts}),
+      flush: true,
+    );
+
+    coordinator = buildCoordinator();
+    expect(await coordinator.start(parent, 32), isTrue);
+    await waitUntil(() => parentStatuses.contains(TaskStatus.complete));
+
+    final target = File(targetPath);
+    expect(await target.exists(), isTrue);
+    expect(await target.length(), 32);
+    expect(await target.readAsBytes(), expectedBytes);
+    expect(pauses.toSet(), <String>{
+      '${parent.taskId}.part.11',
+      '${parent.taskId}.part.12',
+    });
+    expect(await partsDirectory.exists(), isFalse);
+    expect(records[parent.taskId]?.status, TaskStatus.complete);
   });
 
   test('permanent HTTP 403 still parks safely instead of retrying forever', () async {
