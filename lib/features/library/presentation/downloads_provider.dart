@@ -8,6 +8,7 @@ import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/services/download_concurrency.dart';
 import '../../../core/services/download_service.dart';
 import '../../../core/utils/download_cleanup.dart';
+import 'download_episode_artwork.dart';
 
 part 'downloads_provider.g.dart';
 
@@ -264,6 +265,14 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       );
       if (item == null) continue;
       items.add(item);
+      if (status == TaskStatus.complete) {
+        unawaited(
+          ensureDownloadedEpisodeArtwork(
+            taskId: item.id,
+            episode: item.episode,
+          ),
+        );
+      }
     }
 
     // FIFO: oldest first.
@@ -272,6 +281,7 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     for (final extra in collapsed.extraCompleteRecords) {
       await FileDownloader().database.deleteRecordWithId(extra.task.taskId);
       await storage.removeDownloadMetadata(extra.task.taskId);
+      await deleteDownloadedEpisodeArtwork(extra.id);
     }
     return _orderDownloads(collapsed.visible);
   }
@@ -332,6 +342,15 @@ class DownloadsNotifier extends _$DownloadsNotifier {
           episode: existing.episode,
           timestamp: existing.timestamp,
         );
+
+        if (newStatus == TaskStatus.complete) {
+          unawaited(
+            ensureDownloadedEpisodeArtwork(
+              taskId: updatedItem.id,
+              episode: updatedItem.episode,
+            ),
+          );
+        }
 
         final newList = List<DownloadItem>.from(currentList);
         newList[index] = updatedItem;
@@ -451,6 +470,7 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       }
       await FileDownloader().database.deleteRecordWithId(item.task.taskId);
       await storage.removeDownloadMetadata(item.task.taskId);
+      await deleteDownloadedEpisodeArtwork(item.id);
       droppedIds.add(item.id);
     }
 
