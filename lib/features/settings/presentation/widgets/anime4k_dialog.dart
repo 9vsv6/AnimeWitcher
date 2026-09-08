@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animewitcher/core/utils/localized_text.dart';
 import '../../../../shared/widgets/glass_dialog.dart';
 import '../../../player/data/anime4k.dart';
+import '../../../player/data/anime4k_download.dart';
 import '../../../player/data/anime4k_shader_library.dart';
 import '../../../player/presentation/player_controller.dart';
 import '../player_settings_provider.dart';
@@ -33,6 +34,10 @@ class _Anime4kDialog extends ConsumerStatefulWidget {
 class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
   Anime4kPipeline? _pipeline;
   bool _checking = false;
+  bool _downloading = false;
+  double? _downloadProgress;
+  String? _downloadError;
+  int? _downloaded;
 
   @override
   void initState() {
@@ -66,6 +71,43 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
       _pipeline = pipeline;
       _checking = false;
     });
+  }
+
+  /// Fetches the official release and points the setting at it.
+  ///
+  /// This is the path almost everyone should take. The alternative is
+  /// finding a zip on GitHub, unpacking it, and aiming a file picker at the
+  /// right folder inside it — three steps in front of a feature whose whole
+  /// appeal is that it improves the picture without being thought about.
+  Future<void> _downloadShaders() async {
+    setState(() {
+      _downloading = true;
+      _downloadProgress = null;
+      _downloadError = null;
+      _downloaded = null;
+    });
+    try {
+      final result = await ref
+          .read(anime4kDownloaderProvider)
+          .download(
+            onProgress: (value) {
+              if (mounted) setState(() => _downloadProgress = value);
+            },
+          );
+      if (!mounted) return;
+      await ref
+          .read(playerSettingsProvider.notifier)
+          .setAnime4kShaderDirectory(result.directory);
+      if (!mounted) return;
+      setState(() => _downloaded = result.written);
+      await _refreshPipeline();
+      await _reapply();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _downloadError = '$error');
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
   }
 
   Future<void> _chooseFolder() async {
@@ -143,37 +185,110 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
                     : appText(
                         context,
                         english:
-                            'Not chosen. Download the Anime4K GLSL shaders '
-                            'and point here at the folder holding them.',
+                            'None yet. The app can fetch the official '
+                            'release for you.',
                         arabic:
-                            'لم يُختَر بعد. نزّل ملفات Anime4K بصيغة GLSL '
-                            'ثم اختر المجلد الذي يحويها.',
+                            'لا يوجد بعد. يمكن للتطبيق تنزيل الإصدار '
+                            'الرسمي نيابةً عنك.',
                       ),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colors.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: OutlinedButton.icon(
-                  onPressed: _chooseFolder,
-                  icon: const Icon(Icons.folder_open_rounded, size: 18),
-                  label: Text(
-                    hasFolder
-                        ? appText(
-                            context,
-                            english: 'Change folder',
-                            arabic: 'تغيير المجلد',
-                          )
-                        : appText(
-                            context,
-                            english: 'Choose folder',
-                            arabic: 'اختيار المجلد',
-                          ),
+              const SizedBox(height: 10),
+              if (_downloading)
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: _downloadProgress,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      _downloadProgress == null
+                          ? appText(
+                              context,
+                              english: 'Downloading...',
+                              arabic: 'جارٍ التنزيل…',
+                            )
+                          : appText(
+                              context,
+                              english:
+                                  'Downloading '
+                                  '${(_downloadProgress! * 100).round()}%',
+                              arabic:
+                                  'جارٍ التنزيل '
+                                  '${(_downloadProgress! * 100).round()}٪',
+                            ),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _downloadShaders,
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: Text(
+                        hasFolder
+                            ? appText(
+                                context,
+                                english: 'Download again',
+                                arabic: 'إعادة التنزيل',
+                              )
+                            : appText(
+                                context,
+                                english: 'Download shaders',
+                                arabic: 'تنزيل الشيدرات',
+                              ),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _chooseFolder,
+                      icon: const Icon(Icons.folder_open_rounded, size: 18),
+                      label: Text(
+                        hasFolder
+                            ? appText(
+                                context,
+                                english: 'Change folder',
+                                arabic: 'تغيير المجلد',
+                              )
+                            : appText(
+                                context,
+                                english: 'I already have them',
+                                arabic: 'لديّ الملفات',
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              if (_downloadError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _downloadError!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.error,
                   ),
                 ),
-              ),
+              ],
+              if (_downloaded != null && _downloadError == null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  appText(
+                    context,
+                    english: 'Downloaded $_downloaded shaders',
+                    arabic: 'تم تنزيل $_downloaded ملفًا',
+                  ),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
               if (hasFolder) ...[
                 const SizedBox(height: 8),
                 _StatusLine(pipeline: _pipeline, checking: _checking),
