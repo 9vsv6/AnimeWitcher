@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import '../../data/anime4k.dart';
+import 'anime4k_frame_preview.dart';
 import 'hotstar_player_style.dart';
 import 'player_ltr.dart';
 
@@ -239,7 +240,11 @@ class Anime4kPlayerSheet {
                                   SizedBox(height: isCompact ? 14 : 18),
                                   _CompareButton(onHeld: onCompareHeld),
                                   SizedBox(height: isCompact ? 10 : 14),
-                                  _SourceFramePreview(capture: captureSource),
+                                  Anime4kFramePreview(
+                                    capture: captureSource,
+                                    titleColor: HotstarPlayerStyle.primaryText,
+                                    bodyColor: HotstarPlayerStyle.secondaryText,
+                                  ),
                                   SizedBox(height: isCompact ? 10 : 14),
                                   _AppliedLine(read: appliedValue, mode: mode),
                                 ],
@@ -267,151 +272,6 @@ class Anime4kPlayerSheet {
         fontSize: 14,
         fontWeight: FontWeight.w700,
       ),
-    );
-  }
-}
-
-/// This moment as the source encoded it, beside the screen showing it
-/// enhanced.
-///
-/// mpv's `video` screenshot is taken before the GPU pipeline the shaders run
-/// in, so this still is genuinely without Anime4K however hard the shaders
-/// are working behind the panel. Pause first and the two are the same frame:
-/// the still untouched, the picture around it enhanced.
-///
-/// There is deliberately no second still. mpv can save its own rendered
-/// window, but media_kit only ever asks for the `video` variant and a window
-/// capture is not available under the render API this app draws through — so
-/// a two-panel before-and-after would have to fake one side, and a faked
-/// "after" is worse than none.
-class _SourceFramePreview extends StatefulWidget {
-  const _SourceFramePreview({required this.capture});
-
-  final Future<Uint8List?> Function() capture;
-
-  @override
-  State<_SourceFramePreview> createState() => _SourceFramePreviewState();
-}
-
-class _SourceFramePreviewState extends State<_SourceFramePreview> {
-  Uint8List? _frame;
-  bool _busy = false;
-  bool _failed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_grab());
-  }
-
-  Future<void> _grab() async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _failed = false;
-    });
-    final bytes = await widget.capture();
-    if (!mounted) return;
-    setState(() {
-      _frame = bytes;
-      _failed = bytes == null;
-      _busy = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final frame = _frame;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                appText(
-                  context,
-                  english: 'This frame, before enhancing',
-                  arabic: 'هذه اللقطة قبل التحسين',
-                ),
-                style: const TextStyle(
-                  color: HotstarPlayerStyle.primaryText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: _busy ? null : _grab,
-              icon: const Icon(Icons.refresh_rounded, size: 15),
-              label: Text(
-                appText(context, english: 'Refresh', arabic: 'تحديث'),
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: SizedBox(
-            // Fixed rather than 16:9 across the panel's width: a full-width
-            // frame is a third of the dialog's height on its own and pushes
-            // the controls below the fold on the phone.
-            height: 132,
-            width: double.infinity,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
-              ),
-              child: frame != null
-                  ? Image.memory(
-                      frame,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                    )
-                  : Center(
-                      child: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              _failed
-                                  ? appText(
-                                      context,
-                                      english: 'No frame to show yet',
-                                      arabic: 'لا توجد لقطة بعد',
-                                    )
-                                  : '',
-                              style: const TextStyle(
-                                color: HotstarPlayerStyle.secondaryText,
-                                fontSize: 12,
-                              ),
-                            ),
-                    ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          appText(
-            context,
-            english:
-                'Pause, then compare this with the picture behind — same '
-                'moment, enhanced.',
-            arabic:
-                'أوقف التشغيل ثم قارنها بالصورة خلف هذه النافذة — اللقطة '
-                'نفسها بعد التحسين.',
-          ),
-          style: const TextStyle(
-            color: HotstarPlayerStyle.secondaryText,
-            fontSize: 11,
-            height: 1.4,
-          ),
-        ),
-      ],
     );
   }
 }
