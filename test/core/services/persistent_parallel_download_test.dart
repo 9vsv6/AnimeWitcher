@@ -42,6 +42,7 @@ void main() {
         onPartProgress: (_, _, _) {},
         maxActiveConnections: maxActiveConnections,
         livePartIds: () async => liveIds,
+        recoveryDelay: const Duration(milliseconds: 10),
       );
 
   setUp(() async {
@@ -134,6 +135,43 @@ void main() {
       expect(starts.map((task) => task.taskId).toSet().length, 5);
     },
   );
+
+  test(
+    'system pause resumes only the affected identity with bounded retries',
+    () async {
+      await coordinator.start(parent, 25);
+      await expandFreshTo(5);
+      final original = List<DownloadTask>.from(starts);
+      for (var attempt = 0; attempt < 2; attempt++) {
+        coordinator.handleUpdate(
+          TaskStatusUpdate(original[1], TaskStatus.paused),
+        );
+        await waitUntil(() => starts.length == 6 + attempt);
+        expect(starts.last.taskId, original[1].taskId);
+        expect(coordinator.activeConnectionCount, 5);
+        expect(pauses, isEmpty);
+        expect(coordinator.isActive(parent.taskId), isTrue);
+      }
+      coordinator.handleUpdate(
+        TaskStatusUpdate(original[1], TaskStatus.paused),
+      );
+      await waitUntil(() => !coordinator.isActive(parent.taskId));
+      await coordinator.pause(parent);
+      expect(starts.length, 7);
+      expect(coordinator.activeConnectionCount, 0);
+    },
+  );
+
+  test('user pause cancels a pending automatic part recovery', () async {
+    await coordinator.start(parent, 25);
+    final first = starts.first;
+    coordinator.handleUpdate(TaskStatusUpdate(first, TaskStatus.paused));
+    await coordinator.pause(parent);
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(starts.length, 1);
+    expect(coordinator.isActive(parent.taskId), isFalse);
+    expect(coordinator.activeConnectionCount, 0);
+  });
 
   test(
     'a pump enqueue exception parks the parent and releases all slots',

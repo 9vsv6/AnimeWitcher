@@ -35,6 +35,7 @@ class PersistentParallelDownload {
     required this.onUpdate,
     required this.onPartProgress,
     this.livePartIds,
+    this.recoveryDelay = const Duration(seconds: 1),
     this.maxActiveConnections = kDownloadGlobalConnectionBudget,
   });
 
@@ -49,6 +50,7 @@ class PersistentParallelDownload {
   onPartProgress;
   final int maxActiveConnections;
   final Future<Set<String>> Function()? livePartIds;
+  final Duration recoveryDelay;
 
   final Map<String, _ParallelSession> _sessions = {};
   final Map<String, _ParallelSession> _children = {};
@@ -59,6 +61,11 @@ class PersistentParallelDownload {
   bool _disposed = false;
 
   bool isActive(String id) => !_disposed && (_sessions[id]?.active ?? false);
+
+  bool hasLiveConnections(String id) {
+    final session = _sessions[id];
+    return session != null && _activeConnectionsForSession(session) > 0;
+  }
 
   /// Includes native tasks that were handed to the OS but are still waiting
   /// for a socket. Counting them is deliberate: the manager never queues more
@@ -81,6 +88,7 @@ class PersistentParallelDownload {
     _disposed = true;
     for (final session in _sessions.values) {
       session.cancelAggregateProgress();
+      session.cancelPartRetries();
     }
     final pump = _pumpFuture;
     if (pump != null) await pump;
@@ -244,6 +252,9 @@ class PersistentParallelDownload {
         await _restoreNativeOwnership(session);
         for (final part in session.parts) {
           part.speed = 0;
+          part.recoveryAttempts = 0;
+          // Never copy or adopt a file while a native worker still owns it.
+          if (part.launched) continue;
           final saved = await canonicalizePartialDownloadFile(
             destinationPath: await part.task.filePath(),
           );
@@ -402,6 +413,8 @@ class PersistentParallelDownload {
   }
 
   void _releaseConnection(_DownloadPart part) {
+    part.recoveryTimer?.cancel();
+    part.recoveryTimer = null;
     _activeConnectionIds.remove(part.task.taskId);
     part.launched = false;
     part.speed = 0;
@@ -688,6 +701,13 @@ class PersistentParallelDownload {
           }
 
           if (session.active &&
+              update.status == TaskStatus.paused &&
+              _retrySystemPausedPart(session, part)) {
+            await _status(session, TaskStatus.waitingToRetry);
+            return;
+          }
+
+          if (session.active &&
               (update.status == TaskStatus.failed ||
                   update.status == TaskStatus.notFound ||
                   update.status == TaskStatus.canceled ||
@@ -717,6 +737,39 @@ class PersistentParallelDownload {
     await session.serialize(() => _pause(session));
   }
 
+  bool _retrySystemPausedPart(_ParallelSession session, _DownloadPart part) {
+    if (part.recoveryTimer != null) return true;
+    if (part.recoveryAttempts >= kDownloadPartRetries) return false;
+    part.recoveryAttempts++;
+    part.speed = 0;
+    // Keep the slot reserved throughout backoff. Only the same resumable
+    // identity may use it, and slow-start must wait for its next real callback.
+    part.launched = true;
+    _activeConnectionIds.add(part.task.taskId);
+    session.currentBatchPendingIds.add(part.task.taskId);
+    final generation = session.generation;
+    part.recoveryTimer = Timer(recoveryDelay * part.recoveryAttempts, () {
+      unawaited(
+        session.serialize(() async {
+          if (_disposed ||
+              !session.active ||
+              session.deleted ||
+              session.generation != generation ||
+              part.complete)
+            return;
+          part.recoveryTimer = null;
+          try {
+            if (await startPart(part.task, part.progress, part.size)) return;
+          } catch (_) {
+            // Fall through to a durable paused parent if native recovery fails.
+          }
+          await _pause(session);
+        }),
+      );
+    });
+    return true;
+  }
+
   /// Reconcile after returning to the app, when the OS may have completed or
   /// removed workers without delivering their final callback to Dart.
   Future<void> reconcile(Future<Set<String>> Function() liveTaskIds) async {
@@ -728,6 +781,7 @@ class PersistentParallelDownload {
         for (final part in session.parts) {
           if (part.complete ||
               !part.launched ||
+              part.recoveryTimer != null ||
               live.contains(part.task.taskId)) {
             continue;
           }
@@ -978,6 +1032,7 @@ class _ParallelSession {
   }
 
   void resetRamp() {
+    cancelPartRetries();
     connectionCeiling = kDownloadPartsMin;
     lastHealthyConnections = 0;
     slowStartComplete = false;
@@ -985,6 +1040,13 @@ class _ParallelSession {
     rampBatchIndex = 0;
     currentBatchRemaining = 0;
     currentBatchPendingIds.clear();
+  }
+
+  void cancelPartRetries() {
+    for (final part in parts) {
+      part.recoveryTimer?.cancel();
+      part.recoveryTimer = null;
+    }
   }
 
   Future<T> serialize<T>(Future<T> Function() action) {
@@ -1010,6 +1072,8 @@ class _DownloadPart {
   bool complete;
   bool launched = false;
   double speed = 0;
+  int recoveryAttempts = 0;
+  Timer? recoveryTimer;
 
   int get size => to - from + 1;
 

@@ -8,7 +8,7 @@ void main() {
     home: Scaffold(body: SizedBox(width: 400, child: child)),
   );
 
-  testWidgets('renders one real progress bar per parallel child', (
+  testWidgets('renders one aggregate bar even with parallel child telemetry', (
     tester,
   ) async {
     final task = ParallelDownloadTask(
@@ -39,17 +39,12 @@ void main() {
           find.byType(LinearProgressIndicator),
         )
         .toList();
-    expect(indicators, hasLength(4));
-    expect(indicators.map((indicator) => indicator.value).toList(), <double?>[
-      0.10,
-      0.25,
-      0.50,
-      0.75,
-    ]);
+    expect(indicators, hasLength(1));
+    expect(indicators.single.value, 0.35);
   });
 
   testWidgets(
-    'falls back to one honest aggregate bar without child telemetry',
+    'renders one honest aggregate bar without child telemetry',
     (tester) async {
       final task = ParallelDownloadTask(
         taskId: 'episode-10',

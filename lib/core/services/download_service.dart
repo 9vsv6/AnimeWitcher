@@ -690,7 +690,8 @@ class DownloadService {
         _rememberSessionTask(task.taskId);
         if (shouldNativePauseAfterUserPause(
           userPaused: true,
-          stillInNativeQueue: stillNative,
+          stillInNativeQueue:
+              stillNative || _parallel.hasLiveConnections(task.taskId),
         )) {
           try {
             await _pauseTransfer(task);
