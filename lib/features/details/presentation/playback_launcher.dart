@@ -51,6 +51,62 @@ class PlaybackLauncher {
     return provider ?? _ref.read(activeProviderProvider);
   }
 
+  bool _needsPlayerEpisodes(MultimediaItem item) {
+    return item.contentType == MultimediaContentType.series ||
+        item.contentType == MultimediaContentType.anime;
+  }
+
+  /// Continue-watching storage intentionally keeps a lightweight media item,
+  /// so series/anime entries usually reach this launcher without `episodes`.
+  /// Hydrate them before opening the internal player so its episode drawer,
+  /// next/previous navigation and next-episode overlay all have the catalog.
+  /// Failure is non-fatal: playback must still work when the catalog is
+  /// temporarily unavailable (especially for an already downloaded episode).
+  Future<MultimediaItem> _hydratePlayerEpisodes(
+    MultimediaItem item, {
+    AnimeWitcherProvider? provider,
+  }) async {
+    if ((item.episodes?.isNotEmpty ?? false) ||
+        !_needsPlayerEpisodes(item) ||
+        item.url.trim().isEmpty) {
+      return item;
+    }
+
+    final resolvedProvider = provider ?? _resolveProvider(item);
+    if (resolvedProvider == null) return item;
+
+    try {
+      final episodes = await resolvedProvider.getEpisodes(item.url);
+      if (episodes.isEmpty) return item;
+      return item.copyWith(
+        episodes: episodes,
+        provider: item.provider ?? resolvedProvider.packageName,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('PlaybackLauncher._hydratePlayerEpisodes: $e');
+      }
+      return item;
+    }
+  }
+
+  Episode? _canonicalEpisode(
+    MultimediaItem item,
+    Episode? episode,
+    String progressUrl,
+  ) {
+    final episodes = item.episodes;
+    if (episodes == null || episodes.isEmpty) return episode;
+
+    return matchResumeEpisode(
+          episodes,
+          resumeEpisodeUrl: progressUrl,
+          resumeEpisodeNumber: episode?.episode,
+          resumeSeason: episode?.season,
+        ) ??
+        episode;
+  }
+
   Future<StreamResult?> _chooseSource(
     BuildContext context,
     AnimeWitcherProvider provider,
@@ -89,9 +145,10 @@ class PlaybackLauncher {
     );
   }
 
-  /// Opens the episode server list on the current screen (home) instead of
-  /// routing through details. Uses the stored episode data URL when present,
-  /// otherwise matches the continue-watching episode in the catalog.
+  /// Opens Continue Watching directly on Home. A completed download is looked
+  /// up by the canonical episode tracking URL first, so it bypasses the server
+  /// picker. Online entries still use normal source selection, while both paths
+  /// hydrate the episode catalog before the internal player is shown.
   Future<void> playFromContinueWatching(
     BuildContext context,
     HistoryItem history,
@@ -101,7 +158,21 @@ class PlaybackLauncher {
     final hintEpisode = episodeFromContinueWatching(history);
 
     if (savedUrl.isNotEmpty) {
-      await play(context, savedUrl, baseItem: item, episode: hintEpisode);
+      final localFile = await _ref
+          .read(downloadServiceProvider)
+          .getFileForTrackingUrl(
+            savedUrl,
+            item: item,
+            episode: hintEpisode,
+          );
+      if (!context.mounted) return;
+
+      await play(
+        context,
+        localFile?.path ?? savedUrl,
+        baseItem: item,
+        episode: hintEpisode,
+      );
       return;
     }
 
@@ -118,22 +189,24 @@ class PlaybackLauncher {
         ? hintEpisode
         : null;
     var resolvedUrl = '';
+    var resolvedEpisodes = const <Episode>[];
     final selected = await _chooseSource(
       context,
       provider,
       item.url,
       episode: hintEpisode,
       loadSources: () async {
-        final episodes = await provider.getEpisodes(item.url);
+        resolvedEpisodes = await provider.getEpisodes(item.url);
         resolvedEpisode = matchResumeEpisode(
-          episodes,
+          resolvedEpisodes,
+          resumeEpisodeUrl: history.lastEpisodeUrl,
           resumeEpisodeNumber: history.episode,
           resumeSeason: history.season,
         );
         if (resolvedEpisode == null &&
-            episodes.isNotEmpty &&
+            resolvedEpisodes.isNotEmpty &&
             (history.episode == null || history.episode! <= 0)) {
-          resolvedEpisode = episodes.first;
+          resolvedEpisode = resolvedEpisodes.first;
         }
         resolvedUrl = resolvedEpisode?.url.trim() ?? '';
         if (resolvedUrl.isEmpty) return const <StreamResult>[];
@@ -143,10 +216,18 @@ class PlaybackLauncher {
     if (selected == null || !context.mounted) return;
     if (resolvedUrl.isEmpty) return;
 
+    final detailedItem = resolvedEpisodes.isEmpty
+        ? null
+        : item.copyWith(
+            episodes: resolvedEpisodes,
+            provider: item.provider ?? provider.packageName,
+          );
+
     await play(
       context,
       resolvedUrl,
       baseItem: item,
+      detailedItem: detailedItem,
       episode: resolvedEpisode,
       preselectedSource: selected,
     );
@@ -270,6 +351,9 @@ class PlaybackLauncher {
     if (!context.mounted) return;
 
     final item = detailedItem ?? baseItem;
+    // Start this immediately so episode metadata loads in parallel with local
+    // file detection / source selection instead of adding another serial wait.
+    final playerItemFuture = _hydratePlayerEpisodes(item);
     final resolvedEpisode =
         episode ?? item.episodes?.firstWhereOrNull((e) => e.url == url);
     final resolvedEpisodeUrl = resolvedEpisode?.url.trim() ?? '';
@@ -293,25 +377,33 @@ class PlaybackLauncher {
 
     // Downloaded files are already playable and do not need a source list.
     if (AppUtils.isLocalFile(localOrEpisodeUrl)) {
-      await _recordEpisodeOpened(item, resolvedEpisode);
+      final playerItem = await playerItemFuture;
+      if (!context.mounted) return;
+      final playerEpisode = _canonicalEpisode(
+        playerItem,
+        resolvedEpisode,
+        canonicalProgressUrl,
+      );
+
+      await _recordEpisodeOpened(playerItem, playerEpisode);
       if (settings.preferredPlayer != null) {
         final stream = StreamResult(url: localOrEpisodeUrl, source: 'محلي');
         await _launchStream(
           context,
           stream,
-          item,
+          playerItem,
           localOrEpisodeUrl,
           settings.preferredPlayer!,
-          episode: resolvedEpisode,
+          episode: playerEpisode,
           progressUrl: canonicalProgressUrl,
         );
       } else {
         await PlayerRoute(
           $extra: PlayerRouteExtra(
-            item: item,
+            item: playerItem,
             videoUrl: localOrEpisodeUrl,
             progressUrl: canonicalProgressUrl,
-            episode: resolvedEpisode,
+            episode: playerEpisode,
           ),
         ).push<void>(context);
       }
@@ -340,15 +432,23 @@ class PlaybackLauncher {
         );
     if (selected == null || !context.mounted) return;
 
+    final playerItem = await playerItemFuture;
+    if (!context.mounted) return;
+    final playerEpisode = _canonicalEpisode(
+      playerItem,
+      resolvedEpisode,
+      canonicalProgressUrl,
+    );
+
     if (settings.preferredPlayer == null) {
-      await _recordEpisodeOpened(item, resolvedEpisode);
+      await _recordEpisodeOpened(playerItem, playerEpisode);
       if (!context.mounted) return;
       await PlayerRoute(
         $extra: PlayerRouteExtra(
-          item: item,
+          item: playerItem,
           videoUrl: localOrEpisodeUrl,
           progressUrl: canonicalProgressUrl,
-          episode: resolvedEpisode,
+          episode: playerEpisode,
           selectedSource: selected,
         ),
       ).push<void>(context);
@@ -369,14 +469,14 @@ class PlaybackLauncher {
           selected,
         );
         if (resolved == null || !context.mounted) return;
-        await _recordEpisodeOpened(item, resolvedEpisode);
+        await _recordEpisodeOpened(playerItem, playerEpisode);
         await _launchStream(
           context,
           resolved,
-          item,
+          playerItem,
           selected.url,
           settings.preferredPlayer!,
-          episode: resolvedEpisode,
+          episode: playerEpisode,
           progressUrl: canonicalProgressUrl,
         );
       } finally {
