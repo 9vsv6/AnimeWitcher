@@ -111,54 +111,38 @@ void main() {
     await Future<void>.delayed(Duration.zero);
   }
 
-  test(
-    'five parts cover each byte once and failed zero-byte start can retry',
-    () async {
-      acceptStarts = false;
-      expect(await coordinator.start(parent, 23), isFalse);
-      expect(statuses.last, TaskStatus.paused);
-      expect(
-        await File('${await parent.filePath()}.parts/manifest.json').exists(),
-        isTrue,
-      );
-      starts.clear();
-      acceptStarts = true;
-      expect(await coordinator.start(parent, 23), isTrue);
-      await expandFreshTo(5);
-      expect(starts.map((task) => task.headers['Range']), [
-        'bytes=0-3',
-        'bytes=4-8',
-        'bytes=9-12',
-        'bytes=13-17',
-        'bytes=18-22',
-      ]);
-      expect(starts.map((task) => task.taskId).toSet().length, 5);
-    },
-  );
+  test('five parts cover each byte once', () async {
+    expect(await coordinator.start(parent, 23), isTrue);
+    await expandFreshTo(5);
+    expect(starts.map((task) => task.headers['Range']), [
+      'bytes=0-3',
+      'bytes=4-8',
+      'bytes=9-12',
+      'bytes=13-17',
+      'bytes=18-22',
+    ]);
+    expect(starts.map((task) => task.taskId).toSet().length, 5);
+  });
 
   test(
-    'system pause resumes only the affected identity with bounded retries',
+    'repeated system pauses recover only the affected identity',
     () async {
       await coordinator.start(parent, 25);
       await expandFreshTo(5);
       final original = List<DownloadTask>.from(starts);
-      for (var attempt = 0; attempt < 2; attempt++) {
+      for (var attempt = 0; attempt < 6; attempt++) {
+        final expectedStarts = starts.length + 1;
         coordinator.handleUpdate(
           TaskStatusUpdate(original[1], TaskStatus.paused),
         );
-        await waitUntil(() => starts.length == 6 + attempt);
+        await waitUntil(() => starts.length >= expectedStarts);
         expect(starts.last.taskId, original[1].taskId);
         expect(coordinator.activeConnectionCount, 5);
         expect(pauses, isEmpty);
         expect(coordinator.isActive(parent.taskId), isTrue);
+        expect(statuses.last, TaskStatus.waitingToRetry);
       }
-      coordinator.handleUpdate(
-        TaskStatusUpdate(original[1], TaskStatus.paused),
-      );
-      await waitUntil(() => !coordinator.isActive(parent.taskId));
-      await coordinator.pause(parent);
-      expect(starts.length, 7);
-      expect(coordinator.activeConnectionCount, 0);
+      expect(statuses, isNot(contains(TaskStatus.paused)));
     },
   );
 
@@ -275,19 +259,25 @@ void main() {
   );
 
   test(
-    'missing worker callbacks release ghost slots and permit resume',
+    'missing worker callbacks recover ghost children without pausing parent',
     () async {
       await coordinator.start(parent, 25);
       await expandFreshTo(5);
-      final first = starts.first;
-      await File(await first.filePath()).writeAsBytes([0, 1, 2, 3, 4]);
+      final original = List<DownloadTask>.from(starts);
+      await File(await original.first.filePath()).writeAsBytes([0, 1, 2, 3, 4]);
+
       await coordinator.reconcile(() async => <String>{});
-      expect(coordinator.isActive(parent.taskId), isFalse);
-      expect(coordinator.activeConnectionCount, 0);
-      starts.clear();
-      expect(await coordinator.start(parent, 25), isTrue);
-      await expandFreshTo(4);
-      expect(starts.map((t) => t.taskId), isNot(contains(first.taskId)));
+
+      expect(coordinator.isActive(parent.taskId), isTrue);
+      expect(statuses.last, TaskStatus.waitingToRetry);
+      expect(statuses, isNot(contains(TaskStatus.paused)));
+      await waitUntil(() => starts.length >= 9);
+      final retriedIds = starts
+          .skip(5)
+          .map((task) => task.taskId)
+          .toSet();
+      expect(retriedIds, original.skip(1).map((task) => task.taskId).toSet());
+      expect(retriedIds, isNot(contains(original.first.taskId)));
     },
   );
 
@@ -336,16 +326,20 @@ void main() {
   );
 
   test(
-    'a failed part pauses siblings without deleting completed bytes',
+    'a permanent failed part pauses siblings without deleting completed bytes',
     () async {
       await coordinator.start(parent, 25);
       await expandFreshTo(5);
       final original = List<DownloadTask>.from(starts);
       await completePart(original.first, [0, 1, 2, 3, 4]);
       coordinator.handleUpdate(
-        TaskStatusUpdate(original[1], TaskStatus.failed),
+        TaskStatusUpdate(
+          original[1],
+          TaskStatus.failed,
+          TaskHttpException('forbidden', 403),
+        ),
       );
-      await coordinator.pause(parent);
+      await waitUntil(() => records[parent.taskId]?.status == TaskStatus.paused);
       expect(await File(await original.first.filePath()).exists(), isTrue);
       expect(records[parent.taskId]!.status, TaskStatus.paused);
       starts.clear();

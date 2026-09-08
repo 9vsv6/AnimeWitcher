@@ -243,9 +243,23 @@ final class DownloadContinuedProcessingManager {
   private func completeSession(success: Bool, status: String) {
     cancelPendingRequest()
 
+    // Flutter can decide that the session has no *running* entries after an
+    // unexpected child pause, even though the logical episode is only 36% done.
+    // Never let that bookkeeping race become the iOS "Download complete"
+    // banner seen by the user. A real final episode reaches progress 1.0 and,
+    // for a batch, all earlier episodes are already counted as completed.
+    let snapshotLooksComplete: Bool
+    if let snapshot {
+      snapshotLooksComplete = snapshot.progress >= 0.999_999
+        && snapshot.completedCount + 1 >= max(snapshot.batchTotal, 1)
+    } else {
+      snapshotLooksComplete = false
+    }
+    let verifiedSuccess = success && snapshotLooksComplete
+
     if let task = activeTask {
       activeTask = nil
-      if success {
+      if verifiedSuccess {
         if task.progress.totalUnitCount <= 0 {
           task.progress.totalUnitCount = 1000
         }
@@ -254,14 +268,19 @@ final class DownloadContinuedProcessingManager {
           "Download complete",
           subtitle: sessionCountSubtitle(snapshot)
         )
-      } else if status == "failed" {
+      } else if status == "canceled" {
+        task.updateTitle(
+          "Download stopped",
+          subtitle: sessionCountSubtitle(snapshot)
+        )
+      } else {
         task.updateTitle(
           "Download paused",
           subtitle: sessionCountSubtitle(snapshot)
         )
       }
       task.expirationHandler = nil
-      task.setTaskCompleted(success: success)
+      task.setTaskCompleted(success: verifiedSuccess)
     }
 
     snapshot = nil

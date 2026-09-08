@@ -15,6 +15,13 @@ import '../utils/download_resume.dart';
 /// times back-to-back for the same measurement interval.
 const Duration kParallelProgressCoalesceDelay = Duration(milliseconds: 350);
 
+/// Automatic child recovery is intentionally unbounded while the logical
+/// episode is active: transient URLSession/system/network interruptions must
+/// never turn into a user-visible pause. Backoff is capped so an unavailable
+/// origin does not create a tight retry loop. Any real forward progress resets
+/// the attempt counter back to zero.
+const int kParallelRecoveryMaxBackoffMultiplier = 15;
+
 /// Native DownloadTasks transfer the parts; this coordinator persists their
 /// identity before starting them. A process restart must not create new parts
 /// or ask the plugin to resume an already completed part.
@@ -374,10 +381,13 @@ class PersistentParallelDownload {
         session.currentBatchRemaining--;
 
         if (!await startPart(part.task, part.progress, part.size)) {
-          part.launched = false;
-          _activeConnectionIds.remove(part.task.taskId);
           session.currentBatchPendingIds.remove(part.task.taskId);
-          return false;
+          // Native enqueue/resume can fail transiently (especially URLSession
+          // hand-off on iOS). Keep this exact identity and its saved bytes and
+          // retry it instead of parking the entire episode.
+          _schedulePartRecovery(session, part);
+          await _status(session, TaskStatus.waitingToRetry);
+          return true;
         }
 
         // On process recovery a child may already be owned by native IO, so a
@@ -620,9 +630,15 @@ class PersistentParallelDownload {
               _activeConnectionIds.add(part.task.taskId);
               _markConnectionReady(session, part);
             }
+            final previousProgress = part.progress;
             part.progress = update.progress > part.progress
                 ? update.progress
                 : part.progress;
+            if (part.progress > previousProgress) {
+              // A recovered connection that actually writes bytes is healthy
+              // again. Future interruptions start from the short backoff.
+              part.recoveryAttempts = 0;
+            }
             part.speed = update.networkSpeed > 0 ? update.networkSpeed : 0;
             onPartProgress(
               session.task.taskId,
@@ -701,23 +717,27 @@ class PersistentParallelDownload {
           }
 
           if (session.active &&
-              update.status == TaskStatus.paused &&
-              _retrySystemPausedPart(session, part)) {
-            await _status(session, TaskStatus.waitingToRetry);
-            return;
-          }
-
-          if (session.active &&
               (update.status == TaskStatus.failed ||
                   update.status == TaskStatus.notFound ||
                   update.status == TaskStatus.canceled ||
                   update.status == TaskStatus.paused)) {
             if (update.status == TaskStatus.failed) {
-              // Preserve the learned cap even when the child's bounded native
-              // retries were exhausted, so explicit resume does not repeat the
-              // same connection storm.
               _applyConnectionPressure(session, update);
             }
+
+            if (_shouldAutomaticallyRecoverPart(update)) {
+              // A native child finishing/pausing is not the same thing as the
+              // logical episode stopping. Keep every healthy sibling alive and
+              // recover only this exact resumable identity from its saved bytes.
+              _schedulePartRecovery(session, part);
+              await _status(session, TaskStatus.waitingToRetry);
+              return;
+            }
+
+            // Permanent client-side HTTP errors (for example 401/403/404) are
+            // not helped by hammering the same signed URL forever. Preserve all
+            // bytes and park the logical episode so a later source refresh/user
+            // resume can obtain a new URL.
             _markConnectionReady(session, part);
             _releaseConnection(part);
             await _pause(session);
@@ -737,9 +757,41 @@ class PersistentParallelDownload {
     await session.serialize(() => _pause(session));
   }
 
-  bool _retrySystemPausedPart(_ParallelSession session, _DownloadPart part) {
+  bool _shouldAutomaticallyRecoverPart(TaskStatusUpdate update) {
+    switch (update.status) {
+      case TaskStatus.paused:
+      case TaskStatus.canceled:
+      case TaskStatus.notFound:
+        return true;
+      case TaskStatus.failed:
+        final exception = update.exception;
+        final statusCode = update.responseStatusCode ??
+            (exception is TaskHttpException ? exception.httpResponseCode : null);
+        if (statusCode == null) return true;
+        return statusCode == 408 ||
+            statusCode == 425 ||
+            statusCode == 429 ||
+            (statusCode >= 500 && statusCode <= 599);
+      case TaskStatus.enqueued:
+      case TaskStatus.running:
+      case TaskStatus.complete:
+      case TaskStatus.waitingToRetry:
+        return false;
+    }
+  }
+
+  Duration _partRecoveryDelay(int attempts) {
+    final multiplier = attempts
+        .clamp(1, kParallelRecoveryMaxBackoffMultiplier)
+        .toInt();
+    return recoveryDelay * multiplier;
+  }
+
+  bool _schedulePartRecovery(_ParallelSession session, _DownloadPart part) {
     if (part.recoveryTimer != null) return true;
-    if (part.recoveryAttempts >= kDownloadPartRetries) return false;
+    if (!session.active || session.deleted || _disposed || part.complete) {
+      return false;
+    }
     part.recoveryAttempts++;
     part.speed = 0;
     // Keep the slot reserved throughout backoff. Only the same resumable
@@ -748,7 +800,7 @@ class PersistentParallelDownload {
     _activeConnectionIds.add(part.task.taskId);
     session.currentBatchPendingIds.add(part.task.taskId);
     final generation = session.generation;
-    part.recoveryTimer = Timer(recoveryDelay * part.recoveryAttempts, () {
+    part.recoveryTimer = Timer(_partRecoveryDelay(part.recoveryAttempts), () {
       unawaited(
         session.serialize(() async {
           if (_disposed ||
@@ -761,9 +813,12 @@ class PersistentParallelDownload {
           try {
             if (await startPart(part.task, part.progress, part.size)) return;
           } catch (_) {
-            // Fall through to a durable paused parent if native recovery fails.
+            // Keep retrying below with a bounded backoff. The same taskId and
+            // partial file are preserved, so no retry can restart byte 0.
           }
-          await _pause(session);
+          if (_schedulePartRecovery(session, part)) {
+            await _status(session, TaskStatus.waitingToRetry);
+          }
         }),
       );
     });
@@ -777,7 +832,7 @@ class PersistentParallelDownload {
       await session.serialize(() async {
         if (_disposed || !session.active || session.deleted) return;
         final live = await liveTaskIds();
-        var missing = false;
+        var recovering = false;
         for (final part in session.parts) {
           if (part.complete ||
               !part.launched ||
@@ -792,14 +847,18 @@ class PersistentParallelDownload {
             part.complete = true;
             part.progress = 1;
           } else {
-            missing = true;
+            // URLSession can temporarily drop a worker during hand-off without
+            // delivering its final callback to Dart. Recover that one child;
+            // never pause healthy siblings just because ownership vanished.
+            recovering = _schedulePartRecovery(session, part) || recovering;
           }
         }
-        if (missing) {
-          await _pause(session);
-        } else if (session.parts.every((part) => part.complete)) {
+        if (session.parts.every((part) => part.complete)) {
           await _assemble(session);
         } else {
+          if (recovering) {
+            await _status(session, TaskStatus.waitingToRetry);
+          }
           await _persist(session);
           _schedulePumpAll();
         }
