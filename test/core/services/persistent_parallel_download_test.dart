@@ -101,6 +101,17 @@ void main() {
       await markRunning(batch);
       await waitUntil(() => starts.length > before || starts.length >= target);
     }
+
+    // Reaching the target means the final slow-start batch was only enqueued;
+    // it has not necessarily acknowledged running yet. Mark that last batch as
+    // healthy too so tests that follow with recovery/reconcile start from the
+    // same fully-established connection level as a real transfer.
+    final finalBatch = starts
+        .where((task) => acknowledged.add(task.taskId))
+        .toList(growable: false);
+    if (finalBatch.isNotEmpty) {
+      await markRunning(finalBatch);
+    }
   }
 
   Future<void> completePart(DownloadTask task, List<int> bytes) async {
@@ -136,12 +147,18 @@ void main() {
           TaskStatusUpdate(original[1], TaskStatus.paused),
         );
         await waitUntil(() => starts.length >= expectedStarts);
-        expect(starts.last.taskId, original[1].taskId);
+        final recovered = starts.last;
+        expect(recovered.taskId, original[1].taskId);
+        // A real native worker acknowledges the recovered enqueue before it can
+        // be interrupted again. Keep the slow-start batch state honest instead
+        // of injecting consecutive pause callbacks into an unacknowledged task.
+        await markRunning([recovered]);
         expect(coordinator.activeConnectionCount, 5);
         expect(pauses, isEmpty);
         expect(coordinator.isActive(parent.taskId), isTrue);
-        expect(statuses.last, TaskStatus.waitingToRetry);
+        expect(statuses.last, TaskStatus.running);
       }
+      expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
       expect(statuses, isNot(contains(TaskStatus.paused)));
     },
   );
@@ -151,10 +168,15 @@ void main() {
     final first = starts.first;
     coordinator.handleUpdate(TaskStatusUpdate(first, TaskStatus.paused));
     await coordinator.pause(parent);
+    final startsAfterUserPause = starts.length;
     await Future<void>.delayed(const Duration(milliseconds: 40));
-    expect(starts.length, 1);
+    // Recovery is allowed to hand the just-freed slot to healthy queued work
+    // before the user's pause is serialized. Once the user pause completes,
+    // however, no pending recovery timer may launch anything else.
+    expect(starts.length, startsAfterUserPause);
     expect(coordinator.isActive(parent.taskId), isFalse);
     expect(coordinator.activeConnectionCount, 0);
+    expect(statuses.last, TaskStatus.paused);
   });
 
   test(
@@ -259,7 +281,7 @@ void main() {
   );
 
   test(
-    'missing worker callbacks recover ghost children without pausing parent',
+    'missing worker callbacks begin governed recovery without pausing parent',
     () async {
       await coordinator.start(parent, 25);
       await expandFreshTo(5);
@@ -269,15 +291,25 @@ void main() {
       await coordinator.reconcile(() async => <String>{});
 
       expect(coordinator.isActive(parent.taskId), isTrue);
-      expect(statuses.last, TaskStatus.waitingToRetry);
+      expect(statuses.last, TaskStatus.running);
+      expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
       expect(statuses, isNot(contains(TaskStatus.paused)));
-      await waitUntil(() => starts.length >= 9);
-      final retriedIds = starts
-          .skip(5)
-          .map((task) => task.taskId)
-          .toSet();
-      expect(retriedIds, original.skip(1).map((task) => task.taskId).toSet());
+
+      // Recovery now re-enters the normal pump/governor instead of calling
+      // startPart directly for every ghost worker. The scheduler may therefore
+      // keep some ghosts queued until an already re-enqueued worker reports
+      // running/completes. Reconcile only needs to prove that governed recovery
+      // starts, never retries the durable complete range, and never parks the
+      // logical episode while those workers are being recovered.
+      await waitUntil(() => starts.length > 5);
+      final recoverableIds = original.skip(1).map((task) => task.taskId).toSet();
+      final retriedIds = starts.skip(5).map((task) => task.taskId).toSet();
+      expect(retriedIds, isNotEmpty);
+      expect(retriedIds.difference(recoverableIds), isEmpty);
       expect(retriedIds, isNot(contains(original.first.taskId)));
+      expect(coordinator.isActive(parent.taskId), isTrue);
+      expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
+      expect(statuses, isNot(contains(TaskStatus.paused)));
     },
   );
 

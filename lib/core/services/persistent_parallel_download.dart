@@ -183,7 +183,10 @@ class PersistentParallelDownload {
         Map<String, dynamic>.from(chunk['task'] as Map),
       ) as DownloadTask;
       return _DownloadPart(
-        child.copyWith(group: kPersistentDownloadChunkGroup),
+        child.copyWith(
+          group: kPersistentDownloadChunkGroup,
+          retries: kDownloadPartRetries,
+        ),
         (chunk['fromByte'] as num).toInt(),
         (chunk['toByte'] as num).toInt(),
         progress: (chunk['progress'] as num? ?? 0).toDouble(),
@@ -317,8 +320,16 @@ class PersistentParallelDownload {
       )
       .length;
 
-  int _unlaunchedPartCount(_ParallelSession session) =>
-      session.parts.where((part) => !part.complete && !part.launched).length;
+  Iterable<_DownloadPart> _launchableParts(_ParallelSession session) =>
+      session.parts.where(
+        (part) =>
+            !part.complete &&
+            !part.launched &&
+            part.recoveryTimer == null,
+      );
+
+  int _launchablePartCount(_ParallelSession session) =>
+      _launchableParts(session).length;
 
   Future<bool> _pumpSession(_ParallelSession session) async {
     if (_disposed || !session.active || session.deleted) return true;
@@ -331,12 +342,13 @@ class PersistentParallelDownload {
               session.rampBatches[session.rampBatchIndex++];
         } else {
           // Slow start reached its safe ceiling. Keep the pipeline full by
-          // replacing completed ranges one-for-one, never exceeding that cap.
+          // replacing completed or backing-off ranges one-for-one, never
+          // exceeding that cap.
           session.slowStartComplete = true;
           final sessionAvailable =
               session.connectionCeiling - _activeConnectionsForSession(session);
           if (sessionAvailable <= 0) return true;
-          final remaining = _unlaunchedPartCount(session);
+          final remaining = _launchablePartCount(session);
           if (remaining <= 0) return true;
           session.currentBatchRemaining = remaining < sessionAvailable
               ? remaining
@@ -355,15 +367,14 @@ class PersistentParallelDownload {
       final launchCount = session.currentBatchRemaining < available
           ? session.currentBatchRemaining
           : available;
-      final parts = session.parts
-          .where((part) => !part.complete && !part.launched)
-          .take(launchCount)
-          .toList(growable: false);
+      final parts = _launchableParts(
+        session,
+      ).take(launchCount).toList(growable: false);
 
-      if (parts.isEmpty) {
-        session.currentBatchRemaining = 0;
-        continue;
-      }
+      // Every unlaunched range may currently be inside its recovery backoff.
+      // Preserve the batch count and sleep until one timer makes work eligible;
+      // otherwise a tight microtask pump can spin at 0 B/s.
+      if (parts.isEmpty) return true;
 
       for (final part in parts) {
         if (_disposed) return true;
@@ -381,12 +392,13 @@ class PersistentParallelDownload {
         session.currentBatchRemaining--;
 
         if (!await startPart(part.task, part.progress, part.size)) {
-          session.currentBatchPendingIds.remove(part.task.taskId);
           // Native enqueue/resume can fail transiently (especially URLSession
-          // hand-off on iOS). Keep this exact identity and its saved bytes and
-          // retry it instead of parking the entire episode.
+          // hand-off on iOS). Release this socket while it backs off so a
+          // healthy tail range can keep the episode moving. The exact taskId
+          // and saved bytes stay intact and retry only via this scheduler.
+          _stabilizeSessionForRecovery(session);
           _schedulePartRecovery(session, part);
-          await _status(session, TaskStatus.waitingToRetry);
+          await _status(session, TaskStatus.running);
           return true;
         }
 
@@ -443,6 +455,18 @@ class PersistentParallelDownload {
     // Do not clear pending IDs: already-launched native children must prove
     // they recovered before the scheduler considers opening replacements.
     session.currentBatchRemaining = 0;
+  }
+
+  /// Any automatic child recovery freezes slow-start at the last proven
+  /// healthy level. This prevents one interrupted batch from immediately
+  /// expanding again while still allowing spare tail work to replace the
+  /// backing-off connection at that safe ceiling.
+  void _stabilizeSessionForRecovery(_ParallelSession session) {
+    final active = _activeConnectionsForSession(session);
+    final safe = session.lastHealthyConnections > 0
+        ? session.lastHealthyConnections
+        : (active > 0 ? active : kDownloadPartsMin);
+    _capSessionAt(session, safe);
   }
 
   void _applyConnectionPressure(
@@ -591,10 +615,12 @@ class PersistentParallelDownload {
     if (_activeConnectionsForSession(session) >= session.connectionCeiling) {
       return false;
     }
+    final launchable = _launchablePartCount(session);
+    if (launchable <= 0) return false;
     if (session.currentBatchRemaining > 0) return true;
     if (session.currentBatchPendingIds.isNotEmpty) return false;
     if (session.rampBatchIndex < session.rampBatches.length) return true;
-    return _unlaunchedPartCount(session) > 0;
+    return launchable > 0;
   }
 
   bool handleUpdate(TaskUpdate update) {
@@ -656,14 +682,17 @@ class PersistentParallelDownload {
           if (update is! TaskStatusUpdate) return;
 
           if (session.active && update.status == TaskStatus.waitingToRetry) {
-            // The native task keeps its reserved slot while it retries. Stop
-            // opening more connections when this is an overload/connection
-            // pressure signal, exactly where Gopeed pauses slow-start growth.
+            // Only legacy/native workers created before the unified retry
+            // policy should reach here. Keep their real native ownership
+            // reserved, but never turn this internal state into a paused parent
+            // notification. Newly created/restored child definitions use zero
+            // native retries and recover through the scheduler below.
             part.launched = true;
             part.speed = 0;
             _activeConnectionIds.add(part.task.taskId);
             _applyConnectionPressure(session, update);
             await _persist(session);
+            await _status(session, TaskStatus.running);
             return;
           }
 
@@ -727,10 +756,12 @@ class PersistentParallelDownload {
 
             if (_shouldAutomaticallyRecoverPart(update)) {
               // A native child finishing/pausing is not the same thing as the
-              // logical episode stopping. Keep every healthy sibling alive and
-              // recover only this exact resumable identity from its saved bytes.
+              // logical episode stopping. Release only this child's connection
+              // during backoff; healthy siblings/tail work keep moving. The
+              // parent remains running so recovery never emits a fake pause.
+              _stabilizeSessionForRecovery(session);
               _schedulePartRecovery(session, part);
-              await _status(session, TaskStatus.waitingToRetry);
+              await _status(session, TaskStatus.running);
               return;
             }
 
@@ -794,11 +825,14 @@ class PersistentParallelDownload {
     }
     part.recoveryAttempts++;
     part.speed = 0;
-    // Keep the slot reserved throughout backoff. Only the same resumable
-    // identity may use it, and slow-start must wait for its next real callback.
-    part.launched = true;
-    _activeConnectionIds.add(part.task.taskId);
-    session.currentBatchPendingIds.add(part.task.taskId);
+
+    // Backoff is not an active connection. Free the reserved slot immediately
+    // so another durable range can use it. The failed range becomes launchable
+    // only after its timer expires and then re-enters _pumpSession, where both
+    // the per-session ceiling and the global governor are checked again.
+    part.launched = false;
+    _activeConnectionIds.remove(part.task.taskId);
+    session.currentBatchPendingIds.remove(part.task.taskId);
     final generation = session.generation;
     part.recoveryTimer = Timer(_partRecoveryDelay(part.recoveryAttempts), () {
       unawaited(
@@ -810,18 +844,11 @@ class PersistentParallelDownload {
               part.complete)
             return;
           part.recoveryTimer = null;
-          try {
-            if (await startPart(part.task, part.progress, part.size)) return;
-          } catch (_) {
-            // Keep retrying below with a bounded backoff. The same taskId and
-            // partial file are preserved, so no retry can restart byte 0.
-          }
-          if (_schedulePartRecovery(session, part)) {
-            await _status(session, TaskStatus.waitingToRetry);
-          }
+          _schedulePumpAll();
         }),
       );
     });
+    _schedulePumpAll();
     return true;
   }
 
@@ -850,6 +877,7 @@ class PersistentParallelDownload {
             // URLSession can temporarily drop a worker during hand-off without
             // delivering its final callback to Dart. Recover that one child;
             // never pause healthy siblings just because ownership vanished.
+            _stabilizeSessionForRecovery(session);
             recovering = _schedulePartRecovery(session, part) || recovering;
           }
         }
@@ -857,7 +885,7 @@ class PersistentParallelDownload {
           await _assemble(session);
         } else {
           if (recovering) {
-            await _status(session, TaskStatus.waitingToRetry);
+            await _status(session, TaskStatus.running);
           }
           await _persist(session);
           _schedulePumpAll();
@@ -1136,14 +1164,18 @@ class _DownloadPart {
 
   int get size => to - from + 1;
 
-  factory _DownloadPart.fromJson(Map<String, dynamic> json) => _DownloadPart(
-    Task.createFromJson(Map<String, dynamic>.from(json['task'] as Map))
-        as DownloadTask,
-    json['from'] as int,
-    json['to'] as int,
-    progress: (json['progress'] as num).toDouble(),
-    complete: json['complete'] as bool,
-  );
+  factory _DownloadPart.fromJson(Map<String, dynamic> json) {
+    final restored = Task.createFromJson(
+      Map<String, dynamic>.from(json['task'] as Map),
+    ) as DownloadTask;
+    return _DownloadPart(
+      restored.copyWith(retries: kDownloadPartRetries),
+      json['from'] as int,
+      json['to'] as int,
+      progress: (json['progress'] as num).toDouble(),
+      complete: json['complete'] as bool,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'task': task.toJson(),
