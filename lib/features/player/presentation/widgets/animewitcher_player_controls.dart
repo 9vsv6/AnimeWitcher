@@ -99,6 +99,9 @@ class AnimeWitcherPlayerControlsState
 
   // Seek animation state
   late AnimationController _seekAnimController;
+  Timer? _seekOverlayTimer;
+  bool _seekOverlayVisible = false;
+  int _seekAccumulatedSeconds = 0;
   bool _isSeekingLeft = false;
 
   /// Which of fit / zoom / stretch the picture is currently drawn with.
@@ -199,11 +202,11 @@ class AnimeWitcherPlayerControlsState
           toggleMuteLevel: () =>
               ref.read(playerControllerProvider.notifier).toggleMute(),
           onDoubleTapAnimationStart: (isLeft, tapPos, seconds) {
-            setState(() {
-              _tapPosition = tapPos;
-              _isSeekingLeft = isLeft;
-            });
-            _seekAnimController.forward(from: 0.0);
+            _showSeekFeedback(
+              isLeft: isLeft,
+              seconds: seconds,
+              tapPosition: tapPos,
+            );
           },
         );
 
@@ -275,9 +278,10 @@ class AnimeWitcherPlayerControlsState
 
     _seekAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 180),
     );
-    // No addListener needed â AnimatedBuilder wraps the seek widget directly
+    // The short controller animates the entrance; a separate one-second timer
+    // keeps the cumulative seek value visible between repeated seeks.
 
     // Bridge video_view state into local cache so seek calculations and
     // the loading guard stay correct when ExoPlayer is active.
@@ -398,6 +402,7 @@ class AnimeWitcherPlayerControlsState
     _nextEpFocusNode.dispose();
     _skipFocusNode.dispose();
     _hideTimer?.cancel();
+    _seekOverlayTimer?.cancel();
     _seekAnimController.dispose();
     try {
       ScreenBrightness().resetApplicationScreenBrightness();
@@ -861,6 +866,37 @@ class AnimeWitcherPlayerControlsState
     await ref.read(playerGestureHandlerProvider.notifier).changeVolume(step);
   }
 
+  void _showSeekFeedback({
+    required bool isLeft,
+    required int seconds,
+    required Offset tapPosition,
+  }) {
+    final signedSeconds = isLeft ? -seconds : seconds;
+    final shouldReset = !_seekOverlayVisible;
+
+    _seekOverlayTimer?.cancel();
+    setState(() {
+      if (shouldReset) {
+        _seekAccumulatedSeconds = 0;
+      }
+      _seekAccumulatedSeconds += signedSeconds;
+      _isSeekingLeft = _seekAccumulatedSeconds == 0
+          ? isLeft
+          : _seekAccumulatedSeconds < 0;
+      _tapPosition = tapPosition;
+      _seekOverlayVisible = true;
+    });
+
+    _seekAnimController.forward(from: 0.0);
+    _seekOverlayTimer = Timer(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      setState(() {
+        _seekOverlayVisible = false;
+        _seekAccumulatedSeconds = 0;
+      });
+    });
+  }
+
   void triggerSeek(bool isLeft) {
     final width = MediaQuery.sizeOf(context).width;
     final settings =
@@ -874,12 +910,11 @@ class AnimeWitcherPlayerControlsState
     // hid it because the key repeats.
     _seekRelative(Duration(seconds: isLeft ? -seconds : seconds));
 
-    setState(() {
-      _isSeekingLeft = isLeft;
-      // Set tap position for animation to appear on correct side
-      _tapPosition = Offset(isLeft ? width * 0.25 : width * 0.75, 100);
-    });
-    _seekAnimController.forward(from: 0.0);
+    _showSeekFeedback(
+      isLeft: isLeft,
+      seconds: seconds,
+      tapPosition: Offset(isLeft ? width * 0.25 : width * 0.75, 100),
+    );
   }
 
   void cycleResize() {
@@ -969,8 +1004,12 @@ class AnimeWitcherPlayerControlsState
   }
 
   Widget _buildKickAnimation() {
-    final seconds =
-        ref.watch(playerSettingsProvider).asData?.value.seekDuration ?? 10;
+    final absoluteSeconds = _seekAccumulatedSeconds.abs();
+    final label = _seekAccumulatedSeconds > 0
+        ? '+$absoluteSeconds'
+        : _seekAccumulatedSeconds < 0
+        ? '-$absoluteSeconds'
+        : '0';
 
     return FadeTransition(
       opacity: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -993,7 +1032,7 @@ class AnimeWitcherPlayerControlsState
                 size: 34,
               ),
             Text(
-              "$seconds",
+              label,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -1276,7 +1315,7 @@ class AnimeWitcherPlayerControlsState
                 AnimatedBuilder(
                   animation: _seekAnimController,
                   builder: (context, _) {
-                    if (!_seekAnimController.isAnimating) {
+                    if (!_seekOverlayVisible) {
                       return const SizedBox.shrink();
                     }
                     return Align(
@@ -1534,8 +1573,7 @@ class AnimeWitcherPlayerControlsState
             arabic: 'إرجاع ${playerSettings.seekDuration} ثوانٍ',
           ),
           // The same call the arrow keys make, so pressing the button
-          // raises the "10 »" mark and the ripple with it. Going straight to
-          // _seekRelative moved the position and said nothing.
+          // raises the cumulative signed seek mark and the ripple with it.
           onPressed: () => triggerSeek(true),
           isTv: _isTv,
         ),
