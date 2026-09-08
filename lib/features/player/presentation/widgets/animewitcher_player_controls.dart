@@ -12,6 +12,7 @@ import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:video_view/video_view.dart' as vv;
 import '../../../../l10n/generated/app_localizations.dart';
 import '../player_controller.dart';
+import '../player_shortcuts.dart';
 import '../../../details/presentation/playback_launcher.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
@@ -880,6 +881,49 @@ class AnimeWitcherPlayerControlsState
       _tapPosition = Offset(isLeft ? width * 0.25 : width * 0.75, 100);
     });
     _seekAnimController.forward(from: 0.0);
+  }
+
+  /// Jumps to [fraction] of the way through the episode — the number keys.
+  ///
+  /// Silently does nothing before a duration arrives: a fraction of an unknown
+  /// length is not a position, and seeking to zero would be a surprising thing
+  /// for the 5 key to do.
+  void seekToFraction(double fraction) {
+    if (_duration <= Duration.zero) return;
+    final target = Duration(
+      milliseconds: (_duration.inMilliseconds * fraction.clamp(0.0, 1.0))
+          .round(),
+    );
+    unawaited(ref.read(playerControllerProvider.notifier).seekTo(target));
+    // Surface the chrome: after a jump you want to see where you landed.
+    onUserInteraction();
+  }
+
+  /// Steps playback speed by a quarter — the `,` and `.` keys.
+  void stepPlaybackSpeed({required bool faster}) {
+    final playerState = ref.read(playerControllerProvider);
+    final current = playerState.playbackSpeed;
+    final next = steppedPlaybackSpeed(
+      current,
+      faster: faster,
+      maxSpeed: playerState.maxPlaybackSpeed,
+    );
+    // Already at the end of the range: say nothing rather than flashing a
+    // toast that reports no change.
+    if (next == current) return;
+
+    unawaited(
+      ref
+          .read(playerControllerProvider.notifier)
+          .setPlaybackSpeed(next, persist: true),
+    );
+    ref
+        .read(playerGestureHandlerProvider.notifier)
+        .showToast(
+          playbackSpeedLabel(next),
+          faster ? LucideIcons.fastForward200 : LucideIcons.rewind200,
+        );
+    onUserInteraction();
   }
 
   void cycleResize() {
