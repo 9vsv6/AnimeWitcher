@@ -43,6 +43,8 @@ import '../../skip/data/skip_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 import 'playback_recovery_policy.dart';
 import 'playback_resume.dart';
+import '../data/anime4k.dart';
+import '../data/anime4k_shader_library.dart';
 
 enum PlaybackUiPhaseKind {
   idle,
@@ -2586,7 +2588,45 @@ class PlayerController extends Notifier<PlayerState> {
     await _player.open(Media(mediaKitUrl, httpHeaders: headers), play: play);
     if (!_isCurrentSourceSession(sourceSessionId)) return;
     state = state.copyWith(useExoPlayer: false, isSeekable: true);
+    unawaited(applyAnime4kShaders());
     _scheduleAutoSubtitleSelection();
+  }
+
+  /// Hands mpv the Anime4K pipeline the settings ask for, or clears it.
+  ///
+  /// Only mpv can do this. The adaptive backend used for DRM and some live
+  /// streams has no GLSL stage at all, so on that path this does nothing
+  /// rather than pretending to — which is also why the setting says it is
+  /// for the built-in player.
+  ///
+  /// Called when a file opens and again when the setting changes, so turning
+  /// a mode on takes effect on what is already playing.
+  Future<void> applyAnime4kShaders() async {
+    if (_isDisposed) return;
+    if (state.useExoPlayer) return;
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+
+    try {
+      final settings = ref.read(playerSettingsProvider).asData?.value;
+      final pipeline = await ref
+          .read(anime4kShaderLibraryProvider)
+          .pipeline(
+            mode: settings?.anime4kMode ?? Anime4kMode.off,
+            quality: settings?.anime4kQuality ?? Anime4kQuality.m,
+            directory: settings?.anime4kShaderDirectory ?? '',
+          );
+      if (_isDisposed) return;
+      // An empty string is how mpv is told to run no shaders, so this both
+      // applies a mode and turns one off.
+      await platform.setProperty('glsl-shaders', pipeline.value);
+      if (kDebugMode && pipeline.missing.isNotEmpty) {
+        debugPrint('Anime4K: missing ${pipeline.missing.join(", ")}');
+      }
+    } catch (e) {
+      // A shader that will not load must not take playback down with it.
+      if (kDebugMode) debugPrint('Anime4K shaders not applied: $e');
+    }
   }
 
   Future<void> seekTo(Duration position, {bool fast = false}) async {

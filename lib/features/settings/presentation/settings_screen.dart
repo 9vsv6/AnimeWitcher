@@ -20,6 +20,8 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'cache_provider.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
+import '../../player/data/anime4k.dart';
+import 'widgets/anime4k_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -398,6 +400,15 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => ref
                 .read(playerSettingsProvider.notifier)
                 .setPrefetchNextEpisode(!playerSettings.prefetchNextEpisode),
+          ),
+          SettingsTile(
+            icon: Icons.auto_awesome_rounded,
+            title: 'Anime4K',
+            subtitle: playerSettings.anime4kMode == Anime4kMode.off
+                ? appText(context, english: 'Off', arabic: 'إيقاف')
+                : '${playerSettings.anime4kMode.label} '
+                      '(${playerSettings.anime4kQuality.suffix})',
+            onTap: () => showAnime4kDialog(context, ref),
           ),
           SettingsTile(
             icon: Icons.tune_rounded,

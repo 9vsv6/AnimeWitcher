@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/storage/settings_repository.dart';
+import '../../player/data/anime4k.dart';
 
 part 'player_settings_provider.g.dart';
 
@@ -102,9 +103,24 @@ class PlayerSettings {
   /// a viewer has decided to keep watching.
   final bool prefetchNextEpisode;
 
+  /// Which Anime4K pipeline to run, if any. Off by default: the shaders are
+  /// files the viewer supplies, and the GPU cost is theirs to opt into.
+  final Anime4kMode anime4kMode;
+
+  /// The size of network the Anime4K shaders use. Each step up roughly
+  /// doubles the GPU time.
+  final Anime4kQuality anime4kQuality;
+
+  /// Where the viewer's Anime4K `.glsl` files live. Empty until they choose a
+  /// folder, which is what keeps the mode from doing anything.
+  final String anime4kShaderDirectory;
+
   const PlayerSettings({
     this.fillerBehaviour = FillerBehaviour.note,
     this.prefetchNextEpisode = true,
+    this.anime4kMode = Anime4kMode.off,
+    this.anime4kQuality = Anime4kQuality.m,
+    this.anime4kShaderDirectory = '',
     this.seekDuration = 10,
     this.defaultResizeMode = 'Fit',
     this.subtitleSize = 22.0,
@@ -183,6 +199,9 @@ class PlayerSettings {
     bool? skipSegmentsEnabled,
     FillerBehaviour? fillerBehaviour,
     bool? prefetchNextEpisode,
+    Anime4kMode? anime4kMode,
+    Anime4kQuality? anime4kQuality,
+    String? anime4kShaderDirectory,
     bool? autoSkipIntro,
     bool? autoSkipCredits,
   }) {
@@ -234,6 +253,10 @@ class PlayerSettings {
       skipSegmentsEnabled: skipSegmentsEnabled ?? this.skipSegmentsEnabled,
       fillerBehaviour: fillerBehaviour ?? this.fillerBehaviour,
       prefetchNextEpisode: prefetchNextEpisode ?? this.prefetchNextEpisode,
+      anime4kMode: anime4kMode ?? this.anime4kMode,
+      anime4kQuality: anime4kQuality ?? this.anime4kQuality,
+      anime4kShaderDirectory:
+          anime4kShaderDirectory ?? this.anime4kShaderDirectory,
       autoSkipIntro: autoSkipIntro ?? this.autoSkipIntro,
       autoSkipCredits: autoSkipCredits ?? this.autoSkipCredits,
     );
@@ -436,6 +459,24 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
         defaultValue: FillerBehaviour.note.name,
       ),
     );
+    final anime4kMode = Anime4kModeName.fromName(
+      storage.getPlayerSetting<String>(
+        'player_anime4k_mode',
+        defaultValue: Anime4kMode.off.name,
+      ),
+    );
+    final anime4kQuality = Anime4kQualitySuffix.fromName(
+      storage.getPlayerSetting<String>(
+        'player_anime4k_quality',
+        defaultValue: Anime4kQuality.m.name,
+      ),
+    );
+    final anime4kShaderDirectory =
+        storage.getPlayerSetting<String>(
+          'player_anime4k_shader_dir',
+          defaultValue: '',
+        ) ??
+        '';
     final autoSkipCredits =
         storage.getPlayerSetting<bool>(
           'player_auto_skip_credits',
@@ -483,6 +524,9 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       fillerBehaviour: fillerBehaviour,
       prefetchNextEpisode: prefetchNextEpisode,
       autoSkipCredits: autoSkipCredits,
+      anime4kMode: anime4kMode,
+      anime4kQuality: anime4kQuality,
+      anime4kShaderDirectory: anime4kShaderDirectory,
     );
   }
 
@@ -637,6 +681,24 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setPrefetchNextEpisode(bool val) async {
     await _repository.setPlayerSetting('player_prefetch_next_episode', val);
     state = AsyncData(state.requireValue.copyWith(prefetchNextEpisode: val));
+  }
+
+  Future<void> setAnime4kMode(Anime4kMode val) async {
+    await _repository.setPlayerSetting('player_anime4k_mode', val.name);
+    state = AsyncData(state.requireValue.copyWith(anime4kMode: val));
+  }
+
+  Future<void> setAnime4kQuality(Anime4kQuality val) async {
+    await _repository.setPlayerSetting('player_anime4k_quality', val.name);
+    state = AsyncData(state.requireValue.copyWith(anime4kQuality: val));
+  }
+
+  Future<void> setAnime4kShaderDirectory(String val) async {
+    final trimmed = val.trim();
+    await _repository.setPlayerSetting('player_anime4k_shader_dir', trimmed);
+    state = AsyncData(
+      state.requireValue.copyWith(anime4kShaderDirectory: trimmed),
+    );
   }
 
   Future<void> setFillerBehaviour(FillerBehaviour val) async {
