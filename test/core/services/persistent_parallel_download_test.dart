@@ -136,12 +136,18 @@ void main() {
           TaskStatusUpdate(original[1], TaskStatus.paused),
         );
         await waitUntil(() => starts.length >= expectedStarts);
-        expect(starts.last.taskId, original[1].taskId);
+        final recovered = starts.last;
+        expect(recovered.taskId, original[1].taskId);
+        // A real native worker acknowledges the recovered enqueue before it can
+        // be interrupted again. Keep the slow-start batch state honest instead
+        // of injecting consecutive pause callbacks into an unacknowledged task.
+        await markRunning([recovered]);
         expect(coordinator.activeConnectionCount, 5);
         expect(pauses, isEmpty);
         expect(coordinator.isActive(parent.taskId), isTrue);
-        expect(statuses.last, TaskStatus.waitingToRetry);
+        expect(statuses.last, TaskStatus.running);
       }
+      expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
       expect(statuses, isNot(contains(TaskStatus.paused)));
     },
   );
@@ -151,10 +157,15 @@ void main() {
     final first = starts.first;
     coordinator.handleUpdate(TaskStatusUpdate(first, TaskStatus.paused));
     await coordinator.pause(parent);
+    final startsAfterUserPause = starts.length;
     await Future<void>.delayed(const Duration(milliseconds: 40));
-    expect(starts.length, 1);
+    // Recovery is allowed to hand the just-freed slot to healthy queued work
+    // before the user's pause is serialized. Once the user pause completes,
+    // however, no pending recovery timer may launch anything else.
+    expect(starts.length, startsAfterUserPause);
     expect(coordinator.isActive(parent.taskId), isFalse);
     expect(coordinator.activeConnectionCount, 0);
+    expect(statuses.last, TaskStatus.paused);
   });
 
   test(
@@ -269,7 +280,8 @@ void main() {
       await coordinator.reconcile(() async => <String>{});
 
       expect(coordinator.isActive(parent.taskId), isTrue);
-      expect(statuses.last, TaskStatus.waitingToRetry);
+      expect(statuses.last, TaskStatus.running);
+      expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
       expect(statuses, isNot(contains(TaskStatus.paused)));
       await waitUntil(() => starts.length >= 9);
       final retriedIds = starts
