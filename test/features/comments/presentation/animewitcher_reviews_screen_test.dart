@@ -25,16 +25,14 @@ import 'package:animewitcher/core/utils/window_controls_inset.dart';
 class _FakeAccountService extends AnimeWitcherAccountService {
   _FakeAccountService({
     required this.reviews,
-    this.signedIn = true,
-    this.myUserId = 'me',
   }) : super(
          storage: StorageService(),
          secureStorage: SecureTokenStorage(StorageService()),
        );
 
   final List<AnimeWitcherComment> reviews;
-  final bool signedIn;
-  final String myUserId;
+  final bool signedIn = true;
+  final String myUserId = 'me';
   int? lastLimit;
   AnimeWitcherCommentSort? lastSort;
   String? lastPublishedText;

@@ -24,7 +24,6 @@ class _FakeAccountService extends AnimeWitcherAccountService {
     required this.comments,
     required this.replies,
     this.signedIn = true,
-    this.myUserId = 'me',
   }) : super(
           storage: StorageService(),
           secureStorage: SecureTokenStorage(StorageService()),
@@ -33,7 +32,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
   final List<AnimeWitcherComment> comments;
   final List<AnimeWitcherComment> replies;
   final bool signedIn;
-  final String myUserId;
+  final String myUserId = 'me';
 
   int loadCommentsCalls = 0;
   int loadRepliesCalls = 0;
@@ -381,5 +380,40 @@ void main() {
     expect(find.text('التعليقات'), findsOneWidget);
     expect(service.loadCommentsCalls, 1);
     expect(service.loadRepliesCalls, 1);
+  });
+
+  testWidgets('signed out, the composer is replaced by a sign-in notice', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.runAsync(TestFonts.loadWalkthroughFonts);
+
+    final service = _FakeAccountService(
+      comments: <AnimeWitcherComment>[parent],
+      replies: <AnimeWitcherComment>[otherReply],
+      signedIn: false,
+    );
+
+    await tester.pumpWidget(
+      _app(
+        service: service,
+        home: AnimeWitcherRepliesScreen(parentComment: parent),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // The replies themselves stay readable — signing in is only required to
+    // add one.
+    expect(find.text('انا فكرتها كيلوا'), findsOneWidget);
+
+    expect(
+      find.text('سجّل الدخول إلى حساب AnimeWitcher لإضافة رد.'),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byTooltip('إرسال'), findsNothing);
   });
 }

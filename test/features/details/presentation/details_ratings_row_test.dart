@@ -27,7 +27,6 @@ class _FakeAccountService extends AnimeWitcherAccountService {
   _FakeAccountService({
     this.signedIn = false,
     this.userRating,
-    this.reviewsClosedLive = false,
   }) : super(
          storage: StorageService(),
          secureStorage: SecureTokenStorage(StorageService()),
@@ -35,7 +34,7 @@ class _FakeAccountService extends AnimeWitcherAccountService {
 
   final bool signedIn;
   int? userRating;
-  final bool reviewsClosedLive;
+  final bool reviewsClosedLive = false;
   final List<String> writes = <String>[];
   final List<String> deletes = <String>[];
 
