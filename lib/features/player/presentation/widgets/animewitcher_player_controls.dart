@@ -1226,9 +1226,6 @@ class AnimeWitcherPlayerControlsState
                                   arabic: 'إرجاع $seekDuration ثوانٍ',
                                 ),
                                 onPressed: () => triggerSeek(true),
-                                backgroundColor: Colors.black.withValues(
-                                  alpha: 0.32,
-                                ),
                               ),
                               const SizedBox(width: 28),
                               PlayerPlayPauseButton(
@@ -1237,9 +1234,6 @@ class AnimeWitcherPlayerControlsState
                                 isLoading: widget.isLoading,
                                 isTv: _isTv,
                                 size: 82,
-                                backgroundColor: Colors.black.withValues(
-                                  alpha: 0.32,
-                                ),
                                 onPressed: _togglePlay,
                               ),
                               const SizedBox(width: 28),
@@ -1252,9 +1246,6 @@ class AnimeWitcherPlayerControlsState
                                   arabic: 'تقديم $seekDuration ثوانٍ',
                                 ),
                                 onPressed: () => triggerSeek(false),
-                                backgroundColor: Colors.black.withValues(
-                                  alpha: 0.32,
-                                ),
                               ),
                             ],
                           ),
@@ -1657,7 +1648,9 @@ class AnimeWitcherPlayerControlsState
             isTv: _isTv,
           ),
           PlayerChromeAction.rotate => PlayerIconButton(
-            icon: LucideIcons.rotate3d200,
+            icon: LucideIcons.rotateCw200,
+            iconBuilder: (color, size) =>
+                RotateScreenIcon(size: size, color: color),
             tooltip: l10n.rotate,
             onPressed: _toggleOrientation,
             isTv: _isTv,
