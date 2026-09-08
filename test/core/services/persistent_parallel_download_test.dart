@@ -281,7 +281,7 @@ void main() {
   );
 
   test(
-    'missing worker callbacks recover ghost children without pausing parent',
+    'missing worker callbacks begin governed recovery without pausing parent',
     () async {
       await coordinator.start(parent, 25);
       await expandFreshTo(5);
@@ -294,13 +294,22 @@ void main() {
       expect(statuses.last, TaskStatus.running);
       expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
       expect(statuses, isNot(contains(TaskStatus.paused)));
-      await waitUntil(() => starts.length >= 9);
-      final retriedIds = starts
-          .skip(5)
-          .map((task) => task.taskId)
-          .toSet();
-      expect(retriedIds, original.skip(1).map((task) => task.taskId).toSet());
+
+      // Recovery now re-enters the normal pump/governor instead of calling
+      // startPart directly for every ghost worker. The scheduler may therefore
+      // keep some ghosts queued until an already re-enqueued worker reports
+      // running/completes. Reconcile only needs to prove that governed recovery
+      // starts, never retries the durable complete range, and never parks the
+      // logical episode while those workers are being recovered.
+      await waitUntil(() => starts.length > 5);
+      final recoverableIds = original.skip(1).map((task) => task.taskId).toSet();
+      final retriedIds = starts.skip(5).map((task) => task.taskId).toSet();
+      expect(retriedIds, isNotEmpty);
+      expect(retriedIds.difference(recoverableIds), isEmpty);
       expect(retriedIds, isNot(contains(original.first.taskId)));
+      expect(coordinator.isActive(parent.taskId), isTrue);
+      expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
+      expect(statuses, isNot(contains(TaskStatus.paused)));
     },
   );
 
