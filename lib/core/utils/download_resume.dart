@@ -18,6 +18,15 @@ enum DownloadResumeStrategy {
   restartFromZero,
 }
 
+/// Native status checkpoints can report -1/0 when the response size is not
+/// available. Those sentinels must not erase a previously known file length.
+int knownDownloadSize(Iterable<int?> candidates) {
+  for (final bytes in candidates) {
+    if (bytes != null && bytes > 0) return bytes;
+  }
+  return -1;
+}
+
 /// True when [existingPartialBytes] is a usable prefix of the download.
 bool shouldResumeFromPartialBytes({
   required int existingPartialBytes,
@@ -56,12 +65,9 @@ bool shouldRestartDownloadFromZero({
   required int expectedBytes,
   double savedProgress = 0,
 }) {
-  if (shouldResumeFromPartialBytes(
-    existingPartialBytes: existingPartialBytes,
-    expectedBytes: expectedBytes,
-  )) {
-    return false;
-  }
+  // Exact-size files may be completed downloads whose last callback was lost.
+  // Oversized files also contain saved data and must never be overwritten.
+  if (existingPartialBytes > 0) return false;
   if (savedProgress > 0) return false;
   return true;
 }

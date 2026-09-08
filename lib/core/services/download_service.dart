@@ -172,6 +172,7 @@ class DownloadService {
       },
       saveRecord: (record) => FileDownloader().database.updateRecord(record),
       recordForId: (id) => FileDownloader().database.recordForId(id),
+      livePartIds: _livePartIds,
       onUpdate: (update) {
         if (!_disposed) _sharedEvents.add(update);
       },
@@ -210,6 +211,7 @@ class DownloadService {
 
   void dispose() {
     _disposed = true;
+    unawaited(_parallel.dispose());
     _rangeTransfers.dispose();
     _updatesSubscription?.cancel();
     unawaited(_continuedProcessing.dispose());
@@ -688,7 +690,8 @@ class DownloadService {
         _rememberSessionTask(task.taskId);
         if (shouldNativePauseAfterUserPause(
           userPaused: true,
-          stillInNativeQueue: stillNative,
+          stillInNativeQueue:
+              stillNative || _parallel.hasLiveConnections(task.taskId),
         )) {
           try {
             await _pauseTransfer(task);
@@ -720,11 +723,12 @@ class DownloadService {
         );
       }
 
-      final shouldReenqueue = shouldReenqueueWaitingAfterProcessKill(
+      final shouldReenqueue = shouldRequeueInterruptedDownloadAfterRelaunch(
         persisted: record.status,
         queueWaiting: queueWaiting,
         userPaused: userPaused,
         stillInNativeQueue: stillNative,
+        hasMetadata: metadata != null,
       );
       if (shouldReenqueue) {
         _queueWaitingIds.add(task.taskId);
@@ -855,6 +859,7 @@ class DownloadService {
   Future<void> onAppForegrounded() async {
     if (!_isInitialized) return;
     await _serializeQueue(() async {
+      await _reconcileTransferOwnership();
       await _attachUiToLiveNativeTasks();
       await _syncQueueToCapUnlocked();
     });
@@ -1245,10 +1250,11 @@ class DownloadService {
       incoming: progress,
       lastKnown: downloadMetadataProgress(metadata),
     );
-    final totalSize =
-        current?.totalSize ??
-        record?.expectedFileSize ??
-        downloadMetadataExpectedBytes(metadata);
+    final totalSize = knownDownloadSize([
+      current?.totalSize,
+      record?.expectedFileSize,
+      downloadMetadataExpectedBytes(metadata),
+    ]);
     var partialBytes = 0;
     try {
       final path = await task.filePath();
@@ -1531,10 +1537,11 @@ class DownloadService {
       lastKnown: downloadMetadataProgress(metadata),
     );
 
-    final totalSize =
-        current?.totalSize ??
-        record?.expectedFileSize ??
-        downloadMetadataExpectedBytes(metadata);
+    final totalSize = knownDownloadSize([
+      current?.totalSize,
+      record?.expectedFileSize,
+      downloadMetadataExpectedBytes(metadata),
+    ]);
 
     // Never delete the DB record, metadata, or partial file here — only mark
     // paused so retry/unpause can continue from the saved offset.
@@ -1740,10 +1747,11 @@ class DownloadService {
           incoming: progress,
           lastKnown: downloadMetadataProgress(metadata),
         );
-        final totalSize =
-            current?.totalSize ??
-            record?.expectedFileSize ??
-            downloadMetadataExpectedBytes(metadata);
+        final totalSize = knownDownloadSize([
+          current?.totalSize,
+          record?.expectedFileSize,
+          downloadMetadataExpectedBytes(metadata),
+        ]);
         await FileDownloader().database.updateRecord(
           TaskRecord(downloadTask, TaskStatus.paused, progress, totalSize),
         );
@@ -1780,6 +1788,7 @@ class DownloadService {
   }
 
   Future<void> _resumeUserPausedUnlocked(String taskId) async {
+    await _reconcileTransferOwnership();
     _userPausedIds.remove(taskId);
     _dequeuingPausedIds.remove(taskId);
     DownloadTask? downloadTask = await _liveNativeTaskFor(taskId: taskId);
@@ -2095,13 +2104,20 @@ class DownloadService {
     }
     if (destinationPath.isEmpty) return false;
 
-    final partial = await findPartialDownloadFile(
+    final partial = await canonicalizePartialDownloadFile(
       destinationPath: destinationPath,
     );
     if (partial == null) return false;
-    final existingBytes = await partial.length();
-    final record = await FileDownloader().database.recordForId(task.taskId);
-    final expectedBytes = record?.expectedFileSize ?? -1;
+    final existingBytes = partial.bytes;
+    final expectedBytes = (await _savedProgressFor(task)).totalSize;
+    if (expectedBytes > 0 && existingBytes == expectedBytes) {
+      await FileDownloader().database.updateRecord(
+        TaskRecord(task, TaskStatus.complete, 1, expectedBytes),
+      );
+      _sharedEvents.add(TaskProgressUpdate(task, 1, expectedBytes));
+      _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
+      return true;
+    }
     if (!shouldResumeFromPartialBytes(
       existingPartialBytes: existingBytes,
       expectedBytes: expectedBytes,
@@ -2109,15 +2125,9 @@ class DownloadService {
       return false;
     }
 
-    final dest = File(destinationPath);
-    if (partial.path != dest.path) {
-      await dest.parent.create(recursive: true);
-      await partial.copy(dest.path);
-    }
-
     return _appendRemainingWithDio(
       task,
-      dest: dest,
+      dest: partial.file,
       existingBytes: existingBytes,
       expectedBytes: expectedBytes,
     );
@@ -2141,9 +2151,7 @@ class DownloadService {
       await FileDownloader().database.updateRecord(
         TaskRecord(task, status, written / total, total),
       );
-      _sharedEvents.add(
-        TaskProgressUpdate(task, written / total, total),
-      );
+      _sharedEvents.add(TaskProgressUpdate(task, written / total, total));
       if (complete)
         _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
     },
@@ -2168,6 +2176,38 @@ class DownloadService {
         .where((task) => !paused.contains(task.taskId))
         .toList();
   }
+
+  Future<void> _reconcileTransferOwnership() async {
+    await _parallel.reconcile(_livePartIds);
+    final liveIds = await _livePartIds();
+    for (final record in await FileDownloader().database.allRecords()) {
+      if (!isLogicalEpisodeDownloadTask(record.task) ||
+          _queueWaitingIds.contains(record.taskId) ||
+          _startingTaskIds.contains(record.taskId) ||
+          liveIds.contains(record.taskId) ||
+          _parallel.isActive(record.taskId) ||
+          !isLiveNativeDownloadStatus(record.status))
+        continue;
+      final task = record.task as DownloadTask;
+      final saved = await _savedProgressFor(task);
+      await FileDownloader().database.updateRecord(
+        TaskRecord(task, TaskStatus.paused, saved.progress, saved.totalSize),
+      );
+      _publishProgress(
+        trackingUrl: downloadTrackingUrl(task),
+        taskId: task.taskId,
+        progress: saved.progress,
+        totalSize: saved.totalSize,
+        status: TaskStatus.paused,
+      );
+      _updatesController.add(TaskStatusUpdate(task, TaskStatus.paused));
+    }
+  }
+
+  Future<Set<String>> _livePartIds() async => {
+    for (final task in await _liveTransferTasks()) task.taskId,
+    ..._rangeTransfers.activeTaskIds,
+  };
 
   Future<void> _pauseTransfer(DownloadTask task) async {
     if (_rangeTransfers.isActive(task.taskId)) {
@@ -2203,19 +2243,30 @@ class DownloadService {
     if (_rangeTransfers.isActive(task.taskId)) return true;
     if ((await _liveTransferTasks()).any((live) => live.taskId == task.taskId))
       return true;
-    // ignore: invalid_use_of_visible_for_testing_member
-    final resume = await FileDownloader().downloaderForTesting.getResumeData(
-      task.taskId,
-    );
-    if (resume != null && await FileDownloader().resume(task)) return true;
-    final partial = await findPartialDownloadFile(
+    try {
+      // ignore: invalid_use_of_visible_for_testing_member
+      final resume = await FileDownloader().downloaderForTesting.getResumeData(
+        task.taskId,
+      );
+      if (resume != null && await FileDownloader().resume(task)) return true;
+    } catch (_) {
+      // A stale native checkpoint must not prevent the disk-prefix fallback.
+    }
+    final partial = await canonicalizePartialDownloadFile(
       destinationPath: await task.filePath(),
     );
-    final bytes = partial == null ? 0 : await partial.length();
+    final bytes = partial?.bytes ?? 0;
+    if (bytes == size && size > 0) {
+      await FileDownloader().database.updateRecord(
+        TaskRecord(task, TaskStatus.complete, 1, size),
+      );
+      _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
+      return true;
+    }
     if (bytes > 0 && bytes < size) {
       return _appendRemainingWithDio(
         task,
-        dest: partial!,
+        dest: partial!.file,
         existingBytes: bytes,
         expectedBytes: size,
       );
@@ -2591,7 +2642,9 @@ class DownloadService {
           knownTotalBytes: expectedBytes,
         );
 
-        _waitingPayloads[transferTask.taskId] = _waitingPayloadFor(transferTask);
+        _waitingPayloads[transferTask.taskId] = _waitingPayloadFor(
+          transferTask,
+        );
         _rememberSessionTask(transferTask.taskId);
         await storage.saveDownloadMetadata(
           task.taskId,

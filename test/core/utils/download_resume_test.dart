@@ -7,6 +7,75 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
+  test('unknown native size cannot hide a durable expected length', () {
+    expect(knownDownloadSize([-1, 0, 1024]), 1024);
+    expect(knownDownloadSize([null, 2048, 1024]), 2048);
+    expect(knownDownloadSize([4096, -1, 1024]), 4096);
+    expect(knownDownloadSize([null, -1, 0]), -1);
+  });
+  test('complete or oversized saved files never restart from zero', () async {
+    for (final bytes in [10, 11]) {
+      var restarts = 0;
+      expect(
+        await resumeOrRestartDownload(
+          canResume: () async => false,
+          resume: () async => false,
+          resumeFromPartial: () async => false,
+          restart: () async {
+            restarts++;
+            return true;
+          },
+          existingPartialBytes: bytes,
+          expectedBytes: 10,
+        ),
+        isFalse,
+      );
+      expect(restarts, 0);
+    }
+  });
+
+  test(
+    'relaunch recovers system pauses but respects user pause and delete',
+    () {
+      for (final status in [
+        TaskStatus.paused,
+        TaskStatus.failed,
+        TaskStatus.notFound,
+        TaskStatus.canceled,
+      ]) {
+        expect(
+          shouldRequeueInterruptedDownloadAfterRelaunch(
+            persisted: status,
+            queueWaiting: false,
+            userPaused: false,
+            stillInNativeQueue: false,
+            hasMetadata: true,
+          ),
+          isTrue,
+        );
+        expect(
+          shouldRequeueInterruptedDownloadAfterRelaunch(
+            persisted: status,
+            queueWaiting: false,
+            userPaused: true,
+            stillInNativeQueue: false,
+            hasMetadata: true,
+          ),
+          isFalse,
+        );
+        expect(
+          shouldRequeueInterruptedDownloadAfterRelaunch(
+            persisted: status,
+            queueWaiting: false,
+            userPaused: false,
+            stillInNativeQueue: false,
+            hasMetadata: false,
+          ),
+          isFalse,
+        );
+      }
+    },
+  );
   test(
     'uses a successful native resume when resume data is available',
     () async {
@@ -358,9 +427,8 @@ void main() {
     addTearDown(() => root.delete(recursive: true));
     final dest = File(p.join(root.path, 'ep.mp4'));
     await dest.writeAsBytes(List<int>.filled(10, 1));
-    await File(
-      p.join(root.path, 'ep.mp4.download'),
-    ).writeAsBytes(List<int>.filled(40, 2));
+    await File(p.join(root.path, 'ep.mp4.download'))
+        .writeAsBytes(List<int>.filled(40, 2));
 
     final found = await findPartialDownloadFile(destinationPath: dest.path);
     expect(found, isNotNull);
