@@ -94,7 +94,7 @@ class Anime4kShaderLibrary {
         .map((name) => p.join(directory.trim(), name))
         .toList(growable: false);
     return Anime4kPipeline(
-      value: anime4kGlslShadersValue(paths),
+      value: anime4kGlslShadersValue(paths, onWindows: Platform.isWindows),
       files: chain.files,
       missing: chain.missing,
     );

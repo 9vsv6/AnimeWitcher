@@ -31,11 +31,7 @@ Anime4kChain _chain(
   Anime4kQuality quality = Anime4kQuality.m,
   List<String> folder = _fullFolder,
 }) {
-  return resolveAnime4kChain(
-    mode: mode,
-    quality: quality,
-    available: folder,
-  );
+  return resolveAnime4kChain(mode: mode, quality: quality, available: folder);
 }
 
 void main() {
@@ -219,29 +215,63 @@ void main() {
   });
 
   group('the value handed to mpv', () {
-    test('joins paths with a colon', () {
+    test('joins with a colon on Unix', () {
       expect(
-        anime4kGlslShadersValue(<String>['/a/one.glsl', '/a/two.glsl']),
-        '/a/one.glsl:/a/two.glsl',
+        anime4kGlslShadersValue(<String>[
+          '/home/me/shaders/one.glsl',
+          '/home/me/shaders/two.glsl',
+        ], onWindows: false),
+        '/home/me/shaders/one.glsl:/home/me/shaders/two.glsl',
       );
     });
 
-    test('escapes the colon inside a Windows drive letter', () {
-      // mpv splits this list on ':' everywhere, so an unescaped C: makes it
-      // look for a shader called "C" and render nothing, with no error the
-      // viewer would ever see.
+    test('joins with a semicolon on Windows, leaving the drive alone', () {
+      // mpv's manual: file list options use ':' on Unix and ';' on Windows.
+      // Joining with a colon there hands mpv one unparseable path, and
+      // escaping the drive colon makes it worse — C\:\shaders is not a path
+      // anything can open. Neither failure says a word: the picture simply
+      // comes out untouched, which reads as "Anime4K does not do much".
       expect(
         anime4kGlslShadersValue(<String>[
           r'C:\shaders\Anime4K_Clamp_Highlights.glsl',
           r'C:\shaders\Anime4K_Upscale_CNN_x2_M.glsl',
-        ]),
-        r'C\:\shaders\Anime4K_Clamp_Highlights.glsl:'
-        r'C\:\shaders\Anime4K_Upscale_CNN_x2_M.glsl',
+        ], onWindows: true),
+        r'C:\shaders\Anime4K_Clamp_Highlights.glsl;'
+        r'C:\shaders\Anime4K_Upscale_CNN_x2_M.glsl',
+      );
+    });
+
+    test('the separator is what gets escaped, and only it', () {
+      // A colon is legal inside a Unix filename and a semicolon inside a
+      // Windows one, so each platform escapes its own separator and nothing
+      // else.
+      expect(
+        anime4kGlslShadersValue(<String>['/od/d:d/one.glsl'], onWindows: false),
+        r'/od/d\:d/one.glsl',
+      );
+      expect(
+        anime4kGlslShadersValue(<String>[r'C:\od;d\one.glsl'], onWindows: true),
+        r'C:\od\;d\one.glsl',
+      );
+    });
+
+    test('a single path needs no separator at all', () {
+      expect(
+        anime4kGlslShadersValue(<String>[
+          r'C:\shaders\one.glsl',
+        ], onWindows: true),
+        r'C:\shaders\one.glsl',
       );
     });
 
     test('nothing in, nothing out', () {
-      expect(anime4kGlslShadersValue(const <String>[]), '');
+      expect(anime4kGlslShadersValue(const <String>[], onWindows: true), '');
+      expect(anime4kGlslShadersValue(const <String>[], onWindows: false), '');
+    });
+
+    test('the separator itself is named per platform', () {
+      expect(anime4kListSeparator(onWindows: true), ';');
+      expect(anime4kListSeparator(onWindows: false), ':');
     });
   });
 

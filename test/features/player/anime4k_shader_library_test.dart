@@ -89,8 +89,16 @@ void main() {
       for (final name in result.files) {
         expect(File(p.join(_folder.path, name)).existsSync(), isTrue);
       }
-      expect(result.value, contains(p.join(_folder.path, result.files.first)
-          .replaceAll(':', r'\:')));
+      // The value mpv gets holds every chosen path, joined the way mpv
+      // splits them on this platform.
+      final separator = anime4kListSeparator(onWindows: Platform.isWindows);
+      // A plain split is safe here: the temp folder holds no separator
+      // character, so nothing in these paths is escaped.
+      final parts = result.value.split(separator);
+      expect(parts, hasLength(result.files.length));
+      for (final name in result.files) {
+        expect(parts, contains(p.join(_folder.path, name)));
+      }
     });
 
     test('mode off asks for nothing, whatever is in the folder', () async {

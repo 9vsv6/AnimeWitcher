@@ -241,11 +241,30 @@ Anime4kChain resolveAnime4kChain({
   return Anime4kChain(files: files, missing: missing);
 }
 
-/// The value mpv's `glsl-shaders` property expects: paths joined by `:`.
+/// The character mpv splits its file-list options on.
 ///
-/// mpv splits this list on `:` on every platform, including Windows, where a
-/// path also contains a drive colon — so a backslash escapes it. Getting this
-/// wrong makes mpv read `C` as a shader file and silently render nothing.
-String anime4kGlslShadersValue(Iterable<String> paths) {
-  return paths.map((path) => path.replaceAll(':', r'\:')).join(':');
+/// From mpv's manual: "most path or file list options use `:` (Unix) or `;`
+/// (Windows) as separator". The colon cannot be it on Windows, where every
+/// absolute path carries a drive colon of its own.
+String anime4kListSeparator({required bool onWindows}) =>
+    onWindows ? ';' : ':';
+
+/// The value mpv's `glsl-shaders` property expects.
+///
+/// Only the separator itself is escaped — both characters are legal inside a
+/// filename on their own platform. On Windows the drive colon is left exactly
+/// as it is: escaping it produced `C\:\shaders\...`, which is not a path any
+/// system can open.
+///
+/// Getting this wrong does not fail loudly. mpv takes the string, finds
+/// nothing it can load, and renders the picture untouched — which from the
+/// sofa is indistinguishable from Anime4K simply not doing much.
+String anime4kGlslShadersValue(
+  Iterable<String> paths, {
+  required bool onWindows,
+}) {
+  final separator = anime4kListSeparator(onWindows: onWindows);
+  return paths
+      .map((path) => path.replaceAll(separator, '\\$separator'))
+      .join(separator);
 }

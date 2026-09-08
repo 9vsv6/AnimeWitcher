@@ -2592,6 +2592,13 @@ class PlayerController extends Notifier<PlayerState> {
     _scheduleAutoSubtitleSelection();
   }
 
+  /// What mpv reports for `glsl-shaders` after the last apply.
+  ///
+  /// Empty means no shaders are running, whether because none were asked for
+  /// or because mpv could not use what it was given.
+  String _anime4kApplied = '';
+  String get anime4kAppliedValue => _anime4kApplied;
+
   /// Hands mpv the Anime4K pipeline the settings ask for, or clears it.
   ///
   /// Only mpv can do this. The adaptive backend used for DRM and some live
@@ -2620,8 +2627,20 @@ class PlayerController extends Notifier<PlayerState> {
       // An empty string is how mpv is told to run no shaders, so this both
       // applies a mode and turns one off.
       await platform.setProperty('glsl-shaders', pipeline.value);
-      if (kDebugMode && pipeline.missing.isNotEmpty) {
-        debugPrint('Anime4K: missing ${pipeline.missing.join(", ")}');
+
+      // Read it back. mpv accepts a malformed list without complaint and
+      // simply renders nothing different, so "did it take" is a question
+      // only the property itself can answer — and the answer is what tells
+      // a viewer whether their folder is wrong or their eyes are.
+      final applied = await platform.getProperty('glsl-shaders');
+      _anime4kApplied = applied.trim();
+      if (kDebugMode) {
+        debugPrint(
+          'Anime4K: asked for ${pipeline.files.length} shaders, '
+          'mpv holds "${_anime4kApplied}"'
+          '${pipeline.missing.isEmpty ? '' : ', missing '
+              '${pipeline.missing.join(", ")}'}',
+        );
       }
     } catch (e) {
       // A shader that will not load must not take playback down with it.

@@ -1739,6 +1739,9 @@ class AnimeWitcherPlayerControlsState
                     .read(playerControllerProvider.notifier)
                     .applyAnime4kShaders();
               },
+              appliedValue: () async => ref
+                  .read(playerControllerProvider.notifier)
+                  .anime4kAppliedValue,
             ),
             isTv: _isTv,
           ),

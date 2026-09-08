@@ -21,6 +21,7 @@ class Anime4kPlayerSheet {
     required Anime4kQuality currentQuality,
     required ValueChanged<Anime4kMode> onModeSelected,
     required ValueChanged<Anime4kQuality> onQualitySelected,
+    required Future<String> Function() appliedValue,
   }) {
     var mode = currentMode;
     var quality = currentQuality;
@@ -196,6 +197,8 @@ class Anime4kPlayerSheet {
                                       ),
                                   ],
                                 ),
+                                SizedBox(height: isCompact ? 14 : 18),
+                                _AppliedLine(read: appliedValue, mode: mode),
                               ],
                             ),
                           ),
@@ -220,6 +223,108 @@ class Anime4kPlayerSheet {
         fontSize: 14,
         fontWeight: FontWeight.w700,
       ),
+    );
+  }
+}
+
+/// Says whether mpv is actually running the shaders.
+///
+/// The picture is the real answer, but "is it on at all" should not be a
+/// judgement call: a wrong folder and a mode that is simply subtle look
+/// identical from the sofa, and only one of them is worth investigating.
+class _AppliedLine extends StatefulWidget {
+  const _AppliedLine({required this.read, required this.mode});
+
+  final Future<String> Function() read;
+  final Anime4kMode mode;
+
+  @override
+  State<_AppliedLine> createState() => _AppliedLineState();
+}
+
+class _AppliedLineState extends State<_AppliedLine> {
+  String? _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void didUpdateWidget(_AppliedLine oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.mode != widget.mode) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    // A moment for the apply that a chip tap has just started.
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (!mounted) return;
+    final value = await widget.read();
+    if (mounted) setState(() => _value = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _value;
+    if (value == null) return const SizedBox.shrink();
+
+    final running = value.trim().isNotEmpty;
+    final count = running
+        ? value
+              .split(RegExp(r'(?<!\)[:;]'))
+              .where((p) => p.trim().isNotEmpty)
+              .length
+        : 0;
+
+    if (widget.mode == Anime4kMode.off) {
+      return Text(
+        appText(context, english: 'Not running', arabic: 'غير مُفعّل'),
+        style: const TextStyle(
+          color: HotstarPlayerStyle.secondaryText,
+          fontSize: 12,
+        ),
+      );
+    }
+    return Row(
+      children: [
+        Icon(
+          running
+              ? Icons.check_circle_outline_rounded
+              : Icons.error_outline_rounded,
+          size: 15,
+          color: running
+              ? HotstarPlayerStyle.accent
+              : Theme.of(context).colorScheme.error,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            running
+                ? appText(
+                    context,
+                    english: 'mpv is running $count shaders',
+                    arabic: 'mpv يشغّل $count ملفات',
+                  )
+                : appText(
+                    context,
+                    english:
+                        'mpv is running none — check the shader folder in '
+                        'settings',
+                    arabic:
+                        'mpv لا يشغّل أي ملف — راجع مجلد الشيدرات في '
+                        'الإعدادات',
+                  ),
+            style: TextStyle(
+              color: running
+                  ? HotstarPlayerStyle.secondaryText
+                  : Theme.of(context).colorScheme.error,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
