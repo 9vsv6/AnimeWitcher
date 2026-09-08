@@ -101,6 +101,17 @@ void main() {
       await markRunning(batch);
       await waitUntil(() => starts.length > before || starts.length >= target);
     }
+
+    // Reaching the target means the final slow-start batch was only enqueued;
+    // it has not necessarily acknowledged running yet. Mark that last batch as
+    // healthy too so tests that follow with recovery/reconcile start from the
+    // same fully-established connection level as a real transfer.
+    final finalBatch = starts
+        .where((task) => acknowledged.add(task.taskId))
+        .toList(growable: false);
+    if (finalBatch.isNotEmpty) {
+      await markRunning(finalBatch);
+    }
   }
 
   Future<void> completePart(DownloadTask task, List<int> bytes) async {
