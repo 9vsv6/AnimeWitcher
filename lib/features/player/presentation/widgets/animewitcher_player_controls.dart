@@ -34,6 +34,8 @@ import '../player_pip.dart';
 import '../player_chrome_actions.dart';
 import '../player_gesture_handler.dart';
 import 'player_metadata_scrim.dart';
+import '../../data/anime4k.dart';
+import 'anime4k_player_sheet.dart';
 
 class AnimeWitcherPlayerControls extends ConsumerStatefulWidget {
   final Player player;
@@ -1663,6 +1665,12 @@ class AnimeWitcherPlayerControlsState
       hasEpisodePicker: hasEpisodePicker,
       showResize: playerSettings.showResize,
       isDesktop: isDesktop,
+      anime4kOn: playerSettings.anime4kMode != Anime4kMode.off,
+      // The adaptive backend has no GLSL stage, so there is nothing for the
+      // button to change while it is the one playing.
+      anime4kSupported: !ref.watch(
+        playerControllerProvider.select((s) => s.useExoPlayer),
+      ),
     );
 
     // Right-side optional player controls. PiP sits immediately left of
@@ -1703,6 +1711,35 @@ class AnimeWitcherPlayerControlsState
             icon: LucideIcons.listVideo200,
             tooltip: l10n.episodes,
             onPressed: openEpisodesPanel,
+            isTv: _isTv,
+          ),
+          PlayerChromeAction.anime4k => PlayerIconButton(
+            key: const ValueKey<String>('playerAnime4kButton'),
+            icon: LucideIcons.sparkles200,
+            tooltip:
+                'Anime4K · ${playerSettings.anime4kMode.label} '
+                '(${playerSettings.anime4kQuality.suffix})',
+            onPressed: () => Anime4kPlayerSheet.show(
+              context: context,
+              currentMode: playerSettings.anime4kMode,
+              currentQuality: playerSettings.anime4kQuality,
+              onModeSelected: (mode) async {
+                await ref
+                    .read(playerSettingsProvider.notifier)
+                    .setAnime4kMode(mode);
+                await ref
+                    .read(playerControllerProvider.notifier)
+                    .applyAnime4kShaders();
+              },
+              onQualitySelected: (quality) async {
+                await ref
+                    .read(playerSettingsProvider.notifier)
+                    .setAnime4kQuality(quality);
+                await ref
+                    .read(playerControllerProvider.notifier)
+                    .applyAnime4kShaders();
+              },
+            ),
             isTv: _isTv,
           ),
           PlayerChromeAction.resize => PlayerIconButton(
