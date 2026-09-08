@@ -25,8 +25,7 @@ String normalizePageEscapes(String input) {
   }
 
   final hasKnownJsEscapes =
-      text.contains(r'\u003') ||
-      text.contains(r'\u002') ||
+      text.contains(r'\u') ||
       text.contains(r'\x') ||
       text.contains(r'\/') ||
       text.contains(r'\"') ||
