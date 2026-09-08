@@ -10,10 +10,29 @@ void main() {
       expect(mediaFirePageRequestUrl(url), url);
     });
 
-    test('does not change normal MediaFire links', () {
+    test('does not change normal HTTPS MediaFire links', () {
       const url = 'https://www.mediafire.com/file/abc123/video.mp4/file';
 
       expect(mediaFirePageRequestUrl(url), url);
+    });
+
+    test('upgrades HTTP MediaFire pages before the resolver fetch', () {
+      const url = 'http://www.mediafire.com/file/abc123/video.mp4/file';
+
+      expect(
+        mediaFirePageRequestUrl(url),
+        'https://www.mediafire.com/file/abc123/video.mp4/file',
+      );
+    });
+
+    test('canonicalizes apex MediaFire host without changing route/query', () {
+      const url =
+          'http://mediafire.com/file_premium/abc123/video.mp4/file?x=1';
+
+      expect(
+        mediaFirePageRequestUrl(url),
+        'https://www.mediafire.com/file_premium/abc123/video.mp4/file?x=1',
+      );
     });
 
     test('adds a scheme without changing the route', () {
@@ -29,6 +48,12 @@ void main() {
         mediaFirePageRequestUrl(path),
         'https://www.mediafire.com$path',
       );
+    });
+
+    test('does not rewrite non-MediaFire intermediary URLs', () {
+      const url = 'https://resolver.example.com/go?id=mf';
+
+      expect(mediaFirePageRequestUrl(url), url);
     });
   });
 }

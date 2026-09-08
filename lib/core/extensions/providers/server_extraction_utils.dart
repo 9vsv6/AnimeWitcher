@@ -10,9 +10,28 @@ final HtmlUnescape _pageUnescape = HtmlUnescape();
 /// Removes the escaped-HTML/JavaScript wrappers pages serialize markers
 /// through. Matches production, plus leftover `\uXXXX` / `\xNN` sequences
 /// that the older hardcoded list missed.
+///
+/// Server pages can be large (MediaFire in particular). Most of their HTML is
+/// ordinary text, so avoid running every whole-string replacement unless the
+/// corresponding escape family is actually present. This keeps the exact
+/// decoding behavior while making the common direct-download-button path much
+/// cheaper to process.
 String normalizePageEscapes(String input) {
   if (input.isEmpty) return input;
-  var text = _pageUnescape.convert(input);
+
+  var text = input;
+  if (text.contains('&')) {
+    text = _pageUnescape.convert(text);
+  }
+
+  final hasKnownJsEscapes =
+      text.contains(r'\u') ||
+      text.contains(r'\x') ||
+      text.contains(r'\/') ||
+      text.contains(r'\"') ||
+      text.contains(r"\'");
+  if (!hasKnownJsEscapes) return text;
+
   text = text
       .replaceAll(r'\u003a', ':')
       .replaceAll(r'\u003A', ':')
@@ -31,14 +50,19 @@ String normalizePageEscapes(String input) {
       .replaceAll(r'\/', '/')
       .replaceAll(r'\"', '"')
       .replaceAll(r"\'", "'");
-  text = text.replaceAllMapped(
-    RegExp(r'\\u([0-9a-fA-F]{4})'),
-    (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
-  );
-  text = text.replaceAllMapped(
-    RegExp(r'\\x([0-9a-fA-F]{2})'),
-    (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
-  );
+
+  if (text.contains(r'\u')) {
+    text = text.replaceAllMapped(
+      RegExp(r'\\u([0-9a-fA-F]{4})'),
+      (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
+    );
+  }
+  if (text.contains(r'\x')) {
+    text = text.replaceAllMapped(
+      RegExp(r'\\x([0-9a-fA-F]{2})'),
+      (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
+    );
+  }
   return text;
 }
 
