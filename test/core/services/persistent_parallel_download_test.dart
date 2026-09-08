@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,15 +16,20 @@ void main() {
   late List<TaskStatus> statuses;
   late PersistentParallelDownload coordinator;
   var acceptStarts = true;
+  var throwStarts = false;
+  Completer<void>? pauseGate;
+  Set<String> liveIds = {};
 
   PersistentParallelDownload create({int maxActiveConnections = 16}) =>
       PersistentParallelDownload(
         startPart: (task, progress, size) async {
           starts.add(task);
+          if (throwStarts) throw StateError('native enqueue failed');
           return acceptStarts;
         },
         pausePart: (task) async {
           pauses.add(task.taskId);
+          await pauseGate?.future;
         },
         cancelParts: (ids) async {},
         saveRecord: (record) async {
@@ -35,6 +41,7 @@ void main() {
         },
         onPartProgress: (_, _, _) {},
         maxActiveConnections: maxActiveConnections,
+        livePartIds: () async => liveIds,
       );
 
   setUp(() async {
@@ -53,6 +60,9 @@ void main() {
     pauses = [];
     statuses = [];
     acceptStarts = true;
+    throwStarts = false;
+    pauseGate = null;
+    liveIds = {};
     coordinator = create();
   });
 
@@ -126,6 +136,140 @@ void main() {
   );
 
   test(
+    'a pump enqueue exception parks the parent and releases all slots',
+    () async {
+      await coordinator.start(parent, 25);
+      throwStarts = true;
+      await markRunning(starts.take(1));
+      await waitUntil(() => statuses.last == TaskStatus.paused);
+      expect(coordinator.isActive(parent.taskId), isFalse);
+      expect(coordinator.activeConnectionCount, 0);
+      throwStarts = false;
+      starts.clear();
+      expect(await coordinator.start(parent, 25), isTrue);
+      await expandFreshTo(5);
+    },
+  );
+
+  test(
+    'completed parts ignore duplicate and late nonfinal callbacks',
+    () async {
+      await coordinator.start(parent, 25);
+      await expandFreshTo(5);
+      final first = starts.first;
+      await completePart(first, [0, 1, 2, 3, 4]);
+      await waitUntil(() => coordinator.activeConnectionCount == 4);
+      for (final status in [
+        TaskStatus.complete,
+        TaskStatus.running,
+        TaskStatus.waitingToRetry,
+        TaskStatus.failed,
+      ]) {
+        coordinator.handleUpdate(TaskStatusUpdate(first, status));
+      }
+      coordinator.handleUpdate(TaskProgressUpdate(first, .5, 5));
+      await coordinator.reconcile(
+        () async => starts.skip(1).map((t) => t.taskId).toSet(),
+      );
+      expect(coordinator.isActive(parent.taskId), isTrue);
+      expect(coordinator.activeConnectionCount, 4);
+      expect(statuses, isNot(contains(TaskStatus.paused)));
+    },
+  );
+
+  test(
+    'pause requests every connection before waiting for callbacks',
+    () async {
+      await coordinator.start(parent, 25);
+      await expandFreshTo(5);
+      final gate = Completer<void>();
+      pauseGate = gate;
+      final pausing = coordinator.pause(parent);
+      try {
+        await waitUntil(() => pauses.length == 5);
+        expect(coordinator.isActive(parent.taskId), isFalse);
+      } finally {
+        gate.complete();
+        await pausing;
+      }
+      expect(coordinator.activeConnectionCount, 0);
+    },
+  );
+
+  test(
+    'pause after recreation stops native children with no launched flags',
+    () async {
+      await coordinator.start(parent, 25);
+      await expandFreshTo(5);
+      await coordinator.dispose();
+      coordinator = create();
+      await coordinator.pause(parent);
+      expect(pauses.toSet(), starts.map((task) => task.taskId).toSet());
+      expect(coordinator.activeConnectionCount, 0);
+    },
+  );
+
+  test(
+    'restored live native children count against the global budget',
+    () async {
+      await coordinator.start(parent, 25);
+      await expandFreshTo(5);
+      liveIds = starts.map((task) => task.taskId).toSet();
+      await coordinator.dispose();
+      starts.clear();
+      coordinator = create(maxActiveConnections: 5);
+      expect(await coordinator.restore(parent), isTrue);
+      expect(coordinator.activeConnectionCount, 5);
+      expect(await coordinator.start(parent, 25), isTrue);
+      expect(starts, isEmpty);
+      final second = ParallelDownloadTask(
+        taskId: 'second',
+        url: parent.url,
+        filename: 'second.mp4',
+        directory: directory.path,
+        baseDirectory: BaseDirectory.root,
+        chunks: 5,
+      );
+      await coordinator.start(second, 25);
+      expect(starts, isEmpty);
+      expect(coordinator.activeConnectionCount, 5);
+    },
+  );
+
+  test(
+    'missing worker callbacks release ghost slots and permit resume',
+    () async {
+      await coordinator.start(parent, 25);
+      await expandFreshTo(5);
+      final first = starts.first;
+      await File(await first.filePath()).writeAsBytes([0, 1, 2, 3, 4]);
+      await coordinator.reconcile(() async => <String>{});
+      expect(coordinator.isActive(parent.taskId), isFalse);
+      expect(coordinator.activeConnectionCount, 0);
+      starts.clear();
+      expect(await coordinator.start(parent, 25), isTrue);
+      await expandFreshTo(4);
+      expect(starts.map((t) => t.taskId), isNot(contains(first.taskId)));
+    },
+  );
+
+  test(
+    'complete temp part is recovered at canonical path without a request',
+    () async {
+      await coordinator.start(parent, 25);
+      final first = starts.first;
+      await coordinator.pause(parent);
+      await File('${await first.filePath()}.download')
+          .writeAsBytes([0, 1, 2, 3, 4]);
+      starts.clear();
+      expect(await coordinator.start(parent, 25), isTrue);
+      await expandFreshTo(4);
+      expect(starts.map((t) => t.taskId), isNot(contains(first.taskId)));
+      expect(await File(await first.filePath()).readAsBytes(), [0, 1, 2, 3, 4]);
+    },
+  );
+
+  test(
     'pause and process recreation retain a complete part and resume only four',
     () async {
       expect(await coordinator.start(parent, 25), isTrue);
@@ -182,11 +326,11 @@ void main() {
       for (var i = 4; i >= 0; i--) {
         await completePart(original[i], List.generate(5, (j) => i * 5 + j));
       }
+      await waitUntil(() => statuses.contains(TaskStatus.complete));
       await waitUntil(
-        () => statuses.contains(TaskStatus.complete),
-      );
-      await waitUntil(
-        () => !File('${directory.path}/video.mp4.parts/manifest.json').existsSync(),
+        () =>
+            !File('${directory.path}/video.mp4.parts/manifest.json')
+                .existsSync(),
       );
       expect(
         await File(await parent.filePath()).readAsBytes(),
@@ -233,23 +377,26 @@ void main() {
     },
   );
 
-  test('recovers a durable temp manifest left by process termination', () async {
-    expect(await coordinator.start(parent, 25), isTrue);
-    await coordinator.pause(parent);
-    await coordinator.dispose();
+  test(
+    'recovers a durable temp manifest left by process termination',
+    () async {
+      expect(await coordinator.start(parent, 25), isTrue);
+      await coordinator.pause(parent);
+      await coordinator.dispose();
 
-    final manifest = File('${await parent.filePath()}.parts/manifest.json');
-    final temp = File('${manifest.path}.tmp');
-    expect(await manifest.exists(), isTrue);
-    await manifest.rename(temp.path);
+      final manifest = File('${await parent.filePath()}.parts/manifest.json');
+      final temp = File('${manifest.path}.tmp');
+      expect(await manifest.exists(), isTrue);
+      await manifest.rename(temp.path);
 
-    starts.clear();
-    coordinator = create();
-    expect(await coordinator.start(parent, 25), isTrue);
-    expect(await manifest.exists(), isTrue);
-    expect(await temp.exists(), isFalse);
-    expect(starts.length, 1);
-  });
+      starts.clear();
+      coordinator = create();
+      expect(await coordinator.start(parent, 25), isTrue);
+      expect(await manifest.exists(), isTrue);
+      expect(await temp.exists(), isFalse);
+      expect(starts.length, 1);
+    },
+  );
 
   test(
     'adopts an already assembled target after a crash without redownloading',
@@ -299,54 +446,56 @@ void main() {
     await waitUntil(() => starts.length == 16);
 
     expect(coordinator.activeConnectionCount, 16);
-    expect(
-      starts.map((task) => task.headers['Range']).last,
-      'bytes=150-159',
-    );
+    expect(starts.map((task) => task.headers['Range']).last, 'bytes=150-159');
   });
 
-  test('global budget never hands more than sixteen children to native IO', () async {
-    final first = ParallelDownloadTask(
-      taskId: 'first-16',
-      url: 'https://example.com/first',
-      filename: 'first.mp4',
-      directory: directory.path,
-      baseDirectory: BaseDirectory.root,
-      chunks: 16,
-      allowPause: true,
-    );
-    final second = ParallelDownloadTask(
-      taskId: 'second-16',
-      url: 'https://example.com/second',
-      filename: 'second.mp4',
-      directory: directory.path,
-      baseDirectory: BaseDirectory.root,
-      chunks: 16,
-      allowPause: true,
-    );
+  test(
+    'global budget never hands more than sixteen children to native IO',
+    () async {
+      final first = ParallelDownloadTask(
+        taskId: 'first-16',
+        url: 'https://example.com/first',
+        filename: 'first.mp4',
+        directory: directory.path,
+        baseDirectory: BaseDirectory.root,
+        chunks: 16,
+        allowPause: true,
+      );
+      final second = ParallelDownloadTask(
+        taskId: 'second-16',
+        url: 'https://example.com/second',
+        filename: 'second.mp4',
+        directory: directory.path,
+        baseDirectory: BaseDirectory.root,
+        chunks: 16,
+        allowPause: true,
+      );
 
-    expect(await coordinator.start(first, 160), isTrue);
-    await expandFreshTo(16);
-    expect(coordinator.activeConnectionCount, 16);
+      expect(await coordinator.start(first, 160), isTrue);
+      await expandFreshTo(16);
+      expect(coordinator.activeConnectionCount, 16);
 
-    final beforeSecond = starts.length;
-    expect(await coordinator.start(second, 160), isTrue);
-    expect(starts.length, beforeSecond);
-    expect(coordinator.activeConnectionCount, 16);
+      final beforeSecond = starts.length;
+      expect(await coordinator.start(second, 160), isTrue);
+      expect(starts.length, beforeSecond);
+      expect(coordinator.activeConnectionCount, 16);
 
-    final firstPart = starts.firstWhere(
-      (task) => task.taskId.startsWith('first-16.part.'),
-    );
-    await completePart(firstPart, List<int>.generate(10, (i) => i));
-    await waitUntil(
-      () => starts.any((task) => task.taskId.startsWith('second-16.part.')),
-    );
-    expect(coordinator.activeConnectionCount, 16);
-    expect(
-      starts.where((task) => task.taskId.startsWith('second-16.part.')).length,
-      1,
-    );
-  });
+      final firstPart = starts.firstWhere(
+        (task) => task.taskId.startsWith('first-16.part.'),
+      );
+      await completePart(firstPart, List<int>.generate(10, (i) => i));
+      await waitUntil(
+        () => starts.any((task) => task.taskId.startsWith('second-16.part.')),
+      );
+      expect(coordinator.activeConnectionCount, 16);
+      expect(
+        starts
+            .where((task) => task.taskId.startsWith('second-16.part.'))
+            .length,
+        1,
+      );
+    },
+  );
 
   test(
     '429 during slow start falls back to last healthy level and teaches host',
@@ -411,7 +560,9 @@ void main() {
 
       // Host memory prevents the sibling from trying 7/15/16 again.
       expect(
-        starts.where((task) => task.taskId.startsWith('sibling-16.part.')).length,
+        starts
+            .where((task) => task.taskId.startsWith('sibling-16.part.'))
+            .length,
         3,
       );
     },

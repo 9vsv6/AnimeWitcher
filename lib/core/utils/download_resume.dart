@@ -56,12 +56,9 @@ bool shouldRestartDownloadFromZero({
   required int expectedBytes,
   double savedProgress = 0,
 }) {
-  if (shouldResumeFromPartialBytes(
-    existingPartialBytes: existingPartialBytes,
-    expectedBytes: expectedBytes,
-  )) {
-    return false;
-  }
+  // Exact-size files may be completed downloads whose last callback was lost.
+  // Oversized files also contain saved data and must never be overwritten.
+  if (existingPartialBytes > 0) return false;
   if (savedProgress > 0) return false;
   return true;
 }

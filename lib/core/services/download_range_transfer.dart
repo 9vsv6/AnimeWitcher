@@ -75,9 +75,7 @@ bool shouldEmitDownloadRangeProgress({
 /// validation does not allow them for If-Range.
 String? downloadIfRangeValidator(Headers headers) {
   final etag = headers.value('etag')?.trim();
-  if (etag != null &&
-      etag.isNotEmpty &&
-      !etag.toLowerCase().startsWith('w/')) {
+  if (etag != null && etag.isNotEmpty && !etag.toLowerCase().startsWith('w/')) {
     return etag;
   }
   final lastModified = headers.value('last-modified')?.trim();
@@ -106,6 +104,7 @@ class DownloadRangeTransfer {
   final _operations = <String, _RangeOperation>{};
   final _maxConnectTimesByOrigin = <String, Duration>{};
   bool isActive(String id) => _operations.containsKey(id);
+  Set<String> get activeTaskIds => _operations.keys.toSet();
 
   Future<void> stop(String id) async {
     final operation = _operations[id];
@@ -249,8 +248,7 @@ class DownloadRangeTransfer {
         final requestHeaders = Map<String, String>.from(headers)
           ..removeWhere(
             (key, _) =>
-                key.toLowerCase() == 'range' ||
-                key.toLowerCase() == 'if-range',
+                key.toLowerCase() == 'range' || key.toLowerCase() == 'if-range',
           );
         requestHeaders['Range'] = 'bytes=$probeStart-$probeEnd';
         requestHeaders['Accept-Encoding'] = 'identity';
@@ -265,7 +263,8 @@ class DownloadRangeTransfer {
         if (isRetryableDownloadHttpStatus(status)) {
           await _discard(stream);
           if (attempt + 1 >= kDownloadRangeRequestAttempts) return null;
-          await Future<void>.delayed(
+          await _retryDelay(
+            operation,
             downloadRangeRetryDelay(
               retryIndex: attempt,
               retryAfter: response.headers.value('retry-after'),
@@ -302,7 +301,8 @@ class DownloadRangeTransfer {
             attempt + 1 >= kDownloadRangeRequestAttempts) {
           return null;
         }
-        await Future<void>.delayed(
+        await _retryDelay(
+          operation,
           downloadRangeRetryDelay(retryIndex: attempt),
         );
       }
@@ -340,7 +340,8 @@ class DownloadRangeTransfer {
         if (isRetryableDownloadHttpStatus(status)) {
           await _discard(stream);
           if (attempt + 1 >= attempts) return null;
-          await Future<void>.delayed(
+          await _retryDelay(
+            operation,
             downloadRangeRetryDelay(
               retryIndex: attempt,
               retryAfter: response.headers.value('retry-after'),
@@ -355,7 +356,9 @@ class DownloadRangeTransfer {
           await _discard(stream);
           return null;
         }
-        final ifRange = _usableIfRange(_headerValue(requestHeaders, 'if-range'));
+        final ifRange = _usableIfRange(
+          _headerValue(requestHeaders, 'if-range'),
+        );
         if (ifRange != null &&
             !_responseMatchesIfRange(response.headers, ifRange)) {
           await _discard(stream);
@@ -384,7 +387,8 @@ class DownloadRangeTransfer {
             attempt + 1 >= attempts) {
           return null;
         }
-        await Future<void>.delayed(
+        await _retryDelay(
+          operation,
           downloadRangeRetryDelay(retryIndex: attempt),
         );
       }
@@ -396,6 +400,21 @@ class DownloadRangeTransfer {
   /// itself does not cancel Dio, which could otherwise leave the old socket
   /// alive while a retry opens another one. Cancelling the child token keeps
   /// the connection count honest and mirrors Gopeed's fast-fail client.
+  Future<void> _retryDelay(_RangeOperation operation, Duration delay) async {
+    // Retry-After may be thirty seconds. Pause/delete must interrupt backoff
+    // immediately, including while start() is validating the first response.
+    final elapsed = Completer<void>();
+    final timer = Timer(delay, elapsed.complete);
+    try {
+      await Future.any<void>([
+        elapsed.future,
+        operation.token.whenCancel.then<void>((_) {}),
+      ]);
+    } finally {
+      timer.cancel();
+    }
+  }
+
   Future<Response<ResponseBody>> _getRangeResponse({
     required _RangeOperation operation,
     required String url,
@@ -440,9 +459,8 @@ class DownloadRangeTransfer {
     }
   }
 
-  Duration _responseTimeoutFor(String url) => downloadRangeFastFailTimeout(
-    _maxConnectTimesByOrigin[_originKey(url)],
-  );
+  Duration _responseTimeoutFor(String url) =>
+      downloadRangeFastFailTimeout(_maxConnectTimesByOrigin[_originKey(url)]);
 
   void _rememberConnectTime(String url, Duration elapsed) {
     if (elapsed <= Duration.zero) return;
@@ -541,12 +559,14 @@ class DownloadRangeTransfer {
         if (operation.token.isCancelled ||
             streamError is FormatException ||
             reconnects >= kDownloadRangeReconnectAttempts) {
-          throw streamError ?? const FormatException('Range body is incomplete');
+          throw streamError ??
+              const FormatException('Range body is incomplete');
         }
 
         reconnects++;
         await output.flush();
-        await Future<void>.delayed(
+        await _retryDelay(
+          operation,
           downloadRangeRetryDelay(retryIndex: reconnects - 1),
         );
         final reopened = await _openWithRetries(
@@ -556,7 +576,7 @@ class DownloadRangeTransfer {
           spec: spec,
           written: written,
           expectedBytes: expectedBytes,
-          attempts: 1,
+          attempts: kDownloadRangeRequestAttempts,
         );
         if (reopened == null || reopened.total != total) {
           throw const FormatException('Could not reconnect range body');
@@ -578,10 +598,12 @@ class DownloadRangeTransfer {
     } finally {
       await output?.close();
       operation.token.cancel();
-      _operations.remove(id);
       try {
         if (!complete) await onPaused(written, total);
       } finally {
+        // Keep the transfer owned until the final paused checkpoint settles.
+        // Otherwise a new resume can race an old onPaused database write.
+        _operations.remove(id);
         if (!operation.done.isCompleted) operation.done.complete();
       }
     }
@@ -595,10 +617,15 @@ class DownloadRangeTransfer {
     return bytes;
   }
 
-  Future<List<int>?> _readExactStream(Stream<List<int>> stream, int length) async {
+  Future<List<int>?> _readExactStream(
+    Stream<List<int>> stream,
+    int length,
+  ) async {
     final bytes = <int>[];
     try {
-      await for (final chunk in stream.timeout(kDownloadRangeStreamIdleTimeout)) {
+      await for (final chunk in stream.timeout(
+        kDownloadRangeStreamIdleTimeout,
+      )) {
         if (bytes.length + chunk.length > length) return null;
         bytes.addAll(chunk);
       }

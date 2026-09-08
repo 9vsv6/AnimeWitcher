@@ -43,12 +43,11 @@ void main() {
           .firstMatch(requestedRange ?? '');
       final openEnded = RegExp(r'^bytes=(\d+)-$')
           .firstMatch(requestedRange ?? '');
-      final requestedStart = int.tryParse(
-            bounded?[1] ?? openEnded?[1] ?? '',
-          ) ??
-          3;
+      final requestedStart =
+          int.tryParse(bounded?[1] ?? openEnded?[1] ?? '') ?? 3;
       final requestedEnd = int.tryParse(bounded?[2] ?? '') ?? 9;
-      final isProbe = bounded != null && requestedStart == 0 && requestedEnd == 2;
+      final isProbe =
+          bounded != null && requestedStart == 0 && requestedEnd == 2;
 
       if (isProbe) {
         response.statusCode = 206;
@@ -64,6 +63,16 @@ void main() {
       }
 
       transferAttempts++;
+      if (responseMode == 'long-backoff' ||
+          (responseMode == 'reconnect-retry' && transferAttempts == 2)) {
+        response.statusCode = 503;
+        response.headers.set(
+          'retry-after',
+          responseMode == 'long-backoff' ? '30' : '0',
+        );
+        await response.close();
+        return;
+      }
       if (responseMode == 'retry-status' && transferAttempts == 1) {
         response.statusCode = 503;
         response.headers.set('retry-after', '0');
@@ -98,7 +107,9 @@ void main() {
         return;
       }
 
-      if (responseMode == 'truncate-once' && transferAttempts == 1) {
+      if ((responseMode == 'truncate-once' ||
+              responseMode == 'reconnect-retry') &&
+          transferAttempts == 1) {
         response.add([3, 4]);
         await response.close();
         return;
@@ -158,34 +169,96 @@ void main() {
     expect(await partial.readAsBytes(), List.generate(10, (i) => i));
   });
 
-  test('retries a transient HTTP response before starting the writer', () async {
-    responseMode = 'retry-status';
+  test(
+    'retries a transient HTTP response before starting the writer',
+    () async {
+      responseMode = 'retry-status';
+      final finished = Completer<bool>();
+      expect(await start(finished), isTrue);
+      expect(await finished.future.timeout(const Duration(seconds: 5)), isTrue);
+      expect(ranges, ['bytes=0-2', 'bytes=3-', 'bytes=3-']);
+      expect(ifRanges.skip(1), everyElement('"v1"'));
+      expect(await partial.readAsBytes(), List.generate(10, (i) => i));
+    },
+  );
+
+  test(
+    'reconnects an interrupted body with the same If-Range validator',
+    () async {
+      responseMode = 'truncate-once';
+      final finished = Completer<bool>();
+      expect(await start(finished), isTrue);
+      expect(await finished.future.timeout(const Duration(seconds: 5)), isTrue);
+      expect(ranges, ['bytes=0-2', 'bytes=3-', 'bytes=5-']);
+      expect(ifRanges, [null, '"v1"', '"v1"']);
+      expect(await partial.readAsBytes(), List.generate(10, (i) => i));
+    },
+  );
+
+  test('a transient reconnect failure retries the durable offset', () async {
+    responseMode = 'reconnect-retry';
     final finished = Completer<bool>();
     expect(await start(finished), isTrue);
     expect(await finished.future.timeout(const Duration(seconds: 5)), isTrue);
-    expect(ranges, ['bytes=0-2', 'bytes=3-', 'bytes=3-']);
-    expect(ifRanges.skip(1), everyElement('"v1"'));
+    expect(ranges, ['bytes=0-2', 'bytes=3-', 'bytes=5-', 'bytes=5-']);
     expect(await partial.readAsBytes(), List.generate(10, (i) => i));
   });
 
-  test('reconnects an interrupted body with the same If-Range validator', () async {
-    responseMode = 'truncate-once';
-    final finished = Completer<bool>();
-    expect(await start(finished), isTrue);
-    expect(await finished.future.timeout(const Duration(seconds: 5)), isTrue);
-    expect(ranges, ['bytes=0-2', 'bytes=3-', 'bytes=5-']);
-    expect(ifRanges, [null, '"v1"', '"v1"']);
-    expect(await partial.readAsBytes(), List.generate(10, (i) => i));
-  });
-
-  test('refuses a changed resource before modifying the saved prefix', () async {
-    responseMode = 'changed-resource';
-    expect(await start(Completer<bool>()), isFalse);
-    expect(ranges, ['bytes=0-2', 'bytes=3-']);
-    expect(ifRanges.last, '"v1"');
+  test('stop interrupts Retry-After while start is still pending', () async {
+    responseMode = 'long-backoff';
+    final starting = start(Completer<bool>());
+    for (var i = 0; i < 200 && transferAttempts == 0; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(transferAttempts, 1);
+    await runner.stop('episode').timeout(const Duration(seconds: 2));
+    expect(await starting, isFalse);
+    expect(runner.isActive('episode'), isFalse);
     expect(await partial.readAsBytes(), [0, 1, 2]);
+  });
+
+  test('stop retains ownership until the final paused write settles', () async {
+    responseMode = 'stall';
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    expect(
+      await runner.start(
+        id: 'episode',
+        url: url,
+        headers: {},
+        file: partial,
+        existingBytes: 3,
+        expectedBytes: 10,
+        onState: (_, _, _) async {},
+        onPaused: (_, _) async {
+          entered.complete();
+          await release.future;
+        },
+      ),
+      isTrue,
+    );
+    final stopping = runner.stop('episode');
+    try {
+      await entered.future.timeout(const Duration(seconds: 2));
+      expect(runner.isActive('episode'), isTrue);
+    } finally {
+      release.complete();
+      await stopping;
+    }
     expect(runner.isActive('episode'), isFalse);
   });
+
+  test(
+    'refuses a changed resource before modifying the saved prefix',
+    () async {
+      responseMode = 'changed-resource';
+      expect(await start(Completer<bool>()), isFalse);
+      expect(ranges, ['bytes=0-2', 'bytes=3-']);
+      expect(ifRanges.last, '"v1"');
+      expect(await partial.readAsBytes(), [0, 1, 2]);
+      expect(runner.isActive('episode'), isFalse);
+    },
+  );
 
   test('rejects a non-compliant 206 whose ETag changed', () async {
     responseMode = 'changed-etag-206';
@@ -194,12 +267,15 @@ void main() {
     expect(await partial.readAsBytes(), [0, 1, 2]);
   });
 
-  test('rejects a legacy partial whose saved prefix no longer matches', () async {
-    responseMode = 'prefix-mismatch';
-    expect(await start(Completer<bool>()), isFalse);
-    expect(ranges, ['bytes=0-2']);
-    expect(await partial.readAsBytes(), [0, 1, 2]);
-  });
+  test(
+    'rejects a legacy partial whose saved prefix no longer matches',
+    () async {
+      responseMode = 'prefix-mismatch';
+      expect(await start(Completer<bool>()), isFalse);
+      expect(ranges, ['bytes=0-2']);
+      expect(await partial.readAsBytes(), [0, 1, 2]);
+    },
+  );
 
   for (final mode in ['ignored', 'wrong-start']) {
     test('rejects $mode Range without modifying the saved prefix', () async {
@@ -210,21 +286,24 @@ void main() {
     });
   }
 
-  test('bounded reconnects keep durable bytes when the body stays truncated', () async {
-    responseMode = 'truncated';
-    final finished = Completer<bool>();
-    expect(await start(finished), isTrue);
-    expect(
-      await finished.future.timeout(const Duration(seconds: 5)),
-      isFalse,
-    );
-    expect(ranges.length, 2 + kDownloadRangeReconnectAttempts);
-    expect(ifRanges.skip(1), everyElement('"v1"'));
-    final bytes = await partial.readAsBytes();
-    expect(bytes.take(3), [0, 1, 2]);
-    expect(bytes.length, greaterThan(3));
-    expect(bytes.length, lessThan(10));
-  });
+  test(
+    'bounded reconnects keep durable bytes when the body stays truncated',
+    () async {
+      responseMode = 'truncated';
+      final finished = Completer<bool>();
+      expect(await start(finished), isTrue);
+      expect(
+        await finished.future.timeout(const Duration(seconds: 5)),
+        isFalse,
+      );
+      expect(ranges.length, 2 + kDownloadRangeReconnectAttempts);
+      expect(ifRanges.skip(1), everyElement('"v1"'));
+      final bytes = await partial.readAsBytes();
+      expect(bytes.take(3), [0, 1, 2]);
+      expect(bytes.length, greaterThan(3));
+      expect(bytes.length, lessThan(10));
+    },
+  );
 
   test('stop cancels a stalled body and joins its writer promptly', () async {
     responseMode = 'stall';
@@ -256,9 +335,6 @@ void main() {
       'etag': ['W/"abc"'],
       'last-modified': ['Sun, 07 Sep 2026 12:00:00 GMT'],
     });
-    expect(
-      downloadIfRangeValidator(weak),
-      'Sun, 07 Sep 2026 12:00:00 GMT',
-    );
+    expect(downloadIfRangeValidator(weak), 'Sun, 07 Sep 2026 12:00:00 GMT');
   });
 }
