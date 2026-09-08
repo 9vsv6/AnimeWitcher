@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../support/test_fonts.dart';
+import '../../../support/debug_shots.dart';
 
 class _FakeAccountService extends AnimeWitcherAccountService {
   _FakeAccountService({
@@ -179,8 +180,8 @@ Widget _app({
 }
 
 Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
-  final artifacts = Directory('/opt/cursor/artifacts');
-  artifacts.createSync(recursive: true);
+  final artifacts = debugShotDirectory();
+  if (artifacts == null) return;
   await tester.runAsync(() async {
     final boundary = tester.renderObject<RenderRepaintBoundary>(
       find.byKey(key),

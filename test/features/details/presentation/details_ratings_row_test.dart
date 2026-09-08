@@ -22,6 +22,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../support/test_fonts.dart';
+import '../../../support/debug_shots.dart';
 
 class _FakeAccountService extends AnimeWitcherAccountService {
   _FakeAccountService({
@@ -686,10 +687,8 @@ void main() {
   testWidgets('ratings screenshots', (tester) async {
     final loaded = await tester.runAsync(TestFonts.loadWalkthroughFonts);
     if (loaded != true) return;
-    final artifacts = Directory('/opt/cursor/artifacts');
-    if (!artifacts.existsSync()) {
-      artifacts.createSync(recursive: true);
-    }
+    final artifacts = debugShotDirectory();
+    if (artifacts == null) return;
 
     Future<void> shot(String name, MultimediaItem item) async {
       final key = ValueKey(name);
