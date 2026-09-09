@@ -623,16 +623,11 @@ class DownloadService {
     // the internal multipart children. Clear legacy/default configs first and
     // install only the logical-episode group so four parts still emit one
     // user-visible notification for their parent episode.
-    // Clear any legacy default config through the public API so internal
-    // multipart children never inherit a user-visible notification.
-    FileDownloader().configureNotification(progressBar: false);
-    if (shouldClearDownloadNotificationConfigs(prefs)) {
-      FileDownloader().configureNotificationForGroup(
-        kLogicalDownloadGroup,
-        progressBar: false,
-      );
-      return;
-    }
+    // background_downloader 9.6 cannot clear notification configs through
+    // its public configureNotification API because an empty config asserts.
+    // Keep that unsupported operation inside the compatibility seam.
+    BackgroundDownloaderCompat.clearNotificationConfigs();
+    if (shouldClearDownloadNotificationConfigs(prefs)) return;
     const title = '{displayName}';
     final running = downloadNotificationIfEnabled(
       enabled: prefs.running,
