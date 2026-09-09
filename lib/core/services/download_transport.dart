@@ -2,6 +2,15 @@ import 'dart:async';
 
 import 'package:background_downloader/background_downloader.dart';
 
+bool isNativeSingleDownloadTask(Task task) =>
+    task is DownloadTask && task is! ParallelDownloadTask;
+
+/// Anime episodes are explicit user downloads and frequently exceed Android's
+/// short background-worker window. These hints let background_downloader 9.6
+/// choose UIDT/high priority where available and preserve pause resilience.
+Set<TransferHint> animeDownloadTransferHints({required int expectedBytes}) =>
+    <TransferHint>{TransferHint.userInitiated, TransferHint.largeFile};
+
 /// Execution boundary used by DownloadService.
 ///
 /// Logical job state, queue order, resource validation and multipart assembly
@@ -51,9 +60,9 @@ class NativeSingleDownloadTransport implements DownloadTransport {
     final tasks = <DownloadTask>[];
     for (final transfer in transfers) {
       final task = transfer.task;
-      if (task is! DownloadTask || task is ParallelDownloadTask) continue;
+      if (!isNativeSingleDownloadTask(task)) continue;
       _attach(transfer);
-      tasks.add(task);
+      tasks.add(task as DownloadTask);
     }
     return tasks;
   }
@@ -67,7 +76,7 @@ class NativeSingleDownloadTransport implements DownloadTransport {
 
   @override
   Future<bool> start(DownloadTask task) async {
-    if (task is ParallelDownloadTask) return false;
+    if (!isNativeSingleDownloadTask(task)) return false;
     final existing = handleFor(task.taskId);
     if (existing != null) {
       _attach(existing);
@@ -94,7 +103,7 @@ class NativeSingleDownloadTransport implements DownloadTransport {
 
   @override
   Future<bool> pause(DownloadTask task) async {
-    if (task is ParallelDownloadTask) return false;
+    if (!isNativeSingleDownloadTask(task)) return false;
     final transfer = handleFor(task.taskId);
     if (transfer == null) return _downloader.pause(task);
     _attach(transfer);
@@ -107,7 +116,7 @@ class NativeSingleDownloadTransport implements DownloadTransport {
 
   @override
   Future<bool> resume(DownloadTask task) async {
-    if (task is ParallelDownloadTask) return false;
+    if (!isNativeSingleDownloadTask(task)) return false;
     var transfer = handleFor(task.taskId);
     if (transfer == null) {
       try {
@@ -130,7 +139,7 @@ class NativeSingleDownloadTransport implements DownloadTransport {
 
   @override
   Future<bool> cancel(DownloadTask task) async {
-    if (task is ParallelDownloadTask) return false;
+    if (!isNativeSingleDownloadTask(task)) return false;
     final transfer = handleFor(task.taskId);
     try {
       final canceled = transfer != null
@@ -157,7 +166,7 @@ class NativeSingleDownloadTransport implements DownloadTransport {
   void _attach(Transfer transfer) {
     final id = transfer.taskId;
     if (_handles[id] == transfer && _subscriptions.containsKey(id)) return;
-    _subscriptions.remove(id)?.cancel();
+    unawaited(_subscriptions.remove(id)?.cancel());
     _handles[id] = transfer;
     final controller = _controllers.putIfAbsent(
       id,
@@ -174,7 +183,7 @@ class NativeSingleDownloadTransport implements DownloadTransport {
   }
 
   void _detach(String taskId) {
-    _subscriptions.remove(taskId)?.cancel();
+    unawaited(_subscriptions.remove(taskId)?.cancel());
     _handles.remove(taskId);
     _downloader.transfers.remove(taskId, dispose: true);
   }
