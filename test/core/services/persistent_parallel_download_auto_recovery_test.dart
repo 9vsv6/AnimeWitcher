@@ -447,7 +447,11 @@ void main() {
       coordinator.handleUpdate(
         TaskStatusUpdate(stuckChild!, TaskStatus.complete),
       );
-      await waitUntil(() => parentStatuses.contains(TaskStatus.complete));
+      await waitUntil(
+        () =>
+            parentStatuses.contains(TaskStatus.complete) &&
+            !partsDirectory.existsSync(),
+      );
 
       final target = File(targetPath);
       expect(await target.exists(), isTrue);
