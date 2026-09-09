@@ -1,0 +1,37 @@
+name: Apply parallel reliability patch
+
+on:
+  push:
+    branches: [refactor/download-reliability-completion]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-parallel-reliability
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refactor/download-reliability-completion
+          fetch-depth: 0
+
+      - name: Apply guarded patch
+        run: python3 tool/apply_parallel_reliability_patch.py
+
+      - name: Commit multipart reliability integration
+        run: |
+          if git diff --quiet -- lib/core/services/download_connection_governor.dart lib/core/services/persistent_parallel_download.dart; then
+            echo "Expected reliability patch produced no diff" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+Fares669@users.noreply.github.com"
+          git add lib/core/services/download_connection_governor.dart lib/core/services/persistent_parallel_download.dart
+          git commit -m "Persist adaptive multipart host learning and harden assembly"
+          git push origin HEAD:refactor/download-reliability-completion
