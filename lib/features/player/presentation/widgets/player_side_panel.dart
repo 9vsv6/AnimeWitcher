@@ -22,6 +22,7 @@ import '../../../details/presentation/download_launcher.dart';
 import '../../../details/presentation/downloaded_file_provider.dart';
 import '../../../details/presentation/widgets/download_management_dialog.dart';
 import '../../../details/presentation/widgets/download_progress_dialog.dart';
+import '../../../details/presentation/widgets/episode_action_chip.dart';
 import 'hotstar_player_style.dart';
 
 import 'package:animewitcher/core/utils/artwork_quality.dart';
@@ -321,6 +322,9 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
     });
 
     final l10n = AppLocalizations.of(context)!;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final panelDirection = isArabic ? TextDirection.rtl : TextDirection.ltr;
     final currentUrl =
         ref.watch(playerControllerProvider.select((s) => s.activeEpisodeUrl)) ??
         ref.read(playerControllerProvider.notifier).currentEpisodeUrl;
@@ -412,42 +416,49 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 12, 20, 12),
-            child: Row(
-              textDirection: TextDirection.rtl,
-              children: [
-                const Icon(
-                  Icons.video_library_outlined,
-                  color: Colors.white,
-                  size: 22,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    l10n.episodes,
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: HotstarPlayerStyle.primaryText,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
-                      shadows: _kGlassTextShadow,
+            padding: isArabic
+                ? const EdgeInsets.fromLTRB(4, 12, 20, 12)
+                : const EdgeInsets.fromLTRB(20, 12, 4, 12),
+            child: Directionality(
+              textDirection: panelDirection,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.video_library_outlined,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      l10n.episodes,
+                      textAlign: TextAlign.start,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: HotstarPlayerStyle.primaryText,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
+                        shadows: _kGlassTextShadow,
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  onPressed: widget.onClose,
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
-                  padding: EdgeInsets.zero,
-                  iconSize: 22,
-                  icon: const Icon(Icons.close_rounded),
-                  color: HotstarPlayerStyle.secondaryText,
-                ),
-              ],
+                  IconButton(
+                    onPressed: widget.onClose,
+                    tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(
+                      minWidth: 38,
+                      minHeight: 38,
+                    ),
+                    padding: EdgeInsets.zero,
+                    iconSize: 22,
+                    icon: const Icon(Icons.close_rounded),
+                    color: HotstarPlayerStyle.secondaryText,
+                  ),
+                ],
+              ),
             ),
           ),
           const Divider(color: HotstarPlayerStyle.divider, height: 1),
@@ -524,63 +535,53 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
     required DownloadProgressData? progressData,
     required VoidCallback onPressed,
   }) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+
     if (downloadedFile != null) {
-      return IconButton(
-        icon: const Icon(
-          Icons.download_done_sharp,
-          color: Colors.green,
-          size: 32,
-        ),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
+      return EpisodeActionChip(
+        tooltip: isArabic ? 'تم التنزيل' : 'Downloaded',
+        icon: Icons.download_done_rounded,
+        color: const Color(0xFF4CAF50),
         onPressed: onPressed,
       );
     }
 
     if (isDownloading) {
-      return SizedBox(
-        width: 32,
-        height: 32,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: progressData?.status == TaskStatus.paused
-                ? Icon(
-                    Icons.pause_rounded,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  )
-                : Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: downloadProgress > 0 ? downloadProgress : null,
-                        strokeWidth: 2,
+      return EpisodeActionChip(
+        tooltip: isArabic ? 'جارٍ التنزيل' : 'Downloading',
+        onPressed: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: progressData?.status == TaskStatus.paused
+              ? Icon(
+                  Icons.pause_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                )
+              : Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      value: downloadProgress > 0 ? downloadProgress : null,
+                      strokeWidth: 2,
+                    ),
+                    Text(
+                      '${(downloadProgress * 100).toInt()}%',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
-                      Text(
-                        '${(downloadProgress * 100).toInt()}%',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
+                    ),
+                  ],
+                ),
         ),
       );
     }
 
-    return IconButton(
-      icon: Icon(
-        Icons.file_download_outlined,
-        size: 32,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
+    return EpisodeActionChip(
+      tooltip: isArabic ? 'تنزيل الحلقة' : 'Download episode',
+      icon: Icons.save_alt_rounded,
       onPressed: onPressed,
     );
   }
@@ -627,7 +628,9 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
     final showHighlight = _focused || _hovered;
     final ring = _focused && widget.isTv;
     const accent = HotstarPlayerStyle.accent;
-    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final rowDirection = isArabic ? TextDirection.rtl : TextDirection.ltr;
     return Semantics(
       button: true,
       selected: widget.isCurrent,
@@ -662,102 +665,99 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
                 selected: widget.isCurrent,
                 hovered: showHighlight,
               ),
-              child: Row(
-                textDirection: TextDirection.rtl,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _EpisodeThumbnail(
-                    posterUrl: ep.posterUrl,
-                    isCurrent: widget.isCurrent,
-                    isWatched: widget.isWatched,
-                    progress: widget.progress,
-                  ),
-                  const SizedBox(width: 12),
-                  Flexible(
-                    fit: FlexFit.loose,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          textDirection: isArabic
-                              ? TextDirection.rtl
-                              : TextDirection.ltr,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                formatEpisodePrimaryLabel(
-                                  episode: ep.episode,
-                                  isArabic: isArabic,
-                                  isFinal: ep.isFinal,
-                                  serverName: ep.serverName,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.start,
-                                style: TextStyle(
-                                  color: widget.isCurrent
-                                      ? HotstarPlayerStyle.primaryText
-                                      : HotstarPlayerStyle.secondaryText,
-                                  fontSize: 14,
-                                  fontWeight: widget.isCurrent
-                                      ? FontWeight.w800
-                                      : FontWeight.w600,
-                                  shadows: _kGlassTextShadow,
-                                ),
-                              ),
-                            ),
-                            if (ep.isFiller) ...[
-                              const SizedBox(width: 6),
-                              const _FillerBadge(),
-                            ],
-                            if (ep.dubStatus != DubStatus.none &&
-                                !isStandaloneEpisodeLabel(ep.serverName)) ...[
-                              const SizedBox(width: 6),
-                              _DubBadge(
-                                dubStatus: ep.dubStatus,
-                                isCurrent: widget.isCurrent,
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (realEpisodeTitle(ep.name).isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            realEpisodeTitle(ep.name),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.start,
-                            style: TextStyle(
-                              color: widget.isCurrent
-                                  ? accent
-                                  : HotstarPlayerStyle.mutedText,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              shadows: _kGlassTextShadow,
-                            ),
-                          ),
-                        ],
-                      ],
+              child: Directionality(
+                textDirection: rowDirection,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _EpisodeThumbnail(
+                      posterUrl: ep.posterUrl,
+                      isCurrent: widget.isCurrent,
+                      isWatched: widget.isWatched,
+                      progress: widget.progress,
                     ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 40,
-                    child: ExcludeFocus(
-                      child: _buildDownloadAction(
-                        context,
-                        downloadedFile: downloadedFile,
-                        isDownloading: isDownloading,
-                        downloadProgress: downloadProgress,
-                        progressData: progressData,
-                        onPressed: triggerDownload,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  formatEpisodePrimaryLabel(
+                                    episode: ep.episode,
+                                    isArabic: isArabic,
+                                    isFinal: ep.isFinal,
+                                    serverName: ep.serverName,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.start,
+                                  style: TextStyle(
+                                    color: widget.isCurrent
+                                        ? HotstarPlayerStyle.primaryText
+                                        : HotstarPlayerStyle.secondaryText,
+                                    fontSize: 14,
+                                    fontWeight: widget.isCurrent
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    shadows: _kGlassTextShadow,
+                                  ),
+                                ),
+                              ),
+                              if (ep.isFiller) ...[
+                                const SizedBox(width: 6),
+                                const _FillerBadge(),
+                              ],
+                              if (ep.dubStatus != DubStatus.none &&
+                                  !isStandaloneEpisodeLabel(ep.serverName)) ...[
+                                const SizedBox(width: 6),
+                                _DubBadge(
+                                  dubStatus: ep.dubStatus,
+                                  isCurrent: widget.isCurrent,
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (realEpisodeTitle(ep.name).isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              realEpisodeTitle(ep.name),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.start,
+                              style: TextStyle(
+                                color: widget.isCurrent
+                                    ? accent
+                                    : HotstarPlayerStyle.mutedText,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                shadows: _kGlassTextShadow,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 34,
+                      child: ExcludeFocus(
+                        child: _buildDownloadAction(
+                          context,
+                          downloadedFile: downloadedFile,
+                          isDownloading: isDownloading,
+                          downloadProgress: downloadProgress,
+                          progressData: progressData,
+                          onPressed: triggerDownload,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -992,15 +992,21 @@ class _EmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: HotstarPlayerStyle.mutedText,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          shadows: _kGlassTextShadow,
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    return Directionality(
+      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Text(
+          text,
+          textAlign: TextAlign.start,
+          style: const TextStyle(
+            color: HotstarPlayerStyle.mutedText,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            shadows: _kGlassTextShadow,
+          ),
         ),
       ),
     );
@@ -1043,16 +1049,22 @@ class _PanelSubheader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          color: HotstarPlayerStyle.mutedText,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.2,
-          shadows: _kGlassTextShadow,
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    return Directionality(
+      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+        child: Text(
+          title.toUpperCase(),
+          textAlign: TextAlign.start,
+          style: const TextStyle(
+            color: HotstarPlayerStyle.mutedText,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+            shadows: _kGlassTextShadow,
+          ),
         ),
       ),
     );
