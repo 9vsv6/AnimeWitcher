@@ -13,14 +13,27 @@ old = '''        if (!await startPart(part.task, part.progress, part.size)) {
           return true;
         }
 '''
-new = '''        bool started;
+new = '''        void rollbackUnownedReservation() {
+          // Reservation happens before startPart to close the enqueue/running
+          // race. If native never accepts the child, put that slot back into
+          // the same slow-start batch. Otherwise repeated transient enqueue
+          // failures consume the batch counter and can strand the episode with
+          // no launchable work even though its immutable Range still exists.
+          if (session.currentBatchPendingIds.remove(part.task.taskId)) {
+            session.currentBatchRemaining++;
+          }
+          _activeConnectionIds.remove(part.task.taskId);
+          part.launched = false;
+        }
+
+        bool started;
         try {
           started = await startPart(part.task, part.progress, part.size);
         } catch (_) {
-          // An enqueue exception happens after this child reserved its scheduler
-          // slot but before native ownership exists. Release that exact slot and
-          // retry the same immutable Range/taskId; never pause the parent and
-          // never leave currentBatchPendingIds blocking the next pump forever.
+          // The task was never handed to native IO. Retry this exact taskId and
+          // byte Range after backoff; never pause the logical episode or reset
+          // any durable bytes.
+          rollbackUnownedReservation();
           _stabilizeSessionForRecovery(session);
           _schedulePartRecovery(session, part);
           try {
@@ -29,10 +42,10 @@ new = '''        bool started;
           return true;
         }
         if (!started) {
-          // Native enqueue/resume can fail transiently (especially URLSession
-          // hand-off on iOS). Release this socket while it backs off so a
-          // healthy tail range can keep the episode moving. The exact taskId
-          // and saved bytes stay intact and retry only via this scheduler.
+          // A false enqueue result has the same ownership semantics as a throw:
+          // native never acquired the reserved slot, so restore its batch count
+          // before scheduling the same child for recovery.
+          rollbackUnownedReservation();
           _stabilizeSessionForRecovery(session);
           _schedulePartRecovery(session, part);
           await _status(session, TaskStatus.running);
@@ -42,4 +55,4 @@ new = '''        bool started;
 if text.count(old) != 1:
     raise SystemExit(f'expected one startPart block, found {text.count(old)}')
 path.write_text(text.replace(old, new, 1))
-print('fixed thrown native enqueue recovery')
+print('fixed native enqueue reservation recovery')
