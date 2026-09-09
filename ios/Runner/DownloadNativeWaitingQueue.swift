@@ -242,12 +242,21 @@ enum DownloadNativeWaitingQueue {
     }
 
     var sessionIsIdle: Bool {
-      transferringTaskIds.isEmpty && waiters.isEmpty
+      guard transferringTaskIds.isEmpty && waiters.isEmpty else { return false }
+      if sessionBatchTotal <= 0 && sessionTaskIds.isEmpty { return true }
+
+      let terminalIds = Set(completedTaskIds).union(pausedTaskIds)
+      let hasKnownOutstandingEpisode = sessionTaskIds.contains {
+        !terminalIds.contains($0)
+      }
+      let terminalCount = min(terminalIds.count, max(sessionBatchTotal, 0))
+      let batchStillOutstanding = sessionBatchTotal > 0
+        && terminalCount < sessionBatchTotal
+      return !hasKnownOutstandingEpisode && !batchStillOutstanding
     }
   }
 
-  private struct WriteSample {
-    var taskId: String
+  private struct ThroughputPoint {
     var bytes: Int64
     var time: CFAbsoluteTime
   }
@@ -264,12 +273,16 @@ enum DownloadNativeWaitingQueue {
   /// relaunch and block a real resume.
   private static var activeEpisodeKeysByTaskId: [String: String] = [:]
   private static var startingEpisodeKeys = Set<String>()
-  private static var lastWrites: [String: WriteSample] = [:]
-  private static var lastChunkWrites: [String: WriteSample] = [:]
+  private static var taskSpeedWindows: [String: [ThroughputPoint]] = [:]
+  private static var chunkSpeedWindows: [String: [ThroughputPoint]] = [:]
+  private static var lastChunkBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static var lastTaskBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static let chunkBridgeInterval: CFTimeInterval = 0.25
   private static let taskBridgeInterval: CFTimeInterval = 0.25
-  private static let speedSampleInterval: CFTimeInterval = 1.0
+  private static let speedWindowInterval: CFTimeInterval = 4.0
+  private static let speedMinimumWindow: CFTimeInterval = 0.75
+  private static let speedStaleInterval: CFTimeInterval = 3.0
+  private static let speedWindowMaxPoints = 32
 
   static func installUrlSessionHook() {
     lock.lock()
@@ -421,8 +434,9 @@ enum DownloadNativeWaitingQueue {
     seenTransferringIds.removeAll()
     activeEpisodeKeysByTaskId.removeAll()
     startingEpisodeKeys.removeAll()
-    lastWrites.removeAll()
-    lastChunkWrites.removeAll()
+    taskSpeedWindows.removeAll()
+    chunkSpeedWindows.removeAll()
+    lastChunkBridgeTimes.removeAll()
     lastTaskBridgeTimes.removeAll()
   }
 
@@ -476,7 +490,7 @@ enum DownloadNativeWaitingQueue {
     if let failedId {
       state.transferringTaskIds.removeAll { $0 == failedId }
       state.runningSamples[failedId] = nil
-      lastWrites[failedId] = nil
+      taskSpeedWindows[failedId] = nil
       lastTaskBridgeTimes[failedId] = nil
       seenTransferringIds.remove(failedId)
       if let key = activeEpisodeKeysByTaskId.removeValue(forKey: failedId) {
@@ -509,7 +523,7 @@ enum DownloadNativeWaitingQueue {
     if let completedId {
       state.transferringTaskIds.removeAll { $0 == completedId }
       state.runningSamples[completedId] = nil
-      lastWrites[completedId] = nil
+      taskSpeedWindows[completedId] = nil
       lastTaskBridgeTimes[completedId] = nil
       seenTransferringIds.remove(completedId)
       if let key = activeEpisodeKeysByTaskId.removeValue(forKey: completedId) {
@@ -875,6 +889,86 @@ enum DownloadNativeWaitingQueue {
     return nil
   }
 
+  private static func rollingSpeedLocked(
+    windows: inout [String: [ThroughputPoint]],
+    taskId: String,
+    totalWritten: Int64,
+    now: CFAbsoluteTime,
+    completed: Bool = false
+  ) -> Double {
+    var points = windows[taskId] ?? []
+    if let last = points.last, totalWritten < last.bytes {
+      // Resume-data handoff can restart URLSession's counter. Treat it as a new
+      // observation window instead of creating a negative/huge delta.
+      points.removeAll()
+    }
+    if points.last?.bytes != totalWritten || points.isEmpty {
+      points.append(ThroughputPoint(bytes: max(totalWritten, 0), time: now))
+    }
+    let cutoff = now - speedWindowInterval
+    points.removeAll { $0.time < cutoff }
+    if points.count > speedWindowMaxPoints {
+      points.removeFirst(points.count - speedWindowMaxPoints)
+    }
+
+    if completed {
+      windows[taskId] = nil
+    } else {
+      windows[taskId] = points
+    }
+    guard points.count >= 2,
+          let first = points.first,
+          let last = points.last
+    else { return 0 }
+    let elapsed = last.time - first.time
+    let delta = last.bytes - first.bytes
+    guard elapsed >= speedMinimumWindow, delta > 0 else { return 0 }
+    return Double(delta) / elapsed
+  }
+
+  private static func scheduleNativeSpeedStaleReset(
+    taskId: String,
+    observedAt: CFAbsoluteTime
+  ) {
+    DispatchQueue.global(qos: .utility).asyncAfter(
+      deadline: .now() + speedStaleInterval
+    ) {
+      lock.lock()
+      guard let last = taskSpeedWindows[taskId]?.last,
+            last.time <= observedAt + 0.000_001,
+            CFAbsoluteTimeGetCurrent() - last.time >= speedStaleInterval
+      else {
+        lock.unlock()
+        return
+      }
+      var state = loadLocked()
+      guard state.transferringTaskIds.contains(taskId),
+            var sample = state.runningSamples[taskId]
+      else {
+        lock.unlock()
+        return
+      }
+      sample.speed = 0
+      state.runningSamples[taskId] = sample
+      let presentation = overlayPresentation(
+        from: state,
+        fallbackId: taskId,
+        fallbackName: sample.displayName
+      )
+      saveLocked(state)
+      lock.unlock()
+
+      upsertSessionOverlay(
+        currentTaskId: presentation.currentTaskId,
+        displayName: presentation.displayName,
+        progress: presentation.progress,
+        totalBytes: presentation.totalBytes,
+        transferredBytes: presentation.transferredBytes,
+        speedBytesPerSecond: presentation.speedBytesPerSecond
+      )
+    }
+  }
+
   /// Forward native URLSession byte counts for multipart children while the
   /// body still lives in Apple's temporary file. Dart cannot stat that file,
   /// which is why polling only `0.part`/`1.part` updated in whole-part jumps.
@@ -892,28 +986,25 @@ enum DownloadNativeWaitingQueue {
     }
 
     let now = CFAbsoluteTimeGetCurrent()
-    var speed = 0.0
     lock.lock()
-    if let last = lastChunkWrites[childId], now > last.time {
-      let elapsed = now - last.time
-      if !completed && elapsed < chunkBridgeInterval {
-        lock.unlock()
-        return
-      }
-      let delta = Double(max(totalWritten - last.bytes, 0))
-      if elapsed > 0 && delta > 0 {
-        speed = delta / elapsed
-      }
+    if !completed,
+       let lastBridge = lastChunkBridgeTimes[childId],
+       now - lastBridge < chunkBridgeInterval {
+      lock.unlock()
+      return
     }
     if completed {
-      lastChunkWrites[childId] = nil
+      lastChunkBridgeTimes[childId] = nil
     } else {
-      lastChunkWrites[childId] = WriteSample(
-        taskId: childId,
-        bytes: max(totalWritten, 0),
-        time: now
-      )
+      lastChunkBridgeTimes[childId] = now
     }
+    let speed = rollingSpeedLocked(
+      windows: &chunkSpeedWindows,
+      taskId: childId,
+      totalWritten: totalWritten,
+      now: now,
+      completed: completed
+    )
     lock.unlock()
 
     var values: [String: Any] = [
@@ -979,19 +1070,12 @@ enum DownloadNativeWaitingQueue {
     seenTransferringIds.insert(id)
     activeEpisodeKeysByTaskId[id] = logicalKey
     startingEpisodeKeys.remove(logicalKey)
-    var speed: Double = 0
-    if let last = lastWrites[id], now > last.time {
-      let deltaTime = now - last.time
-      if deltaTime >= speedSampleInterval {
-        let deltaBytes = Double(max(totalWritten - last.bytes, 0))
-        if deltaBytes > 0 {
-          speed = deltaBytes / deltaTime
-        }
-        lastWrites[id] = WriteSample(taskId: id, bytes: totalWritten, time: now)
-      }
-    } else {
-      lastWrites[id] = WriteSample(taskId: id, bytes: totalWritten, time: now)
-    }
+    let speed = rollingSpeedLocked(
+      windows: &taskSpeedWindows,
+      taskId: id,
+      totalWritten: totalWritten,
+      now: now
+    )
     var state = loadLocked()
     if !state.transferringTaskIds.contains(id) {
       state.transferringTaskIds.append(id)
@@ -1004,7 +1088,7 @@ enum DownloadNativeWaitingQueue {
     )
     sample.written = totalWritten
     if totalExpected > 0 { sample.expected = totalExpected }
-    if speed > 0 { sample.speed = speed }
+    sample.speed = speed
     if sample.displayName.isEmpty {
       sample.displayName = name
     }
@@ -1016,6 +1100,7 @@ enum DownloadNativeWaitingQueue {
     let stableSpeed = sample.speed
     saveLocked(state)
     lock.unlock()
+    scheduleNativeSpeedStaleReset(taskId: id, observedAt: now)
 
     postSingleTaskUpdate(
       taskId: id,
@@ -1194,8 +1279,8 @@ enum DownloadNativeWaitingQueue {
         state.sessionTotalBytes = totalBytes
       }
       state.sessionTransferredBytes = transferredBytes
-      if speedBytesPerSecond > 0 {
-        state.sessionSpeedBytesPerSecond = speedBytesPerSecond
+      if speedBytesPerSecond >= 0 {
+        state.sessionSpeedBytesPerSecond = max(speedBytesPerSecond, 0)
       }
     }
     if let completedCount {

@@ -1484,10 +1484,30 @@ class DownloadService {
     _sessionCompletedCount = session.completedCount;
     _sessionBatchTotal = session.batchTotal;
 
+    var activeEngineCount = _sessionOrder.where((taskId) {
+      return _parallel.isActive(taskId) ||
+          _rangeTransfers.isActive(taskId) ||
+          _startingTaskIds.contains(taskId);
+    }).length;
+    // Only pay the native lookup cost in the rare bookkeeping gap where the
+    // planner sees no running/waiting row. URLSession ownership is stronger
+    // evidence than a transient DB status and prevents finish->recreate churn.
+    if (session.runningCount == 0 &&
+        session.waitingCount == 0 &&
+        _waitingPayloads.isEmpty &&
+        activeEngineCount == 0) {
+      try {
+        final liveIds = (await _liveTransferTasks())
+            .map((task) => task.taskId)
+            .toSet();
+        activeEngineCount = _sessionOrder.where(liveIds.contains).length;
+      } catch (_) {}
+    }
     final hasRemaining = downloadSessionHasRemainingWork(
       runningCount: session.runningCount,
       waitingCount: session.waitingCount,
       pendingWaiterPayloads: _waitingPayloads.length,
+      activeEngineCount: activeEngineCount,
     );
     if (!hasRemaining) {
       if (_sessionOverlayActive) {
@@ -1508,7 +1528,9 @@ class DownloadService {
       return;
     }
 
-    final keepAlive = _sessionOverlayActive && session.waitingCount > 0;
+    final keepAlive =
+        _sessionOverlayActive &&
+        (session.waitingCount > 0 || activeEngineCount > 0);
     if (session.runningCount == 0 && !keepAlive) {
       await _persistNativeWaitingSnapshot(overlay: session);
       return;

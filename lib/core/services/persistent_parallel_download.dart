@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import 'download_connection_governor.dart';
 import 'download_parallel.dart';
+import 'download_telemetry.dart';
 import '../utils/download_resume.dart';
 
 /// Child connections tend to report progress in a tight burst at the native
@@ -100,6 +101,8 @@ class PersistentParallelDownload {
   final Set<String> _activeConnectionIds = {};
   final DownloadConnectionGovernor _connectionGovernor =
       DownloadConnectionGovernor();
+  final DownloadTelemetryEstimator _speedTelemetry =
+      DownloadTelemetryEstimator();
   Future<void>? _pumpFuture;
   bool _disposed = false;
 
@@ -124,6 +127,11 @@ class PersistentParallelDownload {
   }) async {
     if (_disposed || !await restore(task)) return null;
     final session = _sessions[task.taskId]!;
+    _speedTelemetry.seed(
+      task.taskId,
+      transferredBytes: session.creditedBytes,
+      expectedBytes: session.size,
+    );
     return session.serialize(() async {
       if (_disposed || session.deleted || session.active) return null;
       final updated = task.copyWith(
@@ -181,9 +189,11 @@ class PersistentParallelDownload {
       return;
     }
     _disposed = true;
+    _speedTelemetry.clear();
     for (final session in _sessions.values) {
       session.cancelAggregateProgress();
       session.cancelDiskProgressPoll();
+      session.cancelCoordinatorRecovery();
       session.cancelPartRetries();
     }
     final pump = _pumpFuture;
@@ -452,7 +462,10 @@ class PersistentParallelDownload {
               part.credibleProgress = diskProgress;
             }
           }
-          if (part.complete) throw StateError('A completed part is missing');
+          if (part.complete) {
+            await _pause(session);
+            return false;
+          }
         }
 
         final pending = session.parts.where((part) => !part.complete).length;
@@ -482,6 +495,14 @@ class PersistentParallelDownload {
         _schedulePumpAll();
         return true;
       } catch (_) {
+        if (session.active && _activeConnectionsForSession(session) > 0) {
+          _scheduleDiskProgressPoll(session);
+          _scheduleCoordinatorRecovery(session);
+          try {
+            await _status(session, TaskStatus.running);
+          } catch (_) {}
+          return true;
+        }
         await _pause(session);
         return false;
       }
@@ -573,12 +594,40 @@ class PersistentParallelDownload {
         session.currentBatchPendingIds.add(part.task.taskId);
         session.currentBatchRemaining--;
 
-        if (!await startPart(part.task, part.progress, part.size)) {
-          // Native enqueue/resume can fail transiently (especially URLSession
-          // hand-off on iOS). Release this socket while it backs off so a
-          // healthy tail range can keep the episode moving. The exact taskId
-          // and saved bytes stay intact and retry only via this scheduler.
-          _stabilizeSessionForRecovery(session);
+        void rollbackUnownedReservation() {
+          // Reservation happens before startPart to close the enqueue/running
+          // race. If native never accepts the child, put that slot back into
+          // the same slow-start batch. Otherwise repeated transient enqueue
+          // failures consume the batch counter and can strand the episode with
+          // no launchable work even though its immutable Range still exists.
+          if (session.currentBatchPendingIds.remove(part.task.taskId)) {
+            session.currentBatchRemaining++;
+          }
+          _activeConnectionIds.remove(part.task.taskId);
+          part.launched = false;
+        }
+
+        bool started;
+        try {
+          started = await startPart(part.task, part.progress, part.size);
+        } catch (_) {
+          // The task was never handed to native IO. This is a local enqueue
+          // failure, not evidence that the origin cannot sustain the current
+          // connection level. Restoring/capping slow-start here can pin the
+          // session at its already-active connection count and silently prevent
+          // this Range from ever being retried.
+          rollbackUnownedReservation();
+          _schedulePartRecovery(session, part);
+          try {
+            await _status(session, TaskStatus.running);
+          } catch (_) {}
+          return true;
+        }
+        if (!started) {
+          // A false enqueue result has identical ownership semantics: no native
+          // worker exists, so restore the scheduler reservation and retry the
+          // exact same taskId/Range without teaching a lower host ceiling.
+          rollbackUnownedReservation();
           _schedulePartRecovery(session, part);
           await _status(session, TaskStatus.running);
           return true;
@@ -1052,12 +1101,15 @@ class PersistentParallelDownload {
 
   Future<void> _emitAggregateProgress(_ParallelSession session) async {
     final progress = session.progress;
-    final nativeSpeed = session.parts.fold<double>(
-      0,
-      (sum, child) => sum + (child.complete ? 0 : child.speed),
+    final telemetry = _speedTelemetry.observe(
+      taskId: session.task.taskId,
+      transferredBytes: session.creditedBytes,
+      expectedBytes: session.size,
     );
-    final speed = nativeSpeed > 0 ? nativeSpeed : session.diskObservedSpeed;
-    final timeRemaining = _aggregateTimeRemaining(session, speed);
+    final speed = telemetry.speedBytesPerSecond > 0
+        ? telemetry.speedBytesPerSecond / 1000 / 1000
+        : 0.0;
+    final timeRemaining = telemetry.timeRemaining;
 
     if (speed > 0) {
       final now = DateTime.now();
@@ -1102,6 +1154,42 @@ class PersistentParallelDownload {
     return Duration(seconds: seconds < 1 ? 1 : seconds);
   }
 
+  void _scheduleCoordinatorRecovery(_ParallelSession session) {
+    if (_disposed || !session.active || session.deleted) return;
+    if (session.coordinatorRecoveryTimer != null) return;
+    final generation = session.generation;
+    session.coordinatorRecoveryTimer = Timer(recoveryDelay, () {
+      session.coordinatorRecoveryTimer = null;
+      if (_disposed) return;
+      unawaited(
+        session.serialize(() async {
+          if (_disposed ||
+              !session.active ||
+              session.deleted ||
+              session.generation != generation) {
+            return;
+          }
+          try {
+            await _restoreNativeOwnership(session);
+          } catch (_) {}
+          _scheduleDiskProgressPoll(session);
+          try {
+            if (!session.parentRunningReported) {
+              await _status(session, TaskStatus.running);
+            }
+          } catch (_) {}
+          try {
+            await _pumpSession(session);
+          } catch (_) {}
+          try {
+            await _persist(session);
+          } catch (_) {}
+          _schedulePumpAll();
+        }),
+      );
+    });
+  }
+
   void _schedulePumpAll() {
     if (_disposed || _pumpFuture != null) return;
 
@@ -1116,14 +1204,14 @@ class PersistentParallelDownload {
                   if (_disposed || !session.active || session.deleted) return;
                   try {
                     if (!await _pumpSession(session)) {
-                      await _pause(session);
+                      _scheduleCoordinatorRecovery(session);
                     } else {
                       await _persist(session);
                     }
                   } catch (_) {
-                    // A thrown enqueue/read used to leave the parent active with a
-                    // reserved connection that had no worker behind it.
-                    await _pause(session);
+                    // Coordinator bookkeeping is not a user-visible pause.
+                    // Keep native owners untouched and reconcile them shortly.
+                    _scheduleCoordinatorRecovery(session);
                   }
                 });
               }
@@ -1415,9 +1503,11 @@ class PersistentParallelDownload {
             }
 
             if (!exists || length != part.size) {
-              throw StateError(
-                'Invalid byte count for part ${part.task.taskId}',
-              );
+              // A completed callback with the wrong durable byte count is a
+              // data-integrity boundary, not a coordinator race. Keep the
+              // bytes for diagnosis/resume and park the parent deterministically.
+              await _pause(session);
+              return;
             }
             _markConnectionReady(session, part);
             _releaseConnection(part);
@@ -1475,7 +1565,9 @@ class PersistentParallelDownload {
             await _pause(session);
           }
         } catch (_) {
-          if (!_disposed && !session.deleted) await _pause(session);
+          if (!_disposed && session.active && !session.deleted) {
+            _scheduleCoordinatorRecovery(session);
+          }
         }
       }),
     );
@@ -1609,8 +1701,10 @@ class PersistentParallelDownload {
   Future<bool> _pause(_ParallelSession session) async {
     session.active = false;
     session.generation++;
+    _speedTelemetry.resetSpeed(session.task.taskId);
     session.cancelAggregateProgress();
     session.cancelDiskProgressPoll();
+    session.cancelCoordinatorRecovery();
     session.resetRamp();
 
     final unfinished = session.parts
@@ -1710,6 +1804,8 @@ class PersistentParallelDownload {
     session.active = false;
     session.cancelAggregateProgress();
     session.cancelDiskProgressPoll();
+    session.cancelCoordinatorRecovery();
+    _speedTelemetry.remove(task.taskId);
     session.resetRamp();
     await session.serialize(() async {
       for (final part in session.parts) {
@@ -1833,6 +1929,8 @@ class PersistentParallelDownload {
     session.active = false;
     session.cancelAggregateProgress();
     session.cancelDiskProgressPoll();
+    session.cancelCoordinatorRecovery();
+    _speedTelemetry.remove(session.task.taskId);
     session.resetRamp();
     for (final part in session.parts) {
       _activeConnectionIds.remove(part.task.taskId);
@@ -1868,7 +1966,8 @@ class PersistentParallelDownload {
       }
       // Never overwrite an unexpected user-visible file during automatic
       // recovery. The user can remove/rename it explicitly and resume later.
-      throw StateError('Download target already exists with a different size');
+      await _pause(session);
+      return;
     }
 
     final staging = File('${target.path}.assembling');
@@ -1883,19 +1982,22 @@ class PersistentParallelDownload {
       for (final part in session.parts) {
         final file = File(await part.task.filePath());
         if (!await file.exists() || await file.length() != part.size) {
-          throw StateError('Part size changed');
+          await _pause(session);
+          return;
         }
         await for (final bytes in file.openRead()) {
           if (session.deleted) return;
           if (assembledBytes + bytes.length > session.size) {
-            throw StateError('Assembly exceeded expected size');
+            await _pause(session);
+            return;
           }
           await output.writeFrom(bytes);
           assembledBytes += bytes.length;
         }
       }
       if (assembledBytes != session.size) {
-        throw StateError('Incomplete assembly');
+        await _pause(session);
+        return;
       }
       await output.flush();
     } finally {
@@ -1903,7 +2005,8 @@ class PersistentParallelDownload {
     }
     if (session.deleted) return;
     if (!await staging.exists() || await staging.length() != session.size) {
-      throw StateError('Incomplete assembly');
+      await _pause(session);
+      return;
     }
     // The target was proven absent above. Rename staging atomically so a crash
     // leaves either the recoverable .assembling file or the full final file.
@@ -1931,6 +2034,7 @@ class _ParallelSession {
   Timer? aggregateProgressTimer;
   bool aggregateProgressDirty = false;
   Timer? diskProgressTimer;
+  Timer? coordinatorRecoveryTimer;
   int lastDiskObservedBytes = -1;
   DateTime? lastDiskObservedAt;
   double diskObservedSpeed = 0;
@@ -1967,6 +2071,11 @@ class _ParallelSession {
     lastDiskObservedBytes = -1;
     lastDiskObservedAt = null;
     diskObservedSpeed = 0;
+  }
+
+  void cancelCoordinatorRecovery() {
+    coordinatorRecoveryTimer?.cancel();
+    coordinatorRecoveryTimer = null;
   }
 
   void resetRamp() {
