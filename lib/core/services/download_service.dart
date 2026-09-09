@@ -29,6 +29,7 @@ import 'download_concurrency.dart';
 import 'download_parallel.dart';
 import 'persistent_parallel_download.dart';
 import 'download_range_transfer.dart';
+import 'download_diagnostic_log.dart';
 import 'download_retry_policy.dart';
 import 'download_host_profile.dart';
 import 'download_job_state.dart';
@@ -238,6 +239,19 @@ class ActiveDownloadsNotifier extends _$ActiveDownloadsNotifier {
 }
 
 class DownloadService {
+  final diagnosticLog = DownloadDiagnosticLog(
+    () async => Directory(
+      p.join((await getApplicationDocumentsDirectory()).path, 'log'),
+    ),
+  );
+
+  Future<void> setDiagnosticLogging(bool enabled) async {
+    await init();
+    await diagnosticLog.configure(enabled);
+    await _continuedProcessing.configureDiagnosticLog(enabled);
+    await _ref.read(storageServiceProvider).setDownloadDiagnosticLog(enabled);
+  }
+
   // FileDownloader().updates is a single-subscription stream that rejects
   // re-subscription even after cancel. Subscribe once as a static bridge so
   // each DownloadService instance can listen via the broadcast proxy instead.
@@ -275,7 +289,7 @@ class DownloadService {
 
   DownloadService(this._ref) : _dio = _ref.read(dioClientProvider) {
     _nativeTransport = NativeSingleDownloadTransport();
-    _rangeTransfers = DownloadRangeTransfer(_dio);
+    _rangeTransfers = DownloadRangeTransfer(_dio, diagnosticLog: diagnosticLog);
     _hostProfiles = DownloadHostProfileStore(
       const HiveDownloadHostProfileBackend(),
     );
@@ -341,6 +355,12 @@ class DownloadService {
     required int expectedBytes,
     double? speedBytesPerSecond,
   }) {
+    diagnosticLog.record('native.progress', {
+      'taskId': taskId,
+      'bytes': writtenBytes,
+      'total': expectedBytes,
+      'speed': speedBytesPerSecond,
+    });
     if (_disposed ||
         taskId.isEmpty ||
         trackingUrl.isEmpty ||
@@ -467,6 +487,15 @@ class DownloadService {
     double? speedBytesPerSecond,
     bool completed = false,
   }) {
+    diagnosticLog.record('chunk.update', {
+      'taskId': chunkTaskId,
+      'parentTaskId': parentTaskId,
+      'bytes': writtenBytes,
+      'total': expectedBytes,
+      'progress': progress,
+      'status': statusOrdinal,
+      'result': completed,
+    });
     final derivedProgress = completed
         ? 1.0
         : (progress ??
@@ -524,6 +553,16 @@ class DownloadService {
       if (kDebugMode) debugPrint('[DownloadService] Already initialized.');
       return;
     }
+    final logging = _ref
+        .read(storageServiceProvider)
+        .getDownloadDiagnosticLog();
+    try {
+      await diagnosticLog.configure(logging);
+      await _continuedProcessing.configureDiagnosticLog(logging);
+    } catch (_) {
+      diagnosticLog.lastError = 'Unable to initialize log directory';
+    }
+    diagnosticLog.record('service.initialize');
     // 1. Configure the downloader (chainable API)
     final concurrency = _ref
         .read(storageServiceProvider)
@@ -559,6 +598,18 @@ class DownloadService {
     //    then let this instance listen to that broadcast proxy.
     _fdSubscription ??= FileDownloader().updates.listen(_sharedEvents.add);
     _updatesSubscription = _sharedEvents.stream.listen((update) {
+      diagnosticLog.record('task.update', {
+        'taskId': update.task.taskId,
+        if (update is TaskStatusUpdate) ...{
+          'status': update.status.name,
+          'errorType': update.exception?.runtimeType.toString(),
+        },
+        if (update is TaskProgressUpdate) ...{
+          'progress': update.progress,
+          'total': update.expectedFileSize,
+          'speed': update.networkSpeed,
+        },
+      });
       if (_parallel.handleUpdate(update)) return;
       if (isInternalDownloaderChunk(update.task)) return;
       final trackingUrl = update.task.metaData.isNotEmpty
@@ -961,6 +1012,11 @@ class DownloadService {
     return previous.catchError((_) {}).then((_) async {
       try {
         return await action();
+      } catch (error) {
+        diagnosticLog.record('queue.error', {
+          'errorType': error.runtimeType.toString(),
+        });
+        rethrow;
       } finally {
         if (!done.isCompleted) done.complete();
       }
@@ -969,6 +1025,14 @@ class DownloadService {
 
   Future<void> _recoverPersistedDownloads() async {
     final records = await FileDownloader().database.allRecords();
+    diagnosticLog.record('recovery.begin', {'count': records.length});
+    for (final record in records) {
+      diagnosticLog.record('recovery.record', {
+        'taskId': record.task.taskId,
+        'status': record.status.name,
+        'progress': record.progress,
+      });
+    }
     final nativeIds = <String>{
       for (final task in await _liveTransferTasks())
         if (isLogicalEpisodeDownloadTask(task)) task.taskId,
@@ -2153,6 +2217,7 @@ class DownloadService {
     String trackingUrl, {
     bool notifyContinuedProcessing = true,
   }) async {
+    diagnosticLog.record('command.cancel', {'taskId': taskId});
     // Tombstone the logical download before waiting on native IO. This makes a
     // user delete immediate in every UI and prevents late URLSession callbacks
     // from resurrecting the row while the OS finishes canceling its worker.
@@ -2218,6 +2283,7 @@ class DownloadService {
   }
 
   Future<void> pauseDownload(String taskId) async {
+    diagnosticLog.record('command.pauseDownload', {'taskId': taskId});
     // Fence callbacks immediately on tap. Native pause/resume-data settlement
     // can take a moment on iOS, but progress events must not visually undo the
     // user's pause while that acknowledgement is in flight.
@@ -2339,6 +2405,7 @@ class DownloadService {
   }
 
   Future<void> resumeDownload(String taskId) async {
+    diagnosticLog.record('command.resumeDownload', {'taskId': taskId});
     await _serializeQueue(() async {
       await _resumeUserPausedUnlocked(taskId);
     });
@@ -3243,6 +3310,7 @@ class DownloadService {
     Map<String, String>? headers,
     int totalBytes = -1,
   }) async {
+    diagnosticLog.record('command.start', {'total': totalBytes});
     if (kDebugMode) {
       debugPrint('[DownloadService] startDownload called');
       debugPrint('[DownloadService] - URL: $url');

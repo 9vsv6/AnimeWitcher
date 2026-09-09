@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../services/download_concurrency.dart';
 import 'storage_service.dart';
 
@@ -53,6 +54,8 @@ class SettingsRepository {
 
   Future<void> setDownloadConcurrency(int value) =>
       _storageService.setDownloadConcurrency(value);
+
+  bool getDownloadDiagnosticLog() => _storageService.getDownloadDiagnosticLog();
 
   int getDownloadConcurrency() => _storageService.getDownloadConcurrency();
 
