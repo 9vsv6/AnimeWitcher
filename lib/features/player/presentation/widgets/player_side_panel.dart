@@ -689,6 +689,7 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
                 hovered: showHighlight,
               ),
               child: Row(
+                textDirection: TextDirection.rtl,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   _EpisodeThumbnail(
