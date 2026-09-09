@@ -1,0 +1,67 @@
+name: Verify download telemetry log fixes
+
+on:
+  push:
+    branches:
+      - fix/download-telemetry-log-review
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reapply exact reviewed patch
+        shell: bash
+        run: |
+          sed -n "/python3 - <<'PY'/,/^          PY$/p" .github/workflows/apply-download-telemetry-log-fix.yml \
+            | sed '1d;$d;s/^          //' > /tmp/download_patch.py
+          python3 /tmp/download_patch.py
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+
+      - name: Dependencies and generated sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Format and whitespace check
+        run: |
+          dart format lib/core/services/persistent_parallel_download.dart test/core/services/download_runtime_stability_review_test.dart
+          git diff --check
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Focused download tests
+        run: |
+          flutter test test/core/services/download_runtime_stability_review_test.dart
+          flutter test test/core/services/persistent_parallel_download_test.dart
+          flutter test test/core/services/download_telemetry_test.dart
+
+      - name: Full Flutter tests
+        run: flutter test
+
+      - name: Parse native Swift
+        run: xcrun swiftc -parse ios/Runner/DownloadNativeWaitingQueue.swift ios/Runner/DownloadContinuedProcessingManager.swift
+
+      - name: Commit verified fix and remove temporary workflows
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-download-telemetry-log-fix.yml .github/workflows/verify-download-telemetry-log-fix.yml
+          git add lib/core/services/persistent_parallel_download.dart ios/Runner/DownloadNativeWaitingQueue.swift test/core/services/download_runtime_stability_review_test.dart
+          git commit -m 'Stabilize download telemetry and system task updates'
+          git push origin HEAD:fix/download-telemetry-log-review
