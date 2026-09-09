@@ -29,6 +29,7 @@ import 'download_concurrency.dart';
 import 'download_parallel.dart';
 import 'persistent_parallel_download.dart';
 import 'download_range_transfer.dart';
+import 'download_transport.dart';
 import 'download_continued_processing_service.dart';
 
 part 'download_service.g.dart';
@@ -146,6 +147,7 @@ class DownloadService {
   Future<void>? _initializing;
   late final PersistentParallelDownload _parallel;
   late final DownloadRangeTransfer _rangeTransfers;
+  late final NativeSingleDownloadTransport _nativeTransport;
   Future<void> _queueChain = Future<void>.value();
   final Set<String> _queueWaitingIds = {};
   final Set<String> _startingTaskIds = {};
@@ -157,6 +159,7 @@ class DownloadService {
   final Map<String, Map<String, Object>> _waitingPayloads = {};
 
   DownloadService(this._ref) : _dio = _ref.read(dioClientProvider) {
+    _nativeTransport = NativeSingleDownloadTransport();
     _rangeTransfers = DownloadRangeTransfer(_dio);
     _parallel = PersistentParallelDownload(
       startPart: _startPart,
@@ -213,6 +216,7 @@ class DownloadService {
     _disposed = true;
     unawaited(_parallel.dispose());
     _rangeTransfers.dispose();
+    unawaited(_nativeTransport.dispose());
     _updatesSubscription?.cancel();
     unawaited(_continuedProcessing.dispose());
     _updatesController.close();
@@ -536,6 +540,10 @@ class DownloadService {
       doRescheduleKilledTasks: false,
       markDownloadedComplete: false,
     );
+    // Rebuild Transfer handles from the plugin database without enqueueing
+    // anything. Recovery below remains the only code allowed to decide whether
+    // an interrupted task should resume, wait, or stay user-paused.
+    await _nativeTransport.rehydrate(group: kLogicalDownloadGroup);
 
     // 6. Restore UI rows and continue any download that was running when
     //    the process died, keeping already-written bytes.
@@ -1318,6 +1326,14 @@ class DownloadService {
     required String taskId,
     String? trackingUrl,
   }) async {
+    final transfer = _nativeTransport.handleFor(taskId);
+    final transferTask = transfer?.task;
+    if (transfer != null &&
+        transferTask is DownloadTask &&
+        isLogicalEpisodeDownloadTask(transferTask) &&
+        isLiveNativeDownloadStatus(transfer.status)) {
+      return transferTask;
+    }
     final track = trackingUrl ?? '';
     for (final task in await _liveTransferTasks()) {
       if (!isLogicalEpisodeDownloadTask(task)) continue;
@@ -1690,7 +1706,9 @@ class DownloadService {
       );
     }
 
-    final didPause = await FileDownloader().pause(downloadTask);
+    final didPause = downloadTask is ParallelDownloadTask
+        ? await FileDownloader().pause(downloadTask)
+        : await _nativeTransport.pause(downloadTask);
     if (didPause) {
       await _syncSessionOverlay();
       return;
@@ -1726,8 +1744,15 @@ class DownloadService {
         );
         if (parentRecord?.task is ParallelDownloadTask) {
           await _parallel.cancel(parentRecord!.task as ParallelDownloadTask);
+        } else if (parentRecord?.task is DownloadTask &&
+            isNativeSingleDownloadTask(parentRecord!.task)) {
+          await _nativeTransport.cancel(parentRecord.task as DownloadTask);
+          ids.remove(taskId);
         }
-        await FileDownloader().cancelTasksWithIds(ids.toList());
+        if (ids.isNotEmpty) {
+          await FileDownloader().cancelTasksWithIds(ids.toList());
+        }
+        _nativeTransport.forget(taskId);
         _userPausedIds.remove(taskId);
         _dequeuingPausedIds.remove(taskId);
         _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
@@ -2134,7 +2159,7 @@ class DownloadService {
             ) !=
             null;
       },
-      resume: () => FileDownloader().resume(task),
+      resume: () => _nativeTransport.resume(task),
       resumeFromPartial: () => _resumeUsingPartialFile(task),
       restart: () =>
           _enqueueFreshAdaptiveTask(task, knownTotalBytes: saved.totalSize),
@@ -2275,7 +2300,7 @@ class DownloadService {
         }
       });
       try {
-        if (await FileDownloader().pause(task)) {
+        if (await _nativeTransport.pause(task)) {
           // pause() only acknowledges the command; native resume data arrives
           // with a later callback. Wait before letting a subsequent resume run.
           await settled.future.timeout(
@@ -2326,7 +2351,7 @@ class DownloadService {
   }
 
   Future<bool> _enqueueTransfer(DownloadTask task, int totalBytes) async {
-    if (task is! ParallelDownloadTask) return FileDownloader().enqueue(task);
+    if (task is! ParallelDownloadTask) return _nativeTransport.start(task);
     if (totalBytes <= 0) {
       totalBytes =
           (await getMetadata(task.url, headers: task.headers))?.size ?? -1;
@@ -2650,6 +2675,8 @@ class DownloadService {
         allowPause: true,
         group: kLogicalDownloadGroup,
         metaData: trackingUrl ?? url,
+        transferHints: animeDownloadTransferHints(expectedBytes: totalBytes),
+        stallTimeout: const Duration(seconds: 45),
       );
 
       if (kDebugMode) debugPrint('[DownloadService] Enqueuing task...');
