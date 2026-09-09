@@ -4,6 +4,7 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
 
 import '../services/download_concurrency.dart';
+import '../services/download_job_state.dart';
 import 'download_cleanup.dart';
 
 /// How an interrupted download should be continued.
@@ -100,10 +101,12 @@ bool shouldAutoResumeInterruptedDownload({
 }
 
 /// Decide which persisted rows must be restored to AnimeWitcher's logical
-/// waiting queue after process death. A parked failure is deliberately paused
-/// while this process stays alive so the next episode can run, but after an app
-/// relaunch it is an interrupted transfer, not a user pause. Gopeed likewise
-/// allows Start from both paused/error state while retaining completed ranges.
+/// waiting queue after process death.
+///
+/// The decision now goes through [planDownloadRecovery], which establishes one
+/// precedence order for user pause, native ownership, logical queue state and
+/// stale persisted status. This keeps startup recovery deterministic while the
+/// rest of DownloadService is migrated onto the same logical state machine.
 bool shouldRequeueInterruptedDownloadAfterRelaunch({
   required TaskStatus persisted,
   required bool queueWaiting,
@@ -111,25 +114,13 @@ bool shouldRequeueInterruptedDownloadAfterRelaunch({
   required bool stillInNativeQueue,
   required bool hasMetadata,
 }) {
-  if (stillInNativeQueue || userPaused) return false;
-  if (queueWaiting) return true;
-  switch (persisted) {
-    case TaskStatus.enqueued:
-    case TaskStatus.running:
-    case TaskStatus.waitingToRetry:
-      return true;
-    case TaskStatus.paused:
-    case TaskStatus.failed:
-    case TaskStatus.notFound:
-      return hasMetadata;
-    case TaskStatus.canceled:
-      // Explicit user delete removes metadata before recovery. A canceled row
-      // with metadata is therefore a system/native interruption and is safe to
-      // restore without turning delete into redownload.
-      return hasMetadata;
-    case TaskStatus.complete:
-      return false;
-  }
+  return planDownloadRecovery(
+    persisted: persisted,
+    queueWaiting: queueWaiting,
+    userPaused: userPaused,
+    stillInNativeQueue: stillInNativeQueue,
+    hasMetadata: hasMetadata,
+  ).shouldRequeue;
 }
 
 /// HTTP headers that continue a download from [existingBytes].
@@ -169,7 +160,7 @@ Future<File?> findPartialDownloadFile({
   final dir = dest.parent;
   final name = p.basename(destinationPath);
   for (final suffix in tempSuffixes) {
-    await consider(File(p.join(dir.path, '$name$suffix')));
+    await consider(File(p.join(dir.path, '$name$suffix'));
   }
   return best;
 }
