@@ -30,11 +30,12 @@ new = '''        void rollbackUnownedReservation() {
         try {
           started = await startPart(part.task, part.progress, part.size);
         } catch (_) {
-          // The task was never handed to native IO. Retry this exact taskId and
-          // byte Range after backoff; never pause the logical episode or reset
-          // any durable bytes.
+          // The task was never handed to native IO. This is a local enqueue
+          // failure, not evidence that the origin cannot sustain the current
+          // connection level. Restoring/capping slow-start here can pin the
+          // session at its already-active connection count and silently prevent
+          // this Range from ever being retried.
           rollbackUnownedReservation();
-          _stabilizeSessionForRecovery(session);
           _schedulePartRecovery(session, part);
           try {
             await _status(session, TaskStatus.running);
@@ -42,11 +43,10 @@ new = '''        void rollbackUnownedReservation() {
           return true;
         }
         if (!started) {
-          // A false enqueue result has the same ownership semantics as a throw:
-          // native never acquired the reserved slot, so restore its batch count
-          // before scheduling the same child for recovery.
+          // A false enqueue result has identical ownership semantics: no native
+          // worker exists, so restore the scheduler reservation and retry the
+          // exact same taskId/Range without teaching a lower host ceiling.
           rollbackUnownedReservation();
-          _stabilizeSessionForRecovery(session);
           _schedulePartRecovery(session, part);
           await _status(session, TaskStatus.running);
           return true;
@@ -55,4 +55,4 @@ new = '''        void rollbackUnownedReservation() {
 if text.count(old) != 1:
     raise SystemExit(f'expected one startPart block, found {text.count(old)}')
 path.write_text(text.replace(old, new, 1))
-print('fixed native enqueue reservation recovery')
+print('fixed pre-native enqueue recovery without false host backoff')
