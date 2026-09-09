@@ -26,7 +26,7 @@ const String kDownloadNotificationSettingsKey =
     'download_notification_settings';
 
 const int kDownloadConcurrencyMin = 1;
-const int kDownloadConcurrencyMax = 5;
+const int kDownloadConcurrencyMax = 10;
 const int kDownloadConcurrencyDefault = 1;
 
 int clampDownloadConcurrency(int value) =>
