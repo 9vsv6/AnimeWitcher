@@ -1,0 +1,77 @@
+name: Finalize download runtime stabilization
+
+on:
+  push:
+    branches:
+      - fix/download-telemetry-log-review
+    paths:
+      - .github/workflows/finalize-download-runtime.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/download-telemetry-log-review
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Apply final runtime fixes
+        run: python3 .github/scripts/finalize-download-runtime.py
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Format and whitespace
+        run: |
+          dart format \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/core/services/download_service.dart \
+            test/core/services/persistent_parallel_download_progress_test.dart \
+            test/core/services/download_runtime_stability_review_test.dart
+          git diff --check
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Focused download tests
+        run: |
+          flutter test \
+            test/core/services/persistent_parallel_download_progress_test.dart \
+            test/core/services/download_runtime_stability_review_test.dart \
+            test/core/services/download_diagnostic_log_test.dart \
+            test/core/services/download_ui_responsiveness_test.dart
+
+      - name: Full tests
+        run: flutter test
+
+      - name: Parse Swift download bridge
+        run: |
+          xcrun swiftc -parse \
+            ios/Runner/DownloadNativeWaitingQueue.swift \
+            ios/Runner/DownloadContinuedProcessingManager.swift
+
+      - name: Commit verified fixes and remove one-shot files
+        shell: bash
+        run: |
+          rm .github/scripts/finalize-download-runtime.py
+          rm .github/workflows/finalize-download-runtime.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Stabilize multipart progress persistence and speed"
+          git push origin HEAD:fix/download-telemetry-log-review
