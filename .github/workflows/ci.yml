@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,6 +19,37 @@ jobs:
     name: Analyze and test
     runs-on: ubuntu-latest
     steps:
+      - name: Purge all obsolete workflow run history
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ids="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --jq '.workflow_runs[] | select(.name != "Flutter Checks" and .name != "Build Preview" and .name != "Build & Release") | .id')"
+          if [ -z "$ids" ]; then
+            echo "No obsolete workflow runs found."
+          else
+            total="$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+            echo "Deleting $total obsolete workflow runs across the full Actions history."
+            deleted=0
+            for id in $ids; do
+              gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/runs/${id}"
+              deleted=$((deleted + 1))
+              if (( deleted % 25 == 0 )); then
+                echo "Deleted $deleted/$total obsolete runs..."
+              fi
+            done
+            echo "Deleted $deleted obsolete workflow runs."
+          fi
+
+          remaining="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --jq '.workflow_runs[] | select(.name != "Flutter Checks" and .name != "Build Preview" and .name != "Build & Release") | .id' | head -n 1)"
+          if [ -n "$remaining" ]; then
+            echo "Obsolete workflow history still remains after cleanup." >&2
+            exit 1
+          fi
+          echo "Verified: only the three essential workflow names remain in Actions run history."
+
       - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
@@ -33,14 +65,7 @@ jobs:
           dart run build_runner build --delete-conflicting-outputs
 
       - name: Analyze
-        # Existing warnings and infos remain visible in the log, but only
-        # analyzer errors block this first enforcement step. Warnings can be
-        # reduced safely in dedicated cleanup PRs rather than masking real
-        # build/test regressions behind a large baseline migration.
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
       - name: Test
-        # A mock Firestore client test exercises the configured REST path. This
-        # harmless value satisfies its build-time configuration guard; it is
-        # never sent to an external service by the test suite.
         run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
