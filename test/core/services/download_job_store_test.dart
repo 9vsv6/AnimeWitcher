@@ -96,6 +96,18 @@ void main() {
   });
 
   group('resource fingerprint', () {
+    test(
+      'shared Last-Modified still rejects changes when one ETag is absent',
+      () {
+        const old = DownloadResourceFingerprint(
+          strongEtag: '"v1"',
+          lastModified: 'old',
+        );
+        const changed = DownloadResourceFingerprint(lastModified: 'new');
+        expect(old.compatibleWith(changed), isFalse);
+        expect(changed.compatibleWith(old), isFalse);
+      },
+    );
     test('strong ETag mismatch is incompatible', () {
       const old = DownloadResourceFingerprint(
         strongEtag: '"old"',
@@ -141,6 +153,75 @@ void main() {
       expect(loaded?.durableBytes, 100);
     });
 
+    test(
+      'status-only checkpoint retains size and fingerprint across recreation',
+      () async {
+        await store.put(
+          _job(
+            fingerprint: const DownloadResourceFingerprint(
+              strongEtag: '"v1"',
+              lastModified: 'date',
+              expectedBytes: 1000,
+            ),
+          ),
+        );
+        expect(
+          await store.put(
+            _job(expectedBytes: -1, state: DownloadJobState.interrupted),
+          ),
+          isTrue,
+        );
+        store = DownloadJobStore(backend);
+        final saved = await store.get('episode-1');
+        expect(saved!.expectedBytes, 1000);
+        expect(saved.fingerprint!.strongEtag, '"v1"');
+        expect(await store.put(_job(expectedBytes: 1100)), isFalse);
+        expect(
+          await store.put(
+            _job(
+              fingerprint: const DownloadResourceFingerprint(
+                strongEtag: '"v2"',
+                expectedBytes: 1000,
+              ),
+            ),
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'partial fingerprint update cannot erase a stronger validator',
+      () async {
+        await store.put(
+          _job(
+            fingerprint: const DownloadResourceFingerprint(
+              strongEtag: '"v1"',
+              lastModified: 'date',
+              expectedBytes: 1000,
+            ),
+          ),
+        );
+        final token = await store.beginAttempt('episode-1');
+        expect(
+          await store.updateForAttempt(
+            token!,
+            expectedBytes: 0,
+            fingerprint: const DownloadResourceFingerprint(
+              finalUrl: 'https://cdn.test/new-token',
+            ),
+          ),
+          isTrue,
+        );
+        final saved = await store.get('episode-1');
+        expect(saved!.expectedBytes, 1000);
+        expect(saved.fingerprint!.strongEtag, '"v1"');
+        expect(saved.fingerprint!.lastModified, 'date');
+        expect(saved.fingerprint!.expectedBytes, 1000);
+        expect(saved.fingerprint!.finalUrl, 'https://cdn.test/new-token');
+      },
+    );
+
     test('rejects a callback from an older generation', () async {
       expect(await store.put(_job(generation: 4, durableBytes: 500)), isTrue);
 
@@ -163,9 +244,7 @@ void main() {
     test('durable bytes never go backwards across a newer attempt', () async {
       expect(await store.put(_job(generation: 2, durableBytes: 700)), isTrue);
 
-      final regressed = await store.put(
-        _job(generation: 3, durableBytes: 600),
-      );
+      final regressed = await store.put(_job(generation: 3, durableBytes: 600));
 
       expect(regressed, isFalse);
       expect((await store.get('episode-1'))?.durableBytes, 700);
@@ -239,21 +318,18 @@ void main() {
       );
     });
 
-    test('delete is the explicit boundary that permits a fresh zero-byte job', () async {
-      expect(await store.put(_job(generation: 3, durableBytes: 900)), isTrue);
-      expect(
-        await store.put(_job(generation: 4, durableBytes: 0)),
-        isFalse,
-      );
+    test(
+      'delete is the explicit boundary that permits a fresh zero-byte job',
+      () async {
+        expect(await store.put(_job(generation: 3, durableBytes: 900)), isTrue);
+        expect(await store.put(_job(generation: 4, durableBytes: 0)), isFalse);
 
-      await store.remove('episode-1');
+        await store.remove('episode-1');
 
-      expect(
-        await store.put(_job(generation: 1, durableBytes: 0)),
-        isTrue,
-      );
-      expect((await store.get('episode-1'))?.durableBytes, 0);
-    });
+        expect(await store.put(_job(generation: 1, durableBytes: 0)), isTrue);
+        expect((await store.get('episode-1'))?.durableBytes, 0);
+      },
+    );
 
     test('durable attempt token accepts only the current generation', () async {
       expect(await store.put(_job(generation: 8)), isTrue);
@@ -272,13 +348,16 @@ void main() {
       );
     });
 
-    test('all ignores corrupt entries and sorts by durable update order', () async {
-      await store.put(_job(taskId: 'b', updatedAtMillis: 20));
-      await store.put(_job(taskId: 'a', updatedAtMillis: 10));
-      backend.values['broken'] = {'taskId': '', 'trackingUrl': ''};
+    test(
+      'all ignores corrupt entries and sorts by durable update order',
+      () async {
+        await store.put(_job(taskId: 'b', updatedAtMillis: 20));
+        await store.put(_job(taskId: 'a', updatedAtMillis: 10));
+        backend.values['broken'] = {'taskId': '', 'trackingUrl': ''};
 
-      final jobs = await store.all();
-      expect(jobs.map((job) => job.taskId).toList(), ['a', 'b']);
-    });
+        final jobs = await store.all();
+        expect(jobs.map((job) => job.taskId).toList(), ['a', 'b']);
+      },
+    );
   });
 }

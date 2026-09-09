@@ -160,6 +160,64 @@ void main() {
     },
   );
 
+  test(
+    'throwing startup failure observer releases ownership for a later resume',
+    () async {
+      await partial.delete();
+      await expectLater(
+        runner.start(
+          id: 'episode',
+          url: url,
+          headers: {},
+          file: partial,
+          existingBytes: 3,
+          expectedBytes: 10,
+          onState: (_, _, _) async {},
+          onPaused: (_, _) async {},
+          onFailure: (_) async => throw StateError('checkpoint unavailable'),
+        ),
+        throwsStateError,
+      );
+      expect(runner.isActive('episode'), isFalse);
+      expect(
+        await runner.stop('episode').timeout(const Duration(seconds: 1)),
+        isFalse,
+      );
+      await partial.writeAsBytes([0, 1, 2]);
+      final finished = Completer<bool>();
+      expect(await start(finished), isTrue);
+      expect(await finished.future.timeout(const Duration(seconds: 5)), isTrue);
+      expect(await partial.readAsBytes(), List.generate(10, (i) => i));
+    },
+  );
+
+  test(
+    'failed paused checkpoint still joins the writer and preserves its bytes',
+    () async {
+      responseMode = 'stall';
+      expect(
+        await runner.start(
+          id: 'episode',
+          url: url,
+          headers: {},
+          file: partial,
+          existingBytes: 3,
+          expectedBytes: 10,
+          onState: (_, _, _) async {},
+          onPaused: (_, _) async => throw StateError('storage unavailable'),
+        ),
+        isTrue,
+      );
+      expect(
+        await runner.stop('episode').timeout(const Duration(seconds: 2)),
+        isTrue,
+      );
+      expect(runner.isActive('episode'), isFalse);
+      expect(await runner.stop('episode'), isFalse);
+      expect((await partial.readAsBytes()).take(3), [0, 1, 2]);
+    },
+  );
+
   test('verifies prefix then appends with If-Range validator', () async {
     final finished = Completer<bool>();
     expect(await start(finished), isTrue);

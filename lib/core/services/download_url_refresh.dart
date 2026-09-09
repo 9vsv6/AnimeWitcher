@@ -43,7 +43,8 @@ class DownloadUrlRefreshDescriptor {
     final trackingUrl = _string(map['trackingUrl']);
     final providerId = _string(map['providerId']);
     final source = _string(map['source']);
-    if (trackingUrl == null || providerId == null || source == null) return null;
+    if (trackingUrl == null || providerId == null || source == null)
+      return null;
     return DownloadUrlRefreshDescriptor(
       trackingUrl: trackingUrl,
       providerId: providerId,
@@ -157,7 +158,7 @@ class DownloadUrlRefresher {
       } catch (_) {}
     }
 
-    if (candidates.isEmpty) {
+    if (_bestStreamMatch(candidates, descriptor) == null) {
       List<StreamResult> sources;
       try {
         sources = await provider.loadStreamSources(descriptor.trackingUrl);
@@ -178,7 +179,10 @@ class DownloadUrlRefresher {
     }
 
     final refreshed = _bestStreamMatch(candidates, descriptor);
-    if (refreshed == null || refreshed.url.trim().isEmpty) return null;
+    if (refreshed == null ||
+        refreshed.requiresResolution ||
+        refreshed.url.trim().isEmpty)
+      return null;
     return RefreshedDownloadUrl(
       url: refreshed.url.trim(),
       headers: Map<String, String>.from(refreshed.headers ?? const {}),
@@ -199,11 +203,19 @@ StreamResult? _bestStreamMatch(
   StreamResult? best;
   var bestScore = -1;
   for (final stream in streams) {
+    if (stream.source.trim().toLowerCase() != wantedSource) continue;
     var score = 0;
     if (stream.source.trim().toLowerCase() == wantedSource) score += 4;
     final quality = stream.quality?.trim().toLowerCase();
     if (wantedQuality != null && wantedQuality.isNotEmpty) {
-      if (quality == wantedQuality) score += 3;
+      if (quality == wantedQuality) {
+        score += 3;
+      } else if (!(stream.requiresResolution &&
+          (quality == null || quality.isEmpty))) {
+        // An unresolved source may expose qualities only after extraction.
+        // A playable replacement must match the saved quality exactly.
+        continue;
+      }
     } else if (quality == null || quality.isEmpty) {
       score += 1;
     }
@@ -216,7 +228,9 @@ StreamResult? _bestStreamMatch(
   return best;
 }
 
-final downloadUrlRefreshStoreProvider = Provider<DownloadUrlRefreshStore>((ref) {
+final downloadUrlRefreshStoreProvider = Provider<DownloadUrlRefreshStore>((
+  ref,
+) {
   return DownloadUrlRefreshStore(const HiveDownloadUrlRefreshBackend());
 });
 

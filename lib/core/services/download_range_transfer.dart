@@ -120,11 +120,12 @@ class DownloadRangeTransfer {
   Set<String> get activeTaskIds => _operations.keys.toSet();
   DownloadRangeFailure? failureFor(String id) => _lastFailures[id];
 
-  Future<void> stop(String id) async {
+  Future<bool> stop(String id) async {
     final operation = _operations[id];
-    if (operation == null) return;
+    if (operation == null) return false;
     operation.token.cancel('Download stopped');
     await operation.done.future;
+    return true;
   }
 
   void dispose() {
@@ -207,15 +208,18 @@ class DownloadRangeTransfer {
       return false;
     } finally {
       if (!launched) {
-        operation.token.cancel();
-        await _discard(opened?.stream);
-        final failure = operation.failure;
-        if (failure != null) {
-          _lastFailures[id] = failure;
-          if (onFailure != null) await onFailure(failure);
+        try {
+          operation.token.cancel();
+          await _discard(opened?.stream);
+          final failure = operation.failure;
+          if (failure != null) {
+            _lastFailures[id] = failure;
+            if (onFailure != null) await onFailure(failure);
+          }
+        } finally {
+          _operations.remove(id);
+          if (!operation.done.isCompleted) operation.done.complete();
         }
-        _operations.remove(id);
-        if (!operation.done.isCompleted) operation.done.complete();
       }
     }
   }
@@ -709,7 +713,16 @@ class DownloadRangeTransfer {
       // Keep every durable byte. The next explicit resume starts exactly from
       // [written] if the bounded automatic reconnects were exhausted.
     } finally {
-      await output?.close();
+      try {
+        await output?.close();
+      } catch (error) {
+        operation.failure = DownloadRangeFailure(
+          action: isNoSpaceDownloadError(error)
+              ? DownloadFailureAction.stopNoSpace
+              : DownloadFailureAction.park,
+          error: error,
+        );
+      }
       operation.token.cancel();
       try {
         if (!complete) {
@@ -722,6 +735,13 @@ class DownloadRangeTransfer {
         } else {
           _lastFailures.remove(id);
         }
+      } catch (error) {
+        // Async checkpoint observers must not strand stop() or escape as an
+        // unhandled error from the detached receive future. Bytes stay on disk.
+        _lastFailures[id] = DownloadRangeFailure(
+          action: DownloadFailureAction.park,
+          error: error,
+        );
       } finally {
         _operations.remove(id);
         if (!operation.done.isCompleted) operation.done.complete();
@@ -790,9 +810,8 @@ class DownloadRangeTransfer {
   }
 
   int _unsatisfiedRangeSize(Headers headers) {
-    final match = RegExp(r'^bytes \*/(\d+)$').firstMatch(
-      headers.value('content-range') ?? '',
-    );
+    final match = RegExp(r'^bytes \*/(\d+)$')
+        .firstMatch(headers.value('content-range') ?? '');
     return match == null ? -1 : int.parse(match[1]!);
   }
 
@@ -808,7 +827,8 @@ class DownloadRangeTransfer {
 bool isNoSpaceDownloadError(Object error) {
   if (error is! FileSystemException) return false;
   final code = error.osError?.errorCode;
-  if (code == 28 || code == 112) return true; // POSIX ENOSPC / Windows disk full
+  if (code == 28 || code == 112)
+    return true; // POSIX ENOSPC / Windows disk full
   final message = '${error.message} ${error.osError?.message ?? ''}'
       .toLowerCase();
   return message.contains('no space left') ||
