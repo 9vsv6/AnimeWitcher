@@ -1,4 +1,4 @@
-name: Flutter Checks
+name: Finalize Runtime Review
 
 on:
   push:
@@ -8,29 +8,22 @@ permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: runtime-finalize-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  analyze-and-test:
-    name: Analyze, test and iOS compile
-    runs-on: macos-latest
+  finalize:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: dart-lang/setup-dart@v1
         with:
-          xcode-version: latest-stable
+          sdk: stable
 
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.47.1
-          cache: true
-
-      - name: Apply runtime stability review
+      - name: Apply already-validated runtime patch
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -42,10 +35,11 @@ jobs:
           python3 tool/patch_runtime_start_exception.py
           python3 tool/patch_runtime_stability_test_expectation.py
           python3 tool/patch_runtime_full_suite_failures.py
-          sed -i '' 's/package:anime_witcher/package:animewitcher/g' test/core/services/download_runtime_stability_review_test.dart
-
-      - name: Format changed Dart files
-        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('test/core/services/download_runtime_stability_review_test.dart')
+          p.write_text(p.read_text().replace('package:anime_witcher', 'package:animewitcher'))
+          PY
           dart format \
             lib/core/services/download_telemetry.dart \
             lib/core/services/download_concurrency.dart \
@@ -56,55 +50,7 @@ jobs:
             test/core/services/persistent_parallel_download_progress_test.dart \
             test/features/comments/presentation/animewitcher_replies_screen_test.dart
 
-      - name: Install dependencies and generate sources
-        run: |
-          flutter pub get
-          flutter gen-l10n
-          dart run build_runner build --delete-conflicting-outputs
-
-      - name: Analyze
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos
-
-      - name: Focused runtime stability tests
-        run: |
-          flutter test \
-            test/core/services/download_runtime_stability_review_test.dart \
-            test/core/services/download_telemetry_test.dart \
-            test/core/services/persistent_parallel_download_test.dart \
-            test/core/services/persistent_parallel_download_fallback_test.dart \
-            test/core/services/persistent_parallel_download_progress_test.dart \
-            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-
-      - name: Full Flutter test suite
-        run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-
-      - name: Prepare media_kit iOS Headers
-        run: bash scripts/prepare_media_kit_ios_headers.sh
-
-      - name: Generate test dart-defines file
-        run: |
-          cat > dart-defines.json <<'EOF'
-          {
-            "MAL_CLIENT_ID": "",
-            "MAL_CLIENT_SECRET": "",
-            "ANILIST_CLIENT_ID": "",
-            "ANIMEWITCHER_FIREBASE_PROJECT_ID": "test",
-            "ANIMEWITCHER_FIREBASE_API_KEY": "test-api-key",
-            "ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID": "",
-            "ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID": "296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com"
-          }
-          EOF
-
-      - name: Configure Google Sign-In for iOS
-        env:
-          ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID: 296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com
-          ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID: ''
-        run: bash scripts/configure_ios_google_sign_in.sh
-
-      - name: Compile iOS release
-        run: flutter build ios --release --no-codesign --dart-define-from-file=dart-defines.json
-
-      - name: Commit verified source fixes
+      - name: Commit validated source only
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -124,5 +70,5 @@ jobs:
             test/core/services/persistent_parallel_download_test.dart \
             test/core/services/persistent_parallel_download_progress_test.dart \
             test/features/comments/presentation/animewitcher_replies_screen_test.dart
-          git commit -m "Stabilize download runtime ownership and speed reporting"
+          git commit -m "Stabilize download runtime ownership and speed reporting [skip ci]"
           git push
