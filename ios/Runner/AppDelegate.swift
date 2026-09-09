@@ -197,6 +197,12 @@ import UserNotifications
 
     channel.setMethodCallHandler { call, result in
 #if os(iOS)
+      if call.method == "configureDiagnosticLog" {
+        let arguments = call.arguments as? [String: Any] ?? [:]
+        DownloadNativeDiagnosticLog.configure(arguments["enabled"] as? Bool ?? false)
+        result(nil)
+        return
+      }
       if call.method == "persistNativeQueue" || call.method == "persistWaitingQueue" {
         let arguments = call.arguments as? [String: Any] ?? [:]
         DownloadNativeWaitingQueue.persist(from: arguments)

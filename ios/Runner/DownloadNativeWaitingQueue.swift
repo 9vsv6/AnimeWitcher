@@ -1,5 +1,72 @@
 #if os(iOS)
 import Foundation
+// Separate native journal survives Dart suspension. Synchronous, serial appends
+// finish before background completion handlers can suspend the process.
+enum DownloadNativeDiagnosticLog {
+  private static let queue = DispatchQueue(label: "animewitcher.download.log")
+  private static let key = "downloadDiagnosticLogEnabled"
+  private static var enabled = UserDefaults.standard.bool(forKey: key)
+  private static var file: URL?
+  private static var size = 0
+  private static var sequence = 0
+  private static var lastProgress: [Int: TimeInterval] = [:]
+  private static let session = String(Int64(Date().timeIntervalSince1970 * 1000000))
+
+  static func configure(_ value: Bool) {
+    queue.sync {
+      enabled = value
+      UserDefaults.standard.set(value, forKey: key)
+      lastProgress.removeAll()
+    }
+  }
+
+  static func record(_ event: String, task: URLSessionTask, error: Error? = nil) {
+    queue.sync {
+      guard enabled else { return }
+      let now = Date().timeIntervalSince1970
+      if event == "progress" {
+        if let previous = lastProgress[task.taskIdentifier], now - previous < 0.25 { return }
+        lastProgress[task.taskIdentifier] = now
+      } else {
+        lastProgress.removeValue(forKey: task.taskIdentifier)
+      }
+      sequence += 1
+      var row: [String: Any] = ["time": ISO8601DateFormatter().string(from: Date()),
+        "session": session, "sequence": sequence, "source": "ios", "event": event,
+        "nativeTaskId": task.taskIdentifier, "bytes": task.countOfBytesReceived,
+        "total": task.countOfBytesExpectedToReceive, "state": task.state.rawValue]
+      if let id = DownloadNativeWaitingQueue.taskId(from: task) { row["taskId"] = id }
+      if let response = task.response as? HTTPURLResponse { row["httpStatus"] = response.statusCode }
+      if let error = error as NSError? { row["errorDomain"] = error.domain; row["errorCode"] = error.code }
+      do {
+        var data = try JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
+        data.append(0x0a)
+        let fm = FileManager.default
+        let directory = fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("log", isDirectory: true)
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        if file == nil || size + data.count > 4 * 1024 * 1024 {
+          file = directory.appendingPathComponent("download-ios-\(session)-\(String(format: "%020d", sequence)).log")
+          try Data().write(to: file!)
+          size = 0
+          let files = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey])
+            .filter { $0.lastPathComponent.hasPrefix("download-ios-") && $0.pathExtension == "log" }
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }
+          for old in files.dropFirst(5) where old != file { try fm.removeItem(at: old) }
+        }
+        let handle = try FileHandle(forWritingTo: file!)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
+        try handle.synchronize()
+        size += data.count
+      } catch {
+        // Logging must never fail or interrupt URLSession delegate handling.
+        file = nil
+      }
+    }
+  }
+}
+
 import ObjectiveC
 import UIKit
 #if canImport(background_downloader)
@@ -1515,6 +1582,7 @@ private enum DownloadUrlSessionHook {
     guard let method = class_getInstanceMethod(cls, completeSelector) else { return }
     originalComplete = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionTask, Error?) -> Void = { slf, session, task, error in
+      DownloadNativeDiagnosticLog.record("complete", task: task, error: error)
       // The plugin owns URLSession bookkeeping, retries, resume data and its
       // holding queue. Let it settle the failed task before AnimeWitcher frees
       // the logical episode slot and promotes another one.
@@ -1542,6 +1610,7 @@ private enum DownloadUrlSessionHook {
     guard let method = class_getInstanceMethod(cls, finishDownloadSelector) else { return }
     originalFinishDownload = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionDownloadTask, URL) -> Void = { slf, session, downloadTask, location in
+      DownloadNativeDiagnosticLog.record("file.received", task: downloadTask)
       // Original must run first so the plugin can move the temp file.
       // Then promote like pre-tabs: ep2 must start before the session sleeps.
       if let original = DownloadUrlSessionHook.originalFinishDownload {
@@ -1568,6 +1637,7 @@ private enum DownloadUrlSessionHook {
     let block: @convention(block) (
       AnyObject, URLSession, URLSessionDownloadTask, Int64, Int64, Int64
     ) -> Void = { slf, session, downloadTask, bytesWritten, totalWritten, totalExpected in
+      DownloadNativeDiagnosticLog.record("progress", task: downloadTask)
       if let original = DownloadUrlSessionHook.originalWrite {
         let fn = unsafeBitCast(
           original,

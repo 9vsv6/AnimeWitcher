@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:dio/dio.dart';
 
 import 'download_retry_policy.dart';
+import 'download_diagnostic_log.dart';
 
 /// Keep retries short: a permanently dead episode must still yield its queue
 /// slot, while transient CDN/radio failures should not force a manual resume.
@@ -107,9 +108,10 @@ class DownloadRangeFailure {
 /// against the current resource. If the origin exposes a strong ETag or
 /// Last-Modified validator, all remaining requests carry it as `If-Range`.
 class DownloadRangeTransfer {
-  DownloadRangeTransfer(this.dio, {math.Random? random})
+  DownloadRangeTransfer(this.dio, {math.Random? random, this.diagnosticLog})
     : _random = random ?? math.Random();
 
+  final DownloadDiagnosticLog? diagnosticLog;
   final Dio dio;
   final math.Random _random;
   final _operations = <String, _RangeOperation>{};
@@ -121,6 +123,7 @@ class DownloadRangeTransfer {
   DownloadRangeFailure? failureFor(String id) => _lastFailures[id];
 
   Future<bool> stop(String id) async {
+    diagnosticLog?.record('range.stop', {'taskId': id});
     final operation = _operations[id];
     if (operation == null) return false;
     operation.token.cancel('Download stopped');
@@ -149,7 +152,12 @@ class DownloadRangeTransfer {
   }) async {
     if (_operations.containsKey(id)) return true;
     _lastFailures.remove(id);
-    final operation = _RangeOperation(canRefreshUrl: canRefreshUrl);
+    final operation = _RangeOperation(id: id, canRefreshUrl: canRefreshUrl);
+    diagnosticLog?.record('range.start', {
+      'taskId': id,
+      'bytes': existingBytes,
+      'total': expectedBytes,
+    });
     _operations[id] = operation;
     var launched = false;
     _OpenedRange? opened;
@@ -213,6 +221,11 @@ class DownloadRangeTransfer {
           await _discard(opened?.stream);
           final failure = operation.failure;
           if (failure != null) {
+            diagnosticLog?.record('range.failure', {
+              'taskId': id,
+              'reason': failure.action.name,
+              'errorType': failure.error?.runtimeType.toString(),
+            });
             _lastFailures[id] = failure;
             if (onFailure != null) await onFailure(failure);
           }
@@ -504,6 +517,10 @@ class DownloadRangeTransfer {
   }
 
   Future<void> _retryDelay(_RangeOperation operation, Duration delay) async {
+    diagnosticLog?.record('http.retry', {
+      'taskId': operation.id,
+      'delayMs': delay.inMilliseconds,
+    });
     final elapsed = Completer<void>();
     final timer = Timer(delay, elapsed.complete);
     try {
@@ -532,6 +549,11 @@ class DownloadRangeTransfer {
     );
 
     final responseTimeout = _responseTimeoutFor(url);
+    diagnosticLog?.record('http.request', {
+      'taskId': operation.id,
+      'range': headers['Range'],
+      'timeoutMs': responseTimeout.inMilliseconds,
+    });
     final clock = Stopwatch()..start();
     try {
       final response = await dio
@@ -553,8 +575,20 @@ class DownloadRangeTransfer {
               throw TimeoutException(timeoutMessage);
             },
           );
+      diagnosticLog?.record('http.response', {
+        'taskId': operation.id,
+        'httpStatus': response.statusCode,
+        'elapsedMs': clock.elapsedMilliseconds,
+      });
       _rememberConnectTime(url, clock.elapsed);
       return response;
+    } catch (error) {
+      diagnosticLog?.record('http.error', {
+        'taskId': operation.id,
+        'errorType': error.runtimeType.toString(),
+        'elapsedMs': clock.elapsedMilliseconds,
+      });
+      rethrow;
     } finally {
       clock.stop();
     }
@@ -729,6 +763,11 @@ class DownloadRangeTransfer {
           await onPaused(written, total);
           final failure = operation.failure;
           if (failure != null) {
+            diagnosticLog?.record('range.failure', {
+              'taskId': id,
+              'reason': failure.action.name,
+              'errorType': failure.error?.runtimeType.toString(),
+            });
             _lastFailures[id] = failure;
             if (onFailure != null) await onFailure(failure);
           }
@@ -866,7 +905,8 @@ class _ResumeProbe {
 }
 
 class _RangeOperation {
-  _RangeOperation({required this.canRefreshUrl});
+  _RangeOperation({required this.id, required this.canRefreshUrl});
+  final String id;
 
   final bool canRefreshUrl;
   final token = CancelToken();

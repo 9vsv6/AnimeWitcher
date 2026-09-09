@@ -55,6 +55,9 @@ class DownloadContinuedProcessingService {
 
   bool get _isAvailable => !kIsWeb && Platform.isIOS;
 
+  Future<void> configureDiagnosticLog(bool enabled) =>
+      _invoke('configureDiagnosticLog', {'enabled': enabled});
+
   Future<void> start({
     required String taskId,
     required String displayName,

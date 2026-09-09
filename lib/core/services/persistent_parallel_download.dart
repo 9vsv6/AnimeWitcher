@@ -1,3 +1,5 @@
+import 'download_diagnostic_log.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -58,6 +60,7 @@ const Duration kParallelDiskProgressPollInterval = Duration(seconds: 1);
 /// the requested 16 connections.
 class PersistentParallelDownload {
   PersistentParallelDownload({
+    this.diagnosticLog,
     required this.startPart,
     required this.pausePart,
     required this.cancelParts,
@@ -74,6 +77,7 @@ class PersistentParallelDownload {
     this.onHostSample,
   });
 
+  final DownloadDiagnosticLog? diagnosticLog;
   final Future<bool> Function(DownloadTask task, double progress, int size)
   startPart;
   final Future<void> Function(DownloadTask task) pausePart;
@@ -1824,6 +1828,11 @@ class PersistentParallelDownload {
   }
 
   Future<void> _status(_ParallelSession session, TaskStatus status) async {
+    diagnosticLog?.record('parallel.status', {
+      'taskId': session.task.taskId,
+      'status': status.name,
+      'progress': session.progress,
+    });
     if (status == TaskStatus.running) {
       session.parentRunningReported = true;
     } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {
@@ -1944,6 +1953,11 @@ class PersistentParallelDownload {
   }
 
   Future<void> _assemble(_ParallelSession session) async {
+    diagnosticLog?.record('assembly.begin', {
+      'taskId': session.task.taskId,
+      'total': session.size,
+      'count': session.parts.length,
+    });
     final target = File(await session.task.filePath());
     if (await target.exists()) {
       if (await target.length() == session.size) {

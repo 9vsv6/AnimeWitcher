@@ -9,6 +9,7 @@ import '../../../core/storage/settings_repository.dart';
 part 'general_settings_provider.g.dart';
 
 class GeneralSettings {
+  final bool downloadDiagnosticLog;
   final String defaultHomeScreen;
   final bool alwaysOnTop;
   final List<String> taskbarOrder;
@@ -18,6 +19,7 @@ class GeneralSettings {
   final DownloadNotificationPrefs downloadNotifications;
 
   const GeneralSettings({
+    this.downloadDiagnosticLog = false,
     this.defaultHomeScreen = '/home',
     this.alwaysOnTop = false,
     this.taskbarOrder = defaultTaskbarOrderIds,
@@ -28,6 +30,7 @@ class GeneralSettings {
   });
 
   GeneralSettings copyWith({
+    bool? downloadDiagnosticLog,
     String? defaultHomeScreen,
     bool? alwaysOnTop,
     List<String>? taskbarOrder,
@@ -37,6 +40,8 @@ class GeneralSettings {
     DownloadNotificationPrefs? downloadNotifications,
   }) {
     return GeneralSettings(
+      downloadDiagnosticLog:
+          downloadDiagnosticLog ?? this.downloadDiagnosticLog,
       defaultHomeScreen: defaultHomeScreen ?? this.defaultHomeScreen,
       alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
       taskbarOrder: taskbarOrder ?? this.taskbarOrder,
@@ -55,14 +60,15 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
   @override
   GeneralSettings build() {
     final repository = ref.watch(settingsRepositoryProvider);
-    final order = normalizeTaskbarOrder(
-      repository.getTaskbarOrder(),
-    ).map((destination) => destination.id).toList(growable: false);
+    final order = normalizeTaskbarOrder(repository.getTaskbarOrder())
+        .map((destination) => destination.id)
+        .toList(growable: false);
     final hidden = normalizeHiddenTaskbarItems(
       repository.getHiddenTaskbarItems(),
     );
 
     return GeneralSettings(
+      downloadDiagnosticLog: repository.getDownloadDiagnosticLog(),
       defaultHomeScreen: resolveInitialTaskbarRoute(
         repository.getDefaultHomeScreen(),
         order,
@@ -75,6 +81,11 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
       downloadParallelParts: repository.getDownloadParallelParts(),
       downloadNotifications: repository.getDownloadNotificationPrefs(),
     );
+  }
+
+  Future<void> setDownloadDiagnosticLog(bool enabled) async {
+    await ref.read(downloadServiceProvider).setDiagnosticLogging(enabled);
+    state = state.copyWith(downloadDiagnosticLog: enabled);
   }
 
   Future<void> setDefaultHomeScreen(String path) async {
@@ -93,9 +104,9 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
     Set<String> hidden,
   ) async {
     final repository = ref.read(settingsRepositoryProvider);
-    final normalizedOrder = normalizeTaskbarOrder(
-      order,
-    ).map((destination) => destination.id).toList(growable: false);
+    final normalizedOrder = normalizeTaskbarOrder(order)
+        .map((destination) => destination.id)
+        .toList(growable: false);
     final normalizedHidden = normalizeHiddenTaskbarItems(hidden);
     final resolvedDefault = resolveInitialTaskbarRoute(
       state.defaultHomeScreen,

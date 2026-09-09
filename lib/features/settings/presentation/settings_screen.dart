@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+
+import 'widgets/download_log_dialog.dart';
+
 import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
 import '../../../core/providers/device_info_provider.dart';
@@ -17,6 +21,7 @@ import 'general_settings_provider.dart';
 import 'app_version_provider.dart';
 
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
+
 import 'cache_provider.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
@@ -62,9 +67,8 @@ class SettingsScreen extends ConsumerWidget {
                         textDirection: isRtl
                             ? TextDirection.rtl
                             : TextDirection.ltr,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -443,8 +447,25 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: downloadNotificationsSubtitle(
               generalSettings.downloadNotifications,
             ),
-            isLast: true,
             onTap: () => showDownloadNotificationsDialog(context, ref),
+          ),
+          SettingsTile(
+            icon: Icons.bug_report_outlined,
+            title: appText(
+              context,
+              english: 'Download log',
+              arabic: 'سجل التنزيلات (Log)',
+            ),
+            subtitle: appText(
+              context,
+              english: 'Track downloads in the log folder. Tap to manage and export.',
+              arabic: 'تتبّع التنزيلات في مجلد log. اضغط للتفعيل وعرض الملفات وتصديرها.',
+            ),
+            isLast: true,
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (_) => const DownloadLogDialog(),
+            ),
           ),
         ],
       ),
