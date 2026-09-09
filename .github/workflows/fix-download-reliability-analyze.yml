@@ -1,0 +1,35 @@
+name: Fix download reliability analyze
+
+on:
+  push:
+    branches: [refactor/download-reliability-completion]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-download-reliability-analyze
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refactor/download-reliability-completion
+          fetch-depth: 0
+      - name: Apply guarded fix
+        run: python3 tool/fix_download_reliability_analyze.py
+      - name: Commit analyze fixes
+        run: |
+          if git diff --quiet -- lib/core/services/download_service.dart lib/core/services/persistent_parallel_download.dart; then
+            echo "Expected analyze fix produced no diff" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+Fares669@users.noreply.github.com"
+          git add lib/core/services/download_service.dart lib/core/services/persistent_parallel_download.dart
+          git commit -m "Fix reliability analyzer errors"
+          git push origin HEAD:refactor/download-reliability-completion
