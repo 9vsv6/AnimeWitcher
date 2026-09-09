@@ -41,6 +41,7 @@ jobs:
           python3 tool/patch_download_runtime_stability.py
           python3 tool/patch_runtime_start_exception.py
           python3 tool/patch_runtime_stability_test_expectation.py
+          python3 tool/patch_runtime_full_suite_failures.py
           sed -i '' 's/package:anime_witcher/package:animewitcher/g' test/core/services/download_runtime_stability_review_test.dart
 
       - name: Format changed Dart files
@@ -51,7 +52,9 @@ jobs:
             lib/core/services/download_service.dart \
             lib/core/services/persistent_parallel_download.dart \
             test/core/services/download_runtime_stability_review_test.dart \
-            test/core/services/persistent_parallel_download_test.dart
+            test/core/services/persistent_parallel_download_test.dart \
+            test/core/services/persistent_parallel_download_progress_test.dart \
+            test/features/comments/presentation/animewitcher_replies_screen_test.dart
 
       - name: Install dependencies and generate sources
         run: |
@@ -63,7 +66,14 @@ jobs:
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
       - name: Focused runtime stability tests
-        run: flutter test test/core/services/download_runtime_stability_review_test.dart test/core/services/download_telemetry_test.dart test/core/services/persistent_parallel_download_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+        run: |
+          flutter test \
+            test/core/services/download_runtime_stability_review_test.dart \
+            test/core/services/download_telemetry_test.dart \
+            test/core/services/persistent_parallel_download_test.dart \
+            test/core/services/persistent_parallel_download_fallback_test.dart \
+            test/core/services/persistent_parallel_download_progress_test.dart \
+            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
       - name: Full Flutter test suite
         run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
@@ -146,7 +156,12 @@ jobs:
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm tool/patch_download_runtime_stability.py tool/patch_runtime_start_exception.py tool/patch_runtime_stability_test_expectation.py
+          git rm \
+            tool/patch_download_runtime_stability.py \
+            tool/patch_runtime_start_exception.py \
+            tool/patch_runtime_stability_test_expectation.py \
+            tool/patch_runtime_full_suite_failures.py \
+            .github/workflows/sync-runtime-review-main.yml
           git add .github/workflows/ci.yml \
             lib/core/services/download_telemetry.dart \
             lib/core/services/download_concurrency.dart \
@@ -155,6 +170,8 @@ jobs:
             ios/Runner/DownloadNativeWaitingQueue.swift \
             ios/Runner/DownloadContinuedProcessingManager.swift \
             test/core/services/download_runtime_stability_review_test.dart \
-            test/core/services/persistent_parallel_download_test.dart
+            test/core/services/persistent_parallel_download_test.dart \
+            test/core/services/persistent_parallel_download_progress_test.dart \
+            test/features/comments/presentation/animewitcher_replies_screen_test.dart
           git commit -m "Stabilize download runtime ownership and speed reporting"
           git push
