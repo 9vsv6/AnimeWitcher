@@ -214,105 +214,174 @@ String downloadConcurrencyTitle() => 'عدد التحميلات المتزامن
 String downloadConcurrencySubtitle(int count) =>
     '${clampDownloadConcurrency(count)} في نفس الوقت';
 
-/// Pick how many episode downloads may transfer at once (1–5). Applies live.
+String _downloadConcurrencyDialogValue(int count) {
+  final normalized = clampDownloadConcurrency(count);
+  return normalized == 1
+      ? 'تحميل واحد في نفس الوقت'
+      : '$normalized تحميلات في نفس الوقت';
+}
+
+/// Pick how many episode downloads may transfer at once. The setting is only
+/// committed when Save is pressed, matching SkyStream's slider interaction.
 void showDownloadConcurrencyDialog(
   BuildContext context,
   WidgetRef ref,
   int current,
 ) {
-  final selected = clampDownloadConcurrency(current);
-  final options = List<int>.generate(
-    kDownloadConcurrencyMax - kDownloadConcurrencyMin + 1,
-    (i) => kDownloadConcurrencyMin + i,
-  );
+  final l10n = AppLocalizations.of(context)!;
+  var selected = clampDownloadConcurrency(current);
 
   showGlassDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(downloadConcurrencyTitle()),
-      content: RadioGroup<int>(
-        groupValue: selected,
-        onChanged: (val) {
-          if (val == null) return;
-          ref
-              .read(generalSettingsProvider.notifier)
-              .setDownloadConcurrency(val);
-          Navigator.pop<void>(context);
-        },
-        child: SingleChildScrollView(
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        surfaceTintColor: Colors.transparent,
+        title: Text(downloadConcurrencyTitle()),
+        content: SizedBox(
+          width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: options.map((n) {
-              return ListTile(
-                title: Text('$n'),
-                subtitle: Text(downloadConcurrencySubtitle(n)),
-                leading: Radio<int>(value: n),
-                onTap: () {
-                  ref
-                      .read(generalSettingsProvider.notifier)
-                      .setDownloadConcurrency(n);
-                  Navigator.pop<void>(context);
-                },
-              );
-            }).toList(),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _downloadConcurrencyDialogValue(selected),
+                key: const ValueKey('download-concurrency-value'),
+                style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              CustomSlider(
+                key: const ValueKey('download-concurrency-slider'),
+                value: selected.toDouble(),
+                min: kDownloadConcurrencyMin.toDouble(),
+                max: kDownloadConcurrencyMax.toDouble(),
+                divisions: kDownloadConcurrencyMax - kDownloadConcurrencyMin,
+                step: 1.0,
+                onChanged: (value) =>
+                    setState(() => selected = value.round()),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'يحدد عدد الحلقات التي يمكن تنزيلها معًا قبل وضع البقية في الانتظار.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop<void>(ctx),
+            child: Text(
+              l10n.cancel,
+              style: TextStyle(
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          CustomButton(
+            isPrimary: true,
+            onPressed: () async {
+              await ref
+                  .read(generalSettingsProvider.notifier)
+                  .setDownloadConcurrency(selected);
+              if (ctx.mounted) Navigator.pop<void>(ctx);
+            },
+            child: Text(l10n.save),
+          ),
+        ],
       ),
     ),
   );
 }
 
-String downloadPartsTitle() => 'أجزاء التنزيل';
+String downloadPartsTitle() => 'اتصالات التنزيل';
 
 String downloadPartsSubtitle(int value) {
   final normalized = normalizeDownloadPartPreference(value);
-  return normalized == kDownloadPartsAuto ? 'تلقائي' : '$normalized أجزاء';
+  if (normalized == kDownloadPartsAuto) return 'تلقائي';
+  if (normalized == 1) return 'اتصال واحد';
+  return '$normalized اتصالات';
 }
 
+String _downloadPartsDialogValue(int value) {
+  final normalized = normalizeDownloadPartPreference(value);
+  if (normalized == kDownloadPartsAuto) return 'تلقائي';
+  if (normalized == 1) return 'اتصال واحد';
+  return '$normalized اتصالات متوازية';
+}
+
+/// 0 is Auto, followed by every manual connection count from 1 through 16.
+/// The backend already uses the same range; this changes only the picker UX.
 void showDownloadPartsDialog(BuildContext context, WidgetRef ref, int current) {
-  final selected = normalizeDownloadPartPreference(current);
+  final l10n = AppLocalizations.of(context)!;
+  var selected = normalizeDownloadPartPreference(current);
+
   showGlassDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(downloadPartsTitle()),
-      content: RadioGroup<int>(
-        groupValue: selected,
-        onChanged: (value) {
-          if (value == null) return;
-          ref
-              .read(generalSettingsProvider.notifier)
-              .setDownloadParallelParts(value);
-          Navigator.pop<void>(context);
-        },
-        child: SingleChildScrollView(
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        surfaceTintColor: Colors.transparent,
+        title: Text(downloadPartsTitle()),
+        content: SizedBox(
+          width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: kDownloadPartChoices
-                .map((value) {
-                  final auto = value == kDownloadPartsAuto;
-                  return ListTile(
-                    title: Text(auto ? 'تلقائي' : '$value'),
-                    subtitle: Text(
-                      auto
-                          ? 'يختار العدد حسب حجم الملف ودعم الخادم'
-                          : value == 1
-                          ? 'اتصال واحد'
-                          : '$value اتصالات متوازية عند دعم الخادم',
-                    ),
-                    leading: Radio<int>(value: value),
-                    onTap: () {
-                      ref
-                          .read(generalSettingsProvider.notifier)
-                          .setDownloadParallelParts(value);
-                      Navigator.pop<void>(context);
-                    },
-                  );
-                })
-                .toList(growable: false),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _downloadPartsDialogValue(selected),
+                key: const ValueKey('download-parts-value'),
+                style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              CustomSlider(
+                key: const ValueKey('download-parts-slider'),
+                value: selected.toDouble(),
+                min: kDownloadPartsAuto.toDouble(),
+                max: kDownloadPartsMax.toDouble(),
+                divisions: kDownloadPartsMax - kDownloadPartsAuto,
+                step: 1.0,
+                onChanged: (value) =>
+                    setState(() => selected = value.round()),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                selected == kDownloadPartsAuto
+                    ? 'تلقائي يختار عدد الاتصالات حسب حجم الملف ودعم الخادم لطلبات Range.'
+                    : 'يحدد الحد الأقصى لاتصالات الحلقة الواحدة. التقسيم يعمل فقط عندما يدعم الخادم Range.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop<void>(ctx),
+            child: Text(
+              l10n.cancel,
+              style: TextStyle(
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          CustomButton(
+            isPrimary: true,
+            onPressed: () async {
+              await ref
+                  .read(generalSettingsProvider.notifier)
+                  .setDownloadParallelParts(selected);
+              if (ctx.mounted) Navigator.pop<void>(ctx);
+            },
+            child: Text(l10n.save),
+          ),
+        ],
       ),
     ),
   );
