@@ -32,15 +32,7 @@ jobs:
           else
             total="$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')"
             echo "Deleting $total obsolete workflow runs across the full Actions history."
-            deleted=0
-            for id in $ids; do
-              gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/runs/${id}"
-              deleted=$((deleted + 1))
-              if (( deleted % 25 == 0 )); then
-                echo "Deleted $deleted/$total obsolete runs..."
-              fi
-            done
-            echo "Deleted $deleted obsolete workflow runs."
+            printf '%s\n' "$ids" | sed '/^$/d' | xargs -n 1 -P 12 sh -c 'gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/runs/$1" >/dev/null && echo "Deleted $1"' _
           fi
 
           remaining="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --jq '.workflow_runs[] | select(.name != "Flutter Checks" and .name != "Build Preview" and .name != "Build & Release") | .id' | head -n 1)"
