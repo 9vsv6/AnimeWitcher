@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,11 +26,12 @@ class _DownloadLogDialogState extends ConsumerState<DownloadLogDialog> {
     try {
       await action();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         _error = text(
           'تعذّر الوصول لملفات السجل أو حفظ الإعداد.',
           'Could not access log files or save the setting.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -102,14 +101,16 @@ class _DownloadLogDialogState extends ConsumerState<DownloadLogDialog> {
               FutureBuilder(
                 future: log.flush().then((_) => log.listFiles()),
                 builder: (context, snapshot) {
-                  if (snapshot.hasError)
+                  if (snapshot.hasError) {
                     return Text(
                       text('تعذّر قراءة مجلد log', 'Cannot read log folder'),
                     );
+                  }
                   final files = snapshot.data;
                   if (files == null) return const LinearProgressIndicator();
-                  if (files.isEmpty)
+                  if (files.isEmpty) {
                     return Text(text('لا توجد سجلات بعد.', 'No logs yet.'));
+                  }
                   return Column(
                     children: files
                         .map(
@@ -122,16 +123,10 @@ class _DownloadLogDialogState extends ConsumerState<DownloadLogDialog> {
                                 : () => run(() async {
                                     await log.flush();
                                     final bytes = await file.readAsBytes();
-                                    final destination = await FilePicker
-                                        .platform
-                                        .saveFile(
-                                          fileName: file.uri.pathSegments.last,
-                                          bytes: bytes,
-                                        );
-                                    if (destination != null) {
-                                      await File(destination)
-                                          .writeAsBytes(bytes, flush: true);
-                                    }
+                                    await FilePicker.saveFile(
+                                      fileName: file.uri.pathSegments.last,
+                                      bytes: bytes,
+                                    );
                                   }),
                           ),
                         )
