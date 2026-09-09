@@ -654,6 +654,7 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
     final showHighlight = _focused || _hovered;
     final ring = _focused && widget.isTv;
     const accent = HotstarPlayerStyle.accent;
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     return Semantics(
       button: true,
       selected: widget.isCurrent,
@@ -700,69 +701,74 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                formatEpisodePrimaryLabel(
-                                  episode: ep.episode,
-                                  isArabic:
-                                      Localizations.localeOf(
-                                        context,
-                                      ).languageCode ==
-                                      'ar',
-                                  isFinal: ep.isFinal,
-                                  serverName: ep.serverName,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: widget.isCurrent
-                                      ? HotstarPlayerStyle.primaryText
-                                      : HotstarPlayerStyle.secondaryText,
-                                  fontSize: 14,
-                                  fontWeight: widget.isCurrent
-                                      ? FontWeight.w800
-                                      : FontWeight.w600,
-                                  shadows: _kGlassTextShadow,
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            textDirection: isArabic
+                                ? TextDirection.rtl
+                                : TextDirection.ltr,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  formatEpisodePrimaryLabel(
+                                    episode: ep.episode,
+                                    isArabic: isArabic,
+                                    isFinal: ep.isFinal,
+                                    serverName: ep.serverName,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.start,
+                                  style: TextStyle(
+                                    color: widget.isCurrent
+                                        ? HotstarPlayerStyle.primaryText
+                                        : HotstarPlayerStyle.secondaryText,
+                                    fontSize: 14,
+                                    fontWeight: widget.isCurrent
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    shadows: _kGlassTextShadow,
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (ep.isFiller) ...[
-                              const SizedBox(width: 6),
-                              const _FillerBadge(),
+                              if (ep.isFiller) ...[
+                                const SizedBox(width: 6),
+                                const _FillerBadge(),
+                              ],
+                              if (ep.dubStatus != DubStatus.none &&
+                                  !isStandaloneEpisodeLabel(ep.serverName)) ...[
+                                const SizedBox(width: 6),
+                                _DubBadge(
+                                  dubStatus: ep.dubStatus,
+                                  isCurrent: widget.isCurrent,
+                                ),
+                              ],
                             ],
-                            if (ep.dubStatus != DubStatus.none &&
-                                !isStandaloneEpisodeLabel(ep.serverName)) ...[
-                              const SizedBox(width: 6),
-                              _DubBadge(
-                                dubStatus: ep.dubStatus,
-                                isCurrent: widget.isCurrent,
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (realEpisodeTitle(ep.name).isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            realEpisodeTitle(ep.name),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: widget.isCurrent
-                                  ? accent
-                                  : HotstarPlayerStyle.mutedText,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              shadows: _kGlassTextShadow,
-                            ),
                           ),
+                          if (realEpisodeTitle(ep.name).isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              realEpisodeTitle(ep.name),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.start,
+                              style: TextStyle(
+                                color: widget.isCurrent
+                                    ? accent
+                                    : HotstarPlayerStyle.mutedText,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                shadows: _kGlassTextShadow,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
