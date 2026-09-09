@@ -92,6 +92,25 @@ class DownloadConnectionGovernor {
   final Map<String, _HostProbeState> _hostProbeStates =
       <String, _HostProbeState>{};
 
+  /// Restore safe host ceilings learned during earlier app sessions.
+  /// Existing in-process pressure always wins by keeping the lower ceiling.
+  void seedHostCeilings(Map<String, int> ceilings) {
+    final nextProbe = _now().add(kDownloadHostProbeCooldown);
+    for (final entry in ceilings.entries) {
+      final key = downloadOriginKey(entry.key);
+      if (key.trim().isEmpty) continue;
+      final safe = _safeCeiling(entry.value);
+      final current = _learnedHostCeilings[key];
+      _learnedHostCeilings[key] = current == null || safe < current
+          ? safe
+          : current;
+      _hostProbeStates.putIfAbsent(
+        key,
+        () => _HostProbeState(nextProbeAt: nextProbe),
+      );
+    }
+  }
+
   int connectionCeilingFor(String url, {required int requested}) {
     final safeRequested = requested
         .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)

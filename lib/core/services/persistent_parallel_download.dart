@@ -35,6 +35,10 @@ const double kParallelNativeCompletionSentinel = 0.999;
 /// genuinely finishing worker enough time, then settle/recover that one range.
 const Duration kParallelTailStallDelay = Duration(seconds: 20);
 
+/// Persist host throughput samples at a low cadence so the next episode can
+/// reuse a proven connection ceiling without writing Hive on every callback.
+const Duration kParallelHostProfileSampleInterval = Duration(seconds: 5);
+
 /// Native DownloadTasks transfer the parts; this coordinator persists their
 /// identity before starting them. A process restart must not create new parts
 /// or ask the plugin to resume an already completed part.
@@ -58,6 +62,8 @@ class PersistentParallelDownload {
     this.recoveryDelay = const Duration(seconds: 1),
     this.tailStallDelay = kParallelTailStallDelay,
     this.maxActiveConnections = kDownloadGlobalConnectionBudget,
+    this.onHostPressure,
+    this.onHostSample,
   });
 
   final Future<bool> Function(DownloadTask task, double progress, int size)
@@ -73,6 +79,12 @@ class PersistentParallelDownload {
   final Future<Set<String>> Function()? livePartIds;
   final Duration recoveryDelay;
   final Duration tailStallDelay;
+  final void Function(String url, int fallbackCeiling)? onHostPressure;
+  final void Function(
+    String url,
+    int activeConnections,
+    double bytesPerSecond,
+  )? onHostSample;
 
   final Map<String, _ParallelSession> _sessions = {};
   final Map<String, _ParallelSession> _children = {};
@@ -93,10 +105,59 @@ class PersistentParallelDownload {
   /// Native 0.999 completion sentinels are intentionally excluded.
   double? progressFor(String id) => _sessions[id]?.progress;
 
+  /// Replace only the remote source of a paused/restored multipart job.
+  /// Every range identity, byte boundary, credible progress value and local
+  /// part file is retained. This is used when a signed CDN URL expires.
+  Future<ParallelDownloadTask?> replaceSource(
+    ParallelDownloadTask task, {
+    required String url,
+    required Map<String, String> headers,
+  }) async {
+    if (_disposed || !await restore(task)) return null;
+    final session = _sessions[task.taskId]!;
+    return session.serialize(() async {
+      if (_disposed || session.deleted || session.active) return null;
+      final updated = task.copyWith(
+        url: url,
+        headers: Map<String, String>.from(headers),
+      );
+      session.task = updated;
+      for (final part in session.parts) {
+        final childHeaders = Map<String, String>.from(headers)
+          ..removeWhere(
+            (key, _) =>
+                key.toLowerCase() == 'range' ||
+                key.toLowerCase() == 'if-range',
+          );
+        childHeaders['Range'] = 'bytes=${part.from}-${part.to}';
+        childHeaders['Accept-Encoding'] = 'identity';
+        part.task = part.task.copyWith(
+          url: url,
+          headers: childHeaders,
+          retries: kDownloadPartRetries,
+        );
+      }
+      await _persist(session);
+      final record = await recordForId(task.taskId);
+      await saveRecord(
+        TaskRecord(
+          session.task,
+          record?.status ?? TaskStatus.paused,
+          session.progress,
+          session.size,
+        ),
+      );
+      return session.task;
+    });
+  }
+
   /// Includes native tasks that were handed to the OS but are still waiting
   /// for a socket. Counting them is deliberate: the manager never queues more
   /// than the global connection budget into URLSession/background_downloader.
   int get activeConnectionCount => _activeConnectionIds.length;
+
+  void seedHostCeilings(Map<String, int> ceilings) =>
+      _connectionGovernor.seedHostCeilings(ceilings);
 
   int get _connectionBudget =>
       maxActiveConnections.clamp(1, kDownloadGlobalConnectionBudget).toInt();
@@ -839,6 +900,7 @@ class PersistentParallelDownload {
         session.task.url,
         fallback,
       );
+      onHostPressure?.call(session.task.url, learned);
       for (final sibling in _sessions.values) {
         if (!sibling.active || sibling.deleted) continue;
         if (_connectionGovernor.sameOrigin(
@@ -887,6 +949,20 @@ class PersistentParallelDownload {
       (sum, child) => sum + (child.complete ? 0 : child.speed),
     );
     final timeRemaining = _aggregateTimeRemaining(session, speed);
+
+    if (speed > 0) {
+      final now = DateTime.now();
+      final previousSample = session.lastHostProfileSampleAt;
+      if (previousSample == null ||
+          now.difference(previousSample) >= kParallelHostProfileSampleInterval) {
+        session.lastHostProfileSampleAt = now;
+        onHostSample?.call(
+          session.task.url,
+          _activeConnectionsForSession(session).clamp(1, 1 << 30),
+          speed * 1000 * 1000,
+        );
+      }
+    }
 
     await saveRecord(
       TaskRecord(session.task, TaskStatus.running, progress, session.size),
@@ -1454,28 +1530,52 @@ class PersistentParallelDownload {
 
   Future<void> _assemble(_ParallelSession session) async {
     final target = File(await session.task.filePath());
+    if (await target.exists()) {
+      if (await target.length() == session.size) {
+        await _finishCompleteSession(session);
+        return;
+      }
+      // Never overwrite an unexpected user-visible file during automatic
+      // recovery. The user can remove/rename it explicitly and resume later.
+      throw StateError('Download target already exists with a different size');
+    }
+
     final staging = File('${target.path}.assembling');
     final output = await staging.open(mode: FileMode.write);
     try {
+      // Establish the final logical length up front. Besides reducing repeated
+      // growth metadata work, this surfaces many disk-full failures before all
+      // parts are copied into a staging file.
+      await output.truncate(session.size);
+      await output.setPosition(0);
+      var assembledBytes = 0;
       for (final part in session.parts) {
         final file = File(await part.task.filePath());
-        if (await file.length() != part.size) {
+        if (!await file.exists() || await file.length() != part.size) {
           throw StateError('Part size changed');
         }
         await for (final bytes in file.openRead()) {
           if (session.deleted) return;
+          if (assembledBytes + bytes.length > session.size) {
+            throw StateError('Assembly exceeded expected size');
+          }
           await output.writeFrom(bytes);
+          assembledBytes += bytes.length;
         }
+      }
+      if (assembledBytes != session.size) {
+        throw StateError('Incomplete assembly');
       }
       await output.flush();
     } finally {
       await output.close();
     }
     if (session.deleted) return;
-    if (await staging.length() != session.size) {
+    if (!await staging.exists() || await staging.length() != session.size) {
       throw StateError('Incomplete assembly');
     }
-    if (await target.exists()) await target.delete();
+    // The target was proven absent above. Rename staging atomically so a crash
+    // leaves either the recoverable .assembling file or the full final file.
     await staging.rename(target.path);
     await _finishCompleteSession(session);
   }
@@ -1484,7 +1584,7 @@ class PersistentParallelDownload {
 class _ParallelSession {
   _ParallelSession(this.task, this.manifest, this.parts);
 
-  final ParallelDownloadTask task;
+  ParallelDownloadTask task;
   final File manifest;
   final List<_DownloadPart> parts;
   bool active = false;
@@ -1499,6 +1599,7 @@ class _ParallelSession {
   final Set<String> currentBatchPendingIds = {};
   Timer? aggregateProgressTimer;
   bool aggregateProgressDirty = false;
+  DateTime? lastHostProfileSampleAt;
   Future<void> _pending = Future<void>.value();
 
   int get size => parts.fold(0, (sum, part) => sum + part.size);
@@ -1561,7 +1662,7 @@ class _DownloadPart {
                  .clamp(0.0, 1.0)
                  .toDouble();
 
-  final DownloadTask task;
+  DownloadTask task;
   final int from;
   final int to;
 
