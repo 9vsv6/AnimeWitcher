@@ -1,0 +1,47 @@
+name: Fix iOS Multipart Live Progress Selector
+
+on:
+  push:
+    branches:
+      - fix/ios-multipart-live-progress-selector
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Apply selector fix
+        run: python3 tool/fix_ios_multipart_live_progress_selector.py
+      - name: Format Dart regression test
+        run: dart format test/core/services/ios_download_url_session_selector_test.dart
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+      - name: Commit verified fix and remove staging files
+        shell: bash
+        run: |
+          rm -f tool/fix_ios_multipart_live_progress_selector.py
+          rm -f .github/workflows/fix-ios-multipart-live-progress-selector.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Fix continuous iOS multipart progress callbacks"
+          git push origin HEAD:fix/ios-multipart-live-progress-selector
