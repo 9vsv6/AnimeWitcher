@@ -34,6 +34,7 @@ import 'download_host_profile.dart';
 import 'download_job_state.dart';
 import 'download_job_store.dart';
 import 'download_url_refresh.dart';
+import 'download_plugin_compat.dart';
 import 'download_transport.dart';
 import 'download_continued_processing_service.dart';
 
@@ -358,8 +359,7 @@ class DownloadService {
         // so the plugin never receives their synthetic status automatically.
         // Updating the parent explicitly gives one notification per episode
         // while the child parts stay silent.
-        // ignore: invalid_use_of_visible_for_testing_member
-        FileDownloader().downloaderForTesting.updateNotification(
+        BackgroundDownloaderCompat.updateSyntheticNotification(
           update.task,
           update.status,
         );
@@ -623,9 +623,16 @@ class DownloadService {
     // the internal multipart children. Clear legacy/default configs first and
     // install only the logical-episode group so four parts still emit one
     // user-visible notification for their parent episode.
-    // ignore: invalid_use_of_visible_for_testing_member
-    FileDownloader().downloaderForTesting.notificationConfigs.clear();
-    if (shouldClearDownloadNotificationConfigs(prefs)) return;
+    // Clear any legacy default config through the public API so internal
+    // multipart children never inherit a user-visible notification.
+    FileDownloader().configureNotification(progressBar: false);
+    if (shouldClearDownloadNotificationConfigs(prefs)) {
+      FileDownloader().configureNotificationForGroup(
+        kLogicalDownloadGroup,
+        progressBar: false,
+      );
+      return;
+    }
     const title = '{displayName}';
     final running = downloadNotificationIfEnabled(
       enabled: prefs.running,
@@ -1233,9 +1240,7 @@ class DownloadService {
       if (id == null || id.isEmpty) continue;
       if (waiters[i]['resumeDataBase64'] is String) continue;
       try {
-        // ignore: invalid_use_of_visible_for_testing_member
-        final resume = await FileDownloader().downloaderForTesting
-            .getResumeData(id);
+        final resume = await BackgroundDownloaderCompat.resumeDataForTaskId(id);
         if (resume != null && resume.data.isNotEmpty) {
           waiters[i] = {...waiters[i], 'resumeDataBase64': resume.data};
         }
@@ -1262,10 +1267,42 @@ class DownloadService {
 
   String? _notificationConfigJson(DownloadTask task) {
     try {
-      // ignore: invalid_use_of_visible_for_testing_member
-      final config = FileDownloader().downloaderForTesting
-          .notificationConfigForTask(task);
-      if (config == null) return null;
+      final prefs = _ref
+          .read(storageServiceProvider)
+          .getDownloadNotificationPrefs();
+      if (shouldClearDownloadNotificationConfigs(prefs)) return null;
+      const title = '{displayName}';
+      final config = TaskNotificationConfig(
+        taskOrGroup: task,
+        running: downloadNotificationIfEnabled(
+          enabled: prefs.running,
+          title: title,
+          body: Platform.isIOS
+              ? kDownloadRunningNotificationBodyIos
+              : kDownloadRunningNotificationBodyAndroid,
+        ),
+        complete: downloadNotificationIfEnabled(
+          enabled: prefs.complete,
+          title: title,
+          body: kDownloadCompleteNotificationBody,
+        ),
+        error: downloadNotificationIfEnabled(
+          enabled: prefs.error,
+          title: title,
+          body: kDownloadParkedNotificationBody,
+        ),
+        paused: downloadNotificationIfEnabled(
+          enabled: prefs.paused,
+          title: title,
+          body: kDownloadParkedNotificationBody,
+        ),
+        canceled: downloadNotificationIfEnabled(
+          enabled: prefs.canceled,
+          title: title,
+          body: kDownloadCanceledNotificationBody,
+        ),
+        progressBar: !Platform.isIOS && prefs.running,
+      );
       return jsonEncode(config.toJson());
     } catch (_) {
       return null;
@@ -1285,9 +1322,9 @@ class DownloadService {
     final payload = Map<String, Object>.from(_waitingPayloadFor(task));
     if (task is! ParallelDownloadTask) {
       try {
-        // ignore: invalid_use_of_visible_for_testing_member
-        final resume = await FileDownloader().downloaderForTesting
-            .getResumeData(task.taskId);
+        final resume = await BackgroundDownloaderCompat.resumeDataForTaskId(
+          task.taskId,
+        );
         if (resume != null && resume.data.isNotEmpty) {
           payload['resumeDataBase64'] = resume.data;
         }
@@ -2179,8 +2216,7 @@ class DownloadService {
         return _parallel.start(task, saved.totalSize);
       // Import completed/paused legacy chunks without using resumeChunkTasks,
       // which cancels all siblings when one completed child cannot be resumed.
-      // ignore: invalid_use_of_visible_for_testing_member
-      final data = await FileDownloader().downloaderForTesting.getResumeData(
+      final data = await BackgroundDownloaderCompat.resumeDataForTaskId(
         task.taskId,
       );
       if (data != null && data.data.isNotEmpty) {
@@ -2200,13 +2236,13 @@ class DownloadService {
 
     return resumeOrRestartDownload(
       canResume: () async {
-        // Unlike taskCanResume, a stored-data lookup cannot wait forever for
-        // a response from a task that died before its first network callback.
-        // ignore: invalid_use_of_visible_for_testing_member
-        return await FileDownloader().downloaderForTesting.getResumeData(
-              task.taskId,
-            ) !=
-            null;
+        try {
+          return await FileDownloader()
+              .taskCanResume(task)
+              .timeout(const Duration(seconds: 3));
+        } catch (_) {
+          return false;
+        }
       },
       resume: () => _nativeTransport.resume(task),
       resumeFromPartial: () => _resumeUsingPartialFile(task),
@@ -2569,11 +2605,10 @@ class DownloadService {
     if ((await _liveTransferTasks()).any((live) => live.taskId == task.taskId))
       return true;
     try {
-      // ignore: invalid_use_of_visible_for_testing_member
-      final resume = await FileDownloader().downloaderForTesting.getResumeData(
-        task.taskId,
-      );
-      if (resume != null && await FileDownloader().resume(task)) return true;
+      final canResume = await FileDownloader()
+          .taskCanResume(task)
+          .timeout(const Duration(seconds: 3));
+      if (canResume && await FileDownloader().resume(task)) return true;
     } catch (_) {
       // A stale native checkpoint must not prevent the disk-prefix fallback.
     }
