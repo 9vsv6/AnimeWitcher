@@ -1,74 +1,46 @@
-name: Finalize Runtime Review
+name: Flutter Checks
 
 on:
+  pull_request:
+    branches: [main]
   push:
-    branches: [fix/download-runtime-stability-review]
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: runtime-finalize-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  finalize:
+  analyze-and-test:
+    name: Analyze and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
         with:
-          fetch-depth: 0
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
 
-      - uses: dart-lang/setup-dart@v1
-        with:
-          sdk: stable
-
-      - name: Apply already-validated runtime patch
+      - name: Install dependencies and generate sources
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('tool/patch_download_runtime_stability.py')
-          s = p.read_text().replace('if count != 1:', 'if count < 1:')
-          p.write_text(s)
-          PY
-          python3 tool/patch_download_runtime_stability.py
-          python3 tool/patch_runtime_start_exception.py
-          python3 tool/patch_runtime_stability_test_expectation.py
-          python3 tool/patch_runtime_full_suite_failures.py
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('test/core/services/download_runtime_stability_review_test.dart')
-          p.write_text(p.read_text().replace('package:anime_witcher', 'package:animewitcher'))
-          PY
-          dart format \
-            lib/core/services/download_telemetry.dart \
-            lib/core/services/download_concurrency.dart \
-            lib/core/services/download_service.dart \
-            lib/core/services/persistent_parallel_download.dart \
-            test/core/services/download_runtime_stability_review_test.dart \
-            test/core/services/persistent_parallel_download_test.dart \
-            test/core/services/persistent_parallel_download_progress_test.dart \
-            test/features/comments/presentation/animewitcher_replies_screen_test.dart
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
 
-      - name: Commit validated source only
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -f \
-            tool/patch_download_runtime_stability.py \
-            tool/patch_runtime_start_exception.py \
-            tool/patch_runtime_stability_test_expectation.py \
-            tool/patch_runtime_full_suite_failures.py
-          git add \
-            lib/core/services/download_telemetry.dart \
-            lib/core/services/download_concurrency.dart \
-            lib/core/services/download_service.dart \
-            lib/core/services/persistent_parallel_download.dart \
-            ios/Runner/DownloadNativeWaitingQueue.swift \
-            ios/Runner/DownloadContinuedProcessingManager.swift \
-            test/core/services/download_runtime_stability_review_test.dart \
-            test/core/services/persistent_parallel_download_test.dart \
-            test/core/services/persistent_parallel_download_progress_test.dart \
-            test/features/comments/presentation/animewitcher_replies_screen_test.dart
-          git commit -m "Stabilize download runtime ownership and speed reporting [skip ci]"
-          git push
+      - name: Analyze
+        # Existing warnings and infos remain visible in the log, but only
+        # analyzer errors block this first enforcement step. Warnings can be
+        # reduced safely in dedicated cleanup PRs rather than masking real
+        # build/test regressions behind a large baseline migration.
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Test
+        # A mock Firestore client test exercises the configured REST path. This
+        # harmless value satisfies its build-time configuration guard; it is
+        # never sent to an external service by the test suite.
+        run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
