@@ -96,12 +96,11 @@ class DownloadTelemetryEstimator {
       // Progress/URLSession callbacks should be monotonic. If one late callback
       // regresses, keep the durable high-water mark instead of producing a
       // negative or absurd throughput sample.
-      if (incoming >= state.transferredBytes) {
-        if (incoming > state.transferredBytes || state.byteSamples.isEmpty) {
-          state.transferredBytes = incoming;
-          state.byteSamples.add(_BytePoint(timestamp, incoming));
-          state.lastByteAt = timestamp;
-        }
+      if (incoming >= state.transferredBytes &&
+          (incoming > state.transferredBytes || state.byteSamples.isEmpty)) {
+        state.transferredBytes = incoming;
+        state.byteSamples.add(_BytePoint(timestamp, incoming));
+        state.lastByteAt = timestamp;
       }
     }
 
@@ -113,14 +112,13 @@ class DownloadTelemetryEstimator {
     _trim(state.byteSamples, timestamp, window, maxSamples);
     _trim(state.reportedSpeedSamples, timestamp, window, maxSamples);
 
-    var speed = _byteWindowSpeed(state, timestamp);
+    var speed = _byteWindowSpeed(state);
     if (speed <= 0) speed = _medianReportedSpeed(state.reportedSpeedSamples);
 
     final lastByteAt = state.lastByteAt;
     if (lastByteAt != null && timestamp.difference(lastByteAt) >= staleAfter) {
       speed = 0;
     }
-    state.lastStableSpeed = speed;
 
     final expected = state.expectedBytes;
     final remainingBytes = expected > 0
@@ -160,14 +158,13 @@ class DownloadTelemetryEstimator {
     state.byteSamples.clear();
     state.reportedSpeedSamples.clear();
     state.lastByteAt = null;
-    state.lastStableSpeed = 0;
   }
 
   void remove(String taskId) => _states.remove(taskId);
 
   void clear() => _states.clear();
 
-  double _byteWindowSpeed(_TelemetryState state, DateTime now) {
+  double _byteWindowSpeed(_TelemetryState state) {
     if (state.byteSamples.length < 2) return 0;
     final latest = state.byteSamples.last;
     _BytePoint? oldest;
@@ -233,7 +230,6 @@ class _SpeedPoint extends _TimedPoint {
 class _TelemetryState {
   int transferredBytes = 0;
   int expectedBytes = -1;
-  double lastStableSpeed = 0;
   DateTime? lastByteAt;
   final ListQueue<_BytePoint> byteSamples = ListQueue<_BytePoint>();
   final ListQueue<_SpeedPoint> reportedSpeedSamples = ListQueue<_SpeedPoint>();
