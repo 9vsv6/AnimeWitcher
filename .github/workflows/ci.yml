@@ -40,6 +40,7 @@ jobs:
           PY
           python3 tool/patch_download_runtime_stability.py
           python3 tool/patch_runtime_stability_test_expectation.py
+          sed -i '' 's/package:anime_witcher/package:animewitcher/g' test/core/services/download_runtime_stability_review_test.dart
 
       - name: Format changed Dart files
         run: |
