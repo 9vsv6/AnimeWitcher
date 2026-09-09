@@ -31,7 +31,9 @@ jobs:
           cache: true
 
       - name: Apply runtime stability review
-        run: python3 tool/patch_download_runtime_stability.py
+        run: |
+          python3 tool/patch_download_runtime_stability.py
+          python3 tool/patch_runtime_stability_test_expectation.py
 
       - name: Format changed Dart files
         run: |
@@ -40,7 +42,8 @@ jobs:
             lib/core/services/download_concurrency.dart \
             lib/core/services/download_service.dart \
             lib/core/services/persistent_parallel_download.dart \
-            test/core/services/download_runtime_stability_review_test.dart
+            test/core/services/download_runtime_stability_review_test.dart \
+            test/core/services/persistent_parallel_download_test.dart
 
       - name: Install dependencies and generate sources
         run: |
@@ -135,7 +138,7 @@ jobs:
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm tool/patch_download_runtime_stability.py
+          git rm tool/patch_download_runtime_stability.py tool/patch_runtime_stability_test_expectation.py
           git add .github/workflows/ci.yml \
             lib/core/services/download_telemetry.dart \
             lib/core/services/download_concurrency.dart \
@@ -143,6 +146,7 @@ jobs:
             lib/core/services/persistent_parallel_download.dart \
             ios/Runner/DownloadNativeWaitingQueue.swift \
             ios/Runner/DownloadContinuedProcessingManager.swift \
-            test/core/services/download_runtime_stability_review_test.dart
+            test/core/services/download_runtime_stability_review_test.dart \
+            test/core/services/persistent_parallel_download_test.dart
           git commit -m "Stabilize download runtime ownership and speed reporting"
           git push
