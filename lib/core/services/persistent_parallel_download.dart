@@ -121,7 +121,6 @@ class PersistentParallelDownload {
         url: url,
         headers: Map<String, String>.from(headers),
       );
-      if (updated is! ParallelDownloadTask) return null;
       session.task = updated;
       for (final part in session.parts) {
         final childHeaders = Map<String, String>.from(headers)

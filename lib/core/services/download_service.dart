@@ -2401,7 +2401,9 @@ class DownloadService {
         _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.paused));
       },
       onFailure: (failure) async {
-        if (!logical || token == null || !await _jobStore.accepts(token)) return;
+        if (!logical || token == null) return;
+        final activeToken = token;
+        if (!await _jobStore.accepts(activeToken)) return;
         if (failure.action == DownloadFailureAction.refreshUrl) {
           // DownloadRangeTransfer removes its ownership immediately after this
           // callback returns. Queue the retry on the next event turn so the
@@ -2427,7 +2429,7 @@ class DownloadService {
             await dest.length() == failure.resourceSize &&
             (expectedBytes <= 0 || expectedBytes == failure.resourceSize)) {
           await _jobStore.updateForAttempt(
-            token,
+            activeToken,
             state: DownloadJobState.completed,
             durableBytes: failure.resourceSize,
             expectedBytes: failure.resourceSize,
