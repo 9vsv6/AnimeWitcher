@@ -2222,7 +2222,7 @@ class DownloadService {
     // can take a moment on iOS, but progress events must not visually undo the
     // user's pause while that acknowledgement is in flight.
     _userPausedIds.add(taskId);
-    await _rangeTransfers.stop(taskId);
+    final stoppedRange = await _rangeTransfers.stop(taskId);
     await _serializeQueue(() async {
       _userPausedIds.add(taskId);
       _queueWaitingIds.remove(taskId);
@@ -2249,7 +2249,10 @@ class DownloadService {
         // cancel deletes the temp file and forces a restart from byte 0.
         var didPause = false;
         try {
-          didPause = await _pauseTransfer(downloadTask);
+          didPause = await _pauseTransfer(
+            downloadTask,
+            rangeAlreadyStopped: stoppedRange,
+          );
         } catch (_) {}
         final trackingUrl = downloadTrackingUrl(downloadTask);
         final current = _ref.read(downloadProgressProvider)[trackingUrl];
@@ -2975,7 +2978,10 @@ class DownloadService {
     ..._rangeTransfers.activeTaskIds,
   };
 
-  Future<bool> _pauseTransfer(DownloadTask task) async {
+  Future<bool> _pauseTransfer(
+    DownloadTask task, {
+    bool rangeAlreadyStopped = false,
+  }) async {
     if (_rangeTransfers.isActive(task.taskId)) {
       await _rangeTransfers.stop(task.taskId);
       return true;
@@ -2997,7 +3003,14 @@ class DownloadService {
       final accepted = isInternalDownloaderChunk(task)
           ? await FileDownloader().pause(task)
           : await _nativeTransport.pause(task);
-      if (!accepted) return false;
+      if (!accepted) {
+        // pauseDownload already joined the Range writer before entering the
+        // control queue. A missing native task is expected in that case.
+        return rangeAlreadyStopped &&
+            !(await _liveTransferTasks()).any(
+              (live) => live.taskId == task.taskId,
+            );
+      }
 
       // pause() acknowledges the command before URLSession has necessarily
       // produced resume data. Wait for its state callback before resume can run.

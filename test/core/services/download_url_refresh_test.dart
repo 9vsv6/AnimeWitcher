@@ -56,11 +56,8 @@ class _FakeProvider extends AnimeWitcherProvider {
   Future<Map<String, List<MultimediaItem>>> getHome() async => const {};
 
   @override
-  Future<MultimediaItem> getDetails(String url) async => MultimediaItem(
-    title: 'Fake',
-    url: url,
-    posterUrl: '',
-  );
+  Future<MultimediaItem> getDetails(String url) async =>
+      MultimediaItem(title: 'Fake', url: url, posterUrl: '');
 
   @override
   Future<List<StreamResult>> loadStreamSources(String url) async {
@@ -81,6 +78,120 @@ class _FakeProvider extends AnimeWitcherProvider {
 }
 
 void main() {
+  const saved = DownloadUrlRefreshDescriptor(
+    trackingUrl: 'episode',
+    providerId: 'fake.provider',
+    source: 'Server A',
+    quality: '1080p',
+    updatedAtMillis: 1,
+  );
+  for (final candidate in const [
+    StreamResult(
+      url: 'https://cdn.test/other',
+      source: 'Server B',
+      quality: '1080p',
+    ),
+    StreamResult(
+      url: 'https://cdn.test/low',
+      source: 'Server A',
+      quality: '720p',
+    ),
+    StreamResult(url: 'https://cdn.test/unknown', source: 'Server A'),
+  ]) {
+    test('refresh refuses incompatible candidate ${candidate.url}', () async {
+      final provider = _FakeProvider(sources: [candidate]);
+      final refresher = DownloadUrlRefresher(providerForId: (_) => provider);
+      expect(await refresher.refresh(saved, currentUrl: 'expired'), isNull);
+    });
+  }
+
+  test(
+    'unresolved source may discover the exact quality during extraction',
+    () async {
+      final provider = _FakeProvider(
+        sources: const [
+          StreamResult(
+            url: 'opaque',
+            source: 'Server A',
+            requiresResolution: true,
+          ),
+        ],
+        resolved: const [
+          StreamResult(
+            url: 'https://cdn.test/new',
+            source: 'Server A',
+            quality: '1080p',
+          ),
+        ],
+      );
+      final refresher = DownloadUrlRefresher(providerForId: (_) => provider);
+      expect(
+        (await refresher.refresh(saved, currentUrl: 'expired'))?.url,
+        'https://cdn.test/new',
+      );
+      expect(provider.lastResolvedUrl, 'opaque');
+    },
+  );
+
+  test(
+    'resolution cannot replace saved quality with a different encoding',
+    () async {
+      final provider = _FakeProvider(
+        sources: const [
+          StreamResult(
+            url: 'opaque',
+            source: 'Server A',
+            requiresResolution: true,
+          ),
+        ],
+        resolved: const [
+          StreamResult(
+            url: 'https://cdn.test/low',
+            source: 'Server A',
+            quality: '720p',
+          ),
+        ],
+      );
+      final refresher = DownloadUrlRefresher(providerForId: (_) => provider);
+      expect(await refresher.refresh(saved, currentUrl: 'expired'), isNull);
+    },
+  );
+
+  test(
+    'incompatible refreshUrl result falls back to the saved source list',
+    () async {
+      final provider = _FakeProvider(
+        sources: const [
+          StreamResult(
+            url: 'https://cdn.test/correct',
+            source: 'Server A',
+            quality: '1080p',
+          ),
+        ],
+        resolved: const [
+          StreamResult(
+            url: 'https://cdn.test/wrong',
+            source: 'Server B',
+            quality: '1080p',
+          ),
+        ],
+      );
+      final refresher = DownloadUrlRefresher(providerForId: (_) => provider);
+      const descriptor = DownloadUrlRefreshDescriptor(
+        trackingUrl: 'episode',
+        providerId: 'fake.provider',
+        source: 'Server A',
+        quality: '1080p',
+        refreshUrl: 'stale-source',
+        updatedAtMillis: 1,
+      );
+      expect(
+        (await refresher.refresh(descriptor, currentUrl: 'expired'))?.url,
+        'https://cdn.test/correct',
+      );
+      expect(provider.lastSourcesUrl, 'episode');
+    },
+  );
   test('descriptor store round trips and expires stale entries', () async {
     var now = DateTime.utc(2026, 9, 9);
     final backend = _MemoryBackend();
@@ -97,7 +208,9 @@ void main() {
     await store.save(descriptor);
     expect((await store.get(descriptor.trackingUrl))?.quality, '1080p');
 
-    now = now.add(kDownloadUrlRefreshDescriptorTtl + const Duration(seconds: 1));
+    now = now.add(
+      kDownloadUrlRefreshDescriptorTtl + const Duration(seconds: 1),
+    );
     expect(await store.get(descriptor.trackingUrl), isNull);
     expect(backend.values, isEmpty);
   });
