@@ -34,8 +34,7 @@ class DownloadResourceFingerprint {
 
   Map<String, Object?> toJson() => <String, Object?>{
     if (strongEtag?.trim().isNotEmpty ?? false) 'strongEtag': strongEtag,
-    if (lastModified?.trim().isNotEmpty ?? false)
-      'lastModified': lastModified,
+    if (lastModified?.trim().isNotEmpty ?? false) 'lastModified': lastModified,
     if (expectedBytes > 0) 'expectedBytes': expectedBytes,
     if (finalUrl?.trim().isNotEmpty ?? false) 'finalUrl': finalUrl,
   };
@@ -61,8 +60,7 @@ class DownloadResourceFingerprint {
 
     final aModified = _nonEmptyString(lastModified);
     final bModified = _nonEmptyString(other.lastModified);
-    if (aEtag == null &&
-        bEtag == null &&
+    if ((aEtag == null || bEtag == null) &&
         aModified != null &&
         bModified != null &&
         aModified != bModified) {
@@ -108,10 +106,8 @@ class DownloadJobRecord {
   final int updatedAtMillis;
   final DownloadResourceFingerprint? fingerprint;
 
-  DownloadAttemptToken get attemptToken => DownloadAttemptToken(
-    taskId: taskId,
-    generation: generation,
-  );
+  DownloadAttemptToken get attemptToken =>
+      DownloadAttemptToken(taskId: taskId, generation: generation);
 
   DownloadJobRecord copyWith({
     String? trackingUrl,
@@ -262,7 +258,8 @@ class DownloadJobStore {
   /// Returns false for stale or unsafe writes instead of allowing a late
   /// callback to regress durable state. The only supported way to intentionally
   /// restart from byte zero is to [remove] the job first (the user-delete path).
-  Future<bool> put(DownloadJobRecord next) => _serialize(() => _putUnlocked(next));
+  Future<bool> put(DownloadJobRecord next) =>
+      _serialize(() => _putUnlocked(next));
 
   Future<bool> _putUnlocked(DownloadJobRecord next) async {
     final taskId = next.taskId.trim();
@@ -293,7 +290,33 @@ class DownloadJobStore {
       }
     }
 
-    await backend.write(taskId, next.toJson());
+    // Unknown fields in a status-only checkpoint must not discard identity
+    // evidence and let a later incompatible URL/size pass validation.
+    final oldFingerprint = current?.fingerprint;
+    final newFingerprint = next.fingerprint;
+    final fingerprint = oldFingerprint == null
+        ? newFingerprint
+        : DownloadResourceFingerprint(
+            strongEtag:
+                _nonEmptyString(newFingerprint?.strongEtag) ??
+                oldFingerprint.strongEtag,
+            lastModified:
+                _nonEmptyString(newFingerprint?.lastModified) ??
+                oldFingerprint.lastModified,
+            expectedBytes: (newFingerprint?.expectedBytes ?? -1) > 0
+                ? newFingerprint!.expectedBytes
+                : oldFingerprint.expectedBytes,
+            finalUrl:
+                _nonEmptyString(newFingerprint?.finalUrl) ??
+                oldFingerprint.finalUrl,
+          );
+    final durable = next.copyWith(
+      expectedBytes: next.expectedBytes > 0
+          ? next.expectedBytes
+          : current?.expectedBytes,
+      fingerprint: fingerprint,
+    );
+    await backend.write(taskId, durable.toJson());
     return true;
   }
 
@@ -311,8 +334,7 @@ class DownloadJobStore {
     final next = current.copyWith(
       state: state,
       generation: current.generation + 1,
-      updatedAtMillis:
-          updatedAtMillis ?? DateTime.now().millisecondsSinceEpoch,
+      updatedAtMillis: updatedAtMillis ?? DateTime.now().millisecondsSinceEpoch,
     );
     if (!await _putUnlocked(next)) return null;
     return next.attemptToken;
