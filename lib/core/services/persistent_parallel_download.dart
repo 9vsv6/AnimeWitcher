@@ -28,6 +28,12 @@ const int kParallelRecoveryMaxBackoffMultiplier = 15;
 /// on disk and finish it ourselves instead of leaving the episode at 99%.
 const double kParallelNativeCompletionSentinel = 0.999;
 
+/// A native URLSession child can remain listed as live even after it has stopped
+/// delivering bytes. Near the tail this used to reserve the final connection
+/// forever because reconcile trusted native ownership unconditionally. Give a
+/// genuinely finishing worker enough time, then settle/recover that one range.
+const Duration kParallelTailStallDelay = Duration(seconds: 20);
+
 /// Native DownloadTasks transfer the parts; this coordinator persists their
 /// identity before starting them. A process restart must not create new parts
 /// or ask the plugin to resume an already completed part.
@@ -49,6 +55,7 @@ class PersistentParallelDownload {
     required this.onPartProgress,
     this.livePartIds,
     this.recoveryDelay = const Duration(seconds: 1),
+    this.tailStallDelay = kParallelTailStallDelay,
     this.maxActiveConnections = kDownloadGlobalConnectionBudget,
   });
 
@@ -64,6 +71,7 @@ class PersistentParallelDownload {
   final int maxActiveConnections;
   final Future<Set<String>> Function()? livePartIds;
   final Duration recoveryDelay;
+  final Duration tailStallDelay;
 
   final Map<String, _ParallelSession> _sessions = {};
   final Map<String, _ParallelSession> _children = {};
@@ -282,6 +290,7 @@ class PersistentParallelDownload {
             )) {
               continue;
             }
+            _armTailStallWatch(session, part);
             continue;
           }
 
@@ -425,6 +434,8 @@ class PersistentParallelDownload {
           return true;
         }
 
+        _armTailStallWatch(session, part);
+
         // On process recovery a child may already be owned by native IO, so a
         // fresh running callback is not guaranteed.
         if (record != null &&
@@ -457,13 +468,207 @@ class PersistentParallelDownload {
     }
   }
 
+  void _cancelTailStallWatch(_DownloadPart part) {
+    part.tailStallTimer?.cancel();
+    part.tailStallTimer = null;
+  }
+
   void _releaseConnection(_DownloadPart part) {
     part.recoveryTimer?.cancel();
     part.recoveryTimer = null;
+    _cancelTailStallWatch(part);
     _activeConnectionIds.remove(part.task.taskId);
     part.launched = false;
     part.speed = 0;
     _schedulePumpAll();
+  }
+
+  void _armTailStallWatch(
+    _ParallelSession session,
+    _DownloadPart part,
+  ) {
+    if (_disposed ||
+        !session.active ||
+        session.deleted ||
+        part.complete ||
+        !part.launched ||
+        part.progress < kParallelNativeCompletionSentinel ||
+        part.progress >= 1) {
+      _cancelTailStallWatch(part);
+      return;
+    }
+
+    final observedProgress = part.progress;
+    if (part.tailStallTimer != null &&
+        observedProgress <= part.tailWatchProgress) {
+      return;
+    }
+
+    _cancelTailStallWatch(part);
+    part.tailWatchProgress = observedProgress;
+    final generation = session.generation;
+    part.tailStallTimer = Timer(tailStallDelay, () {
+      part.tailStallTimer = null;
+      unawaited(
+        session.serialize(() async {
+          if (_disposed ||
+              !session.active ||
+              session.deleted ||
+              session.generation != generation ||
+              part.complete ||
+              !part.launched) {
+            return;
+          }
+          if (part.progress > observedProgress) {
+            _armTailStallWatch(session, part);
+            return;
+          }
+          await _recoverTailStall(session, part);
+        }),
+      );
+    });
+  }
+
+  Future<void> _afterAdoptedPart(
+    _ParallelSession session,
+  ) async {
+    await _persist(session);
+    if (session.parts.every((child) => child.complete)) {
+      await _assemble(session);
+    } else {
+      _scheduleAggregateProgress(session);
+      _schedulePumpAll();
+    }
+  }
+
+  /// A tail child that is still marked live but has made no forward progress
+  /// must not own the final slot forever. First settle/pause the same child and
+  /// preserve its native resume data. If that exact worker returns but remains
+  /// stuck, recycle only that immutable Range; all completed sibling ranges are
+  /// left untouched.
+  Future<void> _recoverTailStall(
+    _ParallelSession session,
+    _DownloadPart part,
+  ) async {
+    if (_disposed || !session.active || session.deleted || part.complete) return;
+
+    if (await _adoptExactSizePart(
+      session,
+      part,
+      settleNativeOwner: part.launched,
+    )) {
+      await _afterAdoptedPart(session);
+      return;
+    }
+
+    if (!part.tailRecoveryAttempted) {
+      part.tailRecoveryAttempted = true;
+      try {
+        await pausePart(part.task);
+      } catch (_) {
+        // The worker can already be a stale URLSession bookkeeping entry.
+      }
+
+      if (await _adoptExactSizePart(
+        session,
+        part,
+        settleNativeOwner: false,
+      )) {
+        await _afterAdoptedPart(session);
+        return;
+      }
+
+      _stabilizeSessionForRecovery(session);
+      _schedulePartRecovery(session, part);
+      await _persist(session);
+      await _status(session, TaskStatus.running);
+      return;
+    }
+
+    await _recycleStalledTailRange(session, part);
+  }
+
+  Future<void> _recycleStalledTailRange(
+    _ParallelSession session,
+    _DownloadPart part,
+  ) async {
+    final destinationPath = await part.task.filePath();
+    final partial = await canonicalizePartialDownloadFile(
+      destinationPath: destinationPath,
+    );
+    var savedBytes = partial?.bytes ?? 0;
+    File? backup;
+
+    // cancelTasksWithIds may remove URLSession's child file. Preserve a visible
+    // prefix outside the plugin's temp names, then restore it under the same
+    // child path so DownloadRangeTransfer can append only the missing suffix.
+    if (savedBytes > 0 && savedBytes < part.size && partial != null) {
+      backup = File('$destinationPath.aw-tail-recovery');
+      try {
+        if (await backup.exists()) await backup.delete();
+        await partial.file.copy(backup.path);
+      } catch (_) {
+        backup = null;
+      }
+    } else if (savedBytes > part.size) {
+      // An oversized child is not a safe prefix of its immutable Range.
+      savedBytes = 0;
+    }
+
+    _cancelTailStallWatch(part);
+    _activeConnectionIds.remove(part.task.taskId);
+    part.launched = false;
+    part.speed = 0;
+    session.currentBatchPendingIds.remove(part.task.taskId);
+
+    try {
+      await cancelParts(<String>[part.task.taskId]);
+    } catch (_) {
+      // Recovery remains safe even if native already forgot this child.
+    }
+
+    if (backup != null) {
+      try {
+        if (await backup.exists()) {
+          final destination = File(destinationPath);
+          await destination.parent.create(recursive: true);
+          await backup.copy(destination.path);
+          await backup.delete();
+        }
+      } catch (_) {}
+    }
+
+    final restored = await canonicalizePartialDownloadFile(
+      destinationPath: destinationPath,
+    );
+    savedBytes = restored?.bytes ?? 0;
+    if (savedBytes == part.size && part.size > 0) {
+      part.complete = true;
+      part.progress = 1;
+      await saveRecord(TaskRecord(part.task, TaskStatus.complete, 1, part.size));
+      onPartProgress(session.task.taskId, part.task.taskId, 1);
+      await _afterAdoptedPart(session);
+      return;
+    }
+    if (savedBytes < 0 || savedBytes > part.size) savedBytes = 0;
+
+    // If native resume data/temp bytes are genuinely inaccessible, zero means
+    // re-fetch only this one immutable Range. Never restart the parent episode
+    // or any of its already-completed siblings.
+    part.progress = part.size > 0 ? savedBytes / part.size : 0;
+    part.recoveryAttempts = 0;
+    await saveRecord(
+      TaskRecord(part.task, TaskStatus.paused, part.progress, part.size),
+    );
+    onPartProgress(
+      session.task.taskId,
+      part.task.taskId,
+      part.progress,
+    );
+    await _persist(session);
+    _stabilizeSessionForRecovery(session);
+    _schedulePartRecovery(session, part);
+    await _status(session, TaskStatus.running);
   }
 
   /// Adopt a range whose complete callback was lost after every requested byte
@@ -720,8 +925,10 @@ class PersistentParallelDownload {
                 : part.progress;
             if (part.progress > previousProgress) {
               // A recovered connection that actually writes bytes is healthy
-              // again. Future interruptions start from the short backoff.
+              // again. Future interruptions start from the short backoff and
+              // the tail watchdog gets a fresh grace period.
               part.recoveryAttempts = 0;
+              part.tailRecoveryAttempted = false;
             }
             part.speed = update.networkSpeed > 0 ? update.networkSpeed : 0;
 
@@ -737,16 +944,11 @@ class PersistentParallelDownload {
                   part,
                   settleNativeOwner: part.launched,
                 )) {
-              await _persist(session);
-              if (session.parts.every((child) => child.complete)) {
-                await _assemble(session);
-              } else {
-                _scheduleAggregateProgress(session);
-                _schedulePumpAll();
-              }
+              await _afterAdoptedPart(session);
               return;
             }
 
+            _armTailStallWatch(session, part);
             onPartProgress(
               session.task.taskId,
               part.task.taskId,
@@ -772,6 +974,7 @@ class PersistentParallelDownload {
             part.speed = 0;
             _activeConnectionIds.add(part.task.taskId);
             _applyConnectionPressure(session, update);
+            _armTailStallWatch(session, part);
             await _persist(session);
             await _status(session, TaskStatus.running);
             return;
@@ -821,6 +1024,7 @@ class PersistentParallelDownload {
             part.launched = true;
             _activeConnectionIds.add(part.task.taskId);
             _markConnectionReady(session, part);
+            _armTailStallWatch(session, part);
             await _status(session, TaskStatus.running);
             _schedulePumpAll();
             return;
@@ -904,6 +1108,7 @@ class PersistentParallelDownload {
     if (!session.active || session.deleted || _disposed || part.complete) {
       return false;
     }
+    _cancelTailStallWatch(part);
     part.recoveryAttempts++;
     part.speed = 0;
 
@@ -955,9 +1160,13 @@ class PersistentParallelDownload {
             continue;
           }
 
-          // A genuinely live worker that does not yet have every byte should
-          // continue normally. Only a vanished owner enters recovery.
-          if (nativeOwnsPart) continue;
+          // A genuinely live worker normally continues untouched. A live child
+          // parked at the completion sentinel is different: arm the watchdog so
+          // stale URLSession ownership cannot reserve the final slot forever.
+          if (nativeOwnsPart) {
+            _armTailStallWatch(session, part);
+            continue;
+          }
 
           // URLSession can temporarily drop a worker during hand-off without
           // delivering its final callback to Dart. Recover that one child;
@@ -1217,6 +1426,8 @@ class _ParallelSession {
     for (final part in parts) {
       part.recoveryTimer?.cancel();
       part.recoveryTimer = null;
+      part.tailStallTimer?.cancel();
+      part.tailStallTimer = null;
     }
   }
 
@@ -1245,6 +1456,9 @@ class _DownloadPart {
   double speed = 0;
   int recoveryAttempts = 0;
   Timer? recoveryTimer;
+  Timer? tailStallTimer;
+  double tailWatchProgress = -1;
+  bool tailRecoveryAttempted = false;
 
   int get size => to - from + 1;
 
