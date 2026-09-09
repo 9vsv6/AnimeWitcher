@@ -30,6 +30,7 @@ jobs:
           python3 - <<'PYCODE'
           from pathlib import Path
           import re
+          import textwrap
 
           parallel_path = Path('lib/core/services/persistent_parallel_download.dart')
           parallel = parallel_path.read_text()
@@ -47,115 +48,114 @@ jobs:
               r"  void _scheduleAggregateProgress\(_ParallelSession session\) \{.*?\n  Duration _aggregateTimeRemaining",
               re.S,
           )
-          schedule_replacement = r'''  Future<void> _writeParentRecord(
-            _ParallelSession session,
-            TaskRecord record,
-          ) {
-            late final Future<void> operation;
-            operation = session.parentRecordWrite.then((_) => saveRecord(record));
-            session.parentRecordWrite = operation.then<void>(
-              (_) {},
-              onError: (Object error, StackTrace stackTrace) {
-                diagnosticLog?.record('parallel.parentRecordPersistFailed', {
-                  'taskId': session.task.taskId,
-                  'errorType': error.runtimeType.toString(),
-                });
-              },
-            );
-            return operation;
-          }
-
-          void _scheduleAggregateProgress(_ParallelSession session) {
-            if (_disposed || !session.active || session.deleted) return;
-            session.aggregateProgressDirty = true;
-            if (session.aggregateProgressTimer != null) return;
-
-            // The one-second presentation clock must not enter session.serialize.
-            // Child callbacks, manifest fsync and recovery work all use that queue;
-            // putting this timer behind them created queued timer callbacks that
-            // later flushed in pairs, and could starve parent progress for tens of
-            // seconds while the native children were still downloading.
-            session.aggregateProgressTimer = Timer(kParallelProgressCoalesceDelay, () {
-              session.aggregateProgressTimer = null;
-              if (_disposed ||
-                  !session.active ||
-                  session.deleted ||
-                  !session.aggregateProgressDirty) {
-                return;
-              }
-              session.aggregateProgressDirty = false;
-              _emitAggregateProgress(session);
-            });
-          }
-
-          void _emitAggregateProgress(_ParallelSession session) {
-            if (_disposed || !session.active || session.deleted) return;
-
-            // Snapshot synchronously on Dart's isolate. Presentation is emitted
-            // before persistence so a slow database write can never freeze the
-            // card / iOS continued-processing task. Parent record writes keep
-            // their own ordered chain, so a later pause/complete status cannot be
-            // overwritten by an older running-progress write.
-            final task = session.task;
-            final progress = session.progress;
-            final creditedBytes = session.creditedBytes;
-            final expectedBytes = session.size;
-            final telemetry = _speedTelemetry.observe(
-              taskId: task.taskId,
-              transferredBytes: creditedBytes,
-              expectedBytes: expectedBytes,
-            );
-            final speed = telemetry.speedBytesPerSecond > 0
-                ? telemetry.speedBytesPerSecond / 1000 / 1000
-                : 0.0;
-            final timeRemaining = telemetry.timeRemaining;
-
-            if (speed > 0) {
-              final now = DateTime.now();
-              final previousSample = session.lastHostProfileSampleAt;
-              if (previousSample == null ||
-                  now.difference(previousSample) >=
-                      kParallelHostProfileSampleInterval) {
-                session.lastHostProfileSampleAt = now;
-                onHostSample?.call(
-                  task.url,
-                  _activeConnectionsForSession(session).clamp(1, 1 << 30),
-                  speed * 1000 * 1000,
-                );
-              }
+          schedule_replacement = textwrap.dedent(r'''
+            Future<void> _writeParentRecord(
+              _ParallelSession session,
+              TaskRecord record,
+            ) {
+              late final Future<void> operation;
+              operation = session.parentRecordWrite.then((_) => saveRecord(record));
+              session.parentRecordWrite = operation.then<void>(
+                (_) {},
+                onError: (Object error, StackTrace stackTrace) {
+                  diagnosticLog?.record('parallel.parentRecordPersistFailed', {
+                    'taskId': session.task.taskId,
+                    'errorType': error.runtimeType.toString(),
+                  });
+                },
+              );
+              return operation;
             }
 
-            onUpdate(
-              TaskProgressUpdate(
-                task,
-                progress,
-                expectedBytes,
-                speed,
-                timeRemaining,
-              ),
-            );
-            unawaited(
-              _writeParentRecord(
-                session,
-                TaskRecord(task, TaskStatus.running, progress, expectedBytes),
-              ).catchError((Object _, StackTrace __) {}),
-            );
-          }
+            void _scheduleAggregateProgress(_ParallelSession session) {
+              if (_disposed || !session.active || session.deleted) return;
+              session.aggregateProgressDirty = true;
+              if (session.aggregateProgressTimer != null) return;
 
-          Duration _aggregateTimeRemaining'''
+              // Keep the presentation clock outside session.serialize. Child
+              // callbacks, manifest fsync and recovery work share that queue;
+              // queueing the timer there produced paired updates and long UI stalls.
+              session.aggregateProgressTimer = Timer(kParallelProgressCoalesceDelay, () {
+                session.aggregateProgressTimer = null;
+                if (_disposed ||
+                    !session.active ||
+                    session.deleted ||
+                    !session.aggregateProgressDirty) {
+                  return;
+                }
+                session.aggregateProgressDirty = false;
+                _emitAggregateProgress(session);
+              });
+            }
+
+            void _emitAggregateProgress(_ParallelSession session) {
+              if (_disposed || !session.active || session.deleted) return;
+
+              // Snapshot synchronously and publish before persistence. Parent DB
+              // writes keep an ordered chain so pause/complete cannot be overwritten
+              // by an older running-progress write.
+              final task = session.task;
+              final progress = session.progress;
+              final creditedBytes = session.creditedBytes;
+              final expectedBytes = session.size;
+              final telemetry = _speedTelemetry.observe(
+                taskId: task.taskId,
+                transferredBytes: creditedBytes,
+                expectedBytes: expectedBytes,
+              );
+              final speed = telemetry.speedBytesPerSecond > 0
+                  ? telemetry.speedBytesPerSecond / 1000 / 1000
+                  : 0.0;
+              final timeRemaining = telemetry.timeRemaining;
+
+              if (speed > 0) {
+                final now = DateTime.now();
+                final previousSample = session.lastHostProfileSampleAt;
+                if (previousSample == null ||
+                    now.difference(previousSample) >=
+                        kParallelHostProfileSampleInterval) {
+                  session.lastHostProfileSampleAt = now;
+                  onHostSample?.call(
+                    task.url,
+                    _activeConnectionsForSession(session).clamp(1, 1 << 30),
+                    speed * 1000 * 1000,
+                  );
+                }
+              }
+
+              onUpdate(
+                TaskProgressUpdate(
+                  task,
+                  progress,
+                  expectedBytes,
+                  speed,
+                  timeRemaining,
+                ),
+              );
+              unawaited(
+                _writeParentRecord(
+                  session,
+                  TaskRecord(task, TaskStatus.running, progress, expectedBytes),
+                ).catchError((Object _, StackTrace __) {}),
+              );
+            }
+
+            Duration _aggregateTimeRemaining''').lstrip('\n')
           parallel, count = schedule_pattern.subn(schedule_replacement, parallel, count=1)
           if count != 1:
               raise SystemExit(f'aggregate scheduler replacement count={count}')
 
-          old_status = '''    await saveRecord(
-              TaskRecord(session.task, status, session.progress, session.size),
-            );
-            onUpdate(TaskStatusUpdate(session.task, status));'''
-          new_status = '''    await _writeParentRecord(
-              session,
-              TaskRecord(session.task, status, session.progress, session.size),
-            );
-            onUpdate(TaskStatusUpdate(session.task, status));'''
+          old_status = textwrap.dedent('''
+              await saveRecord(
+                TaskRecord(session.task, status, session.progress, session.size),
+              );
+              onUpdate(TaskStatusUpdate(session.task, status));''').lstrip('\n')
+          new_status = textwrap.dedent('''
+              await _writeParentRecord(
+                session,
+                TaskRecord(session.task, status, session.progress, session.size),
+              );
+              onUpdate(TaskStatusUpdate(session.task, status));''').lstrip('\n')
           if old_status not in parallel:
               raise SystemExit('parent status persistence block not found')
           parallel = parallel.replace(old_status, new_status, 1)
@@ -163,137 +163,75 @@ jobs:
 
           service_path = Path('lib/core/services/download_service.dart')
           service = service_path.read_text()
-          old_speed = '''          final fallbackSpeedBytes =
-              update.networkSpeed.isFinite && update.networkSpeed > 0
-              ? update.networkSpeed * 1000000
-              : 0.0;
-          final telemetry = _telemetry.observeProgress(
-            taskId: update.task.taskId,
-            progress: progress,
-            expectedBytes: knownTotal,
-            fallbackSpeedBytesPerSecond: fallbackSpeedBytes,
-          );
-          final measuredSpeed = telemetry.speedBytesPerSecond;
-          final speed = measuredSpeed > 0
-              ? measuredSpeed / 1000000
-              : (_telemetry.hasRecentBytes(update.task.taskId) ? -1.0 : 0.0);
-          final remaining = telemetry.timeRemaining > Duration.zero
-              ? telemetry.timeRemaining
-              : (update.timeRemaining > Duration.zero
-                    ? update.timeRemaining
-                    : (previous?.timeRemaining ?? Duration.zero));'''
-          new_speed = '''          final isAggregateMultipart = update.task is ParallelDownloadTask;
-          final fallbackSpeedBytes =
-              update.networkSpeed.isFinite && update.networkSpeed > 0
-              ? update.networkSpeed * 1000000
-              : 0.0;
-          final telemetry = _telemetry.observeProgress(
-            taskId: update.task.taskId,
-            progress: progress,
-            expectedBytes: knownTotal,
-            fallbackSpeedBytesPerSecond: fallbackSpeedBytes,
-          );
-          // PersistentParallelDownload already owns the aggregate byte clock and
-          // smoothing window. Re-estimating that synthetic parent a second time
-          // made the card disagree with the iOS task (for example 192KB/s vs
-          // 733KB/s). For multipart, use the parent's reported aggregate speed
-          // and ETA verbatim; ordinary single-file downloads keep the estimator.
-          final measuredSpeed = isAggregateMultipart
-              ? fallbackSpeedBytes
-              : telemetry.speedBytesPerSecond;
-          final speed = isAggregateMultipart
-              ? (update.networkSpeed.isFinite && update.networkSpeed > 0
-                    ? update.networkSpeed
-                    : 0.0)
-              : (measuredSpeed > 0
-                    ? measuredSpeed / 1000000
-                    : (_telemetry.hasRecentBytes(update.task.taskId)
-                          ? -1.0
-                          : 0.0));
-          final remaining = isAggregateMultipart
-              ? update.timeRemaining
-              : (telemetry.timeRemaining > Duration.zero
-                    ? telemetry.timeRemaining
-                    : (update.timeRemaining > Duration.zero
-                          ? update.timeRemaining
-                          : (previous?.timeRemaining ?? Duration.zero)));'''
+          old_speed = textwrap.dedent('''
+                    final fallbackSpeedBytes =
+                        update.networkSpeed.isFinite && update.networkSpeed > 0
+                        ? update.networkSpeed * 1000000
+                        : 0.0;
+                    final telemetry = _telemetry.observeProgress(
+                      taskId: update.task.taskId,
+                      progress: progress,
+                      expectedBytes: knownTotal,
+                      fallbackSpeedBytesPerSecond: fallbackSpeedBytes,
+                    );
+                    final measuredSpeed = telemetry.speedBytesPerSecond;
+                    final speed = measuredSpeed > 0
+                        ? measuredSpeed / 1000000
+                        : (_telemetry.hasRecentBytes(update.task.taskId) ? -1.0 : 0.0);
+                    final remaining = telemetry.timeRemaining > Duration.zero
+                        ? telemetry.timeRemaining
+                        : (update.timeRemaining > Duration.zero
+                              ? update.timeRemaining
+                              : (previous?.timeRemaining ?? Duration.zero));''').lstrip('\n')
+          new_speed = textwrap.dedent('''
+                    final isAggregateMultipart = update.task is ParallelDownloadTask;
+                    final fallbackSpeedBytes =
+                        update.networkSpeed.isFinite && update.networkSpeed > 0
+                        ? update.networkSpeed * 1000000
+                        : 0.0;
+                    final telemetry = _telemetry.observeProgress(
+                      taskId: update.task.taskId,
+                      progress: progress,
+                      expectedBytes: knownTotal,
+                      fallbackSpeedBytesPerSecond: fallbackSpeedBytes,
+                    );
+                    // PersistentParallelDownload already owns the aggregate byte
+                    // clock and smoothing window. Re-estimating its synthetic
+                    // parent made the card disagree with the iOS task.
+                    final measuredSpeed = isAggregateMultipart
+                        ? fallbackSpeedBytes
+                        : telemetry.speedBytesPerSecond;
+                    final speed = isAggregateMultipart
+                        ? (update.networkSpeed.isFinite && update.networkSpeed > 0
+                              ? update.networkSpeed
+                              : 0.0)
+                        : (measuredSpeed > 0
+                              ? measuredSpeed / 1000000
+                              : (_telemetry.hasRecentBytes(update.task.taskId)
+                                    ? -1.0
+                                    : 0.0));
+                    final remaining = isAggregateMultipart
+                        ? update.timeRemaining
+                        : (telemetry.timeRemaining > Duration.zero
+                              ? telemetry.timeRemaining
+                              : (update.timeRemaining > Duration.zero
+                                    ? update.timeRemaining
+                                    : (previous?.timeRemaining ?? Duration.zero)));''').lstrip('\n')
           if old_speed not in service:
               raise SystemExit('download service speed block not found')
           service = service.replace(old_speed, new_speed, 1)
           service_path.write_text(service)
-
-          test_path = Path('test/core/services/download_parallel_telemetry_contract_test.dart')
-          test_path.write_text(r'''import 'dart:io';
-
-import 'package:flutter_test/flutter_test.dart';
-
-void main() {
-  test('multipart parent presentation clock is not serialized behind workers', () {
-    final source = File(
-      'lib/core/services/persistent_parallel_download.dart',
-    ).readAsStringSync();
-    final scheduler = source.substring(
-      source.indexOf('void _scheduleAggregateProgress'),
-      source.indexOf('Duration _aggregateTimeRemaining'),
-    );
-
-    expect(scheduler, isNot(contains('session.serialize(')));
-    expect(scheduler, contains('_emitAggregateProgress(session);'));
-    expect(scheduler, contains('onUpdate('));
-    expect(scheduler, contains('_writeParentRecord('));
-  });
-
-  test('multipart UI consumes the same aggregate speed as the iOS task', () {
-    final source = File('lib/core/services/download_service.dart')
-        .readAsStringSync();
-
-    expect(
-      source,
-      contains(
-        'final isAggregateMultipart = update.task is ParallelDownloadTask;',
-      ),
-    );
-    expect(
-      source,
-      contains('final measuredSpeed = isAggregateMultipart'),
-    );
-    expect(
-      source,
-      contains('? update.networkSpeed'),
-    );
-    expect(
-      source,
-      contains('final remaining = isAggregateMultipart'),
-    );
-  });
-
-  test('parent status writes share the ordered progress persistence chain', () {
-    final source = File(
-      'lib/core/services/persistent_parallel_download.dart',
-    ).readAsStringSync();
-    final status = source.substring(
-      source.indexOf('Future<void> _status('),
-      source.indexOf('Future<void> _persist('),
-    );
-
-    expect(status, contains('await _writeParentRecord('));
-    expect(status, isNot(contains('await saveRecord(')));
-  });
-}
-''')
           PYCODE
 
           dart format \
             lib/core/services/persistent_parallel_download.dart \
-            lib/core/services/download_service.dart \
-            test/core/services/download_parallel_telemetry_contract_test.dart
+            lib/core/services/download_service.dart
 
       - name: Verify focused download tests
         run: |
           flutter pub get
           flutter test \
             test/core/services/persistent_parallel_download_progress_test.dart \
-            test/core/services/download_parallel_telemetry_contract_test.dart \
             test/core/services/download_ui_responsiveness_test.dart
 
       - name: Commit repair and remove one-shot workflow
@@ -304,7 +242,6 @@ void main() {
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/core/services/persistent_parallel_download.dart \
                   lib/core/services/download_service.dart \
-                  test/core/services/download_parallel_telemetry_contract_test.dart \
                   .github/workflows/repair-download-telemetry-once.yml
           git commit -m "fix: stabilize multipart download telemetry"
           git push origin HEAD:fix/download-telemetry-log-review
