@@ -23,9 +23,10 @@ const Duration kParallelProgressCoalesceDelay = Duration(milliseconds: 350);
 const int kParallelRecoveryMaxBackoffMultiplier = 15;
 
 /// background_downloader deliberately keeps a child just below 1.0 until its
-/// final status callback is delivered. If iOS loses that callback while the
-/// exact range bytes are already durable, this sentinel lets us verify the file
-/// on disk and finish it ourselves instead of leaving the episode at 99%.
+/// final status callback is delivered. This is a completion sentinel, not a
+/// byte-accurate 99.9% sample. It may drive recovery, but it must never be
+/// credited to the logical episode until exact bytes or a normal progress
+/// sample prove what is actually durable.
 const double kParallelNativeCompletionSentinel = 0.999;
 
 /// A native URLSession child can remain listed as live even after it has stopped
@@ -87,6 +88,10 @@ class PersistentParallelDownload {
     final session = _sessions[id];
     return session != null && _activeConnectionsForSession(session) > 0;
   }
+
+  /// The byte-credible aggregate for a restored/live multipart parent.
+  /// Native 0.999 completion sentinels are intentionally excluded.
+  double? progressFor(String id) => _sessions[id]?.progress;
 
   /// Includes native tasks that were handed to the OS but are still waiting
   /// for a socket. Counting them is deliberate: the manager never queues more
@@ -152,6 +157,68 @@ class PersistentParallelDownload {
           try {
             if (await temp.exists()) await temp.delete();
           } catch (_) {}
+        }
+
+        // Manifests written before credibleProgress existed may contain 0.999
+        // for an unfinished child. That value is background_downloader's tail
+        // sentinel, not proof that ~one whole Range exists. Keep it as the raw
+        // recovery hint, but rebuild the credited amount from visible bytes
+        // when native no longer owns the child. Never copy/read a native temp
+        // file that is still being written by URLSession.
+        var repaired = false;
+        for (final part in session.parts) {
+          if (!part.needsCredibleProgressRepair) continue;
+          repaired = true;
+          if (!part.launched) {
+            try {
+              final partial = await findPartialDownloadFile(
+                destinationPath: await part.task.filePath(),
+              );
+              final bytes = partial == null ? 0 : await partial.length();
+              if (bytes == part.size && part.size > 0) {
+                part.complete = true;
+                part.progress = 1;
+                part.credibleProgress = 1;
+              } else if (bytes > 0 && bytes < part.size) {
+                part.credibleProgress = bytes / part.size;
+              }
+            } catch (_) {}
+          }
+          part.needsCredibleProgressRepair = false;
+
+          final childRecord = await recordForId(part.task.taskId);
+          if (childRecord != null &&
+              !part.complete &&
+              childRecord.progress >= kParallelNativeCompletionSentinel) {
+            await saveRecord(
+              TaskRecord(
+                part.task,
+                childRecord.status,
+                part.credibleProgress,
+                part.size,
+              ),
+            );
+          } else if (part.complete) {
+            await saveRecord(
+              TaskRecord(part.task, TaskStatus.complete, 1, part.size),
+            );
+          }
+        }
+
+        if (repaired) {
+          await _persist(session);
+          final parentRecord = await recordForId(task.taskId);
+          if (parentRecord != null &&
+              parentRecord.status != TaskStatus.complete) {
+            await saveRecord(
+              TaskRecord(
+                task,
+                parentRecord.status,
+                session.progress,
+                session.size,
+              ),
+            );
+          }
         }
         return true;
       } catch (_) {
@@ -301,12 +368,19 @@ class PersistentParallelDownload {
           if (await file.exists() && await file.length() == part.size) {
             part.complete = true;
             part.progress = 1;
+            part.credibleProgress = 1;
             _activeConnectionIds.remove(part.task.taskId);
             part.launched = false;
             await saveRecord(
               TaskRecord(part.task, TaskStatus.complete, 1, part.size),
             );
             continue;
+          }
+          if (saved != null && saved.bytes > 0 && saved.bytes < part.size) {
+            final diskProgress = saved.bytes / part.size;
+            if (diskProgress > part.credibleProgress) {
+              part.credibleProgress = diskProgress;
+            }
           }
           if (part.complete) throw StateError('A completed part is missing');
         }
@@ -415,6 +489,13 @@ class PersistentParallelDownload {
         if (progress > part.progress && progress <= 1) {
           part.progress = progress;
         }
+        // A child DB checkpoint at 0.999 is the same native sentinel as the
+        // callback. Preserve it as a resume/recovery hint, but never turn it
+        // into credited bytes. Ordinary (< 0.999) checkpoints remain useful.
+        if (progress > part.credibleProgress &&
+            progress < kParallelNativeCompletionSentinel) {
+          part.credibleProgress = progress;
+        }
 
         // Reserve before enqueueing to close the enqueue->running race. This
         // also keeps 5 episodes x 16 parts from becoming 80 native requests.
@@ -498,7 +579,7 @@ class PersistentParallelDownload {
       return;
     }
 
-    final observedProgress = part.progress;
+    final observedProgress = part.credibleProgress;
     if (part.tailStallTimer != null &&
         observedProgress <= part.tailWatchProgress) {
       return;
@@ -519,7 +600,7 @@ class PersistentParallelDownload {
               !part.launched) {
             return;
           }
-          if (part.progress > observedProgress) {
+          if (part.credibleProgress > observedProgress) {
             _armTailStallWatch(session, part);
             return;
           }
@@ -645,6 +726,7 @@ class PersistentParallelDownload {
     if (savedBytes == part.size && part.size > 0) {
       part.complete = true;
       part.progress = 1;
+      part.credibleProgress = 1;
       await saveRecord(TaskRecord(part.task, TaskStatus.complete, 1, part.size));
       onPartProgress(session.task.taskId, part.task.taskId, 1);
       await _afterAdoptedPart(session);
@@ -656,6 +738,7 @@ class PersistentParallelDownload {
     // re-fetch only this one immutable Range. Never restart the parent episode
     // or any of its already-completed siblings.
     part.progress = part.size > 0 ? savedBytes / part.size : 0;
+    part.credibleProgress = part.progress;
     part.recoveryAttempts = 0;
     await saveRecord(
       TaskRecord(part.task, TaskStatus.paused, part.progress, part.size),
@@ -663,7 +746,7 @@ class PersistentParallelDownload {
     onPartProgress(
       session.task.taskId,
       part.task.taskId,
-      part.progress,
+      part.credibleProgress,
     );
     await _persist(session);
     _stabilizeSessionForRecovery(session);
@@ -701,6 +784,7 @@ class PersistentParallelDownload {
     _releaseConnection(part);
     part.complete = true;
     part.progress = 1;
+    part.credibleProgress = 1;
     await saveRecord(TaskRecord(part.task, TaskStatus.complete, 1, part.size));
     onPartProgress(session.task.taskId, part.task.taskId, 1);
     return true;
@@ -824,7 +908,7 @@ class PersistentParallelDownload {
     }
     final remainingBytes = session.parts.fold<double>(
       0,
-      (sum, part) => sum + part.size * (1 - part.progress),
+      (sum, part) => sum + part.size * (1 - part.credibleProgress),
     );
     if (remainingBytes <= 0) return Duration.zero;
 
@@ -919,11 +1003,27 @@ class PersistentParallelDownload {
               _activeConnectionIds.add(part.task.taskId);
               _markConnectionReady(session, part);
             }
-            final previousProgress = part.progress;
-            part.progress = update.progress > part.progress
-                ? update.progress
-                : part.progress;
-            if (part.progress > previousProgress) {
+            final incoming = update.progress;
+            final previousCredibleProgress = part.credibleProgress;
+
+            if (incoming >= kParallelNativeCompletionSentinel) {
+              // 0.999 (and a progress-only 1.0) is a native completion
+              // sentinel. Keep it for exact-size adoption/watchdog recovery,
+              // but do not count it as downloaded bytes.
+              if (incoming > part.progress) part.progress = incoming;
+            } else if (incoming > part.credibleProgress) {
+              // A normal sample is byte-credible. If this connection is
+              // recovering from a previously observed 0.999 sentinel, allow
+              // the raw marker to move back below 0.999 so the tail watchdog
+              // is canceled by genuine forward progress.
+              part.credibleProgress = incoming;
+              if (part.progress >= kParallelNativeCompletionSentinel ||
+                  incoming > part.progress) {
+                part.progress = incoming;
+              }
+            }
+
+            if (part.credibleProgress > previousCredibleProgress) {
               // A recovered connection that actually writes bytes is healthy
               // again. Future interruptions start from the short backoff and
               // the tail watchdog gets a fresh grace period.
@@ -938,7 +1038,7 @@ class PersistentParallelDownload {
             // the child here settles native ownership before assembly deletes
             // the .part files.
             if (session.active &&
-                part.progress >= kParallelNativeCompletionSentinel &&
+                incoming >= kParallelNativeCompletionSentinel &&
                 await _adoptExactSizePart(
                   session,
                   part,
@@ -952,7 +1052,7 @@ class PersistentParallelDownload {
             onPartProgress(
               session.task.taskId,
               part.task.taskId,
-              part.progress,
+              part.credibleProgress,
             );
             await _persist(session);
             if (session.active) {
@@ -1008,6 +1108,7 @@ class PersistentParallelDownload {
             _releaseConnection(part);
             part.complete = true;
             part.progress = 1;
+            part.credibleProgress = 1;
             onPartProgress(session.task.taskId, part.task.taskId, 1);
             await _persist(session);
             if (session.active &&
@@ -1322,6 +1423,7 @@ class PersistentParallelDownload {
     await source.rename(target.path);
     sourcePart.complete = true;
     sourcePart.progress = 1;
+    sourcePart.credibleProgress = 1;
     await _finishCompleteSession(session);
     return true;
   }
@@ -1401,7 +1503,10 @@ class _ParallelSession {
 
   int get size => parts.fold(0, (sum, part) => sum + part.size);
   double get progress =>
-      parts.fold<double>(0, (sum, part) => sum + part.size * part.progress) /
+      parts.fold<double>(
+        0,
+        (sum, part) => sum + part.size * part.credibleProgress,
+      ) /
       size;
   Future<void> get idle => _pending;
 
@@ -1445,12 +1550,29 @@ class _DownloadPart {
     this.to, {
     this.progress = 0,
     this.complete = false,
-  });
+    double? credibleProgress,
+    this.needsCredibleProgressRepair = false,
+  }) : credibleProgress = complete
+           ? 1
+           : (credibleProgress ??
+                     (progress >= kParallelNativeCompletionSentinel
+                         ? 0
+                         : progress))
+                 .clamp(0.0, 1.0)
+                 .toDouble();
 
   final DownloadTask task;
   final int from;
   final int to;
+
+  /// Raw native/resume marker. This may legitimately be 0.999 while the
+  /// complete callback is pending, so it is not used for parent byte totals.
   double progress;
+
+  /// Byte-credible progress used by the logical episode/UI. A 0.999 sentinel
+  /// never advances this field by itself.
+  double credibleProgress;
+
   bool complete;
   bool launched = false;
   double speed = 0;
@@ -1459,6 +1581,7 @@ class _DownloadPart {
   Timer? tailStallTimer;
   double tailWatchProgress = -1;
   bool tailRecoveryAttempted = false;
+  bool needsCredibleProgressRepair;
 
   int get size => to - from + 1;
 
@@ -1466,12 +1589,24 @@ class _DownloadPart {
     final restored = Task.createFromJson(
       Map<String, dynamic>.from(json['task'] as Map),
     ) as DownloadTask;
+    final complete = json['complete'] as bool;
+    final rawProgress = (json['progress'] as num).toDouble();
+    final savedCredible = json['credibleProgress'];
+    final hasSavedCredible = savedCredible is num;
+    final legacyTailSentinel =
+        !complete &&
+        !hasSavedCredible &&
+        rawProgress >= kParallelNativeCompletionSentinel;
     return _DownloadPart(
       restored.copyWith(retries: kDownloadPartRetries),
       json['from'] as int,
       json['to'] as int,
-      progress: (json['progress'] as num).toDouble(),
-      complete: json['complete'] as bool,
+      progress: complete ? 1 : rawProgress,
+      complete: complete,
+      credibleProgress: complete
+          ? 1
+          : (hasSavedCredible ? savedCredible.toDouble() : null),
+      needsCredibleProgressRepair: legacyTailSentinel,
     );
   }
 
@@ -1480,6 +1615,7 @@ class _DownloadPart {
     'from': from,
     'to': to,
     'progress': progress,
+    'credibleProgress': credibleProgress,
     'complete': complete,
   };
 }
