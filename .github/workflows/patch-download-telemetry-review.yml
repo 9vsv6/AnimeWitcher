@@ -69,7 +69,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm tool/patch_download_telemetry_review.py .github/workflows/patch-download-telemetry-review.yml
+          git rm -f tool/patch_download_telemetry_review.py .github/workflows/patch-download-telemetry-review.yml
           git add \
             lib/core/services/download_telemetry.dart \
             lib/core/services/download_continued_processing_service.dart \
