@@ -6,6 +6,14 @@ import 'package:flutter/services.dart';
 import 'download_concurrency.dart';
 
 typedef SystemDownloadCancellation = Future<void> Function(String taskId);
+typedef SystemDownloadTaskUpdate = void Function({
+  required String taskId,
+  required String trackingUrl,
+  required int writtenBytes,
+  required int expectedBytes,
+  double? speedBytesPerSecond,
+});
+
 typedef SystemDownloadChunkUpdate = void Function({
   required String parentTaskId,
   required String chunkTaskId,
@@ -30,11 +38,13 @@ class DownloadContinuedProcessingService {
   );
 
   final SystemDownloadCancellation onSystemCancel;
+  final SystemDownloadTaskUpdate? onTaskUpdate;
   final SystemDownloadChunkUpdate? onChunkUpdate;
   bool _handlerInstalled = false;
 
   DownloadContinuedProcessingService({
     required this.onSystemCancel,
+    this.onTaskUpdate,
     this.onChunkUpdate,
   }) {
     if (_isAvailable) {
@@ -157,6 +167,29 @@ class DownloadContinuedProcessingService {
   Future<dynamic> _handleNativeCall(MethodCall call) async {
     final arguments = call.arguments;
     if (arguments is! Map) return false;
+
+    if (call.method == 'taskUpdate') {
+      final taskId = arguments['taskId'];
+      final trackingUrl = arguments['trackingUrl'];
+      final rawWritten = arguments['writtenBytes'];
+      final rawExpected = arguments['expectedBytes'];
+      final rawSpeed = arguments['speedBytesPerSecond'];
+      if (taskId is! String ||
+          taskId.isEmpty ||
+          trackingUrl is! String ||
+          trackingUrl.isEmpty ||
+          rawWritten is! num) {
+        return false;
+      }
+      onTaskUpdate?.call(
+        taskId: taskId,
+        trackingUrl: trackingUrl,
+        writtenBytes: rawWritten.toInt(),
+        expectedBytes: rawExpected is num ? rawExpected.toInt() : -1,
+        speedBytesPerSecond: rawSpeed is num ? rawSpeed.toDouble() : null,
+      );
+      return true;
+    }
 
     if (call.method == 'chunkUpdate') {
       final parentTaskId = arguments['parentTaskId'];

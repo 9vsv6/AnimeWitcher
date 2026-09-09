@@ -125,9 +125,7 @@ class DownloadTelemetryEstimator {
         ? (expected - state.transferredBytes).clamp(0, expected)
         : 0;
     final remaining = speed > 0 && remainingBytes > 0
-        ? Duration(
-            milliseconds: ((remainingBytes / speed) * 1000).ceil(),
-          )
+        ? Duration(milliseconds: ((remainingBytes / speed) * 1000).ceil())
         : Duration.zero;
 
     return DownloadTelemetryReading(
@@ -142,11 +140,7 @@ class DownloadTelemetryEstimator {
     return observe(taskId: taskId, now: now);
   }
 
-  bool hasRecentBytes(
-    String taskId, {
-    DateTime? now,
-    Duration? maxAge,
-  }) {
+  bool hasRecentBytes(String taskId, {DateTime? now, Duration? maxAge}) {
     final at = _states[taskId]?.lastByteAt;
     if (at == null) return false;
     return (now ?? DateTime.now()).difference(at) < (maxAge ?? staleAfter);

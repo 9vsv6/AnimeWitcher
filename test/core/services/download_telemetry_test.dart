@@ -31,32 +31,35 @@ void main() {
       expect(reading.expectedBytes, 20 * 1000 * 1000);
     });
 
-    test('ignores a late byte regression instead of creating nonsense speed', () {
-      final estimator = DownloadTelemetryEstimator();
-      final start = DateTime(2026, 1, 1, 12);
+    test(
+      'ignores a late byte regression instead of creating nonsense speed',
+      () {
+        final estimator = DownloadTelemetryEstimator();
+        final start = DateTime(2026, 1, 1, 12);
 
-      estimator.observe(
-        taskId: 'one',
-        transferredBytes: 10 * 1000 * 1000,
-        expectedBytes: 100 * 1000 * 1000,
-        now: start,
-      );
-      estimator.observe(
-        taskId: 'one',
-        transferredBytes: 12 * 1000 * 1000,
-        expectedBytes: 100 * 1000 * 1000,
-        now: start.add(const Duration(seconds: 2)),
-      );
-      final reading = estimator.observe(
-        taskId: 'one',
-        transferredBytes: 2 * 1000 * 1000,
-        expectedBytes: 100 * 1000 * 1000,
-        now: start.add(const Duration(seconds: 3)),
-      );
+        estimator.observe(
+          taskId: 'one',
+          transferredBytes: 10 * 1000 * 1000,
+          expectedBytes: 100 * 1000 * 1000,
+          now: start,
+        );
+        estimator.observe(
+          taskId: 'one',
+          transferredBytes: 12 * 1000 * 1000,
+          expectedBytes: 100 * 1000 * 1000,
+          now: start.add(const Duration(seconds: 2)),
+        );
+        final reading = estimator.observe(
+          taskId: 'one',
+          transferredBytes: 2 * 1000 * 1000,
+          expectedBytes: 100 * 1000 * 1000,
+          now: start.add(const Duration(seconds: 3)),
+        );
 
-      expect(reading.transferredBytes, 12 * 1000 * 1000);
-      expect(reading.speedBytesPerSecond, closeTo(1000 * 1000, 1));
-    });
+        expect(reading.transferredBytes, 12 * 1000 * 1000);
+        expect(reading.speedBytesPerSecond, closeTo(1000 * 1000, 1));
+      },
+    );
 
     test('uses median reported speed when byte totals are unavailable', () {
       final estimator = DownloadTelemetryEstimator();

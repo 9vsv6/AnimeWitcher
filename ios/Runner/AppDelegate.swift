@@ -8,6 +8,7 @@ import UserNotifications
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var downloadContinuedProcessingChannel: FlutterMethodChannel?
   private var downloadChunkProgressObserver: NSObjectProtocol?
+  private var downloadTaskProgressObserver: NSObjectProtocol?
   private var liquidGlassPresenterChannel: FlutterMethodChannel?
   private var persistentGlassHeaderChannel: FlutterMethodChannel?
   private var persistentGlassHeaderController: ApplePersistentGlassHeaderNativeController?
@@ -363,6 +364,37 @@ import UserNotifications
         arguments["completed"] = completed
       }
       channel?.invokeMethod("chunkUpdate", arguments: arguments)
+    }
+#endif
+
+#if os(iOS)
+    if let previous = downloadTaskProgressObserver {
+      NotificationCenter.default.removeObserver(previous)
+    }
+    downloadTaskProgressObserver = NotificationCenter.default.addObserver(
+      forName: Notification.Name("AnimeWitcherBackgroundDownloaderTaskUpdate"),
+      object: nil,
+      queue: .main
+    ) { [weak channel] notification in
+      guard let values = notification.userInfo,
+            let taskId = values["taskId"] as? String,
+            let trackingUrl = values["trackingUrl"] as? String,
+            !taskId.isEmpty,
+            !trackingUrl.isEmpty,
+            let written = values["writtenBytes"] as? NSNumber else { return }
+
+      var arguments: [String: Any] = [
+        "taskId": taskId,
+        "trackingUrl": trackingUrl,
+        "writtenBytes": written.int64Value,
+      ]
+      if let expected = values["expectedBytes"] as? NSNumber {
+        arguments["expectedBytes"] = expected.int64Value
+      }
+      if let speed = values["speedBytesPerSecond"] as? NSNumber {
+        arguments["speedBytesPerSecond"] = speed.doubleValue
+      }
+      channel?.invokeMethod("taskUpdate", arguments: arguments)
     }
 #endif
 
