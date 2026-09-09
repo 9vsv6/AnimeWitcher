@@ -199,7 +199,10 @@ enum DownloadNativeWaitingQueue {
   private static var startingEpisodeKeys = Set<String>()
   private static var lastWrites: [String: WriteSample] = [:]
   private static var lastChunkWrites: [String: WriteSample] = [:]
+  private static var lastTaskBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static let chunkBridgeInterval: CFTimeInterval = 0.25
+  private static let taskBridgeInterval: CFTimeInterval = 0.25
+  private static let speedSampleInterval: CFTimeInterval = 1.0
 
   static func installUrlSessionHook() {
     lock.lock()
@@ -353,6 +356,7 @@ enum DownloadNativeWaitingQueue {
     startingEpisodeKeys.removeAll()
     lastWrites.removeAll()
     lastChunkWrites.removeAll()
+    lastTaskBridgeTimes.removeAll()
   }
 
   /// Called from the plugin URLSession delegate after a native completion
@@ -406,6 +410,7 @@ enum DownloadNativeWaitingQueue {
       state.transferringTaskIds.removeAll { $0 == failedId }
       state.runningSamples[failedId] = nil
       lastWrites[failedId] = nil
+      lastTaskBridgeTimes[failedId] = nil
       seenTransferringIds.remove(failedId)
       if let key = activeEpisodeKeysByTaskId.removeValue(forKey: failedId) {
         startingEpisodeKeys.remove(key)
@@ -438,6 +443,7 @@ enum DownloadNativeWaitingQueue {
       state.transferringTaskIds.removeAll { $0 == completedId }
       state.runningSamples[completedId] = nil
       lastWrites[completedId] = nil
+      lastTaskBridgeTimes[completedId] = nil
       seenTransferringIds.remove(completedId)
       if let key = activeEpisodeKeysByTaskId.removeValue(forKey: completedId) {
         startingEpisodeKeys.remove(key)
@@ -908,13 +914,17 @@ enum DownloadNativeWaitingQueue {
     startingEpisodeKeys.remove(logicalKey)
     var speed: Double = 0
     if let last = lastWrites[id], now > last.time {
-      let deltaBytes = Double(max(totalWritten - last.bytes, 0))
       let deltaTime = now - last.time
-      if deltaTime > 0 {
-        speed = deltaBytes / deltaTime
+      if deltaTime >= speedSampleInterval {
+        let deltaBytes = Double(max(totalWritten - last.bytes, 0))
+        if deltaBytes > 0 {
+          speed = deltaBytes / deltaTime
+        }
+        lastWrites[id] = WriteSample(taskId: id, bytes: totalWritten, time: now)
       }
+    } else {
+      lastWrites[id] = WriteSample(taskId: id, bytes: totalWritten, time: now)
     }
-    lastWrites[id] = WriteSample(taskId: id, bytes: totalWritten, time: now)
     var state = loadLocked()
     if !state.transferringTaskIds.contains(id) {
       state.transferringTaskIds.append(id)
@@ -935,8 +945,19 @@ enum DownloadNativeWaitingQueue {
     let transferringSet = Set(state.transferringTaskIds)
     state.runningSamples = state.runningSamples.filter { transferringSet.contains($0.key) }
     let presentation = overlayPresentation(from: state, fallbackId: id, fallbackName: name)
+    let stableExpected = sample.expected > 0 ? sample.expected : totalExpected
+    let stableSpeed = sample.speed
     saveLocked(state)
     lock.unlock()
+
+    postSingleTaskUpdate(
+      taskId: id,
+      trackingUrl: metaData.isEmpty ? url : metaData,
+      totalWritten: totalWritten,
+      totalExpected: stableExpected,
+      speedBytesPerSecond: stableSpeed,
+      now: now
+    )
 
     upsertSessionOverlay(
       currentTaskId: presentation.currentTaskId,
@@ -945,6 +966,47 @@ enum DownloadNativeWaitingQueue {
       totalBytes: presentation.totalBytes,
       transferredBytes: presentation.transferredBytes,
       speedBytesPerSecond: presentation.speedBytesPerSecond
+    )
+  }
+
+
+  /// Exact byte telemetry for ordinary URLSession downloads. The system
+  /// notification already has these values; forwarding the same source of
+  /// truth fixes Flutter's `-- / -- MB` when background_downloader reports an
+  /// unknown expectedFileSize. Throttle transport events, while Dart owns the
+  /// one-second UI cadence and the longer smoothing window.
+  private static func postSingleTaskUpdate(
+    taskId: String,
+    trackingUrl: String,
+    totalWritten: Int64,
+    totalExpected: Int64,
+    speedBytesPerSecond: Double,
+    now: CFAbsoluteTime
+  ) {
+    guard !taskId.isEmpty, !trackingUrl.isEmpty, totalWritten >= 0 else { return }
+    lock.lock()
+    if let last = lastTaskBridgeTimes[taskId], now - last < taskBridgeInterval {
+      lock.unlock()
+      return
+    }
+    lastTaskBridgeTimes[taskId] = now
+    lock.unlock()
+
+    var values: [String: Any] = [
+      "taskId": taskId,
+      "trackingUrl": trackingUrl,
+      "writtenBytes": totalWritten,
+    ]
+    if totalExpected > 0 {
+      values["expectedBytes"] = totalExpected
+    }
+    if speedBytesPerSecond > 0, speedBytesPerSecond.isFinite {
+      values["speedBytesPerSecond"] = speedBytesPerSecond
+    }
+    NotificationCenter.default.post(
+      name: Notification.Name("AnimeWitcherBackgroundDownloaderTaskUpdate"),
+      object: nil,
+      userInfo: values
     )
   }
 

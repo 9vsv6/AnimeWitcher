@@ -37,6 +37,7 @@ import 'download_url_refresh.dart';
 import 'download_plugin_compat.dart';
 import 'download_transport.dart';
 import 'download_continued_processing_service.dart';
+import 'download_telemetry.dart';
 
 part 'download_service.g.dart';
 
@@ -74,7 +75,7 @@ class DownloadProgressData {
     if (networkSpeed == 0) return '0 MB/s';
 
     if (networkSpeed < 1.0) {
-      return '${(networkSpeed * 1024).toStringAsFixed(2)} KB/s';
+      return '${(networkSpeed * 1000).toStringAsFixed(2)} KB/s';
     }
     return '${networkSpeed.toStringAsFixed(2)} MB/s';
   }
@@ -83,7 +84,9 @@ class DownloadProgressData {
 @Riverpod(keepAlive: true)
 class DownloadProgressNotifier extends _$DownloadProgressNotifier {
   static const Duration _uiSampleInterval = Duration(seconds: 1);
+  static const Duration _staleMetricInterval = kDownloadTelemetryStaleAfter;
   final Map<String, Timer> _timers = <String, Timer>{};
+  final Map<String, Timer> _staleTimers = <String, Timer>{};
   final Map<String, DownloadProgressData> _pending =
       <String, DownloadProgressData>{};
   final Map<String, DateTime> _lastPublished = <String, DateTime>{};
@@ -94,7 +97,11 @@ class DownloadProgressNotifier extends _$DownloadProgressNotifier {
       for (final timer in _timers.values) {
         timer.cancel();
       }
+      for (final timer in _staleTimers.values) {
+        timer.cancel();
+      }
       _timers.clear();
+      _staleTimers.clear();
       _pending.clear();
       _lastPublished.clear();
     });
@@ -104,6 +111,12 @@ class DownloadProgressNotifier extends _$DownloadProgressNotifier {
   void update(String url, DownloadProgressData data) {
     final previous = state[url];
     final statusChanged = previous == null || previous.status != data.status;
+
+    if (data.status == TaskStatus.running && data.progress < 1.0) {
+      _armStaleMetricTimer(url, data.taskId);
+    } else {
+      _staleTimers.remove(url)?.cancel();
+    }
 
     // Commands and lifecycle changes must feel instantaneous. Only repeated
     // running metrics are sampled: downloaded MB, percentage, speed and ETA
@@ -134,6 +147,34 @@ class DownloadProgressNotifier extends _$DownloadProgressNotifier {
     });
   }
 
+  void _armStaleMetricTimer(String url, String taskId) {
+    _staleTimers.remove(url)?.cancel();
+    _staleTimers[url] = Timer(_staleMetricInterval, () {
+      _staleTimers.remove(url);
+      final current = state[url];
+      if (current == null ||
+          current.taskId != taskId ||
+          current.status != TaskStatus.running ||
+          current.progress >= 1.0) {
+        return;
+      }
+      _timers.remove(url)?.cancel();
+      _pending.remove(url);
+      _lastPublished[url] = DateTime.now();
+      state = {
+        ...state,
+        url: DownloadProgressData(
+          taskId: current.taskId,
+          progress: current.progress,
+          networkSpeed: 0,
+          timeRemaining: Duration.zero,
+          totalSize: current.totalSize,
+          status: current.status,
+        ),
+      };
+    });
+  }
+
   void _publishNow(String url, DownloadProgressData data) {
     _timers.remove(url)?.cancel();
     _pending.remove(url);
@@ -142,6 +183,7 @@ class DownloadProgressNotifier extends _$DownloadProgressNotifier {
   }
 
   void _publishPending(String url) {
+    _timers.remove(url)?.cancel();
     final data = _pending.remove(url);
     if (data == null) return;
     _lastPublished[url] = DateTime.now();
@@ -150,6 +192,7 @@ class DownloadProgressNotifier extends _$DownloadProgressNotifier {
 
   void remove(String url) {
     _timers.remove(url)?.cancel();
+    _staleTimers.remove(url)?.cancel();
     _pending.remove(url);
     _lastPublished.remove(url);
     state = {...state}..remove(url);
@@ -218,6 +261,8 @@ class DownloadService {
   late final NativeSingleDownloadTransport _nativeTransport;
   late final DownloadHostProfileStore _hostProfiles;
   late final DownloadJobStore _jobStore;
+  final DownloadTelemetryEstimator _telemetry = DownloadTelemetryEstimator();
+  final Set<String> _expectedSizePersistedIds = <String>{};
   Future<void> _queueChain = Future<void>.value();
   final Set<String> _queueWaitingIds = {};
   final Set<String> _startingTaskIds = {};
@@ -282,11 +327,135 @@ class DownloadService {
     );
     _continuedProcessing = DownloadContinuedProcessingService(
       onSystemCancel: _cancelFromSystemUI,
+      onTaskUpdate: _handleNativeTaskUpdate,
       onChunkUpdate: _handleNativeChunkUpdate,
     );
   }
 
   Stream<TaskUpdate> get updates => _updatesController.stream;
+
+  void _handleNativeTaskUpdate({
+    required String taskId,
+    required String trackingUrl,
+    required int writtenBytes,
+    required int expectedBytes,
+    double? speedBytesPerSecond,
+  }) {
+    if (_disposed ||
+        taskId.isEmpty ||
+        trackingUrl.isEmpty ||
+        writtenBytes < 0) {
+      return;
+    }
+    if (_userPausedIds.contains(taskId) ||
+        _cancellingUrls.contains(trackingUrl)) {
+      return;
+    }
+
+    final current = _ref.read(downloadProgressProvider)[trackingUrl];
+    final total = knownDownloadSize(<int?>[
+      expectedBytes,
+      _telemetry.expectedBytesFor(taskId),
+      current?.totalSize,
+    ]);
+    final reading = _telemetry.observe(
+      taskId: taskId,
+      transferredBytes: writtenBytes,
+      expectedBytes: total,
+      fallbackSpeedBytesPerSecond: speedBytesPerSecond ?? 0,
+    );
+    final knownTotal = reading.expectedBytes > 0
+        ? reading.expectedBytes
+        : total;
+    final measuredProgress = knownTotal > 0
+        ? (reading.transferredBytes / knownTotal).clamp(0.0, 1.0).toDouble()
+        : (current?.progress ?? 0.0);
+    final progress = keepLastKnownDownloadProgress(
+      incoming: measuredProgress,
+      lastKnown: current?.progress,
+    );
+    final recentBytes = _telemetry.hasRecentBytes(taskId);
+    final speedMb = reading.speedBytesPerSecond > 0
+        ? reading.speedBytesPerSecond / 1000000
+        : (recentBytes ? -1.0 : 0.0);
+
+    _queueWaitingIds.remove(taskId);
+    _waitingPayloads.remove(taskId);
+    _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
+    _ref
+        .read(downloadProgressProvider.notifier)
+        .update(
+          trackingUrl,
+          DownloadProgressData(
+            taskId: taskId,
+            progress: progress,
+            networkSpeed: speedMb,
+            timeRemaining: reading.timeRemaining,
+            totalSize: knownTotal,
+            status: TaskStatus.running,
+          ),
+        );
+    unawaited(
+      _ref
+          .read(storageServiceProvider)
+          .patchDownloadMetadata(taskId, queueWaiting: false),
+    );
+    if (knownTotal > 0) {
+      unawaited(
+        _rememberExpectedBytes(
+          taskId: taskId,
+          expectedBytes: knownTotal,
+          progress: progress,
+        ),
+      );
+    }
+  }
+
+  Future<void> _rememberExpectedBytes({
+    required String taskId,
+    required int expectedBytes,
+    double? progress,
+  }) async {
+    if (expectedBytes <= 0 || !_expectedSizePersistedIds.add(taskId)) return;
+    try {
+      final record = await FileDownloader().database.recordForId(taskId);
+      if (record != null && record.expectedFileSize <= 0) {
+        final keptProgress = progress != null && progress >= 0 && progress <= 1
+            ? progress
+            : record.progress;
+        await FileDownloader().database.updateRecord(
+          TaskRecord(record.task, record.status, keptProgress, expectedBytes),
+        );
+      }
+    } catch (_) {}
+    try {
+      await _ref
+          .read(storageServiceProvider)
+          .patchDownloadMetadata(
+            taskId,
+            lastExpectedBytes: expectedBytes,
+            lastProgress: progress != null && progress > 0 && progress <= 1
+                ? progress
+                : null,
+          );
+    } catch (_) {}
+    try {
+      final job = await _jobStore.get(taskId);
+      if (job != null && job.expectedBytes <= 0) {
+        final derived = progress != null && progress > 0 && progress <= 1
+            ? (progress * expectedBytes).floor()
+            : 0;
+        final durable = derived > job.durableBytes ? derived : job.durableBytes;
+        await _jobStore.put(
+          job.copyWith(
+            expectedBytes: expectedBytes,
+            durableBytes: durable,
+            updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
 
   void _handleNativeChunkUpdate({
     required String parentTaskId,
@@ -332,6 +501,8 @@ class DownloadService {
     _disposed = true;
     unawaited(_parallel.dispose());
     _rangeTransfers.dispose();
+    _telemetry.clear();
+    _expectedSizePersistedIds.clear();
     unawaited(_nativeTransport.dispose());
     _updatesSubscription?.cancel();
     unawaited(_continuedProcessing.dispose());
@@ -487,24 +658,49 @@ class DownloadService {
             return;
           }
 
-          final speed = keepLastKnownDownloadSpeed(
-            status: TaskStatus.running,
-            incomingSpeed: update.networkSpeed,
-            lastKnownSpeed: previous?.networkSpeed,
+          final knownTotal = knownDownloadSize(<int?>[
+            update.expectedFileSize,
+            _telemetry.expectedBytesFor(update.task.taskId),
+            previous?.totalSize,
+          ]);
+          final fallbackSpeedBytes =
+              update.networkSpeed.isFinite && update.networkSpeed > 0
+              ? update.networkSpeed * 1000000
+              : 0.0;
+          final telemetry = _telemetry.observeProgress(
+            taskId: update.task.taskId,
+            progress: progress,
+            expectedBytes: knownTotal,
+            fallbackSpeedBytesPerSecond: fallbackSpeedBytes,
           );
-          final remaining = update.timeRemaining > Duration.zero
-              ? update.timeRemaining
-              : (previous?.timeRemaining ?? Duration.zero);
+          final measuredSpeed = telemetry.speedBytesPerSecond;
+          final speed = measuredSpeed > 0
+              ? measuredSpeed / 1000000
+              : (_telemetry.hasRecentBytes(update.task.taskId) ? -1.0 : 0.0);
+          final remaining = telemetry.timeRemaining > Duration.zero
+              ? telemetry.timeRemaining
+              : (update.timeRemaining > Duration.zero
+                    ? update.timeRemaining
+                    : (previous?.timeRemaining ?? Duration.zero));
           final progressData = DownloadProgressData(
             taskId: update.task.taskId,
             progress: progress,
             networkSpeed: speed,
             timeRemaining: remaining,
-            totalSize: update.expectedFileSize > 0
-                ? update.expectedFileSize
-                : (previous?.totalSize ?? -1),
+            totalSize: telemetry.expectedBytes > 0
+                ? telemetry.expectedBytes
+                : knownTotal,
             status: TaskStatus.running,
           );
+          if (progressData.totalSize > 0) {
+            unawaited(
+              _rememberExpectedBytes(
+                taskId: update.task.taskId,
+                expectedBytes: progressData.totalSize,
+                progress: progress,
+              ),
+            );
+          }
 
           if (update.progress < 1.0) {
             _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
@@ -562,6 +758,9 @@ class DownloadService {
             persisted: update.status,
             queueWaiting: _queueWaitingIds.contains(update.task.taskId),
           );
+          if (uiStatus != TaskStatus.running) {
+            _telemetry.resetSpeed(update.task.taskId);
+          }
           if (current != null) {
             final kept = keepLastKnownDownloadProgress(
               incoming: current.progress,
@@ -854,6 +1053,11 @@ class DownloadService {
       if (oldJob != null && oldJob.durableBytes > durableBytes) {
         durableBytes = oldJob.durableBytes;
       }
+      _telemetry.seed(
+        task.taskId,
+        transferredBytes: durableBytes,
+        expectedBytes: expectedBytes,
+      );
       final migratedJob = DownloadJobRecord(
         taskId: task.taskId,
         trackingUrl: trackingUrl,
@@ -942,7 +1146,7 @@ class DownloadService {
         trackingUrl: trackingUrl,
         taskId: task.taskId,
         progress: progress,
-        totalSize: record.expectedFileSize,
+        totalSize: expectedBytes,
         status: showAsWaiting
             ? TaskStatus.enqueued
             : (userPaused
@@ -1468,6 +1672,7 @@ class DownloadService {
     final metadata = await _ref
         .read(storageServiceProvider)
         .getDownloadMetadata(task.taskId);
+    final job = await _jobStore.get(task.taskId);
     final parallelProgress = task is ParallelDownloadTask
         ? _parallel.progressFor(task.taskId)
         : null;
@@ -1485,9 +1690,17 @@ class DownloadService {
     }
     final totalSize = knownDownloadSize([
       current?.totalSize,
+      _telemetry.expectedBytesFor(task.taskId),
       record?.expectedFileSize,
       downloadMetadataExpectedBytes(metadata),
+      job?.expectedBytes,
     ]);
+    if (job != null && job.expectedBytes > 0 && job.durableBytes > 0) {
+      progress = keepLastKnownDownloadProgress(
+        incoming: progress,
+        lastKnown: job.durableBytes / job.expectedBytes,
+      );
+    }
     var partialBytes = 0;
     try {
       final path = await task.filePath();
@@ -1504,6 +1717,14 @@ class DownloadService {
         }
       }
     } catch (_) {}
+    final credibleBytes = partialBytes > 0
+        ? partialBytes
+        : (totalSize > 0 && progress > 0 ? (totalSize * progress).floor() : 0);
+    _telemetry.seed(
+      task.taskId,
+      transferredBytes: credibleBytes,
+      expectedBytes: totalSize,
+    );
     return (
       progress: progress,
       totalSize: totalSize,
@@ -1547,9 +1768,14 @@ class DownloadService {
         .patchDownloadMetadata(task.taskId, queueWaiting: false);
     final record = await FileDownloader().database.recordForId(attached.taskId);
     final trackingUrl = downloadTrackingUrl(attached);
-    var progress = record?.progress ?? 0.0;
-    if (progress < 0 || progress > 1) progress = 0.0;
-    final totalSize = record?.expectedFileSize ?? -1;
+    final saved = await _savedProgressFor(attached);
+    var progress = record?.progress ?? saved.progress;
+    if (progress < 0 || progress > 1) progress = saved.progress;
+    progress = keepLastKnownDownloadProgress(
+      incoming: progress,
+      lastKnown: saved.progress,
+    );
+    final totalSize = saved.totalSize;
     final transferring =
         record?.status == TaskStatus.running ||
         record?.status == TaskStatus.waitingToRetry ||
@@ -1585,9 +1811,14 @@ class DownloadService {
           .read(storageServiceProvider)
           .patchDownloadMetadata(task.taskId, queueWaiting: false);
       final record = byId[task.taskId];
-      var progress = record?.progress ?? 0.0;
-      if (progress < 0 || progress > 1) progress = 0.0;
-      final totalSize = record?.expectedFileSize ?? -1;
+      final saved = await _savedProgressFor(task as DownloadTask);
+      var progress = record?.progress ?? saved.progress;
+      if (progress < 0 || progress > 1) progress = saved.progress;
+      progress = keepLastKnownDownloadProgress(
+        incoming: progress,
+        lastKnown: saved.progress,
+      );
+      final totalSize = saved.totalSize;
       final transferring =
           record?.status == TaskStatus.running ||
           record?.status == TaskStatus.waitingToRetry ||
@@ -1683,6 +1914,14 @@ class DownloadService {
   }) {
     final previous = _ref.read(downloadProgressProvider)[trackingUrl];
     final parallelProgress = _parallel.progressFor(taskId);
+    final knownTotal = knownDownloadSize(<int?>[
+      totalSize,
+      _telemetry.expectedBytesFor(taskId),
+      previous?.totalSize,
+    ]);
+    if (knownTotal > 0) {
+      _telemetry.seed(taskId, expectedBytes: knownTotal);
+    }
     final keptProgress = parallelProgress != null
         ? parallelProgress.clamp(0.0, 1.0).toDouble()
         : keepLastKnownDownloadProgress(
@@ -1710,7 +1949,7 @@ class DownloadService {
             networkSpeed: speed,
             timeRemaining: remaining,
             status: status,
-            totalSize: totalSize > 0 ? totalSize : (previous?.totalSize ?? -1),
+            totalSize: knownTotal,
           ),
         );
   }
@@ -1926,6 +2165,8 @@ class DownloadService {
     _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
     _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
     _ref.read(downloadChunkProgressProvider.notifier).remove(taskId);
+    _telemetry.remove(taskId);
+    _expectedSizePersistedIds.remove(taskId);
 
     await _rangeTransfers.stop(taskId);
     try {
@@ -2033,6 +2274,7 @@ class DownloadService {
         }
         final totalSize = knownDownloadSize([
           current?.totalSize,
+          _telemetry.expectedBytesFor(taskId),
           record?.expectedFileSize,
           downloadMetadataExpectedBytes(metadata),
         ]);
@@ -2842,7 +3084,10 @@ class DownloadService {
         final response = await _dio
             .head<dynamic>(
               url,
-              options: Options(headers: headers, followRedirects: true),
+              options: Options(
+                headers: {...?headers, 'Accept-Encoding': 'identity'},
+                followRedirects: true,
+              ),
             )
             .timeout(const Duration(seconds: 10));
         size = int.tryParse(response.headers.value('content-length') ?? '');
@@ -2855,13 +3100,16 @@ class DownloadService {
       // hosts that reject HEAD. Stream and cancel immediately so a bad server
       // that ignores Range cannot buffer a whole episode into memory.
       {
-        supportsRanges = false;
         try {
           final response = await _dio
               .get<dynamic>(
                 url,
                 options: Options(
-                  headers: {...?headers, 'Range': 'bytes=0-0'},
+                  headers: {
+                    ...?headers,
+                    'Range': 'bytes=0-0',
+                    'Accept-Encoding': 'identity',
+                  },
                   followRedirects: true,
                   responseType: ResponseType.stream,
                   validateStatus: (status) =>
@@ -2875,6 +3123,10 @@ class DownloadService {
             supportsRanges = match != null;
             if (match != null) size = int.tryParse(match[1]!);
           } else {
+            // A successful 200 to an explicit Range request means the
+            // origin ignored the range. A thrown probe keeps HEAD's prior
+            // Accept-Ranges evidence instead of falsely disabling parts.
+            supportsRanges = false;
             final contentLength = int.tryParse(
               response.headers.value('content-length') ?? '',
             );
@@ -3221,18 +3473,19 @@ class DownloadService {
           queueWaiting: !startNow,
         );
         _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
+        _telemetry.seed(transferTask.taskId, expectedBytes: expectedBytes);
+        _publishProgress(
+          trackingUrl: trackingUrl ?? url,
+          taskId: transferTask.taskId,
+          progress: 0,
+          totalSize: expectedBytes,
+          status: TaskStatus.enqueued,
+        );
 
         if (!startNow) {
           _queueWaitingIds.add(task.taskId);
           await FileDownloader().database.updateRecord(
             TaskRecord(transferTask, TaskStatus.paused, 0, expectedBytes),
-          );
-          _publishProgress(
-            trackingUrl: trackingUrl ?? url,
-            taskId: task.taskId,
-            progress: 0,
-            totalSize: expectedBytes,
-            status: TaskStatus.enqueued,
           );
           _updatesController.add(
             TaskStatusUpdate(transferTask, TaskStatus.enqueued),

@@ -77,7 +77,7 @@ String formatDownloadSpeed(DownloadProgressData data, AppLocalizations l10n) {
   if (data.networkSpeed == 0) return '0 MB/s';
 
   if (data.networkSpeed < 1.0) {
-    return '${(data.networkSpeed * 1024).toStringAsFixed(2)} KB/s';
+    return '${(data.networkSpeed * 1000).toStringAsFixed(2)} KB/s';
   }
   return '${data.networkSpeed.toStringAsFixed(2)} MB/s';
 }
