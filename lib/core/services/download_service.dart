@@ -29,6 +29,11 @@ import 'download_concurrency.dart';
 import 'download_parallel.dart';
 import 'persistent_parallel_download.dart';
 import 'download_range_transfer.dart';
+import 'download_retry_policy.dart';
+import 'download_host_profile.dart';
+import 'download_job_state.dart';
+import 'download_job_store.dart';
+import 'download_url_refresh.dart';
 import 'download_transport.dart';
 import 'download_continued_processing_service.dart';
 
@@ -148,6 +153,8 @@ class DownloadService {
   late final PersistentParallelDownload _parallel;
   late final DownloadRangeTransfer _rangeTransfers;
   late final NativeSingleDownloadTransport _nativeTransport;
+  late final DownloadHostProfileStore _hostProfiles;
+  late final DownloadJobStore _jobStore;
   Future<void> _queueChain = Future<void>.value();
   final Set<String> _queueWaitingIds = {};
   final Set<String> _startingTaskIds = {};
@@ -161,6 +168,10 @@ class DownloadService {
   DownloadService(this._ref) : _dio = _ref.read(dioClientProvider) {
     _nativeTransport = NativeSingleDownloadTransport();
     _rangeTransfers = DownloadRangeTransfer(_dio);
+    _hostProfiles = DownloadHostProfileStore(
+      const HiveDownloadHostProfileBackend(),
+    );
+    _jobStore = DownloadJobStore(const HiveDownloadJobBackend());
     _parallel = PersistentParallelDownload(
       startPart: _startPart,
       pausePart: _pauseTransfer,
@@ -186,6 +197,23 @@ class DownloadService {
             chunkTaskId: child,
             progress: progress,
           );
+      },
+      onHostPressure: (url, ceiling) {
+        unawaited(
+          _hostProfiles.recordPressure(
+            url: url,
+            fallbackCeiling: ceiling,
+          ),
+        );
+      },
+      onHostSample: (url, connections, bytesPerSecond) {
+        unawaited(
+          _hostProfiles.recordSuccess(
+            url: url,
+            activeConnections: connections,
+            bytesPerSecond: bytesPerSecond,
+          ),
+        );
       },
     );
     _continuedProcessing = DownloadContinuedProcessingService(
@@ -527,6 +555,10 @@ class DownloadService {
     // 5. Catch up on native tasks. Do not reschedule killed tasks with a
     //    fresh enqueue — that restarts the file from byte 0. Interrupted
     //    transfers are resumed from leftover bytes below.
+    // Restore persisted host knowledge before any multipart session picks
+    // its slow-start target. Expired profiles are removed by the store.
+    _parallel.seedHostCeilings(await _hostProfiles.validHostCeilings());
+
     // Restore part identities before replaying native callbacks.
     for (final record in await FileDownloader().database.allRecords()) {
       if (record.task is ParallelDownloadTask &&
@@ -1760,6 +1792,10 @@ class DownloadService {
         // Proactive cleanup
         await FileDownloader().database.deleteRecordWithId(taskId);
         await _ref.read(storageServiceProvider).removeDownloadMetadata(taskId);
+        await _jobStore.remove(taskId);
+        await _ref
+            .read(downloadUrlRefreshStoreProvider)
+            .remove(trackingUrl);
         await _syncQueueToCapUnlocked();
         if (notifyContinuedProcessing) {
           await _syncSessionOverlay(completedSuccess: false);
@@ -2121,6 +2157,12 @@ class DownloadService {
     }
 
     final saved = await _savedProgressFor(task);
+    final refreshResult = await _refreshTaskBeforeResume(
+      task,
+      expectedBytes: saved.totalSize,
+      partialBytes: saved.partialBytes,
+    );
+    task = refreshResult.task;
     final trackingUrl = downloadTrackingUrl(task);
     if (saved.progress > 0) {
       _publishProgress(
@@ -2147,6 +2189,13 @@ class DownloadService {
       }
       if (saved.progress > 0 || saved.partialBytes > 0) return false;
       return _enqueueTransfer(task, saved.totalSize);
+    }
+
+    // A refreshed signed URL cannot use native resume data that embeds the
+    // expired URL. When a verified partial file exists, go directly to the
+    // prefix-validated Range append path.
+    if (refreshResult.refreshed && saved.partialBytes > 0) {
+      return _resumeUsingPartialFile(task);
     }
 
     return resumeOrRestartDownload(
@@ -2213,31 +2262,232 @@ class DownloadService {
     required File dest,
     required int existingBytes,
     required int expectedBytes,
-  }) => _rangeTransfers.start(
-    id: task.taskId,
-    url: task.url,
-    headers: task.headers,
-    file: dest,
-    existingBytes: existingBytes,
-    expectedBytes: expectedBytes,
-    onState: (written, total, complete) async {
-      if (_disposed) return;
-      final status = complete ? TaskStatus.complete : TaskStatus.running;
-      await FileDownloader().database.updateRecord(
-        TaskRecord(task, status, written / total, total),
+  }) async {
+    final logical = isLogicalEpisodeDownloadTask(task);
+    DownloadAttemptToken? token;
+    var canRefreshUrl = false;
+    if (logical) {
+      token = await _beginLogicalRangeAttempt(
+        task,
+        existingBytes: existingBytes,
+        expectedBytes: expectedBytes,
       );
-      _sharedEvents.add(TaskProgressUpdate(task, written / total, total));
-      if (complete)
-        _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
-    },
-    onPaused: (written, total) async {
-      if (_disposed) return;
-      await FileDownloader().database.updateRecord(
-        TaskRecord(task, TaskStatus.paused, written / total, total),
+      canRefreshUrl =
+          await _ref
+              .read(downloadUrlRefreshStoreProvider)
+              .get(downloadTrackingUrl(task)) !=
+          null;
+    }
+
+    return _rangeTransfers.start(
+      id: task.taskId,
+      url: task.url,
+      headers: task.headers,
+      file: dest,
+      existingBytes: existingBytes,
+      expectedBytes: expectedBytes,
+      canRefreshUrl: canRefreshUrl,
+      onState: (written, total, complete) async {
+        if (_disposed) return;
+        if (token != null &&
+            !await _jobStore.updateForAttempt(
+              token,
+              state: complete
+                  ? DownloadJobState.completed
+                  : DownloadJobState.running,
+              durableBytes: written,
+              expectedBytes: total,
+              queueWaiting: false,
+            )) {
+          return;
+        }
+        final status = complete ? TaskStatus.complete : TaskStatus.running;
+        await FileDownloader().database.updateRecord(
+          TaskRecord(task, status, written / total, total),
+        );
+        _sharedEvents.add(TaskProgressUpdate(task, written / total, total));
+        if (complete) {
+          _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
+        }
+      },
+      onPaused: (written, total) async {
+        if (_disposed) return;
+        if (token != null &&
+            !await _jobStore.updateForAttempt(
+              token,
+              state: _userPausedIds.contains(task.taskId)
+                  ? DownloadJobState.pausedByUser
+                  : DownloadJobState.interrupted,
+              durableBytes: written,
+              expectedBytes: total,
+            )) {
+          return;
+        }
+        await FileDownloader().database.updateRecord(
+          TaskRecord(task, TaskStatus.paused, written / total, total),
+        );
+        _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.paused));
+      },
+      onFailure: (failure) async {
+        if (!logical || token == null || !await _jobStore.accepts(token)) return;
+        if (failure.action == DownloadFailureAction.refreshUrl) {
+          // DownloadRangeTransfer removes its ownership immediately after this
+          // callback returns. Queue the retry on the next event turn so the
+          // same taskId can start a new fenced generation safely.
+          Future<void>.delayed(Duration.zero, () async {
+            if (_disposed ||
+                _userPausedIds.contains(task.taskId) ||
+                _cancellingUrls.contains(downloadTrackingUrl(task))) {
+              return;
+            }
+            await _serializeQueue(() async {
+              final record = await FileDownloader().database.recordForId(
+                task.taskId,
+              );
+              if (record?.task is DownloadTask) {
+                await _resumeDownloadTask(record!.task as DownloadTask);
+              }
+            });
+          });
+        } else if (failure.action == DownloadFailureAction.reconcileRange &&
+            failure.resourceSize > 0 &&
+            await dest.exists() &&
+            await dest.length() == failure.resourceSize &&
+            (expectedBytes <= 0 || expectedBytes == failure.resourceSize)) {
+          await _jobStore.updateForAttempt(
+            token,
+            state: DownloadJobState.completed,
+            durableBytes: failure.resourceSize,
+            expectedBytes: failure.resourceSize,
+          );
+          await FileDownloader().database.updateRecord(
+            TaskRecord(task, TaskStatus.complete, 1, failure.resourceSize),
+          );
+          _sharedEvents.add(
+            TaskProgressUpdate(task, 1, failure.resourceSize),
+          );
+          _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
+        }
+      },
+    );
+  }
+
+  Future<DownloadAttemptToken?> _beginLogicalRangeAttempt(
+    DownloadTask task, {
+    required int existingBytes,
+    required int expectedBytes,
+  }) async {
+    final trackingUrl = downloadTrackingUrl(task);
+    var job = await _jobStore.get(task.taskId);
+    if (job == null) {
+      final seeded = DownloadJobRecord(
+        taskId: task.taskId,
+        trackingUrl: trackingUrl,
+        state: DownloadJobState.interrupted,
+        generation: 0,
+        durableBytes: existingBytes,
+        expectedBytes: expectedBytes,
+        userPaused: false,
+        queueWaiting: false,
+        updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
+        fingerprint: DownloadResourceFingerprint(
+          expectedBytes: expectedBytes,
+          finalUrl: task.url,
+        ),
       );
-      _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.paused));
-    },
-  );
+      if (!await _jobStore.put(seeded)) return null;
+      job = seeded;
+    } else if (existingBytes > job.durableBytes) {
+      await _jobStore.put(
+        job.copyWith(
+          durableBytes: existingBytes,
+          expectedBytes: expectedBytes > 0 ? expectedBytes : job.expectedBytes,
+          updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+    }
+    return _jobStore.beginAttempt(
+      task.taskId,
+      state: DownloadJobState.running,
+    );
+  }
+
+  Future<({DownloadTask task, bool refreshed})> _refreshTaskBeforeResume(
+    DownloadTask task, {
+    required int expectedBytes,
+    required int partialBytes,
+  }) async {
+    // Native single-file resume data may be the only durable representation of
+    // its bytes. Do not replace that URL unless a visible partial prefix exists.
+    // Multipart manifests own their own durable child files, so they are safe.
+    if (task is! ParallelDownloadTask && partialBytes <= 0) {
+      return (task: task, refreshed: false);
+    }
+
+    final trackingUrl = downloadTrackingUrl(task);
+    final store = _ref.read(downloadUrlRefreshStoreProvider);
+    final descriptor = await store.get(trackingUrl);
+    if (descriptor == null) return (task: task, refreshed: false);
+
+    // Keep a still-valid URL. This avoids provider extraction work on every
+    // short pause/resume while still detecting expired signed links.
+    final current = await getMetadata(task.url, headers: task.headers);
+    final currentSizeMatches =
+        expectedBytes <= 0 || current?.size == null || current?.size == expectedBytes;
+    final currentRangeOk =
+        task is! ParallelDownloadTask && partialBytes <= 0 ||
+        current?.supportsRanges == true;
+    if (current != null &&
+        current.size != null &&
+        currentSizeMatches &&
+        currentRangeOk) {
+      return (task: task, refreshed: false);
+    }
+
+    final refreshed = await _ref
+        .read(downloadUrlRefresherProvider)
+        .refresh(descriptor, currentUrl: task.url);
+    if (refreshed == null) return (task: task, refreshed: false);
+    final metadata = await getMetadata(
+      refreshed.url,
+      headers: refreshed.headers,
+    );
+    if (metadata?.size == null ||
+        (expectedBytes > 0 && metadata!.size != expectedBytes) ||
+        ((task is ParallelDownloadTask || partialBytes > 0) &&
+            metadata?.supportsRanges != true)) {
+      return (task: task, refreshed: false);
+    }
+
+    if (task is ParallelDownloadTask) {
+      final replaced = await _parallel.replaceSource(
+        task,
+        url: refreshed.url,
+        headers: refreshed.headers,
+      );
+      return replaced == null
+          ? (task: task, refreshed: false)
+          : (task: replaced, refreshed: true);
+    }
+
+    final updated = task.copyWith(
+      url: refreshed.url,
+      headers: Map<String, String>.from(refreshed.headers),
+    );
+    final record = await FileDownloader().database.recordForId(task.taskId);
+    if (record != null) {
+      await FileDownloader().database.updateRecord(
+        TaskRecord(
+          updated,
+          record.status,
+          record.progress,
+          record.expectedFileSize,
+        ),
+      );
+    }
+    _nativeTransport.forget(task.taskId);
+    return (task: updated, refreshed: true);
+  }
 
   Future<List<Task>> _liveTransferTasks() async {
     // allTasks/taskForId include persisted paused tasks. They are not proof
@@ -2718,6 +2968,25 @@ class DownloadService {
           task,
           knownTotalBytes: expectedBytes,
         );
+        await _jobStore.put(
+          DownloadJobRecord(
+            taskId: transferTask.taskId,
+            trackingUrl: trackingUrl ?? url,
+            state: startNow
+                ? DownloadJobState.starting
+                : DownloadJobState.queued,
+            generation: 0,
+            durableBytes: 0,
+            expectedBytes: expectedBytes,
+            userPaused: false,
+            queueWaiting: !startNow,
+            updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
+            fingerprint: DownloadResourceFingerprint(
+              expectedBytes: expectedBytes,
+              finalUrl: url,
+            ),
+          ),
+        );
 
         _waitingPayloads[transferTask.taskId] = _waitingPayloadFor(
           transferTask,
@@ -2857,6 +3126,7 @@ class DownloadService {
     for (final record in records) {
       await FileDownloader().database.deleteRecordWithId(record.task.taskId);
       await storage.removeDownloadMetadata(record.task.taskId);
+      await _jobStore.remove(record.task.taskId);
     }
   }
 

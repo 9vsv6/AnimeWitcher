@@ -105,6 +105,53 @@ class PersistentParallelDownload {
   /// Native 0.999 completion sentinels are intentionally excluded.
   double? progressFor(String id) => _sessions[id]?.progress;
 
+  /// Replace only the remote source of a paused/restored multipart job.
+  /// Every range identity, byte boundary, credible progress value and local
+  /// part file is retained. This is used when a signed CDN URL expires.
+  Future<ParallelDownloadTask?> replaceSource(
+    ParallelDownloadTask task, {
+    required String url,
+    required Map<String, String> headers,
+  }) async {
+    if (_disposed || !await restore(task)) return null;
+    final session = _sessions[task.taskId]!;
+    return session.serialize(() async {
+      if (_disposed || session.deleted || session.active) return null;
+      final updated = task.copyWith(
+        url: url,
+        headers: Map<String, String>.from(headers),
+      );
+      if (updated is! ParallelDownloadTask) return null;
+      session.task = updated;
+      for (final part in session.parts) {
+        final childHeaders = Map<String, String>.from(headers)
+          ..removeWhere(
+            (key, _) =>
+                key.toLowerCase() == 'range' ||
+                key.toLowerCase() == 'if-range',
+          );
+        childHeaders['Range'] = 'bytes=${part.from}-${part.to}';
+        childHeaders['Accept-Encoding'] = 'identity';
+        part.task = part.task.copyWith(
+          url: url,
+          headers: childHeaders,
+          retries: kDownloadPartRetries,
+        );
+      }
+      await _persist(session);
+      final record = await recordForId(task.taskId);
+      await saveRecord(
+        TaskRecord(
+          session.task,
+          record?.status ?? TaskStatus.paused,
+          session.progress,
+          session.size,
+        ),
+      );
+      return session.task;
+    });
+  }
+
   /// Includes native tasks that were handed to the OS but are still waiting
   /// for a socket. Counting them is deliberate: the manager never queues more
   /// than the global connection budget into URLSession/background_downloader.
@@ -1538,7 +1585,7 @@ class PersistentParallelDownload {
 class _ParallelSession {
   _ParallelSession(this.task, this.manifest, this.parts);
 
-  final ParallelDownloadTask task;
+  ParallelDownloadTask task;
   final File manifest;
   final List<_DownloadPart> parts;
   bool active = false;
@@ -1616,7 +1663,7 @@ class _DownloadPart {
                  .clamp(0.0, 1.0)
                  .toDouble();
 
-  final DownloadTask task;
+  DownloadTask task;
   final int from;
   final int to;
 
