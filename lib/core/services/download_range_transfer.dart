@@ -221,6 +221,11 @@ class DownloadRangeTransfer {
           await _discard(opened?.stream);
           final failure = operation.failure;
           if (failure != null) {
+            diagnosticLog?.record('range.failure', {
+              'taskId': id,
+              'reason': failure.action.name,
+              'errorType': failure.error?.runtimeType.toString(),
+            });
             _lastFailures[id] = failure;
             if (onFailure != null) await onFailure(failure);
           }
@@ -758,6 +763,11 @@ class DownloadRangeTransfer {
           await onPaused(written, total);
           final failure = operation.failure;
           if (failure != null) {
+            diagnosticLog?.record('range.failure', {
+              'taskId': id,
+              'reason': failure.action.name,
+              'errorType': failure.error?.runtimeType.toString(),
+            });
             _lastFailures[id] = failure;
             if (onFailure != null) await onFailure(failure);
           }

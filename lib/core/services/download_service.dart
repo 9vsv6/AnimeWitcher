@@ -247,9 +247,15 @@ class DownloadService {
 
   Future<void> setDiagnosticLogging(bool enabled) async {
     await init();
-    await diagnosticLog.configure(enabled);
-    await _continuedProcessing.configureDiagnosticLog(enabled);
-    await _ref.read(storageServiceProvider).setDownloadDiagnosticLog(enabled);
+    final previous = diagnosticLog.enabled;
+    try {
+      await diagnosticLog.configure(enabled);
+      await _ref.read(storageServiceProvider).setDownloadDiagnosticLog(enabled);
+      await _continuedProcessing.configureDiagnosticLog(enabled);
+    } catch (_) {
+      await diagnosticLog.configure(previous);
+      rethrow;
+    }
   }
 
   // FileDownloader().updates is a single-subscription stream that rejects
@@ -295,6 +301,7 @@ class DownloadService {
     );
     _jobStore = DownloadJobStore(const HiveDownloadJobBackend());
     _parallel = PersistentParallelDownload(
+      diagnosticLog: diagnosticLog,
       startPart: _startPart,
       pausePart: (task) async {
         if (!await _pauseTransfer(task)) {
@@ -325,6 +332,7 @@ class DownloadService {
           );
       },
       onHostPressure: (url, ceiling) {
+        diagnosticLog.record('parallel.hostPressure', {'count': ceiling});
         unawaited(
           _hostProfiles.recordPressure(url: url, fallbackCeiling: ceiling),
         );
@@ -603,11 +611,16 @@ class DownloadService {
         if (update is TaskStatusUpdate) ...{
           'status': update.status.name,
           'errorType': update.exception?.runtimeType.toString(),
+          if (update.exception is TaskHttpException)
+            'httpStatus':
+                (update.exception as TaskHttpException).httpResponseCode,
         },
         if (update is TaskProgressUpdate) ...{
           'progress': update.progress,
           'total': update.expectedFileSize,
-          'speed': update.networkSpeed,
+          'speed': update.networkSpeed < 0
+              ? update.networkSpeed
+              : update.networkSpeed * 1000000,
         },
       });
       if (_parallel.handleUpdate(update)) return;
@@ -2926,6 +2939,11 @@ class DownloadService {
     required int expectedBytes,
     required int partialBytes,
   }) async {
+    diagnosticLog.record('source.check', {
+      'taskId': task.taskId,
+      'bytes': partialBytes,
+      'total': expectedBytes,
+    });
     // Native single-file resume data may be the only durable representation of
     // its bytes. Do not replace that URL unless a visible partial prefix exists.
     // Multipart manifests own their own durable child files, so they are safe.
@@ -2958,6 +2976,10 @@ class DownloadService {
     final refreshed = await _ref
         .read(downloadUrlRefresherProvider)
         .refresh(descriptor, currentUrl: task.url);
+    diagnosticLog.record('source.refresh', {
+      'taskId': task.taskId,
+      'result': refreshed != null,
+    });
     if (refreshed == null) return (task: task, refreshed: false);
     final metadata = await getMetadata(
       refreshed.url,
@@ -3070,6 +3092,10 @@ class DownloadService {
       final accepted = isInternalDownloaderChunk(task)
           ? await FileDownloader().pause(task)
           : await _nativeTransport.pause(task);
+      diagnosticLog.record('native.pauseAck', {
+        'taskId': task.taskId,
+        'result': accepted,
+      });
       if (!accepted) {
         // pauseDownload already joined the Range writer before entering the
         // control queue. A missing native task is expected in that case.
@@ -3108,6 +3134,11 @@ class DownloadService {
   }
 
   Future<bool> _startPart(DownloadTask task, double progress, int size) async {
+    diagnosticLog.record('part.start', {
+      'taskId': task.taskId,
+      'progress': progress,
+      'total': size,
+    });
     if (_rangeTransfers.isActive(task.taskId)) return true;
     if ((await _liveTransferTasks()).any((live) => live.taskId == task.taskId))
       return true;

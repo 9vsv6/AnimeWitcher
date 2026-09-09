@@ -30,9 +30,13 @@ void main() {
       'logging.enabled',
       'start',
       'progress',
+      'logging.disabled',
     ]);
-    expect(rows.map((r) => r['sequence']).toList(), orderedEquals([1, 2, 3]));
-    expect(rows.last['bytes'], 12);
+    expect(
+      rows.map((r) => r['sequence']).toList(),
+      orderedEquals([1, 2, 3, 4]),
+    );
+    expect(rows[2]['bytes'], 12);
   });
   test(
     'does not retain URLs, headers, exception messages or arbitrary fields',

@@ -25,6 +25,7 @@ class DownloadDiagnosticLog {
   final String _session = '${DateTime.now().microsecondsSinceEpoch}-$pid';
 
   Future<void> configure(bool value) async {
+    if (enabled && !value) record('logging.disabled');
     enabled = false;
     await flush();
     if (value) {
@@ -119,6 +120,7 @@ class DownloadDiagnosticLog {
         }
         await _file!.writeAsBytes(bytes, mode: FileMode.append, flush: true);
         _bytes += bytes.length;
+        lastError = null;
       } catch (error) {
         lastError = error.runtimeType.toString();
         _file = null;
