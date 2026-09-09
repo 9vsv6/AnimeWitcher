@@ -39,6 +39,7 @@ jobs:
           p.write_text(s)
           PY
           python3 tool/patch_download_runtime_stability.py
+          python3 tool/patch_runtime_start_exception.py
           python3 tool/patch_runtime_stability_test_expectation.py
           sed -i '' 's/package:anime_witcher/package:animewitcher/g' test/core/services/download_runtime_stability_review_test.dart
 
@@ -145,7 +146,7 @@ jobs:
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm tool/patch_download_runtime_stability.py tool/patch_runtime_stability_test_expectation.py
+          git rm tool/patch_download_runtime_stability.py tool/patch_runtime_start_exception.py tool/patch_runtime_stability_test_expectation.py
           git add .github/workflows/ci.yml \
             lib/core/services/download_telemetry.dart \
             lib/core/services/download_concurrency.dart \
