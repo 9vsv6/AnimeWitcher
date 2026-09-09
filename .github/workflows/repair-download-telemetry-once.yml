@@ -145,45 +145,27 @@ jobs:
           if count != 1:
               raise SystemExit(f'aggregate scheduler replacement count={count}')
 
-          old_status = textwrap.dedent('''
-              await saveRecord(
-                TaskRecord(session.task, status, session.progress, session.size),
-              );
-              onUpdate(TaskStatusUpdate(session.task, status));''').lstrip('\n')
-          new_status = textwrap.dedent('''
-              await _writeParentRecord(
-                session,
-                TaskRecord(session.task, status, session.progress, session.size),
-              );
-              onUpdate(TaskStatusUpdate(session.task, status));''').lstrip('\n')
-          if old_status not in parallel:
-              raise SystemExit('parent status persistence block not found')
-          parallel = parallel.replace(old_status, new_status, 1)
+          status_pattern = re.compile(
+              r"    await saveRecord\(\n      TaskRecord\(session\.task, status, session\.progress, session\.size\),\n    \);\n    onUpdate\(TaskStatusUpdate\(session\.task, status\)\);"
+          )
+          status_replacement = textwrap.dedent('''
+                await _writeParentRecord(
+                  session,
+                  TaskRecord(session.task, status, session.progress, session.size),
+                );
+                onUpdate(TaskStatusUpdate(session.task, status));''').lstrip('\n')
+          parallel, count = status_pattern.subn(status_replacement, parallel, count=1)
+          if count != 1:
+              raise SystemExit(f'parent status replacement count={count}')
           parallel_path.write_text(parallel)
 
           service_path = Path('lib/core/services/download_service.dart')
           service = service_path.read_text()
-          old_speed = textwrap.dedent('''
-                    final fallbackSpeedBytes =
-                        update.networkSpeed.isFinite && update.networkSpeed > 0
-                        ? update.networkSpeed * 1000000
-                        : 0.0;
-                    final telemetry = _telemetry.observeProgress(
-                      taskId: update.task.taskId,
-                      progress: progress,
-                      expectedBytes: knownTotal,
-                      fallbackSpeedBytesPerSecond: fallbackSpeedBytes,
-                    );
-                    final measuredSpeed = telemetry.speedBytesPerSecond;
-                    final speed = measuredSpeed > 0
-                        ? measuredSpeed / 1000000
-                        : (_telemetry.hasRecentBytes(update.task.taskId) ? -1.0 : 0.0);
-                    final remaining = telemetry.timeRemaining > Duration.zero
-                        ? telemetry.timeRemaining
-                        : (update.timeRemaining > Duration.zero
-                              ? update.timeRemaining
-                              : (previous?.timeRemaining ?? Duration.zero));''').lstrip('\n')
-          new_speed = textwrap.dedent('''
+          speed_pattern = re.compile(
+              r"          final fallbackSpeedBytes =.*?          final remaining = telemetry\.timeRemaining > Duration\.zero\n              \? telemetry\.timeRemaining\n              : \(update\.timeRemaining > Duration\.zero\n                    \? update\.timeRemaining\n                    : \(previous\?\.timeRemaining \?\? Duration\.zero\)\);",
+              re.S,
+          )
+          speed_replacement = textwrap.dedent('''
                     final isAggregateMultipart = update.task is ParallelDownloadTask;
                     final fallbackSpeedBytes =
                         update.networkSpeed.isFinite && update.networkSpeed > 0
@@ -217,9 +199,9 @@ jobs:
                               : (update.timeRemaining > Duration.zero
                                     ? update.timeRemaining
                                     : (previous?.timeRemaining ?? Duration.zero)));''').lstrip('\n')
-          if old_speed not in service:
-              raise SystemExit('download service speed block not found')
-          service = service.replace(old_speed, new_speed, 1)
+          service, count = speed_pattern.subn(speed_replacement, service, count=1)
+          if count != 1:
+              raise SystemExit(f'download service speed replacement count={count}')
           service_path.write_text(service)
           PYCODE
 
