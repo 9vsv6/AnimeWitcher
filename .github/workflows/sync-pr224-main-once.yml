@@ -1,0 +1,27 @@
+name: Sync PR224 with main
+
+on:
+  push:
+    branches: [feat/download-diagnostic-log]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-pr224-main
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Merge latest main
+        run: |
+          git fetch origin main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit origin/main
+          git push
