@@ -165,9 +165,20 @@ Future<File?> findPartialDownloadFile({
   return best;
 }
 
-/// Copy the largest saved prefix into the canonical task destination before
-/// resuming. Native downloaders may leave `.tmp`/`.download` siblings; custom
-/// multipart validation always checks the canonical child path.
+/// Put the largest durable prefix at the canonical destination before a Range
+/// append.
+///
+/// Native downloaders often leave the best prefix in a sibling `.tmp` or
+/// `.download` file. Copying that file first temporarily requires roughly twice
+/// the partial size and can fail on a nearly-full device. Because the candidate
+/// is a sibling on the same filesystem, prefer a rename after removing only the
+/// smaller canonical prefix. If rename is unavailable (for example because a
+/// platform still has the source handle open), fall back to copy while keeping
+/// the source intact as crash-recovery evidence.
+///
+/// Crash safety: if the process dies after the smaller destination is removed
+/// but before rename/copy finishes, the larger suffix file is still present and
+/// [findPartialDownloadFile] will select it again on the next launch.
 Future<({File file, int bytes})?> canonicalizePartialDownloadFile({
   required String destinationPath,
 }) async {
@@ -175,13 +186,58 @@ Future<({File file, int bytes})?> canonicalizePartialDownloadFile({
     destinationPath: destinationPath,
   );
   if (partial == null) return null;
+
   final bytes = await partial.length();
   final destination = File(destinationPath);
-  if (partial.path != destination.path) {
-    await destination.parent.create(recursive: true);
-    await partial.copy(destination.path);
+  if (partial.path == destination.path) {
+    return (file: destination, bytes: bytes);
   }
-  return (file: destination, bytes: bytes);
+
+  await destination.parent.create(recursive: true);
+
+  // The selected suffix is strictly larger than destination (ties keep the
+  // destination because it is considered first). Removing that smaller copy
+  // cannot discard the best durable prefix: [partial] remains untouched until
+  // rename succeeds.
+  try {
+    if (await destination.exists()) {
+      await destination.delete();
+    }
+  } catch (_) {
+    // A locked destination may still be replaceable by File.copy below.
+  }
+
+  try {
+    final moved = await partial.rename(destination.path);
+    final movedBytes = await moved.length();
+    if (movedBytes != bytes) {
+      throw FileSystemException(
+        'Partial rename changed file length',
+        destination.path,
+      );
+    }
+    return (file: moved, bytes: bytes);
+  } catch (_) {
+    // If rename completed but a follow-up stat failed, prefer the canonical
+    // file when it contains the exact prefix rather than copying again.
+    try {
+      if (await destination.exists() && await destination.length() == bytes) {
+        return (file: destination, bytes: bytes);
+      }
+    } catch (_) {}
+
+    // Rename failed before moving the source. Copy is the compatibility path;
+    // leave [partial] in place so a disk-full/interrupted copy never destroys
+    // the only good prefix.
+    if (!await partial.exists()) return null;
+    try {
+      final copied = await partial.copy(destination.path);
+      if (await copied.length() != bytes) return null;
+      return (file: copied, bytes: bytes);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 /// Appends [chunks] onto [dest] without rewriting the existing prefix.
