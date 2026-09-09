@@ -74,9 +74,16 @@ class PlayerSidePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.shortestSide < 600;
-    final panelWidth = isCompact
+    final basePanelWidth = isCompact
         ? (size.width * 0.8).clamp(260.0, 380.0)
         : 350.0;
+    // The episodes drawer needs more horizontal room than the source/track
+    // drawers so its card layout can match the Episodes page. Keep the shared
+    // shell unchanged for every other panel and widen episodes by exactly 25%.
+    final widthScale = child is PlayerEpisodesPanel ? 1.25 : 1.0;
+    final panelWidth = (basePanelWidth * widthScale)
+        .clamp(260.0, size.width * 0.95)
+        .toDouble();
 
     return IgnorePointer(
       ignoring: !isVisible,
@@ -147,20 +154,14 @@ class _PanelSurface extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. LAYERED TRANSLUCENT OBSIDIAN/CHARCOAL BLACK BASE WITH BACKDROP BLUR
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 22.0, sigmaY: 22.0),
               child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Color(
-                    0xA6060608,
-                  ), // Frosted glass obsidian tint (65% opacity)
-                ),
+                decoration: BoxDecoration(color: Color(0xA6060608)),
               ),
             ),
           ),
-          // 2. SOFT AMBIENT GLOSS
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -169,9 +170,7 @@ class _PanelSurface extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.white.withValues(
-                        alpha: 0.04,
-                      ), // soft mirror-like reflection
+                      Colors.white.withValues(alpha: 0.04),
                       Colors.white.withValues(alpha: 0.01),
                       Colors.transparent,
                     ],
@@ -181,7 +180,6 @@ class _PanelSurface extends StatelessWidget {
               ),
             ),
           ),
-          // 3. REALISTIC LIGHT DIFFUSION (Soft ambient lighting texture)
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -198,7 +196,6 @@ class _PanelSurface extends StatelessWidget {
               ),
             ),
           ),
-          // 4. FRESNEL EDGE HIGHLIGHTS WITH SOFT GRADIENT BLENDING (Left and Right)
           Positioned.fill(
             child: IgnorePointer(
               child: ShaderMask(
@@ -229,7 +226,6 @@ class _PanelSurface extends StatelessWidget {
               ),
             ),
           ),
-          // 5. INNER RIM HIGHLIGHT WITH SOFT GRADIENT BLENDING (Left and Right)
           Positioned.fill(
             child: IgnorePointer(
               child: ShaderMask(
@@ -260,7 +256,6 @@ class _PanelSurface extends StatelessWidget {
               ),
             ),
           ),
-          // Main content
           Positioned.fill(child: child),
         ],
       ),
@@ -268,11 +263,6 @@ class _PanelSurface extends StatelessWidget {
   }
 }
 
-/// Content for the episodes side panel — the same right-drawer shell and row
-/// styling as the sources/tracks panel, but a single vertical list (episodes
-/// grouped under `Season N` subheaders). Pure Up/Down D-pad; the current episode
-/// is the focus anchor and is centred on open. Selecting an episode loads it and
-/// closes the pane. No dropdown, no scroll-jump animation.
 class PlayerEpisodesPanel extends ConsumerStatefulWidget {
   final MultimediaItem item;
   final bool isTv;
@@ -329,7 +319,6 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // Restore focus to the current episode whenever the pane opens.
     ref.listen(playerControllerProvider.select((s) => s.showEpisodeList), (
       prev,
       next,
@@ -338,16 +327,11 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
     });
 
     final l10n = AppLocalizations.of(context)!;
-    // A stream URL belongs to the selected server and normally differs from
-    // the canonical episode URL. Use the episode identity stored by the
-    // controller so the active-row highlight follows the episode being played.
     final currentUrl =
         ref.watch(playerControllerProvider.select((s) => s.activeEpisodeUrl)) ??
         ref.read(playerControllerProvider.notifier).currentEpisodeUrl;
     var episodes = widget.item.episodes ?? const <Episode>[];
-    final currentEpisode = episodes.firstWhereOrNull(
-      (e) => e.url == currentUrl,
-    );
+    final currentEpisode = episodes.firstWhereOrNull((e) => e.url == currentUrl);
     final isSeries =
         widget.item.contentType == MultimediaContentType.series ||
         widget.item.contentType == MultimediaContentType.anime;
@@ -358,7 +342,6 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
           .where((e) => e.dubStatus == currentEpisode.dubStatus)
           .toList();
     }
-    // Same server order (and same sort toggle) as the Episodes tab.
     episodes = episodesInDisplayOrder(
       episodes,
       ascending: ref.watch(
@@ -435,8 +418,9 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 4, 12),
+            padding: const EdgeInsets.fromLTRB(4, 12, 20, 12),
             child: Row(
+              textDirection: TextDirection.rtl,
               children: [
                 const Icon(
                   Icons.video_library_outlined,
@@ -447,6 +431,7 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
                 Expanded(
                   child: Text(
                     l10n.episodes,
+                    textAlign: TextAlign.right,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -486,9 +471,6 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
   }
 }
 
-/// A single episode row: focusable (same accent border/glow cue, no scale),
-/// shows "S·E", the title, a slim progress bar, and a play marker for the
-/// episode that's currently active.
 class _EpisodeRow extends ConsumerStatefulWidget {
   final MultimediaItem parentItem;
   final Episode episode;
@@ -814,9 +796,6 @@ class _FillerBadge extends StatelessWidget {
   }
 }
 
-/// Claymorphism badge showing SUB or DUB next to the episode number.
-/// Soft inner shadow + subtle highlight simulates a pressed-clay look on the
-/// frosted-glass panel surface. Colour-coded: blue-ish for SUB, warm amber for DUB.
 class _DubBadge extends StatelessWidget {
   final DubStatus dubStatus;
   final bool isCurrent;
@@ -829,24 +808,19 @@ class _DubBadge extends StatelessWidget {
     final label = isSub
         ? AppLocalizations.of(context)!.sub.toUpperCase()
         : AppLocalizations.of(context)!.dub.toUpperCase();
-    // SUB = cool blue tint, DUB = warm amber tint.
     final tint = isSub ? const Color(0xFF64B5F6) : const Color(0xFFFFB74D);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
       decoration: BoxDecoration(
-        // Claymorphism: translucent tinted fill.
         color: tint.withValues(alpha: isCurrent ? 0.22 : 0.14),
         borderRadius: BorderRadius.circular(4),
-        // Soft outer shadow (depth) + inner highlight (clay press).
         boxShadow: [
-          // Outer shadow — subtle depth lift.
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.35),
             offset: const Offset(0, 1),
             blurRadius: 2,
           ),
-          // Inner highlight — top-left light catch.
           BoxShadow(
             color: tint.withValues(alpha: 0.18),
             offset: const Offset(0, -0.5),
@@ -871,9 +845,6 @@ class _DubBadge extends StatelessWidget {
   }
 }
 
-/// Episode thumbnail: poster image (or a placeholder), a play overlay for the
-/// current episode, and a watch-progress bar along the bottom. The small inner
-/// [Stack] is a leaf decoration on the image — not chrome layout.
 class _EpisodeThumbnail extends StatelessWidget {
   final String? posterUrl;
   final bool isCurrent;
@@ -1000,9 +971,6 @@ class _ThumbPlaceholder extends StatelessWidget {
   }
 }
 
-/// A focus-traversal group wrapping a scrollable list of option rows. Up/Down
-/// move between rows geometrically; horizontal arrows are left for the panel to
-/// handle as tab switches.
 class _OptionList extends StatelessWidget {
   final List<Widget> children;
 
@@ -1014,9 +982,6 @@ class _OptionList extends StatelessWidget {
       policy: WidgetOrderTraversalPolicy(),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        // Build a generous off-screen window so the selected (anchor) row is
-        // laid out even when it starts below the fold — required for the
-        // open/tab-switch ensureVisible() to be able to scroll to it.
         scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
         children: children,
       ),
@@ -1046,10 +1011,6 @@ class _EmptyHint extends StatelessWidget {
   }
 }
 
-/// Shared decoration for focusable panel rows. On TV focus the row lights up
-/// with an accent fill + border + soft glow — the same treatment as the
-/// play/pause and action buttons — so the focused item is clearly visible
-/// rather than a faint dark tint.
 BoxDecoration _panelRowDecoration({
   required bool focusedOnTv,
   required bool selected,
@@ -1079,10 +1040,6 @@ BoxDecoration _panelRowDecoration({
   );
 }
 
-/// One selectable row. Focus lights it up like the player buttons (see
-/// [_panelRowDecoration]). Activates on tap and on D-pad/keyboard
-/// select/enter/space; directional movement between rows is handled natively by
-/// the enclosing traversal group.
 class _PanelSubheader extends StatelessWidget {
   final String title;
 
