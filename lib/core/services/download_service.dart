@@ -82,14 +82,76 @@ class DownloadProgressData {
 
 @Riverpod(keepAlive: true)
 class DownloadProgressNotifier extends _$DownloadProgressNotifier {
+  static const Duration _uiSampleInterval = Duration(seconds: 1);
+  final Map<String, Timer> _timers = <String, Timer>{};
+  final Map<String, DownloadProgressData> _pending =
+      <String, DownloadProgressData>{};
+  final Map<String, DateTime> _lastPublished = <String, DateTime>{};
+
   @override
-  Map<String, DownloadProgressData> build() => {};
+  Map<String, DownloadProgressData> build() {
+    ref.onDispose(() {
+      for (final timer in _timers.values) {
+        timer.cancel();
+      }
+      _timers.clear();
+      _pending.clear();
+      _lastPublished.clear();
+    });
+    return {};
+  }
 
   void update(String url, DownloadProgressData data) {
+    final previous = state[url];
+    final statusChanged = previous == null || previous.status != data.status;
+
+    // Commands and lifecycle changes must feel instantaneous. Only repeated
+    // running metrics are sampled: downloaded MB, percentage, speed and ETA
+    // then move together once per second instead of repainting dozens of times.
+    if (statusChanged ||
+        data.status != TaskStatus.running ||
+        data.progress >= 1.0) {
+      _publishNow(url, data);
+      return;
+    }
+
+    _pending[url] = data;
+    final last = _lastPublished[url];
+    if (last == null) {
+      _publishNow(url, data);
+      return;
+    }
+
+    final elapsed = DateTime.now().difference(last);
+    if (elapsed >= _uiSampleInterval) {
+      _publishPending(url);
+      return;
+    }
+
+    _timers[url] ??= Timer(_uiSampleInterval - elapsed, () {
+      _timers.remove(url);
+      _publishPending(url);
+    });
+  }
+
+  void _publishNow(String url, DownloadProgressData data) {
+    _timers.remove(url)?.cancel();
+    _pending.remove(url);
+    _lastPublished[url] = DateTime.now();
+    state = {...state, url: data};
+  }
+
+  void _publishPending(String url) {
+    final data = _pending.remove(url);
+    if (data == null) return;
+    _lastPublished[url] = DateTime.now();
     state = {...state, url: data};
   }
 
   void remove(String url) {
+    _timers.remove(url)?.cancel();
+    _pending.remove(url);
+    _lastPublished.remove(url);
     state = {...state}..remove(url);
   }
 }
@@ -1852,7 +1914,19 @@ class DownloadService {
     String trackingUrl, {
     bool notifyContinuedProcessing = true,
   }) async {
+    // Tombstone the logical download before waiting on native IO. This makes a
+    // user delete immediate in every UI and prevents late URLSession callbacks
+    // from resurrecting the row while the OS finishes canceling its worker.
     _cancellingUrls.add(trackingUrl);
+    _queueWaitingIds.remove(taskId);
+    _waitingPayloads.remove(taskId);
+    _forgetSessionTask(taskId);
+    _userPausedIds.remove(taskId);
+    _dequeuingPausedIds.remove(taskId);
+    _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
+    _ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
+    _ref.read(downloadChunkProgressProvider.notifier).remove(taskId);
+
     await _rangeTransfers.stop(taskId);
     try {
       await _serializeQueue(() async {
@@ -1903,6 +1977,10 @@ class DownloadService {
   }
 
   Future<void> pauseDownload(String taskId) async {
+    // Fence callbacks immediately on tap. Native pause/resume-data settlement
+    // can take a moment on iOS, but progress events must not visually undo the
+    // user's pause while that acknowledgement is in flight.
+    _userPausedIds.add(taskId);
     await _rangeTransfers.stop(taskId);
     await _serializeQueue(() async {
       _userPausedIds.add(taskId);

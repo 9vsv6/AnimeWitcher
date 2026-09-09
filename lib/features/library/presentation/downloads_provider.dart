@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:animewitcher/core/storage/storage_service.dart';
+
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/services/download_concurrency.dart';
 import '../../../core/services/download_service.dart';
@@ -205,6 +206,10 @@ DownloadItem? downloadItemFromTaskMetadata({
 
 @Riverpod(keepAlive: true)
 class DownloadsNotifier extends _$DownloadsNotifier {
+  static const Duration _listProgressUiInterval = Duration(seconds: 1);
+  final Set<String> _deletingIds = <String>{};
+  final Map<String, DateTime> _lastProgressUiUpdate = <String, DateTime>{};
+
   @override
   Future<List<DownloadItem>> build() async {
     // Listen to updates from DownloadService (broadcast) instead of FileDownloader (single)
@@ -275,6 +280,10 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       }
     }
 
+    // A user-deleted task is a session tombstone until its native cleanup has
+    // fully settled. Never let an unrelated refresh briefly resurrect it.
+    items.removeWhere((item) => _deletingIds.contains(item.id));
+
     // FIFO: oldest first.
     items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     final collapsed = collapseDuplicateDownloads(items);
@@ -302,7 +311,22 @@ class DownloadsNotifier extends _$DownloadsNotifier {
   }
 
   Future<void> _handleUpdate(TaskUpdate update) async {
-    if (state.value == null) return;
+    if (state.value == null || _deletingIds.contains(update.task.taskId))
+      return;
+
+    // DownloadService already exposes sampled live metrics. Keep the durable
+    // list snapshot to the same one-second cadence so the whole downloads page
+    // does not rebuild for every native didWriteData packet.
+    if (update is TaskProgressUpdate &&
+        update.progress >= 0 &&
+        update.progress < 1) {
+      final now = DateTime.now();
+      final last = _lastProgressUiUpdate[update.task.taskId];
+      if (last != null && now.difference(last) < _listProgressUiInterval) {
+        return;
+      }
+      _lastProgressUiUpdate[update.task.taskId] = now;
+    }
 
     final List<DownloadItem> currentList = state.value!;
     final index = currentList.indexWhere(
@@ -320,6 +344,7 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         }
       } else if (update is TaskStatusUpdate) {
         newStatus = update.status;
+        if (update.status == TaskStatus.complete) newProgress = 1.0;
       }
 
       if (newStatus == TaskStatus.canceled) {
@@ -400,93 +425,153 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     final storage = ref.read(storageServiceProvider);
     final current = List<DownloadItem>.from(state.value ?? items);
 
-    final resolvedById = <String, File>{};
-    Future<File?> resolveFile(DownloadItem item) async {
-      final cached = resolvedById[item.id];
-      if (cached != null) return cached;
-      final file = await downloadService.resolveDownloadedFile(
-        item.task,
-        item.item,
-        episode: item.episode,
-      );
-      if (file != null) resolvedById[item.id] = file;
-      return file;
-    }
-
-    for (final item in items) {
-      await resolveFile(item);
-    }
-
+    // Resolve the logical rows synchronously first and hide them before any
+    // filesystem/native await. The old order deleted the file first and, when
+    // an active worker still owned it, `stillExists` caused us to skip cancel
+    // entirely — leaving a stuck row that could never disappear.
     final toRemove = <String, DownloadItem>{};
     for (final requested in items) {
-      final requestedFile = await resolveFile(requested);
-      String? requestedTaskPath;
-      try {
-        requestedTaskPath = await requested.task.filePath();
-      } catch (_) {}
+      toRemove[requested.id] = requested;
       for (final candidate in current) {
-        if (toRemove.containsKey(candidate.id)) continue;
         if (downloadsPointAtSameTarget(requested, candidate)) {
           toRemove[candidate.id] = candidate;
-          continue;
         }
-        try {
-          final candidatePath = await candidate.task.filePath();
-          if (candidatePath.isNotEmpty &&
-              (candidatePath == requestedFile?.path ||
-                  candidatePath == requestedTaskPath)) {
-            toRemove[candidate.id] = candidate;
-          }
-        } catch (_) {}
       }
     }
 
+    final droppedIds = toRemove.keys.toSet();
+    _deletingIds.addAll(droppedIds);
+    for (final id in droppedIds) {
+      _lastProgressUiUpdate.remove(id);
+    }
+
+    if (state.value != null) {
+      state = AsyncData(
+        state.value!.where((item) => !droppedIds.contains(item.id)).toList(),
+      );
+    }
+
     for (final item in toRemove.values) {
-      await resolveFile(item);
+      final trackingUrl = downloadTrackingUrl(item.task);
+      ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
+      ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
+      ref.read(downloadChunkProgressProvider.notifier).remove(item.id);
+    }
+
+    // Capture possible final/partial paths before cancel removes metadata. This
+    // is cleanup-only work: the card is already gone and controls are free.
+    final filesToDelete = <String, File>{};
+    for (final item in toRemove.values) {
+      try {
+        final taskPath = await item.task.filePath();
+        if (taskPath.isNotEmpty) filesToDelete[taskPath] = File(taskPath);
+      } catch (_) {}
+      try {
+        final resolved = await downloadService
+            .resolveDownloadedFile(item.task, item.item, episode: item.episode)
+            .timeout(const Duration(milliseconds: 750));
+        if (resolved != null) filesToDelete[resolved.path] = resolved;
+      } catch (_) {}
+    }
+
+    // Stop ownership and tombstone DB/Hive first. Every step is best-effort so
+    // one stale URLSession worker can never prevent the logical delete.
+    for (final item in toRemove.values) {
+      final trackingUrl = downloadTrackingUrl(item.task);
+      if (shouldCancelDownload(item.status)) {
+        try {
+          await downloadService
+              .cancelDownload(item.task.taskId, trackingUrl)
+              .timeout(const Duration(seconds: 3));
+        } catch (_) {
+          // Timeout only releases the UI cleanup path; cancelDownload continues
+          // settling its native Future in the background.
+        }
+      }
+      try {
+        await FileDownloader().database.deleteRecordWithId(item.task.taskId);
+      } catch (_) {}
+      try {
+        await storage.removeDownloadMetadata(item.task.taskId);
+      } catch (_) {}
+      try {
+        await deleteDownloadedEpisodeArtwork(item.id);
+      } catch (_) {}
     }
 
     final deletedPaths = <String>{};
-    for (final file in resolvedById.values) {
+    for (final file in filesToDelete.values) {
       if (!deletedPaths.add(file.path)) continue;
-      await downloadService.deleteDownloadedFile(file);
-    }
-
-    final droppedIds = <String>{};
-    for (final item in toRemove.values) {
-      final file = resolvedById[item.id];
-      var stillExists = false;
-      if (file != null) {
+      try {
+        await downloadService
+            .deleteDownloadedFile(file)
+            .timeout(const Duration(seconds: 2));
+      } catch (_) {
         try {
-          stillExists = await file.exists();
-        } catch (_) {
-          stillExists = true;
-        }
+          if (await file.exists()) await file.delete(recursive: true);
+        } catch (_) {}
       }
-      if (stillExists) continue;
-
-      if (shouldCancelDownload(item.status)) {
-        final trackingUrl = downloadTrackingUrl(item.task);
-        await downloadService.cancelDownload(item.task.taskId, trackingUrl);
-      }
-      await FileDownloader().database.deleteRecordWithId(item.task.taskId);
-      await storage.removeDownloadMetadata(item.task.taskId);
-      await deleteDownloadedEpisodeArtwork(item.id);
-      droppedIds.add(item.id);
     }
+  }
 
-    if (state.value != null && droppedIds.isNotEmpty) {
-      final remaining = state.value!
-          .where((i) => !droppedIds.contains(i.id))
-          .toList();
-      state = AsyncData(remaining);
-    }
+  void _setOptimisticStatus(String taskId, TaskStatus status) {
+    final current = state.value;
+    if (current == null) return;
+    final index = current.indexWhere((item) => item.id == taskId);
+    if (index < 0) return;
+
+    final existing = current[index];
+    final trackingUrl = downloadTrackingUrl(existing.task);
+    final live = ref.read(downloadProgressProvider)[trackingUrl];
+    final progress = live?.progress ?? existing.progress;
+    final updated = DownloadItem(
+      task: existing.task,
+      status: status,
+      progress: progress,
+      item: existing.item,
+      episode: existing.episode,
+      timestamp: existing.timestamp,
+    );
+    final next = List<DownloadItem>.from(current)..[index] = updated;
+    state = AsyncData(next);
+
+    ref
+        .read(downloadProgressProvider.notifier)
+        .update(
+          trackingUrl,
+          DownloadProgressData(
+            taskId: taskId,
+            progress: progress,
+            networkSpeed: status == TaskStatus.running
+                ? (live?.networkSpeed ?? 0)
+                : 0,
+            timeRemaining: status == TaskStatus.running
+                ? (live?.timeRemaining ?? Duration.zero)
+                : Duration.zero,
+            totalSize: live?.totalSize ?? -1,
+            status: status,
+          ),
+        );
   }
 
   Future<void> pauseDownload(String taskId) async {
-    await ref.read(downloadServiceProvider).pauseDownload(taskId);
+    _setOptimisticStatus(taskId, TaskStatus.paused);
+    try {
+      await ref.read(downloadServiceProvider).pauseDownload(taskId);
+    } catch (_) {
+      state = AsyncData(await _refreshList());
+    }
   }
 
   Future<void> resumeDownload(String taskId) async {
-    await ref.read(downloadServiceProvider).resumeDownload(taskId);
+    // Queue state is the only universally correct immediate state: if a slot is
+    // free DownloadService will replace it with running almost immediately;
+    // otherwise the user sees في الانتظار instead of a dead play button.
+    _setOptimisticStatus(taskId, TaskStatus.enqueued);
+    try {
+      await ref.read(downloadServiceProvider).resumeDownload(taskId);
+    } catch (_) {
+      state = AsyncData(await _refreshList());
+    }
   }
 }
