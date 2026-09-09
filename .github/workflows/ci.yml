@@ -156,7 +156,7 @@ jobs:
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm \
+          git rm -f \
             tool/patch_download_runtime_stability.py \
             tool/patch_runtime_start_exception.py \
             tool/patch_runtime_stability_test_expectation.py \
