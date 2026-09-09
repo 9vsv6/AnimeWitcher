@@ -1,0 +1,182 @@
+name: Apply download telemetry log fixes
+
+on:
+  push:
+    branches:
+      - fix/download-telemetry-log-review
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply source fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'missing patch anchor in {path}: {old[:120]!r}')
+              if text.count(old) != 1:
+                  raise SystemExit(f'non-unique patch anchor in {path}: count={text.count(old)}')
+              p.write_text(text.replace(old, new, 1))
+
+          p = 'lib/core/services/persistent_parallel_download.dart'
+          replace_once(
+              p,
+              '/// Child connections tend to report progress in a tight burst at the native\n/// progress cadence. Collapse that burst into one parent/UI sample so four or\n/// sixteen connections do not make the displayed bytes and speed jump several\n/// times back-to-back for the same measurement interval.\nconst Duration kParallelProgressCoalesceDelay = Duration(milliseconds: 350);',
+              '/// Child connections can report progress independently and in bursts. The\n/// logical episode, Flutter UI and iOS continued-processing task all publish\n/// one aggregate sample per second so they show the same bytes/speed/ETA.\nconst Duration kParallelProgressCoalesceDelay = Duration(seconds: 1);\n\n/// Progress manifests are durable recovery checkpoints, not a telemetry bus.\n/// Persist at most once per second while bytes are flowing; exact completion,\n/// pause and cancel boundaries still persist synchronously. This prevents 5-16\n/// child callbacks from creating a serialized fsync backlog that starves the\n/// parent progress stream.\nconst Duration kParallelProgressPersistInterval = Duration(seconds: 1);'
+          )
+
+          replace_once(
+              p,
+              '      session.cancelAggregateProgress();\n      session.cancelDiskProgressPoll();\n      session.cancelCoordinatorRecovery();',
+              '      session.cancelAggregateProgress();\n      session.cancelProgressPersist();\n      session.cancelDiskProgressPoll();\n      session.cancelCoordinatorRecovery();'
+          )
+
+          replace_once(
+              p,
+              '    if (!changed) return;\n    await _persist(session);\n    if (session.parts.every((part) => part.complete)) {\n      await _assemble(session);\n      return;\n    }\n    if (!session.parentRunningReported) {\n      await _status(session, TaskStatus.running);\n    }\n    await _emitAggregateProgress(session);\n    _schedulePumpAll();\n  }\n\n  void _scheduleAggregateProgress(_ParallelSession session) {',
+              '    if (!changed) return;\n    _scheduleProgressPersist(session);\n    if (session.parts.every((part) => part.complete)) {\n      await _assemble(session);\n      return;\n    }\n    if (!session.parentRunningReported) {\n      await _status(session, TaskStatus.running);\n    }\n    _scheduleAggregateProgress(session);\n    _schedulePumpAll();\n  }\n\n  void _scheduleProgressPersist(_ParallelSession session) {\n    if (_disposed || !session.active || session.deleted) return;\n    session.progressPersistDirty = true;\n    if (session.progressPersistTimer != null) return;\n\n    session.progressPersistTimer = Timer(kParallelProgressPersistInterval, () {\n      session.progressPersistTimer = null;\n      if (_disposed) return;\n      unawaited(\n        session.serialize(() async {\n          if (_disposed ||\n              !session.active ||\n              session.deleted ||\n              !session.progressPersistDirty) {\n            return;\n          }\n          session.progressPersistDirty = false;\n          await _persist(session);\n        }),\n      );\n    });\n  }\n\n  void _scheduleAggregateProgress(_ParallelSession session) {'
+          )
+
+          replace_once(
+              p,
+              '      if (credible > previousCredible || completed) {\n        onPartProgress(\n          session.task.taskId,\n          part.task.taskId,\n          part.credibleProgress,\n        );\n        await _persist(session);\n      }\n\n      if (!session.active) return;\n      if (!session.parentRunningReported) {\n        await _status(session, TaskStatus.running);\n      }\n      await _emitAggregateProgress(session);\n      _schedulePumpAll();',
+              '      if (credible > previousCredible || completed) {\n        onPartProgress(\n          session.task.taskId,\n          part.task.taskId,\n          part.credibleProgress,\n        );\n        _scheduleProgressPersist(session);\n      }\n\n      if (!session.active) return;\n      if (!session.parentRunningReported) {\n        await _status(session, TaskStatus.running);\n      }\n      _scheduleAggregateProgress(session);\n      _schedulePumpAll();'
+          )
+
+          replace_once(
+              p,
+              '          if (update is TaskProgressUpdate &&\n              update.progress >= 0 &&\n              update.progress <= 1) {\n            if (session.active) {',
+              '          if (update is TaskProgressUpdate &&\n              update.progress >= 0 &&\n              update.progress <= 1) {\n            // On iOS the URLSession bridge carries exact byte counts from the\n            // temp file. background_downloader emits a second progress callback\n            // for the same child. Ignore that duplicate while the byte bridge\n            // is healthy; if the bridge goes quiet, plugin progress becomes the\n            // fallback automatically.\n            final nativeBridgeFresh = part.lastNativeBridgeAt != null &&\n                DateTime.now().difference(part.lastNativeBridgeAt!) <\n                    const Duration(seconds: 2);\n            if (nativeBridgeFresh) return;\n\n            if (session.active) {'
+          )
+
+          replace_once(
+              p,
+              '            onPartProgress(\n              session.task.taskId,\n              part.task.taskId,\n              part.credibleProgress,\n            );\n            await _persist(session);\n            if (session.active) {\n              _scheduleAggregateProgress(session);\n            }',
+              '            onPartProgress(\n              session.task.taskId,\n              part.task.taskId,\n              part.credibleProgress,\n            );\n            _scheduleProgressPersist(session);\n            if (session.active) {\n              _scheduleAggregateProgress(session);\n            }'
+          )
+
+          replace_once(
+              p,
+              '    session.active = false;\n    session.generation++;\n    _speedTelemetry.resetSpeed(session.task.taskId);\n    session.cancelAggregateProgress();\n    session.cancelDiskProgressPoll();',
+              '    session.active = false;\n    session.generation++;\n    _speedTelemetry.resetSpeed(session.task.taskId);\n    session.cancelAggregateProgress();\n    session.cancelProgressPersist();\n    session.cancelDiskProgressPoll();'
+          )
+
+          replace_once(
+              p,
+              '    session.deleted = true;\n    session.active = false;\n    session.cancelAggregateProgress();\n    session.cancelDiskProgressPoll();',
+              '    session.deleted = true;\n    session.active = false;\n    session.cancelAggregateProgress();\n    session.cancelProgressPersist();\n    session.cancelDiskProgressPoll();'
+          )
+
+          replace_once(
+              p,
+              '  Future<void> _finishCompleteSession(_ParallelSession session) async {\n    session.active = false;\n    session.cancelAggregateProgress();\n    session.cancelDiskProgressPoll();',
+              '  Future<void> _finishCompleteSession(_ParallelSession session) async {\n    session.active = false;\n    session.cancelAggregateProgress();\n    session.cancelProgressPersist();\n    session.cancelDiskProgressPoll();'
+          )
+
+          replace_once(
+              p,
+              '  Timer? aggregateProgressTimer;\n  bool aggregateProgressDirty = false;\n  Timer? diskProgressTimer;',
+              '  Timer? aggregateProgressTimer;\n  bool aggregateProgressDirty = false;\n  Timer? progressPersistTimer;\n  bool progressPersistDirty = false;\n  Timer? diskProgressTimer;'
+          )
+
+          replace_once(
+              p,
+              '  void cancelAggregateProgress() {\n    aggregateProgressTimer?.cancel();\n    aggregateProgressTimer = null;\n    aggregateProgressDirty = false;\n  }\n\n  void cancelDiskProgressPoll() {',
+              '  void cancelAggregateProgress() {\n    aggregateProgressTimer?.cancel();\n    aggregateProgressTimer = null;\n    aggregateProgressDirty = false;\n  }\n\n  void cancelProgressPersist() {\n    progressPersistTimer?.cancel();\n    progressPersistTimer = null;\n    progressPersistDirty = false;\n  }\n\n  void cancelDiskProgressPoll() {'
+          )
+
+          swift = 'ios/Runner/DownloadNativeWaitingQueue.swift'
+          replace_once(
+              swift,
+              '        if let previous = lastProgress[task.taskIdentifier], now - previous < 0.25 { return }',
+              '        if let previous = lastProgress[task.taskIdentifier], now - previous < 1.0 { return }'
+          )
+          replace_once(
+              swift,
+              '  private static let chunkBridgeInterval: CFTimeInterval = 0.25\n  private static let taskBridgeInterval: CFTimeInterval = 0.25',
+              '  private static let chunkBridgeInterval: CFTimeInterval = 1.0\n  private static let taskBridgeInterval: CFTimeInterval = 1.0'
+          )
+
+          replace_once(
+              swift,
+              '    postSingleTaskUpdate(\n      taskId: id,\n      trackingUrl: metaData.isEmpty ? url : metaData,\n      totalWritten: totalWritten,\n      totalExpected: stableExpected,\n      speedBytesPerSecond: stableSpeed,\n      now: now\n    )\n\n    upsertSessionOverlay(\n      currentTaskId: presentation.currentTaskId,\n      displayName: presentation.displayName,\n      progress: presentation.progress,\n      totalBytes: presentation.totalBytes,\n      transferredBytes: presentation.transferredBytes,\n      speedBytesPerSecond: presentation.speedBytesPerSecond\n    )',
+              '    let bridgedToDart = postSingleTaskUpdate(\n      taskId: id,\n      trackingUrl: metaData.isEmpty ? url : metaData,\n      totalWritten: totalWritten,\n      totalExpected: stableExpected,\n      speedBytesPerSecond: stableSpeed,\n      now: now\n    )\n\n    // While Flutter is foregrounded, Dart owns the single one-second sample\n    // used by both the in-app card and the iOS task. Publishing native overlay\n    // samples in parallel creates two clocks and visibly different speeds. In\n    // background, Dart may be suspended, so native keeps the same task alive.\n    if bridgedToDart && !isAppInForeground() {\n      upsertSessionOverlay(\n        currentTaskId: presentation.currentTaskId,\n        displayName: presentation.displayName,\n        progress: presentation.progress,\n        totalBytes: presentation.totalBytes,\n        transferredBytes: presentation.transferredBytes,\n        speedBytesPerSecond: presentation.speedBytesPerSecond\n      )\n    }'
+          )
+
+          replace_once(
+              swift,
+              '  private static func postSingleTaskUpdate(\n    taskId: String,\n    trackingUrl: String,\n    totalWritten: Int64,\n    totalExpected: Int64,\n    speedBytesPerSecond: Double,\n    now: CFAbsoluteTime\n  ) {\n    guard !taskId.isEmpty, !trackingUrl.isEmpty, totalWritten >= 0 else { return }\n    lock.lock()\n    if let last = lastTaskBridgeTimes[taskId], now - last < taskBridgeInterval {\n      lock.unlock()\n      return\n    }',
+              '  private static func postSingleTaskUpdate(\n    taskId: String,\n    trackingUrl: String,\n    totalWritten: Int64,\n    totalExpected: Int64,\n    speedBytesPerSecond: Double,\n    now: CFAbsoluteTime\n  ) -> Bool {\n    guard !taskId.isEmpty, !trackingUrl.isEmpty, totalWritten >= 0 else { return false }\n    lock.lock()\n    if let last = lastTaskBridgeTimes[taskId], now - last < taskBridgeInterval {\n      lock.unlock()\n      return false\n    }'
+          )
+          replace_once(
+              swift,
+              '    NotificationCenter.default.post(\n      name: Notification.Name("AnimeWitcherBackgroundDownloaderTaskUpdate"),\n      object: nil,\n      userInfo: values\n    )\n  }',
+              '    NotificationCenter.default.post(\n      name: Notification.Name("AnimeWitcherBackgroundDownloaderTaskUpdate"),\n      object: nil,\n      userInfo: values\n    )\n    return true\n  }'
+          )
+
+          test = 'test/core/services/download_runtime_stability_review_test.dart'
+          replace_once(
+              test,
+              "      expect(swift, contains('speedWindowInterval: CFTimeInterval = 4.0'));\n      expect(swift, contains('elapsed >= speedMinimumWindow'));",
+              "      expect(swift, contains('speedWindowInterval: CFTimeInterval = 4.0'));\n      expect(swift, contains('chunkBridgeInterval: CFTimeInterval = 1.0'));\n      expect(swift, contains('taskBridgeInterval: CFTimeInterval = 1.0'));\n      expect(swift, contains('if bridgedToDart && !isAppInForeground()'));\n      expect(swift, contains('elapsed >= speedMinimumWindow'));"
+          )
+          replace_once(
+              test,
+              "      expect(source, contains('DownloadTelemetryEstimator _speedTelemetry'));\n    });",
+              "      expect(source, contains('DownloadTelemetryEstimator _speedTelemetry'));\n      expect(\n        source,\n        contains('kParallelProgressCoalesceDelay = Duration(seconds: 1)'),\n      );\n      expect(source, contains('kParallelProgressPersistInterval'));\n      expect(source, contains('final nativeBridgeFresh ='));\n      expect(source, contains('_scheduleProgressPersist(session)'));\n    });"
+          )
+          PY
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+
+      - name: Dependencies and generated sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed lib/core/services/persistent_parallel_download.dart test/core/services/download_runtime_stability_review_test.dart
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Focused download tests
+        run: |
+          flutter test test/core/services/download_runtime_stability_review_test.dart
+          flutter test test/core/services/persistent_parallel_download_test.dart
+          flutter test test/core/services/download_telemetry_test.dart
+
+      - name: Full Flutter tests
+        run: flutter test
+
+      - name: Parse native Swift
+        run: xcrun swiftc -parse ios/Runner/DownloadNativeWaitingQueue.swift ios/Runner/DownloadContinuedProcessingManager.swift
+
+      - name: Commit verified fix and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/apply-download-telemetry-log-fix.yml
+          git add lib/core/services/persistent_parallel_download.dart ios/Runner/DownloadNativeWaitingQueue.swift test/core/services/download_runtime_stability_review_test.dart
+          git commit -m 'Stabilize download telemetry and system task updates'
+          git push origin HEAD:fix/download-telemetry-log-review
