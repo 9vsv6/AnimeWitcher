@@ -224,6 +224,20 @@ class DownloadJobStore {
   DownloadJobStore(this.backend);
 
   final DownloadJobBackend backend;
+  Future<void> _writeChain = Future<void>.value();
+
+  Future<T> _serialize<T>(Future<T> Function() action) {
+    final done = Completer<void>();
+    final previous = _writeChain;
+    _writeChain = previous.catchError((_) {}).whenComplete(() => done.future);
+    return previous.catchError((_) {}).then((_) async {
+      try {
+        return await action();
+      } finally {
+        if (!done.isCompleted) done.complete();
+      }
+    });
+  }
 
   Future<DownloadJobRecord?> get(String taskId) async {
     final id = taskId.trim();
@@ -246,7 +260,9 @@ class DownloadJobStore {
   /// Returns false for stale or unsafe writes instead of allowing a late
   /// callback to regress durable state. The only supported way to intentionally
   /// restart from byte zero is to [remove] the job first (the user-delete path).
-  Future<bool> put(DownloadJobRecord next) async {
+  Future<bool> put(DownloadJobRecord next) => _serialize(() => _putUnlocked(next));
+
+  Future<bool> _putUnlocked(DownloadJobRecord next) async {
     final taskId = next.taskId.trim();
     final trackingUrl = next.trackingUrl.trim();
     if (taskId.isEmpty || trackingUrl.isEmpty) return false;
@@ -279,7 +295,57 @@ class DownloadJobStore {
     return true;
   }
 
-  Future<void> remove(String taskId) => backend.delete(taskId.trim());
+  /// Start a new execution generation atomically. The durable bytes and
+  /// fingerprint are inherited; beginning an attempt can never reset progress.
+  Future<DownloadAttemptToken?> beginAttempt(
+    String taskId, {
+    DownloadJobState state = DownloadJobState.starting,
+    int? updatedAtMillis,
+  }) => _serialize(() async {
+    final current = await get(taskId);
+    if (current == null || current.state == DownloadJobState.completed) {
+      return null;
+    }
+    final next = current.copyWith(
+      state: state,
+      generation: current.generation + 1,
+      updatedAtMillis:
+          updatedAtMillis ?? DateTime.now().millisecondsSinceEpoch,
+    );
+    if (!await _putUnlocked(next)) return null;
+    return next.attemptToken;
+  });
+
+  /// Apply one callback/result only when it belongs to the active generation.
+  /// This is the durable counterpart of [DownloadAttemptFence].
+  Future<bool> updateForAttempt(
+    DownloadAttemptToken token, {
+    DownloadJobState? state,
+    int? durableBytes,
+    int? expectedBytes,
+    bool? userPaused,
+    bool? queueWaiting,
+    DownloadResourceFingerprint? fingerprint,
+    int? updatedAtMillis,
+  }) => _serialize(() async {
+    final current = await get(token.taskId);
+    if (current == null || current.generation != token.generation) return false;
+    return _putUnlocked(
+      current.copyWith(
+        state: state,
+        durableBytes: durableBytes,
+        expectedBytes: expectedBytes,
+        userPaused: userPaused,
+        queueWaiting: queueWaiting,
+        fingerprint: fingerprint,
+        updatedAtMillis:
+            updatedAtMillis ?? DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+  });
+
+  Future<void> remove(String taskId) =>
+      _serialize(() => backend.delete(taskId.trim()));
 
   /// Durable generation check for async callbacks after relaunch.
   Future<bool> accepts(DownloadAttemptToken token) async {
