@@ -12,11 +12,17 @@ import 'download_parallel.dart';
 import 'download_telemetry.dart';
 import '../utils/download_resume.dart';
 
-/// Child connections tend to report progress in a tight burst at the native
-/// progress cadence. Collapse that burst into one parent/UI sample so four or
-/// sixteen connections do not make the displayed bytes and speed jump several
-/// times back-to-back for the same measurement interval.
-const Duration kParallelProgressCoalesceDelay = Duration(milliseconds: 350);
+/// Child connections can report progress independently and in bursts. The
+/// logical episode, Flutter UI and iOS continued-processing task all publish
+/// one aggregate sample per second so they show the same bytes/speed/ETA.
+const Duration kParallelProgressCoalesceDelay = Duration(seconds: 1);
+
+/// Progress manifests are durable recovery checkpoints, not a telemetry bus.
+/// Persist at most once per second while bytes are flowing; exact completion,
+/// pause and cancel boundaries still persist synchronously. This prevents 5-16
+/// child callbacks from creating a serialized fsync backlog that starves the
+/// parent progress stream.
+const Duration kParallelProgressPersistInterval = Duration(seconds: 1);
 
 /// Automatic child recovery is intentionally unbounded while the logical
 /// episode is active: transient URLSession/system/network interruptions must
@@ -192,6 +198,7 @@ class PersistentParallelDownload {
     _speedTelemetry.clear();
     for (final session in _sessions.values) {
       session.cancelAggregateProgress();
+      session.cancelProgressPersist();
       session.cancelDiskProgressPoll();
       session.cancelCoordinatorRecovery();
       session.cancelPartRetries();
@@ -1064,7 +1071,7 @@ class PersistentParallelDownload {
     session.lastDiskObservedAt = now;
 
     if (!changed) return;
-    await _persist(session);
+    _scheduleProgressPersist(session);
     if (session.parts.every((part) => part.complete)) {
       await _assemble(session);
       return;
@@ -1072,8 +1079,31 @@ class PersistentParallelDownload {
     if (!session.parentRunningReported) {
       await _status(session, TaskStatus.running);
     }
-    await _emitAggregateProgress(session);
+    _scheduleAggregateProgress(session);
     _schedulePumpAll();
+  }
+
+  void _scheduleProgressPersist(_ParallelSession session) {
+    if (_disposed || !session.active || session.deleted) return;
+    session.progressPersistDirty = true;
+    if (session.progressPersistTimer != null) return;
+
+    session.progressPersistTimer = Timer(kParallelProgressPersistInterval, () {
+      session.progressPersistTimer = null;
+      if (_disposed) return;
+      unawaited(
+        session.serialize(() async {
+          if (_disposed ||
+              !session.active ||
+              session.deleted ||
+              !session.progressPersistDirty) {
+            return;
+          }
+          session.progressPersistDirty = false;
+          await _persist(session);
+        }),
+      );
+    });
   }
 
   void _scheduleAggregateProgress(_ParallelSession session) {
@@ -1361,14 +1391,14 @@ class PersistentParallelDownload {
           part.task.taskId,
           part.credibleProgress,
         );
-        await _persist(session);
+        _scheduleProgressPersist(session);
       }
 
       if (!session.active) return;
       if (!session.parentRunningReported) {
         await _status(session, TaskStatus.running);
       }
-      await _emitAggregateProgress(session);
+      _scheduleAggregateProgress(session);
       _schedulePumpAll();
     });
   }
@@ -1401,6 +1431,17 @@ class PersistentParallelDownload {
           if (update is TaskProgressUpdate &&
               update.progress >= 0 &&
               update.progress <= 1) {
+            // On iOS the URLSession bridge carries exact byte counts from the
+            // temp file. background_downloader emits a second progress callback
+            // for the same child. Ignore that duplicate while the byte bridge
+            // is healthy; if the bridge goes quiet, plugin progress becomes the
+            // fallback automatically.
+            final nativeBridgeFresh =
+                part.lastNativeBridgeAt != null &&
+                DateTime.now().difference(part.lastNativeBridgeAt!) <
+                    const Duration(seconds: 2);
+            if (nativeBridgeFresh) return;
+
             if (session.active) {
               part.launched = true;
               _activeConnectionIds.add(part.task.taskId);
@@ -1457,7 +1498,7 @@ class PersistentParallelDownload {
               part.task.taskId,
               part.credibleProgress,
             );
-            await _persist(session);
+            _scheduleProgressPersist(session);
             if (session.active) {
               _scheduleAggregateProgress(session);
             }
@@ -1703,6 +1744,7 @@ class PersistentParallelDownload {
     session.generation++;
     _speedTelemetry.resetSpeed(session.task.taskId);
     session.cancelAggregateProgress();
+    session.cancelProgressPersist();
     session.cancelDiskProgressPoll();
     session.cancelCoordinatorRecovery();
     session.resetRamp();
@@ -1803,6 +1845,7 @@ class PersistentParallelDownload {
     session.deleted = true;
     session.active = false;
     session.cancelAggregateProgress();
+    session.cancelProgressPersist();
     session.cancelDiskProgressPoll();
     session.cancelCoordinatorRecovery();
     _speedTelemetry.remove(task.taskId);
@@ -1928,6 +1971,7 @@ class PersistentParallelDownload {
   Future<void> _finishCompleteSession(_ParallelSession session) async {
     session.active = false;
     session.cancelAggregateProgress();
+    session.cancelProgressPersist();
     session.cancelDiskProgressPoll();
     session.cancelCoordinatorRecovery();
     _speedTelemetry.remove(session.task.taskId);
@@ -2033,6 +2077,8 @@ class _ParallelSession {
   final Set<String> currentBatchPendingIds = {};
   Timer? aggregateProgressTimer;
   bool aggregateProgressDirty = false;
+  Timer? progressPersistTimer;
+  bool progressPersistDirty = false;
   Timer? diskProgressTimer;
   Timer? coordinatorRecoveryTimer;
   int lastDiskObservedBytes = -1;
@@ -2063,6 +2109,12 @@ class _ParallelSession {
     aggregateProgressTimer?.cancel();
     aggregateProgressTimer = null;
     aggregateProgressDirty = false;
+  }
+
+  void cancelProgressPersist() {
+    progressPersistTimer?.cancel();
+    progressPersistTimer = null;
+    progressPersistDirty = false;
   }
 
   void cancelDiskProgressPoll() {

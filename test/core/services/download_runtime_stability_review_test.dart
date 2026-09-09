@@ -55,6 +55,9 @@ void main() {
       final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
           .readAsStringSync();
       expect(swift, contains('speedWindowInterval: CFTimeInterval = 4.0'));
+      expect(swift, contains('chunkBridgeInterval: CFTimeInterval = 1.0'));
+      expect(swift, contains('taskBridgeInterval: CFTimeInterval = 1.0'));
+      expect(swift, contains('if bridgedToDart && !isAppInForeground()'));
       expect(swift, contains('elapsed >= speedMinimumWindow'));
       expect(swift, contains('speedStaleInterval: CFTimeInterval = 3.0'));
       expect(swift, contains('let hasKnownOutstandingEpisode'));
@@ -71,6 +74,13 @@ void main() {
         contains('Coordinator bookkeeping is not a user-visible pause.'),
       );
       expect(source, contains('DownloadTelemetryEstimator _speedTelemetry'));
+      expect(
+        source,
+        contains('kParallelProgressCoalesceDelay = Duration(seconds: 1)'),
+      );
+      expect(source, contains('kParallelProgressPersistInterval'));
+      expect(source, contains('final nativeBridgeFresh ='));
+      expect(source, contains('_scheduleProgressPersist(session)'));
     });
 
     test('continued-processing speed zero explicitly clears stale speed', () {
