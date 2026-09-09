@@ -5,11 +5,18 @@ import 'package:background_downloader/background_downloader.dart';
 bool isNativeSingleDownloadTask(Task task) =>
     task is DownloadTask && task is! ParallelDownloadTask;
 
-/// Anime episodes are explicit user downloads and frequently exceed Android's
-/// short background-worker window. These hints let background_downloader 9.6
-/// choose UIDT/high priority where available and preserve pause resilience.
-Set<TransferHint> animeDownloadTransferHints({required int expectedBytes}) =>
-    <TransferHint>{TransferHint.userInitiated, TransferHint.largeFile};
+const int kDownloadLargeFileHintThresholdBytes = 50 * 1024 * 1024;
+
+/// Anime episodes are explicit user downloads. User-initiated is always useful;
+/// largeFile is added when size is unknown or the episode is large enough to
+/// benefit from background_downloader's long-running transfer policy.
+Set<TransferHint> animeDownloadTransferHints({required int expectedBytes}) {
+  final hints = <TransferHint>{TransferHint.userInitiated};
+  if (expectedBytes <= 0 || expectedBytes >= kDownloadLargeFileHintThresholdBytes) {
+    hints.add(TransferHint.largeFile);
+  }
+  return hints;
+}
 
 /// Execution boundary used by DownloadService.
 ///
