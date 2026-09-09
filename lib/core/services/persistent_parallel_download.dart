@@ -39,6 +39,12 @@ const Duration kParallelTailStallDelay = Duration(seconds: 20);
 /// reuse a proven connection ceiling without writing Hive on every callback.
 const Duration kParallelHostProfileSampleInterval = Duration(seconds: 5);
 
+/// iOS URLSession can keep writing/finalizing a child Range while its Dart
+/// progress/status callbacks are delayed or lost. Poll only visible final part
+/// paths as a fallback so durable bytes can wake the logical parent, advance
+/// slow-start and update the UI without restarting any Range.
+const Duration kParallelDiskProgressPollInterval = Duration(seconds: 1);
+
 /// Native DownloadTasks transfer the parts; this coordinator persists their
 /// identity before starting them. A process restart must not create new parts
 /// or ask the plugin to resume an already completed part.
@@ -61,6 +67,7 @@ class PersistentParallelDownload {
     this.livePartIds,
     this.recoveryDelay = const Duration(seconds: 1),
     this.tailStallDelay = kParallelTailStallDelay,
+    this.diskProgressPollInterval = kParallelDiskProgressPollInterval,
     this.maxActiveConnections = kDownloadGlobalConnectionBudget,
     this.onHostPressure,
     this.onHostSample,
@@ -79,12 +86,10 @@ class PersistentParallelDownload {
   final Future<Set<String>> Function()? livePartIds;
   final Duration recoveryDelay;
   final Duration tailStallDelay;
+  final Duration diskProgressPollInterval;
   final void Function(String url, int fallbackCeiling)? onHostPressure;
-  final void Function(
-    String url,
-    int activeConnections,
-    double bytesPerSecond,
-  )? onHostSample;
+  final void Function(String url, int activeConnections, double bytesPerSecond)?
+  onHostSample;
 
   final Map<String, _ParallelSession> _sessions = {};
   final Map<String, _ParallelSession> _children = {};
@@ -126,8 +131,7 @@ class PersistentParallelDownload {
         final childHeaders = Map<String, String>.from(headers)
           ..removeWhere(
             (key, _) =>
-                key.toLowerCase() == 'range' ||
-                key.toLowerCase() == 'if-range',
+                key.toLowerCase() == 'range' || key.toLowerCase() == 'if-range',
           );
         childHeaders['Range'] = 'bytes=${part.from}-${part.to}';
         childHeaders['Accept-Encoding'] = 'identity';
@@ -175,6 +179,7 @@ class PersistentParallelDownload {
     _disposed = true;
     for (final session in _sessions.values) {
       session.cancelAggregateProgress();
+      session.cancelDiskProgressPoll();
       session.cancelPartRetries();
     }
     final pump = _pumpFuture;
@@ -468,6 +473,7 @@ class PersistentParallelDownload {
         if (!await _pumpSession(session)) {
           throw StateError('Could not start initial download connection');
         }
+        _scheduleDiskProgressPoll(session);
         await _persist(session);
         _schedulePumpAll();
         return true;
@@ -490,9 +496,7 @@ class PersistentParallelDownload {
   Iterable<_DownloadPart> _launchableParts(_ParallelSession session) =>
       session.parts.where(
         (part) =>
-            !part.complete &&
-            !part.launched &&
-            part.recoveryTimer == null,
+            !part.complete && !part.launched && part.recoveryTimer == null,
       );
 
   int _launchablePartCount(_ParallelSession session) =>
@@ -534,9 +538,9 @@ class PersistentParallelDownload {
       final launchCount = session.currentBatchRemaining < available
           ? session.currentBatchRemaining
           : available;
-      final parts = _launchableParts(
-        session,
-      ).take(launchCount).toList(growable: false);
+      final parts = _launchableParts(session)
+          .take(launchCount)
+          .toList(growable: false);
 
       // Every unlaunched range may currently be inside its recovery backoff.
       // Preserve the batch count and sleep until one timer makes work eligible;
@@ -625,10 +629,7 @@ class PersistentParallelDownload {
     _schedulePumpAll();
   }
 
-  void _armTailStallWatch(
-    _ParallelSession session,
-    _DownloadPart part,
-  ) {
+  void _armTailStallWatch(_ParallelSession session, _DownloadPart part) {
     if (_disposed ||
         !session.active ||
         session.deleted ||
@@ -671,9 +672,7 @@ class PersistentParallelDownload {
     });
   }
 
-  Future<void> _afterAdoptedPart(
-    _ParallelSession session,
-  ) async {
+  Future<void> _afterAdoptedPart(_ParallelSession session) async {
     await _persist(session);
     if (session.parts.every((child) => child.complete)) {
       await _assemble(session);
@@ -692,7 +691,8 @@ class PersistentParallelDownload {
     _ParallelSession session,
     _DownloadPart part,
   ) async {
-    if (_disposed || !session.active || session.deleted || part.complete) return;
+    if (_disposed || !session.active || session.deleted || part.complete)
+      return;
 
     if (await _adoptExactSizePart(
       session,
@@ -711,11 +711,7 @@ class PersistentParallelDownload {
         // The worker can already be a stale URLSession bookkeeping entry.
       }
 
-      if (await _adoptExactSizePart(
-        session,
-        part,
-        settleNativeOwner: false,
-      )) {
+      if (await _adoptExactSizePart(session, part, settleNativeOwner: false)) {
         await _afterAdoptedPart(session);
         return;
       }
@@ -788,7 +784,9 @@ class PersistentParallelDownload {
       part.complete = true;
       part.progress = 1;
       part.credibleProgress = 1;
-      await saveRecord(TaskRecord(part.task, TaskStatus.complete, 1, part.size));
+      await saveRecord(
+        TaskRecord(part.task, TaskStatus.complete, 1, part.size),
+      );
       onPartProgress(session.task.taskId, part.task.taskId, 1);
       await _afterAdoptedPart(session);
       return;
@@ -919,6 +917,112 @@ class PersistentParallelDownload {
     }
   }
 
+  void _scheduleDiskProgressPoll(_ParallelSession session) {
+    if (_disposed || !session.active || session.deleted) return;
+    if (session.diskProgressTimer != null) return;
+
+    if (session.lastDiskObservedBytes < 0) {
+      session.lastDiskObservedBytes = session.creditedBytes;
+      session.lastDiskObservedAt = DateTime.now();
+    }
+    session.diskProgressTimer = Timer(diskProgressPollInterval, () {
+      session.diskProgressTimer = null;
+      if (_disposed) return;
+      unawaited(
+        session.serialize(() async {
+          if (_disposed || !session.active || session.deleted) return;
+          try {
+            await _pollDiskProgress(session);
+          } catch (_) {
+            // This is only a fallback for missing native callbacks. A transient
+            // file move/read race must never pause a healthy parent download.
+          } finally {
+            if (!_disposed && session.active && !session.deleted) {
+              _scheduleDiskProgressPoll(session);
+            }
+          }
+        }),
+      );
+    });
+  }
+
+  Future<void> _pollDiskProgress(_ParallelSession session) async {
+    var changed = false;
+
+    for (final part in session.parts) {
+      if (part.complete) continue;
+      try {
+        final file = File(await part.task.filePath());
+        if (!await file.exists()) continue;
+        final bytes = await file.length();
+        if (bytes <= 0 || bytes > part.size) continue;
+
+        if (bytes == part.size &&
+            await _adoptExactSizePart(
+              session,
+              part,
+              settleNativeOwner: part.launched,
+            )) {
+          changed = true;
+          continue;
+        }
+
+        final diskProgress = (bytes / part.size).clamp(0.0, 1.0).toDouble();
+        if (diskProgress <= part.credibleProgress) continue;
+
+        part.credibleProgress = diskProgress;
+        if (part.progress >= kParallelNativeCompletionSentinel ||
+            diskProgress > part.progress) {
+          part.progress = diskProgress;
+        }
+        part.recoveryAttempts = 0;
+        part.tailRecoveryAttempted = false;
+        if (part.launched) _markConnectionReady(session, part);
+        onPartProgress(
+          session.task.taskId,
+          part.task.taskId,
+          part.credibleProgress,
+        );
+        changed = true;
+      } on FileSystemException {
+        // URLSession may atomically move a child while it is sampled.
+      }
+    }
+
+    final now = DateTime.now();
+    final creditedBytes = session.creditedBytes;
+    final previousBytes = session.lastDiskObservedBytes;
+    final previousAt = session.lastDiskObservedAt;
+    if (previousBytes >= 0 && previousAt != null) {
+      final elapsedMicros = now.difference(previousAt).inMicroseconds;
+      final deltaBytes = creditedBytes - previousBytes;
+      if (elapsedMicros > 0 && deltaBytes > 0) {
+        session.diskObservedSpeed =
+            deltaBytes *
+            Duration.microsecondsPerSecond /
+            elapsedMicros /
+            1000 /
+            1000;
+      } else if (deltaBytes <= 0) {
+        session.diskObservedSpeed = 0;
+      }
+    }
+    session.lastDiskObservedBytes = creditedBytes;
+    session.lastDiskObservedAt = now;
+
+    if (!changed) return;
+    await _persist(session);
+    if (session.parts.every((part) => part.complete)) {
+      await _assemble(session);
+      return;
+    }
+    if (!session.parentRunningReported) {
+      await _status(session, TaskStatus.running);
+    }
+    await _emitAggregateProgress(session);
+    _schedulePumpAll();
+  }
+
   void _scheduleAggregateProgress(_ParallelSession session) {
     if (_disposed || !session.active || session.deleted) return;
     session.aggregateProgressDirty = true;
@@ -944,17 +1048,19 @@ class PersistentParallelDownload {
 
   Future<void> _emitAggregateProgress(_ParallelSession session) async {
     final progress = session.progress;
-    final speed = session.parts.fold<double>(
+    final nativeSpeed = session.parts.fold<double>(
       0,
       (sum, child) => sum + (child.complete ? 0 : child.speed),
     );
+    final speed = nativeSpeed > 0 ? nativeSpeed : session.diskObservedSpeed;
     final timeRemaining = _aggregateTimeRemaining(session, speed);
 
     if (speed > 0) {
       final now = DateTime.now();
       final previousSample = session.lastHostProfileSampleAt;
       if (previousSample == null ||
-          now.difference(previousSample) >= kParallelHostProfileSampleInterval) {
+          now.difference(previousSample) >=
+              kParallelHostProfileSampleInterval) {
         session.lastHostProfileSampleAt = now;
         onHostSample?.call(
           session.task.url,
@@ -1258,8 +1364,11 @@ class PersistentParallelDownload {
         return true;
       case TaskStatus.failed:
         final exception = update.exception;
-        final statusCode = update.responseStatusCode ??
-            (exception is TaskHttpException ? exception.httpResponseCode : null);
+        final statusCode =
+            update.responseStatusCode ??
+            (exception is TaskHttpException
+                ? exception.httpResponseCode
+                : null);
         if (statusCode == null) return true;
         return statusCode == 408 ||
             statusCode == 425 ||
@@ -1368,6 +1477,7 @@ class PersistentParallelDownload {
     session.active = false;
     session.generation++;
     session.cancelAggregateProgress();
+    session.cancelDiskProgressPoll();
     session.resetRamp();
     // Restored sessions can still have native children even though their
     // in-memory launched flags are false. Pause every unfinished identity,
@@ -1395,6 +1505,7 @@ class PersistentParallelDownload {
     session.deleted = true;
     session.active = false;
     session.cancelAggregateProgress();
+    session.cancelDiskProgressPoll();
     session.resetRamp();
     await session.serialize(() async {
       for (final part in session.parts) {
@@ -1417,6 +1528,11 @@ class PersistentParallelDownload {
   }
 
   Future<void> _status(_ParallelSession session, TaskStatus status) async {
+    if (status == TaskStatus.running) {
+      session.parentRunningReported = true;
+    } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {
+      session.parentRunningReported = false;
+    }
     await saveRecord(
       TaskRecord(session.task, status, session.progress, session.size),
     );
@@ -1507,6 +1623,7 @@ class PersistentParallelDownload {
   Future<void> _finishCompleteSession(_ParallelSession session) async {
     session.active = false;
     session.cancelAggregateProgress();
+    session.cancelDiskProgressPoll();
     session.resetRamp();
     for (final part in session.parts) {
       _activeConnectionIds.remove(part.task.taskId);
@@ -1599,10 +1716,23 @@ class _ParallelSession {
   final Set<String> currentBatchPendingIds = {};
   Timer? aggregateProgressTimer;
   bool aggregateProgressDirty = false;
+  Timer? diskProgressTimer;
+  int lastDiskObservedBytes = -1;
+  DateTime? lastDiskObservedAt;
+  double diskObservedSpeed = 0;
+  bool parentRunningReported = false;
   DateTime? lastHostProfileSampleAt;
   Future<void> _pending = Future<void>.value();
 
   int get size => parts.fold(0, (sum, part) => sum + part.size);
+  int get creditedBytes => parts.fold<int>(
+    0,
+    (sum, part) =>
+        sum +
+        (part.complete
+            ? part.size
+            : (part.size * part.credibleProgress).floor()),
+  );
   double get progress =>
       parts.fold<double>(
         0,
@@ -1615,6 +1745,14 @@ class _ParallelSession {
     aggregateProgressTimer?.cancel();
     aggregateProgressTimer = null;
     aggregateProgressDirty = false;
+  }
+
+  void cancelDiskProgressPoll() {
+    diskProgressTimer?.cancel();
+    diskProgressTimer = null;
+    lastDiskObservedBytes = -1;
+    lastDiskObservedAt = null;
+    diskObservedSpeed = 0;
   }
 
   void resetRamp() {

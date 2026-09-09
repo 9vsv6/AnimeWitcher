@@ -20,30 +20,33 @@ void main() {
   Completer<void>? pauseGate;
   Set<String> liveIds = {};
 
-  PersistentParallelDownload create({int maxActiveConnections = 16}) =>
-      PersistentParallelDownload(
-        startPart: (task, progress, size) async {
-          starts.add(task);
-          if (throwStarts) throw StateError('native enqueue failed');
-          return acceptStarts;
-        },
-        pausePart: (task) async {
-          pauses.add(task.taskId);
-          await pauseGate?.future;
-        },
-        cancelParts: (ids) async {},
-        saveRecord: (record) async {
-          records[record.task.taskId] = record;
-        },
-        recordForId: (id) async => records[id],
-        onUpdate: (update) {
-          if (update is TaskStatusUpdate) statuses.add(update.status);
-        },
-        onPartProgress: (_, _, _) {},
-        maxActiveConnections: maxActiveConnections,
-        livePartIds: () async => liveIds,
-        recoveryDelay: const Duration(milliseconds: 10),
-      );
+  PersistentParallelDownload create({
+    int maxActiveConnections = 16,
+    Duration diskProgressPollInterval = const Duration(seconds: 1),
+  }) => PersistentParallelDownload(
+    startPart: (task, progress, size) async {
+      starts.add(task);
+      if (throwStarts) throw StateError('native enqueue failed');
+      return acceptStarts;
+    },
+    pausePart: (task) async {
+      pauses.add(task.taskId);
+      await pauseGate?.future;
+    },
+    cancelParts: (ids) async {},
+    saveRecord: (record) async {
+      records[record.task.taskId] = record;
+    },
+    recordForId: (id) async => records[id],
+    onUpdate: (update) {
+      if (update is TaskStatusUpdate) statuses.add(update.status);
+    },
+    onPartProgress: (_, _, _) {},
+    maxActiveConnections: maxActiveConnections,
+    livePartIds: () async => liveIds,
+    recoveryDelay: const Duration(milliseconds: 10),
+    diskProgressPollInterval: diskProgressPollInterval,
+  );
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('parallel-recovery-');
@@ -136,32 +139,76 @@ void main() {
   });
 
   test(
-    'repeated system pauses recover only the affected identity',
+    'visible part bytes wake a parent when native callbacks are missing',
     () async {
-      await coordinator.start(parent, 25);
-      await expandFreshTo(5);
-      final original = List<DownloadTask>.from(starts);
-      for (var attempt = 0; attempt < 6; attempt++) {
-        final expectedStarts = starts.length + 1;
-        coordinator.handleUpdate(
-          TaskStatusUpdate(original[1], TaskStatus.paused),
-        );
-        await waitUntil(() => starts.length >= expectedStarts);
-        final recovered = starts.last;
-        expect(recovered.taskId, original[1].taskId);
-        // A real native worker acknowledges the recovered enqueue before it can
-        // be interrupted again. Keep the slow-start batch state honest instead
-        // of injecting consecutive pause callbacks into an unacknowledged task.
-        await markRunning([recovered]);
-        expect(coordinator.activeConnectionCount, 5);
-        expect(pauses, isEmpty);
-        expect(coordinator.isActive(parent.taskId), isTrue);
-        expect(statuses.last, TaskStatus.running);
-      }
-      expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
-      expect(statuses, isNot(contains(TaskStatus.paused)));
+      await coordinator.dispose();
+      coordinator = create(
+        diskProgressPollInterval: const Duration(milliseconds: 10),
+      );
+
+      expect(await coordinator.start(parent, 100), isTrue);
+      expect(starts.length, 1);
+      final first = starts.single;
+      final file = File(await first.filePath());
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(List<int>.filled(10, 7), flush: true);
+
+      await waitUntil(() => (records[parent.taskId]?.progress ?? 0) > 0);
+      final parentRecord = records[parent.taskId]!;
+      expect(parentRecord.status, TaskStatus.running);
+      expect(parentRecord.progress, closeTo(.1, .001));
+      expect(statuses, contains(TaskStatus.running));
+      await waitUntil(() => starts.length >= 3);
     },
   );
+
+  test(
+    'exact visible part is adopted when native completion callback is lost',
+    () async {
+      await coordinator.dispose();
+      coordinator = create(
+        diskProgressPollInterval: const Duration(milliseconds: 10),
+      );
+
+      expect(await coordinator.start(parent, 100), isTrue);
+      final first = starts.single;
+      final file = File(await first.filePath());
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(List<int>.filled(20, 9), flush: true);
+
+      await waitUntil(
+        () => records[first.taskId]?.status == TaskStatus.complete,
+      );
+      expect(coordinator.progressFor(parent.taskId), greaterThanOrEqualTo(.2));
+      expect(pauses, contains(first.taskId));
+      await waitUntil(() => starts.length >= 3);
+    },
+  );
+
+  test('repeated system pauses recover only the affected identity', () async {
+    await coordinator.start(parent, 25);
+    await expandFreshTo(5);
+    final original = List<DownloadTask>.from(starts);
+    for (var attempt = 0; attempt < 6; attempt++) {
+      final expectedStarts = starts.length + 1;
+      coordinator.handleUpdate(
+        TaskStatusUpdate(original[1], TaskStatus.paused),
+      );
+      await waitUntil(() => starts.length >= expectedStarts);
+      final recovered = starts.last;
+      expect(recovered.taskId, original[1].taskId);
+      // A real native worker acknowledges the recovered enqueue before it can
+      // be interrupted again. Keep the slow-start batch state honest instead
+      // of injecting consecutive pause callbacks into an unacknowledged task.
+      await markRunning([recovered]);
+      expect(coordinator.activeConnectionCount, 5);
+      expect(pauses, isEmpty);
+      expect(coordinator.isActive(parent.taskId), isTrue);
+      expect(statuses.last, TaskStatus.running);
+    }
+    expect(statuses, isNot(contains(TaskStatus.waitingToRetry)));
+    expect(statuses, isNot(contains(TaskStatus.paused)));
+  });
 
   test('user pause cancels a pending automatic part recovery', () async {
     await coordinator.start(parent, 25);
@@ -302,7 +349,10 @@ void main() {
       // starts, never retries the durable complete range, and never parks the
       // logical episode while those workers are being recovered.
       await waitUntil(() => starts.length > 5);
-      final recoverableIds = original.skip(1).map((task) => task.taskId).toSet();
+      final recoverableIds = original
+          .skip(1)
+          .map((task) => task.taskId)
+          .toSet();
       final retriedIds = starts.skip(5).map((task) => task.taskId).toSet();
       expect(retriedIds, isNotEmpty);
       expect(retriedIds.difference(recoverableIds), isEmpty);
@@ -371,7 +421,9 @@ void main() {
           TaskHttpException('forbidden', 403),
         ),
       );
-      await waitUntil(() => records[parent.taskId]?.status == TaskStatus.paused);
+      await waitUntil(
+        () => records[parent.taskId]?.status == TaskStatus.paused,
+      );
       expect(await File(await original.first.filePath()).exists(), isTrue);
       expect(records[parent.taskId]!.status, TaskStatus.paused);
       starts.clear();

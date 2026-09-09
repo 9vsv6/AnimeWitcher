@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,31 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: 3.47.1
           cache: true
-
-      - name: Apply multipart disk progress fallback
-        shell: bash
-        run: |
-          python3 tool/apply_multipart_disk_progress_fix.py
-          dart format lib/core/services/persistent_parallel_download.dart test/core/services/persistent_parallel_download_test.dart
-
-          # Remove every temporary patch artifact and restore the canonical
-          # Flutter Checks workflow in the same commit as the real fix.
-          rm tool/apply_multipart_disk_progress_fix.py
-          git show bcb676dc89ae79c377cf35e6f31b6665a41aeaf5:.github/workflows/ci.yml > .github/workflows/ci.yml
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Fix multipart progress when native callbacks are lost"
-          git push origin HEAD:main
 
       - name: Install dependencies and generate sources
         run: |
@@ -52,7 +33,14 @@ jobs:
           dart run build_runner build --delete-conflicting-outputs
 
       - name: Analyze
+        # Existing warnings and infos remain visible in the log, but only
+        # analyzer errors block this first enforcement step. Warnings can be
+        # reduced safely in dedicated cleanup PRs rather than masking real
+        # build/test regressions behind a large baseline migration.
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
       - name: Test
+        # A mock Firestore client test exercises the configured REST path. This
+        # harmless value satisfies its build-time configuration guard; it is
+        # never sent to an external service by the test suite.
         run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
