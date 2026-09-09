@@ -1,0 +1,37 @@
+name: Apply download startup job migration
+
+on:
+  push:
+    branches: [refactor/download-reliability-completion]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-download-startup-job-migration
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refactor/download-reliability-completion
+          fetch-depth: 0
+
+      - name: Apply guarded migration
+        run: python3 tool/apply_download_startup_job_migration.py
+
+      - name: Commit migration
+        run: |
+          if git diff --quiet -- lib/core/services/download_service.dart; then
+            echo "Expected startup migration produced no diff" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+Fares669@users.noreply.github.com"
+          git add lib/core/services/download_service.dart
+          git commit -m "Migrate persisted downloads into durable job state on startup"
+          git push origin HEAD:refactor/download-reliability-completion
