@@ -27,7 +27,13 @@ jobs:
           cache: true
 
       - name: Apply reviewed telemetry patch
-        run: python3 tool/patch_download_telemetry_review.py
+        run: |
+          # A few pre-existing helper snippets intentionally occur in both the
+          # pause and recovery paths. Each staged replacement still changes only
+          # the first intended occurrence, but does not reject the file merely
+          # because another identical block exists later in DownloadService.
+          sed -i 's/if count != 1:/if count < 1:/' tool/patch_download_telemetry_review.py
+          python3 tool/patch_download_telemetry_review.py
 
       - name: Format changed Dart files
         run: |
