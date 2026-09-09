@@ -1308,16 +1308,16 @@ enum DownloadNativeWaitingQueue {
 /// never hits the original ObjC IMP.
 private enum DownloadUrlSessionHook {
   private static let completeSelector = NSSelectorFromString(
-    "urlSession:task:didCompleteWithError:"
+    "URLSession:task:didCompleteWithError:"
   )
   private static let finishDownloadSelector = NSSelectorFromString(
-    "urlSession:downloadTask:didFinishDownloadingToURL:"
+    "URLSession:downloadTask:didFinishDownloadingToURL:"
   )
   private static let finishEventsSelector = NSSelectorFromString(
-    "urlSessionDidFinishEventsForBackgroundURLSession:"
+    "URLSessionDidFinishEventsForBackgroundURLSession:"
   )
   private static let writeSelector = NSSelectorFromString(
-    "urlSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:"
+    "URLSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:"
   )
 
   private static var originalComplete: IMP?
@@ -1341,6 +1341,11 @@ private enum DownloadUrlSessionHook {
     let hooked = originalComplete != nil || originalFinishDownload != nil || originalFinishEvents != nil || originalWrite != nil
     if hooked {
       NSLog("[DownloadNativeWaitingQueue] hooked UrlSessionDelegate %@", String(cString: class_getName(delegateClass)))
+    } else {
+      NSLog(
+        "[DownloadNativeWaitingQueue] ERROR: no NSURLSession delegate selectors were hooked on %@",
+        String(cString: class_getName(delegateClass))
+      )
     }
     return hooked
   }
