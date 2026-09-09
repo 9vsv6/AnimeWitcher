@@ -74,9 +74,16 @@ class PlayerSidePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.shortestSide < 600;
-    final panelWidth = isCompact
+    final basePanelWidth = isCompact
         ? (size.width * 0.8).clamp(260.0, 380.0)
         : 350.0;
+    // The episodes drawer needs more horizontal room than the source/track
+    // drawers so its card layout can match the Episodes page. Keep the shared
+    // shell unchanged for every other panel and widen episodes by exactly 25%.
+    final widthScale = child is PlayerEpisodesPanel ? 1.25 : 1.0;
+    final panelWidth = (basePanelWidth * widthScale)
+        .clamp(260.0, size.width * 0.95)
+        .toDouble();
 
     return IgnorePointer(
       ignoring: !isVisible,
@@ -405,8 +412,9 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 4, 12),
+            padding: const EdgeInsets.fromLTRB(4, 12, 20, 12),
             child: Row(
+              textDirection: TextDirection.rtl,
               children: [
                 const Icon(
                   Icons.video_library_outlined,
@@ -417,6 +425,7 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
                 Expanded(
                   child: Text(
                     l10n.episodes,
+                    textAlign: TextAlign.right,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
