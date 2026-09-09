@@ -160,7 +160,7 @@ Future<File?> findPartialDownloadFile({
   final dir = dest.parent;
   final name = p.basename(destinationPath);
   for (final suffix in tempSuffixes) {
-    await consider(File(p.join(dir.path, '$name$suffix'));
+    await consider(File(p.join(dir.path, '$name$suffix')));
   }
   return best;
 }
