@@ -117,21 +117,20 @@ class NativeSingleDownloadTransport implements DownloadTransport {
   @override
   Future<bool> resume(DownloadTask task) async {
     if (!isNativeSingleDownloadTask(task)) return false;
-    var transfer = handleFor(task.taskId);
-    if (transfer == null) {
-      try {
-        transfer = await _downloader.transfers.getOrStart(
-          task,
-          matchBy: (existingTask) => existingTask.taskId == task.taskId,
-          reEnqueueIfFailed: false,
-        );
-      } catch (_) {
-        return false;
-      }
-    }
-    _attach(transfer);
     try {
-      return await transfer.resume();
+      // FileDownloader.resume preserves the old strict contract: false means
+      // native resume was unavailable. Transfer.resume in 9.6 may intentionally
+      // fall back to re-enqueueing, which AnimeWitcher must never permit while
+      // verified partial bytes exist.
+      final resumed = await _downloader.resume(task);
+      if (!resumed) return false;
+      final transfer = await _downloader.transfers.getOrStart(
+        task,
+        matchBy: (existingTask) => existingTask.taskId == task.taskId,
+        reEnqueueIfFailed: false,
+      );
+      _attach(transfer);
+      return true;
     } catch (_) {
       return false;
     }
