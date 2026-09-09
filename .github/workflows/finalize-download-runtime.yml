@@ -46,13 +46,20 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Focused download tests
-        run: |
-          flutter test \
-            test/core/services/persistent_parallel_download_progress_test.dart \
-            test/core/services/download_runtime_stability_review_test.dart \
-            test/core/services/download_diagnostic_log_test.dart \
-            test/core/services/download_ui_responsiveness_test.dart
+      - name: Nonblocking parent progress regression
+        run: flutter test test/core/services/persistent_parallel_download_progress_test.dart --plain-name "parent progress is not blocked by slow record persistence"
+
+      - name: Parallel progress tests
+        run: flutter test test/core/services/persistent_parallel_download_progress_test.dart
+
+      - name: Runtime stability tests
+        run: flutter test test/core/services/download_runtime_stability_review_test.dart
+
+      - name: Diagnostic log tests
+        run: flutter test test/core/services/download_diagnostic_log_test.dart
+
+      - name: UI responsiveness tests
+        run: flutter test test/core/services/download_ui_responsiveness_test.dart
 
       - name: Full tests
         run: flutter test
