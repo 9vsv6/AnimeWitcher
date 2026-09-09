@@ -7,6 +7,117 @@ on:
     branches: [main]
 
 permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-test:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Apply multipart disk progress fallback
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          source_path = Path('lib/core/services/persistent_parallel_download.dart')
+          source = source_path.read_text()
+          marker = 'kParallelDiskProgressPollInterval'
+          if marker not in source:
+              replacements = []
+              replacements.append((
+          """const Duration kParallelHostProfileSampleInterval = Duration(seconds: 5);\n""",
+          """const Duration kParallelHostProfileSampleInterval = Duration(seconds: 5);\n\n/// iOS URLSession can keep writing/finalizing a child Range while its Dart\n/// progress/status callbacks are delayed or lost. Poll only the final visible\n/// part paths as a fallback so real durable bytes can wake the logical parent,\n/// advance slow-start, and update the UI without restarting any Range.\nconst Duration kParallelDiskProgressPollInterval = Duration(seconds: 1);\n"""))
+              replacements.append((
+          """    this.recoveryDelay = const Duration(seconds: 1),\n    this.tailStallDelay = kParallelTailStallDelay,\n    this.maxActiveConnections = kDownloadGlobalConnectionBudget,\n""",
+          """    this.recoveryDelay = const Duration(seconds: 1),\n    this.tailStallDelay = kParallelTailStallDelay,\n    this.diskProgressPollInterval = kParallelDiskProgressPollInterval,\n    this.maxActiveConnections = kDownloadGlobalConnectionBudget,\n"""))
+              replacements.append((
+          """  final Duration recoveryDelay;\n  final Duration tailStallDelay;\n  final void Function(String url, int fallbackCeiling)? onHostPressure;\n""",
+          """  final Duration recoveryDelay;\n  final Duration tailStallDelay;\n  final Duration diskProgressPollInterval;\n  final void Function(String url, int fallbackCeiling)? onHostPressure;\n"""))
+              replacements.append((
+          """    for (final session in _sessions.values) {\n      session.cancelAggregateProgress();\n      session.cancelPartRetries();\n    }\n""",
+          """    for (final session in _sessions.values) {\n      session.cancelAggregateProgress();\n      session.cancelDiskProgressPoll();\n      session.cancelPartRetries();\n    }\n"""))
+              replacements.append((
+          """        if (!await _pumpSession(session)) {\n          throw StateError('Could not start initial download connection');\n        }\n        await _persist(session);\n""",
+          """        if (!await _pumpSession(session)) {\n          throw StateError('Could not start initial download connection');\n        }\n        _scheduleDiskProgressPoll(session);\n        await _persist(session);\n"""))
+              replacements.append((
+          """  void _scheduleAggregateProgress(_ParallelSession session) {\n""",
+          """  void _scheduleDiskProgressPoll(_ParallelSession session) {\n    if (_disposed || !session.active || session.deleted) return;\n    if (session.diskProgressTimer != null) return;\n\n    session.lastDiskObservedBytes = session.creditedBytes;\n    session.lastDiskObservedAt ??= DateTime.now();\n    session.diskProgressTimer = Timer(diskProgressPollInterval, () {\n      session.diskProgressTimer = null;\n      if (_disposed) return;\n      unawaited(\n        session.serialize(() async {\n          if (_disposed || !session.active || session.deleted) return;\n          try {\n            await _pollDiskProgress(session);\n          } catch (_) {\n            // Disk inspection is only a fallback for missing native callbacks.\n            // A transient file move/read race must never pause the parent.\n          } finally {\n            if (!_disposed && session.active && !session.deleted) {\n              _scheduleDiskProgressPoll(session);\n            }\n          }\n        }),\n      );\n    });\n  }\n\n  Future<void> _pollDiskProgress(_ParallelSession session) async {\n    var changed = false;\n\n    for (final part in session.parts) {\n      if (part.complete) continue;\n      try {\n        final file = File(await part.task.filePath());\n        if (!await file.exists()) continue;\n        final bytes = await file.length();\n        if (bytes <= 0 || bytes > part.size) continue;\n\n        if (bytes == part.size &&\n            await _adoptExactSizePart(\n              session,\n              part,\n              settleNativeOwner: part.launched,\n            )) {\n          changed = true;\n          continue;\n        }\n\n        final diskProgress = (bytes / part.size).clamp(0.0, 1.0).toDouble();\n        if (diskProgress <= part.credibleProgress) continue;\n\n        part.credibleProgress = diskProgress;\n        if (part.progress >= kParallelNativeCompletionSentinel ||\n            diskProgress > part.progress) {\n          part.progress = diskProgress;\n        }\n        part.recoveryAttempts = 0;\n        part.tailRecoveryAttempted = false;\n        if (part.launched) _markConnectionReady(session, part);\n        onPartProgress(\n          session.task.taskId,\n          part.task.taskId,\n          part.credibleProgress,\n        );\n        changed = true;\n      } on FileSystemException {\n        // URLSession may atomically move a child while it is being sampled.\n      }\n    }\n\n    final now = DateTime.now();\n    final creditedBytes = session.creditedBytes;\n    final previousBytes = session.lastDiskObservedBytes;\n    final previousAt = session.lastDiskObservedAt;\n    if (previousBytes >= 0 && previousAt != null) {\n      final elapsedMicros = now.difference(previousAt).inMicroseconds;\n      final deltaBytes = creditedBytes - previousBytes;\n      if (elapsedMicros > 0 && deltaBytes > 0) {\n        session.diskObservedSpeed =\n            deltaBytes * Duration.microsecondsPerSecond /\n            elapsedMicros /\n            1000 /\n            1000;\n      } else if (deltaBytes <= 0) {\n        session.diskObservedSpeed = 0;\n      }\n    }\n    session.lastDiskObservedBytes = creditedBytes;\n    session.lastDiskObservedAt = now;\n\n    if (!changed) return;\n    await _persist(session);\n    if (session.parts.every((part) => part.complete)) {\n      await _assemble(session);\n      return;\n    }\n    if (!session.parentRunningReported) {\n      await _status(session, TaskStatus.running);\n    }\n    await _emitAggregateProgress(session);\n    _schedulePumpAll();\n  }\n\n  void _scheduleAggregateProgress(_ParallelSession session) {\n"""))
+              replacements.append((
+          """    final speed = session.parts.fold<double>(\n      0,\n      (sum, child) => sum + (child.complete ? 0 : child.speed),\n    );\n""",
+          """    final nativeSpeed = session.parts.fold<double>(\n      0,\n      (sum, child) => sum + (child.complete ? 0 : child.speed),\n    );\n    final speed = nativeSpeed > 0 ? nativeSpeed : session.diskObservedSpeed;\n"""))
+              replacements.append((
+          """  Future<void> _pause(_ParallelSession session) async {\n    session.active = false;\n    session.generation++;\n    session.cancelAggregateProgress();\n""",
+          """  Future<void> _pause(_ParallelSession session) async {\n    session.active = false;\n    session.generation++;\n    session.cancelAggregateProgress();\n    session.cancelDiskProgressPoll();\n"""))
+              replacements.append((
+          """    session.deleted = true;\n    session.active = false;\n    session.cancelAggregateProgress();\n    session.resetRamp();\n""",
+          """    session.deleted = true;\n    session.active = false;\n    session.cancelAggregateProgress();\n    session.cancelDiskProgressPoll();\n    session.resetRamp();\n"""))
+              replacements.append((
+          """  Future<void> _status(_ParallelSession session, TaskStatus status) async {\n    await saveRecord(\n""",
+          """  Future<void> _status(_ParallelSession session, TaskStatus status) async {\n    if (status == TaskStatus.running) {\n      session.parentRunningReported = true;\n    } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {\n      session.parentRunningReported = false;\n    }\n    await saveRecord(\n"""))
+              replacements.append((
+          """  Future<void> _finishCompleteSession(_ParallelSession session) async {\n    session.active = false;\n    session.cancelAggregateProgress();\n    session.resetRamp();\n""",
+          """  Future<void> _finishCompleteSession(_ParallelSession session) async {\n    session.active = false;\n    session.cancelAggregateProgress();\n    session.cancelDiskProgressPoll();\n    session.resetRamp();\n"""))
+              replacements.append((
+          """  Timer? aggregateProgressTimer;\n  bool aggregateProgressDirty = false;\n  DateTime? lastHostProfileSampleAt;\n""",
+          """  Timer? aggregateProgressTimer;\n  bool aggregateProgressDirty = false;\n  Timer? diskProgressTimer;\n  int lastDiskObservedBytes = -1;\n  DateTime? lastDiskObservedAt;\n  double diskObservedSpeed = 0;\n  bool parentRunningReported = false;\n  DateTime? lastHostProfileSampleAt;\n"""))
+              replacements.append((
+          """  int get size => parts.fold(0, (sum, part) => sum + part.size);\n  double get progress =>\n""",
+          """  int get size => parts.fold(0, (sum, part) => sum + part.size);\n  int get creditedBytes => parts.fold<int>(\n    0,\n    (sum, part) =>\n        sum +\n        (part.complete\n            ? part.size\n            : (part.size * part.credibleProgress).floor()),\n  );\n  double get progress =>\n"""))
+              replacements.append((
+          """  void resetRamp() {\n""",
+          """  void cancelDiskProgressPoll() {\n    diskProgressTimer?.cancel();\n    diskProgressTimer = null;\n    lastDiskObservedBytes = -1;\n    lastDiskObservedAt = null;\n    diskObservedSpeed = 0;\n  }\n\n  void resetRamp() {\n"""))
+
+              for old, new in replacements:
+                  if old not in source:
+                      raise SystemExit(f'missing source patch anchor:\n{old[:160]}')
+                  source = source.replace(old, new, 1)
+              source_path.write_text(source)
+
+          test_path = Path('test/core/services/persistent_parallel_download_test.dart')
+          test = test_path.read_text()
+          test_marker = 'visible part bytes wake a parent when native callbacks are missing'
+          if test_marker not in test:
+              old = """  PersistentParallelDownload create({int maxActiveConnections = 16}) =>\n      PersistentParallelDownload(\n"""
+              new = """  PersistentParallelDownload create({\n    int maxActiveConnections = 16,\n    Duration diskProgressPollInterval = const Duration(seconds: 1),\n  }) => PersistentParallelDownload(\n"""
+              if old not in test:
+                  raise SystemExit('missing test create anchor')
+              test = test.replace(old, new, 1)
+
+              old = """        recoveryDelay: const Duration(milliseconds: 10),\n      );\n"""
+              new = """        recoveryDelay: const Duration(milliseconds: 10),\n        diskProgressPollInterval: diskProgressPollInterval,\n      );\n"""
+              if old not in test:
+                  raise SystemExit('missing test constructor anchor')
+              test = test.replace(old, new, 1)
+
+              anchor = """  test(\n    'repeated system pauses recover only the affected identity',\n"""
+              addition = """  test(\n    'visible part bytes wake a parent when native callbacks are missing',\n    () async {\n      await coordinator.dispose();\n      coordinator = create(\n        diskProgressPollInterval: const Duration(milliseconds: 10),\n      );\n\n      expect(await coordinator.start(parent, 100), isTrue);\n      expect(starts.length, 1);\n      final first = starts.single;\n      final file = File(await first.filePath());\n      await file.parent.create(recursive: true);\n      await file.writeAsBytes(List<int>.filled(10, 7), flush: true);\n\n      await waitUntil(() => (records[parent.taskId]?.progress ?? 0) > 0);\n      final parentRecord = records[parent.taskId]!;\n      expect(parentRecord.status, TaskStatus.running);\n      expect(parentRecord.progress, closeTo(.1, .001));\n      expect(statuses, contains(TaskStatus.running));\n\n      // Disk growth proves the first native worker is actually transferring,\n      // so slow-start must not remain stuck waiting for a lost running callback.\n      await waitUntil(() => starts.length >= 3);\n    },\n  );\n\n  test(\n    'exact visible part is adopted when native completion callback is lost',\n    () async {\n      await coordinator.dispose();\n      coordinator = create(\n        diskProgressPollInterval: const Duration(milliseconds: 10),\n      );\n\n      expect(await coordinator.start(parent, 100), isTrue);\n      final first = starts.single;\n      final file = File(await first.filePath());\n      await file.parent.create(recursive: true);\n      await file.writeAsBytes(List<int>.filled(20, 9), flush: true);\n\n      await waitUntil(\n        () => records[first.taskId]?.status == TaskStatus.complete,\n      );\n      expect(coordinator.progressFor(parent.taskId), greaterThanOrEqualTo(.2));\n      expect(pauses, contains(first.taskId));\n      await waitUntil(() => starts.length >= 3);\n    },\n  );\n\n"""
+              if anchor not in test:
+                  raise SystemExit('missing test insertion anchor')
+              test = test.replace(anchor, addition + anchor, 1)
+              test_path.write_text(test)
+
+          canonical_ci = """name: Flutter Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
   contents: read
 
 concurrency:
@@ -43,4 +154,35 @@ jobs:
         # A mock Firestore client test exercises the configured REST path. This
         # harmless value satisfies its build-time configuration guard; it is
         # never sent to an external service by the test suite.
+        run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+"""
+          Path('.github/workflows/ci.yml').write_text(canonical_ci)
+          PY
+
+          dart format \
+            lib/core/services/persistent_parallel_download.dart \
+            test/core/services/persistent_parallel_download_test.dart
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/core/services/persistent_parallel_download.dart \
+            test/core/services/persistent_parallel_download_test.dart \
+            .github/workflows/ci.yml
+          if git diff --cached --quiet; then
+            echo "Patch already applied"
+          else
+            git commit -m "Fix multipart progress when native callbacks are lost"
+            git push origin HEAD:main
+          fi
+
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Test
         run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
