@@ -747,6 +747,48 @@ class DownloadService {
       final userPaused =
           isUserPausedMetadata(metadata) ||
           _userPausedIds.contains(task.taskId);
+      final recoveryPlan = planDownloadRecovery(
+        persisted: record.status,
+        queueWaiting: queueWaiting,
+        userPaused: userPaused,
+        stillInNativeQueue: stillNative,
+        hasMetadata: metadata != null,
+      );
+
+      // Migrate pre-DownloadJobStore installs on first reconciliation. Only
+      // byte-credible disk/manifests are counted; native resume blobs with no
+      // visible prefix remain unknown instead of being guessed from percent.
+      final saved = await _savedProgressFor(task);
+      final expectedBytes = knownDownloadSize(<int?>[
+        saved.totalSize,
+        record.expectedFileSize,
+        downloadMetadataExpectedBytes(metadata),
+      ]);
+      var durableBytes = saved.partialBytes;
+      if (task is ParallelDownloadTask && expectedBytes > 0) {
+        durableBytes = (progress * expectedBytes).floor();
+      }
+      final oldJob = await _jobStore.get(task.taskId);
+      if (oldJob != null && oldJob.durableBytes > durableBytes) {
+        durableBytes = oldJob.durableBytes;
+      }
+      final migratedJob = DownloadJobRecord(
+        taskId: task.taskId,
+        trackingUrl: trackingUrl,
+        state: recoveryPlan.state,
+        generation: oldJob?.generation ?? 0,
+        durableBytes: durableBytes,
+        expectedBytes: expectedBytes,
+        userPaused: userPaused,
+        queueWaiting: recoveryPlan.shouldRequeue,
+        updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
+        fingerprint: oldJob?.fingerprint ??
+            DownloadResourceFingerprint(
+              expectedBytes: expectedBytes,
+              finalUrl: task.url,
+            ),
+      );
+      await _jobStore.put(migratedJob);
 
       if (userPaused) {
         _userPausedIds.add(task.taskId);
@@ -788,13 +830,7 @@ class DownloadService {
         );
       }
 
-      final shouldReenqueue = shouldRequeueInterruptedDownloadAfterRelaunch(
-        persisted: record.status,
-        queueWaiting: queueWaiting,
-        userPaused: userPaused,
-        stillInNativeQueue: stillNative,
-        hasMetadata: metadata != null,
-      );
+      final shouldReenqueue = recoveryPlan.shouldRequeue;
       if (shouldReenqueue) {
         _queueWaitingIds.add(task.taskId);
         _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
