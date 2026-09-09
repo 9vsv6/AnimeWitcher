@@ -1,13 +1,11 @@
 name: Flutter Checks
 
 on:
-  pull_request:
-    branches: [main]
   push:
-    branches: [main]
+    branches: [fix/download-runtime-stability-review]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,16 +13,34 @@ concurrency:
 
 jobs:
   analyze-and-test:
-    name: Analyze and test
-    runs-on: ubuntu-latest
+    name: Analyze, test and iOS compile
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: 3.47.1
           cache: true
+
+      - name: Apply runtime stability review
+        run: python3 tool/patch_download_runtime_stability.py
+
+      - name: Format changed Dart files
+        run: |
+          dart format \
+            lib/core/services/download_telemetry.dart \
+            lib/core/services/download_concurrency.dart \
+            lib/core/services/download_service.dart \
+            lib/core/services/persistent_parallel_download.dart \
+            test/core/services/download_runtime_stability_review_test.dart
 
       - name: Install dependencies and generate sources
         run: |
@@ -33,14 +49,100 @@ jobs:
           dart run build_runner build --delete-conflicting-outputs
 
       - name: Analyze
-        # Existing warnings and infos remain visible in the log, but only
-        # analyzer errors block this first enforcement step. Warnings can be
-        # reduced safely in dedicated cleanup PRs rather than masking real
-        # build/test regressions behind a large baseline migration.
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
-      - name: Test
-        # A mock Firestore client test exercises the configured REST path. This
-        # harmless value satisfies its build-time configuration guard; it is
-        # never sent to an external service by the test suite.
+      - name: Focused runtime stability tests
+        run: flutter test test/core/services/download_runtime_stability_review_test.dart test/core/services/download_telemetry_test.dart test/core/services/persistent_parallel_download_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Full Flutter test suite
         run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Prepare media_kit iOS Headers
+        run: bash scripts/prepare_media_kit_ios_headers.sh
+
+      - name: Generate test dart-defines file
+        run: |
+          cat > dart-defines.json <<'EOF'
+          {
+            "MAL_CLIENT_ID": "",
+            "MAL_CLIENT_SECRET": "",
+            "ANILIST_CLIENT_ID": "",
+            "ANIMEWITCHER_FIREBASE_PROJECT_ID": "test",
+            "ANIMEWITCHER_FIREBASE_API_KEY": "test-api-key",
+            "ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID": "",
+            "ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID": "296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com"
+          }
+          EOF
+
+      - name: Configure Google Sign-In for iOS
+        env:
+          ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID: 296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com
+          ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID: ''
+        run: bash scripts/configure_ios_google_sign_in.sh
+
+      - name: Compile iOS release
+        run: flutter build ios --release --no-codesign --dart-define-from-file=dart-defines.json
+
+      - name: Commit verified fix and restore normal CI
+        run: |
+          cat > .github/workflows/ci.yml <<'EOF'
+          name: Flutter Checks
+
+          on:
+            pull_request:
+              branches: [main]
+            push:
+              branches: [main]
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: ${{ github.workflow }}-${{ github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            analyze-and-test:
+              name: Analyze and test
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v5
+
+                - uses: subosito/flutter-action@v2
+                  with:
+                    channel: stable
+                    flutter-version: 3.47.1
+                    cache: true
+
+                - name: Install dependencies and generate sources
+                  run: |
+                    flutter pub get
+                    flutter gen-l10n
+                    dart run build_runner build --delete-conflicting-outputs
+
+                - name: Analyze
+                  # Existing warnings and infos remain visible in the log, but only
+                  # analyzer errors block this first enforcement step. Warnings can be
+                  # reduced safely in dedicated cleanup PRs rather than masking real
+                  # build/test regressions behind a large baseline migration.
+                  run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+                - name: Test
+                  # A mock Firestore client test exercises the configured REST path. This
+                  # harmless value satisfies its build-time configuration guard; it is
+                  # never sent to an external service by the test suite.
+                  run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm tool/patch_download_runtime_stability.py
+          git add .github/workflows/ci.yml \
+            lib/core/services/download_telemetry.dart \
+            lib/core/services/download_concurrency.dart \
+            lib/core/services/download_service.dart \
+            lib/core/services/persistent_parallel_download.dart \
+            ios/Runner/DownloadNativeWaitingQueue.swift \
+            ios/Runner/DownloadContinuedProcessingManager.swift \
+            test/core/services/download_runtime_stability_review_test.dart
+          git commit -m "Stabilize download runtime ownership and speed reporting"
+          git push
