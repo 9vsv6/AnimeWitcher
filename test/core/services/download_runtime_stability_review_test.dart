@@ -88,5 +88,39 @@ void main() {
           .readAsStringSync();
       expect(swift, contains('speedBytesPerSecond >= 0'));
     });
+
+    test(
+      'multipart progress callback cannot feed native ingress back into itself',
+      () {
+        final source = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        final start = source.indexOf(
+          'onPartProgress: (parent, child, progress) {',
+        );
+        final end = source.indexOf('onHostPressure:', start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        final callback = source.substring(start, end);
+        expect(callback, contains('_publishChunkProgress('));
+        expect(callback, isNot(contains('_handleNativeChunkUpdate(')));
+        expect(source, contains('void _publishChunkProgress({'));
+      },
+    );
+
+    test(
+      'continued-processing metric updates are coalesced to one per second',
+      () {
+        final source = File(
+          'lib/core/services/download_continued_processing_service.dart',
+        ).readAsStringSync();
+        expect(
+          source,
+          contains('_updateSampleInterval = Duration(seconds: 1)'),
+        );
+        expect(source, contains('Future<void> _queueUpdate('));
+        expect(source, contains('_pendingUpdate = arguments'));
+        expect(source, contains('_cancelPendingUpdate();'));
+      },
+    );
   });
 }

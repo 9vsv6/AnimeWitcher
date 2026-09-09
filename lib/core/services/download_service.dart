@@ -324,12 +324,13 @@ class DownloadService {
         if (!_disposed) _sharedEvents.add(update);
       },
       onPartProgress: (parent, child, progress) {
-        if (!_disposed)
-          _handleNativeChunkUpdate(
+        if (!_disposed) {
+          _publishChunkProgress(
             parentTaskId: parent,
             chunkTaskId: child,
             progress: progress,
           );
+        }
       },
       onHostPressure: (url, ceiling) {
         diagnosticLog.record('parallel.hostPressure', {'count': ceiling});
@@ -485,6 +486,22 @@ class DownloadService {
     } catch (_) {}
   }
 
+  void _publishChunkProgress({
+    required String parentTaskId,
+    required String chunkTaskId,
+    double? progress,
+    int? statusOrdinal,
+  }) {
+    _ref
+        .read(downloadChunkProgressProvider.notifier)
+        .update(
+          parentTaskId: parentTaskId,
+          chunkTaskId: chunkTaskId,
+          progress: progress,
+          statusOrdinal: statusOrdinal,
+        );
+  }
+
   void _handleNativeChunkUpdate({
     required String parentTaskId,
     required String chunkTaskId,
@@ -512,14 +529,12 @@ class DownloadService {
                       expectedBytes > 0)
                   ? writtenBytes / expectedBytes
                   : null));
-    _ref
-        .read(downloadChunkProgressProvider.notifier)
-        .update(
-          parentTaskId: parentTaskId,
-          chunkTaskId: chunkTaskId,
-          progress: derivedProgress,
-          statusOrdinal: completed ? TaskStatus.complete.index : statusOrdinal,
-        );
+    _publishChunkProgress(
+      parentTaskId: parentTaskId,
+      chunkTaskId: chunkTaskId,
+      progress: derivedProgress,
+      statusOrdinal: completed ? TaskStatus.complete.index : statusOrdinal,
+    );
 
     unawaited(
       _parallel.handleNativeChunkUpdate(
