@@ -27,7 +27,9 @@ jobs:
           cache: true
 
       - name: Apply final runtime fixes
-        run: python3 .github/scripts/finalize-download-runtime.py
+        run: |
+          python3 .github/scripts/finalize-download-runtime.py
+          python3 .github/scripts/fix-finalize-analyzer.py
 
       - name: Dependencies
         run: flutter pub get
@@ -65,6 +67,7 @@ jobs:
         shell: bash
         run: |
           rm .github/scripts/finalize-download-runtime.py
+          rm .github/scripts/fix-finalize-analyzer.py
           rm .github/workflows/finalize-download-runtime.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
