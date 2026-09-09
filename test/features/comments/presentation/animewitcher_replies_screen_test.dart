@@ -26,9 +26,9 @@ class _FakeAccountService extends AnimeWitcherAccountService {
     this.signedIn = true,
     this.myUserId = 'me',
   }) : super(
-          storage: StorageService(),
-          secureStorage: SecureTokenStorage(StorageService()),
-        );
+         storage: StorageService(),
+         secureStorage: SecureTokenStorage(StorageService()),
+       );
 
   final List<AnimeWitcherComment> comments;
   final List<AnimeWitcherComment> replies;
@@ -46,15 +46,15 @@ class _FakeAccountService extends AnimeWitcherAccountService {
 
   @override
   AnimeWitcherAccountSnapshot get snapshot => AnimeWitcherAccountSnapshot(
-        profile: signedIn
-            ? AnimeWitcherProfile(
-                documentId: myUserId,
-                uid: myUserId,
-                signInMethod: AnimeWitcherSignInMethod.google,
-                userName: 'Me',
-              )
-            : null,
-      );
+    profile: signedIn
+        ? AnimeWitcherProfile(
+            documentId: myUserId,
+            uid: myUserId,
+            signInMethod: AnimeWitcherSignInMethod.google,
+            userName: 'Me',
+          )
+        : null,
+  );
 
   @override
   bool ownsComment(AnimeWitcherComment comment) {
@@ -180,7 +180,9 @@ Widget _app({
 }
 
 Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
-  final artifacts = Directory('/opt/cursor/artifacts');
+  final artifacts = Directory(
+    '${Directory.systemTemp.path}/animewitcher-test-artifacts',
+  );
   artifacts.createSync(recursive: true);
   await tester.runAsync(() async {
     final boundary = tester.renderObject<RenderRepaintBoundary>(
@@ -188,7 +190,8 @@ Future<void> _writeShot(WidgetTester tester, String filename, Key key) async {
     );
     final image = await boundary.toImage(pixelRatio: 2);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    File('${artifacts.path}/$filename').writeAsBytesSync(bytes!.buffer.asUint8List());
+    File('${artifacts.path}/$filename')
+        .writeAsBytesSync(bytes!.buffer.asUint8List());
   });
 }
 
@@ -226,55 +229,58 @@ void main() {
     collection: parent.repliesCollectionPath,
   );
 
-  testWidgets('replies load oldest first and place mention start-side of likes',
-      (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.runAsync(TestFonts.loadWalkthroughFonts);
+  testWidgets(
+    'replies load oldest first and place mention start-side of likes',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.runAsync(TestFonts.loadWalkthroughFonts);
 
-    final service = _FakeAccountService(
-      comments: <AnimeWitcherComment>[parent],
-      replies: <AnimeWitcherComment>[otherReply],
-    );
-    const shotKey = ValueKey<String>('replies-shot');
+      final service = _FakeAccountService(
+        comments: <AnimeWitcherComment>[parent],
+        replies: <AnimeWitcherComment>[otherReply],
+      );
+      const shotKey = ValueKey<String>('replies-shot');
 
-    await tester.pumpWidget(
-      _app(
-        service: service,
-        shotKey: shotKey,
-        home: AnimeWitcherRepliesScreen(parentComment: parent),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpWidget(
+        _app(
+          service: service,
+          shotKey: shotKey,
+          home: AnimeWitcherRepliesScreen(parentComment: parent),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('الردود'), findsOneWidget);
-    expect(find.text('اكتب رداً...'), findsOneWidget);
-    expect(find.byTooltip('ترتيب الردود'), findsOneWidget);
-    expect(service.lastRepliesSort, AnimeWitcherCommentSort.oldest);
+      expect(find.text('الردود'), findsOneWidget);
+      expect(find.text('اكتب رداً...'), findsOneWidget);
+      expect(find.byTooltip('ترتيب الردود'), findsOneWidget);
+      expect(service.lastRepliesSort, AnimeWitcherCommentSort.oldest);
 
-    await _writeShot(tester, 'replies_mention_and_sort.png', shotKey);
+      await _writeShot(tester, 'replies_mention_and_sort.png', shotKey);
 
-    final mention = tester.getRect(
-      find.byKey(ValueKey<String>('reply-mention-${otherReply.path}')),
-    );
-    final heart = tester.getRect(find.byIcon(Icons.favorite_border_rounded));
-    expect(
-      mention.center.dx,
-      greaterThan(heart.center.dx),
-      reason: 'RTL: mention sits on the start-side (right) of the like row',
-    );
+      final mention = tester.getRect(
+        find.byKey(ValueKey<String>('reply-mention-${otherReply.path}')),
+      );
+      final heart = tester.getRect(find.byIcon(Icons.favorite_border_rounded));
+      expect(
+        mention.center.dx,
+        greaterThan(heart.center.dx),
+        reason: 'RTL: mention sits on the start-side (right) of the like row',
+      );
 
-    await tester.tap(find.byTooltip('ترتيب الردود'));
-    await tester.pumpAndSettle();
-    expect(find.text('الأحدث'), findsWidgets);
-    expect(find.text('الأقدم'), findsWidgets);
-    expect(find.text('الأكثر اعجابا'), findsWidgets);
-    await _writeShot(tester, 'replies_sort_menu.png', shotKey);
-  });
+      await tester.tap(find.byTooltip('ترتيب الردود'));
+      await tester.pumpAndSettle();
+      expect(find.text('الأحدث'), findsWidgets);
+      expect(find.text('الأقدم'), findsWidgets);
+      expect(find.text('الأكثر اعجابا'), findsWidgets);
+      await _writeShot(tester, 'replies_sort_menu.png', shotKey);
+    },
+  );
 
-  testWidgets('mention button inserts @name and blocks a second tag',
-      (tester) async {
+  testWidgets('mention button inserts @name and blocks a second tag', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.runAsync(TestFonts.loadWalkthroughFonts);
@@ -299,7 +305,10 @@ void main() {
       find.byKey(ValueKey<String>('reply-mention-${ownReply.path}')),
     );
     await tester.pump();
-    expect(tester.widget<TextField>(find.byType(TextField)).controller?.text, '');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      '',
+    );
 
     await tester.tap(
       find.byKey(ValueKey<String>('reply-mention-${otherReply.path}')),
@@ -345,8 +354,9 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('returning from replies does not refetch comments',
-      (tester) async {
+  testWidgets('returning from replies does not refetch comments', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 

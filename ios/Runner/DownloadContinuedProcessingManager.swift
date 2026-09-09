@@ -91,7 +91,7 @@ final class DownloadContinuedProcessingManager {
       && taskId != previousEpisodeTaskId
     let keepSpeed = switched
       ? max(speedBytesPerSecond, 0)
-      : (speedBytesPerSecond > 0
+      : (speedBytesPerSecond >= 0
         ? speedBytesPerSecond
         : max(snapshot?.speedBytesPerSecond ?? 0, 0))
     let snapshot = Snapshot(
@@ -210,8 +210,8 @@ final class DownloadContinuedProcessingManager {
     }
     if switched {
       snapshot.speedBytesPerSecond = max(speedBytesPerSecond, 0)
-    } else if speedBytesPerSecond > 0 {
-      snapshot.speedBytesPerSecond = speedBytesPerSecond
+    } else if speedBytesPerSecond >= 0 {
+      snapshot.speedBytesPerSecond = max(speedBytesPerSecond, 0)
     }
     if !displayName.isEmpty {
       snapshot.displayName = displayName

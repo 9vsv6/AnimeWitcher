@@ -270,18 +270,21 @@ void main() {
   });
 
   test(
-    'a pump enqueue exception parks the parent and releases all slots',
+    'a pump enqueue exception recovers without pausing the logical parent',
     () async {
       await coordinator.start(parent, 25);
       throwStarts = true;
       await markRunning(starts.take(1));
-      await waitUntil(() => statuses.last == TaskStatus.paused);
-      expect(coordinator.isActive(parent.taskId), isFalse);
-      expect(coordinator.activeConnectionCount, 0);
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+      expect(coordinator.isActive(parent.taskId), isTrue);
+      expect(statuses, isNot(contains(TaskStatus.paused)));
+
       throwStarts = false;
-      starts.clear();
-      expect(await coordinator.start(parent, 25), isTrue);
-      await expandFreshTo(5);
+      final beforeRecovery = starts.length;
+      await waitUntil(() => starts.length > beforeRecovery);
+      await markRunning(starts.skip(beforeRecovery));
+      expect(coordinator.isActive(parent.taskId), isTrue);
+      expect(statuses, isNot(contains(TaskStatus.paused)));
     },
   );
 

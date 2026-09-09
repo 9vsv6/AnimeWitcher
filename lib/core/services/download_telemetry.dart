@@ -160,17 +160,14 @@ class DownloadTelemetryEstimator {
 
   double _byteWindowSpeed(_TelemetryState state) {
     if (state.byteSamples.length < 2) return 0;
+    final oldest = state.byteSamples.first;
     final latest = state.byteSamples.last;
-    _BytePoint? oldest;
-    for (final sample in state.byteSamples) {
-      final elapsed = latest.at.difference(sample.at);
-      if (elapsed >= minimumWindow) {
-        oldest = sample;
-        break;
-      }
-    }
-    oldest ??= state.byteSamples.first;
-    final elapsedMicros = latest.at.difference(oldest.at).inMicroseconds;
+    final elapsed = latest.at.difference(oldest.at);
+    // URLSession/progress callbacks arrive in bursts. A 50-300ms delta is not
+    // a user-visible download speed; wait for a real observation window rather
+    // than magnifying that burst into an implausible MB/s value.
+    if (elapsed < minimumWindow) return 0;
+    final elapsedMicros = elapsed.inMicroseconds;
     final deltaBytes = latest.bytes - oldest.bytes;
     if (elapsedMicros <= 0 || deltaBytes <= 0) return 0;
     return deltaBytes / (elapsedMicros / Duration.microsecondsPerSecond);
