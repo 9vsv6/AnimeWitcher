@@ -1,0 +1,284 @@
+import 'package:animewitcher/core/services/download_job_state.dart';
+import 'package:animewitcher/core/services/download_job_store.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+class _MemoryBackend implements DownloadJobBackend {
+  final Map<String, Map<String, dynamic>> values = {};
+
+  @override
+  Future<void> delete(String taskId) async {
+    values.remove(taskId);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> read(String taskId) async {
+    final value = values[taskId];
+    return value == null ? null : Map<String, dynamic>.from(value);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> readAll() async => values.values
+      .map((value) => Map<String, dynamic>.from(value))
+      .toList(growable: false);
+
+  @override
+  Future<void> write(String taskId, Map<String, Object?> value) async {
+    values[taskId] = Map<String, dynamic>.from(value);
+  }
+}
+
+DownloadJobRecord _job({
+  String taskId = 'episode-1',
+  String trackingUrl = 'https://example.test/watch/1',
+  DownloadJobState state = DownloadJobState.running,
+  int generation = 1,
+  int durableBytes = 100,
+  int expectedBytes = 1000,
+  bool userPaused = false,
+  bool queueWaiting = false,
+  int updatedAtMillis = 1,
+  DownloadResourceFingerprint? fingerprint,
+}) => DownloadJobRecord(
+  taskId: taskId,
+  trackingUrl: trackingUrl,
+  state: state,
+  generation: generation,
+  durableBytes: durableBytes,
+  expectedBytes: expectedBytes,
+  userPaused: userPaused,
+  queueWaiting: queueWaiting,
+  updatedAtMillis: updatedAtMillis,
+  fingerprint: fingerprint,
+);
+
+void main() {
+  group('DownloadJobRecord codec', () {
+    test('round trips logical state and resource fingerprint', () {
+      const fingerprint = DownloadResourceFingerprint(
+        strongEtag: '"abc"',
+        lastModified: 'Wed, 09 Sep 2026 08:00:00 GMT',
+        expectedBytes: 1000,
+        finalUrl: 'https://cdn.example.test/file.mp4?token=2',
+      );
+      final source = _job(
+        state: DownloadJobState.pausedByUser,
+        generation: 7,
+        durableBytes: 456,
+        userPaused: true,
+        fingerprint: fingerprint,
+      );
+
+      final decoded = DownloadJobRecord.fromJson(source.toJson());
+
+      expect(decoded, isNotNull);
+      expect(decoded!.taskId, source.taskId);
+      expect(decoded.trackingUrl, source.trackingUrl);
+      expect(decoded.state, DownloadJobState.pausedByUser);
+      expect(decoded.generation, 7);
+      expect(decoded.durableBytes, 456);
+      expect(decoded.userPaused, isTrue);
+      expect(decoded.fingerprint?.strongEtag, '"abc"');
+      expect(decoded.fingerprint?.expectedBytes, 1000);
+    });
+
+    test('unknown state is conservatively restored as interrupted', () {
+      final json = _job().toJson()..['state'] = 'futureNewState';
+      final decoded = DownloadJobRecord.fromJson(json);
+      expect(decoded?.state, DownloadJobState.interrupted);
+    });
+
+    test('invalid identifiers or negative durable bytes are rejected', () {
+      final missingId = _job().toJson()..['taskId'] = '';
+      final negativeBytes = _job().toJson()..['durableBytes'] = -1;
+      expect(DownloadJobRecord.fromJson(missingId), isNull);
+      expect(DownloadJobRecord.fromJson(negativeBytes), isNull);
+    });
+  });
+
+  group('resource fingerprint', () {
+    test('strong ETag mismatch is incompatible', () {
+      const old = DownloadResourceFingerprint(
+        strongEtag: '"old"',
+        expectedBytes: 100,
+      );
+      const fresh = DownloadResourceFingerprint(
+        strongEtag: '"new"',
+        expectedBytes: 100,
+      );
+      expect(old.compatibleWith(fresh), isFalse);
+    });
+
+    test('missing validator is unknown, not automatically incompatible', () {
+      const old = DownloadResourceFingerprint(
+        strongEtag: '"same"',
+        expectedBytes: 100,
+      );
+      const fresh = DownloadResourceFingerprint(expectedBytes: 100);
+      expect(old.compatibleWith(fresh), isTrue);
+    });
+
+    test('size mismatch is incompatible even without validators', () {
+      const old = DownloadResourceFingerprint(expectedBytes: 100);
+      const fresh = DownloadResourceFingerprint(expectedBytes: 101);
+      expect(old.compatibleWith(fresh), isFalse);
+    });
+  });
+
+  group('DownloadJobStore invariants', () {
+    late _MemoryBackend backend;
+    late DownloadJobStore store;
+
+    setUp(() {
+      backend = _MemoryBackend();
+      store = DownloadJobStore(backend);
+    });
+
+    test('persists and loads one logical job', () async {
+      final source = _job();
+      expect(await store.put(source), isTrue);
+      final loaded = await store.get(source.taskId);
+      expect(loaded?.state, DownloadJobState.running);
+      expect(loaded?.durableBytes, 100);
+    });
+
+    test('rejects a callback from an older generation', () async {
+      expect(await store.put(_job(generation: 4, durableBytes: 500)), isTrue);
+
+      final stale = await store.put(
+        _job(
+          state: DownloadJobState.pausedByUser,
+          generation: 3,
+          durableBytes: 700,
+          userPaused: true,
+        ),
+      );
+
+      expect(stale, isFalse);
+      final loaded = await store.get('episode-1');
+      expect(loaded?.generation, 4);
+      expect(loaded?.state, DownloadJobState.running);
+      expect(loaded?.durableBytes, 500);
+    });
+
+    test('durable bytes never go backwards across a newer attempt', () async {
+      expect(await store.put(_job(generation: 2, durableBytes: 700)), isTrue);
+
+      final regressed = await store.put(
+        _job(generation: 3, durableBytes: 600),
+      );
+
+      expect(regressed, isFalse);
+      expect((await store.get('episode-1'))?.durableBytes, 700);
+    });
+
+    test('completed is terminal against late running callbacks', () async {
+      expect(
+        await store.put(
+          _job(
+            state: DownloadJobState.completed,
+            generation: 5,
+            durableBytes: 1000,
+          ),
+        ),
+        isTrue,
+      );
+
+      expect(
+        await store.put(
+          _job(
+            state: DownloadJobState.running,
+            generation: 6,
+            durableBytes: 1000,
+          ),
+        ),
+        isFalse,
+      );
+      expect((await store.get('episode-1'))?.state, DownloadJobState.completed);
+    });
+
+    test('expected size cannot silently change under saved bytes', () async {
+      expect(
+        await store.put(_job(expectedBytes: 1000, durableBytes: 400)),
+        isTrue,
+      );
+
+      expect(
+        await store.put(
+          _job(generation: 2, expectedBytes: 1100, durableBytes: 400),
+        ),
+        isFalse,
+      );
+      expect((await store.get('episode-1'))?.expectedBytes, 1000);
+    });
+
+    test('incompatible fingerprint is rejected', () async {
+      expect(
+        await store.put(
+          _job(
+            fingerprint: const DownloadResourceFingerprint(
+              strongEtag: '"old"',
+              expectedBytes: 1000,
+            ),
+          ),
+        ),
+        isTrue,
+      );
+
+      expect(
+        await store.put(
+          _job(
+            generation: 2,
+            durableBytes: 100,
+            fingerprint: const DownloadResourceFingerprint(
+              strongEtag: '"new"',
+              expectedBytes: 1000,
+            ),
+          ),
+        ),
+        isFalse,
+      );
+    });
+
+    test('delete is the explicit boundary that permits a fresh zero-byte job', () async {
+      expect(await store.put(_job(generation: 3, durableBytes: 900)), isTrue);
+      expect(
+        await store.put(_job(generation: 4, durableBytes: 0)),
+        isFalse,
+      );
+
+      await store.remove('episode-1');
+
+      expect(
+        await store.put(_job(generation: 1, durableBytes: 0)),
+        isTrue,
+      );
+      expect((await store.get('episode-1'))?.durableBytes, 0);
+    });
+
+    test('durable attempt token accepts only the current generation', () async {
+      expect(await store.put(_job(generation: 8)), isTrue);
+
+      expect(
+        await store.accepts(
+          const DownloadAttemptToken(taskId: 'episode-1', generation: 8),
+        ),
+        isTrue,
+      );
+      expect(
+        await store.accepts(
+          const DownloadAttemptToken(taskId: 'episode-1', generation: 7),
+        ),
+        isFalse,
+      );
+    });
+
+    test('all ignores corrupt entries and sorts by durable update order', () async {
+      await store.put(_job(taskId: 'b', updatedAtMillis: 20));
+      await store.put(_job(taskId: 'a', updatedAtMillis: 10));
+      backend.values['broken'] = {'taskId': '', 'trackingUrl': ''};
+
+      final jobs = await store.all();
+      expect(jobs.map((job) => job.taskId).toList(), ['a', 'b']);
+    });
+  });
+}

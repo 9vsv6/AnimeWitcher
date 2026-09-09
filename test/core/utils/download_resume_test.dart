@@ -436,7 +436,7 @@ void main() {
     expect(await found.length(), 40);
   });
 
-  test('canonicalizes the largest temp prefix before range append', () async {
+  test('canonicalizes the largest temp prefix without keeping a duplicate', () async {
     final root = await Directory.systemTemp.createTemp('aw-canonical-');
     addTearDown(() => root.delete(recursive: true));
     final dest = File(p.join(root.path, '0.part'));
@@ -451,6 +451,46 @@ void main() {
     expect(result!.file.path, dest.path);
     expect(result.bytes, 40);
     expect(await dest.length(), 40);
+    expect(await dest.readAsBytes(), List<int>.filled(40, 2));
+    expect(await temp.exists(), isFalse);
+  });
+
+  test('moves a suffix prefix into an absent canonical destination', () async {
+    final root = await Directory.systemTemp.createTemp('aw-canonical-empty-');
+    addTearDown(() => root.delete(recursive: true));
+    final dest = File(p.join(root.path, 'episode.mp4'));
+    final temp = File('${dest.path}.tmp');
+    await temp.writeAsBytes(List<int>.filled(64, 7));
+
+    final result = await canonicalizePartialDownloadFile(
+      destinationPath: dest.path,
+    );
+
+    expect(result, isNotNull);
+    expect(result!.bytes, 64);
+    expect(await dest.exists(), isTrue);
+    expect(await dest.length(), 64);
+    expect(await temp.exists(), isFalse);
+  });
+
+  test('keeps canonical destination when it already has the most bytes', () async {
+    final root = await Directory.systemTemp.createTemp('aw-canonical-best-');
+    addTearDown(() => root.delete(recursive: true));
+    final dest = File(p.join(root.path, 'episode.mp4'));
+    final temp = File('${dest.path}.download');
+    await dest.writeAsBytes(List<int>.filled(80, 3));
+    await temp.writeAsBytes(List<int>.filled(40, 4));
+
+    final result = await canonicalizePartialDownloadFile(
+      destinationPath: dest.path,
+    );
+
+    expect(result, isNotNull);
+    expect(result!.bytes, 80);
+    expect(await dest.length(), 80);
+    // Do not delete a sibling merely because it is smaller. A native worker
+    // may still own it; cleanup remains the explicit cancel/delete path.
+    expect(await temp.exists(), isTrue);
   });
 
   test('append keeps the existing prefix and adds the rest', () async {
