@@ -348,10 +348,16 @@ class DownloadService {
           }
 
           final previous = current;
-          final progress = keepLastKnownDownloadProgress(
-            incoming: update.progress,
-            lastKnown: previous?.progress,
-          );
+          // Multipart parent progress is already the byte-credible aggregate
+          // from PersistentParallelDownload. Let it correct an older inflated
+          // UI value after manifest migration/recovery; ordinary downloads keep
+          // the monotonic late-callback protection.
+          final progress = update.task is ParallelDownloadTask
+              ? update.progress.clamp(0.0, 1.0).toDouble()
+              : keepLastKnownDownloadProgress(
+                  incoming: update.progress,
+                  lastKnown: previous?.progress,
+                );
 
           // Bytes on the wire mean native is transferring. Never keep the row
           // frozen at في الانتظار while Speed: 1.9MB/s (Rivera case 1).
@@ -672,6 +678,18 @@ class DownloadService {
           record.status == TaskStatus.notFound;
       var progress = record.progress;
       if (progress < 0 || progress > 1) progress = 0.0;
+      final parallelProgress = task is ParallelDownloadTask
+          ? _parallel.progressFor(task.taskId)
+          : null;
+      if (parallelProgress != null) {
+        progress = parallelProgress;
+        // Heal lastProgress written by older builds so the first pause/resume
+        // after upgrading cannot resurrect a phantom 18.5 MB Range.
+        await storage.patchDownloadMetadata(
+          task.taskId,
+          lastProgress: progress,
+        );
+      }
 
       final wasRunning =
           record.status == TaskStatus.running ||
@@ -938,10 +956,17 @@ class DownloadService {
       var storedProgress = isPreferred
           ? (progress ?? live?.progress ?? record.progress)
           : (live?.progress ?? record.progress);
-      storedProgress = keepLastKnownDownloadProgress(
-        incoming: storedProgress,
-        lastKnown: live?.progress ?? record.progress,
-      );
+      final parallelProgress = record.task is ParallelDownloadTask
+          ? _parallel.progressFor(record.task.taskId)
+          : null;
+      if (parallelProgress != null) {
+        storedProgress = parallelProgress;
+      } else {
+        storedProgress = keepLastKnownDownloadProgress(
+          incoming: storedProgress,
+          lastKnown: live?.progress ?? record.progress,
+        );
+      }
       final storedTotal = isPreferred
           ? (totalBytes ?? live?.totalSize ?? record.expectedFileSize)
           : (live?.totalSize ?? record.expectedFileSize);
@@ -1236,20 +1261,31 @@ class DownloadService {
 
   Future<({double progress, int totalSize, int partialBytes})>
   _savedProgressFor(DownloadTask task) async {
+    if (task is ParallelDownloadTask) {
+      try {
+        await _parallel.restore(task);
+      } catch (_) {}
+    }
     final trackingUrl = downloadTrackingUrl(task);
     final current = _ref.read(downloadProgressProvider)[trackingUrl];
     final record = await FileDownloader().database.recordForId(task.taskId);
     final metadata = await _ref
         .read(storageServiceProvider)
         .getDownloadMetadata(task.taskId);
-    var progress = keepLastKnownDownloadProgress(
-      incoming: current?.progress ?? 0,
-      lastKnown: record?.progress,
-    );
-    progress = keepLastKnownDownloadProgress(
-      incoming: progress,
-      lastKnown: downloadMetadataProgress(metadata),
-    );
+    final parallelProgress = task is ParallelDownloadTask
+        ? _parallel.progressFor(task.taskId)
+        : null;
+    var progress = parallelProgress ??
+        keepLastKnownDownloadProgress(
+          incoming: current?.progress ?? 0,
+          lastKnown: record?.progress,
+        );
+    if (parallelProgress == null) {
+      progress = keepLastKnownDownloadProgress(
+        incoming: progress,
+        lastKnown: downloadMetadataProgress(metadata),
+      );
+    }
     final totalSize = knownDownloadSize([
       current?.totalSize,
       record?.expectedFileSize,
@@ -1262,7 +1298,7 @@ class DownloadService {
         final partial = await findPartialDownloadFile(destinationPath: path);
         if (partial != null) {
           partialBytes = await partial.length();
-          if (totalSize > 0 && partialBytes > 0) {
+          if (parallelProgress == null && totalSize > 0 && partialBytes > 0) {
             progress = keepLastKnownDownloadProgress(
               incoming: progress,
               lastKnown: partialBytes / totalSize,
@@ -1441,10 +1477,13 @@ class DownloadService {
     Duration timeRemaining = Duration.zero,
   }) {
     final previous = _ref.read(downloadProgressProvider)[trackingUrl];
-    final keptProgress = keepLastKnownDownloadProgress(
-      incoming: progress,
-      lastKnown: previous?.progress,
-    );
+    final parallelProgress = _parallel.progressFor(taskId);
+    final keptProgress = parallelProgress != null
+        ? parallelProgress.clamp(0.0, 1.0).toDouble()
+        : keepLastKnownDownloadProgress(
+            incoming: progress,
+            lastKnown: previous?.progress,
+          );
     final speed = keepLastKnownDownloadSpeed(
       status: status,
       incomingSpeed: networkSpeed,
@@ -1522,20 +1561,25 @@ class DownloadService {
 
     final current = _ref.read(downloadProgressProvider)[trackingUrl];
     final record = await FileDownloader().database.recordForId(task.taskId);
+    final parallelProgress = task is ParallelDownloadTask
+        ? _parallel.progressFor(task.taskId)
+        : null;
 
-    var progress = current?.progress ?? 0.0;
+    var progress = parallelProgress ?? (current?.progress ?? 0.0);
     if (progress < 0 || progress > 1) progress = 0.0;
-    if ((progress == 0.0) && record != null) {
+    if (parallelProgress == null && (progress == 0.0) && record != null) {
       final recorded = record.progress;
       if (recorded > 0 && recorded <= 1) progress = recorded;
     }
     final metadata = await _ref
         .read(storageServiceProvider)
         .getDownloadMetadata(task.taskId);
-    progress = keepLastKnownDownloadProgress(
-      incoming: progress,
-      lastKnown: downloadMetadataProgress(metadata),
-    );
+    if (parallelProgress == null) {
+      progress = keepLastKnownDownloadProgress(
+        incoming: progress,
+        lastKnown: downloadMetadataProgress(metadata),
+      );
+    }
 
     final totalSize = knownDownloadSize([
       current?.totalSize,
@@ -1739,14 +1783,20 @@ class DownloadService {
         final metadata = await _ref
             .read(storageServiceProvider)
             .getDownloadMetadata(taskId);
-        var progress = keepLastKnownDownloadProgress(
-          incoming: current?.progress ?? 0,
-          lastKnown: record?.progress,
-        );
-        progress = keepLastKnownDownloadProgress(
-          incoming: progress,
-          lastKnown: downloadMetadataProgress(metadata),
-        );
+        final parallelProgress = downloadTask is ParallelDownloadTask
+            ? _parallel.progressFor(taskId)
+            : null;
+        var progress = parallelProgress ??
+            keepLastKnownDownloadProgress(
+              incoming: current?.progress ?? 0,
+              lastKnown: record?.progress,
+            );
+        if (parallelProgress == null) {
+          progress = keepLastKnownDownloadProgress(
+            incoming: progress,
+            lastKnown: downloadMetadataProgress(metadata),
+          );
+        }
         final totalSize = knownDownloadSize([
           current?.totalSize,
           record?.expectedFileSize,
