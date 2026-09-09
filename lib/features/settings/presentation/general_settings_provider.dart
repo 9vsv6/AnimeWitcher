@@ -123,7 +123,7 @@ class GeneralSettingsNotifier extends _$GeneralSettingsNotifier {
     state = state.copyWith(alwaysOnTop: enabled);
   }
 
-  /// Writes the 1–5 cap and reconfigures the live downloader immediately.
+  /// Writes the 1–10 cap and reconfigures the live downloader immediately.
   Future<void> setDownloadConcurrency(int value) async {
     await ref
         .read(downloadServiceProvider)
