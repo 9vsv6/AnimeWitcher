@@ -9,6 +9,7 @@ on:
       - .github/scripts/fix-ios-background-transfer-recovery.py
       - .github/scripts/fix-ios-multipart-native-progress.py
       - .github/scripts/fix-ios-multipart-native-progress-guard.py
+      - .github/scripts/fix-ios-background-regression-gaps.py
       - .github/workflows/verify-ios-multipart-pause-drain.yml
 
 permissions:
@@ -33,6 +34,7 @@ jobs:
           python3 .github/scripts/fix-ios-background-transfer-recovery.py
           python3 .github/scripts/fix-ios-multipart-native-progress.py
           python3 .github/scripts/fix-ios-multipart-native-progress-guard.py
+          python3 .github/scripts/fix-ios-background-regression-gaps.py
           # These helpers are called by the sibling URLSession hook type in the
           # same Swift file, so they must not be declaration-private.
           perl -pi -e 's/private static func noteBackgroundRetryProgress/static func noteBackgroundRetryProgress/' ios/Runner/DownloadNativeWaitingQueue.swift
