@@ -144,7 +144,13 @@ void main() {
         expect(source, contains("'expectedBytes': session.size"));
         expect(source, contains("'resourceValidator': session.resourceValidator"));
         expect(source, contains('generation: savedGeneration'));
-        expect(source, contains('resourceValidator: savedResourceValidator'));
+        expect(source, contains("final savedValidator = json['resourceValidator'] is String"));
+        expect(
+          source,
+          contains(
+            'resourceValidator: savedValidator.isEmpty ? null : savedValidator',
+          ),
+        );
         expect(source, contains('if (!contiguous) continue;'));
       },
     );
