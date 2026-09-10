@@ -23,6 +23,8 @@ void main() {
   PersistentParallelDownload create({
     int maxActiveConnections = 16,
     Duration diskProgressPollInterval = const Duration(seconds: 1),
+    bool preserveNativeParts = false,
+    void Function(String parentTaskId)? onPausedDrainSettled,
   }) => PersistentParallelDownload(
     startPart: (task, progress, size) async {
       starts.add(task);
@@ -44,6 +46,8 @@ void main() {
     onPartProgress: (_, _, _) {},
     maxActiveConnections: maxActiveConnections,
     livePartIds: () async => liveIds,
+    shouldDrainPartOnPause: preserveNativeParts ? (_) => true : null,
+    onPausedDrainSettled: onPausedDrainSettled,
     recoveryDelay: const Duration(milliseconds: 10),
     diskProgressPollInterval: diskProgressPollInterval,
   );
@@ -253,6 +257,92 @@ void main() {
     expect(statuses, isNot(contains(TaskStatus.paused)));
   });
 
+  test(
+    'iOS user pause drains launched native range without destructive pause',
+    () async {
+      final settled = <String>[];
+      await coordinator.dispose();
+      coordinator = create(
+        preserveNativeParts: true,
+        onPausedDrainSettled: settled.add,
+      );
+
+      expect(await coordinator.start(parent, 25), isTrue);
+      expect(starts.length, 1);
+      final first = starts.single;
+      liveIds = <String>{first.taskId};
+      await markRunning(<DownloadTask>[first]);
+
+      expect(await coordinator.pause(parent, preserveLiveParts: true), isTrue);
+      final startsAfterPause = starts.length;
+      expect(pauses, isEmpty);
+      expect(coordinator.isActive(parent.taskId), isFalse);
+      expect(coordinator.activeConnectionCount, 1);
+      expect(statuses.last, TaskStatus.paused);
+
+      await completePart(first, <int>[0, 1, 2, 3, 4]);
+      await waitUntil(() => coordinator.activeConnectionCount == 0);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      expect(records[first.taskId]?.status, TaskStatus.complete);
+      expect(settled, contains(parent.taskId));
+      expect(
+        starts.length,
+        startsAfterPause,
+        reason: 'inactive paused parent must not schedule tail work',
+      );
+    },
+  );
+
+  test(
+    'resume during iOS pause drain reuses the same native child identity',
+    () async {
+      await coordinator.dispose();
+      coordinator = create(preserveNativeParts: true);
+
+      expect(await coordinator.start(parent, 25), isTrue);
+      final first = starts.single;
+      liveIds = <String>{first.taskId};
+      await markRunning(<DownloadTask>[first]);
+      expect(await coordinator.pause(parent, preserveLiveParts: true), isTrue);
+      expect(coordinator.activeConnectionCount, 1);
+
+      expect(await coordinator.start(parent, 25), isTrue);
+      expect(
+        starts.where((task) => task.taskId == first.taskId).length,
+        1,
+        reason: 'the still-owned URLSession range must not be enqueued twice',
+      );
+      expect(coordinator.isActive(parent.taskId), isTrue);
+    },
+  );
+
+  test(
+    'failed child while parent is pause-draining releases slot without retry',
+    () async {
+      final settled = <String>[];
+      await coordinator.dispose();
+      coordinator = create(
+        preserveNativeParts: true,
+        onPausedDrainSettled: settled.add,
+      );
+
+      expect(await coordinator.start(parent, 25), isTrue);
+      final first = starts.single;
+      liveIds = <String>{first.taskId};
+      await markRunning(<DownloadTask>[first]);
+      expect(await coordinator.pause(parent, preserveLiveParts: true), isTrue);
+      final startsAtPause = starts.length;
+
+      coordinator.handleUpdate(TaskStatusUpdate(first, TaskStatus.failed));
+      await waitUntil(() => coordinator.activeConnectionCount == 0);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      expect(starts.length, startsAtPause);
+      expect(coordinator.isActive(parent.taskId), isFalse);
+      expect(settled, contains(parent.taskId));
+      expect(statuses.last, TaskStatus.paused);
+    },
+  );
+
   test('user pause cancels a pending automatic part recovery', () async {
     await coordinator.start(parent, 25);
     final first = starts.first;
@@ -334,14 +424,16 @@ void main() {
   );
 
   test(
-    'pause after recreation stops native children with no launched flags',
+    'pause after recreation does not pause children with no native owner',
     () async {
       await coordinator.start(parent, 25);
       await expandFreshTo(5);
       await coordinator.dispose();
+      pauses.clear();
+      liveIds = <String>{};
       coordinator = create();
       await coordinator.pause(parent);
-      expect(pauses.toSet(), starts.map((task) => task.taskId).toSet());
+      expect(pauses, isEmpty);
       expect(coordinator.activeConnectionCount, 0);
     },
   );

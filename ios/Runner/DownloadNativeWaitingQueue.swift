@@ -261,6 +261,14 @@ enum DownloadNativeWaitingQueue {
     var time: CFAbsoluteTime
   }
 
+  private struct BackgroundRetryState {
+    var consecutiveFailures = 0
+    var totalRetries = 0
+    var sawProgressSinceLastFailure = false
+  }
+
+  private static let backgroundRetryMaxConsecutiveFailures = 12
+  private static let backgroundRetryMaxTotalRetries = 128
   private static let lock = NSLock()
   private static var hookInstalled = false
   /// Task IDs that already have URLSession bytes (plugin HQ or our start).
@@ -277,6 +285,9 @@ enum DownloadNativeWaitingQueue {
   private static var chunkSpeedWindows: [String: [ThroughputPoint]] = [:]
   private static var lastChunkBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static var lastTaskBridgeTimes: [String: CFAbsoluteTime] = [:]
+  private static var backgroundRetryStates: [String: BackgroundRetryState] = [:]
+  private static var multipartChildSamples: [String: [String: RunningSample]] = [:]
+  private static var lastMultipartOverlayTimes: [String: CFAbsoluteTime] = [:]
   private static let chunkBridgeInterval: CFTimeInterval = 1.0
   private static let taskBridgeInterval: CFTimeInterval = 1.0
   private static let speedWindowInterval: CFTimeInterval = 4.0
@@ -328,6 +339,8 @@ enum DownloadNativeWaitingQueue {
           && !released.contains($0)
       }
     let transferringSet = Set(transferring)
+    multipartChildSamples = multipartChildSamples.filter { transferringSet.contains($0.key) }
+    lastMultipartOverlayTimes = lastMultipartOverlayTimes.filter { transferringSet.contains($0.key) }
     let completedSet = Set(completed)
     let waiters = dartWaiters.filter {
       !transferringSet.contains($0.taskId)
@@ -438,6 +451,153 @@ enum DownloadNativeWaitingQueue {
     chunkSpeedWindows.removeAll()
     lastChunkBridgeTimes.removeAll()
     lastTaskBridgeTimes.removeAll()
+    backgroundRetryStates.removeAll()
+    multipartChildSamples.removeAll()
+    lastMultipartOverlayTimes.removeAll()
+  }
+
+  /// URLSession transport failures that are worth retrying without waking
+  /// Flutter. -999 (cancelled) is deliberately excluded so user pause/cancel
+  /// can never be resurrected by the background recovery layer.
+  static func isRetryableBackgroundTransportErrorCode(_ code: Int) -> Bool {
+    [
+      -997,  // NSURLErrorBackgroundSessionWasDisconnected
+      -1001, // timed out
+      -1003, // cannot find host
+      -1004, // cannot connect to host
+      -1005, // network connection lost
+      -1006, // DNS lookup failed
+      -1009, // not connected to Internet
+      -1018, // international roaming off
+      -1019, // call is active
+      -1020, // data not allowed
+      -1200, // secure connection failed (transient TLS reconnects do occur)
+    ].contains(code)
+  }
+
+  static func backgroundRetryDelay(forConsecutiveFailure failure: Int) -> TimeInterval {
+    switch max(failure, 1) {
+    case 1: return 1
+    case 2: return 2
+    case 3: return 4
+    case 4: return 8
+    case 5: return 16
+    default: return 30
+    }
+  }
+
+  static func canRecreateBackgroundDownload(
+    isMultipartPart: Bool,
+    receivedBytes: Int64,
+    hasResumeData: Bool
+  ) -> Bool {
+    // Reissuing an immutable multipart Range only loses that one child's
+    // volatile prefix. For a full-file transfer, do not silently throw away
+    // already-downloaded bytes unless Apple gave us resumeData.
+    hasResumeData || isMultipartPart || receivedBytes <= 0
+  }
+
+  static func noteBackgroundRetryProgress(_ task: URLSessionTask) {
+    guard let id = taskId(from: task) else { return }
+    lock.lock()
+    if var retry = backgroundRetryStates[id] {
+      retry.sawProgressSinceLastFailure = true
+      retry.consecutiveFailures = 0
+      backgroundRetryStates[id] = retry
+    }
+    lock.unlock()
+  }
+
+  static func clearBackgroundRetry(_ task: URLSessionTask) {
+    guard let id = taskId(from: task) else { return }
+    lock.lock()
+    backgroundRetryStates[id] = nil
+    lock.unlock()
+  }
+
+  /// Returns true when this completion was consumed by a replacement native
+  /// URLSessionDownloadTask. The caller must then skip the plugin's original
+  /// didComplete callback; otherwise background_downloader would emit
+  /// `Task failed`, free its HoldingQueue slot, and leave the replacement as an
+  /// unowned duplicate. The eventual successful/exhausted replacement is what
+  /// settles the original plugin task.
+  static func retryBackgroundTransferIfNeeded(
+    session: URLSession,
+    task: URLSessionTask,
+    error: Error
+  ) -> Bool {
+    guard task is URLSessionDownloadTask,
+          !isAppInForeground(),
+          let taskId = taskId(from: task),
+          !taskId.isEmpty
+    else {
+      return false
+    }
+
+    let nsError = error as NSError
+    guard nsError.domain == NSURLErrorDomain,
+          isRetryableBackgroundTransportErrorCode(nsError.code)
+    else {
+      return false
+    }
+
+    let resumeData = nsError.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+    let hasResumeData = !(resumeData?.isEmpty ?? true)
+    let multipartPart = isDownloadPart(task)
+    guard canRecreateBackgroundDownload(
+      isMultipartPart: multipartPart,
+      receivedBytes: task.countOfBytesReceived,
+      hasResumeData: hasResumeData
+    ) else {
+      return false
+    }
+
+    let request = task.currentRequest ?? task.originalRequest
+    if !hasResumeData && request == nil { return false }
+
+    let consecutive: Int
+    lock.lock()
+    var retry = backgroundRetryStates[taskId] ?? BackgroundRetryState()
+    if retry.sawProgressSinceLastFailure {
+      retry.consecutiveFailures = 0
+    }
+    retry.consecutiveFailures += 1
+    retry.totalRetries += 1
+    retry.sawProgressSinceLastFailure = false
+    consecutive = retry.consecutiveFailures
+    if retry.consecutiveFailures > backgroundRetryMaxConsecutiveFailures ||
+        retry.totalRetries > backgroundRetryMaxTotalRetries {
+      backgroundRetryStates[taskId] = nil
+      lock.unlock()
+      DownloadNativeDiagnosticLog.record(
+        "background.retry.exhausted",
+        task: task,
+        error: error
+      )
+      return false
+    }
+    backgroundRetryStates[taskId] = retry
+    lock.unlock()
+
+    let replacement: URLSessionDownloadTask
+    if let resumeData, !resumeData.isEmpty {
+      replacement = session.downloadTask(withResumeData: resumeData)
+    } else {
+      replacement = session.downloadTask(with: request!)
+    }
+    replacement.taskDescription = task.taskDescription
+    replacement.priority = task.priority
+    replacement.earliestBeginDate = Date().addingTimeInterval(
+      backgroundRetryDelay(forConsecutiveFailure: consecutive)
+    )
+
+    DownloadNativeDiagnosticLog.record(
+      hasResumeData ? "background.retry.resumeData" : "background.retry.rangeRestart",
+      task: task,
+      error: error
+    )
+    replacement.resume()
+    return true
   }
 
   /// Called from the plugin URLSession delegate after a native completion
@@ -986,6 +1146,14 @@ enum DownloadNativeWaitingQueue {
     }
 
     let now = CFAbsoluteTimeGetCurrent()
+    let taskJson = task.taskDescription?
+      .components(separatedBy: "***<<<|>>>***").first ?? ""
+    let childDirectory = stringFromTaskJson(taskJson, key: "directory")
+    let partsComponent = URL(fileURLWithPath: childDirectory).lastPathComponent
+    let inferredParentName = partsComponent.hasSuffix(".parts")
+      ? String(partsComponent.dropLast(".parts".count))
+      : parentId
+
     lock.lock()
     if !completed,
        let lastBridge = lastChunkBridgeTimes[childId],
@@ -1005,6 +1173,62 @@ enum DownloadNativeWaitingQueue {
       now: now,
       completed: completed
     )
+
+    var state = loadLocked()
+    var children = multipartChildSamples[parentId] ?? [:]
+    var sample = children[childId] ?? RunningSample(
+      written: 0,
+      expected: -1,
+      speed: 0,
+      displayName: inferredParentName
+    )
+    // A URLSession retry can reset its local byte counter. Keep native overlay
+    // progress monotonic while the replacement catches up; this sample is UI
+    // lease telemetry only and is never used as durable resume evidence.
+    sample.written = max(sample.written, max(totalWritten, 0))
+    if totalExpected > 0 {
+      sample.expected = max(sample.expected, totalExpected)
+      if completed { sample.written = sample.expected }
+    }
+    sample.speed = completed ? 0 : max(speed, 0)
+    if sample.displayName.isEmpty { sample.displayName = inferredParentName }
+    children[childId] = sample
+    multipartChildSamples[parentId] = children
+
+    let aggregateWritten = children.values.reduce(Int64(0)) { $0 + max($1.written, 0) }
+    let sampledExpected = children.values.reduce(Int64(0)) {
+      $0 + ($1.expected > 0 ? $1.expected : 0)
+    }
+    let knownParentTotal = state.sessionCurrentTaskId == parentId && state.sessionTotalBytes > 0
+      ? state.sessionTotalBytes
+      : -1
+    let aggregateExpected = knownParentTotal > 0 ? knownParentTotal : sampledExpected
+    let aggregateSpeed = children.values.reduce(0.0) {
+      $0 + ($1.speed.isFinite && $1.speed > 0 ? $1.speed : 0)
+    }
+    let parentName = state.sessionCurrentTaskId == parentId && !state.sessionDisplayName.isEmpty
+      ? state.sessionDisplayName
+      : inferredParentName
+
+    let parentIsTransferring = state.transferringTaskIds.contains(parentId)
+    if parentIsTransferring {
+      state.runningSamples[parentId] = RunningSample(
+        written: min(aggregateWritten, aggregateExpected > 0 ? aggregateExpected : aggregateWritten),
+        expected: aggregateExpected,
+        speed: aggregateSpeed,
+        displayName: parentName
+      )
+    }
+    let presentation = overlayPresentation(
+      from: state,
+      fallbackId: parentId,
+      fallbackName: parentName
+    )
+    let lastOverlay = lastMultipartOverlayTimes[parentId] ?? 0
+    let shouldUpdateNativeOverlay = parentIsTransferring
+      && (completed || now - lastOverlay >= chunkBridgeInterval)
+    if shouldUpdateNativeOverlay { lastMultipartOverlayTimes[parentId] = now }
+    saveLocked(state)
     lock.unlock()
 
     var values: [String: Any] = [
@@ -1032,6 +1256,20 @@ enum DownloadNativeWaitingQueue {
       object: nil,
       userInfo: values
     )
+
+    // Dart owns the overlay while foreground. When it is suspended, keep the
+    // same BGContinuedProcessingTask alive from URLSession's native bytes so
+    // iOS sees real progress instead of an apparently stalled long task.
+    if shouldUpdateNativeOverlay && !isAppInForeground() {
+      upsertSessionOverlay(
+        currentTaskId: presentation.currentTaskId,
+        displayName: presentation.displayName,
+        progress: presentation.progress,
+        totalBytes: presentation.totalBytes,
+        transferredBytes: presentation.transferredBytes,
+        speedBytesPerSecond: presentation.speedBytesPerSecond
+      )
+    }
   }
 
   static func handleBytesWritten(
@@ -1590,9 +1828,16 @@ private enum DownloadUrlSessionHook {
     originalComplete = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionTask, Error?) -> Void = { slf, session, task, error in
       DownloadNativeDiagnosticLog.record("complete", task: task, error: error)
-      // The plugin owns URLSession bookkeeping, retries, resume data and its
-      // holding queue. Let it settle the failed task before AnimeWitcher frees
-      // the logical episode slot and promotes another one.
+      if let error, DownloadNativeWaitingQueue.retryBackgroundTransferIfNeeded(
+        session: session,
+        task: task,
+        error: error
+      ) {
+        return
+      }
+
+      // Non-transient/exhausted failures and normal success still belong to
+      // background_downloader. Only those reach the original callback.
       if let original = DownloadUrlSessionHook.originalComplete {
         let fn = unsafeBitCast(
           original,
@@ -1618,6 +1863,7 @@ private enum DownloadUrlSessionHook {
     originalFinishDownload = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionDownloadTask, URL) -> Void = { slf, session, downloadTask, location in
       DownloadNativeDiagnosticLog.record("file.received", task: downloadTask)
+      DownloadNativeWaitingQueue.clearBackgroundRetry(downloadTask)
       // Original must run first so the plugin can move the temp file.
       // Then promote like pre-tabs: ep2 must start before the session sleeps.
       if let original = DownloadUrlSessionHook.originalFinishDownload {
@@ -1654,6 +1900,7 @@ private enum DownloadUrlSessionHook {
         )
         fn(slf, writeSelector, session, downloadTask, bytesWritten, totalWritten, totalExpected)
       }
+      DownloadNativeWaitingQueue.noteBackgroundRetryProgress(downloadTask)
       DownloadNativeWaitingQueue.handleBytesWritten(
         downloadTask,
         totalWritten: totalWritten,
