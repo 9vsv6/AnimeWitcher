@@ -37,7 +37,10 @@ jobs:
           if [ "$status" -ne 0 ]; then
             echo "Merge conflicts detected:"
             git status --short
-            git diff --name-only --diff-filter=U
+            echo "==== persistent_parallel_download.dart conflict ===="
+            git diff --cc -- lib/core/services/persistent_parallel_download.dart || true
+            echo "==== auto_recovery_test.dart conflict ===="
+            git diff --cc -- test/core/services/persistent_parallel_download_auto_recovery_test.dart || true
             exit "$status"
           fi
 
