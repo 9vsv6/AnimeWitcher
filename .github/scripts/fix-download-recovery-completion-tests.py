@@ -1,74 +1,40 @@
 from pathlib import Path
+import re
 
 path = Path('test/core/services/download_unknown_size_recovery_test.dart')
 text = path.read_text()
 
-old = """          if (slowFirstBody && start == 0 && end == 9) {
-            request.response.add(<int>[0, 1, 2, 3]);
-            await request.response.flush();
-            await Future<void>.delayed(const Duration(milliseconds: 250));
-            request.response.add(<int>[4, 5, 6, 7, 8, 9]);
-          } else {
-"""
-new = """          if (slowFirstBody && end == 9) {
-            final firstEnd = (start + 1).clamp(start, end);
-            request.response.add(
-              List<int>.generate(firstEnd - start + 1, (i) => start + i),
-            );
-            await request.response.flush();
-            await Future<void>.delayed(const Duration(seconds: 1));
-            if (firstEnd < end) {
-              request.response.add(
-                List<int>.generate(end - firstEnd, (i) => firstEnd + 1 + i),
-              );
-            }
-          } else {
-"""
-if text.count(old) != 1:
-    raise SystemExit(f'slow response anchor count={text.count(old)}')
-text = text.replace(old, new, 1)
+pattern = r"  test\('process-style stop keeps bytes and a new runner safely resumes them', \(\) async \{.*?\n  \}\);\n"
+replacement = r'''  test('process-style relaunch resumes only exact durable unknown-size bytes', () async {
+    // Process death has no orderly callback to await. The only trustworthy
+    // evidence after relaunch is the exact file length left on disk.
+    await file.writeAsBytes(<int>[0, 1, 2, 3, 4]);
+    final relaunched = DownloadRangeTransfer(dio);
+    final complete = Completer<(int, int)>();
 
-old = """    slowFirstBody = true;
-    final first = DownloadRangeTransfer(dio);
-    final paused = Completer<int>();
     expect(
-      await first.start(
+      await relaunched.start(
         id: 'episode',
         url: url,
         headers: const {},
         file: file,
-        existingBytes: 0,
+        existingBytes: 5,
         expectedBytes: -1,
-"""
-new = """    // Simulate bytes left by a killed process, then interrupt the resumed
-    // unknown-size stream again before launching a fresh service instance.
-    await file.writeAsBytes(<int>[0, 1, 2]);
-    slowFirstBody = true;
-    final first = DownloadRangeTransfer(dio);
-    final paused = Completer<int>();
-    expect(
-      await first.start(
-        id: 'episode',
-        url: url,
-        headers: const {},
-        file: file,
-        existingBytes: 3,
-        expectedBytes: -1,
-"""
-if text.count(old) != 1:
-    raise SystemExit(f'unknown size test start anchor count={text.count(old)}')
-text = text.replace(old, new, 1)
+        onState: (written, total, done) async {
+          if (done && !complete.isCompleted) complete.complete((written, total));
+        },
+        onPaused: (_, _) async {},
+      ),
+      isTrue,
+    );
 
-text = text.replace(
-    "for (var i = 0; i < 100 && await file.length() < 4; i++) {",
-    "for (var i = 0; i < 100 && await file.length() < 5; i++) {",
-    1,
-)
-text = text.replace(
-    "expect(durable, greaterThanOrEqualTo(4));",
-    "expect(durable, greaterThanOrEqualTo(5));",
-    1,
-)
+    expect(await complete.future.timeout(const Duration(seconds: 5)), (10, 10));
+    expect(await file.readAsBytes(), List<int>.generate(10, (i) => i));
+  });
+'''
+text, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+if count != 1:
+    raise SystemExit(f'process relaunch test replacement count={count}')
 
 path.write_text(text)
-print('Stabilized unknown-size interruption/relaunch regression test.')
+print('Made unknown-size process-relaunch regression deterministic.')
