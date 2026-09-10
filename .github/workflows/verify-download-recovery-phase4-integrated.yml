@@ -1,0 +1,73 @@
+name: Verify Integrated Download Recovery Phase 4
+
+on:
+  push:
+    branches:
+      - fix/download-recovery-plan-integration
+
+permissions:
+  contents: write
+
+jobs:
+  range-reconciliation:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/download-recovery-plan-integration
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Apply Range reconciliation matrix
+        run: python3 .github/scripts/apply-download-recovery-phase4.py
+
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Format and diff check
+        run: |
+          dart format test/core/services/download_range_transfer_test.dart
+          git diff --check
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Range and URL refresh tests
+        run: |
+          flutter test test/core/services/download_range_transfer_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/download_range_fast_fail_policy_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/download_url_refresh_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/download_retry_policy_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Recovery regression suite
+        run: |
+          flutter test test/core/services/persistent_parallel_download_recovery_snapshot_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/persistent_parallel_download_auto_recovery_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/download_runtime_stability_review_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Full Flutter suite
+        run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Swift parse
+        run: swiftc -parse ios/Runner/AppDelegate.swift
+
+      - name: Commit verified Phase 4
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/apply-download-recovery-phase4.py
+          git rm .github/workflows/verify-download-recovery-phase4-integrated.yml
+          git add test/core/services/download_range_transfer_test.dart
+          git diff --cached --check
+          git commit -m "test: lock Range and 416 recovery reconciliation"
+          git push origin HEAD:fix/download-recovery-plan-integration
