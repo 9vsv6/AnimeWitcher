@@ -25,23 +25,145 @@ jobs:
           flutter-version: 3.47.1
           cache: true
 
-      - name: Merge verified recovery snapshot branch
+      - name: Merge and resolve verified recovery branches
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin fix/download-recovery-snapshot-phase1
           set +e
           git merge --no-ff --no-commit origin/fix/download-recovery-snapshot-phase1
-          status=$?
+          merge_status=$?
           set -e
-          if [ "$status" -ne 0 ]; then
-            echo "Merge conflicts detected:"
-            git status --short
-            echo "==== persistent_parallel_download.dart conflict ===="
-            git diff --cc -- lib/core/services/persistent_parallel_download.dart || true
-            echo "==== auto_recovery_test.dart conflict ===="
-            git diff --cc -- test/core/services/persistent_parallel_download_auto_recovery_test.dart || true
-            exit "$status"
+          if [ "$merge_status" -ne 0 ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+
+          def parse_conflicts(text):
+              out = []
+              conflicts = []
+              lines = text.splitlines(keepends=True)
+              i = 0
+              while i < len(lines):
+                  if not lines[i].startswith('<<<<<<< '):
+                      out.append(lines[i]); i += 1; continue
+                  i += 1
+                  ours = []
+                  while i < len(lines) and not lines[i].startswith('======='):
+                      ours.append(lines[i]); i += 1
+                  if i >= len(lines): raise SystemExit('unterminated conflict')
+                  i += 1
+                  theirs = []
+                  while i < len(lines) and not lines[i].startswith('>>>>>>> '):
+                      theirs.append(lines[i]); i += 1
+                  if i >= len(lines): raise SystemExit('unterminated conflict')
+                  i += 1
+                  token = f'__CONFLICT_{len(conflicts)}__\n'
+                  out.append(token)
+                  conflicts.append((ours, theirs))
+              return ''.join(out), conflicts
+
+          def resolve_parallel(path):
+              p = Path(path)
+              skeleton, conflicts = parse_conflicts(p.read_text())
+              resolved = []
+              for ours, theirs in conflicts:
+                  o = ''.join(ours)
+                  t = ''.join(theirs)
+                  if "schemaVersion" in o and "parentTaskId" in t:
+                      resolved.append("""        final schemaVersion = (json['schemaVersion'] as num?)?.toInt() ?? 1;
+        if (schemaVersion < 1 ||
+            schemaVersion > kParallelManifestSchemaVersion) {
+          continue;
+        }
+        final parentTaskId = json['parentTaskId']?.toString().trim();
+        if (parentTaskId != null &&
+            parentTaskId.isNotEmpty &&
+            parentTaskId != task.taskId) {
+          continue;
+        }
+        final savedGeneration = (json['generation'] as num?)?.toInt() ?? 0;
+        final checkpointSequence =
+            (json['checkpointSequence'] as num?)?.toInt() ?? 0;
+        final declaredTotalBytes =
+            (json['totalBytes'] as num?)?.toInt() ??
+            (json['expectedBytes'] as num?)?.toInt() ??
+            -1;
+        if (savedGeneration < 0 || checkpointSequence < 0) continue;
+""")
+                  elif "savedValidator" in o and "checkpointSequence" in t:
+                      resolved.append("""        var contiguous = parts.first.from == 0;
+        for (var index = 1; index < parts.length && contiguous; index++) {
+          contiguous = parts[index].from == parts[index - 1].to + 1;
+        }
+        if (!contiguous) continue;
+        final calculatedBytes = parts.fold<int>(
+          0,
+          (sum, part) => sum + part.size,
+        );
+        final savedExpectedBytes =
+            (json['expectedBytes'] as num?)?.toInt() ?? -1;
+        if (savedExpectedBytes > 0 && savedExpectedBytes != calculatedBytes) {
+          continue;
+        }
+        final savedValidator = json['resourceValidator'] is String
+            ? (json['resourceValidator'] as String).trim()
+            : '';
+        final session = _ParallelSession(
+          task,
+          manifest,
+          parts,
+          generation: savedGeneration,
+          resourceValidator: savedValidator.isEmpty ? null : savedValidator,
+        )..checkpointSequence = checkpointSequence;
+        _applyPinnedValidatorToPendingParts(session);
+""")
+                  elif "'resourceValidator'" in o and "'checkpointSequence'" in t:
+                      resolved.append("""      'parentTaskId': session.task.taskId,
+      'generation': session.generation,
+      'checkpointSequence': session.checkpointSequence,
+      'expectedBytes': session.size,
+      'totalBytes': session.size,
+      'resourceValidator': session.resourceValidator,
+""")
+                  elif "String? resourceValidator" in o and "checkpointSequence" in t:
+                      resolved.append("""  int generation;
+  int checkpointSequence = 0;
+  String? resourceValidator;
+""")
+                  else:
+                      raise SystemExit(f'unrecognized persistent_parallel conflict\nOURS:\n{o}\nTHEIRS:\n{t}')
+              for index, value in enumerate(resolved):
+                  skeleton = skeleton.replace(f'__CONFLICT_{index}__\n', value, 1)
+              if '<<<<<<<' in skeleton or '>>>>>>>' in skeleton:
+                  raise SystemExit('unresolved persistent_parallel marker')
+              p.write_text(skeleton)
+
+          def resolve_auto_recovery(path):
+              p = Path(path)
+              skeleton, conflicts = parse_conflicts(p.read_text())
+              if len(conflicts) != 1:
+                  raise SystemExit(f'expected one auto recovery conflict, got {len(conflicts)}')
+              ours, theirs = conflicts[0]
+              marker = "    'repeated system pauses recover the child without pausing the episode',\n"
+              try:
+                  split = ours.index(marker)
+              except ValueError:
+                  raise SystemExit('repeated pause test marker not found in ours')
+              combined = ''.join(ours[:split]) + ''.join(theirs)
+              skeleton = skeleton.replace('__CONFLICT_0__\n', combined, 1)
+              if '<<<<<<<' in skeleton or '>>>>>>>' in skeleton:
+                  raise SystemExit('unresolved auto recovery marker')
+              p.write_text(skeleton)
+
+          resolve_parallel('lib/core/services/persistent_parallel_download.dart')
+          resolve_auto_recovery('test/core/services/persistent_parallel_download_auto_recovery_test.dart')
+          PY
+            git add lib/core/services/persistent_parallel_download.dart test/core/services/persistent_parallel_download_auto_recovery_test.dart
+            if git diff --name-only --diff-filter=U | grep -q .; then
+              echo "Unresolved merge conflicts remain"
+              git diff --name-only --diff-filter=U
+              exit 1
+            fi
           fi
 
       - name: Install dependencies and generate sources
@@ -86,6 +208,7 @@ jobs:
 
       - name: Commit integrated verified branch
         run: |
+          rm -f .ci-download-recovery-trigger
           git rm .github/workflows/integrate-download-recovery-plan.yml
           git add -A
           git diff --cached --check
