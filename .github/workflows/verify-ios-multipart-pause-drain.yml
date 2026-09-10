@@ -5,6 +5,7 @@ on:
     branches: [fix/download-recovery-plan-integration]
     paths:
       - .github/scripts/fix-ios-multipart-pause-drain.py
+      - .github/scripts/fix-ios-multipart-pause-drain-tests.py
       - .github/workflows/verify-ios-multipart-pause-drain.yml
 
 permissions:
@@ -23,7 +24,9 @@ jobs:
           cache: true
 
       - name: Apply iOS multipart pause fix
-        run: python3 .github/scripts/fix-ios-multipart-pause-drain.py
+        run: |
+          python3 .github/scripts/fix-ios-multipart-pause-drain.py
+          python3 .github/scripts/fix-ios-multipart-pause-drain-tests.py
 
       - name: Install dependencies and generate sources
         run: |
