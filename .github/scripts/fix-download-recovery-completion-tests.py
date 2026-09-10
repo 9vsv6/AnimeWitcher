@@ -45,5 +45,23 @@ old_schema_expectation = "expect(source, contains('kParallelManifestSchemaVersio
 new_schema_expectation = "expect(source, contains('kParallelManifestSchemaVersion = 4'));"
 if runtime_text.count(old_schema_expectation) != 1:
     raise SystemExit('expected exactly one stale schema v3 runtime assertion')
-runtime_path.write_text(runtime_text.replace(old_schema_expectation, new_schema_expectation, 1))
-print('Updated runtime manifest schema assertion to v4.')
+runtime_text = runtime_text.replace(old_schema_expectation, new_schema_expectation, 1)
+
+old_enqueue_expectation = "        expect(section, contains('return FileDownloader().enqueue(task);'));"
+new_enqueue_expectation = """        expect(
+          section,
+          contains('final enqueued = await FileDownloader().enqueue(task);'),
+        );
+        expect(section, contains('return enqueued;'));
+        expect(section, contains('forceSourceValidation'));
+""".rstrip()
+if runtime_text.count(old_enqueue_expectation) != 1:
+    raise SystemExit('expected exactly one stale direct-enqueue runtime assertion')
+runtime_text = runtime_text.replace(
+    old_enqueue_expectation,
+    new_enqueue_expectation,
+    1,
+)
+
+runtime_path.write_text(runtime_text)
+print('Updated runtime recovery assertions for schema v4 and validated enqueue flow.')
