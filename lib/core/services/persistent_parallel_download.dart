@@ -54,6 +54,12 @@ const Duration kParallelHostProfileSampleInterval = Duration(seconds: 5);
 /// slow-start and update the UI without restarting any Range.
 const Duration kParallelDiskProgressPollInterval = Duration(seconds: 1);
 
+/// Multipart recovery checkpoints are versioned snapshots. The sequence is
+/// monotonic so a crash after flushing manifest.json.tmp but before rename
+/// can restore the newer snapshot instead of silently accepting an older
+/// manifest.json.
+const int kParallelManifestSchemaVersion = 2;
+
 /// Native DownloadTasks transfer the parts; this coordinator persists their
 /// identity before starting them. A process restart must not create new parts
 /// or ask the plugin to resume an already completed part.
@@ -187,6 +193,112 @@ class PersistentParallelDownload {
   Future<File> _manifest(DownloadTask task) async =>
       File('${await task.filePath()}.parts/manifest.json');
 
+  Future<List<File>> _orderedManifestCandidates(
+    File manifest,
+    File temp,
+    String taskId,
+  ) async {
+    final ranked = <_ManifestRestoreCandidate>[];
+    for (final file in <File>[manifest, temp]) {
+      try {
+        if (!await file.exists()) continue;
+        final decoded = jsonDecode(await file.readAsString());
+        if (decoded is! Map) continue;
+        final snapshot = Map<String, dynamic>.from(decoded);
+        final parentTaskId = snapshot['parentTaskId']?.toString().trim();
+        if (parentTaskId != null &&
+            parentTaskId.isNotEmpty &&
+            parentTaskId != taskId) {
+          continue;
+        }
+        final sequence = (snapshot['checkpointSequence'] as num?)?.toInt() ?? 0;
+        if (sequence < 0) continue;
+        final stat = await file.stat();
+        ranked.add(
+          _ManifestRestoreCandidate(
+            file: file,
+            sequence: sequence,
+            modifiedMillis: stat.modified.millisecondsSinceEpoch,
+            isTemp: file.path == temp.path,
+          ),
+        );
+      } catch (_) {
+        // A torn candidate is ignored; the other durable snapshot can win.
+      }
+    }
+    ranked.sort((a, b) {
+      final bySequence = b.sequence.compareTo(a.sequence);
+      if (bySequence != 0) return bySequence;
+      final byModified = b.modifiedMillis.compareTo(a.modifiedMillis);
+      if (byModified != 0) return byModified;
+      if (a.isTemp == b.isTemp) return 0;
+      return a.isTemp ? -1 : 1;
+    });
+    return ranked.map((candidate) => candidate.file).toList(growable: false);
+  }
+
+  bool _validRestoredLayout(List<_DownloadPart> parts, int declaredTotalBytes) {
+    if (parts.isEmpty) return false;
+    var nextByte = 0;
+    var total = 0;
+    for (final part in parts) {
+      if (part.from != nextByte || part.to < part.from) return false;
+      total += part.size;
+      nextByte = part.to + 1;
+    }
+    if (total <= 0) return false;
+    return declaredTotalBytes <= 0 || declaredTotalBytes == total;
+  }
+
+  int? _taskAttemptGeneration(Task task) {
+    try {
+      final raw = task.metaData.trim();
+      if (raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return (decoded['attemptGeneration'] as num?)?.toInt();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _partAttemptMetadata(_ParallelSession session, _DownloadPart part) {
+    final metadata = <String, dynamic>{};
+    try {
+      final raw = part.task.metaData.trim();
+      if (raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          metadata.addAll(Map<String, dynamic>.from(decoded));
+        }
+      }
+    } catch (_) {}
+    metadata['parentTaskId'] = session.task.taskId;
+    metadata['attemptGeneration'] = part.attemptGeneration;
+    return jsonEncode(metadata);
+  }
+
+  void _refreshPartAttemptMetadata(
+    _ParallelSession session,
+    _DownloadPart part,
+  ) {
+    part.task = part.task.copyWith(
+      metaData: _partAttemptMetadata(session, part),
+    );
+  }
+
+  void _preparePartAttempt(_ParallelSession session, _DownloadPart part) {
+    if (part.attemptGeneration <= 0) part.attemptGeneration = 1;
+    _refreshPartAttemptMetadata(session, part);
+  }
+
+  void _invalidatePartAttempt(_ParallelSession session, _DownloadPart part) {
+    part.attemptGeneration = part.attemptGeneration <= 0
+        ? 1
+        : part.attemptGeneration + 1;
+    _refreshPartAttemptMetadata(session, part);
+  }
+
   Future<void> dispose() async {
     if (_disposed) {
       final pump = _pumpFuture;
@@ -213,12 +325,28 @@ class PersistentParallelDownload {
     if (_sessions.containsKey(task.taskId)) return true;
     final manifest = await _manifest(task);
     final temp = File('${manifest.path}.tmp');
+    final candidates = await _orderedManifestCandidates(
+      manifest,
+      temp,
+      task.taskId,
+    );
 
-    for (final candidate in <File>[manifest, temp]) {
+    for (final candidate in candidates) {
       try {
         if (!await candidate.exists()) continue;
         final raw = await candidate.readAsString();
         final json = jsonDecode(raw) as Map<String, dynamic>;
+        final parentTaskId = json['parentTaskId']?.toString().trim();
+        if (parentTaskId != null &&
+            parentTaskId.isNotEmpty &&
+            parentTaskId != task.taskId) {
+          continue;
+        }
+        final manifestGeneration = (json['generation'] as num?)?.toInt() ?? 0;
+        final checkpointSequence =
+            (json['checkpointSequence'] as num?)?.toInt() ?? 0;
+        final declaredTotalBytes = (json['totalBytes'] as num?)?.toInt() ?? -1;
+        if (manifestGeneration < 0 || checkpointSequence < 0) continue;
         final partJson = json['parts'];
         if (partJson is! List || partJson.isEmpty) continue;
         final parts = partJson
@@ -229,10 +357,13 @@ class PersistentParallelDownload {
             )
             .toList(growable: false);
         if (parts.length > kDownloadWorkUnitsMax ||
-            parts.any((part) => part.from < 0 || part.to < part.from)) {
+            parts.any((part) => part.from < 0 || part.to < part.from) ||
+            !_validRestoredLayout(parts, declaredTotalBytes)) {
           continue;
         }
-        final session = _ParallelSession(task, manifest, parts);
+        final session = _ParallelSession(task, manifest, parts)
+          ..generation = manifestGeneration
+          ..checkpointSequence = checkpointSequence;
         _register(session);
         await _restoreNativeOwnership(session);
 
@@ -420,6 +551,8 @@ class PersistentParallelDownload {
       session.active = true;
       session.resetRamp();
       try {
+        // Persist the logical generation before any child is handed to native IO.
+        await _persist(session);
         await _status(session, TaskStatus.enqueued);
 
         // Crash window: assembly may already have atomically renamed the final
@@ -594,6 +727,11 @@ class PersistentParallelDownload {
           part.credibleProgress = progress;
         }
 
+        // Give every native enqueue a durable attempt token. Retried/resumed
+        // workers keep the same taskId/Range but never the same generation.
+        _preparePartAttempt(session, part);
+        await _persist(session);
+
         // Reserve before enqueueing to close the enqueue->running race. This
         // also keeps 5 episodes x 16 parts from becoming 80 native requests.
         part.launched = true;
@@ -625,6 +763,7 @@ class PersistentParallelDownload {
           // this Range from ever being retried.
           rollbackUnownedReservation();
           _schedulePartRecovery(session, part);
+          await _persist(session);
           try {
             await _status(session, TaskStatus.running);
           } catch (_) {}
@@ -636,6 +775,7 @@ class PersistentParallelDownload {
           // exact same taskId/Range without teaching a lower host ceiling.
           rollbackUnownedReservation();
           _schedulePartRecovery(session, part);
+          await _persist(session);
           await _status(session, TaskStatus.running);
           return true;
         }
@@ -1322,7 +1462,9 @@ class PersistentParallelDownload {
           break;
         }
       }
-      if (part == null || part.complete) return;
+      // Native bridge updates do not carry the Dart task metadata token.
+      // Accept them only while this exact child currently owns a slot.
+      if (part == null || part.complete || !part.launched) return;
 
       // The immutable Range in the manifest is the authority. Never trust a
       // server-reported expected length enough to credit bytes outside it.
@@ -1435,9 +1577,26 @@ class PersistentParallelDownload {
           final part = session.parts.firstWhere(
             (part) => part.task.taskId == update.task.taskId,
           );
+          final callbackAttempt = _taskAttemptGeneration(update.task);
+          if (callbackAttempt != null &&
+              part.attemptGeneration > 0 &&
+              callbackAttempt != part.attemptGeneration) {
+            diagnosticLog?.record('parallel.staleChildCallback', {
+              'taskId': session.task.taskId,
+              'childTaskId': part.task.taskId,
+              'callbackAttempt': callbackAttempt,
+              'currentAttempt': part.attemptGeneration,
+            });
+            return;
+          }
           // Completion is durable; a late running/progress/retry callback must
           // never reserve its connection again or park the remaining parts.
           if (part.complete) return;
+          if (!part.launched &&
+              !(update is TaskStatusUpdate &&
+                  update.status == TaskStatus.complete)) {
+            return;
+          }
           if (generation != session.generation &&
               !(update is TaskStatusUpdate &&
                   update.status == TaskStatus.complete))
@@ -1608,6 +1767,7 @@ class PersistentParallelDownload {
               // parent remains running so recovery never emits a fake pause.
               _stabilizeSessionForRecovery(session);
               _schedulePartRecovery(session, part);
+              await _persist(session);
               await _status(session, TaskStatus.running);
               return;
             }
@@ -1678,6 +1838,7 @@ class PersistentParallelDownload {
     _cancelTailStallWatch(part);
     part.recoveryAttempts++;
     part.speed = 0;
+    _invalidatePartAttempt(session, part);
 
     // Backoff is not an active connection. Free the reserved slot immediately
     // so another durable range can use it. The failed range becomes launchable
@@ -1832,6 +1993,7 @@ class PersistentParallelDownload {
         if (owns) {
           _activeConnectionIds.add(part.task.taskId);
         } else {
+          _invalidatePartAttempt(session, part);
           _activeConnectionIds.remove(part.task.taskId);
         }
       }
@@ -1842,6 +2004,7 @@ class PersistentParallelDownload {
     }
 
     for (final part in unfinished) {
+      _invalidatePartAttempt(session, part);
       part.launched = false;
       part.speed = 0;
     }
@@ -1906,7 +2069,13 @@ class PersistentParallelDownload {
   Future<void> _persist(_ParallelSession session) async {
     if (session.deleted) return;
     await session.manifest.parent.create(recursive: true);
+    session.checkpointSequence++;
     final payload = jsonEncode({
+      'schemaVersion': kParallelManifestSchemaVersion,
+      'parentTaskId': session.task.taskId,
+      'generation': session.generation,
+      'checkpointSequence': session.checkpointSequence,
+      'totalBytes': session.size,
       'parts': session.parts.map((part) => part.toJson()).toList(),
     });
     final temp = File('${session.manifest.path}.tmp');
@@ -2084,6 +2253,7 @@ class _ParallelSession {
   bool active = false;
   bool deleted = false;
   int generation = 0;
+  int checkpointSequence = 0;
   int connectionCeiling = kDownloadPartsMin;
   int lastHealthyConnections = 0;
   bool slowStartComplete = false;
@@ -2184,6 +2354,7 @@ class _DownloadPart {
     this.to, {
     this.progress = 0,
     this.complete = false,
+    this.attemptGeneration = 0,
     double? credibleProgress,
     this.needsCredibleProgressRepair = false,
   }) : credibleProgress = complete
@@ -2208,6 +2379,7 @@ class _DownloadPart {
   double credibleProgress;
 
   bool complete;
+  int attemptGeneration;
   bool launched = false;
   double speed = 0;
   int recoveryAttempts = 0;
@@ -2239,6 +2411,7 @@ class _DownloadPart {
       json['to'] as int,
       progress: complete ? 1 : rawProgress,
       complete: complete,
+      attemptGeneration: (json['attemptGeneration'] as num?)?.toInt() ?? 0,
       credibleProgress: complete
           ? 1
           : (hasSavedCredible ? savedCredible.toDouble() : null),
@@ -2253,5 +2426,20 @@ class _DownloadPart {
     'progress': progress,
     'credibleProgress': credibleProgress,
     'complete': complete,
+    'attemptGeneration': attemptGeneration,
   };
+}
+
+class _ManifestRestoreCandidate {
+  const _ManifestRestoreCandidate({
+    required this.file,
+    required this.sequence,
+    required this.modifiedMillis,
+    required this.isTemp,
+  });
+
+  final File file;
+  final int sequence;
+  final int modifiedMillis;
+  final bool isTemp;
 }

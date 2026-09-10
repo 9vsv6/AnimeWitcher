@@ -232,18 +232,18 @@ void main() {
     await coordinator.start(parent, 25);
     await expandFreshTo(5);
     final original = List<DownloadTask>.from(starts);
+    var current = original[1];
     for (var attempt = 0; attempt < 6; attempt++) {
       final expectedStarts = starts.length + 1;
-      coordinator.handleUpdate(
-        TaskStatusUpdate(original[1], TaskStatus.paused),
-      );
+      coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.paused));
       await waitUntil(() => starts.length >= expectedStarts);
       final recovered = starts.last;
       expect(recovered.taskId, original[1].taskId);
-      // A real native worker acknowledges the recovered enqueue before it can
-      // be interrupted again. Keep the slow-start batch state honest instead
-      // of injecting consecutive pause callbacks into an unacknowledged task.
+      // Each interruption must come from the currently owned native attempt.
+      // Reusing the original task would intentionally exercise the stale-token
+      // fence rather than repeated real system pauses.
       await markRunning([recovered]);
+      current = recovered;
       expect(coordinator.activeConnectionCount, 5);
       expect(pauses, isEmpty);
       expect(coordinator.isActive(parent.taskId), isTrue);

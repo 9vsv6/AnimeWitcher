@@ -91,7 +91,9 @@ void main() {
   }
 
   setUp(() async {
-    directory = await Directory.systemTemp.createTemp('parallel-auto-recovery-');
+    directory = await Directory.systemTemp.createTemp(
+      'parallel-auto-recovery-',
+    );
     parent = ParallelDownloadTask(
       taskId: 'episode',
       url: 'https://cdn.example.test/video.mp4',
@@ -116,59 +118,73 @@ void main() {
     if (await directory.exists()) await directory.delete(recursive: true);
   });
 
-  test('multipart child uses only AnimeWitcher recovery, not native retries', () async {
-    expect(await coordinator.start(parent, 32), isTrue);
-    expect(starts, hasLength(1));
-    expect(starts.single.retries, 0);
-  });
+  test(
+    'multipart child uses only AnimeWitcher recovery, not native retries',
+    () async {
+      expect(await coordinator.start(parent, 32), isTrue);
+      expect(starts, hasLength(1));
+      expect(starts.single.retries, 0);
+    },
+  );
 
-  test('repeated system pauses recover the child without pausing the episode', () async {
-    expect(await coordinator.start(parent, 32), isTrue);
-    expect(starts, hasLength(1));
-    final child = starts.first;
+  test(
+    'repeated system pauses recover the child without pausing the episode',
+    () async {
+      expect(await coordinator.start(parent, 32), isTrue);
+      expect(starts, hasLength(1));
+      final child = starts.first;
+      var current = child;
 
-    coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
-    await Future<void>.delayed(Duration.zero);
+      coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.running));
+      await Future<void>.delayed(Duration.zero);
 
-    // The old implementation stopped the whole parent after the third pause.
-    // Exercise well beyond that boundary and require the same child identity
-    // to keep recovering automatically.
-    for (var interruption = 0; interruption < 6; interruption++) {
-      final expectedStarts = starts.length + 1;
-      coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.paused));
-      await waitUntil(() => starts.length >= expectedStarts);
+      // The old implementation stopped the whole parent after the third pause.
+      // Exercise well beyond that boundary and require the same child identity
+      // to keep recovering automatically. Each pause comes from the current
+      // native attempt; older task objects are intentionally stale after retry.
+      for (var interruption = 0; interruption < 6; interruption++) {
+        final expectedStarts = starts.length + 1;
+        coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.paused));
+        await waitUntil(() => starts.length >= expectedStarts);
+        current = starts.last;
+        expect(current.taskId, child.taskId);
+        coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.running));
+        await Future<void>.delayed(Duration.zero);
+        expect(coordinator.isActive(parent.taskId), isTrue);
+        expect(parentStatuses.last, TaskStatus.running);
+        expect(pauses, isEmpty);
+      }
+
+      expect(parentStatuses, isNot(contains(TaskStatus.waitingToRetry)));
+      expect(parentStatuses, isNot(contains(TaskStatus.paused)));
+    },
+  );
+
+  test(
+    'transient connection failure retries only the affected child',
+    () async {
+      expect(await coordinator.start(parent, 32), isTrue);
+      final child = starts.first;
+      coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
+      await Future<void>.delayed(Duration.zero);
+
+      coordinator.handleUpdate(
+        TaskStatusUpdate(
+          child,
+          TaskStatus.failed,
+          TaskConnectionException('socket reset'),
+        ),
+      );
+
+      await waitUntil(() => starts.length >= 2);
       expect(starts.last.taskId, child.taskId);
       expect(coordinator.isActive(parent.taskId), isTrue);
       expect(parentStatuses.last, TaskStatus.running);
+      expect(parentStatuses, isNot(contains(TaskStatus.waitingToRetry)));
+      expect(parentStatuses, isNot(contains(TaskStatus.paused)));
       expect(pauses, isEmpty);
-    }
-
-    expect(parentStatuses, isNot(contains(TaskStatus.waitingToRetry)));
-    expect(parentStatuses, isNot(contains(TaskStatus.paused)));
-  });
-
-  test('transient connection failure retries only the affected child', () async {
-    expect(await coordinator.start(parent, 32), isTrue);
-    final child = starts.first;
-    coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
-    await Future<void>.delayed(Duration.zero);
-
-    coordinator.handleUpdate(
-      TaskStatusUpdate(
-        child,
-        TaskStatus.failed,
-        TaskConnectionException('socket reset'),
-      ),
-    );
-
-    await waitUntil(() => starts.length >= 2);
-    expect(starts.last.taskId, child.taskId);
-    expect(coordinator.isActive(parent.taskId), isTrue);
-    expect(parentStatuses.last, TaskStatus.running);
-    expect(parentStatuses, isNot(contains(TaskStatus.waitingToRetry)));
-    expect(parentStatuses, isNot(contains(TaskStatus.paused)));
-    expect(pauses, isEmpty);
-  });
+    },
+  );
 
   test('recovery backoff frees its slot and never bypasses the governor', () async {
     await coordinator.dispose();
@@ -193,17 +209,13 @@ void main() {
     coordinator.handleUpdate(TaskStatusUpdate(first, TaskStatus.running));
     await waitUntil(() => starts.length == 2);
     final interrupted = starts[1];
-    coordinator.handleUpdate(
-      TaskStatusUpdate(interrupted, TaskStatus.running),
-    );
+    coordinator.handleUpdate(TaskStatusUpdate(interrupted, TaskStatus.running));
     await waitUntil(() => coordinator.activeConnectionCount == 2);
 
     // A system interruption used to leave this child counted as an active
     // socket throughout backoff. That eventually parked every connection at
     // once. The slot must be released and immediately used by spare tail work.
-    coordinator.handleUpdate(
-      TaskStatusUpdate(interrupted, TaskStatus.paused),
-    );
+    coordinator.handleUpdate(TaskStatusUpdate(interrupted, TaskStatus.paused));
     await waitUntil(() => starts.length == 3);
     expect(starts[2].taskId, isNot(interrupted.taskId));
     expect(coordinator.activeConnectionCount, 2);
@@ -220,21 +232,24 @@ void main() {
     expect(parentStatuses, isNot(contains(TaskStatus.paused)));
   });
 
-  test('missing native worker during reconcile is recovered, not auto-paused', () async {
-    expect(await coordinator.start(parent, 32), isTrue);
-    final child = starts.first;
-    coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
-    await Future<void>.delayed(Duration.zero);
+  test(
+    'missing native worker during reconcile is recovered, not auto-paused',
+    () async {
+      expect(await coordinator.start(parent, 32), isTrue);
+      final child = starts.first;
+      coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
+      await Future<void>.delayed(Duration.zero);
 
-    await coordinator.reconcile(() async => <String>{});
+      await coordinator.reconcile(() async => <String>{});
 
-    await waitUntil(() => starts.length >= 2);
-    expect(starts.last.taskId, child.taskId);
-    expect(coordinator.isActive(parent.taskId), isTrue);
-    expect(parentStatuses.last, TaskStatus.running);
-    expect(parentStatuses, isNot(contains(TaskStatus.waitingToRetry)));
-    expect(parentStatuses, isNot(contains(TaskStatus.paused)));
-  });
+      await waitUntil(() => starts.length >= 2);
+      expect(starts.last.taskId, child.taskId);
+      expect(coordinator.isActive(parent.taskId), isTrue);
+      expect(parentStatuses.last, TaskStatus.running);
+      expect(parentStatuses, isNot(contains(TaskStatus.waitingToRetry)));
+      expect(parentStatuses, isNot(contains(TaskStatus.paused)));
+    },
+  );
 
   test('0.999 exact-size child finalizes without waiting forever for native complete', () async {
     expect(await coordinator.start(parent, 32), isTrue);
@@ -245,23 +260,23 @@ void main() {
 
     final childFile = File(await child.filePath());
     await childFile.parent.create(recursive: true);
-    await childFile.writeAsBytes(List<int>.generate(32, (index) => index), flush: true);
+    await childFile.writeAsBytes(
+      List<int>.generate(32, (index) => index),
+      flush: true,
+    );
 
     coordinator.handleUpdate(
-      TaskProgressUpdate(
-        child,
-        0.999,
-        32,
-        0,
-        const Duration(seconds: -1),
-      ),
+      TaskProgressUpdate(child, 0.999, 32, 0, const Duration(seconds: -1)),
     );
 
     await waitUntil(() => parentStatuses.contains(TaskStatus.complete));
     final target = File(await parent.filePath());
     expect(await target.exists(), isTrue);
     expect(await target.length(), 32);
-    expect(await target.readAsBytes(), List<int>.generate(32, (index) => index));
+    expect(
+      await target.readAsBytes(),
+      List<int>.generate(32, (index) => index),
+    );
     expect(pauses, contains(child.taskId));
     expect(records[parent.taskId]?.status, TaskStatus.complete);
   });
@@ -303,7 +318,8 @@ void main() {
         group: kPersistentDownloadChunkGroup,
         metaData: jsonEncode(<String, String>{'parentTaskId': parent.taskId}),
       );
-      await File(await child.filePath()).writeAsBytes(<int>[index], flush: true);
+      await File(await child.filePath())
+          .writeAsBytes(<int>[index], flush: true);
       final stuck = index == 11 || index == 12;
       if (stuck) livePartIds.add(child.taskId);
       manifestParts.add(<String, dynamic>{
@@ -377,9 +393,7 @@ void main() {
           retries: 0,
           allowPause: true,
           group: kPersistentDownloadChunkGroup,
-          metaData: jsonEncode(<String, String>{
-            'parentTaskId': parent.taskId,
-          }),
+          metaData: jsonEncode(<String, String>{'parentTaskId': parent.taskId}),
         );
         final bytes = <int>[from, from + 1, from + 2, from + 3];
         expectedBytes.addAll(bytes);
@@ -390,10 +404,8 @@ void main() {
           // Mirror the real report: progress says 0.999, but the immutable
           // range still lacks its final bytes. Three bytes stand in for the
           // large on-device prefix from the uploaded manifest.
-          await File(await child.filePath()).writeAsBytes(
-            bytes.take(3).toList(),
-            flush: true,
-          );
+          await File(await child.filePath())
+              .writeAsBytes(bytes.take(3).toList(), flush: true);
         } else {
           await File(await child.filePath()).writeAsBytes(bytes, flush: true);
         }
@@ -443,7 +455,11 @@ void main() {
       final recoveredPrefix = File(await stuckChild!.filePath());
       expect(await recoveredPrefix.readAsBytes(), <int>[36, 37, 38]);
 
-      await recoveredPrefix.writeAsBytes(<int>[39], mode: FileMode.append, flush: true);
+      await recoveredPrefix.writeAsBytes(
+        <int>[39],
+        mode: FileMode.append,
+        flush: true,
+      );
       coordinator.handleUpdate(
         TaskStatusUpdate(stuckChild!, TaskStatus.complete),
       );
@@ -531,23 +547,26 @@ void main() {
     },
   );
 
-  test('permanent HTTP 403 still parks safely instead of retrying forever', () async {
-    expect(await coordinator.start(parent, 32), isTrue);
-    final child = starts.first;
-    coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
-    await Future<void>.delayed(Duration.zero);
+  test(
+    'permanent HTTP 403 still parks safely instead of retrying forever',
+    () async {
+      expect(await coordinator.start(parent, 32), isTrue);
+      final child = starts.first;
+      coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
+      await Future<void>.delayed(Duration.zero);
 
-    coordinator.handleUpdate(
-      TaskStatusUpdate(
-        child,
-        TaskStatus.failed,
-        TaskHttpException('forbidden', 403),
-      ),
-    );
+      coordinator.handleUpdate(
+        TaskStatusUpdate(
+          child,
+          TaskStatus.failed,
+          TaskHttpException('forbidden', 403),
+        ),
+      );
 
-    await waitUntil(() => parentStatuses.contains(TaskStatus.paused));
-    expect(coordinator.isActive(parent.taskId), isFalse);
-    expect(starts, hasLength(1));
-    expect(pauses, contains(child.taskId));
-  });
+      await waitUntil(() => parentStatuses.contains(TaskStatus.paused));
+      expect(coordinator.isActive(parent.taskId), isFalse);
+      expect(starts, hasLength(1));
+      expect(pauses, contains(child.taskId));
+    },
+  );
 }
