@@ -31,8 +31,8 @@ jobs:
           from pathlib import Path
           path = Path('test/core/services/download_runtime_stability_review_test.dart')
           text = path.read_text()
-          broken = "expect(section, isNot(contains('if (progress > 0 || bytes > 0) return false;')));"
-          fixed = "expect(section, isNot(contains('if (progress > 0 || bytes > 0) return false;'))));"
+          broken = "expect(section, isNot(contains('if (progress > 0 || bytes > 0) return false;'));"
+          fixed = "expect(section, isNot(contains('if (progress > 0 || bytes > 0) return false;')));"
           if broken not in text:
               raise SystemExit('expected runtime-test fixture typo not found')
           path.write_text(text.replace(broken, fixed, 1))
