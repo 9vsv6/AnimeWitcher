@@ -61,6 +61,36 @@ Duration downloadRangeFastFailTimeout(Duration? maxSuccessfulConnectTime) {
   );
 }
 
+bool shouldRememberDownloadRangeConnectTime({
+  required int? statusCode,
+  required String? requestedRange,
+  required String? contentRange,
+}) {
+  if (statusCode != 206 || requestedRange == null || contentRange == null) {
+    return false;
+  }
+  final request = RegExp(r'^bytes=(\d+)-(\d*)$')
+      .firstMatch(requestedRange.trim().toLowerCase());
+  final response = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$')
+      .firstMatch(contentRange.trim().toLowerCase());
+  if (request == null || response == null) return false;
+
+  final requestStart = int.parse(request[1]!);
+  final requestEndText = request[2]!;
+  final responseStart = int.parse(response[1]!);
+  final responseEnd = int.parse(response[2]!);
+  final resourceSize = int.parse(response[3]!);
+  if (responseStart != requestStart ||
+      responseEnd < responseStart ||
+      resourceSize <= responseEnd) {
+    return false;
+  }
+  if (requestEndText.isNotEmpty && responseEnd != int.parse(requestEndText)) {
+    return false;
+  }
+  return true;
+}
+
 bool shouldEmitDownloadRangeProgress({
   required int written,
   required int lastReportedWritten,
@@ -121,6 +151,36 @@ class DownloadRangeTransfer {
   bool isActive(String id) => _operations.containsKey(id);
   Set<String> get activeTaskIds => _operations.keys.toSet();
   DownloadRangeFailure? failureFor(String id) => _lastFailures[id];
+
+  /// Verify a visible local prefix against a candidate source without
+  /// appending bytes. Multipart URL refresh uses this before retaining old
+  /// ranges. The returned validator may be pinned by the caller, but a matching
+  /// byte prefix is sufficient when the origin exposes no validator.
+  Future<({bool matches, String? validator})> verifyExistingPrefix({
+    required String id,
+    required String url,
+    required Map<String, String> headers,
+    required File file,
+    required int written,
+  }) async {
+    if (written <= 0 || !await file.exists() || await file.length() < written) {
+      return (matches: false, validator: null);
+    }
+    final operation = _RangeOperation(id: '$id.identity', canRefreshUrl: false);
+    try {
+      final probe = await _probeSavedPrefix(
+        operation: operation,
+        url: url,
+        headers: headers,
+        spec: _RangeSpec.fromHeaders(headers),
+        file: file,
+        written: written,
+      );
+      return (matches: probe != null, validator: probe?.validator);
+    } finally {
+      operation.token.cancel('Identity probe complete');
+    }
+  }
 
   Future<bool> stop(String id) async {
     diagnosticLog?.record('range.stop', {'taskId': id});
@@ -580,7 +640,20 @@ class DownloadRangeTransfer {
         'httpStatus': response.statusCode,
         'elapsedMs': clock.elapsedMilliseconds,
       });
-      _rememberConnectTime(url, clock.elapsed);
+      String? requestedRange;
+      for (final entry in headers.entries) {
+        if (entry.key.toLowerCase() == 'range') {
+          requestedRange = entry.value;
+          break;
+        }
+      }
+      if (shouldRememberDownloadRangeConnectTime(
+        statusCode: response.statusCode,
+        requestedRange: requestedRange,
+        contentRange: response.headers.value('content-range'),
+      )) {
+        _rememberConnectTime(url, clock.elapsed);
+      }
       return response;
     } catch (error) {
       diagnosticLog?.record('http.error', {

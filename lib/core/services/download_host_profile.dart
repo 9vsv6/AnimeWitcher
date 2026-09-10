@@ -62,15 +62,17 @@ class DownloadHostProfile {
     final map = Map<String, dynamic>.from(raw);
     final origin = (map['origin'] ?? '').toString().trim();
     if (origin.isEmpty) return null;
-    final safe = _asInt(map['safeConnectionCeiling'], fallback: 1)
-        .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)
-        .toInt();
+    final safe = _asInt(
+      map['safeConnectionCeiling'],
+      fallback: 1,
+    ).clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget).toInt();
     return DownloadHostProfile(
       origin: origin,
       safeConnectionCeiling: safe,
-      bestConnections: _asInt(map['bestConnections'], fallback: safe)
-          .clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget)
-          .toInt(),
+      bestConnections: _asInt(
+        map['bestConnections'],
+        fallback: safe,
+      ).clamp(kDownloadPartsMin, kDownloadGlobalConnectionBudget).toInt(),
       bestBytesPerSecond: _asDouble(map['bestBytesPerSecond']),
       maxSuccessfulConnectMicros: _asInt(map['maxSuccessfulConnectMicros']),
       consecutivePressure: _asInt(map['consecutivePressure']),
@@ -88,7 +90,9 @@ abstract interface class DownloadHostProfileBackend {
 }
 
 class HiveDownloadHostProfileBackend implements DownloadHostProfileBackend {
-  const HiveDownloadHostProfileBackend({this.boxName = kDownloadHostProfileBox});
+  const HiveDownloadHostProfileBackend({
+    this.boxName = kDownloadHostProfileBox,
+  });
 
   final String boxName;
 
@@ -126,6 +130,25 @@ class DownloadHostProfileStore {
 
   final DownloadHostProfileBackend backend;
   final DateTime Function() _now;
+  final Map<String, Future<void>> _writeChains = <String, Future<void>>{};
+
+  /// Persisted host profiles are history/seed data only. Runtime connection
+  /// decisions belong to DownloadConnectionGovernor. Serialize profile
+  /// read-modify-write mutations by origin so an older async sample can never
+  /// overwrite newer pressure knowledge after callbacks race each other.
+  Future<T> _serializeOrigin<T>(String url, Future<T> Function() action) {
+    final origin = downloadOriginKey(url);
+    final previous = _writeChains[origin] ?? Future<void>.value();
+    late final Future<void> barrier;
+    final result = previous.catchError((_) {}).then((_) => action());
+    barrier = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _writeChains[origin] = barrier;
+    return result.whenComplete(() {
+      if (identical(_writeChains[origin], barrier)) {
+        _writeChains.remove(origin);
+      }
+    });
+  }
 
   Future<DownloadHostProfile?> getForUrl(String url) async {
     final origin = downloadOriginKey(url);
@@ -161,7 +184,7 @@ class DownloadHostProfileStore {
     required int activeConnections,
     required double bytesPerSecond,
     Duration? connectTime,
-  }) async {
+  }) => _serializeOrigin(url, () async {
     final now = _now();
     final origin = downloadOriginKey(url);
     final previous = await getForUrl(url);
@@ -190,8 +213,8 @@ class DownloadHostProfileStore {
       safeConnectionCeiling: safeCeiling,
       bestConnections: bestConnections,
       bestBytesPerSecond: bestThroughput,
-      maxSuccessfulConnectMicros: connectMicros >
-              (previous?.maxSuccessfulConnectMicros ?? 0)
+      maxSuccessfulConnectMicros:
+          connectMicros > (previous?.maxSuccessfulConnectMicros ?? 0)
           ? connectMicros
           : (previous?.maxSuccessfulConnectMicros ?? 0),
       consecutivePressure: 0,
@@ -200,12 +223,12 @@ class DownloadHostProfileStore {
     );
     await backend.write(origin, profile.toJson());
     return profile;
-  }
+  });
 
   Future<DownloadHostProfile> recordPressure({
     required String url,
     required int fallbackCeiling,
-  }) async {
+  }) => _serializeOrigin(url, () async {
     final now = _now();
     final origin = downloadOriginKey(url);
     final previous = await getForUrl(url);
@@ -224,8 +247,7 @@ class DownloadHostProfileStore {
       safeConnectionCeiling: safeCeiling,
       bestConnections: previous?.bestConnections ?? safeCeiling,
       bestBytesPerSecond: previous?.bestBytesPerSecond ?? 0,
-      maxSuccessfulConnectMicros:
-          previous?.maxSuccessfulConnectMicros ?? 0,
+      maxSuccessfulConnectMicros: previous?.maxSuccessfulConnectMicros ?? 0,
       consecutivePressure: pressure,
       circuitOpenUntilMillis: openCircuit
           ? now.add(kDownloadHostCircuitOpenDuration).millisecondsSinceEpoch
@@ -234,7 +256,7 @@ class DownloadHostProfileStore {
     );
     await backend.write(origin, profile.toJson());
     return profile;
-  }
+  });
 }
 
 int _asInt(Object? value, {int fallback = 0}) {

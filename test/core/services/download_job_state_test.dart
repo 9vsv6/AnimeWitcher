@@ -77,24 +77,31 @@ void main() {
       expect(plan.shouldRequeue, isTrue);
     });
 
-    test('running native statuses become interrupted when ownership is gone', () {
-      for (final status in <TaskStatus>[
-        TaskStatus.enqueued,
-        TaskStatus.running,
-        TaskStatus.waitingToRetry,
-      ]) {
-        final plan = planDownloadRecovery(
-          persisted: status,
-          queueWaiting: false,
-          userPaused: false,
-          stillInNativeQueue: false,
-          hasMetadata: false,
-        );
+    test(
+      'running native statuses become interrupted when ownership is gone',
+      () {
+        for (final status in <TaskStatus>[
+          TaskStatus.enqueued,
+          TaskStatus.running,
+          TaskStatus.waitingToRetry,
+        ]) {
+          final plan = planDownloadRecovery(
+            persisted: status,
+            queueWaiting: false,
+            userPaused: false,
+            stillInNativeQueue: false,
+            hasMetadata: false,
+          );
 
-        expect(plan.state, DownloadJobState.interrupted, reason: '$status');
-        expect(plan.action, DownloadRecoveryAction.requeue, reason: '$status');
-      }
-    });
+          expect(plan.state, DownloadJobState.interrupted, reason: '$status');
+          expect(
+            plan.action,
+            DownloadRecoveryAction.requeue,
+            reason: '$status',
+          );
+        }
+      },
+    );
 
     test('system pause and errors require durable AnimeWitcher metadata', () {
       for (final status in <TaskStatus>[
@@ -163,6 +170,98 @@ void main() {
     });
   });
 
+  group('DownloadJobStore recovery authority', () {
+    test('authoritative user pause beats stale live executor state', () {
+      final plan = planDownloadRecoveryWithJobAuthority(
+        persisted: TaskStatus.running,
+        queueWaiting: false,
+        userPaused: false,
+        stillInNativeQueue: true,
+        hasMetadata: false,
+        authoritativeState: DownloadJobState.pausedByUser,
+        authoritativeUserPaused: true,
+      );
+      expect(plan.state, DownloadJobState.pausedByUser);
+      expect(plan.action, DownloadRecoveryAction.keepPaused);
+    });
+
+    test('authoritative interrupted work revives without legacy metadata', () {
+      final plan = planDownloadRecoveryWithJobAuthority(
+        persisted: TaskStatus.canceled,
+        queueWaiting: false,
+        userPaused: false,
+        stillInNativeQueue: false,
+        hasMetadata: false,
+        authoritativeState: DownloadJobState.running,
+      );
+      expect(plan.state, DownloadJobState.interrupted);
+      expect(plan.action, DownloadRecoveryAction.requeue);
+    });
+
+    test(
+      'authoritative waiter attaches to native ownership without reenqueue',
+      () {
+        final plan = planDownloadRecoveryWithJobAuthority(
+          persisted: TaskStatus.paused,
+          queueWaiting: false,
+          userPaused: false,
+          stillInNativeQueue: true,
+          hasMetadata: false,
+          authoritativeState: DownloadJobState.queued,
+          authoritativeQueueWaiting: true,
+        );
+        expect(plan.state, DownloadJobState.queued);
+        expect(plan.action, DownloadRecoveryAction.keepNative);
+        expect(plan.shouldRequeue, isFalse);
+      },
+    );
+
+    test(
+      'terminal authoritative jobs are never revived by stale executor rows',
+      () {
+        for (final state in <DownloadJobState>[
+          DownloadJobState.completed,
+          DownloadJobState.canceled,
+          DownloadJobState.orphaned,
+        ]) {
+          final plan = planDownloadRecoveryWithJobAuthority(
+            persisted: TaskStatus.running,
+            queueWaiting: true,
+            userPaused: false,
+            stillInNativeQueue: true,
+            hasMetadata: true,
+            authoritativeState: state,
+          );
+          expect(plan.state, state, reason: state.name);
+          expect(
+            plan.action,
+            DownloadRecoveryAction.ignore,
+            reason: state.name,
+          );
+        }
+      },
+    );
+
+    test('missing authority preserves legacy migration behavior', () {
+      final legacy = planDownloadRecovery(
+        persisted: TaskStatus.failed,
+        queueWaiting: false,
+        userPaused: false,
+        stillInNativeQueue: false,
+        hasMetadata: true,
+      );
+      final migrated = planDownloadRecoveryWithJobAuthority(
+        persisted: TaskStatus.failed,
+        queueWaiting: false,
+        userPaused: false,
+        stillInNativeQueue: false,
+        hasMetadata: true,
+      );
+      expect(migrated.state, legacy.state);
+      expect(migrated.action, legacy.action);
+    });
+  });
+
   group('download attempt fence', () {
     test('new generation rejects callbacks from the previous attempt', () {
       final fence = DownloadAttemptFence();
@@ -177,18 +276,24 @@ void main() {
       expect(fence.accepts(second), isTrue);
     });
 
-    test('invalidate fences old callbacks without launching another worker', () {
-      final fence = DownloadAttemptFence();
-      final running = fence.begin('episode-1');
-      final invalidation = fence.invalidate('episode-1');
+    test(
+      'invalidate fences old callbacks without launching another worker',
+      () {
+        final fence = DownloadAttemptFence();
+        final running = fence.begin('episode-1');
+        final invalidation = fence.invalidate('episode-1');
 
-      expect(invalidation.generation, running.generation + 1);
-      expect(fence.accepts(running), isFalse);
-      expect(fence.accepts(invalidation), isTrue);
-    });
+        expect(invalidation.generation, running.generation + 1);
+        expect(fence.accepts(running), isFalse);
+        expect(fence.accepts(invalidation), isTrue);
+      },
+    );
 
     test('persisted generations continue monotonically after relaunch', () {
-      final fence = DownloadAttemptFence(const {'episode-1': 7, 'episode-2': 2});
+      final fence = DownloadAttemptFence(const {
+        'episode-1': 7,
+        'episode-2': 2,
+      });
 
       final token = fence.begin('episode-1');
       expect(token.generation, 8);

@@ -109,6 +109,78 @@ void main() {
       expect(source, contains('? update.networkSpeed'));
     });
 
+    test(
+      'lost multipart resume checkpoint is repaired instead of retried forever',
+      () {
+        final source = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        final start = source.indexOf('Future<bool> _startPart(');
+        final end = source.indexOf('Future<bool> _enqueueTransfer(', start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        final section = source.substring(start, end);
+        expect(section, contains("part.checkpointLost"));
+        expect(section, contains('resetUndurablePartProgress('));
+        expect(
+          section,
+          contains('final enqueued = await FileDownloader().enqueue(task);'),
+        );
+        expect(section, contains('return enqueued;'));
+        expect(section, contains('forceSourceValidation'));
+        expect(
+          section,
+          isNot(contains('if (progress > 0 || bytes > 0) return false;')),
+        );
+      },
+    );
+
+    test(
+      'multipart manifests persist generation, byte and resource identity',
+      () {
+        final source = File(
+          'lib/core/services/persistent_parallel_download.dart',
+        ).readAsStringSync();
+        expect(source, contains('kParallelManifestSchemaVersion = 4'));
+        expect(
+          source,
+          contains("'schemaVersion': kParallelManifestSchemaVersion"),
+        );
+        expect(source, contains("'generation': session.generation"));
+        expect(source, contains("'expectedBytes': session.size"));
+        expect(
+          source,
+          contains("'resourceValidator': session.resourceValidator"),
+        );
+        expect(source, contains('generation: savedGeneration'));
+        expect(
+          source,
+          contains(
+            "final savedValidator = json['resourceValidator'] is String",
+          ),
+        );
+        expect(
+          source,
+          contains(
+            'resourceValidator: savedValidator.isEmpty ? null : savedValidator',
+          ),
+        );
+        expect(source, contains('if (!contiguous) continue;'));
+      },
+    );
+
+    test('complete assembly staging file is adopted after a crash', () {
+      final source = File('lib/core/services/persistent_parallel_download.dart')
+          .readAsStringSync();
+      final start = source.indexOf('Future<bool> _adoptCompletedTarget(');
+      final end = source.indexOf('bool _requestedByteRange(', start);
+      expect(start, greaterThanOrEqualTo(0));
+      expect(end, greaterThan(start));
+      final section = source.substring(start, end);
+      expect(section, contains(".assembling"));
+      expect(section, contains('await staging.rename(target.path)'));
+      expect(section, contains('await file.length() != part.size'));
+    });
+
     test('continued-processing speed zero explicitly clears stale speed', () {
       final swift = File('ios/Runner/DownloadContinuedProcessingManager.swift')
           .readAsStringSync();
@@ -146,6 +218,48 @@ void main() {
         expect(source, contains('Future<void> _queueUpdate('));
         expect(source, contains('_pendingUpdate = arguments'));
         expect(source, contains('_cancelPendingUpdate();'));
+      },
+    );
+
+    test(
+      'startup reconciliation reads JobStore before legacy cancel filtering',
+      () {
+        final source = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        final start = source.indexOf(
+          'Future<void> _recoverPersistedDownloads()',
+        );
+        final end = source.indexOf('int _occupiedSlotCount(', start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        final recovery = source.substring(start, end);
+        final jobRead = recovery.indexOf(
+          'final oldJob = await _jobStore.get(task.taskId);',
+        );
+        final canceledFilter = recovery.indexOf(
+          'record.status == TaskStatus.canceled',
+        );
+        expect(jobRead, greaterThanOrEqualTo(0));
+        expect(canceledFilter, greaterThan(jobRead));
+        expect(recovery, contains('planDownloadRecoveryWithJobAuthority('));
+        expect(recovery, contains('oldJob?.expectedBytes'));
+        expect(recovery, contains('oldJob?.userPaused == true'));
+      },
+    );
+
+    test(
+      'logical lifecycle boundaries checkpoint authoritative JobStore state',
+      () {
+        final source = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        expect(source, contains('Future<void> _checkpointLogicalJob('));
+        expect(source, contains('state: DownloadJobState.pausing'));
+        expect(source, contains('state: DownloadJobState.pausedByUser'));
+        expect(source, contains('state: DownloadJobState.starting'));
+        expect(source, contains('state: DownloadJobState.queued'));
+        expect(source, contains('state: DownloadJobState.interrupted'));
+        expect(source, contains('state: DownloadJobState.completed'));
+        expect(source, contains('await _jobStore.remove(task.taskId);'));
       },
     );
   });

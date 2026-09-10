@@ -124,6 +124,26 @@ void main() {
       expect(downloadTaskPartCount(parallel), 16);
     });
 
+    test('persistent child metadata resolves only its logical parent', () {
+      final child = DownloadTask(
+        taskId: 'episode.part.0',
+        url: 'https://cdn.test/video',
+        group: kPersistentDownloadChunkGroup,
+        metaData: '{"parentTaskId":"episode"}',
+      );
+      final malformed = child.copyWith(metaData: 'not-json');
+      final logical = DownloadTask(
+        taskId: 'episode',
+        url: 'https://cdn.test/video',
+        group: kLogicalDownloadGroup,
+        metaData: '{"parentTaskId":"wrong"}',
+      );
+
+      expect(downloadInternalParentTaskId(child), 'episode');
+      expect(downloadInternalParentTaskId(malformed), isNull);
+      expect(downloadInternalParentTaskId(logical), isNull);
+    });
+
     test('internal chunks are never logical episode tasks', () {
       final child = DownloadTask(
         url: 'https://example.com/episode.mp4',

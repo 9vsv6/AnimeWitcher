@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:animewitcher/core/services/download_range_transfer.dart';
+import 'package:animewitcher/core/services/download_retry_policy.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -49,6 +50,13 @@ void main() {
       final isProbe =
           bounded != null && requestedStart == 0 && requestedEnd == 2;
 
+      if (isProbe && responseMode == 'probe-416') {
+        response.statusCode = 416;
+        response.headers.set('content-range', 'bytes */10');
+        await response.close();
+        return;
+      }
+
       if (isProbe) {
         response.statusCode = 206;
         response.headers.set('content-range', 'bytes 0-2/10');
@@ -63,6 +71,36 @@ void main() {
       }
 
       transferAttempts++;
+      if (responseMode == 'startup-416' ||
+          (responseMode == 'reconnect-416' && transferAttempts == 2)) {
+        response.statusCode = 416;
+        response.headers.set('content-range', 'bytes */10');
+        await response.close();
+        return;
+      }
+      if (responseMode == 'startup-416-malformed') {
+        response.statusCode = 416;
+        await response.close();
+        return;
+      }
+      if (responseMode == 'ignored-no-content-range') {
+        response.statusCode = 200;
+        response.add(List<int>.generate(10, (i) => 30 + i));
+        await response.close();
+        return;
+      }
+      if (responseMode == 'missing-content-range') {
+        response.statusCode = 206;
+        response.headers.set('etag', '"v1"');
+        response.add(
+          List<int>.generate(
+            requestedEnd - requestedStart + 1,
+            (i) => requestedStart + i,
+          ),
+        );
+        await response.close();
+        return;
+      }
       if (responseMode == 'long-backoff' ||
           (responseMode == 'reconnect-retry' && transferAttempts == 2)) {
         response.statusCode = 503;
@@ -92,9 +130,13 @@ void main() {
       final responseStart = responseMode == 'wrong-start'
           ? requestedStart - 1
           : requestedStart;
+      final responseEnd = responseMode == 'wrong-end'
+          ? requestedEnd - 1
+          : requestedEnd;
+      final responseTotal = responseMode == 'wrong-total' ? 11 : 10;
       response.headers.set(
         'content-range',
-        'bytes $responseStart-$requestedEnd/10',
+        'bytes $responseStart-$responseEnd/$responseTotal',
       );
       response.headers.set(
         'etag',
@@ -108,7 +150,8 @@ void main() {
       }
 
       if ((responseMode == 'truncate-once' ||
-              responseMode == 'reconnect-retry') &&
+              responseMode == 'reconnect-retry' ||
+              responseMode == 'reconnect-416') &&
           transferAttempts == 1) {
         response.add([3, 4]);
         await response.close();
@@ -335,7 +378,14 @@ void main() {
     },
   );
 
-  for (final mode in ['ignored', 'wrong-start']) {
+  for (final mode in [
+    'ignored',
+    'ignored-no-content-range',
+    'missing-content-range',
+    'wrong-start',
+    'wrong-end',
+    'wrong-total',
+  ]) {
     test('rejects $mode Range without modifying the saved prefix', () async {
       responseMode = mode;
       expect(await start(Completer<bool>()), isFalse);
@@ -343,6 +393,111 @@ void main() {
       expect(runner.isActive('episode'), isFalse);
     });
   }
+
+  test(
+    'startup 416 reports exact resource size without touching bytes',
+    () async {
+      responseMode = 'startup-416';
+      DownloadRangeFailure? failure;
+      expect(
+        await runner.start(
+          id: 'episode',
+          url: url,
+          headers: {},
+          file: partial,
+          existingBytes: 3,
+          expectedBytes: 10,
+          onState: (_, _, _) async {},
+          onPaused: (_, _) async {},
+          onFailure: (value) async => failure = value,
+        ),
+        isFalse,
+      );
+      expect(failure?.action, DownloadFailureAction.reconcileRange);
+      expect(failure?.statusCode, 416);
+      expect(failure?.resourceSize, 10);
+      expect(await partial.readAsBytes(), [0, 1, 2]);
+      expect(runner.isActive('episode'), isFalse);
+    },
+  );
+
+  test('malformed 416 never invents a resource size', () async {
+    responseMode = 'startup-416-malformed';
+    DownloadRangeFailure? failure;
+    expect(
+      await runner.start(
+        id: 'episode',
+        url: url,
+        headers: {},
+        file: partial,
+        existingBytes: 3,
+        expectedBytes: 10,
+        onState: (_, _, _) async {},
+        onPaused: (_, _) async {},
+        onFailure: (value) async => failure = value,
+      ),
+      isFalse,
+    );
+    expect(failure?.action, DownloadFailureAction.reconcileRange);
+    expect(failure?.resourceSize, -1);
+    expect(await partial.readAsBytes(), [0, 1, 2]);
+  });
+
+  test('416 during prefix validation parks before any append', () async {
+    responseMode = 'probe-416';
+    DownloadRangeFailure? failure;
+    expect(
+      await runner.start(
+        id: 'episode',
+        url: url,
+        headers: {},
+        file: partial,
+        existingBytes: 3,
+        expectedBytes: 10,
+        onState: (_, _, _) async {},
+        onPaused: (_, _) async {},
+        onFailure: (value) async => failure = value,
+      ),
+      isFalse,
+    );
+    expect(ranges, ['bytes=0-2']);
+    expect(failure?.action, DownloadFailureAction.reconcileRange);
+    expect(failure?.resourceSize, 10);
+    expect(await partial.readAsBytes(), [0, 1, 2]);
+  });
+
+  test(
+    '416 on reconnect preserves newly durable bytes for reconciliation',
+    () async {
+      responseMode = 'reconnect-416';
+      final paused = Completer<int>();
+      DownloadRangeFailure? failure;
+      expect(
+        await runner.start(
+          id: 'episode',
+          url: url,
+          headers: {},
+          file: partial,
+          existingBytes: 3,
+          expectedBytes: 10,
+          onState: (_, _, _) async {},
+          onPaused: (written, _) async {
+            if (!paused.isCompleted) paused.complete(written);
+          },
+          onFailure: (value) async => failure = value,
+        ),
+        isTrue,
+      );
+      expect(await paused.future.timeout(const Duration(seconds: 5)), 5);
+      for (var i = 0; i < 100 && runner.isActive('episode'); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(failure?.action, DownloadFailureAction.reconcileRange);
+      expect(failure?.resourceSize, 10);
+      expect(await partial.readAsBytes(), [0, 1, 2, 3, 4]);
+      expect(runner.isActive('episode'), isFalse);
+    },
+  );
 
   test(
     'bounded reconnects keep durable bytes when the body stays truncated',

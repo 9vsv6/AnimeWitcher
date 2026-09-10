@@ -286,6 +286,8 @@ class DownloadService {
   Future<void> _queueChain = Future<void>.value();
   final Set<String> _queueWaitingIds = {};
   final Set<String> _startingTaskIds = {};
+  final Set<String> _refreshingParallelParentIds = <String>{};
+  final Set<String> _terminalJobIds = <String>{};
   final List<String> _sessionOrder = [];
   bool _sessionOverlayActive = false;
   int _sessionCompletedCount = 0;
@@ -320,6 +322,17 @@ class DownloadService {
       saveRecord: (record) => FileDownloader().database.updateRecord(record),
       recordForId: (id) => FileDownloader().database.recordForId(id),
       livePartIds: _livePartIds,
+      shouldRecoverFailedStart: (childTaskId) =>
+          _rangeTransfers.failureFor(childTaskId) == null,
+      onSourceRefreshNeeded: _scheduleParallelParentRefresh,
+      verifyPartSource: (task, file, bytes) =>
+          _rangeTransfers.verifyExistingPrefix(
+            id: task.taskId,
+            url: task.url,
+            headers: task.headers,
+            file: file,
+            written: bytes,
+          ),
       onUpdate: (update) {
         if (!_disposed) _sharedEvents.add(update);
       },
@@ -377,6 +390,7 @@ class DownloadService {
       return;
     }
     if (_userPausedIds.contains(taskId) ||
+        _terminalJobIds.contains(taskId) ||
         _cancellingUrls.contains(trackingUrl)) {
       return;
     }
@@ -471,16 +485,15 @@ class DownloadService {
     try {
       final job = await _jobStore.get(taskId);
       if (job != null && job.expectedBytes <= 0) {
-        final derived = progress != null && progress > 0 && progress <= 1
-            ? (progress * expectedBytes).floor()
-            : 0;
-        final durable = derived > job.durableBytes ? derived : job.durableBytes;
-        await _jobStore.put(
-          job.copyWith(
-            expectedBytes: expectedBytes,
-            durableBytes: durable,
-            updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
-          ),
+        await _jobStore.checkpoint(
+          taskId: job.taskId,
+          trackingUrl: job.trackingUrl,
+          state: job.state,
+          durableBytes: job.durableBytes,
+          expectedBytes: expectedBytes,
+          userPaused: job.userPaused,
+          queueWaiting: job.queueWaiting,
+          fingerprint: job.fingerprint,
         );
       }
     } catch (_) {}
@@ -512,6 +525,10 @@ class DownloadService {
     double? speedBytesPerSecond,
     bool completed = false,
   }) {
+    if (_terminalJobIds.contains(parentTaskId) ||
+        _userPausedIds.contains(parentTaskId)) {
+      return;
+    }
     diagnosticLog.record('chunk.update', {
       'taskId': chunkTaskId,
       'parentTaskId': parentTaskId,
@@ -555,6 +572,7 @@ class DownloadService {
     _rangeTransfers.dispose();
     _telemetry.clear();
     _expectedSizePersistedIds.clear();
+    _terminalJobIds.clear();
     unawaited(_nativeTransport.dispose());
     _updatesSubscription?.cancel();
     unawaited(_continuedProcessing.dispose());
@@ -586,6 +604,9 @@ class DownloadService {
       diagnosticLog.lastError = 'Unable to initialize log directory';
     }
     diagnosticLog.record('service.initialize');
+    // Restore durable user intent before native/plugin callbacks can race the
+    // startup reconciliation pass.
+    await _restoreAuthoritativeJobIntent();
     // 1. Configure the downloader (chainable API)
     final concurrency = _ref
         .read(storageServiceProvider)
@@ -640,6 +661,7 @@ class DownloadService {
       });
       if (_parallel.handleUpdate(update)) return;
       if (isInternalDownloaderChunk(update.task)) return;
+      if (_terminalJobIds.contains(update.task.taskId)) return;
       final trackingUrl = update.task.metaData.isNotEmpty
           ? update.task.metaData
           : update.task.url;
@@ -1065,6 +1087,78 @@ class DownloadService {
     });
   }
 
+  Future<void> _restoreAuthoritativeJobIntent() async {
+    for (final job in await _jobStore.all()) {
+      final paused =
+          job.userPaused ||
+          job.state == DownloadJobState.pausing ||
+          job.state == DownloadJobState.pausedByUser;
+      final terminal =
+          job.state == DownloadJobState.completed ||
+          job.state == DownloadJobState.canceled ||
+          job.state == DownloadJobState.orphaned;
+      if (paused) _userPausedIds.add(job.taskId);
+      if (job.queueWaiting || job.state == DownloadJobState.queued) {
+        _queueWaitingIds.add(job.taskId);
+      }
+      if (terminal) _terminalJobIds.add(job.taskId);
+    }
+  }
+
+  /// Persist lifecycle boundaries for the logical episode without turning
+  /// hot progress callbacks into Hive writes. DownloadJobStore owns monotonic
+  /// byte/identity merging; this service only supplies orchestration evidence.
+  Future<void> _checkpointLogicalJob(
+    DownloadTask task, {
+    required DownloadJobState state,
+    int? durableBytes,
+    int? expectedBytes,
+    bool? userPaused,
+    bool? queueWaiting,
+  }) async {
+    final terminal =
+        state == DownloadJobState.completed ||
+        state == DownloadJobState.canceled ||
+        state == DownloadJobState.orphaned;
+    if (_terminalJobIds.contains(task.taskId) && !terminal) {
+      diagnosticLog.record('job.checkpointRejected', {
+        'taskId': task.taskId,
+        'status': state.name,
+        'reason': 'terminalTombstone',
+      });
+      return;
+    }
+    try {
+      final accepted = await _jobStore.checkpoint(
+        taskId: task.taskId,
+        trackingUrl: downloadTrackingUrl(task),
+        state: state,
+        durableBytes: durableBytes,
+        expectedBytes: expectedBytes,
+        userPaused: userPaused,
+        queueWaiting: queueWaiting,
+        fingerprint: DownloadResourceFingerprint(
+          expectedBytes: expectedBytes ?? -1,
+          finalUrl: task.url,
+        ),
+      );
+      if (!accepted) {
+        diagnosticLog.record('job.checkpointRejected', {
+          'taskId': task.taskId,
+          'status': state.name,
+        });
+        return;
+      }
+      if (terminal) _terminalJobIds.add(task.taskId);
+    } catch (error) {
+      diagnosticLog.record('job.checkpointError', {
+        'taskId': task.taskId,
+        'status': state.name,
+        'errorType': error.runtimeType.toString(),
+      });
+    }
+  }
+
   Future<void> _recoverPersistedDownloads() async {
     final records = await FileDownloader().database.allRecords();
     diagnosticLog.record('recovery.begin', {'count': records.length});
@@ -1086,16 +1180,23 @@ class DownloadService {
       final task = record.task as DownloadTask;
       final trackingUrl = downloadTrackingUrl(task);
       final metadata = await storage.getDownloadMetadata(task.taskId);
+      // JobStore is read before any legacy/plugin early-exit. A stale canceled
+      // executor row must not hide a durable logical job after process death.
+      final oldJob = await _jobStore.get(task.taskId);
       final userPausedMeta = isUserPausedMetadata(metadata);
       if (record.status == TaskStatus.complete) {
         continue;
       }
       if (record.status == TaskStatus.canceled &&
           metadata == null &&
+          oldJob == null &&
           !userPausedMeta) {
         continue;
       }
-      final queueWaiting = isQueueWaitingMetadata(metadata);
+      final legacyQueueWaiting = isQueueWaitingMetadata(metadata);
+      final queueWaiting = oldJob == null
+          ? legacyQueueWaiting
+          : oldJob.queueWaiting || oldJob.state == DownloadJobState.queued;
       if (queueWaiting) {
         _queueWaitingIds.add(task.taskId);
         _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
@@ -1133,13 +1234,19 @@ class DownloadService {
           nativeIds.contains(task.taskId) || _parallel.isActive(task.taskId);
       final userPaused =
           isUserPausedMetadata(metadata) ||
-          _userPausedIds.contains(task.taskId);
-      final recoveryPlan = planDownloadRecovery(
+          _userPausedIds.contains(task.taskId) ||
+          oldJob?.userPaused == true ||
+          oldJob?.state == DownloadJobState.pausedByUser ||
+          oldJob?.state == DownloadJobState.pausing;
+      final recoveryPlan = planDownloadRecoveryWithJobAuthority(
         persisted: record.status,
         queueWaiting: queueWaiting,
         userPaused: userPaused,
         stillInNativeQueue: stillNative,
         hasMetadata: metadata != null,
+        authoritativeState: oldJob?.state,
+        authoritativeUserPaused: oldJob?.userPaused ?? false,
+        authoritativeQueueWaiting: oldJob?.queueWaiting ?? false,
       );
 
       // Migrate pre-DownloadJobStore installs on first reconciliation. Only
@@ -1150,15 +1257,17 @@ class DownloadService {
         saved.totalSize,
         record.expectedFileSize,
         downloadMetadataExpectedBytes(metadata),
+        oldJob?.expectedBytes,
       ]);
-      var durableBytes = saved.partialBytes;
-      if (task is ParallelDownloadTask && expectedBytes > 0) {
-        durableBytes = (progress * expectedBytes).floor();
-      }
-      final oldJob = await _jobStore.get(task.taskId);
-      if (oldJob != null && oldJob.durableBytes > durableBytes) {
-        durableBytes = oldJob.durableBytes;
-      }
+      final manifestBytes = task is ParallelDownloadTask && expectedBytes > 0
+          ? (progress * expectedBytes).floor()
+          : -1;
+      final recoveryBytes = selectDownloadRecoveryBytes(
+        exactDiskBytes: saved.partialBytes > 0 ? saved.partialBytes : -1,
+        currentGenerationJobBytes: oldJob?.durableBytes ?? -1,
+        multipartManifestBytes: manifestBytes,
+      );
+      final durableBytes = recoveryBytes.bytes;
       _telemetry.seed(
         task.taskId,
         transferredBytes: durableBytes,
@@ -1182,6 +1291,14 @@ class DownloadService {
             ),
       );
       await _jobStore.put(migratedJob);
+
+      if (oldJob != null &&
+          recoveryPlan.action == DownloadRecoveryAction.ignore) {
+        _queueWaitingIds.remove(task.taskId);
+        _waitingPayloads.remove(task.taskId);
+        _forgetSessionTask(task.taskId);
+        continue;
+      }
 
       if (userPaused) {
         _userPausedIds.add(task.taskId);
@@ -1830,12 +1947,14 @@ class DownloadService {
       );
     }
     var partialBytes = 0;
+    var exactDiskBytes = -1;
     try {
       final path = await task.filePath();
       if (path.isNotEmpty) {
         final partial = await findPartialDownloadFile(destinationPath: path);
         if (partial != null) {
           partialBytes = await partial.length();
+          exactDiskBytes = partialBytes;
           if (parallelProgress == null && totalSize > 0 && partialBytes > 0) {
             progress = keepLastKnownDownloadProgress(
               incoming: progress,
@@ -1845,12 +1964,20 @@ class DownloadService {
         }
       }
     } catch (_) {}
-    final credibleBytes = partialBytes > 0
-        ? partialBytes
-        : (totalSize > 0 && progress > 0 ? (totalSize * progress).floor() : 0);
+    final manifestBytes =
+        task is ParallelDownloadTask &&
+            parallelProgress != null &&
+            totalSize > 0
+        ? (parallelProgress * totalSize).floor()
+        : -1;
+    final recoveryBytes = selectDownloadRecoveryBytes(
+      exactDiskBytes: exactDiskBytes,
+      currentGenerationJobBytes: job?.durableBytes ?? -1,
+      multipartManifestBytes: manifestBytes,
+    );
     _telemetry.seed(
       task.taskId,
-      transferredBytes: credibleBytes,
+      transferredBytes: recoveryBytes.bytes,
       expectedBytes: totalSize,
     );
     return (
@@ -1864,6 +1991,7 @@ class DownloadService {
     required String taskId,
     String? trackingUrl,
   }) async {
+    if (_terminalJobIds.contains(taskId)) return null;
     final transfer = _nativeTransport.handleFor(taskId);
     final transferTask = transfer?.task;
     if (transfer != null &&
@@ -1911,6 +2039,21 @@ class DownloadService {
     final status = transferring
         ? TaskStatus.running
         : (record?.status ?? TaskStatus.enqueued);
+    if (!_userPausedIds.contains(attached.taskId)) {
+      final durableBytes = totalSize > 0 && progress > 0
+          ? (totalSize * progress).floor()
+          : 0;
+      await _checkpointLogicalJob(
+        attached,
+        state: transferring
+            ? DownloadJobState.running
+            : DownloadJobState.starting,
+        durableBytes: durableBytes,
+        expectedBytes: totalSize,
+        userPaused: false,
+        queueWaiting: false,
+      );
+    }
     _publishProgress(
       trackingUrl: trackingUrl,
       taskId: attached.taskId,
@@ -2171,6 +2314,16 @@ class DownloadService {
           lastProgress: progress,
           lastExpectedBytes: totalSize,
         );
+    await _checkpointLogicalJob(
+      task,
+      state: DownloadJobState.interrupted,
+      durableBytes: totalSize > 0 && progress > 0
+          ? (totalSize * progress).floor()
+          : 0,
+      expectedBytes: totalSize,
+      userPaused: false,
+      queueWaiting: false,
+    );
 
     _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
     _ref
@@ -2286,6 +2439,7 @@ class DownloadService {
     // user delete immediate in every UI and prevents late URLSession callbacks
     // from resurrecting the row while the OS finishes canceling its worker.
     _cancellingUrls.add(trackingUrl);
+    _terminalJobIds.add(taskId);
     _queueWaitingIds.remove(taskId);
     _waitingPayloads.remove(taskId);
     _forgetSessionTask(taskId);
@@ -2374,6 +2528,12 @@ class DownloadService {
       }
 
       if (downloadTask != null) {
+        await _checkpointLogicalJob(
+          downloadTask,
+          state: DownloadJobState.pausing,
+          userPaused: true,
+          queueWaiting: false,
+        );
         // Plugin pause produces URLSession resumeData and drops the
         // transferring task so it no longer occupies a slot. Never cancel —
         // cancel deletes the temp file and forces a restart from byte 0.
@@ -2422,6 +2582,16 @@ class DownloadService {
                 lastProgress: progress,
                 lastExpectedBytes: totalSize,
               );
+          await _checkpointLogicalJob(
+            downloadTask,
+            state: DownloadJobState.running,
+            durableBytes: totalSize > 0 && progress > 0
+                ? (totalSize * progress).floor()
+                : 0,
+            expectedBytes: totalSize,
+            userPaused: false,
+            queueWaiting: false,
+          );
           _publishProgress(
             trackingUrl: trackingUrl,
             taskId: taskId,
@@ -2451,6 +2621,16 @@ class DownloadService {
               lastProgress: progress,
               lastExpectedBytes: totalSize,
             );
+        await _checkpointLogicalJob(
+          downloadTask,
+          state: DownloadJobState.pausedByUser,
+          durableBytes: totalSize > 0 && progress > 0
+              ? (totalSize * progress).floor()
+              : 0,
+          expectedBytes: totalSize,
+          userPaused: true,
+          queueWaiting: false,
+        );
         _publishProgress(
           trackingUrl: trackingUrl,
           taskId: taskId,
@@ -2491,6 +2671,12 @@ class DownloadService {
     await _ref
         .read(storageServiceProvider)
         .patchDownloadMetadata(taskId, queueWaiting: false, userPaused: false);
+    await _checkpointLogicalJob(
+      downloadTask,
+      state: DownloadJobState.starting,
+      userPaused: false,
+      queueWaiting: false,
+    );
 
     final max = clampDownloadConcurrency(
       _ref.read(storageServiceProvider).getDownloadConcurrency(),
@@ -2553,6 +2739,16 @@ class DownloadService {
         final started = await _resumeDownloadTask(downloadTask);
         if (!started) {
           final saved = await _savedProgressFor(downloadTask);
+          await _checkpointLogicalJob(
+            downloadTask,
+            state: DownloadJobState.interrupted,
+            durableBytes: saved.totalSize > 0 && saved.progress > 0
+                ? (saved.totalSize * saved.progress).floor()
+                : saved.partialBytes,
+            expectedBytes: saved.totalSize,
+            userPaused: false,
+            queueWaiting: false,
+          );
           await FileDownloader().database.updateRecord(
             TaskRecord(
               downloadTask,
@@ -2660,6 +2856,13 @@ class DownloadService {
     await _ref
         .read(storageServiceProvider)
         .patchDownloadMetadata(task.taskId, queueWaiting: true);
+    await _checkpointLogicalJob(
+      task,
+      state: DownloadJobState.queued,
+      expectedBytes: totalSize,
+      userPaused: false,
+      queueWaiting: true,
+    );
     await FileDownloader().database.updateRecord(
       TaskRecord(task, TaskStatus.paused, progress, totalSize),
     );
@@ -2833,6 +3036,75 @@ class DownloadService {
     );
   }
 
+  Future<ParallelDownloadTask?> _parallelParentForInternalPart(
+    DownloadTask task,
+  ) async {
+    final parentTaskId = downloadInternalParentTaskId(task);
+    if (parentTaskId == null) return null;
+    final record = await FileDownloader().database.recordForId(parentTaskId);
+    final parent = record?.task;
+    return parent is ParallelDownloadTask ? parent : null;
+  }
+
+  void _scheduleParallelParentRefresh(String parentTaskId) {
+    if (parentTaskId.isEmpty ||
+        !_refreshingParallelParentIds.add(parentTaskId)) {
+      return;
+    }
+    Future<void>.delayed(Duration.zero, () async {
+      try {
+        if (_disposed || _userPausedIds.contains(parentTaskId)) return;
+        await _serializeQueue(() async {
+          if (_disposed || _userPausedIds.contains(parentTaskId)) return;
+          var record = await FileDownloader().database.recordForId(
+            parentTaskId,
+          );
+          if (record?.task is! ParallelDownloadTask) return;
+          var parent = record!.task as ParallelDownloadTask;
+          final trackingUrl = downloadTrackingUrl(parent);
+          if (_cancellingUrls.contains(trackingUrl)) return;
+
+          final descriptor = await _ref
+              .read(downloadUrlRefreshStoreProvider)
+              .get(trackingUrl);
+          if (descriptor == null) {
+            diagnosticLog.record('source.refreshUnavailable', {
+              'taskId': parentTaskId,
+            });
+            return;
+          }
+
+          // A child failure callback can arrive while healthy siblings are still
+          // owned by URLSession. Settle them first so replaceSource can update one
+          // coherent generation without racing stale native callbacks.
+          if (_parallel.isActive(parentTaskId)) {
+            if (!await _parallel.pause(parent)) return;
+          }
+
+          record = await FileDownloader().database.recordForId(parentTaskId);
+          if (record?.task is! ParallelDownloadTask) return;
+          parent = record!.task as ParallelDownloadTask;
+          final saved = await _savedProgressFor(parent);
+          final refreshed = await _refreshTaskBeforeResume(
+            parent,
+            expectedBytes: saved.totalSize,
+            partialBytes: saved.partialBytes,
+          );
+          if (!refreshed.refreshed || refreshed.task is! ParallelDownloadTask) {
+            diagnosticLog.record('source.refreshParked', {
+              'taskId': parentTaskId,
+            });
+            return;
+          }
+
+          await _resumeDownloadTask(refreshed.task);
+        });
+      } finally {
+        _refreshingParallelParentIds.remove(parentTaskId);
+      }
+    });
+  }
+
   Future<bool> _appendRemainingWithDio(
     DownloadTask task, {
     required File dest,
@@ -2840,6 +3112,9 @@ class DownloadService {
     required int expectedBytes,
   }) async {
     final logical = isLogicalEpisodeDownloadTask(task);
+    final parallelParent = logical
+        ? null
+        : await _parallelParentForInternalPart(task);
     DownloadAttemptToken? token;
     var canRefreshUrl = false;
     if (logical) {
@@ -2852,6 +3127,12 @@ class DownloadService {
           await _ref
               .read(downloadUrlRefreshStoreProvider)
               .get(downloadTrackingUrl(task)) !=
+          null;
+    } else if (parallelParent != null) {
+      canRefreshUrl =
+          await _ref
+              .read(downloadUrlRefreshStoreProvider)
+              .get(downloadTrackingUrl(parallelParent)) !=
           null;
     }
 
@@ -2905,7 +3186,13 @@ class DownloadService {
         _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.paused));
       },
       onFailure: (failure) async {
-        if (!logical || token == null) return;
+        if (!logical || token == null) {
+          if (parallelParent != null &&
+              failure.action == DownloadFailureAction.refreshUrl) {
+            _scheduleParallelParentRefresh(parallelParent.taskId);
+          }
+          return;
+        }
         final activeToken = token;
         if (!await _jobStore.accepts(activeToken)) return;
         if (failure.action == DownloadFailureAction.refreshUrl) {
@@ -3191,16 +3478,27 @@ class DownloadService {
       'total': size,
     });
     if (_rangeTransfers.isActive(task.taskId)) return true;
-    if ((await _liveTransferTasks()).any((live) => live.taskId == task.taskId))
+    if ((await _liveTransferTasks()).any(
+      (live) => live.taskId == task.taskId,
+    )) {
       return true;
-    try {
-      final canResume = await FileDownloader()
-          .taskCanResume(task)
-          .timeout(const Duration(seconds: 3));
-      if (canResume && await FileDownloader().resume(task)) return true;
-    } catch (_) {
-      // A stale native checkpoint must not prevent the disk-prefix fallback.
     }
+
+    final forceSourceValidation = downloadInternalSourceValidationRequired(
+      task,
+    );
+    var nativeCanResume = false;
+    if (!forceSourceValidation) {
+      try {
+        nativeCanResume = await FileDownloader()
+            .taskCanResume(task)
+            .timeout(const Duration(seconds: 3));
+        if (nativeCanResume && await FileDownloader().resume(task)) return true;
+      } catch (_) {
+        // A stale native checkpoint must not prevent the disk-prefix fallback.
+      }
+    }
+
     final partial = await canonicalizePartialDownloadFile(
       destinationPath: await task.filePath(),
     );
@@ -3209,19 +3507,58 @@ class DownloadService {
       await FileDownloader().database.updateRecord(
         TaskRecord(task, TaskStatus.complete, 1, size),
       );
+      if (forceSourceValidation) {
+        await _parallel.markPartSourceValidated(task.taskId);
+      }
       _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.complete));
       return true;
     }
     if (bytes > 0 && bytes < size) {
-      return _appendRemainingWithDio(
+      final started = await _appendRemainingWithDio(
         task,
         dest: partial!.file,
         existingBytes: bytes,
         expectedBytes: size,
       );
+      if (started && forceSourceValidation) {
+        await _parallel.markPartSourceValidated(task.taskId);
+      }
+      return started;
     }
-    if (progress > 0 || bytes > 0) return false;
-    return FileDownloader().enqueue(task);
+
+    if (progress > 0 &&
+        bytes == 0 &&
+        (!nativeCanResume || forceSourceValidation)) {
+      // Resume bytes that exist only inside old native resumeData cannot be
+      // proven after a signed URL refresh. Drop only this immutable Range's
+      // phantom prefix and fetch it from byte zero on the refreshed source.
+      final repaired = _parallel.resetUndurablePartProgress(
+        task.taskId,
+        durableBytes: 0,
+      );
+      if (!repaired) return false;
+      diagnosticLog.record('part.checkpointLost', {
+        'taskId': task.taskId,
+        'progress': progress,
+        'total': size,
+        'sourceRefresh': forceSourceValidation,
+      });
+      await FileDownloader().database.updateRecord(
+        TaskRecord(task, TaskStatus.paused, 0, size),
+      );
+      final enqueued = await FileDownloader().enqueue(task);
+      if (enqueued && forceSourceValidation) {
+        await _parallel.markPartSourceValidated(task.taskId);
+      }
+      return enqueued;
+    }
+
+    if (bytes > 0) return false;
+    final enqueued = await FileDownloader().enqueue(task);
+    if (enqueued && forceSourceValidation) {
+      await _parallel.markPartSourceValidated(task.taskId);
+    }
+    return enqueued;
   }
 
   Future<bool> _enqueueTransfer(DownloadTask task, int totalBytes) async {
@@ -3672,6 +4009,13 @@ class DownloadService {
 
         if (!success) {
           _waitingPayloads.remove(task.taskId);
+          await _checkpointLogicalJob(
+            transferTask,
+            state: DownloadJobState.interrupted,
+            expectedBytes: expectedBytes,
+            userPaused: false,
+            queueWaiting: false,
+          );
           await FileDownloader().database.updateRecord(
             TaskRecord(transferTask, TaskStatus.paused, 0, expectedBytes),
           );
@@ -3696,6 +4040,9 @@ class DownloadService {
         _forgetSessionTask(task.taskId);
         final storage = _ref.read(storageServiceProvider);
         await storage.removeDownloadMetadata(task.taskId);
+        // A start that never established recoverable ownership must not leave
+        // an authoritative JobStore row that resurrects itself on relaunch.
+        await _jobStore.remove(task.taskId);
         _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl ?? url);
         _updatesController.add(TaskStatusUpdate(task, TaskStatus.canceled));
         await _syncSessionOverlay(completedSuccess: false);
@@ -3769,13 +4116,36 @@ class DownloadService {
   Future<void> _persistCompletedFilePath(Task task) async {
     try {
       final path = await task.filePath();
+      var fileBytes = -1;
+      if (path.isNotEmpty) {
+        final file = File(path);
+        if (await file.exists()) fileBytes = await file.length();
+      }
+      final record = await FileDownloader().database.recordForId(task.taskId);
+      final expectedBytes = knownDownloadSize(<int?>[
+        fileBytes,
+        record?.expectedFileSize,
+        _telemetry.expectedBytesFor(task.taskId),
+      ]);
       await _ref
           .read(storageServiceProvider)
           .patchDownloadMetadata(
             task.taskId,
             trackingUrl: downloadTrackingUrl(task),
             filePath: path,
+            lastProgress: 1,
+            lastExpectedBytes: expectedBytes,
           );
+      if (task is DownloadTask) {
+        await _checkpointLogicalJob(
+          task,
+          state: DownloadJobState.completed,
+          durableBytes: expectedBytes > 0 ? expectedBytes : fileBytes,
+          expectedBytes: expectedBytes,
+          userPaused: false,
+          queueWaiting: false,
+        );
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[DownloadService] persist filePath failed: $e');

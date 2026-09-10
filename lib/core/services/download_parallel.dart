@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:background_downloader/background_downloader.dart';
 
 /// 0 = Auto. Manual connection counts are allowed up to Gopeed's default
@@ -104,9 +106,7 @@ int selectDownloadWorkUnitCount({
       .toInt();
   if (active <= 1 || totalBytes <= 0) return active;
 
-  final desired = (active * 2)
-      .clamp(active, kDownloadWorkUnitsMax)
-      .toInt();
+  final desired = (active * 2).clamp(active, kDownloadWorkUnitsMax).toInt();
   final sizeBound = totalBytes ~/ kDownloadTailBalanceMinUnitBytes;
   return sizeBound.clamp(active, desired).toInt();
 }
@@ -117,6 +117,38 @@ const String kPersistentDownloadChunkGroup = 'animewitcher_parts';
 bool isInternalDownloaderChunk(Task task) =>
     task.group == FileDownloader.chunkGroup ||
     task.group == kPersistentDownloadChunkGroup;
+
+/// Persistent multipart children store only their logical parent identity in
+/// JSON metadata. Keep this parsing centralized so retry/source-refresh code
+/// never mistakes a child for an independent logical download.
+String? downloadInternalParentTaskId(Task task) {
+  if (!isInternalDownloaderChunk(task)) return null;
+  final raw = task.metaData.trim();
+  if (raw.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    final value = decoded['parentTaskId'];
+    final parent = value is String ? value.trim() : '';
+    return parent.isEmpty ? null : parent;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// True when a multipart child was rebound to a refreshed source and must
+/// not consume native resumeData that can still embed the previous URL.
+bool downloadInternalSourceValidationRequired(Task task) {
+  if (!isInternalDownloaderChunk(task)) return false;
+  final raw = task.metaData.trim();
+  if (raw.isEmpty) return false;
+  try {
+    final decoded = jsonDecode(raw);
+    return decoded is Map && decoded['sourceValidationRequired'] == true;
+  } catch (_) {
+    return false;
+  }
+}
 
 bool isLogicalEpisodeDownloadTask(Task task) =>
     task is DownloadTask && !isInternalDownloaderChunk(task);
