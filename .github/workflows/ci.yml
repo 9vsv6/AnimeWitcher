@@ -17,7 +17,7 @@ concurrency:
 jobs:
   purge-legacy-workflow-runs:
     name: Purge legacy workflow runs
-    if: github.event_name == 'push' && github.event.head_commit.message == 'chore(actions): purge legacy workflow runs'
+    if: "${{ github.event_name == 'push' && github.event.head_commit.message == 'chore(actions): purge legacy workflow runs' }}"
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
