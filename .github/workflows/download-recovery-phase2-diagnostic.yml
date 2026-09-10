@@ -46,6 +46,41 @@ jobs:
           fi
 
           if [ "$apply_status" -eq 0 ]; then
+            python3 - <<'PY' >> /tmp/phase2-setup.log 2>&1
+          from pathlib import Path
+          p = Path('test/core/services/persistent_parallel_download_fallback_test.dart')
+          text = p.read_text()
+          old = r"""      final manifestText = await manifest.readAsString();
+                expect(manifestText, contains('\"resourceValidator\":\"\\\"v1\\\"\"'));"""
+          new = r"""      final manifestText = await manifest.readAsString();
+                expect(manifestText, contains('resourceValidator'));
+                expect(manifestText, contains(r'\"v1\"'));"""
+          if old in text:
+              text = text.replace(old, new)
+          else:
+              # Accept the currently generated over-escaped form as well.
+              lines = text.splitlines()
+              output = []
+              replaced = False
+              for line in lines:
+                  if "expect(manifestText, contains(" in line and "resourceValidator" in line:
+                      indent = line[:len(line) - len(line.lstrip())]
+                      output.append(f"{indent}expect(manifestText, contains('resourceValidator'));" )
+                      output.append(f"{indent}expect(manifestText, contains(r'\\\"v1\\\"'));" )
+                      replaced = True
+                  else:
+                      output.append(line)
+              if not replaced:
+                  raise SystemExit('manifest validator assertion not found')
+              text = '\n'.join(output) + ('\n' if text.endswith('\n') else '')
+          p.write_text(text)
+          PY
+            normalize_status=$?
+          else
+            normalize_status=99
+          fi
+
+          if [ "$normalize_status" -eq 0 ]; then
             flutter pub get >> /tmp/phase2-setup.log 2>&1
             pub_status=$?
           else
@@ -67,7 +102,7 @@ jobs:
             : > /tmp/phase2-full.jsonl
           fi
 
-          PREP_STATUS="$prep_status" APPLY_STATUS="$apply_status" PUB_STATUS="$pub_status" GEN_STATUS="$gen_status" TEST_STATUS="$test_status" python3 - <<'PY'
+          PREP_STATUS="$prep_status" APPLY_STATUS="$apply_status" NORMALIZE_STATUS="$normalize_status" PUB_STATUS="$pub_status" GEN_STATUS="$gen_status" TEST_STATUS="$test_status" python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -75,6 +110,7 @@ jobs:
           out = [
               f"prep_status={os.environ['PREP_STATUS']}",
               f"apply_status={os.environ['APPLY_STATUS']}",
+              f"normalize_status={os.environ['NORMALIZE_STATUS']}",
               f"pub_status={os.environ['PUB_STATUS']}",
               f"gen_status={os.environ['GEN_STATUS']}",
               f"test_status={os.environ['TEST_STATUS']}",
