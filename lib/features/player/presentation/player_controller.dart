@@ -2646,6 +2646,70 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
+  /// This frame twice: as the source made it, and as the shaders leave it.
+  ///
+  /// `screenshot-to-file … window` is the only way to get the second one.
+  /// mpv's `video` screenshot — the one media_kit exposes — is taken before
+  /// the GPU stage the shaders live in, so it can only ever answer for the
+  /// source. The window variant saves what was actually drawn.
+  ///
+  /// Both halves are taken the same way, a moment apart with the shaders
+  /// switched off in between, so the only difference between them is the
+  /// thing being compared. Returns null when mpv will not do a window
+  /// capture, which it may not under a render API that owns no window of its
+  /// own — the caller then falls back to showing the source alone rather than
+  /// inventing the other half.
+  Future<Anime4kComparison?> captureAnime4kComparison() async {
+    if (_isDisposed || state.useExoPlayer) return null;
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return null;
+
+    final wasBypassed = _anime4kBypassed;
+    Directory? scratch;
+    try {
+      scratch = await Directory.systemTemp.createTemp('aw_a4k_');
+      final withShaders = p.join(scratch.path, 'after.png');
+      final withoutShaders = p.join(scratch.path, 'before.png');
+
+      await platform.command(['screenshot-to-file', withShaders, 'window']);
+      final after = await _readIfWritten(withShaders);
+      // Nothing arrived, so this build of mpv will not capture its own
+      // output. Say so by returning null rather than guessing.
+      if (after == null) return null;
+
+      await setAnime4kBypassed(true);
+      await platform.command(['screenshot-to-file', withoutShaders, 'window']);
+      final before = await _readIfWritten(withoutShaders);
+      if (before == null) return null;
+
+      return Anime4kComparison(before: before, after: after);
+    } catch (e) {
+      if (kDebugMode) debugPrint('Anime4K comparison capture failed: $e');
+      return null;
+    } finally {
+      await setAnime4kBypassed(wasBypassed);
+      try {
+        await scratch?.delete(recursive: true);
+      } catch (_) {}
+    }
+  }
+
+  /// Reads a file mpv was asked to write, giving it a moment to appear.
+  ///
+  /// `screenshot-to-file` returns before the file is on disk, and there is no
+  /// event to wait on.
+  Future<Uint8List?> _readIfWritten(String path) async {
+    final file = File(path);
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        if (bytes.isNotEmpty) return bytes;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    return null;
+  }
+
   Future<void> applyAnime4kShaders() async {
     if (_isDisposed) return;
     if (state.useExoPlayer) return;

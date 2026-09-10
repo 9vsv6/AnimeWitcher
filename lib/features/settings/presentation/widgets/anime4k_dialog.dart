@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +8,7 @@ import '../../../player/data/anime4k.dart';
 import '../../../player/data/anime4k_download.dart';
 import '../../../player/data/anime4k_shader_library.dart';
 import '../../../player/presentation/player_controller.dart';
-import '../../../player/presentation/widgets/anime4k_frame_preview.dart';
+import '../../../player/presentation/widgets/anime4k_compare_preview.dart';
 import '../player_settings_provider.dart';
 
 /// Picks an Anime4K pipeline, its network size, and the folder the shaders
@@ -122,11 +121,11 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
   /// Usually there is not: this dialog is normally opened from settings with
   /// nothing playing, and the preview says so rather than showing an empty
   /// box. Opened from the player's own Anime4K button, it has a frame.
-  Future<Uint8List?> _captureSourceFrame() async {
+  Future<Anime4kComparison?> _captureComparison() async {
     try {
       return await ref
           .read(playerControllerProvider.notifier)
-          .captureSourceFrame();
+          .captureAnime4kComparison();
     } catch (_) {
       return null;
     }
@@ -190,6 +189,14 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
                 ),
               ),
               const SizedBox(height: 16),
+
+              Anime4kComparePreview(
+                capture: _captureComparison,
+                titleColor: colors.onSurface,
+                bodyColor: colors.onSurfaceVariant,
+                fillColor: colors.surfaceContainerHighest,
+              ),
+              const SizedBox(height: 20),
 
               // --- the folder ------------------------------------------------
               Text(
@@ -422,13 +429,6 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
                         },
                       ),
                   ],
-                ),
-                const Divider(height: 28),
-                Anime4kFramePreview(
-                  capture: _captureSourceFrame,
-                  titleColor: colors.onSurface,
-                  bodyColor: colors.onSurfaceVariant,
-                  fillColor: colors.surfaceContainerHighest,
                 ),
               ],
             ],

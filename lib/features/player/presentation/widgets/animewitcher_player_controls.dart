@@ -1722,7 +1722,6 @@ class AnimeWitcherPlayerControlsState
             onPressed: () => Anime4kPlayerSheet.show(
               context: context,
               currentMode: playerSettings.anime4kMode,
-              currentQuality: playerSettings.anime4kQuality,
               onModeSelected: (mode) async {
                 await ref
                     .read(playerSettingsProvider.notifier)
@@ -1731,23 +1730,6 @@ class AnimeWitcherPlayerControlsState
                     .read(playerControllerProvider.notifier)
                     .applyAnime4kShaders();
               },
-              onQualitySelected: (quality) async {
-                await ref
-                    .read(playerSettingsProvider.notifier)
-                    .setAnime4kQuality(quality);
-                await ref
-                    .read(playerControllerProvider.notifier)
-                    .applyAnime4kShaders();
-              },
-              appliedValue: () async => ref
-                  .read(playerControllerProvider.notifier)
-                  .anime4kAppliedValue,
-              onCompareHeld: (bypassed) => ref
-                  .read(playerControllerProvider.notifier)
-                  .setAnime4kBypassed(bypassed),
-              captureSource: () => ref
-                  .read(playerControllerProvider.notifier)
-                  .captureSourceFrame(),
             ),
             isTv: _isTv,
           ),

@@ -4,21 +4,11 @@ import 'package:animewitcher/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Opens the sheet and returns what it was told, so a test can check the
-/// panel drives the player rather than only that it draws.
-class _Recorded {
-  final List<Anime4kMode> modes = <Anime4kMode>[];
-  final List<Anime4kQuality> qualities = <Anime4kQuality>[];
-  final List<bool> compares = <bool>[];
-}
-
-Future<_Recorded> _open(
+Future<List<Anime4kMode>> _open(
   WidgetTester tester, {
   Anime4kMode mode = Anime4kMode.a,
-  Anime4kQuality quality = Anime4kQuality.l,
-  String applied = 'a/Anime4K_Clamp_Highlights.glsl;a/Anime4K_Restore_CNN_L.glsl',
 }) async {
-  final recorded = _Recorded();
+  final chosen = <Anime4kMode>[];
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('ar'),
@@ -29,12 +19,7 @@ Future<_Recorded> _open(
           onPressed: () => Anime4kPlayerSheet.show(
             context: context,
             currentMode: mode,
-            currentQuality: quality,
-            onModeSelected: recorded.modes.add,
-            onQualitySelected: recorded.qualities.add,
-            appliedValue: () async => applied,
-            onCompareHeld: (value) async => recorded.compares.add(value),
-            captureSource: () async => null,
+            onModeSelected: chosen.add,
           ),
           child: const Text('open'),
         ),
@@ -43,147 +28,75 @@ Future<_Recorded> _open(
   );
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
-  return recorded;
+  return chosen;
 }
 
 void main() {
+  setUp(() => TestWidgetsFlutterBinding.ensureInitialized());
+
   testWidgets('builds without throwing', (tester) async {
-    // The status line once held a regex whose lookbehind was never closed,
-    // so every build threw a FormatException. In release that paints a plain
-    // grey rectangle, which reads as a broken image rather than a crash — a
-    // failure that survived because nothing pumped this widget.
+    // A regex whose lookbehind was never closed once threw on every build of
+    // this panel, and a thrown widget paints as a plain grey box in release —
+    // which reads as a broken picture rather than a crash. Nothing pumped
+    // this widget at the time.
     await tester.binding.setSurfaceSize(const Size(1280, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await _open(tester);
     expect(tester.takeException(), isNull);
-    expect(find.text('Anime4K'), findsOneWidget);
+    expect(find.text('ANIME4K'), findsOneWidget);
   });
 
-  testWidgets('counts the shaders mpv reports', (tester) async {
+  testWidgets('lists off and every mode, and nothing else', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1280, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await _open(tester);
-    expect(find.textContaining('2'), findsWidgets);
-    expect(tester.takeException(), isNull);
+
+    expect(find.text('إيقاف'), findsOneWidget);
+    for (final mode in Anime4kMode.values) {
+      if (mode == Anime4kMode.off) continue;
+      expect(find.text('النمط ${mode.label}'), findsOneWidget);
+    }
+
+    // Setting the feature up belongs in settings; mid-episode the only
+    // question is which mode is running.
+    expect(find.text('الجودة'), findsNothing);
+    expect(find.textContaining('للمقارنة'), findsNothing);
+    expect(find.byType(Switch), findsNothing);
+    expect(find.byType(Image), findsNothing);
   });
 
-  testWidgets('says so when mpv is running none', (tester) async {
+  testWidgets('describes the mode that is running', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1280, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await _open(tester, applied: '');
-    expect(find.textContaining('لا يشغّل'), findsOneWidget);
+    await _open(tester, mode: Anime4kMode.b);
+    expect(find.textContaining('ترميم أخف'), findsOneWidget);
   });
 
-  group('the switch comes first', () {
-    testWidgets('off hides the modes and everything under them', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 720));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await _open(tester, mode: Anime4kMode.off);
-
-      expect(find.byType(SwitchListTile), findsOneWidget);
-      expect(find.text('النمط'), findsNothing);
-      expect(find.text('الجودة'), findsNothing);
-      expect(find.textContaining('للمقارنة'), findsNothing);
-    });
-
-    testWidgets('on shows them', (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 720));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await _open(tester, mode: Anime4kMode.a);
-
-      expect(find.text('النمط'), findsOneWidget);
-      expect(find.text('الجودة'), findsOneWidget);
-      expect(find.textContaining('للمقارنة'), findsOneWidget);
-    });
-
-    testWidgets('off is no longer one of the modes to choose from', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 720));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await _open(tester, mode: Anime4kMode.a);
-      // Switching the feature off should not look like picking a kind of
-      // enhancement called "off".
-      expect(find.widgetWithText(ChoiceChip, 'إيقاف'), findsNothing);
-      expect(find.widgetWithText(ChoiceChip, 'A'), findsOneWidget);
-    });
-
-    testWidgets('turning it on restores the mode that was chosen before', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 720));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      final recorded = await _open(tester, mode: Anime4kMode.ca);
-
-      await tester.tap(find.byType(SwitchListTile));
-      await tester.pumpAndSettle();
-      expect(recorded.modes.last, Anime4kMode.off);
-
-      await tester.tap(find.byType(SwitchListTile));
-      await tester.pumpAndSettle();
-      expect(
-        recorded.modes.last,
-        Anime4kMode.ca,
-        reason: 'flicking the switch must not discard the chosen mode',
-      );
-    });
-
-    testWidgets('turning it on with nothing chosen starts at A', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1280, 720));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      final recorded = await _open(tester, mode: Anime4kMode.off);
-      await tester.tap(find.byType(SwitchListTile));
-      await tester.pumpAndSettle();
-      expect(recorded.modes.last, Anime4kMode.a);
-    });
-  });
-
-  testWidgets('holding compare suspends the shaders and releasing restores', (
-    tester,
-  ) async {
+  testWidgets('choosing a mode reports it and closes', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1280, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final recorded = await _open(tester);
-    final bar = find.textContaining('للمقارنة');
-    await tester.ensureVisible(bar);
+    final chosen = await _open(tester);
+
+    await tester.tap(find.text('النمط C'));
     await tester.pumpAndSettle();
 
-    final gesture = await tester.startGesture(tester.getCenter(bar));
-    await tester.pump();
-    expect(recorded.compares, <bool>[true]);
-
-    await gesture.up();
-    await tester.pump();
-    expect(recorded.compares, <bool>[true, false]);
+    expect(chosen, <Anime4kMode>[Anime4kMode.c]);
+    expect(find.text('ANIME4K'), findsNothing, reason: 'the menu closed');
   });
 
-  testWidgets('choosing a mode and a quality reaches the player', (
-    tester,
-  ) async {
+  testWidgets('off is one of the choices here', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1280, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final recorded = await _open(tester);
-
-    await tester.tap(find.widgetWithText(ChoiceChip, 'C'));
+    // In settings a switch owns on and off, because that is where the feature
+    // is set up. In a menu of modes, off is simply the last one.
+    final chosen = await _open(tester);
+    await tester.tap(find.text('إيقاف'));
     await tester.pumpAndSettle();
-    expect(recorded.modes.last, Anime4kMode.c);
-
-    await tester.tap(find.widgetWithText(ChoiceChip, 'UL'));
-    await tester.pumpAndSettle();
-    expect(recorded.qualities.last, Anime4kQuality.ul);
+    expect(chosen, <Anime4kMode>[Anime4kMode.off]);
   });
 }

@@ -11,6 +11,8 @@
 /// is actually there, so a partial download degrades instead of failing.
 library;
 
+import 'dart:typed_data';
+
 /// The pipelines Anime4K documents, by what each is for.
 enum Anime4kMode {
   /// Shaders off. mpv is told to clear the property.
@@ -267,4 +269,15 @@ String anime4kGlslShadersValue(
   return paths
       .map((path) => path.replaceAll(separator, '\\$separator'))
       .join(separator);
+}
+
+/// One frame, before and after the shaders.
+class Anime4kComparison {
+  const Anime4kComparison({required this.before, required this.after});
+
+  /// The picture as the source encoded it.
+  final Uint8List before;
+
+  /// The same picture as the shaders leave it.
+  final Uint8List after;
 }

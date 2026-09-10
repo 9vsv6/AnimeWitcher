@@ -1,56 +1,35 @@
-import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import '../../data/anime4k.dart';
-import 'anime4k_frame_preview.dart';
 import 'hotstar_player_style.dart';
 import 'player_ltr.dart';
 
-/// Changes the Anime4K pipeline without leaving the episode.
+/// Picks the Anime4K mode, and nothing else.
 ///
-/// The settings page is where the shader folder is chosen once; this is for
-/// the part worth changing while watching. Whether mode A over-sharpens a
-/// particular show, or whether the GPU can hold VL on this one, is not a
-/// question anybody can answer from a settings screen — it is answered by
-/// looking at the picture, which means changing it here and seeing.
+/// Everything about setting the feature up — the shader folder, the network
+/// size, the before-and-after — lives in settings. Mid-episode the only
+/// question worth a panel is which mode is running, so this is a list of
+/// modes and a line saying what the chosen one is for.
 class Anime4kPlayerSheet {
   const Anime4kPlayerSheet._();
 
   static void show({
     required BuildContext context,
     required Anime4kMode currentMode,
-    required Anime4kQuality currentQuality,
     required ValueChanged<Anime4kMode> onModeSelected,
-    required ValueChanged<Anime4kQuality> onQualitySelected,
-    required Future<String> Function() appliedValue,
-    required Future<void> Function(bool bypassed) onCompareHeld,
-    required Future<Uint8List?> Function() captureSource,
   }) {
-    var mode = currentMode;
-    var quality = currentQuality;
-    // Remembered so the switch can put back what was chosen rather than
-    // resetting to a default every time it is flicked.
-    var lastMode = currentMode;
-
     showPlayerDialog<void>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setState) {
+            var mode = currentMode;
             final size = MediaQuery.sizeOf(context);
             final isCompact = size.shortestSide < 600;
-            final compactWidth = (size.width - 32)
-                .clamp(280.0, 360.0)
-                .toDouble();
             final maxWidth = isCompact
-                ? compactWidth
-                : (size.width >= 900 ? 520.0 : compactWidth);
-            final maxHeight = (size.height * (isCompact ? 0.7 : 0.75))
-                .clamp(200.0, 560.0)
-                .toDouble();
+                ? (size.width - 32).clamp(260.0, 340.0).toDouble()
+                : 360.0;
 
             return Dialog(
               backgroundColor: HotstarPlayerStyle.background,
@@ -59,201 +38,71 @@ class Anime4kPlayerSheet {
                 vertical: isCompact ? 16 : 24,
               ),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(isCompact ? 14 : 20),
+                borderRadius: BorderRadius.circular(isCompact ? 14 : 16),
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: maxWidth,
-                  maxHeight: maxHeight,
+                  maxHeight: size.height * 0.8,
                 ),
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                    brightness: Brightness.dark,
-                    colorScheme: const ColorScheme.dark(
-                      primary: HotstarPlayerStyle.accent,
-                      surface: HotstarPlayerStyle.background,
-                      onSurface: HotstarPlayerStyle.primaryText,
-                    ),
-                    chipTheme: ChipThemeData(
-                      backgroundColor: Colors.white.withValues(alpha: 0.06),
-                      selectedColor: HotstarPlayerStyle.accent.withValues(
-                        alpha: 0.22,
-                      ),
-                      labelStyle: const TextStyle(
-                        color: HotstarPlayerStyle.secondaryText,
-                      ),
-                      secondaryLabelStyle: const TextStyle(
-                        color: HotstarPlayerStyle.primaryText,
-                      ),
-                      side: BorderSide.none,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      isCompact ? 16 : 24,
-                      isCompact ? 12 : 18,
-                      isCompact ? 16 : 24,
-                      isCompact ? 16 : 24,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(
-                                'Anime4K',
-                                style: TextStyle(
-                                  color: HotstarPlayerStyle.primaryText,
-                                  fontSize: isCompact ? 15 : 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                            const Text(
+                              'ANIME4K',
+                              style: TextStyle(
+                                color: HotstarPlayerStyle.secondaryText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
                               ),
                             ),
-                            IconButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              icon: const Icon(Icons.close),
-                              color: HotstarPlayerStyle.secondaryText,
-                              autofocus: true,
+                            const SizedBox(height: 4),
+                            Text(
+                              anime4kModeHint(context, mode),
+                              style: const TextStyle(
+                                color: HotstarPlayerStyle.secondaryText,
+                                fontSize: 12,
+                                height: 1.35,
+                              ),
                             ),
                           ],
                         ),
-                        Flexible(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // On or off first, and nothing else until it
-                                // is on. "Off" was one chip among seven
-                                // modes, which made switching the feature
-                                // off look like choosing a kind of
-                                // enhancement.
-                                SwitchListTile(
-                                  value: mode != Anime4kMode.off,
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  title: Text(
-                                    appText(
-                                      context,
-                                      english: 'Enhance the picture',
-                                      arabic: 'تحسين الصورة',
-                                    ),
-                                    style: const TextStyle(
-                                      color: HotstarPlayerStyle.primaryText,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  onChanged: (on) {
-                                    // Turning it back on returns to whatever
-                                    // was last chosen, not to a default that
-                                    // undoes the choosing.
-                                    final next = on
-                                        ? (lastMode == Anime4kMode.off
-                                              ? Anime4kMode.a
-                                              : lastMode)
-                                        : Anime4kMode.off;
-                                    setState(() {
-                                      if (mode != Anime4kMode.off) {
-                                        lastMode = mode;
-                                      }
-                                      mode = next;
-                                    });
-                                    onModeSelected(next);
+                      ),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final value in Anime4kMode.values)
+                                _ModeRow(
+                                  label: value == Anime4kMode.off
+                                      ? appText(
+                                          context,
+                                          english: 'Off',
+                                          arabic: 'إيقاف',
+                                        )
+                                      : '${appText(context, english: 'Mode', arabic: 'النمط')} ${value.label}',
+                                  selected: mode == value,
+                                  onTap: () {
+                                    setState(() => mode = value);
+                                    onModeSelected(value);
+                                    Navigator.pop<void>(ctx);
                                   },
                                 ),
-                                if (mode != Anime4kMode.off) ...[
-                                  SizedBox(height: isCompact ? 8 : 12),
-                                  _label(
-                                    context,
-                                    appText(
-                                      context,
-                                      english: 'Mode',
-                                      arabic: 'النمط',
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      for (final value in Anime4kMode.values)
-                                        if (value != Anime4kMode.off)
-                                          ChoiceChip(
-                                            label: Text(value.label),
-                                            selected: mode == value,
-                                            onSelected: (_) {
-                                              setState(() {
-                                                mode = value;
-                                                lastMode = value;
-                                              });
-                                              onModeSelected(value);
-                                            },
-                                          ),
-                                    ],
-                                  ),
-                                  SizedBox(height: isCompact ? 16 : 22),
-                                  _label(
-                                    context,
-                                    appText(
-                                      context,
-                                      english: 'Quality',
-                                      arabic: 'الجودة',
-                                    ),
-                                  ),
-                                  Text(
-                                    appText(
-                                      context,
-                                      english:
-                                          'Each step up roughly doubles the '
-                                          'work the GPU does.',
-                                      arabic:
-                                          'كل درجة أعلى تضاعف تقريبًا الحِمل '
-                                          'على كرت الشاشة.',
-                                    ),
-                                    style: const TextStyle(
-                                      color: HotstarPlayerStyle.secondaryText,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      for (final value in Anime4kQuality.values)
-                                        ChoiceChip(
-                                          label: Text(value.suffix),
-                                          selected: quality == value,
-                                          onSelected: (_) {
-                                            setState(() => quality = value);
-                                            onQualitySelected(value);
-                                          },
-                                        ),
-                                    ],
-                                  ),
-                                  SizedBox(height: isCompact ? 14 : 18),
-                                  _CompareButton(onHeld: onCompareHeld),
-                                  SizedBox(height: isCompact ? 10 : 14),
-                                  Anime4kFramePreview(
-                                    capture: captureSource,
-                                    titleColor: HotstarPlayerStyle.primaryText,
-                                    bodyColor: HotstarPlayerStyle.secondaryText,
-                                  ),
-                                  SizedBox(height: isCompact ? 10 : 14),
-                                  _AppliedLine(read: appliedValue, mode: mode),
-                                ],
-                              ],
-                            ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -263,207 +112,95 @@ class Anime4kPlayerSheet {
       },
     );
   }
-
-  static Widget _label(BuildContext context, String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: HotstarPlayerStyle.primaryText,
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
 }
 
-/// Says whether mpv is actually running the shaders.
-///
-/// The picture is the real answer, but "is it on at all" should not be a
-/// judgement call: a wrong folder and a mode that is simply subtle look
-/// identical from the sofa, and only one of them is worth investigating.
-class _AppliedLine extends StatefulWidget {
-  const _AppliedLine({required this.read, required this.mode});
+/// One row of the list, highlighted when it is the running mode.
+class _ModeRow extends StatelessWidget {
+  const _ModeRow({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final Future<String> Function() read;
-  final Anime4kMode mode;
-
-  @override
-  State<_AppliedLine> createState() => _AppliedLineState();
-}
-
-class _AppliedLineState extends State<_AppliedLine> {
-  String? _value;
-
-  @override
-  void initState() {
-    super.initState();
-    _refresh();
-  }
-
-  @override
-  void didUpdateWidget(_AppliedLine oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.mode != widget.mode) _refresh();
-  }
-
-  Future<void> _refresh() async {
-    // A moment for the apply that a chip tap has just started.
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    if (!mounted) return;
-    final value = await widget.read();
-    if (mounted) setState(() => _value = value);
-  }
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final value = _value;
-    if (value == null) return const SizedBox.shrink();
-
-    final running = value.trim().isNotEmpty;
-    // Counted by the extension rather than by splitting on mpv's separator:
-    // that separator differs by platform and can be backslash-escaped inside
-    // a path, and every shader in the list ends in .glsl regardless.
-    final count = running ? value.toLowerCase().split('.glsl').length - 1 : 0;
-
-    if (widget.mode == Anime4kMode.off) {
-      return Text(
-        appText(context, english: 'Not running', arabic: 'غير مُفعّل'),
-        style: const TextStyle(
-          color: HotstarPlayerStyle.secondaryText,
-          fontSize: 12,
-        ),
-      );
-    }
-    return Row(
-      children: [
-        Icon(
-          running
-              ? Icons.check_circle_outline_rounded
-              : Icons.error_outline_rounded,
-          size: 15,
-          color: running
-              ? HotstarPlayerStyle.accent
-              : Theme.of(context).colorScheme.error,
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            running
-                ? appText(
-                    context,
-                    english: 'mpv is running $count shaders',
-                    arabic: 'mpv يشغّل $count ملفات',
-                  )
-                : appText(
-                    context,
-                    english:
-                        'mpv is running none — check the shader folder in '
-                        'settings',
-                    arabic:
-                        'mpv لا يشغّل أي ملف — راجع مجلد الشيدرات في '
-                        'الإعدادات',
-                  ),
-            style: TextStyle(
-              color: running
-                  ? HotstarPlayerStyle.secondaryText
-                  : Theme.of(context).colorScheme.error,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Hold to see the picture without the shaders.
-///
-/// A settings screen cannot show what a mode does. The shaders run inside
-/// mpv, on the frame being played, so the only truthful comparison is that
-/// frame with them and without them — which means taking them away while a
-/// finger is down and putting them back when it lifts. Pausing first makes it
-/// easiest to see.
-class _CompareButton extends StatefulWidget {
-  const _CompareButton({required this.onHeld});
-
-  final Future<void> Function(bool bypassed) onHeld;
-
-  @override
-  State<_CompareButton> createState() => _CompareButtonState();
-}
-
-class _CompareButtonState extends State<_CompareButton> {
-  bool _held = false;
-
-  Future<void> _set(bool held) async {
-    if (_held == held) return;
-    setState(() => _held = held);
-    await widget.onHeld(held);
-  }
-
-  @override
-  void dispose() {
-    // Releasing by closing the sheet must not leave the shaders switched off
-    // with nothing on screen saying so.
-    if (_held) unawaited(widget.onHeld(false));
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      // The whole bar is the control, not just the words on it.
-      behavior: HitTestBehavior.opaque,
-      onPointerDown: (_) => _set(true),
-      onPointerUp: (_) => _set(false),
-      onPointerCancel: (_) => _set(false),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-        decoration: BoxDecoration(
-          color: _held
-              ? HotstarPlayerStyle.accent.withValues(alpha: 0.22)
-              : Colors.white.withValues(alpha: 0.06),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      child: Material(
+        color: selected
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: _held
-                ? HotstarPlayerStyle.accent
-                : Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _held ? Icons.visibility_off_rounded : Icons.compare_rounded,
-              size: 17,
-              color: HotstarPlayerStyle.primaryText,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                _held
-                    ? appText(
-                        context,
-                        english: 'Shaders off — release to restore',
-                        arabic: 'بدون تحسين — ارفع إصبعك للعودة',
-                      )
-                    : appText(
-                        context,
-                        english: 'Hold to compare with the original',
-                        arabic: 'اضغط مع الاستمرار للمقارنة بالأصل',
-                      ),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: HotstarPlayerStyle.primaryText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected
+                    ? Colors.white.withValues(alpha: 0.18)
+                    : Colors.transparent,
               ),
             ),
-          ],
+            child: Text(
+              label,
+              style: TextStyle(
+                color: HotstarPlayerStyle.primaryText,
+                fontSize: 14,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+/// What each mode is for, in one line.
+String anime4kModeHint(BuildContext context, Anime4kMode mode) {
+  return switch (mode) {
+    Anime4kMode.off => appText(
+      context,
+      english: 'The picture is left as the source made it.',
+      arabic: 'تُترك الصورة كما هي من المصدر.',
+    ),
+    Anime4kMode.a => appText(
+      context,
+      english: 'Restore + upscale. The best all-rounder for most anime.',
+      arabic: 'ترميم وتكبير. الأنسب لأغلب الأنميات.',
+    ),
+    Anime4kMode.b => appText(
+      context,
+      english: 'Softer restore. Kinder to compressed or noisy sources.',
+      arabic: 'ترميم أخف. ألطف مع المصادر المضغوطة أو المشوّشة.',
+    ),
+    Anime4kMode.c => appText(
+      context,
+      english: 'Denoise while upscaling, for sources already clean.',
+      arabic: 'إزالة تشويش مع التكبير، للمصادر النظيفة أصلًا.',
+    ),
+    Anime4kMode.aa => appText(
+      context,
+      english: 'Mode A run twice. Slower, for badly degraded sources.',
+      arabic: 'النمط A مرتين. أبطأ، للمصادر السيئة جدًا.',
+    ),
+    Anime4kMode.bb => appText(
+      context,
+      english: 'Mode B run twice.',
+      arabic: 'النمط B مرتين.',
+    ),
+    Anime4kMode.ca => appText(
+      context,
+      english: 'Mode C followed by a restore pass.',
+      arabic: 'النمط C يتبعه ترميم.',
+    ),
+  };
 }
