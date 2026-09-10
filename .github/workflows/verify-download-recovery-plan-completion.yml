@@ -5,6 +5,7 @@ on:
     branches: [fix/download-recovery-plan-integration]
     paths:
       - .github/scripts/complete-download-recovery-plan.py
+      - .github/scripts/fix-download-recovery-completion-tests.py
       - .github/workflows/verify-download-recovery-plan-completion.yml
 
 permissions:
@@ -24,7 +25,9 @@ jobs:
           cache: true
 
       - name: Apply remaining recovery hardening
-        run: python3 .github/scripts/complete-download-recovery-plan.py
+        run: |
+          python3 .github/scripts/complete-download-recovery-plan.py
+          python3 .github/scripts/fix-download-recovery-completion-tests.py
 
       - name: Install dependencies and generate sources
         run: |
