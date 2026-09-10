@@ -34,6 +34,9 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
+      - name: Generate code
+        run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Format and whitespace
         run: |
           dart format \
