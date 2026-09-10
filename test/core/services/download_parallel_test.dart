@@ -4,21 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('adaptive parallel downloads', () {
-    test('normalizes supported manual values and junk to Auto', () {
-      for (final value in <int>[0, 1, 2, 3, 4]) {
+    test('normalizes manual values through sixteen and junk to Auto', () {
+      for (var value = 0; value <= 16; value++) {
         expect(normalizeDownloadPartPreference(value), value);
       }
       expect(normalizeDownloadPartPreference(null), 0);
-      expect(normalizeDownloadPartPreference(5), 0);
-      expect(normalizeDownloadPartPreference(6), 0);
-      expect(normalizeDownloadPartPreference(8), 0);
+      expect(normalizeDownloadPartPreference(17), 0);
       expect(normalizeDownloadPartPreference(99), 0);
     });
 
     test('never splits without proven Range support and size', () {
       expect(
         selectAdaptiveDownloadParts(
-          preference: 4,
+          preference: 16,
           totalBytes: 900 * 1024 * 1024,
           supportsRanges: false,
         ),
@@ -26,7 +24,7 @@ void main() {
       );
       expect(
         selectAdaptiveDownloadParts(
-          preference: 4,
+          preference: 16,
           totalBytes: -1,
           supportsRanges: true,
         ),
@@ -34,93 +32,74 @@ void main() {
       );
     });
 
-    test('Auto follows the 100/200/300 MB thresholds up to four parts', () {
+    test('Auto grows conservatively to sixteen connections', () {
       const mib = 1024 * 1024;
+      final cases = <(int, int)>[
+        (99, 1),
+        (100, 2),
+        (199, 2),
+        (200, 4),
+        (399, 4),
+        (400, 8),
+        (799, 8),
+        (800, 16),
+        (2048, 16),
+      ];
+      for (final (sizeMiB, expected) in cases) {
+        expect(
+          selectAdaptiveDownloadParts(
+            preference: 0,
+            totalBytes: sizeMiB * mib,
+            supportsRanges: true,
+          ),
+          expected,
+        );
+      }
+    });
 
+    test('manual preference can request the full sixteen', () {
+      const mib = 1024 * 1024;
       expect(
         selectAdaptiveDownloadParts(
-          preference: 0,
-          totalBytes: 99 * mib,
-          supportsRanges: true,
-        ),
-        1,
-      );
-      expect(
-        selectAdaptiveDownloadParts(
-          preference: 0,
-          totalBytes: 100 * mib,
-          supportsRanges: true,
-        ),
-        2,
-      );
-      expect(
-        selectAdaptiveDownloadParts(
-          preference: 0,
-          totalBytes: 199 * mib,
-          supportsRanges: true,
-        ),
-        2,
-      );
-      expect(
-        selectAdaptiveDownloadParts(
-          preference: 0,
-          totalBytes: 200 * mib,
-          supportsRanges: true,
-        ),
-        3,
-      );
-      expect(
-        selectAdaptiveDownloadParts(
-          preference: 0,
-          totalBytes: 299 * mib,
-          supportsRanges: true,
-        ),
-        3,
-      );
-      expect(
-        selectAdaptiveDownloadParts(
-          preference: 0,
-          totalBytes: 300 * mib,
-          supportsRanges: true,
-        ),
-        4,
-      );
-      expect(
-        selectAdaptiveDownloadParts(
-          preference: 0,
+          preference: 16,
           totalBytes: 2 * 1024 * mib,
           supportsRanges: true,
         ),
-        4,
+        16,
       );
     });
 
-    test('manual preferences cannot exceed four parts', () {
+    test('large ranges keep spare tail work without adding connections', () {
       const mib = 1024 * 1024;
       expect(
-        selectAdaptiveDownloadParts(
-          preference: 4,
-          totalBytes: 2 * 1024 * mib,
-          supportsRanges: true,
-        ),
-        4,
+        selectDownloadWorkUnitCount(connections: 4, totalBytes: 4 * mib),
+        8,
       );
       expect(
-        selectAdaptiveDownloadParts(
-          preference: 5,
-          totalBytes: 2 * 1024 * mib,
-          supportsRanges: true,
-        ),
-        4,
+        selectDownloadWorkUnitCount(connections: 16, totalBytes: 16 * mib),
+        32,
+      );
+      expect(kDownloadWorkUnitsMax, 32);
+    });
+
+    test('tail work never creates tiny extra ranges', () {
+      const mib = 1024 * 1024;
+      expect(
+        selectDownloadWorkUnitCount(connections: 16, totalBytes: 4 * mib),
+        16,
       );
       expect(
-        selectAdaptiveDownloadParts(
-          preference: 8,
-          totalBytes: 2 * 1024 * mib,
-          supportsRanges: true,
-        ),
-        4,
+        selectDownloadWorkUnitCount(connections: 1, totalBytes: 2 * 1024 * mib),
+        1,
       );
+    });
+
+    test('Gopeed-style ramp reaches sixteen as 1, 2, 4, 8, 1', () {
+      expect(downloadConnectionRampBatches(1), [1]);
+      expect(downloadConnectionRampBatches(4), [1, 2, 1]);
+      expect(downloadConnectionRampBatches(8), [1, 2, 4, 1]);
+      expect(downloadConnectionRampBatches(16), [1, 2, 4, 8, 1]);
+      expect(downloadConnectionRampBatches(99), [1, 2, 4, 8, 1]);
     });
 
     test('builds one logical parent with the same taskId', () {
@@ -136,13 +115,33 @@ void main() {
         group: kLogicalDownloadGroup,
         metaData: 'episode:12',
       );
-      final parallel = buildAdaptiveDownloadTask(template: normal, parts: 4);
+      final parallel = buildAdaptiveDownloadTask(template: normal, parts: 16);
       expect(parallel, isA<ParallelDownloadTask>());
       expect(parallel.taskId, normal.taskId);
       expect(parallel.filename, normal.filename);
       expect(parallel.metaData, normal.metaData);
       expect(parallel.group, kLogicalDownloadGroup);
-      expect(downloadTaskPartCount(parallel), 4);
+      expect(downloadTaskPartCount(parallel), 16);
+    });
+
+    test('persistent child metadata resolves only its logical parent', () {
+      final child = DownloadTask(
+        taskId: 'episode.part.0',
+        url: 'https://cdn.test/video',
+        group: kPersistentDownloadChunkGroup,
+        metaData: '{"parentTaskId":"episode"}',
+      );
+      final malformed = child.copyWith(metaData: 'not-json');
+      final logical = DownloadTask(
+        taskId: 'episode',
+        url: 'https://cdn.test/video',
+        group: kLogicalDownloadGroup,
+        metaData: '{"parentTaskId":"wrong"}',
+      );
+
+      expect(downloadInternalParentTaskId(child), 'episode');
+      expect(downloadInternalParentTaskId(malformed), isNull);
+      expect(downloadInternalParentTaskId(logical), isNull);
     });
 
     test('internal chunks are never logical episode tasks', () {
@@ -152,7 +151,7 @@ void main() {
       );
       final parent = ParallelDownloadTask(
         url: 'https://example.com/episode.mp4',
-        chunks: 4,
+        chunks: 16,
       );
       expect(isInternalDownloaderChunk(child), isTrue);
       expect(isLogicalEpisodeDownloadTask(child), isFalse);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -6,13 +7,24 @@ import 'package:flutter/services.dart';
 import 'download_concurrency.dart';
 
 typedef SystemDownloadCancellation = Future<void> Function(String taskId);
-typedef SystemDownloadChunkUpdate =
-    void Function({
-      required String parentTaskId,
-      required String chunkTaskId,
-      double? progress,
-      int? statusOrdinal,
-    });
+typedef SystemDownloadTaskUpdate = void Function({
+  required String taskId,
+  required String trackingUrl,
+  required int writtenBytes,
+  required int expectedBytes,
+  double? speedBytesPerSecond,
+});
+
+typedef SystemDownloadChunkUpdate = void Function({
+  required String parentTaskId,
+  required String chunkTaskId,
+  double? progress,
+  int? statusOrdinal,
+  int? writtenBytes,
+  int? expectedBytes,
+  double? speedBytesPerSecond,
+  required bool completed,
+});
 
 /// Bridges AnimeWitcher downloads to iOS 26's system-managed continued
 /// processing task UI. On older iOS versions the native side returns false
@@ -27,11 +39,17 @@ class DownloadContinuedProcessingService {
   );
 
   final SystemDownloadCancellation onSystemCancel;
+  final SystemDownloadTaskUpdate? onTaskUpdate;
   final SystemDownloadChunkUpdate? onChunkUpdate;
   bool _handlerInstalled = false;
+  static const Duration _updateSampleInterval = Duration(seconds: 1);
+  Timer? _updateTimer;
+  DateTime? _lastUpdateAt;
+  Map<String, Object>? _pendingUpdate;
 
   DownloadContinuedProcessingService({
     required this.onSystemCancel,
+    this.onTaskUpdate,
     this.onChunkUpdate,
   }) {
     if (_isAvailable) {
@@ -41,6 +59,9 @@ class DownloadContinuedProcessingService {
   }
 
   bool get _isAvailable => !kIsWeb && Platform.isIOS;
+
+  Future<void> configureDiagnosticLog(bool enabled) =>
+      _invoke('configureDiagnosticLog', {'enabled': enabled});
 
   Future<void> start({
     required String taskId,
@@ -53,6 +74,8 @@ class DownloadContinuedProcessingService {
     double speedBytesPerSecond = 0,
     int currentIndex = 0,
   }) async {
+    _cancelPendingUpdate();
+    _lastUpdateAt = DateTime.now();
     await _invoke('start', <String, Object>{
       'taskId': taskId,
       'displayName': displayName,
@@ -77,7 +100,7 @@ class DownloadContinuedProcessingService {
     String displayName = '',
     int currentIndex = 0,
   }) async {
-    await _invoke('update', <String, Object>{
+    await _queueUpdate(<String, Object>{
       'taskId': taskId,
       'progress': progress.clamp(0.0, 1.0).toDouble(),
       'totalBytes': totalBytes,
@@ -90,12 +113,45 @@ class DownloadContinuedProcessingService {
     });
   }
 
+  Future<void> _queueUpdate(Map<String, Object> arguments) async {
+    if (!_isAvailable) return;
+    _pendingUpdate = arguments;
+    final now = DateTime.now();
+    final last = _lastUpdateAt;
+    if (last == null || now.difference(last) >= _updateSampleInterval) {
+      _updateTimer?.cancel();
+      _updateTimer = null;
+      final pending = _pendingUpdate;
+      _pendingUpdate = null;
+      _lastUpdateAt = now;
+      if (pending != null) await _invoke('update', pending);
+      return;
+    }
+
+    final delay = _updateSampleInterval - now.difference(last);
+    _updateTimer ??= Timer(delay, () async {
+      _updateTimer = null;
+      final pending = _pendingUpdate;
+      _pendingUpdate = null;
+      if (pending == null || !_isAvailable) return;
+      _lastUpdateAt = DateTime.now();
+      await _invoke('update', pending);
+    });
+  }
+
+  void _cancelPendingUpdate() {
+    _updateTimer?.cancel();
+    _updateTimer = null;
+    _pendingUpdate = null;
+  }
+
   Future<void> finish({
     required String taskId,
     required bool success,
     required String status,
     bool endSession = false,
   }) async {
+    _cancelPendingUpdate();
     await _invoke('finish', <String, Object>{
       'taskId': taskId,
       'success': success,
@@ -105,6 +161,7 @@ class DownloadContinuedProcessingService {
   }
 
   Future<void> stop({required String taskId, bool endSession = false}) async {
+    _cancelPendingUpdate();
     await _invoke('stop', <String, Object>{
       'taskId': taskId,
       'endSession': endSession,
@@ -155,6 +212,29 @@ class DownloadContinuedProcessingService {
     final arguments = call.arguments;
     if (arguments is! Map) return false;
 
+    if (call.method == 'taskUpdate') {
+      final taskId = arguments['taskId'];
+      final trackingUrl = arguments['trackingUrl'];
+      final rawWritten = arguments['writtenBytes'];
+      final rawExpected = arguments['expectedBytes'];
+      final rawSpeed = arguments['speedBytesPerSecond'];
+      if (taskId is! String ||
+          taskId.isEmpty ||
+          trackingUrl is! String ||
+          trackingUrl.isEmpty ||
+          rawWritten is! num) {
+        return false;
+      }
+      onTaskUpdate?.call(
+        taskId: taskId,
+        trackingUrl: trackingUrl,
+        writtenBytes: rawWritten.toInt(),
+        expectedBytes: rawExpected is num ? rawExpected.toInt() : -1,
+        speedBytesPerSecond: rawSpeed is num ? rawSpeed.toDouble() : null,
+      );
+      return true;
+    }
+
     if (call.method == 'chunkUpdate') {
       final parentTaskId = arguments['parentTaskId'];
       final chunkTaskId = arguments['chunkTaskId'];
@@ -166,11 +246,18 @@ class DownloadContinuedProcessingService {
       }
       final rawProgress = arguments['progress'];
       final rawStatus = arguments['status'];
+      final rawWritten = arguments['writtenBytes'];
+      final rawExpected = arguments['expectedBytes'];
+      final rawSpeed = arguments['speedBytesPerSecond'];
       onChunkUpdate?.call(
         parentTaskId: parentTaskId,
         chunkTaskId: chunkTaskId,
         progress: rawProgress is num ? rawProgress.toDouble() : null,
         statusOrdinal: rawStatus is num ? rawStatus.toInt() : null,
+        writtenBytes: rawWritten is num ? rawWritten.toInt() : null,
+        expectedBytes: rawExpected is num ? rawExpected.toInt() : null,
+        speedBytesPerSecond: rawSpeed is num ? rawSpeed.toDouble() : null,
+        completed: arguments['completed'] == true,
       );
       return true;
     }
@@ -205,6 +292,7 @@ class DownloadContinuedProcessingService {
   }
 
   Future<void> dispose() async {
+    _cancelPendingUpdate();
     if (_handlerInstalled) {
       _channel.setMethodCallHandler(null);
       _handlerInstalled = false;

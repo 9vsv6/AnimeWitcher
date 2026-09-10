@@ -22,6 +22,7 @@ import '../../../details/presentation/download_launcher.dart';
 import '../../../details/presentation/downloaded_file_provider.dart';
 import '../../../details/presentation/widgets/download_management_dialog.dart';
 import '../../../details/presentation/widgets/download_progress_dialog.dart';
+import '../../../details/presentation/widgets/episode_action_chip.dart';
 import 'hotstar_player_style.dart';
 
 import 'package:animewitcher/core/utils/artwork_quality.dart';
@@ -74,9 +75,16 @@ class PlayerSidePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.shortestSide < 600;
-    final panelWidth = isCompact
+    final basePanelWidth = isCompact
         ? (size.width * 0.8).clamp(260.0, 380.0)
         : 350.0;
+    // The episodes drawer needs more horizontal room than the source/track
+    // drawers so its card layout can match the Episodes page. Keep the shared
+    // shell unchanged for every other panel and widen episodes by exactly 25%.
+    final widthScale = child is PlayerEpisodesPanel ? 1.25 : 1.0;
+    final panelWidth = (basePanelWidth * widthScale)
+        .clamp(260.0, size.width * 0.95)
+        .toDouble();
 
     return IgnorePointer(
       ignoring: !isVisible,
@@ -85,7 +93,6 @@ class PlayerSidePanel extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Scrim — tap (or click) anywhere outside the drawer to dismiss.
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -96,8 +103,6 @@ class PlayerSidePanel extends StatelessWidget {
                 ),
               ),
             ),
-            // The drawer — width animates for a slide-from-right reveal while
-            // the content is pinned to full width by the OverflowBox.
             ClipRect(
               child: AnimatedContainer(
                 duration: HotstarPlayerStyle.panelMotionDuration,
@@ -123,9 +128,6 @@ class PlayerSidePanel extends StatelessWidget {
   }
 }
 
-/// Dark surface for the drawer: solid scrim-coloured background + a soft shadow
-/// down the left edge to lift it off the video. No blur (keeps it cheap and
-/// identical across platforms).
 class _PanelSurface extends StatelessWidget {
   final Widget child;
 
@@ -147,20 +149,14 @@ class _PanelSurface extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. LAYERED TRANSLUCENT OBSIDIAN/CHARCOAL BLACK BASE WITH BACKDROP BLUR
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 22.0, sigmaY: 22.0),
               child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Color(
-                    0xA6060608,
-                  ), // Frosted glass obsidian tint (65% opacity)
-                ),
+                decoration: BoxDecoration(color: Color(0xA6060608)),
               ),
             ),
           ),
-          // 2. SOFT AMBIENT GLOSS
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -169,9 +165,7 @@ class _PanelSurface extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.white.withValues(
-                        alpha: 0.04,
-                      ), // soft mirror-like reflection
+                      Colors.white.withValues(alpha: 0.04),
                       Colors.white.withValues(alpha: 0.01),
                       Colors.transparent,
                     ],
@@ -181,7 +175,6 @@ class _PanelSurface extends StatelessWidget {
               ),
             ),
           ),
-          // 3. REALISTIC LIGHT DIFFUSION (Soft ambient lighting texture)
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -198,7 +191,6 @@ class _PanelSurface extends StatelessWidget {
               ),
             ),
           ),
-          // 4. FRESNEL EDGE HIGHLIGHTS WITH SOFT GRADIENT BLENDING (Left and Right)
           Positioned.fill(
             child: IgnorePointer(
               child: ShaderMask(
@@ -229,7 +221,6 @@ class _PanelSurface extends StatelessWidget {
               ),
             ),
           ),
-          // 5. INNER RIM HIGHLIGHT WITH SOFT GRADIENT BLENDING (Left and Right)
           Positioned.fill(
             child: IgnorePointer(
               child: ShaderMask(
@@ -260,7 +251,6 @@ class _PanelSurface extends StatelessWidget {
               ),
             ),
           ),
-          // Main content
           Positioned.fill(child: child),
         ],
       ),
@@ -268,11 +258,6 @@ class _PanelSurface extends StatelessWidget {
   }
 }
 
-/// Content for the episodes side panel — the same right-drawer shell and row
-/// styling as the sources/tracks panel, but a single vertical list (episodes
-/// grouped under `Season N` subheaders). Pure Up/Down D-pad; the current episode
-/// is the focus anchor and is centred on open. Selecting an episode loads it and
-/// closes the pane. No dropdown, no scroll-jump animation.
 class PlayerEpisodesPanel extends ConsumerStatefulWidget {
   final MultimediaItem item;
   final bool isTv;
@@ -329,7 +314,6 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // Restore focus to the current episode whenever the pane opens.
     ref.listen(playerControllerProvider.select((s) => s.showEpisodeList), (
       prev,
       next,
@@ -338,16 +322,14 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
     });
 
     final l10n = AppLocalizations.of(context)!;
-    // A stream URL belongs to the selected server and normally differs from
-    // the canonical episode URL. Use the episode identity stored by the
-    // controller so the active-row highlight follows the episode being played.
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final panelDirection = isArabic ? TextDirection.rtl : TextDirection.ltr;
     final currentUrl =
         ref.watch(playerControllerProvider.select((s) => s.activeEpisodeUrl)) ??
         ref.read(playerControllerProvider.notifier).currentEpisodeUrl;
     var episodes = widget.item.episodes ?? const <Episode>[];
-    final currentEpisode = episodes.firstWhereOrNull(
-      (e) => e.url == currentUrl,
-    );
+    final currentEpisode = episodes.firstWhereOrNull((e) => e.url == currentUrl);
     final isSeries =
         widget.item.contentType == MultimediaContentType.series ||
         widget.item.contentType == MultimediaContentType.anime;
@@ -358,7 +340,6 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
           .where((e) => e.dubStatus == currentEpisode.dubStatus)
           .toList();
     }
-    // Same server order (and same sort toggle) as the Episodes tab.
     episodes = episodesInDisplayOrder(
       episodes,
       ascending: ref.watch(
@@ -435,43 +416,49 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 4, 12),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.video_library_outlined,
-                  color: Colors.white,
-                  size: 22,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    l10n.episodes,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: HotstarPlayerStyle.primaryText,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
-                      shadows: _kGlassTextShadow,
+            padding: isArabic
+                ? const EdgeInsets.fromLTRB(4, 12, 20, 12)
+                : const EdgeInsets.fromLTRB(20, 12, 4, 12),
+            child: Directionality(
+              textDirection: panelDirection,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.video_library_outlined,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      l10n.episodes,
+                      textAlign: TextAlign.start,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: HotstarPlayerStyle.primaryText,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
+                        shadows: _kGlassTextShadow,
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  onPressed: widget.onClose,
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(
-                    minWidth: 38,
-                    minHeight: 38,
+                  IconButton(
+                    onPressed: widget.onClose,
+                    tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(
+                      minWidth: 38,
+                      minHeight: 38,
+                    ),
+                    padding: EdgeInsets.zero,
+                    iconSize: 22,
+                    icon: const Icon(Icons.close_rounded),
+                    color: HotstarPlayerStyle.secondaryText,
                   ),
-                  padding: EdgeInsets.zero,
-                  iconSize: 22,
-                  icon: const Icon(Icons.close_rounded),
-                  color: HotstarPlayerStyle.secondaryText,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const Divider(color: HotstarPlayerStyle.divider, height: 1),
@@ -486,9 +473,6 @@ class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
   }
 }
 
-/// A single episode row: focusable (same accent border/glow cue, no scale),
-/// shows "S·E", the title, a slim progress bar, and a play marker for the
-/// episode that's currently active.
 class _EpisodeRow extends ConsumerStatefulWidget {
   final MultimediaItem parentItem;
   final Episode episode;
@@ -551,63 +535,53 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
     required DownloadProgressData? progressData,
     required VoidCallback onPressed,
   }) {
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+
     if (downloadedFile != null) {
-      return IconButton(
-        icon: const Icon(
-          Icons.download_done_sharp,
-          color: Colors.green,
-          size: 32,
-        ),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
+      return EpisodeActionChip(
+        tooltip: isArabic ? 'تم التنزيل' : 'Downloaded',
+        icon: Icons.download_done_rounded,
+        color: const Color(0xFF4CAF50),
         onPressed: onPressed,
       );
     }
 
     if (isDownloading) {
-      return SizedBox(
-        width: 32,
-        height: 32,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: progressData?.status == TaskStatus.paused
-                ? Icon(
-                    Icons.pause_rounded,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  )
-                : Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: downloadProgress > 0 ? downloadProgress : null,
-                        strokeWidth: 2,
+      return EpisodeActionChip(
+        tooltip: isArabic ? 'جارٍ التنزيل' : 'Downloading',
+        onPressed: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: progressData?.status == TaskStatus.paused
+              ? Icon(
+                  Icons.pause_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                )
+              : Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      value: downloadProgress > 0 ? downloadProgress : null,
+                      strokeWidth: 2,
+                    ),
+                    Text(
+                      '${(downloadProgress * 100).toInt()}%',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
-                      Text(
-                        '${(downloadProgress * 100).toInt()}%',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
+                    ),
+                  ],
+                ),
         ),
       );
     }
 
-    return IconButton(
-      icon: Icon(
-        Icons.file_download_outlined,
-        size: 32,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
+    return EpisodeActionChip(
+      tooltip: isArabic ? 'تنزيل الحلقة' : 'Download episode',
+      icon: Icons.save_alt_rounded,
       onPressed: onPressed,
     );
   }
@@ -654,6 +628,9 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
     final showHighlight = _focused || _hovered;
     final ring = _focused && widget.isTv;
     const accent = HotstarPlayerStyle.accent;
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    final rowDirection = isArabic ? TextDirection.rtl : TextDirection.ltr;
     return Semantics(
       button: true,
       selected: widget.isCurrent,
@@ -688,97 +665,99 @@ class _EpisodeRowState extends ConsumerState<_EpisodeRow> {
                 selected: widget.isCurrent,
                 hovered: showHighlight,
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _EpisodeThumbnail(
-                    posterUrl: ep.posterUrl,
-                    isCurrent: widget.isCurrent,
-                    isWatched: widget.isWatched,
-                    progress: widget.progress,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                formatEpisodePrimaryLabel(
-                                  episode: ep.episode,
-                                  isArabic:
-                                      Localizations.localeOf(
-                                        context,
-                                      ).languageCode ==
-                                      'ar',
-                                  isFinal: ep.isFinal,
-                                  serverName: ep.serverName,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: widget.isCurrent
-                                      ? HotstarPlayerStyle.primaryText
-                                      : HotstarPlayerStyle.secondaryText,
-                                  fontSize: 14,
-                                  fontWeight: widget.isCurrent
-                                      ? FontWeight.w800
-                                      : FontWeight.w600,
-                                  shadows: _kGlassTextShadow,
-                                ),
-                              ),
-                            ),
-                            if (ep.isFiller) ...[
-                              const SizedBox(width: 6),
-                              const _FillerBadge(),
-                            ],
-                            if (ep.dubStatus != DubStatus.none &&
-                                !isStandaloneEpisodeLabel(ep.serverName)) ...[
-                              const SizedBox(width: 6),
-                              _DubBadge(
-                                dubStatus: ep.dubStatus,
-                                isCurrent: widget.isCurrent,
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (realEpisodeTitle(ep.name).isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            realEpisodeTitle(ep.name),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: widget.isCurrent
-                                  ? accent
-                                  : HotstarPlayerStyle.mutedText,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              shadows: _kGlassTextShadow,
-                            ),
-                          ),
-                        ],
-                      ],
+              child: Directionality(
+                textDirection: rowDirection,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _EpisodeThumbnail(
+                      posterUrl: ep.posterUrl,
+                      isCurrent: widget.isCurrent,
+                      isWatched: widget.isWatched,
+                      progress: widget.progress,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 40,
-                    child: ExcludeFocus(
-                      child: _buildDownloadAction(
-                        context,
-                        downloadedFile: downloadedFile,
-                        isDownloading: isDownloading,
-                        downloadProgress: downloadProgress,
-                        progressData: progressData,
-                        onPressed: triggerDownload,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  formatEpisodePrimaryLabel(
+                                    episode: ep.episode,
+                                    isArabic: isArabic,
+                                    isFinal: ep.isFinal,
+                                    serverName: ep.serverName,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.start,
+                                  style: TextStyle(
+                                    color: widget.isCurrent
+                                        ? HotstarPlayerStyle.primaryText
+                                        : HotstarPlayerStyle.secondaryText,
+                                    fontSize: 14,
+                                    fontWeight: widget.isCurrent
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    shadows: _kGlassTextShadow,
+                                  ),
+                                ),
+                              ),
+                              if (ep.isFiller) ...[
+                                const SizedBox(width: 6),
+                                const _FillerBadge(),
+                              ],
+                              if (ep.dubStatus != DubStatus.none &&
+                                  !isStandaloneEpisodeLabel(ep.serverName)) ...[
+                                const SizedBox(width: 6),
+                                _DubBadge(
+                                  dubStatus: ep.dubStatus,
+                                  isCurrent: widget.isCurrent,
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (realEpisodeTitle(ep.name).isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              realEpisodeTitle(ep.name),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.start,
+                              style: TextStyle(
+                                color: widget.isCurrent
+                                    ? accent
+                                    : HotstarPlayerStyle.mutedText,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                shadows: _kGlassTextShadow,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 34,
+                      child: ExcludeFocus(
+                        child: _buildDownloadAction(
+                          context,
+                          downloadedFile: downloadedFile,
+                          isDownloading: isDownloading,
+                          downloadProgress: downloadProgress,
+                          progressData: progressData,
+                          onPressed: triggerDownload,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -813,9 +792,6 @@ class _FillerBadge extends StatelessWidget {
   }
 }
 
-/// Claymorphism badge showing SUB or DUB next to the episode number.
-/// Soft inner shadow + subtle highlight simulates a pressed-clay look on the
-/// frosted-glass panel surface. Colour-coded: blue-ish for SUB, warm amber for DUB.
 class _DubBadge extends StatelessWidget {
   final DubStatus dubStatus;
   final bool isCurrent;
@@ -828,24 +804,19 @@ class _DubBadge extends StatelessWidget {
     final label = isSub
         ? AppLocalizations.of(context)!.sub.toUpperCase()
         : AppLocalizations.of(context)!.dub.toUpperCase();
-    // SUB = cool blue tint, DUB = warm amber tint.
     final tint = isSub ? const Color(0xFF64B5F6) : const Color(0xFFFFB74D);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
       decoration: BoxDecoration(
-        // Claymorphism: translucent tinted fill.
         color: tint.withValues(alpha: isCurrent ? 0.22 : 0.14),
         borderRadius: BorderRadius.circular(4),
-        // Soft outer shadow (depth) + inner highlight (clay press).
         boxShadow: [
-          // Outer shadow — subtle depth lift.
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.35),
             offset: const Offset(0, 1),
             blurRadius: 2,
           ),
-          // Inner highlight — top-left light catch.
           BoxShadow(
             color: tint.withValues(alpha: 0.18),
             offset: const Offset(0, -0.5),
@@ -870,9 +841,6 @@ class _DubBadge extends StatelessWidget {
   }
 }
 
-/// Episode thumbnail: poster image (or a placeholder), a play overlay for the
-/// current episode, and a watch-progress bar along the bottom. The small inner
-/// [Stack] is a leaf decoration on the image — not chrome layout.
 class _EpisodeThumbnail extends StatelessWidget {
   final String? posterUrl;
   final bool isCurrent;
@@ -999,9 +967,6 @@ class _ThumbPlaceholder extends StatelessWidget {
   }
 }
 
-/// A focus-traversal group wrapping a scrollable list of option rows. Up/Down
-/// move between rows geometrically; horizontal arrows are left for the panel to
-/// handle as tab switches.
 class _OptionList extends StatelessWidget {
   final List<Widget> children;
 
@@ -1013,9 +978,6 @@ class _OptionList extends StatelessWidget {
       policy: WidgetOrderTraversalPolicy(),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        // Build a generous off-screen window so the selected (anchor) row is
-        // laid out even when it starts below the fold — required for the
-        // open/tab-switch ensureVisible() to be able to scroll to it.
         scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
         children: children,
       ),
@@ -1030,25 +992,27 @@ class _EmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: HotstarPlayerStyle.mutedText,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          shadows: _kGlassTextShadow,
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    return Directionality(
+      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Text(
+          text,
+          textAlign: TextAlign.start,
+          style: const TextStyle(
+            color: HotstarPlayerStyle.mutedText,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            shadows: _kGlassTextShadow,
+          ),
         ),
       ),
     );
   }
 }
 
-/// Shared decoration for focusable panel rows. On TV focus the row lights up
-/// with an accent fill + border + soft glow — the same treatment as the
-/// play/pause and action buttons — so the focused item is clearly visible
-/// rather than a faint dark tint.
 BoxDecoration _panelRowDecoration({
   required bool focusedOnTv,
   required bool selected,
@@ -1078,10 +1042,6 @@ BoxDecoration _panelRowDecoration({
   );
 }
 
-/// One selectable row. Focus lights it up like the player buttons (see
-/// [_panelRowDecoration]). Activates on tap and on D-pad/keyboard
-/// select/enter/space; directional movement between rows is handled natively by
-/// the enclosing traversal group.
 class _PanelSubheader extends StatelessWidget {
   final String title;
 
@@ -1089,16 +1049,22 @@ class _PanelSubheader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          color: HotstarPlayerStyle.mutedText,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.2,
-          shadows: _kGlassTextShadow,
+    final isArabic =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+    return Directionality(
+      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+        child: Text(
+          title.toUpperCase(),
+          textAlign: TextAlign.start,
+          style: const TextStyle(
+            color: HotstarPlayerStyle.mutedText,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+            shadows: _kGlassTextShadow,
+          ),
         ),
       ),
     );

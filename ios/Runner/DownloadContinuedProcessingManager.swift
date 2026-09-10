@@ -47,6 +47,9 @@ final class DownloadContinuedProcessingManager {
     var currentIndex: Int
   }
 
+  /// Reserved for a real explicit cancel action. BGContinuedProcessingTask
+  /// expiration is only the end of the OS processing lease and must never be
+  /// translated into pausing the independent background URLSession transfer.
   var cancellationHandler: ((String) -> Void)?
 
   private let scheduler = BGTaskScheduler.shared
@@ -88,7 +91,7 @@ final class DownloadContinuedProcessingManager {
       && taskId != previousEpisodeTaskId
     let keepSpeed = switched
       ? max(speedBytesPerSecond, 0)
-      : (speedBytesPerSecond > 0
+      : (speedBytesPerSecond >= 0
         ? speedBytesPerSecond
         : max(snapshot?.speedBytesPerSecond ?? 0, 0))
     let snapshot = Snapshot(
@@ -207,8 +210,8 @@ final class DownloadContinuedProcessingManager {
     }
     if switched {
       snapshot.speedBytesPerSecond = max(speedBytesPerSecond, 0)
-    } else if speedBytesPerSecond > 0 {
-      snapshot.speedBytesPerSecond = speedBytesPerSecond
+    } else if speedBytesPerSecond >= 0 {
+      snapshot.speedBytesPerSecond = max(speedBytesPerSecond, 0)
     }
     if !displayName.isEmpty {
       snapshot.displayName = displayName
@@ -240,9 +243,23 @@ final class DownloadContinuedProcessingManager {
   private func completeSession(success: Bool, status: String) {
     cancelPendingRequest()
 
+    // Flutter can decide that the session has no *running* entries after an
+    // unexpected child pause, even though the logical episode is only 36% done.
+    // Never let that bookkeeping race become the iOS "Download complete"
+    // banner seen by the user. A real final episode reaches progress 1.0 and,
+    // for a batch, all earlier episodes are already counted as completed.
+    let snapshotLooksComplete: Bool
+    if let snapshot {
+      snapshotLooksComplete = snapshot.progress >= 0.999_999
+        && snapshot.completedCount + 1 >= max(snapshot.batchTotal, 1)
+    } else {
+      snapshotLooksComplete = false
+    }
+    let verifiedSuccess = success && snapshotLooksComplete
+
     if let task = activeTask {
       activeTask = nil
-      if success {
+      if verifiedSuccess {
         if task.progress.totalUnitCount <= 0 {
           task.progress.totalUnitCount = 1000
         }
@@ -251,14 +268,19 @@ final class DownloadContinuedProcessingManager {
           "Download complete",
           subtitle: sessionCountSubtitle(snapshot)
         )
-      } else if status == "failed" {
+      } else if status == "canceled" {
+        task.updateTitle(
+          "Download stopped",
+          subtitle: sessionCountSubtitle(snapshot)
+        )
+      } else {
         task.updateTitle(
           "Download paused",
           subtitle: sessionCountSubtitle(snapshot)
         )
       }
       task.expirationHandler = nil
-      task.setTaskCompleted(success: success)
+      task.setTaskCompleted(success: verifiedSuccess)
     }
 
     snapshot = nil
@@ -272,10 +294,13 @@ final class DownloadContinuedProcessingManager {
     task.expirationHandler = { [weak self, weak task] in
       Task { @MainActor in
         guard let self else { return }
-        let cancelId = self.currentEpisodeTaskId.isEmpty
-          ? Self.sessionKey
-          : self.currentEpisodeTaskId
-        self.cancellationHandler?(cancelId)
+
+        // Expiration only revokes the BGContinuedProcessingTask lease / system
+        // overlay. The actual episode is owned by background URLSession (or by
+        // PersistentParallelDownload's child URLSession tasks), which is
+        // intentionally independent and must keep transferring. Mapping this
+        // callback to `cancellationHandler` used to mark the logical parent
+        // paused and promote the next episode while its parts were still live.
         task?.setTaskCompleted(success: false)
         self.activeTask = nil
         self.snapshot = nil

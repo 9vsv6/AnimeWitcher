@@ -44,3 +44,19 @@ jobs:
         # harmless value satisfies its build-time configuration guard; it is
         # never sent to an external service by the test suite.
         run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+  native-log-typecheck:
+    name: Typecheck native download logger
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Typecheck the production Foundation logger
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          source = Path('ios/Runner/DownloadNativeWaitingQueue.swift').read_text()
+          logger = source[source.index('enum DownloadNativeDiagnosticLog'):source.index('import ObjectiveC')]
+          stub = 'enum DownloadNativeWaitingQueue { static func taskId(from task: URLSessionTask) -> String? { nil } }'
+          Path('/tmp/download-log.swift').write_text('import Foundation\n' + logger + stub)
+          PYCODE
+          swiftc -typecheck /tmp/download-log.swift

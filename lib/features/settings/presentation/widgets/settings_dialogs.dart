@@ -124,41 +124,85 @@ String getPlayerDisplayName(String? playerId, AppLocalizations l10n) {
   return player?.displayName ?? playerId;
 }
 
-/// Shows a dialog to pick the seek duration.
+const List<int> kSeekDurationOptions = <int>[5, 10, 15, 20, 30, 60, 120];
+
+int _closestSeekDurationIndex(int current) {
+  var bestIndex = 0;
+  var bestDistance = (kSeekDurationOptions.first - current).abs();
+  for (var i = 1; i < kSeekDurationOptions.length; i++) {
+    final distance = (kSeekDurationOptions[i] - current).abs();
+    if (distance < bestDistance) {
+      bestIndex = i;
+      bestDistance = distance;
+    }
+  }
+  return bestIndex;
+}
+
+/// Shows a discrete slider for the seek duration. Moving the thumb is only a
+/// preview; the setting is committed when Save is pressed.
 void showDurationDialog(BuildContext context, WidgetRef ref, int current) {
   final l10n = AppLocalizations.of(context)!;
-  final options = <int>[5, 10, 15, 20, 30, 60, 120];
+  var selectedIndex = _closestSeekDurationIndex(current);
 
   showGlassDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(l10n.selectSeekDuration),
-      content: RadioGroup<int>(
-        groupValue: current,
-        onChanged: (val) {
-          if (val == null) return;
-          ref.read(playerSettingsProvider.notifier).setSeekDuration(val);
-          Navigator.pop<void>(context);
-        },
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((sec) {
-              return ListTile(
-                title: Text(formatSeekDuration(sec, l10n)),
-                leading: Radio<int>(value: sec),
-                onTap: () {
-                  ref
-                      .read(playerSettingsProvider.notifier)
-                      .setSeekDuration(sec);
-                  Navigator.pop<void>(context);
-                },
-              );
-            }).toList(),
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) {
+        final selected = kSeekDurationOptions[selectedIndex];
+        return AlertDialog(
+          surfaceTintColor: Colors.transparent,
+          title: Text(l10n.selectSeekDuration),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  formatSeekDuration(selected, l10n),
+                  key: const ValueKey('seek-duration-value'),
+                  style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CustomSlider(
+                  key: const ValueKey('seek-duration-slider'),
+                  value: selectedIndex.toDouble(),
+                  min: 0,
+                  max: (kSeekDurationOptions.length - 1).toDouble(),
+                  divisions: kSeekDurationOptions.length - 1,
+                  step: 1.0,
+                  onChanged: (value) =>
+                      setState(() => selectedIndex = value.round()),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop<void>(ctx),
+              child: Text(
+                l10n.cancel,
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            CustomButton(
+              isPrimary: true,
+              onPressed: () async {
+                await ref
+                    .read(playerSettingsProvider.notifier)
+                    .setSeekDuration(kSeekDurationOptions[selectedIndex]);
+                if (ctx.mounted) Navigator.pop<void>(ctx);
+              },
+              child: Text(l10n.save),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -212,105 +256,174 @@ String downloadConcurrencyTitle() => 'عدد التحميلات المتزامن
 String downloadConcurrencySubtitle(int count) =>
     '${clampDownloadConcurrency(count)} في نفس الوقت';
 
-/// Pick how many episode downloads may transfer at once (1–5). Applies live.
+String _downloadConcurrencyDialogValue(int count) {
+  final normalized = clampDownloadConcurrency(count);
+  return normalized == 1
+      ? 'تحميل واحد في نفس الوقت'
+      : '$normalized تحميلات في نفس الوقت';
+}
+
+/// Pick how many episode downloads may transfer at once. The setting is only
+/// committed when Save is pressed, matching SkyStream's slider interaction.
 void showDownloadConcurrencyDialog(
   BuildContext context,
   WidgetRef ref,
   int current,
 ) {
-  final selected = clampDownloadConcurrency(current);
-  final options = List<int>.generate(
-    kDownloadConcurrencyMax - kDownloadConcurrencyMin + 1,
-    (i) => kDownloadConcurrencyMin + i,
-  );
+  final l10n = AppLocalizations.of(context)!;
+  var selected = clampDownloadConcurrency(current);
 
   showGlassDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(downloadConcurrencyTitle()),
-      content: RadioGroup<int>(
-        groupValue: selected,
-        onChanged: (val) {
-          if (val == null) return;
-          ref
-              .read(generalSettingsProvider.notifier)
-              .setDownloadConcurrency(val);
-          Navigator.pop<void>(context);
-        },
-        child: SingleChildScrollView(
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        surfaceTintColor: Colors.transparent,
+        title: Text(downloadConcurrencyTitle()),
+        content: SizedBox(
+          width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: options.map((n) {
-              return ListTile(
-                title: Text('$n'),
-                subtitle: Text(downloadConcurrencySubtitle(n)),
-                leading: Radio<int>(value: n),
-                onTap: () {
-                  ref
-                      .read(generalSettingsProvider.notifier)
-                      .setDownloadConcurrency(n);
-                  Navigator.pop<void>(context);
-                },
-              );
-            }).toList(),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _downloadConcurrencyDialogValue(selected),
+                key: const ValueKey('download-concurrency-value'),
+                style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              CustomSlider(
+                key: const ValueKey('download-concurrency-slider'),
+                value: selected.toDouble(),
+                min: kDownloadConcurrencyMin.toDouble(),
+                max: kDownloadConcurrencyMax.toDouble(),
+                divisions: kDownloadConcurrencyMax - kDownloadConcurrencyMin,
+                step: 1.0,
+                onChanged: (value) =>
+                    setState(() => selected = value.round()),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'يحدد عدد الحلقات التي يمكن تنزيلها معًا قبل وضع البقية في الانتظار.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop<void>(ctx),
+            child: Text(
+              l10n.cancel,
+              style: TextStyle(
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          CustomButton(
+            isPrimary: true,
+            onPressed: () async {
+              await ref
+                  .read(generalSettingsProvider.notifier)
+                  .setDownloadConcurrency(selected);
+              if (ctx.mounted) Navigator.pop<void>(ctx);
+            },
+            child: Text(l10n.save),
+          ),
+        ],
       ),
     ),
   );
 }
 
-String downloadPartsTitle() => 'أجزاء التنزيل';
+String downloadPartsTitle() => 'اتصالات التنزيل';
 
 String downloadPartsSubtitle(int value) {
   final normalized = normalizeDownloadPartPreference(value);
-  return normalized == kDownloadPartsAuto ? 'تلقائي' : '$normalized أجزاء';
+  if (normalized == kDownloadPartsAuto) return 'تلقائي';
+  if (normalized == 1) return 'اتصال واحد';
+  return '$normalized اتصالات';
 }
 
+String _downloadPartsDialogValue(int value) {
+  final normalized = normalizeDownloadPartPreference(value);
+  if (normalized == kDownloadPartsAuto) return 'تلقائي';
+  if (normalized == 1) return 'اتصال واحد';
+  return '$normalized اتصالات متوازية';
+}
+
+/// 0 is Auto, followed by every manual connection count from 1 through 16.
+/// The backend already uses the same range; this changes only the picker UX.
 void showDownloadPartsDialog(BuildContext context, WidgetRef ref, int current) {
-  final selected = normalizeDownloadPartPreference(current);
+  final l10n = AppLocalizations.of(context)!;
+  var selected = normalizeDownloadPartPreference(current);
+
   showGlassDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(downloadPartsTitle()),
-      content: RadioGroup<int>(
-        groupValue: selected,
-        onChanged: (value) {
-          if (value == null) return;
-          ref
-              .read(generalSettingsProvider.notifier)
-              .setDownloadParallelParts(value);
-          Navigator.pop<void>(context);
-        },
-        child: SingleChildScrollView(
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        surfaceTintColor: Colors.transparent,
+        title: Text(downloadPartsTitle()),
+        content: SizedBox(
+          width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: kDownloadPartChoices
-                .map((value) {
-                  final auto = value == kDownloadPartsAuto;
-                  return ListTile(
-                    title: Text(auto ? 'تلقائي' : '$value'),
-                    subtitle: Text(
-                      auto
-                          ? 'يختار العدد حسب حجم الملف ودعم الخادم'
-                          : value == 1
-                          ? 'اتصال واحد'
-                          : '$value اتصالات متوازية عند دعم الخادم',
-                    ),
-                    leading: Radio<int>(value: value),
-                    onTap: () {
-                      ref
-                          .read(generalSettingsProvider.notifier)
-                          .setDownloadParallelParts(value);
-                      Navigator.pop<void>(context);
-                    },
-                  );
-                })
-                .toList(growable: false),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _downloadPartsDialogValue(selected),
+                key: const ValueKey('download-parts-value'),
+                style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              CustomSlider(
+                key: const ValueKey('download-parts-slider'),
+                value: selected.toDouble(),
+                min: kDownloadPartsAuto.toDouble(),
+                max: kDownloadPartsMax.toDouble(),
+                divisions: kDownloadPartsMax - kDownloadPartsAuto,
+                step: 1.0,
+                onChanged: (value) =>
+                    setState(() => selected = value.round()),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                selected == kDownloadPartsAuto
+                    ? 'تلقائي يختار عدد الاتصالات حسب حجم الملف ودعم الخادم لطلبات Range.'
+                    : 'يحدد الحد الأقصى لاتصالات الحلقة الواحدة. التقسيم يعمل فقط عندما يدعم الخادم Range.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop<void>(ctx),
+            child: Text(
+              l10n.cancel,
+              style: TextStyle(
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          CustomButton(
+            isPrimary: true,
+            onPressed: () async {
+              await ref
+                  .read(generalSettingsProvider.notifier)
+                  .setDownloadParallelParts(selected);
+              if (ctx.mounted) Navigator.pop<void>(ctx);
+            },
+            child: Text(l10n.save),
+          ),
+        ],
       ),
     ),
   );
@@ -405,42 +518,70 @@ void showDownloadNotificationsDialog(BuildContext context, WidgetRef ref) {
   );
 }
 
-/// Shows a dialog to pick the readahead duration (5-10 min).
+/// Shows a slider to pick the readahead duration from 1 to 20 minutes. Moving
+/// the thumb is provisional until Save, matching the other numeric settings.
 void showReadaheadDialog(BuildContext context, WidgetRef ref, int current) {
   final l10n = AppLocalizations.of(context)!;
-  // 1 to 20 minutes in 1-minute steps
-  final options = List.generate(20, (i) => (1 + i) * 60);
+  var selectedMinutes = (current / 60).round().clamp(1, 20).toInt();
 
   showGlassDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      surfaceTintColor: Colors.transparent,
-      title: Text(l10n.selectBufferDepth),
-      content: RadioGroup<int>(
-        groupValue: current,
-        onChanged: (val) {
-          if (val == null) return;
-          ref.read(playerSettingsProvider.notifier).setReadaheadSeconds(val);
-          Navigator.pop<void>(context);
-        },
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((sec) {
-              return ListTile(
-                title: Text(formatReadahead(sec, l10n)),
-                leading: Radio<int>(value: sec),
-                onTap: () {
-                  ref
-                      .read(playerSettingsProvider.notifier)
-                      .setReadaheadSeconds(sec);
-                  Navigator.pop<void>(context);
-                },
-              );
-            }).toList(),
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) {
+        final selectedSeconds = selectedMinutes * 60;
+        return AlertDialog(
+          surfaceTintColor: Colors.transparent,
+          title: Text(l10n.selectBufferDepth),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  formatReadahead(selectedSeconds, l10n),
+                  key: const ValueKey('buffer-depth-value'),
+                  style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CustomSlider(
+                  key: const ValueKey('buffer-depth-slider'),
+                  value: selectedMinutes.toDouble(),
+                  min: 1,
+                  max: 20,
+                  divisions: 19,
+                  step: 1.0,
+                  onChanged: (value) =>
+                      setState(() => selectedMinutes = value.round()),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop<void>(ctx),
+              child: Text(
+                l10n.cancel,
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            CustomButton(
+              isPrimary: true,
+              onPressed: () async {
+                await ref
+                    .read(playerSettingsProvider.notifier)
+                    .setReadaheadSeconds(selectedMinutes * 60);
+                if (ctx.mounted) Navigator.pop<void>(ctx);
+              },
+              child: Text(l10n.save),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -865,12 +1006,9 @@ void showFillerBehaviourDialog(BuildContext context, WidgetRef ref) {
                   ),
                   FillerBehaviour.note => appText(
                     context,
-                    english:
-                        'The next-episode card says so and offers the '
-                        'episode after it',
+                    english: 'The next-episode card says so and offers the episode after it',
                     arabic:
-                        'تظهر ملاحظة على بطاقة الحلقة التالية مع الانتقال '
-                        'إلى ما بعدها',
+                        'تظهر ملاحظة على بطاقة الحلقة التالية مع الانتقال إلى ما بعدها',
                   ),
                   FillerBehaviour.skip => appText(
                     context,

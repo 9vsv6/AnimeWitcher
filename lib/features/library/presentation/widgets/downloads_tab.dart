@@ -12,6 +12,7 @@ import '../../../../core/services/download_service.dart';
 import '../../../../core/services/download_concurrency.dart';
 import '../../../../core/services/download_parallel.dart';
 import 'segmented_download_progress.dart';
+import 'completed_download_episode_card.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../details/presentation/playback_launcher.dart';
 import '../downloads_provider.dart';
@@ -105,7 +106,6 @@ class _DownloadsTabState extends ConsumerState<DownloadsTab>
                       textDirection: TextDirection.ltr,
                       child: _CompletedDownloadsList(
                         items: completed,
-                        activeProgress: activeProgress,
                         emptyMessage: l10n.noCompletedDownloadsYet,
                       ),
                     ),
@@ -196,12 +196,10 @@ class _ActiveDownloadsList extends StatelessWidget {
 class _CompletedDownloadsList extends StatelessWidget {
   const _CompletedDownloadsList({
     required this.items,
-    required this.activeProgress,
     required this.emptyMessage,
   });
 
   final List<DownloadItem> items;
-  final Map<String, DownloadProgressData> activeProgress;
   final String emptyMessage;
 
   @override
@@ -229,60 +227,32 @@ class _CompletedDownloadsList extends StatelessWidget {
         separatorBuilder: (context, index) => const SizedBox(height: 16),
         itemBuilder: (context, index) {
           final key = keys[index];
-          final groupItems = grouped[key]!;
-
-          if (groupItems.length == 1) {
-            final download = groupItems.first;
-            final trackingUrl = download.task.metaData.isNotEmpty
-                ? download.task.metaData
-                : download.task.url;
-            final progressData = activeProgress[trackingUrl];
-            final double displayProgress =
-                progressData?.progress ?? download.progress;
-            final TaskStatus displayStatus =
-                progressData?.status ?? download.status;
-
-            return _DownloadItemTile(
-              item: download,
-              progress: displayProgress,
-              status: displayStatus,
-              progressData: progressData,
-            );
-          }
-
-          return _GroupedDownloadTile(
-            items: groupItems,
-            activeProgress: activeProgress,
-          );
+          return _GroupedDownloadTile(items: grouped[key]!);
         },
       ),
     );
   }
 }
 
+String _completedEpisodeCountLabel(BuildContext context, int count) {
+  final isArabic =
+      Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
+  if (!isArabic) return count == 1 ? '1 episode' : '$count episodes';
+  if (count == 1) return 'حلقة';
+  if (count == 2) return 'حلقتان';
+  return '$count حلقات';
+}
+
 class _GroupedDownloadTile extends ConsumerWidget {
   final List<DownloadItem> items;
-  final Map<String, DownloadProgressData> activeProgress;
 
-  const _GroupedDownloadTile({
-    required this.items,
-    required this.activeProgress,
-  });
+  const _GroupedDownloadTile({required this.items});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final firstItem = items.first;
-
-    // Calculate overall progress or status
-    final completedCount = items.where((i) {
-      final trackingUrl = i.task.metaData.isNotEmpty
-          ? i.task.metaData
-          : i.task.url;
-      final status = activeProgress[trackingUrl]?.status ?? i.status;
-      return status == TaskStatus.complete;
-    }).length;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -355,7 +325,7 @@ class _GroupedDownloadTile extends ConsumerWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        l10n.episodesCount(items.length, completedCount),
+                        _completedEpisodeCountLabel(context, items.length),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -378,15 +348,6 @@ class _GroupedDownloadTile extends ConsumerWidget {
           final download = entry.value;
           final isLast = entry.key == items.length - 1;
 
-          final trackingUrl = download.task.metaData.isNotEmpty
-              ? download.task.metaData
-              : download.task.url;
-          final progressData = activeProgress[trackingUrl];
-          final double displayProgress =
-              progressData?.progress ?? download.progress;
-          final TaskStatus displayStatus =
-              progressData?.status ?? download.status;
-
           return Column(
             children: [
               if (entry.key == 0)
@@ -399,12 +360,11 @@ class _GroupedDownloadTile extends ConsumerWidget {
                   horizontal: LayoutConstants.spacingMd,
                   vertical: LayoutConstants.spacingSm,
                 ),
-                child: _DownloadItemTile(
+                child: CompletedDownloadEpisodeCard(
+                  key: ValueKey(download.id),
                   item: download,
-                  progress: displayProgress,
-                  status: displayStatus,
-                  progressData: progressData,
-                  isInsideGroup: true,
+                  onPlay: () => _playLocalFile(context, ref, download, l10n),
+                  onDelete: () => _confirmDelete(context, ref, download, l10n),
                 ),
               ),
               if (!isLast)
@@ -417,6 +377,71 @@ class _GroupedDownloadTile extends ConsumerWidget {
             ],
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Future<void> _playLocalFile(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadItem item,
+    AppLocalizations l10n,
+  ) async {
+    final downloadService = ref.read(downloadServiceProvider);
+    File? file = await downloadService.getDownloadedFileForTask(item.task);
+    file ??= await downloadService.getDownloadedFile(
+      item.item,
+      episode: item.episode,
+    );
+
+    if (file == null || !await file.exists()) {
+      if (context.mounted) {
+        ref
+            .read(notificationServiceProvider)
+            .showError(l10n.fileNotFoundRemoving);
+      }
+      await ref.read(downloadsProvider.notifier).removeDownload(item);
+      return;
+    }
+
+    if (context.mounted) {
+      unawaited(
+        ref
+            .read(playbackLauncherProvider)
+            .play(
+              context,
+              file.path,
+              baseItem: item.item,
+              episode: item.episode,
+            ),
+      );
+    }
+  }
+
+  void _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadItem item,
+    AppLocalizations l10n,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.deleteDownload),
+        content: Text(l10n.confirmDeleteDownload),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(downloadsProvider.notifier).removeDownload(item);
+            },
+            child: Text(l10n.delete, style: const TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
@@ -527,7 +552,6 @@ class _DownloadItemTile extends ConsumerWidget {
       children: [
         poster,
         const SizedBox(width: LayoutConstants.spacingMd),
-        // Details
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,7 +683,6 @@ class _DownloadItemTile extends ConsumerWidget {
                     ],
                   ),
               ],
-              // Actions Row
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -761,8 +784,6 @@ class _DownloadItemTile extends ConsumerWidget {
     AppLocalizations l10n,
   ) async {
     final downloadService = ref.read(downloadServiceProvider);
-    // Prefer the task's recorded path — it is the exact file that was saved,
-    // including quality suffix and OS Unicode form (NFC/NFD).
     File? file = await downloadService.getDownloadedFileForTask(item.task);
     file ??= await downloadService.getDownloadedFile(
       item.item,
@@ -775,14 +796,11 @@ class _DownloadItemTile extends ConsumerWidget {
             .read(notificationServiceProvider)
             .showError(l10n.fileNotFoundRemoving);
       }
-      // Self-delete from DB
       await ref.read(downloadsProvider.notifier).removeDownload(item);
       return;
     }
 
     if (context.mounted) {
-      // Pass the absolute file path so playback does not depend on reconstructing
-      // the filename (والأخيرة / quality / Unicode form) a second time.
       unawaited(
         ref
             .read(playbackLauncherProvider)

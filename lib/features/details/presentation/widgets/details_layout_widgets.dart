@@ -614,7 +614,9 @@ class DetailsEpisodeFilterBar extends ConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Icon(
-                    Icons.swap_vert_rounded,
+                    detailsState.isAscending
+                        ? Icons.arrow_downward_rounded
+                        : Icons.arrow_upward_rounded,
                     size: 22,
                     // The same colour as the view-mode glyphs it sits beside.
                     // Painting it in the accent while they stayed neutral made

@@ -8,6 +8,14 @@ class MemoryStorageService extends StorageService {
   final Map<String, dynamic> settings = <String, dynamic>{};
 
   @override
+  bool getDownloadDiagnosticLog() =>
+      settings['download_diagnostic_log'] == true;
+  @override
+  Future<void> setDownloadDiagnosticLog(bool value) async {
+    settings['download_diagnostic_log'] = value;
+  }
+
+  @override
   Future<void> setDownloadConcurrency(int value) async {
     settings[kDownloadConcurrencyStorageKey] = clampDownloadConcurrency(value);
   }

@@ -12,14 +12,15 @@ void main() {
       expect(parseDownloadConcurrency(null), 1);
     });
 
-    test('clamps to 1–5', () {
+    test('clamps to 1–10', () {
       expect(clampDownloadConcurrency(0), 1);
       expect(clampDownloadConcurrency(-3), 1);
       expect(clampDownloadConcurrency(1), 1);
       expect(clampDownloadConcurrency(3), 3);
       expect(clampDownloadConcurrency(5), 5);
-      expect(clampDownloadConcurrency(6), 5);
-      expect(clampDownloadConcurrency(10), 5);
+      expect(clampDownloadConcurrency(6), 6);
+      expect(clampDownloadConcurrency(10), 10);
+      expect(clampDownloadConcurrency(11), 10);
     });
 
     test('parses numeric storage values and ignores junk', () {
@@ -50,15 +51,15 @@ void main() {
         List<(String, dynamic)>? configured;
 
         final applied = await applyDownloadQueueSettings(
-          maxConcurrent: 9,
+          maxConcurrent: 19,
           persist: storage.setDownloadConcurrency,
           configure: (globalConfig) async {
             configured = globalConfig;
           },
         );
 
-        expect(applied, 5);
-        expect(storage.getDownloadConcurrency(), 5);
+        expect(applied, 10);
+        expect(storage.getDownloadConcurrency(), 10);
         expect(configured, <(String, dynamic)>[(Config.holdingQueue, false)]);
       },
     );
@@ -1506,7 +1507,7 @@ void main() {
       await repository.setDownloadConcurrency(4);
       expect(repository.getDownloadConcurrency(), 4);
       await repository.setDownloadConcurrency(99);
-      expect(repository.getDownloadConcurrency(), 5);
+      expect(repository.getDownloadConcurrency(), 10);
     });
 
     test(

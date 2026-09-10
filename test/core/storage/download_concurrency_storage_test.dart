@@ -26,7 +26,7 @@ void main() {
     return storage;
   }
 
-  test('Hive settings default to 1 and clamp 1–5', () async {
+  test('Hive settings default to 1 and clamp 1–10', () async {
     final storage = await bindFreshBox('download_concurrency_default');
 
     expect(storage.getDownloadConcurrency(), 1);
@@ -34,18 +34,18 @@ void main() {
     await storage.setDownloadConcurrency(0);
     expect(storage.getDownloadConcurrency(), 1);
 
-    await storage.setDownloadConcurrency(5);
-    expect(storage.getDownloadConcurrency(), 5);
-
     await storage.setDownloadConcurrency(8);
-    expect(storage.getDownloadConcurrency(), 5);
+    expect(storage.getDownloadConcurrency(), 8);
+
+    await storage.setDownloadConcurrency(11);
+    expect(storage.getDownloadConcurrency(), 10);
   });
 
-  test('Hive round-trips a live 1–5 change', () async {
+  test('Hive round-trips a live 1–10 change', () async {
     final storage = await bindFreshBox('download_concurrency_roundtrip');
-    await storage.setDownloadConcurrency(4);
-    expect(storage.getDownloadConcurrency(), 4);
-    expect(storage.getDownloadConcurrency(), clampDownloadConcurrency(4));
+    await storage.setDownloadConcurrency(7);
+    expect(storage.getDownloadConcurrency(), 7);
+    expect(storage.getDownloadConcurrency(), clampDownloadConcurrency(7));
   });
 
   test('Hive round-trips download notification toggles', () async {

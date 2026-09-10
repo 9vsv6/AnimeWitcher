@@ -8,7 +8,7 @@ void main() {
     home: Scaffold(body: SizedBox(width: 400, child: child)),
   );
 
-  testWidgets('renders one real progress bar per parallel child', (
+  testWidgets('renders one aggregate bar even with parallel child telemetry', (
     tester,
   ) async {
     final task = ParallelDownloadTask(
@@ -39,17 +39,12 @@ void main() {
           find.byType(LinearProgressIndicator),
         )
         .toList();
-    expect(indicators, hasLength(4));
-    expect(indicators.map((indicator) => indicator.value).toList(), <double?>[
-      0.10,
-      0.25,
-      0.50,
-      0.75,
-    ]);
+    expect(indicators, hasLength(1));
+    expect(indicators.single.value, 0.35);
   });
 
   testWidgets(
-    'falls back to one honest aggregate bar without child telemetry',
+    'renders one honest aggregate bar without child telemetry',
     (tester) async {
       final task = ParallelDownloadTask(
         taskId: 'episode-10',
@@ -75,6 +70,46 @@ void main() {
           .toList();
       expect(indicators, hasLength(1));
       expect(indicators.single.value, 0.35);
+    },
+  );
+
+  testWidgets(
+    'uses aggregate progress when queued work units outnumber connection lanes',
+    (tester) async {
+      final task = ParallelDownloadTask(
+        taskId: 'episode-tail-balanced',
+        url: 'https://example.com/episode.mp4',
+        chunks: 4,
+      );
+
+      await tester.pumpWidget(
+        host(
+          SegmentedDownloadProgress(
+            task: task,
+            value: 0.42,
+            chunkProgress: const {
+              'part-0': 1.0,
+              'part-1': 0.8,
+              'part-2': 0.6,
+              'part-3': 0.4,
+              'part-4': 0.2,
+              'part-5': 0.1,
+              'part-6': 0.0,
+              'part-7': 0.0,
+            },
+            backgroundColor: Colors.black12,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+      );
+
+      final indicators = tester
+          .widgetList<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .toList();
+      expect(indicators, hasLength(1));
+      expect(indicators.single.value, 0.42);
     },
   );
 

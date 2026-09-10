@@ -271,7 +271,7 @@ void main() {
   });
 
   testWidgets(
-    'two complete records for the same episode collapse to one UI row',
+    'two complete records for the same episode collapse into one grouped episode',
     (tester) async {
       final older = _item(taskId: 'old-complete', timestamp: 100);
       final newer = _item(taskId: 'new-complete', timestamp: 200);
@@ -302,11 +302,19 @@ void main() {
       await tester.tap(find.text('المكتملة'));
       await tester.pumpAndSettle();
 
-      expect(find.text('الحلقة 9'), findsOneWidget);
       expect(find.text('Black Torch'), findsOneWidget);
-      expect(find.byType(ExpansionTile), findsNothing);
-      expect(find.byIcon(Icons.play_circle_fill_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.delete_outline_rounded), findsOneWidget);
+      expect(find.byType(ExpansionTile), findsOneWidget);
+      expect(find.text('حلقة'), findsOneWidget);
+      expect(find.text('مكتمل'), findsNothing);
+      expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
+      expect(find.text('الحلقة 9'), findsNothing);
+
+      await tester.tap(find.text('Black Torch'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('الحلقة 9'), findsOneWidget);
+      expect(find.byIcon(Icons.play_circle_fill_rounded), findsNothing);
+      expect(find.byIcon(Icons.delete_outline_rounded), findsNWidgets(2));
       expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
     },
   );
@@ -581,7 +589,7 @@ void main() {
     }
   });
 
-  testWidgets('completed tab still groups multiple episodes of one anime', (
+  testWidgets('completed tab groups two episodes and uses dual count', (
     tester,
   ) async {
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -630,6 +638,9 @@ void main() {
     expect(find.byType(ExpansionTile), findsOneWidget);
     expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
     expect(find.text('Bleach'), findsOneWidget);
+    expect(find.text('حلقتان'), findsOneWidget);
+    expect(find.text('مكتمل'), findsNothing);
+    expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
     expect(
       Directionality.of(tester.element(find.byType(TabBarView))),
       TextDirection.rtl,
@@ -654,7 +665,7 @@ void main() {
     }
   });
 
-  testWidgets('tab swipe follows RTL like المواسم and الإحصائيات', (
+  testWidgets('tab swipe follows RTL and lands on the completed anime group', (
     tester,
   ) async {
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -698,8 +709,6 @@ void main() {
     await tester.pumpWidget(
       _downloadsApp(
         [episode(20, TaskStatus.running), episode(9, TaskStatus.complete)],
-        // DownloadsScreen used to force LTR on the whole page; the pager
-        // must still be RTL like the other FilterStyleTabBar screens.
         shellDirection: TextDirection.ltr,
       ),
     );
@@ -710,17 +719,24 @@ void main() {
       TextDirection.rtl,
     );
     expect(find.text('الحلقة 20'), findsOneWidget);
-    expect(find.text('الحلقة 9'), findsNothing);
 
     await tester.fling(find.byType(TabBarView), const Offset(400, 0), 2000);
     await tester.pumpAndSettle();
 
-    expect(find.text('الحلقة 9'), findsOneWidget);
-    expect(find.text('مكتمل'), findsOneWidget);
+    expect(find.text('Kuroneko'), findsOneWidget);
+    expect(find.byType(ExpansionTile), findsOneWidget);
+    expect(find.text('حلقة'), findsOneWidget);
+    expect(find.text('الحلقة 9'), findsNothing);
+    expect(find.text('مكتمل'), findsNothing);
+    expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
     expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
+
+    await tester.tap(find.text('Kuroneko'));
+    await tester.pumpAndSettle();
+    expect(find.text('الحلقة 9'), findsOneWidget);
   });
 
-  testWidgets('completed grouped and single cards keep poster on the left', (
+  testWidgets('completed single and multi downloads are both anime groups', (
     tester,
   ) async {
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -791,22 +807,32 @@ void main() {
         single,
         bleachEp(6),
         bleachEp(5),
+        bleachEp(4),
       ], shellDirection: TextDirection.ltr),
     );
     await tester.pump();
     await tester.tap(find.text('المكتملة'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ExpansionTile), findsOneWidget);
+    expect(find.byType(ExpansionTile), findsNWidgets(2));
     expect(find.text('Kimi no Koto'), findsOneWidget);
     expect(find.text('Bleach'), findsOneWidget);
+    expect(find.text('حلقة'), findsOneWidget);
+    expect(find.text('3 حلقات'), findsOneWidget);
+    expect(find.text('مكتمل'), findsNothing);
+    expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
 
     final singlePoster = tester.getTopLeft(find.text('Kimi no Koto'));
     final groupPoster = tester.getTopLeft(find.text('Bleach'));
-    // Both titles sit to the right of their posters (LTR cards).
     expect(singlePoster.dx, greaterThan(40));
     expect(groupPoster.dx, greaterThan(40));
     expect((singlePoster.dx - groupPoster.dx).abs(), lessThan(24));
+
+    await tester.tap(find.text('Kimi no Koto'));
+    await tester.pumpAndSettle();
+    expect(find.text('الحلقة 9'), findsOneWidget);
+    expect(find.byIcon(Icons.play_circle_fill_rounded), findsNothing);
+    expect(find.byIcon(Icons.delete_outline_rounded), findsNWidgets(3));
 
     final artifacts = debugShotDirectory();
     if (artifacts != null) {

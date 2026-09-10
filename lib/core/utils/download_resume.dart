@@ -1,7 +1,10 @@
 import 'dart:io';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
 
+import '../services/download_concurrency.dart';
+import '../services/download_job_state.dart';
 import 'download_cleanup.dart';
 
 /// How an interrupted download should be continued.
@@ -14,6 +17,15 @@ enum DownloadResumeStrategy {
 
   /// Nothing to keep; start the transfer from byte 0.
   restartFromZero,
+}
+
+/// Native status checkpoints can report -1/0 when the response size is not
+/// available. Those sentinels must not erase a previously known file length.
+int knownDownloadSize(Iterable<int?> candidates) {
+  for (final bytes in candidates) {
+    if (bytes != null && bytes > 0) return bytes;
+  }
+  return -1;
 }
 
 /// True when [existingPartialBytes] is a usable prefix of the download.
@@ -54,26 +66,26 @@ bool shouldRestartDownloadFromZero({
   required int expectedBytes,
   double savedProgress = 0,
 }) {
-  if (shouldResumeFromPartialBytes(
-    existingPartialBytes: existingPartialBytes,
-    expectedBytes: expectedBytes,
-  )) {
-    return false;
-  }
+  // Exact-size files may be completed downloads whose last callback was lost.
+  // Oversized files also contain saved data and must never be overwritten.
+  if (existingPartialBytes > 0) return false;
   if (savedProgress > 0) return false;
   return true;
 }
 
-/// Unpause / retry / overlay ticks must not flash 0% over saved bytes.
+/// Progress is monotonic. Late native callbacks after pause/reconnect can report
+/// an older percentage; accepting that regression can make restart recovery
+/// think fewer bytes exist than are actually durable on disk.
 double keepLastKnownDownloadProgress({
   required double incoming,
   double? lastKnown,
 }) {
-  if (incoming > 0 && incoming <= 1) return incoming;
-  final last = lastKnown ?? 0;
-  if (last > 0 && last <= 1 && incoming <= 0) return last;
-  if (incoming < 0) return last > 0 ? last : 0;
-  return incoming.clamp(0.0, 1.0);
+  final last = (lastKnown ?? 0).clamp(0.0, 1.0).toDouble();
+  if (incoming > 0 && incoming <= 1) {
+    return incoming > last ? incoming : last;
+  }
+  if (incoming <= 0) return last;
+  return last;
 }
 
 /// Continue a download that was killed mid-transfer. User-paused rows stay
@@ -86,6 +98,29 @@ bool shouldAutoResumeInterruptedDownload({
 }) {
   if (stillInNativeQueue || userPaused || queueWaiting) return false;
   return wasRunningOrFailed;
+}
+
+/// Decide which persisted rows must be restored to AnimeWitcher's logical
+/// waiting queue after process death.
+///
+/// The decision now goes through [planDownloadRecovery], which establishes one
+/// precedence order for user pause, native ownership, logical queue state and
+/// stale persisted status. This keeps startup recovery deterministic while the
+/// rest of DownloadService is migrated onto the same logical state machine.
+bool shouldRequeueInterruptedDownloadAfterRelaunch({
+  required TaskStatus persisted,
+  required bool queueWaiting,
+  required bool userPaused,
+  required bool stillInNativeQueue,
+  required bool hasMetadata,
+}) {
+  return planDownloadRecovery(
+    persisted: persisted,
+    queueWaiting: queueWaiting,
+    userPaused: userPaused,
+    stillInNativeQueue: stillInNativeQueue,
+    hasMetadata: hasMetadata,
+  ).shouldRequeue;
 }
 
 /// HTTP headers that continue a download from [existingBytes].
@@ -128,6 +163,81 @@ Future<File?> findPartialDownloadFile({
     await consider(File(p.join(dir.path, '$name$suffix')));
   }
   return best;
+}
+
+/// Put the largest durable prefix at the canonical destination before a Range
+/// append.
+///
+/// Native downloaders often leave the best prefix in a sibling `.tmp` or
+/// `.download` file. Copying that file first temporarily requires roughly twice
+/// the partial size and can fail on a nearly-full device. Because the candidate
+/// is a sibling on the same filesystem, prefer a rename after removing only the
+/// smaller canonical prefix. If rename is unavailable (for example because a
+/// platform still has the source handle open), fall back to copy while keeping
+/// the source intact as crash-recovery evidence.
+///
+/// Crash safety: if the process dies after the smaller destination is removed
+/// but before rename/copy finishes, the larger suffix file is still present and
+/// [findPartialDownloadFile] will select it again on the next launch.
+Future<({File file, int bytes})?> canonicalizePartialDownloadFile({
+  required String destinationPath,
+}) async {
+  final partial = await findPartialDownloadFile(
+    destinationPath: destinationPath,
+  );
+  if (partial == null) return null;
+
+  final bytes = await partial.length();
+  final destination = File(destinationPath);
+  if (partial.path == destination.path) {
+    return (file: destination, bytes: bytes);
+  }
+
+  await destination.parent.create(recursive: true);
+
+  // The selected suffix is strictly larger than destination (ties keep the
+  // destination because it is considered first). Removing that smaller copy
+  // cannot discard the best durable prefix: [partial] remains untouched until
+  // rename succeeds.
+  try {
+    if (await destination.exists()) {
+      await destination.delete();
+    }
+  } catch (_) {
+    // A locked destination may still be replaceable by File.copy below.
+  }
+
+  try {
+    final moved = await partial.rename(destination.path);
+    final movedBytes = await moved.length();
+    if (movedBytes != bytes) {
+      throw FileSystemException(
+        'Partial rename changed file length',
+        destination.path,
+      );
+    }
+    return (file: moved, bytes: bytes);
+  } catch (_) {
+    // If rename completed but a follow-up stat failed, prefer the canonical
+    // file when it contains the exact prefix rather than copying again.
+    try {
+      if (await destination.exists() && await destination.length() == bytes) {
+        return (file: destination, bytes: bytes);
+      }
+    } catch (_) {}
+
+    // Rename failed before moving the source. Copy is the compatibility path;
+    // leave [partial] in place so a disk-full/interrupted copy never destroys
+    // the only good prefix.
+    if (!await partial.exists()) return null;
+    try {
+      final copied = await partial.copy(destination.path);
+      if (await copied.length() != bytes) return null;
+      return (file: copied, bytes: bytes);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 /// Appends [chunks] onto [dest] without rewriting the existing prefix.

@@ -83,7 +83,6 @@
 - **إيماءات** السطوع ومستوى الصوت، ووضع **صورة داخل صورة (PiP)**.
 - **لوحة الحلقات داخل المشغّل** مع بحث برقم الحلقة — مفيد في الأعمال الطويلة التي تتجاوز ألف حلقة.
 - **بطاقة الحلقة التالية**، مع تحضير مصادر الحلقة التالية مسبقًا كخيار.
-- **ترجمات خارجية** من OpenSubtitles وSubDL وSubSource، مع تحكّم بحجم الخط وألوانه.
 - **تشغيل عبر مشغّل خارجي** إن فضّلته على المشغّل المدمج.
 - **Anime4K** – ترميم الصورة وتكبيرها على كرت الشاشة أثناء التشغيل، مع اختيار النمط (A / B / C وتضاعفاتها) وحجم الشبكة (S حتى UL).
 
@@ -223,7 +222,7 @@ flutter run
 
 - **وجدت مشكلة؟** أبلغ عنها في صفحة **[GitHub Issues](https://github.com/Fares669/AnimeWitcher/issues)**.
 - **تريد المساعدة في الترجمة؟** راجع **[دليل الترجمة](docs/CONTRIBUTING_TRANSLATIONS.md)**.
-- **تحتاج مساعدة؟** انضم إلى المجتمع على **[ديسكورد](https://discord.gg/73XGA8Mxn9)** أو **[تيليجرام](https://t.me/+Ez5Vsv2pUUFjZmNl)**.
+- **تحتاج مساعدة؟** انضم إلى المجتمع على **[ديسكورد](https://discord.gg/73XGA8Mxn9)**.
 
 ## ❓ الأسئلة الشائعة
 
@@ -253,23 +252,6 @@ flutter run
 
 
 </div>
-
-<div align="center">
-
-<a href="https://t.me/+Ez5Vsv2pUUFjZmNl">
-  <img src="https://img.shields.io/badge/Telegram-Channel-blue?style=for-the-badge&logo=telegram">
-</a>
-
-<br>
-<br>
-
-<a href="https://discord.gg/73XGA8Mxn9">
-  <img src="https://invidget.switchblade.xyz/73XGA8Mxn9">
-</a>
-
-</div>
-
-<div dir="rtl">
 
 ## ⭐ تاريخ النجوم
 

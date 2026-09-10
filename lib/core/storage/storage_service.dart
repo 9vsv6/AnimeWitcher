@@ -1,5 +1,7 @@
 import 'package:crypto/crypto.dart';
+
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -7,7 +9,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as p;
+
 import 'dart:io';
+
 import '../domain/entity/multimedia_item.dart';
 import '../services/download_concurrency.dart';
 import '../services/download_parallel.dart';
@@ -625,6 +629,13 @@ class StorageService {
   }
 
   // --- Download queue ---
+
+  Future<void> setDownloadDiagnosticLog(bool value) async {
+    await _settingsBox.put('download_diagnostic_log', value);
+  }
+
+  bool getDownloadDiagnosticLog() =>
+      _settingsBox.get('download_diagnostic_log') == true;
 
   Future<void> setDownloadConcurrency(int value) async {
     await _settingsBox.put(

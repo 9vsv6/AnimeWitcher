@@ -1,5 +1,72 @@
 #if os(iOS)
 import Foundation
+// Separate native journal survives Dart suspension. Synchronous, serial appends
+// finish before background completion handlers can suspend the process.
+enum DownloadNativeDiagnosticLog {
+  private static let queue = DispatchQueue(label: "animewitcher.download.log")
+  private static let key = "downloadDiagnosticLogEnabled"
+  private static var enabled = UserDefaults.standard.bool(forKey: key)
+  private static var file: URL?
+  private static var size = 0
+  private static var sequence = 0
+  private static var lastProgress: [Int: TimeInterval] = [:]
+  private static let session = String(Int64(Date().timeIntervalSince1970 * 1000000))
+
+  static func configure(_ value: Bool) {
+    queue.sync {
+      enabled = value
+      UserDefaults.standard.set(value, forKey: key)
+      lastProgress.removeAll()
+    }
+  }
+
+  static func record(_ event: String, task: URLSessionTask, error: Error? = nil) {
+    queue.sync {
+      guard enabled else { return }
+      let now = Date().timeIntervalSince1970
+      if event == "progress" {
+        if let previous = lastProgress[task.taskIdentifier], now - previous < 1.0 { return }
+        lastProgress[task.taskIdentifier] = now
+      } else {
+        lastProgress.removeValue(forKey: task.taskIdentifier)
+      }
+      sequence += 1
+      var row: [String: Any] = ["time": ISO8601DateFormatter().string(from: Date()),
+        "session": session, "sequence": sequence, "source": "ios", "event": event,
+        "nativeTaskId": task.taskIdentifier, "bytes": task.countOfBytesReceived,
+        "total": task.countOfBytesExpectedToReceive, "state": task.state.rawValue]
+      if let id = DownloadNativeWaitingQueue.taskId(from: task) { row["taskId"] = id }
+      if let response = task.response as? HTTPURLResponse { row["httpStatus"] = response.statusCode }
+      if let error = error as NSError? { row["errorDomain"] = error.domain; row["errorCode"] = error.code }
+      do {
+        var data = try JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
+        data.append(0x0a)
+        let fm = FileManager.default
+        let directory = fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("log", isDirectory: true)
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        if file == nil || size + data.count > 4 * 1024 * 1024 {
+          file = directory.appendingPathComponent("download-ios-\(session)-\(String(format: "%020d", sequence)).log")
+          try Data().write(to: file!)
+          size = 0
+          let files = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey])
+            .filter { $0.lastPathComponent.hasPrefix("download-ios-") && $0.pathExtension == "log" }
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }
+          for old in files.dropFirst(5) where old != file { try fm.removeItem(at: old) }
+        }
+        let handle = try FileHandle(forWritingTo: file!)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
+        try handle.synchronize()
+        size += data.count
+      } catch {
+        // Logging must never fail or interrupt URLSession delegate handling.
+        file = nil
+      }
+    }
+  }
+}
+
 import ObjectiveC
 import UIKit
 #if canImport(background_downloader)
@@ -175,12 +242,21 @@ enum DownloadNativeWaitingQueue {
     }
 
     var sessionIsIdle: Bool {
-      transferringTaskIds.isEmpty && waiters.isEmpty
+      guard transferringTaskIds.isEmpty && waiters.isEmpty else { return false }
+      if sessionBatchTotal <= 0 && sessionTaskIds.isEmpty { return true }
+
+      let terminalIds = Set(completedTaskIds).union(pausedTaskIds)
+      let hasKnownOutstandingEpisode = sessionTaskIds.contains {
+        !terminalIds.contains($0)
+      }
+      let terminalCount = min(terminalIds.count, max(sessionBatchTotal, 0))
+      let batchStillOutstanding = sessionBatchTotal > 0
+        && terminalCount < sessionBatchTotal
+      return !hasKnownOutstandingEpisode && !batchStillOutstanding
     }
   }
 
-  private struct WriteSample {
-    var taskId: String
+  private struct ThroughputPoint {
     var bytes: Int64
     var time: CFAbsoluteTime
   }
@@ -197,7 +273,16 @@ enum DownloadNativeWaitingQueue {
   /// relaunch and block a real resume.
   private static var activeEpisodeKeysByTaskId: [String: String] = [:]
   private static var startingEpisodeKeys = Set<String>()
-  private static var lastWrites: [String: WriteSample] = [:]
+  private static var taskSpeedWindows: [String: [ThroughputPoint]] = [:]
+  private static var chunkSpeedWindows: [String: [ThroughputPoint]] = [:]
+  private static var lastChunkBridgeTimes: [String: CFAbsoluteTime] = [:]
+  private static var lastTaskBridgeTimes: [String: CFAbsoluteTime] = [:]
+  private static let chunkBridgeInterval: CFTimeInterval = 1.0
+  private static let taskBridgeInterval: CFTimeInterval = 1.0
+  private static let speedWindowInterval: CFTimeInterval = 4.0
+  private static let speedMinimumWindow: CFTimeInterval = 0.75
+  private static let speedStaleInterval: CFTimeInterval = 3.0
+  private static let speedWindowMaxPoints = 32
 
   static func installUrlSessionHook() {
     lock.lock()
@@ -349,7 +434,10 @@ enum DownloadNativeWaitingQueue {
     seenTransferringIds.removeAll()
     activeEpisodeKeysByTaskId.removeAll()
     startingEpisodeKeys.removeAll()
-    lastWrites.removeAll()
+    taskSpeedWindows.removeAll()
+    chunkSpeedWindows.removeAll()
+    lastChunkBridgeTimes.removeAll()
+    lastTaskBridgeTimes.removeAll()
   }
 
   /// Called from the plugin URLSession delegate after a native completion
@@ -360,9 +448,19 @@ enum DownloadNativeWaitingQueue {
     task: URLSessionTask,
     error: Error?
   ) {
-    // A native part is not an episode. Dart owns its parent and only frees
-    // that slot after all parts are safely assembled.
-    guard !isDownloadPart(task) else { return }
+    // A native part is not an episode, but its URLSession byte/completion
+    // evidence belongs to the Dart multipart parent. didFinishDownloadingTo
+    // calls us after the plugin moved the temp file, so completion can now be
+    // verified against the exact `.part` path by PersistentParallelDownload.
+    if isDownloadPart(task) {
+      postMultipartChunkUpdate(
+        task,
+        totalWritten: task.countOfBytesReceived,
+        totalExpected: task.countOfBytesExpectedToReceive,
+        completed: error == nil
+      )
+      return
+    }
     if let response = task.response as? HTTPURLResponse,
        !(200...299).contains(response.statusCode) {
       parkFailedTask(task: task)
@@ -392,7 +490,8 @@ enum DownloadNativeWaitingQueue {
     if let failedId {
       state.transferringTaskIds.removeAll { $0 == failedId }
       state.runningSamples[failedId] = nil
-      lastWrites[failedId] = nil
+      taskSpeedWindows[failedId] = nil
+      lastTaskBridgeTimes[failedId] = nil
       seenTransferringIds.remove(failedId)
       if let key = activeEpisodeKeysByTaskId.removeValue(forKey: failedId) {
         startingEpisodeKeys.remove(key)
@@ -424,7 +523,8 @@ enum DownloadNativeWaitingQueue {
     if let completedId {
       state.transferringTaskIds.removeAll { $0 == completedId }
       state.runningSamples[completedId] = nil
-      lastWrites[completedId] = nil
+      taskSpeedWindows[completedId] = nil
+      lastTaskBridgeTimes[completedId] = nil
       seenTransferringIds.remove(completedId)
       if let key = activeEpisodeKeysByTaskId.removeValue(forKey: completedId) {
         startingEpisodeKeys.remove(key)
@@ -763,12 +863,191 @@ enum DownloadNativeWaitingQueue {
     )
   }
 
+
+  private static func parentTaskId(from task: URLSessionTask) -> String? {
+    let description = task.taskDescription ?? ""
+    let json = description.components(separatedBy: "***<<<|>>>***").first ?? description
+    guard let data = json.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+      return nil
+    }
+
+    if let meta = object["metaData"] as? String,
+       let metaData = meta.data(using: .utf8),
+       let metadata = try? JSONSerialization.jsonObject(with: metaData) as? [String: Any],
+       let parent = metadata["parentTaskId"] as? String,
+       !parent.isEmpty {
+      return parent
+    }
+
+    let child = object["taskId"] as? String ?? ""
+    if let range = child.range(of: ".part.", options: .backwards) {
+      let parent = String(child[..<range.lowerBound])
+      return parent.isEmpty ? nil : parent
+    }
+    return nil
+  }
+
+  private static func rollingSpeedLocked(
+    windows: inout [String: [ThroughputPoint]],
+    taskId: String,
+    totalWritten: Int64,
+    now: CFAbsoluteTime,
+    completed: Bool = false
+  ) -> Double {
+    var points = windows[taskId] ?? []
+    if let last = points.last, totalWritten < last.bytes {
+      // Resume-data handoff can restart URLSession's counter. Treat it as a new
+      // observation window instead of creating a negative/huge delta.
+      points.removeAll()
+    }
+    if points.last?.bytes != totalWritten || points.isEmpty {
+      points.append(ThroughputPoint(bytes: max(totalWritten, 0), time: now))
+    }
+    let cutoff = now - speedWindowInterval
+    points.removeAll { $0.time < cutoff }
+    if points.count > speedWindowMaxPoints {
+      points.removeFirst(points.count - speedWindowMaxPoints)
+    }
+
+    if completed {
+      windows[taskId] = nil
+    } else {
+      windows[taskId] = points
+    }
+    guard points.count >= 2,
+          let first = points.first,
+          let last = points.last
+    else { return 0 }
+    let elapsed = last.time - first.time
+    let delta = last.bytes - first.bytes
+    guard elapsed >= speedMinimumWindow, delta > 0 else { return 0 }
+    return Double(delta) / elapsed
+  }
+
+  private static func scheduleNativeSpeedStaleReset(
+    taskId: String,
+    observedAt: CFAbsoluteTime
+  ) {
+    DispatchQueue.global(qos: .utility).asyncAfter(
+      deadline: .now() + speedStaleInterval
+    ) {
+      lock.lock()
+      guard let last = taskSpeedWindows[taskId]?.last,
+            last.time <= observedAt + 0.000_001,
+            CFAbsoluteTimeGetCurrent() - last.time >= speedStaleInterval
+      else {
+        lock.unlock()
+        return
+      }
+      var state = loadLocked()
+      guard state.transferringTaskIds.contains(taskId),
+            var sample = state.runningSamples[taskId]
+      else {
+        lock.unlock()
+        return
+      }
+      sample.speed = 0
+      state.runningSamples[taskId] = sample
+      let presentation = overlayPresentation(
+        from: state,
+        fallbackId: taskId,
+        fallbackName: sample.displayName
+      )
+      saveLocked(state)
+      lock.unlock()
+
+      upsertSessionOverlay(
+        currentTaskId: presentation.currentTaskId,
+        displayName: presentation.displayName,
+        progress: presentation.progress,
+        totalBytes: presentation.totalBytes,
+        transferredBytes: presentation.transferredBytes,
+        speedBytesPerSecond: presentation.speedBytesPerSecond
+      )
+    }
+  }
+
+  /// Forward native URLSession byte counts for multipart children while the
+  /// body still lives in Apple's temporary file. Dart cannot stat that file,
+  /// which is why polling only `0.part`/`1.part` updated in whole-part jumps.
+  private static func postMultipartChunkUpdate(
+    _ task: URLSessionTask,
+    totalWritten: Int64,
+    totalExpected: Int64,
+    completed: Bool
+  ) {
+    guard isDownloadPart(task),
+          let childId = taskId(from: task),
+          let parentId = parentTaskId(from: task)
+    else {
+      return
+    }
+
+    let now = CFAbsoluteTimeGetCurrent()
+    lock.lock()
+    if !completed,
+       let lastBridge = lastChunkBridgeTimes[childId],
+       now - lastBridge < chunkBridgeInterval {
+      lock.unlock()
+      return
+    }
+    if completed {
+      lastChunkBridgeTimes[childId] = nil
+    } else {
+      lastChunkBridgeTimes[childId] = now
+    }
+    let speed = rollingSpeedLocked(
+      windows: &chunkSpeedWindows,
+      taskId: childId,
+      totalWritten: totalWritten,
+      now: now,
+      completed: completed
+    )
+    lock.unlock()
+
+    var values: [String: Any] = [
+      "parentTaskId": parentId,
+      "chunkTaskId": childId,
+      "completed": completed,
+    ]
+    if totalWritten >= 0 {
+      values["writtenBytes"] = totalWritten
+    }
+    if totalExpected > 0 {
+      values["expectedBytes"] = totalExpected
+      values["progress"] = completed
+        ? 1.0
+        : min(max(Double(totalWritten) / Double(totalExpected), 0), 1)
+    } else if completed {
+      values["progress"] = 1.0
+    }
+    if speed > 0 {
+      values["speedBytesPerSecond"] = speed
+    }
+
+    NotificationCenter.default.post(
+      name: Notification.Name("AnimeWitcherBackgroundDownloaderChunkUpdate"),
+      object: nil,
+      userInfo: values
+    )
+  }
+
   static func handleBytesWritten(
     _ downloadTask: URLSessionDownloadTask,
     totalWritten: Int64,
     totalExpected: Int64
   ) {
-    guard !isDownloadPart(downloadTask) else { return }
+    if isDownloadPart(downloadTask) {
+      postMultipartChunkUpdate(
+        downloadTask,
+        totalWritten: totalWritten,
+        totalExpected: totalExpected,
+        completed: false
+      )
+      return
+    }
     guard let id = taskId(from: downloadTask) else { return }
     let json = downloadTask.taskDescription?
       .components(separatedBy: "***<<<|>>>***").first ?? ""
@@ -791,15 +1070,12 @@ enum DownloadNativeWaitingQueue {
     seenTransferringIds.insert(id)
     activeEpisodeKeysByTaskId[id] = logicalKey
     startingEpisodeKeys.remove(logicalKey)
-    var speed: Double = 0
-    if let last = lastWrites[id], now > last.time {
-      let deltaBytes = Double(max(totalWritten - last.bytes, 0))
-      let deltaTime = now - last.time
-      if deltaTime > 0 {
-        speed = deltaBytes / deltaTime
-      }
-    }
-    lastWrites[id] = WriteSample(taskId: id, bytes: totalWritten, time: now)
+    let speed = rollingSpeedLocked(
+      windows: &taskSpeedWindows,
+      taskId: id,
+      totalWritten: totalWritten,
+      now: now
+    )
     var state = loadLocked()
     if !state.transferringTaskIds.contains(id) {
       state.transferringTaskIds.append(id)
@@ -812,7 +1088,7 @@ enum DownloadNativeWaitingQueue {
     )
     sample.written = totalWritten
     if totalExpected > 0 { sample.expected = totalExpected }
-    if speed > 0 { sample.speed = speed }
+    sample.speed = speed
     if sample.displayName.isEmpty {
       sample.displayName = name
     }
@@ -820,17 +1096,77 @@ enum DownloadNativeWaitingQueue {
     let transferringSet = Set(state.transferringTaskIds)
     state.runningSamples = state.runningSamples.filter { transferringSet.contains($0.key) }
     let presentation = overlayPresentation(from: state, fallbackId: id, fallbackName: name)
+    let stableExpected = sample.expected > 0 ? sample.expected : totalExpected
+    let stableSpeed = sample.speed
     saveLocked(state)
     lock.unlock()
+    scheduleNativeSpeedStaleReset(taskId: id, observedAt: now)
 
-    upsertSessionOverlay(
-      currentTaskId: presentation.currentTaskId,
-      displayName: presentation.displayName,
-      progress: presentation.progress,
-      totalBytes: presentation.totalBytes,
-      transferredBytes: presentation.transferredBytes,
-      speedBytesPerSecond: presentation.speedBytesPerSecond
+    let bridgedToDart = postSingleTaskUpdate(
+      taskId: id,
+      trackingUrl: metaData.isEmpty ? url : metaData,
+      totalWritten: totalWritten,
+      totalExpected: stableExpected,
+      speedBytesPerSecond: stableSpeed,
+      now: now
     )
+
+    // While Flutter is foregrounded, Dart owns the single one-second sample
+    // used by both the in-app card and the iOS task. Publishing native overlay
+    // samples in parallel creates two clocks and visibly different speeds. In
+    // background, Dart may be suspended, so native keeps the same task alive.
+    if bridgedToDart && !isAppInForeground() {
+      upsertSessionOverlay(
+        currentTaskId: presentation.currentTaskId,
+        displayName: presentation.displayName,
+        progress: presentation.progress,
+        totalBytes: presentation.totalBytes,
+        transferredBytes: presentation.transferredBytes,
+        speedBytesPerSecond: presentation.speedBytesPerSecond
+      )
+    }
+  }
+
+
+  /// Exact byte telemetry for ordinary URLSession downloads. The system
+  /// notification already has these values; forwarding the same source of
+  /// truth fixes Flutter's `-- / -- MB` when background_downloader reports an
+  /// unknown expectedFileSize. Throttle transport events, while Dart owns the
+  /// one-second UI cadence and the longer smoothing window.
+  private static func postSingleTaskUpdate(
+    taskId: String,
+    trackingUrl: String,
+    totalWritten: Int64,
+    totalExpected: Int64,
+    speedBytesPerSecond: Double,
+    now: CFAbsoluteTime
+  ) -> Bool {
+    guard !taskId.isEmpty, !trackingUrl.isEmpty, totalWritten >= 0 else { return false }
+    lock.lock()
+    if let last = lastTaskBridgeTimes[taskId], now - last < taskBridgeInterval {
+      lock.unlock()
+      return false
+    }
+    lastTaskBridgeTimes[taskId] = now
+    lock.unlock()
+
+    var values: [String: Any] = [
+      "taskId": taskId,
+      "trackingUrl": trackingUrl,
+      "writtenBytes": totalWritten,
+    ]
+    if totalExpected > 0 {
+      values["expectedBytes"] = totalExpected
+    }
+    if speedBytesPerSecond > 0, speedBytesPerSecond.isFinite {
+      values["speedBytesPerSecond"] = speedBytesPerSecond
+    }
+    NotificationCenter.default.post(
+      name: Notification.Name("AnimeWitcherBackgroundDownloaderTaskUpdate"),
+      object: nil,
+      userInfo: values
+    )
+    return true
   }
 
   private static func startLiveActivity(
@@ -950,8 +1286,8 @@ enum DownloadNativeWaitingQueue {
         state.sessionTotalBytes = totalBytes
       }
       state.sessionTransferredBytes = transferredBytes
-      if speedBytesPerSecond > 0 {
-        state.sessionSpeedBytesPerSecond = speedBytesPerSecond
+      if speedBytesPerSecond >= 0 {
+        state.sessionSpeedBytesPerSecond = max(speedBytesPerSecond, 0)
       }
     }
     if let completedCount {
@@ -1193,16 +1529,16 @@ enum DownloadNativeWaitingQueue {
 /// never hits the original ObjC IMP.
 private enum DownloadUrlSessionHook {
   private static let completeSelector = NSSelectorFromString(
-    "urlSession:task:didCompleteWithError:"
+    "URLSession:task:didCompleteWithError:"
   )
   private static let finishDownloadSelector = NSSelectorFromString(
-    "urlSession:downloadTask:didFinishDownloadingToURL:"
+    "URLSession:downloadTask:didFinishDownloadingToURL:"
   )
   private static let finishEventsSelector = NSSelectorFromString(
-    "urlSessionDidFinishEventsForBackgroundURLSession:"
+    "URLSessionDidFinishEventsForBackgroundURLSession:"
   )
   private static let writeSelector = NSSelectorFromString(
-    "urlSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:"
+    "URLSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:"
   )
 
   private static var originalComplete: IMP?
@@ -1226,6 +1562,11 @@ private enum DownloadUrlSessionHook {
     let hooked = originalComplete != nil || originalFinishDownload != nil || originalFinishEvents != nil || originalWrite != nil
     if hooked {
       NSLog("[DownloadNativeWaitingQueue] hooked UrlSessionDelegate %@", String(cString: class_getName(delegateClass)))
+    } else {
+      NSLog(
+        "[DownloadNativeWaitingQueue] ERROR: no NSURLSession delegate selectors were hooked on %@",
+        String(cString: class_getName(delegateClass))
+      )
     }
     return hooked
   }
@@ -1248,6 +1589,7 @@ private enum DownloadUrlSessionHook {
     guard let method = class_getInstanceMethod(cls, completeSelector) else { return }
     originalComplete = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionTask, Error?) -> Void = { slf, session, task, error in
+      DownloadNativeDiagnosticLog.record("complete", task: task, error: error)
       // The plugin owns URLSession bookkeeping, retries, resume data and its
       // holding queue. Let it settle the failed task before AnimeWitcher frees
       // the logical episode slot and promotes another one.
@@ -1275,6 +1617,7 @@ private enum DownloadUrlSessionHook {
     guard let method = class_getInstanceMethod(cls, finishDownloadSelector) else { return }
     originalFinishDownload = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionDownloadTask, URL) -> Void = { slf, session, downloadTask, location in
+      DownloadNativeDiagnosticLog.record("file.received", task: downloadTask)
       // Original must run first so the plugin can move the temp file.
       // Then promote like pre-tabs: ep2 must start before the session sleeps.
       if let original = DownloadUrlSessionHook.originalFinishDownload {
@@ -1301,6 +1644,7 @@ private enum DownloadUrlSessionHook {
     let block: @convention(block) (
       AnyObject, URLSession, URLSessionDownloadTask, Int64, Int64, Int64
     ) -> Void = { slf, session, downloadTask, bytesWritten, totalWritten, totalExpected in
+      DownloadNativeDiagnosticLog.record("progress", task: downloadTask)
       if let original = DownloadUrlSessionHook.originalWrite {
         let fn = unsafeBitCast(
           original,

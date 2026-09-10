@@ -8,6 +8,7 @@ import UserNotifications
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var downloadContinuedProcessingChannel: FlutterMethodChannel?
   private var downloadChunkProgressObserver: NSObjectProtocol?
+  private var downloadTaskProgressObserver: NSObjectProtocol?
   private var liquidGlassPresenterChannel: FlutterMethodChannel?
   private var persistentGlassHeaderChannel: FlutterMethodChannel?
   private var persistentGlassHeaderController: ApplePersistentGlassHeaderNativeController?
@@ -196,6 +197,12 @@ import UserNotifications
 
     channel.setMethodCallHandler { call, result in
 #if os(iOS)
+      if call.method == "configureDiagnosticLog" {
+        let arguments = call.arguments as? [String: Any] ?? [:]
+        DownloadNativeDiagnosticLog.configure(arguments["enabled"] as? Bool ?? false)
+        result(nil)
+        return
+      }
       if call.method == "persistNativeQueue" || call.method == "persistWaitingQueue" {
         let arguments = call.arguments as? [String: Any] ?? [:]
         DownloadNativeWaitingQueue.persist(from: arguments)
@@ -350,7 +357,50 @@ import UserNotifications
       if let status = values["status"] as? NSNumber {
         arguments["status"] = status.intValue
       }
+      if let written = values["writtenBytes"] as? NSNumber {
+        arguments["writtenBytes"] = written.int64Value
+      }
+      if let expected = values["expectedBytes"] as? NSNumber {
+        arguments["expectedBytes"] = expected.int64Value
+      }
+      if let speed = values["speedBytesPerSecond"] as? NSNumber {
+        arguments["speedBytesPerSecond"] = speed.doubleValue
+      }
+      if let completed = values["completed"] as? Bool {
+        arguments["completed"] = completed
+      }
       channel?.invokeMethod("chunkUpdate", arguments: arguments)
+    }
+#endif
+
+#if os(iOS)
+    if let previous = downloadTaskProgressObserver {
+      NotificationCenter.default.removeObserver(previous)
+    }
+    downloadTaskProgressObserver = NotificationCenter.default.addObserver(
+      forName: Notification.Name("AnimeWitcherBackgroundDownloaderTaskUpdate"),
+      object: nil,
+      queue: .main
+    ) { [weak channel] notification in
+      guard let values = notification.userInfo,
+            let taskId = values["taskId"] as? String,
+            let trackingUrl = values["trackingUrl"] as? String,
+            !taskId.isEmpty,
+            !trackingUrl.isEmpty,
+            let written = values["writtenBytes"] as? NSNumber else { return }
+
+      var arguments: [String: Any] = [
+        "taskId": taskId,
+        "trackingUrl": trackingUrl,
+        "writtenBytes": written.int64Value,
+      ]
+      if let expected = values["expectedBytes"] as? NSNumber {
+        arguments["expectedBytes"] = expected.int64Value
+      }
+      if let speed = values["speedBytesPerSecond"] as? NSNumber {
+        arguments["speedBytesPerSecond"] = speed.doubleValue
+      }
+      channel?.invokeMethod("taskUpdate", arguments: arguments)
     }
 #endif
 

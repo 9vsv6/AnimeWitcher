@@ -26,7 +26,7 @@ const String kDownloadNotificationSettingsKey =
     'download_notification_settings';
 
 const int kDownloadConcurrencyMin = 1;
-const int kDownloadConcurrencyMax = 5;
+const int kDownloadConcurrencyMax = 10;
 const int kDownloadConcurrencyDefault = 1;
 
 int clampDownloadConcurrency(int value) =>
@@ -740,7 +740,12 @@ bool downloadSessionHasRemainingWork({
   required int runningCount,
   required int waitingCount,
   int pendingWaiterPayloads = 0,
-}) => runningCount > 0 || waitingCount > 0 || pendingWaiterPayloads > 0;
+  int activeEngineCount = 0,
+}) =>
+    runningCount > 0 ||
+    waitingCount > 0 ||
+    pendingWaiterPayloads > 0 ||
+    activeEngineCount > 0;
 
 /// Line 1: `Downloading “الحلقة 2.mp4”`. Percent lives on the circular progress.
 String formatDownloadSessionTitle({required String displayName}) {
