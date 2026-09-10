@@ -320,6 +320,65 @@ class DownloadJobStore {
     return true;
   }
 
+  /// Persist one logical lifecycle checkpoint while preserving the store's
+  /// monotonic byte, generation and resource-identity invariants.
+  ///
+  /// DownloadService supplies orchestration evidence; this store owns how that
+  /// evidence is merged with the durable logical record. This keeps lifecycle
+  /// writes out of UI/plugin code and prevents a status-only checkpoint from
+  /// discarding stronger identity or byte evidence.
+  Future<bool> checkpoint({
+    required String taskId,
+    required String trackingUrl,
+    required DownloadJobState state,
+    int? durableBytes,
+    int? expectedBytes,
+    bool? userPaused,
+    bool? queueWaiting,
+    DownloadResourceFingerprint? fingerprint,
+    int? updatedAtMillis,
+  }) => _serialize(() async {
+    final id = taskId.trim();
+    final tracking = trackingUrl.trim();
+    if (id.isEmpty || tracking.isEmpty) return false;
+
+    final current = await get(id);
+    final incomingBytes = durableBytes ?? current?.durableBytes ?? 0;
+    if (incomingBytes < 0) return false;
+    final keptBytes = current != null && current.durableBytes > incomingBytes
+        ? current.durableBytes
+        : incomingBytes;
+    final incomingExpected = expectedBytes ?? -1;
+    final keptExpected = incomingExpected > 0
+        ? incomingExpected
+        : (current?.expectedBytes ?? -1);
+    final now = updatedAtMillis ?? DateTime.now().millisecondsSinceEpoch;
+
+    final next = current == null
+        ? DownloadJobRecord(
+            taskId: id,
+            trackingUrl: tracking,
+            state: state,
+            generation: 0,
+            durableBytes: keptBytes,
+            expectedBytes: keptExpected,
+            userPaused: userPaused ?? false,
+            queueWaiting: queueWaiting ?? false,
+            updatedAtMillis: now,
+            fingerprint: fingerprint,
+          )
+        : current.copyWith(
+            state: state,
+            durableBytes: keptBytes,
+            expectedBytes: keptExpected,
+            userPaused: userPaused ?? current.userPaused,
+            queueWaiting: queueWaiting ?? current.queueWaiting,
+            updatedAtMillis: now,
+            fingerprint: fingerprint,
+          );
+    return _putUnlocked(next);
+  });
+
   /// Start a new execution generation atomically. The durable bytes and
   /// fingerprint are inherited; beginning an attempt can never reset progress.
   Future<DownloadAttemptToken?> beginAttempt(

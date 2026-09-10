@@ -121,7 +121,12 @@ void main() {
         final section = source.substring(start, end);
         expect(section, contains("part.checkpointLost"));
         expect(section, contains('resetUndurablePartProgress('));
-        expect(section, contains('return FileDownloader().enqueue(task);'));
+        expect(
+          section,
+          contains('final enqueued = await FileDownloader().enqueue(task);'),
+        );
+        expect(section, contains('return enqueued;'));
+        expect(section, contains('forceSourceValidation'));
         expect(
           section,
           isNot(contains('if (progress > 0 || bytes > 0) return false;')),
@@ -135,7 +140,7 @@ void main() {
         final source = File(
           'lib/core/services/persistent_parallel_download.dart',
         ).readAsStringSync();
-        expect(source, contains('kParallelManifestSchemaVersion = 3'));
+        expect(source, contains('kParallelManifestSchemaVersion = 4'));
         expect(
           source,
           contains("'schemaVersion': kParallelManifestSchemaVersion"),

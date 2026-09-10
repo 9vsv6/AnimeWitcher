@@ -152,6 +152,36 @@ class DownloadRangeTransfer {
   Set<String> get activeTaskIds => _operations.keys.toSet();
   DownloadRangeFailure? failureFor(String id) => _lastFailures[id];
 
+  /// Verify a visible local prefix against a candidate source without
+  /// appending bytes. Multipart URL refresh uses this before retaining old
+  /// ranges. The returned validator may be pinned by the caller, but a matching
+  /// byte prefix is sufficient when the origin exposes no validator.
+  Future<({bool matches, String? validator})> verifyExistingPrefix({
+    required String id,
+    required String url,
+    required Map<String, String> headers,
+    required File file,
+    required int written,
+  }) async {
+    if (written <= 0 || !await file.exists() || await file.length() < written) {
+      return (matches: false, validator: null);
+    }
+    final operation = _RangeOperation(id: '$id.identity', canRefreshUrl: false);
+    try {
+      final probe = await _probeSavedPrefix(
+        operation: operation,
+        url: url,
+        headers: headers,
+        spec: _RangeSpec.fromHeaders(headers),
+        file: file,
+        written: written,
+      );
+      return (matches: probe != null, validator: probe?.validator);
+    } finally {
+      operation.token.cancel('Identity probe complete');
+    }
+  }
+
   Future<bool> stop(String id) async {
     diagnosticLog?.record('range.stop', {'taskId': id});
     final operation = _operations[id];

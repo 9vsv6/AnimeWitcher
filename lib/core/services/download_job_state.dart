@@ -217,6 +217,68 @@ DownloadRecoveryPlan planDownloadRecoveryWithJobAuthority({
   );
 }
 
+/// Source of the byte count selected during startup/resume reconciliation.
+/// Percentages from plugin/UI metadata are deliberately absent: they can inform
+/// presentation, but they are never durable byte evidence.
+enum DownloadRecoveryByteSource {
+  verifiedFinalFile,
+  exactDisk,
+  jobStore,
+  multipartManifest,
+  none,
+}
+
+class DownloadRecoveryByteSelection {
+  const DownloadRecoveryByteSelection({
+    required this.bytes,
+    required this.source,
+  });
+
+  final int bytes;
+  final DownloadRecoveryByteSource source;
+}
+
+/// Apply the recovery truth ordering used by the download manager.
+///
+/// A verified final file wins. Otherwise exact visible bytes win over logical
+/// checkpoints. JobStore and the current multipart manifest are the final
+/// durable fallbacks. Decimal progress is intentionally not accepted here.
+DownloadRecoveryByteSelection selectDownloadRecoveryBytes({
+  int verifiedFinalFileBytes = -1,
+  int exactDiskBytes = -1,
+  int currentGenerationJobBytes = -1,
+  int multipartManifestBytes = -1,
+}) {
+  if (verifiedFinalFileBytes >= 0) {
+    return DownloadRecoveryByteSelection(
+      bytes: verifiedFinalFileBytes,
+      source: DownloadRecoveryByteSource.verifiedFinalFile,
+    );
+  }
+  if (exactDiskBytes >= 0) {
+    return DownloadRecoveryByteSelection(
+      bytes: exactDiskBytes,
+      source: DownloadRecoveryByteSource.exactDisk,
+    );
+  }
+  if (currentGenerationJobBytes >= 0) {
+    return DownloadRecoveryByteSelection(
+      bytes: currentGenerationJobBytes,
+      source: DownloadRecoveryByteSource.jobStore,
+    );
+  }
+  if (multipartManifestBytes >= 0) {
+    return DownloadRecoveryByteSelection(
+      bytes: multipartManifestBytes,
+      source: DownloadRecoveryByteSource.multipartManifest,
+    );
+  }
+  return const DownloadRecoveryByteSelection(
+    bytes: 0,
+    source: DownloadRecoveryByteSource.none,
+  );
+}
+
 /// Identifies one concrete execution attempt of a logical episode.
 ///
 /// Future native/plugin callbacks can carry this token (directly or through a

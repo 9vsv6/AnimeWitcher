@@ -136,6 +136,20 @@ String? downloadInternalParentTaskId(Task task) {
   }
 }
 
+/// True when a multipart child was rebound to a refreshed source and must
+/// not consume native resumeData that can still embed the previous URL.
+bool downloadInternalSourceValidationRequired(Task task) {
+  if (!isInternalDownloaderChunk(task)) return false;
+  final raw = task.metaData.trim();
+  if (raw.isEmpty) return false;
+  try {
+    final decoded = jsonDecode(raw);
+    return decoded is Map && decoded['sourceValidationRequired'] == true;
+  } catch (_) {
+    return false;
+  }
+}
+
 bool isLogicalEpisodeDownloadTask(Task task) =>
     task is DownloadTask && !isInternalDownloaderChunk(task);
 
