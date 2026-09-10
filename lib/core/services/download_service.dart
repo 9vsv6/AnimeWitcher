@@ -1069,6 +1069,70 @@ class DownloadService {
     });
   }
 
+  /// Persist lifecycle boundaries for the logical episode without turning
+  /// hot progress callbacks into Hive writes. Durable bytes are monotonic and
+  /// identity evidence from an existing job is never discarded.
+  Future<void> _checkpointLogicalJob(
+    DownloadTask task, {
+    required DownloadJobState state,
+    int? durableBytes,
+    int? expectedBytes,
+    bool? userPaused,
+    bool? queueWaiting,
+  }) async {
+    try {
+      final current = await _jobStore.get(task.taskId);
+      final currentBytes = current?.durableBytes ?? 0;
+      final incomingBytes = durableBytes ?? 0;
+      final keptBytes = incomingBytes > currentBytes
+          ? incomingBytes
+          : currentBytes;
+      final keptExpected = knownDownloadSize(<int?>[
+        expectedBytes,
+        current?.expectedBytes,
+      ]);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final next = current == null
+          ? DownloadJobRecord(
+              taskId: task.taskId,
+              trackingUrl: downloadTrackingUrl(task),
+              state: state,
+              generation: 0,
+              durableBytes: keptBytes,
+              expectedBytes: keptExpected,
+              userPaused: userPaused ?? false,
+              queueWaiting: queueWaiting ?? false,
+              updatedAtMillis: now,
+              fingerprint: DownloadResourceFingerprint(
+                expectedBytes: keptExpected,
+                finalUrl: task.url,
+              ),
+            )
+          : current.copyWith(
+              state: state,
+              durableBytes: keptBytes,
+              expectedBytes: keptExpected > 0
+                  ? keptExpected
+                  : current.expectedBytes,
+              userPaused: userPaused ?? current.userPaused,
+              queueWaiting: queueWaiting ?? current.queueWaiting,
+              updatedAtMillis: now,
+            );
+      if (!await _jobStore.put(next)) {
+        diagnosticLog.record('job.checkpointRejected', {
+          'taskId': task.taskId,
+          'status': state.name,
+        });
+      }
+    } catch (error) {
+      diagnosticLog.record('job.checkpointError', {
+        'taskId': task.taskId,
+        'status': state.name,
+        'errorType': error.runtimeType.toString(),
+      });
+    }
+  }
+
   Future<void> _recoverPersistedDownloads() async {
     final records = await FileDownloader().database.allRecords();
     diagnosticLog.record('recovery.begin', {'count': records.length});
@@ -1090,16 +1154,23 @@ class DownloadService {
       final task = record.task as DownloadTask;
       final trackingUrl = downloadTrackingUrl(task);
       final metadata = await storage.getDownloadMetadata(task.taskId);
+      // JobStore is read before any legacy/plugin early-exit. A stale canceled
+      // executor row must not hide a durable logical job after process death.
+      final oldJob = await _jobStore.get(task.taskId);
       final userPausedMeta = isUserPausedMetadata(metadata);
       if (record.status == TaskStatus.complete) {
         continue;
       }
       if (record.status == TaskStatus.canceled &&
           metadata == null &&
+          oldJob == null &&
           !userPausedMeta) {
         continue;
       }
-      final queueWaiting = isQueueWaitingMetadata(metadata);
+      final legacyQueueWaiting = isQueueWaitingMetadata(metadata);
+      final queueWaiting = oldJob == null
+          ? legacyQueueWaiting
+          : oldJob.queueWaiting || oldJob.state == DownloadJobState.queued;
       if (queueWaiting) {
         _queueWaitingIds.add(task.taskId);
         _waitingPayloads[task.taskId] = _waitingPayloadFor(task);
@@ -1137,13 +1208,19 @@ class DownloadService {
           nativeIds.contains(task.taskId) || _parallel.isActive(task.taskId);
       final userPaused =
           isUserPausedMetadata(metadata) ||
-          _userPausedIds.contains(task.taskId);
-      final recoveryPlan = planDownloadRecovery(
+          _userPausedIds.contains(task.taskId) ||
+          oldJob?.userPaused == true ||
+          oldJob?.state == DownloadJobState.pausedByUser ||
+          oldJob?.state == DownloadJobState.pausing;
+      final recoveryPlan = planDownloadRecoveryWithJobAuthority(
         persisted: record.status,
         queueWaiting: queueWaiting,
         userPaused: userPaused,
         stillInNativeQueue: stillNative,
         hasMetadata: metadata != null,
+        authoritativeState: oldJob?.state,
+        authoritativeUserPaused: oldJob?.userPaused ?? false,
+        authoritativeQueueWaiting: oldJob?.queueWaiting ?? false,
       );
 
       // Migrate pre-DownloadJobStore installs on first reconciliation. Only
@@ -1154,12 +1231,12 @@ class DownloadService {
         saved.totalSize,
         record.expectedFileSize,
         downloadMetadataExpectedBytes(metadata),
+        oldJob?.expectedBytes,
       ]);
       var durableBytes = saved.partialBytes;
       if (task is ParallelDownloadTask && expectedBytes > 0) {
         durableBytes = (progress * expectedBytes).floor();
       }
-      final oldJob = await _jobStore.get(task.taskId);
       if (oldJob != null && oldJob.durableBytes > durableBytes) {
         durableBytes = oldJob.durableBytes;
       }
@@ -1186,6 +1263,14 @@ class DownloadService {
             ),
       );
       await _jobStore.put(migratedJob);
+
+      if (oldJob != null &&
+          recoveryPlan.action == DownloadRecoveryAction.ignore) {
+        _queueWaitingIds.remove(task.taskId);
+        _waitingPayloads.remove(task.taskId);
+        _forgetSessionTask(task.taskId);
+        continue;
+      }
 
       if (userPaused) {
         _userPausedIds.add(task.taskId);
@@ -1915,6 +2000,21 @@ class DownloadService {
     final status = transferring
         ? TaskStatus.running
         : (record?.status ?? TaskStatus.enqueued);
+    if (!_userPausedIds.contains(attached.taskId)) {
+      final durableBytes = totalSize > 0 && progress > 0
+          ? (totalSize * progress).floor()
+          : 0;
+      await _checkpointLogicalJob(
+        attached,
+        state: transferring
+            ? DownloadJobState.running
+            : DownloadJobState.starting,
+        durableBytes: durableBytes,
+        expectedBytes: totalSize,
+        userPaused: false,
+        queueWaiting: false,
+      );
+    }
     _publishProgress(
       trackingUrl: trackingUrl,
       taskId: attached.taskId,
@@ -2175,6 +2275,16 @@ class DownloadService {
           lastProgress: progress,
           lastExpectedBytes: totalSize,
         );
+    await _checkpointLogicalJob(
+      task,
+      state: DownloadJobState.interrupted,
+      durableBytes: totalSize > 0 && progress > 0
+          ? (totalSize * progress).floor()
+          : 0,
+      expectedBytes: totalSize,
+      userPaused: false,
+      queueWaiting: false,
+    );
 
     _ref.read(activeDownloadsProvider.notifier).add(trackingUrl);
     _ref
@@ -2378,6 +2488,12 @@ class DownloadService {
       }
 
       if (downloadTask != null) {
+        await _checkpointLogicalJob(
+          downloadTask,
+          state: DownloadJobState.pausing,
+          userPaused: true,
+          queueWaiting: false,
+        );
         // Plugin pause produces URLSession resumeData and drops the
         // transferring task so it no longer occupies a slot. Never cancel —
         // cancel deletes the temp file and forces a restart from byte 0.
@@ -2426,6 +2542,16 @@ class DownloadService {
                 lastProgress: progress,
                 lastExpectedBytes: totalSize,
               );
+          await _checkpointLogicalJob(
+            downloadTask,
+            state: DownloadJobState.running,
+            durableBytes: totalSize > 0 && progress > 0
+                ? (totalSize * progress).floor()
+                : 0,
+            expectedBytes: totalSize,
+            userPaused: false,
+            queueWaiting: false,
+          );
           _publishProgress(
             trackingUrl: trackingUrl,
             taskId: taskId,
@@ -2455,6 +2581,16 @@ class DownloadService {
               lastProgress: progress,
               lastExpectedBytes: totalSize,
             );
+        await _checkpointLogicalJob(
+          downloadTask,
+          state: DownloadJobState.pausedByUser,
+          durableBytes: totalSize > 0 && progress > 0
+              ? (totalSize * progress).floor()
+              : 0,
+          expectedBytes: totalSize,
+          userPaused: true,
+          queueWaiting: false,
+        );
         _publishProgress(
           trackingUrl: trackingUrl,
           taskId: taskId,
@@ -2495,6 +2631,12 @@ class DownloadService {
     await _ref
         .read(storageServiceProvider)
         .patchDownloadMetadata(taskId, queueWaiting: false, userPaused: false);
+    await _checkpointLogicalJob(
+      downloadTask,
+      state: DownloadJobState.starting,
+      userPaused: false,
+      queueWaiting: false,
+    );
 
     final max = clampDownloadConcurrency(
       _ref.read(storageServiceProvider).getDownloadConcurrency(),
@@ -2557,6 +2699,16 @@ class DownloadService {
         final started = await _resumeDownloadTask(downloadTask);
         if (!started) {
           final saved = await _savedProgressFor(downloadTask);
+          await _checkpointLogicalJob(
+            downloadTask,
+            state: DownloadJobState.interrupted,
+            durableBytes: saved.totalSize > 0 && saved.progress > 0
+                ? (saved.totalSize * saved.progress).floor()
+                : saved.partialBytes,
+            expectedBytes: saved.totalSize,
+            userPaused: false,
+            queueWaiting: false,
+          );
           await FileDownloader().database.updateRecord(
             TaskRecord(
               downloadTask,
@@ -2664,6 +2816,13 @@ class DownloadService {
     await _ref
         .read(storageServiceProvider)
         .patchDownloadMetadata(task.taskId, queueWaiting: true);
+    await _checkpointLogicalJob(
+      task,
+      state: DownloadJobState.queued,
+      expectedBytes: totalSize,
+      userPaused: false,
+      queueWaiting: true,
+    );
     await FileDownloader().database.updateRecord(
       TaskRecord(task, TaskStatus.paused, progress, totalSize),
     );
@@ -3785,6 +3944,13 @@ class DownloadService {
 
         if (!success) {
           _waitingPayloads.remove(task.taskId);
+          await _checkpointLogicalJob(
+            transferTask,
+            state: DownloadJobState.interrupted,
+            expectedBytes: expectedBytes,
+            userPaused: false,
+            queueWaiting: false,
+          );
           await FileDownloader().database.updateRecord(
             TaskRecord(transferTask, TaskStatus.paused, 0, expectedBytes),
           );
@@ -3809,6 +3975,9 @@ class DownloadService {
         _forgetSessionTask(task.taskId);
         final storage = _ref.read(storageServiceProvider);
         await storage.removeDownloadMetadata(task.taskId);
+        // A start that never established recoverable ownership must not leave
+        // an authoritative JobStore row that resurrects itself on relaunch.
+        await _jobStore.remove(task.taskId);
         _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl ?? url);
         _updatesController.add(TaskStatusUpdate(task, TaskStatus.canceled));
         await _syncSessionOverlay(completedSuccess: false);
@@ -3882,13 +4051,36 @@ class DownloadService {
   Future<void> _persistCompletedFilePath(Task task) async {
     try {
       final path = await task.filePath();
+      var fileBytes = -1;
+      if (path.isNotEmpty) {
+        final file = File(path);
+        if (await file.exists()) fileBytes = await file.length();
+      }
+      final record = await FileDownloader().database.recordForId(task.taskId);
+      final expectedBytes = knownDownloadSize(<int?>[
+        fileBytes,
+        record?.expectedFileSize,
+        _telemetry.expectedBytesFor(task.taskId),
+      ]);
       await _ref
           .read(storageServiceProvider)
           .patchDownloadMetadata(
             task.taskId,
             trackingUrl: downloadTrackingUrl(task),
             filePath: path,
+            lastProgress: 1,
+            lastExpectedBytes: expectedBytes,
           );
+      if (task is DownloadTask) {
+        await _checkpointLogicalJob(
+          task,
+          state: DownloadJobState.completed,
+          durableBytes: expectedBytes > 0 ? expectedBytes : fileBytes,
+          expectedBytes: expectedBytes,
+          userPaused: false,
+          queueWaiting: false,
+        );
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[DownloadService] persist filePath failed: $e');

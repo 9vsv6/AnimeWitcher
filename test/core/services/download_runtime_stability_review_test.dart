@@ -215,5 +215,47 @@ void main() {
         expect(source, contains('_cancelPendingUpdate();'));
       },
     );
+
+    test(
+      'startup reconciliation reads JobStore before legacy cancel filtering',
+      () {
+        final source = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        final start = source.indexOf(
+          'Future<void> _recoverPersistedDownloads()',
+        );
+        final end = source.indexOf('int _occupiedSlotCount(', start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        final recovery = source.substring(start, end);
+        final jobRead = recovery.indexOf(
+          'final oldJob = await _jobStore.get(task.taskId);',
+        );
+        final canceledFilter = recovery.indexOf(
+          'record.status == TaskStatus.canceled',
+        );
+        expect(jobRead, greaterThanOrEqualTo(0));
+        expect(canceledFilter, greaterThan(jobRead));
+        expect(recovery, contains('planDownloadRecoveryWithJobAuthority('));
+        expect(recovery, contains('oldJob?.expectedBytes'));
+        expect(recovery, contains('oldJob?.userPaused == true'));
+      },
+    );
+
+    test(
+      'logical lifecycle boundaries checkpoint authoritative JobStore state',
+      () {
+        final source = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        expect(source, contains('Future<void> _checkpointLogicalJob('));
+        expect(source, contains('state: DownloadJobState.pausing'));
+        expect(source, contains('state: DownloadJobState.pausedByUser'));
+        expect(source, contains('state: DownloadJobState.starting'));
+        expect(source, contains('state: DownloadJobState.queued'));
+        expect(source, contains('state: DownloadJobState.interrupted'));
+        expect(source, contains('state: DownloadJobState.completed'));
+        expect(source, contains('await _jobStore.remove(task.taskId);'));
+      },
+    );
   });
 }

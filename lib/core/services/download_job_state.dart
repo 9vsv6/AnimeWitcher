@@ -138,6 +138,85 @@ DownloadRecoveryPlan planDownloadRecovery({
   }
 }
 
+/// Reconcile executor evidence against an existing durable logical job.
+///
+/// Once a DownloadJobStore record exists it is the authority for user intent
+/// and logical queue ownership. Plugin/URLSession status is still authoritative
+/// for *live execution ownership*, but stale executor rows may not erase a
+/// durable user pause, waiter, terminal state, or interrupted job.
+DownloadRecoveryPlan planDownloadRecoveryWithJobAuthority({
+  required TaskStatus persisted,
+  required bool queueWaiting,
+  required bool userPaused,
+  required bool stillInNativeQueue,
+  required bool hasMetadata,
+  DownloadJobState? authoritativeState,
+  bool authoritativeUserPaused = false,
+  bool authoritativeQueueWaiting = false,
+}) {
+  if (authoritativeState == null) {
+    return planDownloadRecovery(
+      persisted: persisted,
+      queueWaiting: queueWaiting,
+      userPaused: userPaused,
+      stillInNativeQueue: stillInNativeQueue,
+      hasMetadata: hasMetadata,
+    );
+  }
+
+  switch (authoritativeState) {
+    case DownloadJobState.completed:
+    case DownloadJobState.canceled:
+    case DownloadJobState.orphaned:
+      return DownloadRecoveryPlan(
+        state: authoritativeState,
+        action: DownloadRecoveryAction.ignore,
+      );
+    default:
+      break;
+  }
+
+  // Keep legacy userPaused=true as migration evidence too. A pause is safer to
+  // preserve than to accidentally turn into network activity after relaunch.
+  if (authoritativeUserPaused ||
+      userPaused ||
+      authoritativeState == DownloadJobState.pausedByUser ||
+      authoritativeState == DownloadJobState.pausing) {
+    return const DownloadRecoveryPlan(
+      state: DownloadJobState.pausedByUser,
+      action: DownloadRecoveryAction.keepPaused,
+    );
+  }
+
+  if (stillInNativeQueue) {
+    final state = switch (authoritativeState) {
+      DownloadJobState.queued => DownloadJobState.queued,
+      DownloadJobState.starting => DownloadJobState.starting,
+      DownloadJobState.retryWaiting => DownloadJobState.retryWaiting,
+      DownloadJobState.assembling => DownloadJobState.assembling,
+      DownloadJobState.verifying => DownloadJobState.verifying,
+      _ => DownloadJobState.running,
+    };
+    return DownloadRecoveryPlan(
+      state: state,
+      action: DownloadRecoveryAction.keepNative,
+    );
+  }
+
+  if (authoritativeQueueWaiting ||
+      authoritativeState == DownloadJobState.queued) {
+    return const DownloadRecoveryPlan(
+      state: DownloadJobState.queued,
+      action: DownloadRecoveryAction.requeue,
+    );
+  }
+
+  return const DownloadRecoveryPlan(
+    state: DownloadJobState.interrupted,
+    action: DownloadRecoveryAction.requeue,
+  );
+}
+
 /// Identifies one concrete execution attempt of a logical episode.
 ///
 /// Future native/plugin callbacks can carry this token (directly or through a
