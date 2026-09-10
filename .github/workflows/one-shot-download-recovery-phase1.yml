@@ -23,7 +23,9 @@ jobs:
           cache: true
 
       - name: Apply phase 1 patch
-        run: python3 tool/apply_download_recovery_phase1.py
+        run: |
+          python3 tool/apply_download_recovery_phase1.py
+          sed -i 's/int? _taskAttemptGeneration(DownloadTask task)/int? _taskAttemptGeneration(Task task)/' lib/core/services/persistent_parallel_download.dart
 
       - name: Format changed Dart files
         run: dart format lib/core/services/persistent_parallel_download.dart test/core/services/persistent_parallel_download_recovery_snapshot_test.dart
