@@ -61,6 +61,36 @@ Duration downloadRangeFastFailTimeout(Duration? maxSuccessfulConnectTime) {
   );
 }
 
+bool shouldRememberDownloadRangeConnectTime({
+  required int? statusCode,
+  required String? requestedRange,
+  required String? contentRange,
+}) {
+  if (statusCode != 206 || requestedRange == null || contentRange == null) {
+    return false;
+  }
+  final request = RegExp(r'^bytes=(\d+)-(\d*)$')
+      .firstMatch(requestedRange.trim().toLowerCase());
+  final response = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$')
+      .firstMatch(contentRange.trim().toLowerCase());
+  if (request == null || response == null) return false;
+
+  final requestStart = int.parse(request[1]!);
+  final requestEndText = request[2]!;
+  final responseStart = int.parse(response[1]!);
+  final responseEnd = int.parse(response[2]!);
+  final resourceSize = int.parse(response[3]!);
+  if (responseStart != requestStart ||
+      responseEnd < responseStart ||
+      resourceSize <= responseEnd) {
+    return false;
+  }
+  if (requestEndText.isNotEmpty && responseEnd != int.parse(requestEndText)) {
+    return false;
+  }
+  return true;
+}
+
 bool shouldEmitDownloadRangeProgress({
   required int written,
   required int lastReportedWritten,
@@ -580,7 +610,20 @@ class DownloadRangeTransfer {
         'httpStatus': response.statusCode,
         'elapsedMs': clock.elapsedMilliseconds,
       });
-      _rememberConnectTime(url, clock.elapsed);
+      String? requestedRange;
+      for (final entry in headers.entries) {
+        if (entry.key.toLowerCase() == 'range') {
+          requestedRange = entry.value;
+          break;
+        }
+      }
+      if (shouldRememberDownloadRangeConnectTime(
+        statusCode: response.statusCode,
+        requestedRange: requestedRange,
+        contentRange: response.headers.value('content-range'),
+      )) {
+        _rememberConnectTime(url, clock.elapsed);
+      }
       return response;
     } catch (error) {
       diagnosticLog?.record('http.error', {

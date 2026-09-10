@@ -25,10 +25,50 @@ const Duration kParallelProgressCoalesceDelay = Duration(seconds: 1);
 const Duration kParallelProgressPersistInterval = Duration(seconds: 1);
 
 /// Durable multipart manifest schema. Version 1 was the legacy payload that
-/// contained only `parts`. Version 2 also records the logical generation and
-/// expected byte count so a process relaunch cannot silently combine a torn
-/// checkpoint with incompatible recovery metadata.
-const int kParallelManifestSchemaVersion = 2;
+/// contained only `parts`. Version 2 added logical generation/expected byte
+/// identity. Version 3 also pins the first strong ETag (or Last-Modified)
+/// observed from a validated child response, so later/relaunched ranges
+/// cannot silently assemble bytes from a different resource generation.
+const int kParallelManifestSchemaVersion = 3;
+
+/// Validate response metadata from a native multipart child. A full HTTP
+/// 200 is safe only when this child already represents the entire resource;
+/// multi-part ignored-Range responses are handled by the full-body fallback.
+/// For HTTP 206 the final byte and total resource size must match the
+/// immutable manifest Range. The response start may be inside the Range
+/// because URLSession resumeData can restart from an already durable prefix.
+bool downloadPartResponseMatchesRequestedRange({
+  required int from,
+  required int to,
+  required int resourceSize,
+  required int? statusCode,
+  required Map<String, String>? responseHeaders,
+}) {
+  // Older platform/plugin updates did not always expose final response
+  // metadata. Preserve compatibility there; current background_downloader
+  // supplies response headers/status for successful final states.
+  if (statusCode == null && responseHeaders == null) return true;
+  if (statusCode == 200) return from == 0 && to == resourceSize - 1;
+  if (statusCode != 206 || responseHeaders == null) return false;
+
+  String? contentRange;
+  for (final entry in responseHeaders.entries) {
+    if (entry.key.toLowerCase() == 'content-range') {
+      contentRange = entry.value.trim().toLowerCase();
+      break;
+    }
+  }
+  final match = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$')
+      .firstMatch(contentRange ?? '');
+  if (match == null) return false;
+  final responseStart = int.parse(match[1]!);
+  final responseEnd = int.parse(match[2]!);
+  final responseSize = int.parse(match[3]!);
+  return responseStart >= from &&
+      responseStart <= to &&
+      responseEnd == to &&
+      responseSize == resourceSize;
+}
 
 /// Automatic child recovery is intentionally unbounded while the logical
 /// episode is active: transient URLSession/system/network interruptions must
@@ -197,6 +237,8 @@ class PersistentParallelDownload {
           );
         childHeaders['Range'] = 'bytes=${part.from}-${part.to}';
         childHeaders['Accept-Encoding'] = 'identity';
+        final validator = session.resourceValidator;
+        if (validator != null) childHeaders['If-Range'] = validator;
         part.task = part.task.copyWith(
           url: url,
           headers: childHeaders,
@@ -297,12 +339,17 @@ class PersistentParallelDownload {
         if (savedExpectedBytes > 0 && savedExpectedBytes != calculatedBytes) {
           continue;
         }
+        final savedValidator = json['resourceValidator'] is String
+            ? (json['resourceValidator'] as String).trim()
+            : '';
         final session = _ParallelSession(
           task,
           manifest,
           parts,
           generation: savedGeneration,
+          resourceValidator: savedValidator.isEmpty ? null : savedValidator,
         );
+        _applyPinnedValidatorToPendingParts(session);
         _register(session);
         await _restoreNativeOwnership(session);
 
@@ -1635,6 +1682,9 @@ class PersistentParallelDownload {
               await _pause(session);
               return;
             }
+            if (!await _validateCompletedNativeRange(session, part, update)) {
+              return;
+            }
             _markConnectionReady(session, part);
             _releaseConnection(part);
             part.complete = true;
@@ -1980,6 +2030,7 @@ class PersistentParallelDownload {
       'schemaVersion': kParallelManifestSchemaVersion,
       'generation': session.generation,
       'expectedBytes': session.size,
+      'resourceValidator': session.resourceValidator,
       'parts': session.parts.map((part) => part.toJson()).toList(),
     });
     final temp = File('${session.manifest.path}.tmp');
@@ -2026,6 +2077,115 @@ class PersistentParallelDownload {
         entry.key.toLowerCase() == 'range' &&
         entry.value.toLowerCase().startsWith('bytes='),
   );
+
+  String? _responseIfRangeValidator(Map<String, String>? headers) {
+    if (headers == null || headers.isEmpty) return null;
+    String? etag;
+    String? lastModified;
+    for (final entry in headers.entries) {
+      switch (entry.key.toLowerCase()) {
+        case 'etag':
+          etag = entry.value.trim();
+        case 'last-modified':
+          lastModified = entry.value.trim();
+      }
+    }
+    if (etag != null &&
+        etag!.isNotEmpty &&
+        !etag!.toLowerCase().startsWith('w/')) {
+      return etag;
+    }
+    if (lastModified != null && lastModified!.isNotEmpty) {
+      return lastModified;
+    }
+    return null;
+  }
+
+  void _applyPinnedValidatorToPendingParts(_ParallelSession session) {
+    final validator = session.resourceValidator;
+    if (validator == null || validator.isEmpty) return;
+    for (final part in session.parts) {
+      if (part.complete) continue;
+      final headers = Map<String, String>.from(part.task.headers)
+        ..removeWhere((key, _) => key.toLowerCase() == 'if-range');
+      headers['If-Range'] = validator;
+      part.task = part.task.copyWith(headers: headers);
+    }
+  }
+
+  Future<void> _invalidateCompletedRange(
+    _ParallelSession session,
+    _DownloadPart part, {
+    required String reason,
+  }) async {
+    diagnosticLog?.record('parallel.rangeRejected', {
+      'taskId': session.task.taskId,
+      'childTaskId': part.task.taskId,
+      'reason': reason,
+    });
+    _cancelTailStallWatch(part);
+    part.recoveryTimer?.cancel();
+    part.recoveryTimer = null;
+    session.currentBatchPendingIds.remove(part.task.taskId);
+    _activeConnectionIds.remove(part.task.taskId);
+    part.launched = false;
+    part.complete = false;
+    part.progress = 0;
+    part.credibleProgress = 0;
+    part.speed = 0;
+    part.recoveryAttempts = 0;
+    part.tailRecoveryAttempted = false;
+    part.tailWatchProgress = -1;
+    part.lastNativeBridgeBytes = 0;
+    part.lastNativeBridgeAt = null;
+    final file = File(await part.task.filePath());
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+    await saveRecord(TaskRecord(part.task, TaskStatus.paused, 0, part.size));
+    onPartProgress(session.task.taskId, part.task.taskId, 0);
+    await _persist(session);
+  }
+
+  Future<bool> _validateCompletedNativeRange(
+    _ParallelSession session,
+    _DownloadPart part,
+    TaskStatusUpdate update,
+  ) async {
+    if (!downloadPartResponseMatchesRequestedRange(
+      from: part.from,
+      to: part.to,
+      resourceSize: session.size,
+      statusCode: update.responseStatusCode,
+      responseHeaders: update.responseHeaders,
+    )) {
+      await _invalidateCompletedRange(
+        session,
+        part,
+        reason: 'contentRangeMismatch',
+      );
+      await _pause(session);
+      return false;
+    }
+
+    final observedValidator = _responseIfRangeValidator(update.responseHeaders);
+    if (observedValidator == null) return true;
+    final pinned = session.resourceValidator;
+    if (pinned == null) {
+      session.resourceValidator = observedValidator;
+      _applyPinnedValidatorToPendingParts(session);
+      return true;
+    }
+    if (pinned == observedValidator) return true;
+
+    await _invalidateCompletedRange(
+      session,
+      part,
+      reason: 'resourceValidatorChanged',
+    );
+    await _pause(session);
+    return false;
+  }
 
   Future<bool> _adoptIgnoredRangeFullBody(
     _ParallelSession session,
@@ -2168,7 +2328,13 @@ class PersistentParallelDownload {
 }
 
 class _ParallelSession {
-  _ParallelSession(this.task, this.manifest, this.parts, {this.generation = 0});
+  _ParallelSession(
+    this.task,
+    this.manifest,
+    this.parts, {
+    this.generation = 0,
+    this.resourceValidator,
+  });
 
   ParallelDownloadTask task;
   final File manifest;
@@ -2176,6 +2342,7 @@ class _ParallelSession {
   bool active = false;
   bool deleted = false;
   int generation;
+  String? resourceValidator;
   int connectionCeiling = kDownloadPartsMin;
   int lastHealthyConnections = 0;
   bool slowStartComplete = false;

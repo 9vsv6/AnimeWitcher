@@ -24,25 +24,66 @@ void main() {
     );
   });
 
-  test('adds a fifty-percent safety margin to slower successful connections', () {
+  test(
+    'adds a fifty-percent safety margin to slower successful connections',
+    () {
+      expect(
+        downloadRangeFastFailTimeout(const Duration(seconds: 4)),
+        const Duration(seconds: 6),
+      );
+      expect(
+        downloadRangeFastFailTimeout(const Duration(seconds: 10)),
+        const Duration(seconds: 15),
+      );
+    },
+  );
+
+  test('only validated HTTP 206 ranges train the fast-fail baseline', () {
     expect(
-      downloadRangeFastFailTimeout(const Duration(seconds: 4)),
-      const Duration(seconds: 6),
+      shouldRememberDownloadRangeConnectTime(
+        statusCode: 503,
+        requestedRange: 'bytes=100-199',
+        contentRange: null,
+      ),
+      isFalse,
     );
     expect(
-      downloadRangeFastFailTimeout(const Duration(seconds: 10)),
-      const Duration(seconds: 15),
+      shouldRememberDownloadRangeConnectTime(
+        statusCode: 206,
+        requestedRange: 'bytes=100-199',
+        contentRange: 'bytes 100-199/1000',
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRememberDownloadRangeConnectTime(
+        statusCode: 206,
+        requestedRange: 'bytes=100-199',
+        contentRange: 'bytes 101-200/1000',
+      ),
+      isFalse,
+    );
+    expect(
+      shouldRememberDownloadRangeConnectTime(
+        statusCode: 200,
+        requestedRange: 'bytes=100-',
+        contentRange: null,
+      ),
+      isFalse,
     );
   });
 
-  test('never becomes less tolerant than the previous thirty-second ceiling', () {
-    expect(
-      downloadRangeFastFailTimeout(const Duration(seconds: 25)),
-      kDownloadRangeMaxFastFailTimeout,
-    );
-    expect(
-      downloadRangeFastFailTimeout(const Duration(minutes: 2)),
-      kDownloadRangeMaxFastFailTimeout,
-    );
-  });
+  test(
+    'never becomes less tolerant than the previous thirty-second ceiling',
+    () {
+      expect(
+        downloadRangeFastFailTimeout(const Duration(seconds: 25)),
+        kDownloadRangeMaxFastFailTimeout,
+      );
+      expect(
+        downloadRangeFastFailTimeout(const Duration(minutes: 2)),
+        kDownloadRangeMaxFastFailTimeout,
+      );
+    },
+  );
 }
