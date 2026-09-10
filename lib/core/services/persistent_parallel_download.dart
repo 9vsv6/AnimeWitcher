@@ -24,6 +24,12 @@ const Duration kParallelProgressCoalesceDelay = Duration(seconds: 1);
 /// parent progress stream.
 const Duration kParallelProgressPersistInterval = Duration(seconds: 1);
 
+/// Durable multipart manifest schema. Version 1 was the legacy payload that
+/// contained only `parts`. Version 2 also records the logical generation and
+/// expected byte count so a process relaunch cannot silently combine a torn
+/// checkpoint with incompatible recovery metadata.
+const int kParallelManifestSchemaVersion = 2;
+
 /// Automatic child recovery is intentionally unbounded while the logical
 /// episode is active: transient URLSession/system/network interruptions must
 /// never turn into a user-visible pause. Backoff is capped so an unavailable
@@ -123,6 +129,44 @@ class PersistentParallelDownload {
   /// Native 0.999 completion sentinels are intentionally excluded.
   double? progressFor(String id) => _sessions[id]?.progress;
 
+  /// Repair a child whose native resume checkpoint claimed progress but no
+  /// resumable/native/on-disk bytes survived. The immutable Range itself is
+  /// retained; only the unprovable prefix is discarded so recovery can fetch
+  /// that one Range again instead of retrying a phantom checkpoint forever.
+  ///
+  /// This is intentionally synchronous because it is called by [startPart]
+  /// while the owning session is already serialized in [_pumpSession].
+  bool resetUndurablePartProgress(String childTaskId, {int durableBytes = 0}) {
+    if (_disposed) return false;
+    final session = _children[childTaskId];
+    if (session == null || session.deleted) return false;
+    _DownloadPart? part;
+    for (final candidate in session.parts) {
+      if (candidate.task.taskId == childTaskId) {
+        part = candidate;
+        break;
+      }
+    }
+    if (part == null || part.complete) return false;
+    if (durableBytes < 0 || durableBytes > part.size) return false;
+
+    final repaired = part.size > 0
+        ? (durableBytes / part.size).clamp(0.0, 1.0).toDouble()
+        : 0.0;
+    _cancelTailStallWatch(part);
+    part.progress = repaired;
+    part.credibleProgress = repaired;
+    part.speed = 0;
+    part.recoveryAttempts = 0;
+    part.tailRecoveryAttempted = false;
+    part.tailWatchProgress = -1;
+    part.lastNativeBridgeBytes = durableBytes;
+    part.lastNativeBridgeAt = null;
+    onPartProgress(session.task.taskId, childTaskId, repaired);
+    if (session.active) _scheduleAggregateProgress(session);
+    return true;
+  }
+
   /// Replace only the remote source of a paused/restored multipart job.
   /// Every range identity, byte boundary, credible progress value and local
   /// part file is retained. This is used when a signed CDN URL expires.
@@ -219,6 +263,13 @@ class PersistentParallelDownload {
         if (!await candidate.exists()) continue;
         final raw = await candidate.readAsString();
         final json = jsonDecode(raw) as Map<String, dynamic>;
+        final schemaVersion = (json['schemaVersion'] as num?)?.toInt() ?? 1;
+        if (schemaVersion < 1 ||
+            schemaVersion > kParallelManifestSchemaVersion) {
+          continue;
+        }
+        final savedGeneration = (json['generation'] as num?)?.toInt() ?? 0;
+        if (savedGeneration < 0) continue;
         final partJson = json['parts'];
         if (partJson is! List || partJson.isEmpty) continue;
         final parts = partJson
@@ -232,7 +283,26 @@ class PersistentParallelDownload {
             parts.any((part) => part.from < 0 || part.to < part.from)) {
           continue;
         }
-        final session = _ParallelSession(task, manifest, parts);
+        var contiguous = parts.first.from == 0;
+        for (var index = 1; index < parts.length && contiguous; index++) {
+          contiguous = parts[index].from == parts[index - 1].to + 1;
+        }
+        if (!contiguous) continue;
+        final calculatedBytes = parts.fold<int>(
+          0,
+          (sum, part) => sum + part.size,
+        );
+        final savedExpectedBytes =
+            (json['expectedBytes'] as num?)?.toInt() ?? -1;
+        if (savedExpectedBytes > 0 && savedExpectedBytes != calculatedBytes) {
+          continue;
+        }
+        final session = _ParallelSession(
+          task,
+          manifest,
+          parts,
+          generation: savedGeneration,
+        );
         _register(session);
         await _restoreNativeOwnership(session);
 
@@ -1907,6 +1977,9 @@ class PersistentParallelDownload {
     if (session.deleted) return;
     await session.manifest.parent.create(recursive: true);
     final payload = jsonEncode({
+      'schemaVersion': kParallelManifestSchemaVersion,
+      'generation': session.generation,
+      'expectedBytes': session.size,
       'parts': session.parts.map((part) => part.toJson()).toList(),
     });
     final temp = File('${session.manifest.path}.tmp');
@@ -1923,8 +1996,27 @@ class PersistentParallelDownload {
 
   Future<bool> _adoptCompletedTarget(_ParallelSession session) async {
     final target = File(await session.task.filePath());
-    if (!await target.exists()) return false;
-    if (await target.length() != session.size) return false;
+    if (await target.exists()) {
+      if (await target.length() != session.size) return false;
+      await _finishCompleteSession(session);
+      return true;
+    }
+
+    // A crash can happen after the complete staging file was flushed and
+    // closed but before its atomic rename. Reuse it only when every source
+    // Range is still exact, which proves this staging file belongs to this
+    // recoverable multipart generation. Otherwise normal assembly rewrites it.
+    final staging = File('${target.path}.assembling');
+    if (!await staging.exists() || await staging.length() != session.size) {
+      return false;
+    }
+    for (final part in session.parts) {
+      final file = File(await part.task.filePath());
+      if (!await file.exists() || await file.length() != part.size) {
+        return false;
+      }
+    }
+    await staging.rename(target.path);
     await _finishCompleteSession(session);
     return true;
   }
@@ -2076,14 +2168,14 @@ class PersistentParallelDownload {
 }
 
 class _ParallelSession {
-  _ParallelSession(this.task, this.manifest, this.parts);
+  _ParallelSession(this.task, this.manifest, this.parts, {this.generation = 0});
 
   ParallelDownloadTask task;
   final File manifest;
   final List<_DownloadPart> parts;
   bool active = false;
   bool deleted = false;
-  int generation = 0;
+  int generation;
   int connectionCeiling = kDownloadPartsMin;
   int lastHealthyConnections = 0;
   bool slowStartComplete = false;

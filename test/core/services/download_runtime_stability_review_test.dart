@@ -109,6 +109,57 @@ void main() {
       expect(source, contains('? update.networkSpeed'));
     });
 
+    test(
+      'lost multipart resume checkpoint is repaired instead of retried forever',
+      () {
+        final source = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        final start = source.indexOf('Future<bool> _startPart(');
+        final end = source.indexOf('Future<bool> _enqueueTransfer(', start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        final section = source.substring(start, end);
+        expect(section, contains("part.checkpointLost"));
+        expect(section, contains('resetUndurablePartProgress('));
+        expect(section, contains('return FileDownloader().enqueue(task);'));
+        expect(
+          section,
+          isNot(contains('if (progress > 0 || bytes > 0) return false;')),
+        );
+      },
+    );
+
+    test(
+      'multipart manifests persist generation and expected byte identity',
+      () {
+        final source = File(
+          'lib/core/services/persistent_parallel_download.dart',
+        ).readAsStringSync();
+        expect(source, contains('kParallelManifestSchemaVersion = 2'));
+        expect(
+          source,
+          contains("'schemaVersion': kParallelManifestSchemaVersion"),
+        );
+        expect(source, contains("'generation': session.generation"));
+        expect(source, contains("'expectedBytes': session.size"));
+        expect(source, contains('generation: savedGeneration'));
+        expect(source, contains('if (!contiguous) continue;'));
+      },
+    );
+
+    test('complete assembly staging file is adopted after a crash', () {
+      final source = File('lib/core/services/persistent_parallel_download.dart')
+          .readAsStringSync();
+      final start = source.indexOf('Future<bool> _adoptCompletedTarget(');
+      final end = source.indexOf('bool _requestedByteRange(', start);
+      expect(start, greaterThanOrEqualTo(0));
+      expect(end, greaterThan(start));
+      final section = source.substring(start, end);
+      expect(section, contains(".assembling"));
+      expect(section, contains('await staging.rename(target.path)'));
+      expect(section, contains('await file.length() != part.size'));
+    });
+
     test('continued-processing speed zero explicitly clears stale speed', () {
       final swift = File('ios/Runner/DownloadContinuedProcessingManager.swift')
           .readAsStringSync();

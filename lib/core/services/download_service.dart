@@ -3193,11 +3193,13 @@ class DownloadService {
     if (_rangeTransfers.isActive(task.taskId)) return true;
     if ((await _liveTransferTasks()).any((live) => live.taskId == task.taskId))
       return true;
+
+    var nativeCanResume = false;
     try {
-      final canResume = await FileDownloader()
+      nativeCanResume = await FileDownloader()
           .taskCanResume(task)
           .timeout(const Duration(seconds: 3));
-      if (canResume && await FileDownloader().resume(task)) return true;
+      if (nativeCanResume && await FileDownloader().resume(task)) return true;
     } catch (_) {
       // A stale native checkpoint must not prevent the disk-prefix fallback.
     }
@@ -3220,7 +3222,30 @@ class DownloadService {
         expectedBytes: size,
       );
     }
-    if (progress > 0 || bytes > 0) return false;
+
+    if (progress > 0 && bytes == 0 && !nativeCanResume) {
+      // iOS pause is implemented by background_downloader using
+      // cancelByProducingResumeData(). Some Range tasks return nil resume
+      // data; URLSession then removes its private temp file. The old child
+      // percentage is no longer durable and retrying it can never succeed.
+      // Drop only that phantom prefix and re-fetch the same immutable Range.
+      final repaired = _parallel.resetUndurablePartProgress(
+        task.taskId,
+        durableBytes: 0,
+      );
+      if (!repaired) return false;
+      diagnosticLog.record('part.checkpointLost', {
+        'taskId': task.taskId,
+        'progress': progress,
+        'total': size,
+      });
+      await FileDownloader().database.updateRecord(
+        TaskRecord(task, TaskStatus.paused, 0, size),
+      );
+      return FileDownloader().enqueue(task);
+    }
+
+    if (bytes > 0) return false;
     return FileDownloader().enqueue(task);
   }
 
