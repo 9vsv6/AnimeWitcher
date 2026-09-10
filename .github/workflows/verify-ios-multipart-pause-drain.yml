@@ -1,4 +1,4 @@
-name: Verify iOS Multipart Pause Preservation
+name: Verify iOS Background Multipart Recovery
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
     paths:
       - .github/scripts/fix-ios-multipart-pause-drain.py
       - .github/scripts/fix-ios-multipart-pause-drain-tests.py
+      - .github/scripts/fix-ios-background-transfer-recovery.py
       - .github/workflows/verify-ios-multipart-pause-drain.yml
 
 permissions:
@@ -13,7 +14,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
 
@@ -23,10 +24,11 @@ jobs:
           flutter-version: 3.47.1
           cache: true
 
-      - name: Apply iOS multipart pause fix
+      - name: Apply iOS pause and background recovery fixes
         run: |
           python3 .github/scripts/fix-ios-multipart-pause-drain.py
           python3 .github/scripts/fix-ios-multipart-pause-drain-tests.py
+          python3 .github/scripts/fix-ios-background-transfer-recovery.py
 
       - name: Install dependencies and generate sources
         run: |
@@ -46,7 +48,7 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
-      - name: Multipart pause regressions
+      - name: Multipart pause and background regressions
         run: |
           flutter test \
             test/core/services/persistent_parallel_download_test.dart \
@@ -65,14 +67,17 @@ jobs:
       - name: Full Flutter suite
         run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
+      - name: Compile iOS simulator app
+        run: flutter build ios --simulator --debug --no-codesign
+
       - name: Commit verified fix
         run: |
-          if git diff --quiet -- lib test; then
+          if git diff --quiet -- lib test ios; then
             echo "No source changes to commit"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib test
-          git commit -m "Preserve iOS multipart bytes across pause"
+          git add lib test ios
+          git commit -m "Harden iOS background download recovery"
           git push
