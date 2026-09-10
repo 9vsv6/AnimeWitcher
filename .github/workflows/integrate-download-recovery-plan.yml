@@ -1,0 +1,90 @@
+name: Integrate Download Recovery Plan
+
+on:
+  push:
+    branches:
+      - fix/download-recovery-plan-integration
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-and-verify:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/download-recovery-plan-integration
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Merge verified recovery snapshot branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin fix/download-recovery-snapshot-phase1
+          set +e
+          git merge --no-ff --no-commit origin/fix/download-recovery-snapshot-phase1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "Merge conflicts detected:"
+            git status --short
+            git diff --name-only --diff-filter=U
+            exit "$status"
+          fi
+
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Format and diff check
+        run: |
+          dart format \
+            lib/core/services/download_parallel.dart \
+            lib/core/services/download_range_transfer.dart \
+            lib/core/services/download_service.dart \
+            lib/core/services/persistent_parallel_download.dart \
+            test/core/services/download_parallel_test.dart \
+            test/core/services/download_range_fast_fail_policy_test.dart \
+            test/core/services/download_runtime_stability_review_test.dart \
+            test/core/services/persistent_parallel_download_auto_recovery_test.dart \
+            test/core/services/persistent_parallel_download_fallback_test.dart \
+            test/core/services/persistent_parallel_download_phantom_progress_test.dart \
+            test/core/services/persistent_parallel_download_progress_test.dart \
+            test/core/services/persistent_parallel_download_recovery_snapshot_test.dart \
+            test/core/services/persistent_parallel_download_test.dart
+          git diff --check
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Focused download recovery suite
+        run: |
+          flutter test test/core/services/persistent_parallel_download_recovery_snapshot_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/persistent_parallel_download_auto_recovery_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/persistent_parallel_download_fallback_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/persistent_parallel_download_progress_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/download_range_transfer_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/download_url_refresh_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/download_runtime_stability_review_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Full Flutter suite
+        run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Commit integrated verified branch
+        run: |
+          git rm .github/workflows/integrate-download-recovery-plan.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "Integrate recovery snapshots, validators, and retry ownership"
+          git push origin HEAD:fix/download-recovery-plan-integration
