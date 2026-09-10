@@ -130,19 +130,21 @@ void main() {
     );
 
     test(
-      'multipart manifests persist generation and expected byte identity',
+      'multipart manifests persist generation, byte and resource identity',
       () {
         final source = File(
           'lib/core/services/persistent_parallel_download.dart',
         ).readAsStringSync();
-        expect(source, contains('kParallelManifestSchemaVersion = 2'));
+        expect(source, contains('kParallelManifestSchemaVersion = 3'));
         expect(
           source,
           contains("'schemaVersion': kParallelManifestSchemaVersion"),
         );
         expect(source, contains("'generation': session.generation"));
         expect(source, contains("'expectedBytes': session.size"));
+        expect(source, contains("'resourceValidator': session.resourceValidator"));
         expect(source, contains('generation: savedGeneration'));
+        expect(source, contains('resourceValidator: savedResourceValidator'));
         expect(source, contains('if (!contiguous) continue;'));
       },
     );
