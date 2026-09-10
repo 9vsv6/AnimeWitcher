@@ -127,6 +127,8 @@ class PersistentParallelDownload {
     this.shouldRecoverFailedStart,
     this.onSourceRefreshNeeded,
     this.verifyPartSource,
+    this.shouldDrainPartOnPause,
+    this.onPausedDrainSettled,
     this.recoveryDelay = const Duration(seconds: 1),
     this.tailStallDelay = kParallelTailStallDelay,
     this.diskProgressPollInterval = kParallelDiskProgressPollInterval,
@@ -155,6 +157,14 @@ class PersistentParallelDownload {
     int bytes,
   )?
   verifyPartSource;
+
+  /// Whether this launched child must avoid transport pause and finish its
+  /// current immutable Range into a durable file instead. Used on iOS where
+  /// URLSession cancelByProducingResumeData can cancel a task and still return
+  /// no resume data. The policy is consulted only when pause() explicitly asks
+  /// to preserve live parts.
+  final bool Function(DownloadTask task)? shouldDrainPartOnPause;
+  final void Function(String parentTaskId)? onPausedDrainSettled;
   final Duration recoveryDelay;
   final Duration tailStallDelay;
   final Duration diskProgressPollInterval;
@@ -755,6 +765,7 @@ class PersistentParallelDownload {
       if (session.active) return true;
       session.cancelAggregateProgress();
       session.generation++;
+      session.pauseRequested = false;
       session.active = true;
       session.resetRamp();
       try {
@@ -875,9 +886,17 @@ class PersistentParallelDownload {
       _launchableParts(session).length;
 
   Future<bool> _pumpSession(_ParallelSession session) async {
-    if (_disposed || !session.active || session.deleted) return true;
+    if (_disposed ||
+        !session.active ||
+        session.pauseRequested ||
+        session.deleted) {
+      return true;
+    }
 
-    while (!_disposed && session.active && !session.deleted) {
+    while (!_disposed &&
+        session.active &&
+        !session.pauseRequested &&
+        !session.deleted) {
       if (session.currentBatchRemaining == 0) {
         if (session.currentBatchPendingIds.isNotEmpty) return true;
         if (session.rampBatchIndex < session.rampBatches.length) {
@@ -920,7 +939,7 @@ class PersistentParallelDownload {
       if (parts.isEmpty) return true;
 
       for (final part in parts) {
-        if (_disposed) return true;
+        if (_disposed || session.pauseRequested || !session.active) return true;
         final record = await recordForId(part.task.taskId);
         final progress = record?.progress ?? 0;
         if (progress > part.progress && progress <= 1) {
@@ -1091,6 +1110,14 @@ class PersistentParallelDownload {
     });
   }
 
+  void _notifyPausedDrainSettled(_ParallelSession session) {
+    if (session.active || _activeConnectionsForSession(session) > 0) return;
+    diagnosticLog?.record('parallel.pauseDrainSettled', {
+      'taskId': session.task.taskId,
+    });
+    onPausedDrainSettled?.call(session.task.taskId);
+  }
+
   Future<void> _afterAdoptedPart(_ParallelSession session) async {
     await _persist(session);
     if (session.parts.every((child) => child.complete)) {
@@ -1098,6 +1125,7 @@ class PersistentParallelDownload {
     } else {
       _scheduleAggregateProgress(session);
       _schedulePumpAll();
+      _notifyPausedDrainSettled(session);
     }
   }
 
@@ -1951,8 +1979,12 @@ class PersistentParallelDownload {
             part.complete = true;
             part.progress = 1;
             part.credibleProgress = 1;
+            await saveRecord(
+              TaskRecord(part.task, TaskStatus.complete, 1, part.size),
+            );
             onPartProgress(session.task.taskId, part.task.taskId, 1);
             await _persist(session);
+            _notifyPausedDrainSettled(session);
             if (session.active &&
                 session.parts.every((child) => child.complete)) {
               await _assemble(session);
@@ -1970,6 +2002,19 @@ class PersistentParallelDownload {
             _armTailStallWatch(session, part);
             await _status(session, TaskStatus.running);
             _schedulePumpAll();
+            return;
+          }
+
+          if (!session.active &&
+              (update.status == TaskStatus.failed ||
+                  update.status == TaskStatus.notFound ||
+                  update.status == TaskStatus.canceled ||
+                  update.status == TaskStatus.paused)) {
+            _markConnectionReady(session, part);
+            _releaseConnection(part);
+            _invalidatePartAttempt(session, part);
+            await _persist(session);
+            _notifyPausedDrainSettled(session);
             return;
           }
 
@@ -2021,11 +2066,20 @@ class PersistentParallelDownload {
     return true;
   }
 
-  Future<bool> pause(ParallelDownloadTask task) async {
+  Future<bool> pause(
+    ParallelDownloadTask task, {
+    bool preserveLiveParts = false,
+  }) async {
     if (_disposed) return false;
     if (!await restore(task)) return false;
     final session = _sessions[task.taskId]!;
-    return session.serialize(() => _pause(session));
+    // This flag is deliberately set before waiting for session.serialize(). A
+    // slow-start pump may already be queued ahead of _pause; it must observe
+    // the user's pause intent synchronously and stop before another enqueue.
+    session.pauseRequested = true;
+    return session.serialize(
+      () => _pause(session, preserveLiveParts: preserveLiveParts),
+    );
   }
 
   bool _shouldAutomaticallyRecoverPart(TaskStatusUpdate update) {
@@ -2146,7 +2200,10 @@ class PersistentParallelDownload {
     }
   }
 
-  Future<bool> _pause(_ParallelSession session) async {
+  Future<bool> _pause(
+    _ParallelSession session, {
+    bool preserveLiveParts = false,
+  }) async {
     session.active = false;
     session.generation++;
     _speedTelemetry.resetSpeed(session.task.taskId);
@@ -2159,13 +2216,30 @@ class PersistentParallelDownload {
     final unfinished = session.parts
         .where((part) => !part.complete)
         .toList(growable: false);
-    var pauseFailed = false;
+    final drainIds = <String>{};
+    final pauseCandidates = <_DownloadPart>[];
+    for (final part in unfinished) {
+      if (!part.launched) continue;
+      final drain =
+          preserveLiveParts &&
+          (shouldDrainPartOnPause?.call(part.task) ?? false);
+      if (drain) {
+        drainIds.add(part.task.taskId);
+      } else {
+        pauseCandidates.add(part);
+      }
+    }
 
-    // Pause every actual child identity concurrently. DownloadService routes
-    // these child tasks to FileDownloader.pause, which owns their URLSession
-    // resume data; it must never route them through the single-file Transfer.
+    if (drainIds.isNotEmpty) {
+      diagnosticLog?.record('parallel.pauseDrain', {
+        'taskId': session.task.taskId,
+        'count': drainIds.length,
+      });
+    }
+
+    var pauseFailed = false;
     await Future.wait(
-      unfinished.map((part) async {
+      pauseCandidates.map((part) async {
         try {
           await pausePart(part.task);
         } catch (_) {
@@ -2175,25 +2249,26 @@ class PersistentParallelDownload {
     );
 
     Set<String> live = <String>{};
+    var liveLookupSucceeded = livePartIds == null;
     final lookupLive = livePartIds;
     if (lookupLive != null) {
       try {
         live = await lookupLive();
+        liveLookupSucceeded = true;
       } catch (_) {
         pauseFailed = true;
       }
     }
 
-    var stillLive = unfinished
+    // Retry only transport-pause candidates that are still demonstrably live.
+    // Never retry the drain set: on iOS the retry itself is the destructive
+    // cancelByProducingResumeData operation we are avoiding.
+    var stillUnexpected = pauseCandidates
         .where((part) => live.contains(part.task.taskId))
         .toList(growable: false);
-
-    // A pause acknowledgement and the URLSession state transition are
-    // asynchronous on iOS. Retry only identities that are still demonstrably
-    // live; never cancel them, because cancel can discard resume bytes.
-    if (stillLive.isNotEmpty) {
+    if (stillUnexpected.isNotEmpty) {
       await Future.wait(
-        stillLive.map((part) async {
+        stillUnexpected.map((part) async {
           try {
             await pausePart(part.task);
           } catch (_) {
@@ -2205,17 +2280,22 @@ class PersistentParallelDownload {
       if (lookupLive != null) {
         try {
           live = await lookupLive();
+          liveLookupSucceeded = true;
         } catch (_) {
           pauseFailed = true;
+          liveLookupSucceeded = false;
         }
       }
-      stillLive = unfinished
+      stillUnexpected = pauseCandidates
           .where((part) => live.contains(part.task.taskId))
           .toList(growable: false);
     }
 
-    if (stillLive.isNotEmpty || (lookupLive == null && pauseFailed)) {
-      final stillIds = stillLive.map((part) => part.task.taskId).toSet();
+    if (stillUnexpected.isNotEmpty ||
+        (lookupLive == null && pauseFailed && drainIds.isEmpty)) {
+      final stillIds = stillUnexpected.map((part) => part.task.taskId).toSet()
+        ..addAll(drainIds);
+      session.pauseRequested = false;
       session.active = true;
       for (final part in unfinished) {
         final owns = stillIds.contains(part.task.taskId);
@@ -2234,16 +2314,47 @@ class PersistentParallelDownload {
       return false;
     }
 
+    var retainedDrainCount = 0;
     for (final part in unfinished) {
+      final requestedDrain = drainIds.contains(part.task.taskId);
+      // If native liveness could not be queried, retaining a launched drain is
+      // safer than invoking a destructive pause or freeing its slot early. A
+      // later native completion/failure or explicit resume reconciles it.
+      final ownsDrain =
+          requestedDrain &&
+          (!liveLookupSucceeded ||
+              lookupLive == null ||
+              live.contains(part.task.taskId));
+      if (ownsDrain) {
+        retainedDrainCount++;
+        part.launched = true;
+        part.speed = 0;
+        _activeConnectionIds.add(part.task.taskId);
+        continue;
+      }
+
+      // A drain candidate that disappeared between enqueue and the liveness
+      // snapshot may already have moved its complete file. Adopt exact bytes
+      // before fencing the old attempt.
+      if (requestedDrain &&
+          await _adoptExactSizePart(session, part, settleNativeOwner: false)) {
+        continue;
+      }
+
       _invalidatePartAttempt(session, part);
       part.launched = false;
       part.speed = 0;
+      _activeConnectionIds.remove(part.task.taskId);
     }
-    final ids = session.parts.map((part) => part.task.taskId).toSet();
-    _activeConnectionIds.removeWhere(ids.contains);
+
     await _persist(session);
     await _status(session, TaskStatus.paused);
+    diagnosticLog?.record('parallel.pauseCommitted', {
+      'taskId': session.task.taskId,
+      'draining': retainedDrainCount,
+    });
     _schedulePumpAll();
+    if (retainedDrainCount == 0) _notifyPausedDrainSettled(session);
     return true;
   }
 
@@ -2619,6 +2730,9 @@ class _ParallelSession {
   final File manifest;
   final List<_DownloadPart> parts;
   bool active = false;
+  // Synchronous intent fence: true from the instant pause() is requested until
+  // an explicit start/resume begins a new generation.
+  bool pauseRequested = false;
   bool deleted = false;
   int generation;
   int checkpointSequence = 0;

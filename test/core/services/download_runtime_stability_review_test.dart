@@ -109,6 +109,30 @@ void main() {
       expect(source, contains('? update.networkSpeed'));
     });
 
+    test('iOS multipart pause preserves live URLSession range bytes', () {
+      final source = File('lib/core/services/download_service.dart')
+          .readAsStringSync();
+      expect(source, contains('preserveLiveParts: Platform.isIOS'));
+      expect(source, contains('shouldDrainPartOnPause: (task) =>'));
+      expect(
+        source,
+        contains("diagnosticLog.record('parallel.pauseDrainQueueRelease'"),
+      );
+      expect(
+        source,
+        contains(
+          'if (_parallel.hasLiveConnections(taskId)) occupying.add(taskId);',
+        ),
+      );
+      expect(
+        source,
+        contains(
+          'final parentUserPaused = _userPausedIds.contains(parentTaskId);',
+        ),
+      );
+      expect(source, contains('if (!parentUserPaused || completed)'));
+    });
+
     test(
       'lost multipart resume checkpoint is repaired instead of retried forever',
       () {
@@ -260,6 +284,73 @@ void main() {
         expect(source, contains('state: DownloadJobState.interrupted'));
         expect(source, contains('state: DownloadJobState.completed'));
         expect(source, contains('await _jobStore.remove(task.taskId);'));
+      },
+    );
+
+    test(
+      'iOS background transport failures retry before plugin Task failed',
+      () {
+        final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
+            .readAsStringSync();
+        final hookStart = swift.indexOf('private static func hookComplete(');
+        final hookEnd = swift.indexOf(
+          'private static func hookFinishDownload(',
+          hookStart,
+        );
+        expect(hookStart, greaterThanOrEqualTo(0));
+        expect(hookEnd, greaterThan(hookStart));
+        final hook = swift.substring(hookStart, hookEnd);
+        expect(hook, contains('retryBackgroundTransferIfNeeded('));
+        expect(hook, contains('return'));
+        final retryIndex = hook.indexOf('retryBackgroundTransferIfNeeded(');
+        final pluginCallbackIndex = hook.indexOf(
+          'if let original = DownloadUrlSessionHook.originalComplete',
+        );
+        expect(retryIndex, greaterThanOrEqualTo(0));
+        expect(pluginCallbackIndex, greaterThanOrEqualTo(0));
+        expect(retryIndex, lessThan(pluginCallbackIndex));
+        expect(swift, contains('background.retry.resumeData'));
+        expect(swift, contains('background.retry.rangeRestart'));
+        expect(swift, contains('replacement.earliestBeginDate'));
+        expect(swift, contains('-1005, // network connection lost'));
+        expect(swift, contains('-1009, // not connected to Internet'));
+        expect(swift, isNot(contains('-999,  //')));
+
+        final service = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        expect(service, contains('Platform.isIOS'));
+        expect(service, contains('const Duration(minutes: 10)'));
+      },
+    );
+
+    test('pause intent fences a queued multipart slow-start pump', () {
+      final source = File('lib/core/services/persistent_parallel_download.dart')
+          .readAsStringSync();
+      expect(source, contains('session.pauseRequested = true;'));
+      expect(source, contains('session.pauseRequested = false;'));
+      expect(source, contains('session.pauseRequested ||'));
+      expect(source, contains('!session.pauseRequested &&'));
+    });
+
+    test(
+      'multipart native bytes keep iOS continued-processing progress alive',
+      () {
+        final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
+            .readAsStringSync();
+        final start = swift.indexOf(
+          'private static func postMultipartChunkUpdate(',
+        );
+        final end = swift.indexOf('static func handleBytesWritten(', start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        final section = swift.substring(start, end);
+        expect(section, contains('multipartChildSamples[parentId]'));
+        expect(section, contains('state.runningSamples[parentId]'));
+        expect(section, contains('overlayPresentation('));
+        expect(section, contains('shouldUpdateNativeOverlay'));
+        expect(section, contains('!isAppInForeground()'));
+        expect(section, contains('upsertSessionOverlay('));
+        expect(section, contains('never used as durable resume evidence'));
       },
     );
   });
