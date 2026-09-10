@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -10,6 +11,7 @@ import 'package:screen_brightness/screen_brightness.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:video_view/video_view.dart' as vv;
+
 import '../../../../l10n/generated/app_localizations.dart';
 import '../player_controller.dart';
 import '../player_shortcuts.dart';
@@ -1706,10 +1708,11 @@ class AnimeWitcherPlayerControlsState
       // The button follows the feature, not the mode. Choosing "off"
       // from its own list must not retire the control that chose it.
       anime4kOn: playerSettings.anime4kEnabled,
-      // The adaptive backend has no GLSL stage, so there is nothing for the
-      // button to change while it is the one playing.
-      anime4kSupported: !ref.watch(
-        playerControllerProvider.select((s) => s.useExoPlayer),
+      anime4kSupported: anime4kAvailableOn(
+        isDesktopPlatform: isDesktop,
+        usingAdaptiveBackend: ref.watch(
+          playerControllerProvider.select((s) => s.useExoPlayer),
+        ),
       ),
     );
 

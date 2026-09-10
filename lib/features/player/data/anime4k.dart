@@ -84,6 +84,24 @@ extension Anime4kModeName on Anime4kMode {
   }
 }
 
+/// Whether this device can be offered Anime4K at all.
+///
+/// Desktop only, and only on the mpv backend. The shaders are a real load on
+/// a GPU — the network sizes are described by their own project in multiples
+/// of processing time — and a phone playing a 1080p stream has neither the
+/// thermal room nor a screen large enough to show what the work bought. The
+/// adaptive backend used for DRM and some live streams has no GLSL stage at
+/// all, so there is nothing to offer there either.
+///
+/// Judged by platform rather than by window size: a narrow window on a
+/// desktop still has the card behind it, and a tablet-sized phone does not.
+bool anime4kAvailableOn({
+  required bool isDesktopPlatform,
+  required bool usingAdaptiveBackend,
+}) {
+  return isDesktopPlatform && !usingAdaptiveBackend;
+}
+
 /// Whether the feature is on, for a setting that may predate the flag.
 ///
 /// The mode and the feature used to be one value, so "not off" was how being

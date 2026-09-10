@@ -318,4 +318,38 @@ void main() {
       expect(anime4kEnabledFrom(stored: true, mode: Anime4kMode.off), isTrue);
     });
   });
+
+  group('where it is offered at all', () {
+    test('desktop on the mpv backend, and nowhere else', () {
+      expect(
+        anime4kAvailableOn(
+          isDesktopPlatform: true,
+          usingAdaptiveBackend: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('not on a phone, whatever is playing', () {
+      // The shaders are a real load on a GPU, and a phone has neither the
+      // thermal room nor a screen big enough to show what the work bought.
+      for (final adaptive in <bool>[true, false]) {
+        expect(
+          anime4kAvailableOn(
+            isDesktopPlatform: false,
+            usingAdaptiveBackend: adaptive,
+          ),
+          isFalse,
+          reason: 'adaptive backend: $adaptive',
+        );
+      }
+    });
+
+    test('not on the backend that has no shader stage', () {
+      expect(
+        anime4kAvailableOn(isDesktopPlatform: true, usingAdaptiveBackend: true),
+        isFalse,
+      );
+    });
+  });
 }

@@ -15,7 +15,9 @@ import 'package:video_view/video_view.dart'
     show VideoController, SubtitleTrackConfig, VideoControllerPlaybackState;
 
 import '../../../../core/logger/app_logger.dart';
+
 import 'package:animewitcher/core/account/account_providers.dart';
+
 import '../../../../core/services/download_service.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
@@ -1269,10 +1271,8 @@ class PlayerController extends Notifier<PlayerState> {
             _manualSelectionPending = false;
             revertToPreviousStream(
               _playerText(
-                english:
-                    'Selected source is not playable. Reverting back to previous source.',
-                arabic:
-                    'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.',
+                english: 'Selected source is not playable. Reverting back to previous source.',
+                arabic: 'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.',
               ),
             );
           } else {
@@ -1303,10 +1303,8 @@ class PlayerController extends Notifier<PlayerState> {
             SourceAttemptStatus.failed,
           );
           _revertMessage = _playerText(
-            english:
-                'Current source stopped unexpectedly. Trying next available source...',
-            arabic:
-                'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
+            english: 'Current source stopped unexpectedly. Trying next available source...',
+            arabic: 'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
           );
           unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
         }
@@ -1616,10 +1614,8 @@ class PlayerController extends Notifier<PlayerState> {
       _resetBufferWatchdog();
       _resetMidPlaybackReconnect();
       _revertMessage = _playerText(
-        english:
-            'This source stopped responding after the seek. Trying the next one…',
-        arabic:
-            'توقف هذا المصدر عن الاستجابة بعد التقديم. جارٍ تجربة المصدر التالي…',
+        english: 'This source stopped responding after the seek. Trying the next one…',
+        arabic: 'توقف هذا المصدر عن الاستجابة بعد التقديم. جارٍ تجربة المصدر التالي…',
       );
       unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
     }
@@ -1854,10 +1850,8 @@ class PlayerController extends Notifier<PlayerState> {
           SourceAttemptStatus.failed,
         );
         _revertMessage = _playerText(
-          english:
-              'Current source stopped unexpectedly. Trying next available source...',
-          arabic:
-              'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
+          english: 'Current source stopped unexpectedly. Trying next available source...',
+          arabic: 'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
         );
         retryNextStream(sourceSessionId: state.sourceSessionId);
       }
@@ -1911,10 +1905,8 @@ class PlayerController extends Notifier<PlayerState> {
     if (state.currentStream == null) return;
     _markSourceAttempt(state.currentStreamIndex, SourceAttemptStatus.failed);
     _revertMessage = _playerText(
-      english:
-          'Current source stopped unexpectedly. Trying next available source...',
-      arabic:
-          'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
+      english: 'Current source stopped unexpectedly. Trying next available source...',
+      arabic: 'توقف المصدر الحالي بشكل غير متوقع. جارٍ تجربة المصدر التالي المتاح...',
     );
     unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
   }
@@ -2608,7 +2600,13 @@ class PlayerController extends Notifier<PlayerState> {
   /// a mode on takes effect on what is already playing.
   Future<void> applyAnime4kShaders() async {
     if (_isDisposed) return;
-    if (state.useExoPlayer) return;
+    if (!anime4kAvailableOn(
+      isDesktopPlatform:
+          Platform.isWindows || Platform.isMacOS || Platform.isLinux,
+      usingAdaptiveBackend: state.useExoPlayer,
+    )) {
+      return;
+    }
     final platform = _player.platform;
     if (platform is! NativePlayer) return;
 
@@ -2988,10 +2986,8 @@ class PlayerController extends Notifier<PlayerState> {
         // silently to the previously playing source instead.
         revertToPreviousStream(
           _playerText(
-            english:
-                'Selected source is not playable. Reverting back to previous source.',
-            arabic:
-                'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.',
+            english: 'Selected source is not playable. Reverting back to previous source.',
+            arabic: 'المصدر المحدد غير قابل للتشغيل. جارٍ الرجوع إلى المصدر السابق.',
           ),
         );
         return;
@@ -3104,10 +3100,8 @@ class PlayerController extends Notifier<PlayerState> {
       } else {
         revertToPreviousStream(
           _playerText(
-            english:
-                'Could not switch to selected source. Reverting back to previous source.',
-            arabic:
-                'تعذر التبديل إلى المصدر المحدد. جارٍ الرجوع إلى المصدر السابق.',
+            english: 'Could not switch to selected source. Reverting back to previous source.',
+            arabic: 'تعذر التبديل إلى المصدر المحدد. جارٍ الرجوع إلى المصدر السابق.',
           ),
         );
       }
