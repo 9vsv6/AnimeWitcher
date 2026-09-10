@@ -142,9 +142,17 @@ void main() {
         );
         expect(source, contains("'generation': session.generation"));
         expect(source, contains("'expectedBytes': session.size"));
-        expect(source, contains("'resourceValidator': session.resourceValidator"));
+        expect(
+          source,
+          contains("'resourceValidator': session.resourceValidator"),
+        );
         expect(source, contains('generation: savedGeneration'));
-        expect(source, contains("final savedValidator = json['resourceValidator'] is String"));
+        expect(
+          source,
+          contains(
+            "final savedValidator = json['resourceValidator'] is String",
+          ),
+        );
         expect(
           source,
           contains(

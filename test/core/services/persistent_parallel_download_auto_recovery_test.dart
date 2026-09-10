@@ -166,18 +166,23 @@ void main() {
       expect(await coordinator.start(parent, 32), isTrue);
       expect(starts, hasLength(1));
       final child = starts.first;
+      var current = child;
 
-      coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
+      coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.running));
       await Future<void>.delayed(Duration.zero);
 
       // The old implementation stopped the whole parent after the third pause.
       // Exercise well beyond that boundary and require the same child identity
-      // to keep recovering automatically.
+      // to keep recovering automatically. Each pause comes from the current
+      // native attempt; older task objects are intentionally stale after retry.
       for (var interruption = 0; interruption < 6; interruption++) {
         final expectedStarts = starts.length + 1;
-        coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.paused));
+        coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.paused));
         await waitUntil(() => starts.length >= expectedStarts);
-        expect(starts.last.taskId, child.taskId);
+        current = starts.last;
+        expect(current.taskId, child.taskId);
+        coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.running));
+        await Future<void>.delayed(Duration.zero);
         expect(coordinator.isActive(parent.taskId), isTrue);
         expect(parentStatuses.last, TaskStatus.running);
         expect(pauses, isEmpty);
