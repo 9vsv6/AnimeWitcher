@@ -1106,35 +1106,53 @@ class PersistentParallelDownload {
     });
   }
 
+  Future<void> _writeParentRecord(_ParallelSession session, TaskRecord record) {
+    late final Future<void> operation;
+    operation = session.parentRecordWrite.then((_) => saveRecord(record));
+    session.parentRecordWrite = operation.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        diagnosticLog?.record('parallel.parentRecordPersistFailed', {
+          'taskId': session.task.taskId,
+          'errorType': error.runtimeType.toString(),
+        });
+      },
+    );
+    return operation;
+  }
+
   void _scheduleAggregateProgress(_ParallelSession session) {
     if (_disposed || !session.active || session.deleted) return;
     session.aggregateProgressDirty = true;
     if (session.aggregateProgressTimer != null) return;
 
+    // Presentation must not wait behind manifest fsync/recovery bookkeeping.
+    // Snapshot on the one-second clock and publish immediately; parent DB
+    // writes use their own ordered chain so a stale running write can never
+    // overwrite a later pause/complete record.
     session.aggregateProgressTimer = Timer(kParallelProgressCoalesceDelay, () {
       session.aggregateProgressTimer = null;
-      if (_disposed) return;
-      unawaited(
-        session.serialize(() async {
-          if (_disposed ||
-              !session.active ||
-              session.deleted ||
-              !session.aggregateProgressDirty) {
-            return;
-          }
-          session.aggregateProgressDirty = false;
-          await _emitAggregateProgress(session);
-        }),
-      );
+      if (_disposed ||
+          !session.active ||
+          session.deleted ||
+          !session.aggregateProgressDirty) {
+        return;
+      }
+      session.aggregateProgressDirty = false;
+      _emitAggregateProgress(session);
     });
   }
 
-  Future<void> _emitAggregateProgress(_ParallelSession session) async {
+  void _emitAggregateProgress(_ParallelSession session) {
+    if (_disposed || !session.active || session.deleted) return;
+    final task = session.task;
     final progress = session.progress;
+    final creditedBytes = session.creditedBytes;
+    final expectedBytes = session.size;
     final telemetry = _speedTelemetry.observe(
-      taskId: session.task.taskId,
-      transferredBytes: session.creditedBytes,
-      expectedBytes: session.size,
+      taskId: task.taskId,
+      transferredBytes: creditedBytes,
+      expectedBytes: expectedBytes,
     );
     final speed = telemetry.speedBytesPerSecond > 0
         ? telemetry.speedBytesPerSecond / 1000 / 1000
@@ -1149,24 +1167,21 @@ class PersistentParallelDownload {
               kParallelHostProfileSampleInterval) {
         session.lastHostProfileSampleAt = now;
         onHostSample?.call(
-          session.task.url,
+          task.url,
           _activeConnectionsForSession(session).clamp(1, 1 << 30),
           speed * 1000 * 1000,
         );
       }
     }
 
-    await saveRecord(
-      TaskRecord(session.task, TaskStatus.running, progress, session.size),
-    );
     onUpdate(
-      TaskProgressUpdate(
-        session.task,
-        progress,
-        session.size,
-        speed,
-        timeRemaining,
-      ),
+      TaskProgressUpdate(task, progress, expectedBytes, speed, timeRemaining),
+    );
+    unawaited(
+      _writeParentRecord(
+        session,
+        TaskRecord(task, TaskStatus.running, progress, expectedBytes),
+      ).catchError((Object _, StackTrace __) {}),
     );
   }
 
@@ -1881,7 +1896,8 @@ class PersistentParallelDownload {
     } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {
       session.parentRunningReported = false;
     }
-    await saveRecord(
+    await _writeParentRecord(
+      session,
       TaskRecord(session.task, status, session.progress, session.size),
     );
     onUpdate(TaskStatusUpdate(session.task, status));
@@ -2087,6 +2103,7 @@ class _ParallelSession {
   bool parentRunningReported = false;
   DateTime? lastHostProfileSampleAt;
   Future<void> _pending = Future<void>.value();
+  Future<void> parentRecordWrite = Future<void>.value();
 
   int get size => parts.fold(0, (sum, part) => sum + part.size);
   int get creditedBytes => parts.fold<int>(
@@ -2103,7 +2120,10 @@ class _ParallelSession {
         (sum, part) => sum + part.size * part.credibleProgress,
       ) /
       size;
-  Future<void> get idle => _pending;
+  Future<void> get idle async {
+    await _pending;
+    await parentRecordWrite;
+  }
 
   void cancelAggregateProgress() {
     aggregateProgressTimer?.cancel();

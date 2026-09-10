@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:animewitcher/core/services/persistent_parallel_download.dart';
@@ -115,6 +116,78 @@ void main() {
       }
     },
   );
+
+  test('parent progress is not blocked by slow record persistence', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'parallel-progress-nonblocking-',
+    );
+    final parent = ParallelDownloadTask(
+      taskId: 'parallel-progress-nonblocking',
+      url: 'https://example.com/video',
+      filename: 'video.mp4',
+      directory: directory.path,
+      baseDirectory: BaseDirectory.root,
+      chunks: 1,
+      allowPause: true,
+    );
+    final records = <String, TaskRecord>{};
+    final starts = <DownloadTask>[];
+    final updates = <TaskUpdate>[];
+    final blockedWrite = Completer<void>();
+    var blockRunningParentWrite = false;
+    final coordinator = PersistentParallelDownload(
+      startPart: (task, progress, size) async {
+        starts.add(task);
+        return true;
+      },
+      pausePart: (_) async {},
+      cancelParts: (_) async {},
+      saveRecord: (record) async {
+        if (blockRunningParentWrite &&
+            record.task.taskId == parent.taskId &&
+            record.status == TaskStatus.running) {
+          await blockedWrite.future;
+        }
+        records[record.task.taskId] = record;
+      },
+      recordForId: (id) async => records[id],
+      onUpdate: updates.add,
+      onPartProgress: (_, _, _) {},
+    );
+
+    try {
+      expect(await coordinator.start(parent, 1000000), isTrue);
+      final child = starts.single;
+      coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));
+      await waitUntil(() => coordinator.activeConnectionCount == 1);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      updates.clear();
+      blockRunningParentWrite = true;
+
+      coordinator.handleUpdate(
+        TaskProgressUpdate(
+          child,
+          0.25,
+          1000000,
+          0.5,
+          const Duration(seconds: 2),
+        ),
+      );
+
+      await Future<void>.delayed(
+        kParallelProgressCoalesceDelay + const Duration(milliseconds: 150),
+      );
+      expect(
+        updates.whereType<TaskProgressUpdate>(),
+        isNotEmpty,
+        reason: 'UI telemetry must publish before the DB write completes',
+      );
+    } finally {
+      if (!blockedWrite.isCompleted) blockedWrite.complete();
+      await coordinator.dispose();
+      if (await directory.exists()) await directory.delete(recursive: true);
+    }
+  });
 
   test('pause cancels a pending aggregate progress emission', () async {
     final directory = await Directory.systemTemp.createTemp(

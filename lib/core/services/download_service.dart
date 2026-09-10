@@ -742,6 +742,7 @@ class DownloadService {
             _telemetry.expectedBytesFor(update.task.taskId),
             previous?.totalSize,
           ]);
+          final isAggregateMultipart = update.task is ParallelDownloadTask;
           final fallbackSpeedBytes =
               update.networkSpeed.isFinite && update.networkSpeed > 0
               ? update.networkSpeed * 1000000
@@ -752,15 +753,28 @@ class DownloadService {
             expectedBytes: knownTotal,
             fallbackSpeedBytesPerSecond: fallbackSpeedBytes,
           );
-          final measuredSpeed = telemetry.speedBytesPerSecond;
-          final speed = measuredSpeed > 0
-              ? measuredSpeed / 1000000
-              : (_telemetry.hasRecentBytes(update.task.taskId) ? -1.0 : 0.0);
-          final remaining = telemetry.timeRemaining > Duration.zero
-              ? telemetry.timeRemaining
-              : (update.timeRemaining > Duration.zero
-                    ? update.timeRemaining
-                    : (previous?.timeRemaining ?? Duration.zero));
+          // PersistentParallelDownload already owns the aggregate byte clock
+          // and smoothing window. Re-estimating its synthetic parent here made
+          // the card and iOS continued-processing task use different speeds.
+          final measuredSpeed = isAggregateMultipart
+              ? fallbackSpeedBytes
+              : telemetry.speedBytesPerSecond;
+          final speed = isAggregateMultipart
+              ? (update.networkSpeed.isFinite && update.networkSpeed > 0
+                    ? update.networkSpeed
+                    : 0.0)
+              : (measuredSpeed > 0
+                    ? measuredSpeed / 1000000
+                    : (_telemetry.hasRecentBytes(update.task.taskId)
+                          ? -1.0
+                          : 0.0));
+          final remaining = isAggregateMultipart
+              ? update.timeRemaining
+              : (telemetry.timeRemaining > Duration.zero
+                    ? telemetry.timeRemaining
+                    : (update.timeRemaining > Duration.zero
+                          ? update.timeRemaining
+                          : (previous?.timeRemaining ?? Duration.zero)));
           final progressData = DownloadProgressData(
             taskId: update.task.taskId,
             progress: progress,

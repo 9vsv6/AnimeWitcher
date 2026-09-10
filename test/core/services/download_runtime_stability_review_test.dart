@@ -83,6 +83,32 @@ void main() {
       expect(source, contains('_scheduleProgressPersist(session)'));
     });
 
+    test('multipart parent presentation clock is not serialized behind IO', () {
+      final source = File('lib/core/services/persistent_parallel_download.dart')
+          .readAsStringSync();
+      final start = source.indexOf('void _scheduleAggregateProgress(');
+      final end = source.indexOf('Duration _aggregateTimeRemaining', start);
+      expect(start, greaterThanOrEqualTo(0));
+      expect(end, greaterThan(start));
+      final section = source.substring(start, end);
+      expect(section, isNot(contains('session.serialize(')));
+      expect(section, contains('void _emitAggregateProgress('));
+      expect(section, contains('_writeParentRecord('));
+    });
+
+    test('multipart card uses coordinator speed as the canonical speed', () {
+      final source = File('lib/core/services/download_service.dart')
+          .readAsStringSync();
+      expect(
+        source,
+        contains(
+          'final isAggregateMultipart = update.task is ParallelDownloadTask;',
+        ),
+      );
+      expect(source, contains('final measuredSpeed = isAggregateMultipart'));
+      expect(source, contains('? update.networkSpeed'));
+    });
+
     test('continued-processing speed zero explicitly clears stale speed', () {
       final swift = File('ios/Runner/DownloadContinuedProcessingManager.swift')
           .readAsStringSync();
