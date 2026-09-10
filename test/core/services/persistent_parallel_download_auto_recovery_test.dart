@@ -599,7 +599,7 @@ void main() {
       await waitUntil(() => parentStatuses.contains(TaskStatus.paused));
       expect(coordinator.isActive(parent.taskId), isFalse);
       expect(starts, hasLength(1));
-      expect(pauses, contains(child.taskId));
+      expect(pauses, isEmpty);
     },
   );
 }

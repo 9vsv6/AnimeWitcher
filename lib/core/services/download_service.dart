@@ -333,6 +333,17 @@ class DownloadService {
             file: file,
             written: bytes,
           ),
+      shouldDrainPartOnPause: (task) =>
+          Platform.isIOS &&
+          isInternalDownloaderChunk(task) &&
+          !_rangeTransfers.isActive(task.taskId),
+      onPausedDrainSettled: (parentTaskId) {
+        diagnosticLog.record('parallel.pauseDrainQueueRelease', {
+          'taskId': parentTaskId,
+        });
+        unawaited(_serializeQueue(_syncQueueToCapUnlocked));
+        unawaited(_syncSessionOverlay(completedSuccess: false));
+      },
       onUpdate: (update) {
         if (!_disposed) _sharedEvents.add(update);
       },
@@ -525,10 +536,8 @@ class DownloadService {
     double? speedBytesPerSecond,
     bool completed = false,
   }) {
-    if (_terminalJobIds.contains(parentTaskId) ||
-        _userPausedIds.contains(parentTaskId)) {
-      return;
-    }
+    if (_terminalJobIds.contains(parentTaskId)) return;
+    final parentUserPaused = _userPausedIds.contains(parentTaskId);
     diagnosticLog.record('chunk.update', {
       'taskId': chunkTaskId,
       'parentTaskId': parentTaskId,
@@ -546,12 +555,14 @@ class DownloadService {
                       expectedBytes > 0)
                   ? writtenBytes / expectedBytes
                   : null));
-    _publishChunkProgress(
-      parentTaskId: parentTaskId,
-      chunkTaskId: chunkTaskId,
-      progress: derivedProgress,
-      statusOrdinal: completed ? TaskStatus.complete.index : statusOrdinal,
-    );
+    if (!parentUserPaused || completed) {
+      _publishChunkProgress(
+        parentTaskId: parentTaskId,
+        chunkTaskId: chunkTaskId,
+        progress: derivedProgress,
+        statusOrdinal: completed ? TaskStatus.complete.index : statusOrdinal,
+      );
+    }
 
     unawaited(
       _parallel.handleNativeChunkUpdate(
@@ -614,7 +625,12 @@ class DownloadService {
     await FileDownloader()
         .configure(
           globalConfig: [
-            (Config.requestTimeout, const Duration(seconds: 100)),
+            (
+              Config.requestTimeout,
+              Platform.isIOS
+                  ? const Duration(minutes: 10)
+                  : const Duration(seconds: 100),
+            ),
             ...downloadHoldingQueueGlobalConfig(concurrency),
           ],
           androidConfig: [(Config.runInForeground, Config.always)],
@@ -1391,7 +1407,10 @@ class DownloadService {
     for (final record in records) {
       if (!isLogicalEpisodeDownloadTask(record.task)) continue;
       final taskId = record.task.taskId;
-      if (_userPausedIds.contains(taskId)) continue;
+      if (_userPausedIds.contains(taskId)) {
+        if (_parallel.hasLiveConnections(taskId)) occupying.add(taskId);
+        continue;
+      }
       if (reservesDownloadSlot(
         status: record.status,
         queueWaiting: _queueWaitingIds.contains(taskId),
@@ -1400,7 +1419,6 @@ class DownloadService {
       }
     }
     occupying.addAll(_startingTaskIds);
-    occupying.removeAll(_userPausedIds);
     occupying.removeAll(_restackingWaiterIds);
     return occupying.length;
   }
@@ -2416,7 +2434,7 @@ class DownloadService {
     }
 
     final didPause = downloadTask is ParallelDownloadTask
-        ? await _parallel.pause(downloadTask)
+        ? await _parallel.pause(downloadTask, preserveLiveParts: Platform.isIOS)
         : await _nativeTransport.pause(downloadTask);
     if (didPause) {
       await _syncSessionOverlay();
@@ -3414,7 +3432,11 @@ class DownloadService {
       return true;
     }
     if (task is ParallelDownloadTask && await _parallel.restore(task)) {
-      return _parallel.pause(task);
+      return _parallel.pause(
+        task,
+        preserveLiveParts:
+            Platform.isIOS && _userPausedIds.contains(task.taskId),
+      );
     }
 
     final settled = Completer<void>();
