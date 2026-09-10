@@ -12,6 +12,7 @@ def replace_once(path: str, old: str, new: str) -> None:
 
 parallel = 'lib/core/services/persistent_parallel_download.dart'
 runtime_test = 'test/core/services/download_runtime_stability_review_test.dart'
+auto_recovery_test = 'test/core/services/persistent_parallel_download_auto_recovery_test.dart'
 
 # A native child is allowed to finish while its logical multipart parent is in
 # the non-destructive iOS pause-drain state. Persist that exact completion in
@@ -42,6 +43,18 @@ replace_once(
     runtime_test,
     "      expect(section, contains('UI lease telemetry only'));\n",
     "      expect(section, contains('never used as durable resume evidence'));\n",
+)
+
+# A permanent HTTP failure has already ended that child's native transport.
+# The coordinator now releases the terminal child before parking the logical
+# parent, and _pause deliberately touches only still-owned native workers. The
+# old test expected a redundant pause() call on the already-failed child. Keep
+# the stronger invariant instead: the parent parks, the child is not retried,
+# and no destructive transport pause is issued against a terminal worker.
+replace_once(
+    auto_recovery_test,
+    '''      expect(starts, hasLength(1));\n      expect(pauses, contains(child.taskId));\n''',
+    '''      expect(starts, hasLength(1));\n      expect(pauses, isEmpty);\n''',
 )
 
 print('Closed pause-drain completion and background regression assertion gaps.')
