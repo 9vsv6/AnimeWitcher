@@ -76,10 +76,11 @@ void main() {
     expect(await coordinator.start(parent, 100), isTrue);
     expect(starts, hasLength(1));
     final child = starts.single;
+    var current = child;
 
     coordinator.handleUpdate(
       TaskProgressUpdate(
-        child,
+        current,
         0.60,
         100,
         1,
@@ -96,7 +97,7 @@ void main() {
     // so this is not proof that another 39.9 bytes exist.
     coordinator.handleUpdate(
       TaskProgressUpdate(
-        child,
+        current,
         0.999,
         100,
         0,
@@ -110,14 +111,21 @@ void main() {
 
     // Reproduce the user's stop/restart cycle. The raw 0.999 remains useful as
     // a resume hint, but restarting the child must not credit a whole Range.
-    coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.paused));
+    coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.paused));
     await waitUntil(() => starts.length >= 2);
+    current = starts.last;
+    expect(current.taskId, child.taskId);
     expect(startProgresses.last, closeTo(0.999, 0.0001));
     expect(records[parent.taskId]!.progress, closeTo(0.60, 0.0001));
 
+    // The recovered enqueue owns a new attempt token. Native progress from the
+    // original task object is intentionally stale and fenced out, so continue
+    // the scenario with the task instance that the coordinator just launched.
+    coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.running));
+    await Future<void>.delayed(Duration.zero);
     coordinator.handleUpdate(
       TaskProgressUpdate(
-        child,
+        current,
         0.62,
         100,
         1,
@@ -131,7 +139,7 @@ void main() {
 
     coordinator.handleUpdate(
       TaskProgressUpdate(
-        child,
+        current,
         0.999,
         100,
         0,
@@ -232,7 +240,10 @@ void main() {
       closeTo(credibleAggregate, 0.0000001),
     );
     expect(records[parent.taskId]!.progress, lessThan(fakeAggregate));
-    expect(coordinator.progressFor(parent.taskId), closeTo(credibleAggregate, 0.0000001));
+    expect(
+      coordinator.progressFor(parent.taskId),
+      closeTo(credibleAggregate, 0.0000001),
+    );
 
     final repaired = jsonDecode(
       await File('$targetPath.parts/manifest.json').readAsString(),
