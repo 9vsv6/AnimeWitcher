@@ -116,21 +116,6 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
     }
   }
 
-  /// The frame the player is on, when there is one.
-  ///
-  /// Usually there is not: this dialog is normally opened from settings with
-  /// nothing playing, and the preview says so rather than showing an empty
-  /// box. Opened from the player's own Anime4K button, it has a frame.
-  Future<Anime4kComparison?> _captureComparison() async {
-    try {
-      return await ref
-          .read(playerControllerProvider.notifier)
-          .captureAnime4kComparison();
-    } catch (_) {
-      return null;
-    }
-  }
-
   Future<void> _chooseFolder() async {
     final chosen = await FilePicker.getDirectoryPath();
     if (chosen == null || !mounted) return;
@@ -189,14 +174,6 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              Anime4kComparePreview(
-                capture: _captureComparison,
-                titleColor: colors.onSurface,
-                bodyColor: colors.onSurfaceVariant,
-                fillColor: colors.surfaceContainerHighest,
-              ),
-              const SizedBox(height: 20),
 
               // --- the folder ------------------------------------------------
               Text(
@@ -429,6 +406,12 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
                         },
                       ),
                   ],
+                ),
+                const Divider(height: 28),
+                Anime4kComparePreview(
+                  titleColor: colors.onSurface,
+                  bodyColor: colors.onSurfaceVariant,
+                  fillColor: colors.surfaceContainerHighest,
                 ),
               ],
             ],

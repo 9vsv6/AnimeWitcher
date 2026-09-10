@@ -2592,12 +2592,10 @@ class PlayerController extends Notifier<PlayerState> {
     _scheduleAutoSubtitleSelection();
   }
 
-  /// What mpv reports for `glsl-shaders` after the last apply.
-  ///
-  /// Empty means no shaders are running, whether because none were asked for
-  /// or because mpv could not use what it was given.
+  /// What mpv reported for `glsl-shaders` after the last apply, for the
+  /// debug line below: a value mpv rejected and one it accepted are
+  /// indistinguishable from the outside otherwise.
   String _anime4kApplied = '';
-  String get anime4kAppliedValue => _anime4kApplied;
 
   /// Hands mpv the Anime4K pipeline the settings ask for, or clears it.
   ///
@@ -2608,108 +2606,6 @@ class PlayerController extends Notifier<PlayerState> {
   ///
   /// Called when a file opens and again when the setting changes, so turning
   /// a mode on takes effect on what is already playing.
-  /// Suspends the shaders without changing the setting, so the picture can
-  /// be seen as the source made it.
-  ///
-  /// This is the only honest way to show what a mode does. The shaders live
-  /// inside mpv and run on the frame being played, so a difference cannot be
-  /// printed in a settings screen — it can only be looked at, on this frame,
-  /// by taking them away for a moment and putting them back.
-  Future<void> setAnime4kBypassed(bool bypassed) async {
-    if (_anime4kBypassed == bypassed) return;
-    _anime4kBypassed = bypassed;
-    await applyAnime4kShaders();
-  }
-
-  bool _anime4kBypassed = false;
-  bool get isAnime4kBypassed => _anime4kBypassed;
-
-  /// A still of the frame being played, as the source encoded it.
-  ///
-  /// mpv's `video` screenshot is the decoded frame, taken before the GPU
-  /// pipeline the shaders live in — so this is the picture *without* Anime4K,
-  /// whatever the shaders are doing on screen. That is exactly what makes it
-  /// useful next to the live picture: pause, and the still and the screen
-  /// behind it are the same moment, one untouched and one enhanced.
-  ///
-  /// There is no matching call for the enhanced side. mpv can save its own
-  /// rendered window, but media_kit only ever asks for the `video` variant,
-  /// and a window capture is not available under the render API this app
-  /// draws through anyway.
-  Future<Uint8List?> captureSourceFrame() async {
-    if (_isDisposed || state.useExoPlayer) return null;
-    try {
-      return await _player.screenshot(format: 'image/png');
-    } catch (e) {
-      if (kDebugMode) debugPrint('Source frame capture failed: $e');
-      return null;
-    }
-  }
-
-  /// This frame twice: as the source made it, and as the shaders leave it.
-  ///
-  /// `screenshot-to-file … window` is the only way to get the second one.
-  /// mpv's `video` screenshot — the one media_kit exposes — is taken before
-  /// the GPU stage the shaders live in, so it can only ever answer for the
-  /// source. The window variant saves what was actually drawn.
-  ///
-  /// Both halves are taken the same way, a moment apart with the shaders
-  /// switched off in between, so the only difference between them is the
-  /// thing being compared. Returns null when mpv will not do a window
-  /// capture, which it may not under a render API that owns no window of its
-  /// own — the caller then falls back to showing the source alone rather than
-  /// inventing the other half.
-  Future<Anime4kComparison?> captureAnime4kComparison() async {
-    if (_isDisposed || state.useExoPlayer) return null;
-    final platform = _player.platform;
-    if (platform is! NativePlayer) return null;
-
-    final wasBypassed = _anime4kBypassed;
-    Directory? scratch;
-    try {
-      scratch = await Directory.systemTemp.createTemp('aw_a4k_');
-      final withShaders = p.join(scratch.path, 'after.png');
-      final withoutShaders = p.join(scratch.path, 'before.png');
-
-      await platform.command(['screenshot-to-file', withShaders, 'window']);
-      final after = await _readIfWritten(withShaders);
-      // Nothing arrived, so this build of mpv will not capture its own
-      // output. Say so by returning null rather than guessing.
-      if (after == null) return null;
-
-      await setAnime4kBypassed(true);
-      await platform.command(['screenshot-to-file', withoutShaders, 'window']);
-      final before = await _readIfWritten(withoutShaders);
-      if (before == null) return null;
-
-      return Anime4kComparison(before: before, after: after);
-    } catch (e) {
-      if (kDebugMode) debugPrint('Anime4K comparison capture failed: $e');
-      return null;
-    } finally {
-      await setAnime4kBypassed(wasBypassed);
-      try {
-        await scratch?.delete(recursive: true);
-      } catch (_) {}
-    }
-  }
-
-  /// Reads a file mpv was asked to write, giving it a moment to appear.
-  ///
-  /// `screenshot-to-file` returns before the file is on disk, and there is no
-  /// event to wait on.
-  Future<Uint8List?> _readIfWritten(String path) async {
-    final file = File(path);
-    for (var attempt = 0; attempt < 20; attempt++) {
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        if (bytes.isNotEmpty) return bytes;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
-    return null;
-  }
-
   Future<void> applyAnime4kShaders() async {
     if (_isDisposed) return;
     if (state.useExoPlayer) return;
@@ -2718,15 +2614,13 @@ class PlayerController extends Notifier<PlayerState> {
 
     try {
       final settings = ref.read(playerSettingsProvider).asData?.value;
-      final pipeline = _anime4kBypassed
-          ? const Anime4kPipeline.none()
-          : await ref
-                .read(anime4kShaderLibraryProvider)
-                .pipeline(
-                  mode: settings?.anime4kMode ?? Anime4kMode.off,
-                  quality: settings?.anime4kQuality ?? Anime4kQuality.m,
-                  directory: settings?.anime4kShaderDirectory ?? '',
-                );
+      final pipeline = await ref
+          .read(anime4kShaderLibraryProvider)
+          .pipeline(
+            mode: settings?.anime4kMode ?? Anime4kMode.off,
+            quality: settings?.anime4kQuality ?? Anime4kQuality.m,
+            directory: settings?.anime4kShaderDirectory ?? '',
+          );
       if (_isDisposed) return;
       // An empty string is how mpv is told to run no shaders, so this both
       // applies a mode and turns one off.
@@ -2743,7 +2637,7 @@ class PlayerController extends Notifier<PlayerState> {
           'Anime4K: asked for ${pipeline.files.length} shaders, '
           'mpv holds "$_anime4kApplied"'
           '${pipeline.missing.isEmpty ? '' : ', missing '
-              '${pipeline.missing.join(", ")}'}',
+                    '${pipeline.missing.join(", ")}'}',
         );
       }
     } catch (e) {
