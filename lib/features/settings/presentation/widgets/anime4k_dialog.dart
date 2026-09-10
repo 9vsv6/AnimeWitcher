@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
+
 import '../../../../shared/widgets/glass_dialog.dart';
 import '../../../player/data/anime4k.dart';
 import '../../../player/data/anime4k_download.dart';
 import '../../../player/data/anime4k_shader_library.dart';
 import '../../../player/presentation/player_controller.dart';
-import '../../../player/presentation/widgets/anime4k_compare_preview.dart';
+import '../../../player/presentation/widgets/anime4k_sample_preview.dart';
 import '../player_settings_provider.dart';
 
 /// Picks an Anime4K pipeline, its network size, and the folder the shaders
@@ -408,7 +409,10 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
                   ],
                 ),
                 const Divider(height: 28),
-                Anime4kComparePreview(
+                Anime4kSamplePreview(
+                  mode: settings.anime4kMode,
+                  quality: settings.anime4kQuality,
+                  shaderDirectory: settings.anime4kShaderDirectory,
                   titleColor: colors.onSurface,
                   bodyColor: colors.onSurfaceVariant,
                   fillColor: colors.surfaceContainerHighest,
