@@ -25,7 +25,24 @@ jobs:
           cache: true
 
       - name: Apply repair
-        run: python3 .github/scripts/fix-download-recovery-phase1.py
+        run: |
+          python3 .github/scripts/fix-download-recovery-phase1.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('test/core/services/download_runtime_stability_review_test.dart')
+          text = path.read_text()
+          broken = "expect(section, isNot(contains('if (progress > 0 || bytes > 0) return false;')));"
+          fixed = "expect(section, isNot(contains('if (progress > 0 || bytes > 0) return false;'))));"
+          if broken not in text:
+              raise SystemExit('expected runtime-test fixture typo not found')
+          path.write_text(text.replace(broken, fixed, 1))
+          PY
+
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
 
       - name: Format changed Dart files
         run: |
@@ -35,12 +52,6 @@ jobs:
             test/core/services/persistent_parallel_download_progress_test.dart \
             test/core/services/download_runtime_stability_review_test.dart
           git diff --check
-
-      - name: Install dependencies and generate sources
-        run: |
-          flutter pub get
-          flutter gen-l10n
-          dart run build_runner build --delete-conflicting-outputs
 
       - name: Analyze
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
