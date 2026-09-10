@@ -28,6 +28,7 @@ jobs:
           sed -i 's/int? _taskAttemptGeneration(DownloadTask task)/int? _taskAttemptGeneration(Task task)/' lib/core/services/persistent_parallel_download.dart
           python3 - <<'PY'
           from pathlib import Path
+
           path = Path('test/core/services/persistent_parallel_download_test.dart')
           text = path.read_text()
           old = """    final original = List<DownloadTask>.from(starts);\n    for (var attempt = 0; attempt < 6; attempt++) {\n      final expectedStarts = starts.length + 1;\n      coordinator.handleUpdate(\n        TaskStatusUpdate(original[1], TaskStatus.paused),\n      );\n      await waitUntil(() => starts.length >= expectedStarts);\n      final recovered = starts.last;\n      expect(recovered.taskId, original[1].taskId);\n      // A real native worker acknowledges the recovered enqueue before it can\n      // be interrupted again. Keep the slow-start batch state honest instead\n      // of injecting consecutive pause callbacks into an unacknowledged task.\n      await markRunning([recovered]);\n"""
@@ -35,10 +36,18 @@ jobs:
           if text.count(old) != 1:
               raise SystemExit('repeated pause test block did not match exactly')
           path.write_text(text.replace(old, new, 1))
+
+          path = Path('test/core/services/persistent_parallel_download_auto_recovery_test.dart')
+          text = path.read_text()
+          old = """    final child = starts.first;\n\n    coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.running));\n    await Future<void>.delayed(Duration.zero);\n\n    // The old implementation stopped the whole parent after the third pause.\n    // Exercise well beyond that boundary and require the same child identity\n    // to keep recovering automatically.\n    for (var interruption = 0; interruption < 6; interruption++) {\n      final expectedStarts = starts.length + 1;\n      coordinator.handleUpdate(TaskStatusUpdate(child, TaskStatus.paused));\n      await waitUntil(() => starts.length >= expectedStarts);\n      expect(starts.last.taskId, child.taskId);\n      expect(coordinator.isActive(parent.taskId), isTrue);\n      expect(parentStatuses.last, TaskStatus.running);\n      expect(pauses, isEmpty);\n    }\n"""
+          new = """    final child = starts.first;\n    var current = child;\n\n    coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.running));\n    await Future<void>.delayed(Duration.zero);\n\n    // The old implementation stopped the whole parent after the third pause.\n    // Exercise well beyond that boundary and require the same child identity\n    // to keep recovering automatically. Each pause comes from the current\n    // native attempt; older task objects are intentionally stale after retry.\n    for (var interruption = 0; interruption < 6; interruption++) {\n      final expectedStarts = starts.length + 1;\n      coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.paused));\n      await waitUntil(() => starts.length >= expectedStarts);\n      current = starts.last;\n      expect(current.taskId, child.taskId);\n      coordinator.handleUpdate(TaskStatusUpdate(current, TaskStatus.running));\n      await Future<void>.delayed(Duration.zero);\n      expect(coordinator.isActive(parent.taskId), isTrue);\n      expect(parentStatuses.last, TaskStatus.running);\n      expect(pauses, isEmpty);\n    }\n"""
+          if text.count(old) != 1:
+              raise SystemExit('auto-recovery repeated pause block did not match exactly')
+          path.write_text(text.replace(old, new, 1))
           PY
 
       - name: Format changed Dart files
-        run: dart format lib/core/services/persistent_parallel_download.dart test/core/services/persistent_parallel_download_recovery_snapshot_test.dart test/core/services/persistent_parallel_download_test.dart
+        run: dart format lib/core/services/persistent_parallel_download.dart test/core/services/persistent_parallel_download_recovery_snapshot_test.dart test/core/services/persistent_parallel_download_test.dart test/core/services/persistent_parallel_download_auto_recovery_test.dart
 
       - name: Install dependencies and generate sources
         run: |
@@ -65,6 +74,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/one-shot-download-recovery-phase1.yml tool/apply_download_recovery_phase1.py
-          git add lib/core/services/persistent_parallel_download.dart test/core/services/persistent_parallel_download_recovery_snapshot_test.dart test/core/services/persistent_parallel_download_test.dart
+          git add lib/core/services/persistent_parallel_download.dart test/core/services/persistent_parallel_download_recovery_snapshot_test.dart test/core/services/persistent_parallel_download_test.dart test/core/services/persistent_parallel_download_auto_recovery_test.dart
           git commit -m "Harden multipart recovery snapshots and stale callback fencing"
           git push origin HEAD:fix/download-recovery-snapshot-phase1
