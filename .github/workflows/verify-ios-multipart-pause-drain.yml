@@ -29,6 +29,10 @@ jobs:
           python3 .github/scripts/fix-ios-multipart-pause-drain.py
           python3 .github/scripts/fix-ios-multipart-pause-drain-tests.py
           python3 .github/scripts/fix-ios-background-transfer-recovery.py
+          # These helpers are called by the sibling URLSession hook type in the
+          # same Swift file, so they must not be declaration-private.
+          perl -pi -e 's/private static func noteBackgroundRetryProgress/static func noteBackgroundRetryProgress/' ios/Runner/DownloadNativeWaitingQueue.swift
+          perl -pi -e 's/private static func clearBackgroundRetry/static func clearBackgroundRetry/' ios/Runner/DownloadNativeWaitingQueue.swift
 
       - name: Install dependencies and generate sources
         run: |
