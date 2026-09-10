@@ -8,44 +8,12 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  purge-legacy-workflow-runs:
-    name: Purge legacy workflow runs
-    if: "${{ github.event_name == 'push' && github.event.head_commit.message == 'chore(actions): purge legacy workflow runs' }}"
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - name: Delete runs from deleted one-shot workflows
-        shell: bash
-        run: |
-          set -euo pipefail
-          tmp="$(mktemp)"
-          gh api --paginate \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
-            --jq '.workflow_runs[] | select(.path != ".github/workflows/ci.yml" and .path != ".github/workflows/preview.yml" and .path != ".github/workflows/release.yml") | .id' \
-            | sort -u > "$tmp"
-
-          count="$(wc -l < "$tmp" | tr -d ' ')"
-          echo "Deleting $count legacy workflow runs"
-          if [ "$count" -eq 0 ]; then
-            exit 0
-          fi
-
-          export GITHUB_REPOSITORY
-          xargs -r -n1 -P8 -I{} bash -c '
-            gh api --method DELETE \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "repos/${GITHUB_REPOSITORY}/actions/runs/{}"
-          ' < "$tmp"
-
   analyze-and-test:
     name: Analyze and test
     runs-on: ubuntu-latest
