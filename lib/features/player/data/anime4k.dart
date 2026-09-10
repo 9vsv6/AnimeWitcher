@@ -84,6 +84,17 @@ extension Anime4kModeName on Anime4kMode {
   }
 }
 
+/// Whether the feature is on, for a setting that may predate the flag.
+///
+/// The mode and the feature used to be one value, so "not off" was how being
+/// switched on was recorded. An install from before the split has no flag to
+/// read, and its mode is the only evidence of what the viewer chose — reading
+/// a missing flag as false would silently turn Anime4K off for everyone
+/// already using it.
+bool anime4kEnabledFrom({required bool? stored, required Anime4kMode mode}) {
+  return stored ?? (mode != Anime4kMode.off);
+}
+
 /// One shader in a pipeline, as a family plus whether it takes a size.
 enum _Family { clampHighlights, restore, restoreSoft, upscale, upscaleDenoise }
 

@@ -2617,7 +2617,9 @@ class PlayerController extends Notifier<PlayerState> {
       final pipeline = await ref
           .read(anime4kShaderLibraryProvider)
           .pipeline(
-            mode: settings?.anime4kMode ?? Anime4kMode.off,
+            mode: (settings?.anime4kEnabled ?? false)
+                ? (settings?.anime4kMode ?? Anime4kMode.off)
+                : Anime4kMode.off,
             quality: settings?.anime4kQuality ?? Anime4kQuality.m,
             directory: settings?.anime4kShaderDirectory ?? '',
           );

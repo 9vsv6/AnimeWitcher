@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../../../core/storage/settings_repository.dart';
 import '../../player/data/anime4k.dart';
 
@@ -103,8 +104,16 @@ class PlayerSettings {
   /// a viewer has decided to keep watching.
   final bool prefetchNextEpisode;
 
-  /// Which Anime4K pipeline to run, if any. Off by default: the shaders are
-  /// files the viewer supplies, and the GPU cost is theirs to opt into.
+  /// Whether the feature is set up and wanted at all.
+  ///
+  /// Separate from [anime4kMode] on purpose. The mode says which pipeline
+  /// runs; this says whether the viewer has turned the feature on. Choosing
+  /// "off" from the player's mode list should stop the shaders without
+  /// retiring the button that chose them — conflating the two hid the only
+  /// control that could bring them back.
+  final bool anime4kEnabled;
+
+  /// Which Anime4K pipeline to run while it is enabled.
   final Anime4kMode anime4kMode;
 
   /// The size of network the Anime4K shaders use. Each step up roughly
@@ -118,6 +127,7 @@ class PlayerSettings {
   const PlayerSettings({
     this.fillerBehaviour = FillerBehaviour.note,
     this.prefetchNextEpisode = true,
+    this.anime4kEnabled = false,
     this.anime4kMode = Anime4kMode.off,
     this.anime4kQuality = Anime4kQuality.m,
     this.anime4kShaderDirectory = '',
@@ -199,6 +209,7 @@ class PlayerSettings {
     bool? skipSegmentsEnabled,
     FillerBehaviour? fillerBehaviour,
     bool? prefetchNextEpisode,
+    bool? anime4kEnabled,
     Anime4kMode? anime4kMode,
     Anime4kQuality? anime4kQuality,
     String? anime4kShaderDirectory,
@@ -253,6 +264,7 @@ class PlayerSettings {
       skipSegmentsEnabled: skipSegmentsEnabled ?? this.skipSegmentsEnabled,
       fillerBehaviour: fillerBehaviour ?? this.fillerBehaviour,
       prefetchNextEpisode: prefetchNextEpisode ?? this.prefetchNextEpisode,
+      anime4kEnabled: anime4kEnabled ?? this.anime4kEnabled,
       anime4kMode: anime4kMode ?? this.anime4kMode,
       anime4kQuality: anime4kQuality ?? this.anime4kQuality,
       anime4kShaderDirectory:
@@ -318,9 +330,9 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
         (storage.getPlayerSetting('player_default_speed') as num?)
             ?.toDouble() ??
         1.0;
-    final subFixedTextSize =
-        (storage.getPlayerSetting('player_sub_fixed_text_size') as num?)
-            ?.toDouble();
+    final subFixedTextSize = (storage.getPlayerSetting(
+      'player_sub_fixed_text_size',
+    ) as num?)?.toDouble();
     final subTypeface = storage.getPlayerSetting<int>('player_sub_typeface');
     final subTypefaceFilePath = storage.getPlayerSetting<String>(
       'player_sub_typeface_file_path',
@@ -391,11 +403,9 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
         0xFF000000;
     final subBackgroundOpacity =
         (storage.getPlayerSetting(
-                  'player_sub_background_opacity',
-                  defaultValue: 0.5,
-                )
-                as num?)
-            ?.toDouble() ??
+          'player_sub_background_opacity',
+          defaultValue: 0.5,
+        ) as num?)?.toDouble() ??
         0.5;
     final subAlignment = storage.getPlayerSetting<int>('player_sub_alignment');
 
@@ -465,6 +475,10 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
         defaultValue: Anime4kMode.off.name,
       ),
     );
+    final anime4kEnabled = anime4kEnabledFrom(
+      stored: storage.getPlayerSetting<bool>('player_anime4k_enabled'),
+      mode: anime4kMode,
+    );
     final anime4kQuality = Anime4kQualitySuffix.fromName(
       storage.getPlayerSetting<String>(
         'player_anime4k_quality',
@@ -524,6 +538,7 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       fillerBehaviour: fillerBehaviour,
       prefetchNextEpisode: prefetchNextEpisode,
       autoSkipCredits: autoSkipCredits,
+      anime4kEnabled: anime4kEnabled,
       anime4kMode: anime4kMode,
       anime4kQuality: anime4kQuality,
       anime4kShaderDirectory: anime4kShaderDirectory,
@@ -681,6 +696,11 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setPrefetchNextEpisode(bool val) async {
     await _repository.setPlayerSetting('player_prefetch_next_episode', val);
     state = AsyncData(state.requireValue.copyWith(prefetchNextEpisode: val));
+  }
+
+  Future<void> setAnime4kEnabled(bool val) async {
+    await _repository.setPlayerSetting('player_anime4k_enabled', val);
+    state = AsyncData(state.requireValue.copyWith(anime4kEnabled: val));
   }
 
   Future<void> setAnime4kMode(Anime4kMode val) async {

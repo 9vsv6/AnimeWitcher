@@ -310,7 +310,7 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
               // enhancement. It is a state of the feature, not a flavour of
               // it, so it gets the switch and the modes appear underneath.
               SwitchListTile(
-                value: settings.anime4kMode != Anime4kMode.off,
+                value: settings.anime4kEnabled,
                 contentPadding: EdgeInsets.zero,
                 title: Text(
                   appText(
@@ -321,23 +321,21 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
                   style: theme.textTheme.titleSmall,
                 ),
                 onChanged: (on) async {
-                  final next = on
-                      ? (_lastMode == Anime4kMode.off
-                            ? Anime4kMode.a
-                            : _lastMode)
-                      : Anime4kMode.off;
-                  if (settings.anime4kMode != Anime4kMode.off) {
-                    _lastMode = settings.anime4kMode;
+                  final notifier = ref.read(playerSettingsProvider.notifier);
+                  await notifier.setAnime4kEnabled(on);
+                  // Turning it on with no pipeline chosen — or with one the
+                  // player was told to stop — needs something to run.
+                  if (on && settings.anime4kMode == Anime4kMode.off) {
+                    await notifier.setAnime4kMode(
+                      _lastMode == Anime4kMode.off ? Anime4kMode.a : _lastMode,
+                    );
                   }
-                  await ref
-                      .read(playerSettingsProvider.notifier)
-                      .setAnime4kMode(next);
                   await _refreshPipeline();
                   await _reapply();
                 },
               ),
 
-              if (settings.anime4kMode != Anime4kMode.off) ...[
+              if (settings.anime4kEnabled) ...[
                 const SizedBox(height: 8),
                 Text(
                   appText(context, english: 'Mode', arabic: 'النمط'),
@@ -373,7 +371,7 @@ class _Anime4kDialogState extends ConsumerState<_Anime4kDialog> {
                 ),
               ],
 
-              if (settings.anime4kMode != Anime4kMode.off) ...[
+              if (settings.anime4kEnabled) ...[
                 const Divider(height: 28),
                 Text(
                   appText(context, english: 'Quality', arabic: 'الجودة'),

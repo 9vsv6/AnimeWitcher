@@ -292,4 +292,30 @@ void main() {
       expect(Anime4kQualitySuffix.fromName('XXL'), Anime4kQuality.m);
     });
   });
+
+  group('is the feature on', () {
+    test('a stored flag decides it', () {
+      expect(
+        anime4kEnabledFrom(stored: true, mode: Anime4kMode.off),
+        isTrue,
+        reason: 'enabled with no pipeline running is a real state now',
+      );
+      expect(anime4kEnabledFrom(stored: false, mode: Anime4kMode.a), isFalse);
+    });
+
+    test('an install from before the flag keeps what it had', () {
+      // Mode and feature used to be one value, so "not off" was how being on
+      // was recorded. Reading a missing flag as false would switch Anime4K
+      // off for everyone already using it.
+      expect(anime4kEnabledFrom(stored: null, mode: Anime4kMode.a), isTrue);
+      expect(anime4kEnabledFrom(stored: null, mode: Anime4kMode.ca), isTrue);
+      expect(anime4kEnabledFrom(stored: null, mode: Anime4kMode.off), isFalse);
+    });
+
+    test('stopping the pipeline from the player is not switching off', () {
+      // Choosing "off" in the player sets the mode and leaves the flag, so
+      // the button that chose it stays on screen to choose again.
+      expect(anime4kEnabledFrom(stored: true, mode: Anime4kMode.off), isTrue);
+    });
+  });
 }

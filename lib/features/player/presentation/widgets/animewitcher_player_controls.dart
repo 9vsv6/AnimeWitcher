@@ -1703,7 +1703,9 @@ class AnimeWitcherPlayerControlsState
       hasEpisodePicker: hasEpisodePicker,
       showResize: playerSettings.showResize,
       isDesktop: isDesktop,
-      anime4kOn: playerSettings.anime4kMode != Anime4kMode.off,
+      // The button follows the feature, not the mode. Choosing "off"
+      // from its own list must not retire the control that chose it.
+      anime4kOn: playerSettings.anime4kEnabled,
       // The adaptive backend has no GLSL stage, so there is nothing for the
       // button to change while it is the one playing.
       anime4kSupported: !ref.watch(

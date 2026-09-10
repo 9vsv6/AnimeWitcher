@@ -54,7 +54,7 @@ class _Anime4kComparePreviewState extends State<Anime4kComparePreview> {
   }
 
   void _load() {
-    final provider = const CachedNetworkImageProvider(anime4kReferenceImageUrl);
+    const provider = CachedNetworkImageProvider(anime4kReferenceImageUrl);
     final stream = provider.resolve(ImageConfiguration.empty);
     final listener = ImageStreamListener(
       (info, _) {
