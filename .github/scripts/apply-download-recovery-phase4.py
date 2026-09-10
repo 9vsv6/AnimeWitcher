@@ -13,6 +13,12 @@ path = 'test/core/services/download_range_transfer_test.dart'
 
 replace_once(
     path,
+    "import 'package:animewitcher/core/services/download_range_transfer.dart';\n",
+    "import 'package:animewitcher/core/services/download_range_transfer.dart';\nimport 'package:animewitcher/core/services/download_retry_policy.dart';\n",
+)
+
+replace_once(
+    path,
     "      if (isProbe) {\n        response.statusCode = 206;\n",
     "      if (isProbe && responseMode == 'probe-416') {\n        response.statusCode = 416;\n        response.headers.set('content-range', 'bytes */10');\n        await response.close();\n        return;\n      }\n\n      if (isProbe) {\n        response.statusCode = 206;\n",
 )
