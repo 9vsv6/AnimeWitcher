@@ -286,6 +286,7 @@ class DownloadService {
   Future<void> _queueChain = Future<void>.value();
   final Set<String> _queueWaitingIds = {};
   final Set<String> _startingTaskIds = {};
+  final Set<String> _refreshingParallelParentIds = <String>{};
   final List<String> _sessionOrder = [];
   bool _sessionOverlayActive = false;
   int _sessionCompletedCount = 0;
@@ -320,6 +321,9 @@ class DownloadService {
       saveRecord: (record) => FileDownloader().database.updateRecord(record),
       recordForId: (id) => FileDownloader().database.recordForId(id),
       livePartIds: _livePartIds,
+      shouldRecoverFailedStart: (childTaskId) =>
+          _rangeTransfers.failureFor(childTaskId) == null,
+      onSourceRefreshNeeded: _scheduleParallelParentRefresh,
       onUpdate: (update) {
         if (!_disposed) _sharedEvents.add(update);
       },
@@ -2833,6 +2837,75 @@ class DownloadService {
     );
   }
 
+  Future<ParallelDownloadTask?> _parallelParentForInternalPart(
+    DownloadTask task,
+  ) async {
+    final parentTaskId = downloadInternalParentTaskId(task);
+    if (parentTaskId == null) return null;
+    final record = await FileDownloader().database.recordForId(parentTaskId);
+    final parent = record?.task;
+    return parent is ParallelDownloadTask ? parent : null;
+  }
+
+  void _scheduleParallelParentRefresh(String parentTaskId) {
+    if (parentTaskId.isEmpty ||
+        !_refreshingParallelParentIds.add(parentTaskId)) {
+      return;
+    }
+    Future<void>.delayed(Duration.zero, () async {
+      try {
+        if (_disposed || _userPausedIds.contains(parentTaskId)) return;
+        await _serializeQueue(() async {
+          if (_disposed || _userPausedIds.contains(parentTaskId)) return;
+          var record = await FileDownloader().database.recordForId(
+            parentTaskId,
+          );
+          if (record?.task is! ParallelDownloadTask) return;
+          var parent = record!.task as ParallelDownloadTask;
+          final trackingUrl = downloadTrackingUrl(parent);
+          if (_cancellingUrls.contains(trackingUrl)) return;
+
+          final descriptor = await _ref
+              .read(downloadUrlRefreshStoreProvider)
+              .get(trackingUrl);
+          if (descriptor == null) {
+            diagnosticLog.record('source.refreshUnavailable', {
+              'taskId': parentTaskId,
+            });
+            return;
+          }
+
+          // A child failure callback can arrive while healthy siblings are still
+          // owned by URLSession. Settle them first so replaceSource can update one
+          // coherent generation without racing stale native callbacks.
+          if (_parallel.isActive(parentTaskId)) {
+            if (!await _parallel.pause(parent)) return;
+          }
+
+          record = await FileDownloader().database.recordForId(parentTaskId);
+          if (record?.task is! ParallelDownloadTask) return;
+          parent = record!.task as ParallelDownloadTask;
+          final saved = await _savedProgressFor(parent);
+          final refreshed = await _refreshTaskBeforeResume(
+            parent,
+            expectedBytes: saved.totalSize,
+            partialBytes: saved.partialBytes,
+          );
+          if (!refreshed.refreshed || refreshed.task is! ParallelDownloadTask) {
+            diagnosticLog.record('source.refreshParked', {
+              'taskId': parentTaskId,
+            });
+            return;
+          }
+
+          await _resumeDownloadTask(refreshed.task);
+        });
+      } finally {
+        _refreshingParallelParentIds.remove(parentTaskId);
+      }
+    });
+  }
+
   Future<bool> _appendRemainingWithDio(
     DownloadTask task, {
     required File dest,
@@ -2840,6 +2913,9 @@ class DownloadService {
     required int expectedBytes,
   }) async {
     final logical = isLogicalEpisodeDownloadTask(task);
+    final parallelParent = logical
+        ? null
+        : await _parallelParentForInternalPart(task);
     DownloadAttemptToken? token;
     var canRefreshUrl = false;
     if (logical) {
@@ -2852,6 +2928,12 @@ class DownloadService {
           await _ref
               .read(downloadUrlRefreshStoreProvider)
               .get(downloadTrackingUrl(task)) !=
+          null;
+    } else if (parallelParent != null) {
+      canRefreshUrl =
+          await _ref
+              .read(downloadUrlRefreshStoreProvider)
+              .get(downloadTrackingUrl(parallelParent)) !=
           null;
     }
 
@@ -2905,7 +2987,13 @@ class DownloadService {
         _sharedEvents.add(TaskStatusUpdate(task, TaskStatus.paused));
       },
       onFailure: (failure) async {
-        if (!logical || token == null) return;
+        if (!logical || token == null) {
+          if (parallelParent != null &&
+              failure.action == DownloadFailureAction.refreshUrl) {
+            _scheduleParallelParentRefresh(parallelParent.taskId);
+          }
+          return;
+        }
         final activeToken = token;
         if (!await _jobStore.accepts(activeToken)) return;
         if (failure.action == DownloadFailureAction.refreshUrl) {

@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import 'download_connection_governor.dart';
 import 'download_parallel.dart';
+import 'download_retry_policy.dart';
 import 'download_telemetry.dart';
 import '../utils/download_resume.dart';
 
@@ -121,6 +122,8 @@ class PersistentParallelDownload {
     required this.onUpdate,
     required this.onPartProgress,
     this.livePartIds,
+    this.shouldRecoverFailedStart,
+    this.onSourceRefreshNeeded,
     this.recoveryDelay = const Duration(seconds: 1),
     this.tailStallDelay = kParallelTailStallDelay,
     this.diskProgressPollInterval = kParallelDiskProgressPollInterval,
@@ -141,6 +144,8 @@ class PersistentParallelDownload {
   onPartProgress;
   final int maxActiveConnections;
   final Future<Set<String>> Function()? livePartIds;
+  final bool Function(String childTaskId)? shouldRecoverFailedStart;
+  final void Function(String parentTaskId)? onSourceRefreshNeeded;
   final Duration recoveryDelay;
   final Duration tailStallDelay;
   final Duration diskProgressPollInterval;
@@ -748,10 +753,22 @@ class PersistentParallelDownload {
           return true;
         }
         if (!started) {
-          // A false enqueue result has identical ownership semantics: no native
-          // worker exists, so restore the scheduler reservation and retry the
-          // exact same taskId/Range without teaching a lower host ceiling.
+          // A false enqueue result has no native owner. Retry it only when the
+          // transport did not already classify the attempt as terminal. Range
+          // refresh/reconcile/disk failures belong to the logical parent; an
+          // unconditional child retry here used to relaunch the same expired
+          // signed URL forever.
           rollbackUnownedReservation();
+          final shouldRecover =
+              shouldRecoverFailedStart?.call(part.task.taskId) ?? true;
+          if (!shouldRecover) {
+            diagnosticLog?.record('parallel.childStartParked', {
+              'taskId': part.task.taskId,
+              'parentTaskId': session.task.taskId,
+            });
+            await _pause(session);
+            return true;
+          }
           _schedulePartRecovery(session, part);
           await _status(session, TaskStatus.running);
           return true;
@@ -1732,10 +1749,19 @@ class PersistentParallelDownload {
               return;
             }
 
-            // Permanent client-side HTTP errors (for example 401/403/404) are
-            // not helped by hammering the same signed URL forever. Preserve all
-            // bytes and park the logical episode so a later source refresh/user
-            // resume can obtain a new URL.
+            // Permanent client-side HTTP errors are not helped by hammering
+            // the same signed URL forever. 401/403 specifically mean the logical
+            // owner may be able to mint a fresh signed source; schedule that
+            // outside this session serialization, then park all current workers.
+            final exception = update.exception;
+            final statusCode =
+                update.responseStatusCode ??
+                (exception is TaskHttpException
+                    ? exception.httpResponseCode
+                    : null);
+            if (isDownloadUrlRefreshStatus(statusCode, include404: false)) {
+              onSourceRefreshNeeded?.call(session.task.taskId);
+            }
             _markConnectionReady(session, part);
             _releaseConnection(part);
             await _pause(session);
