@@ -3,7 +3,7 @@ name: Fix Download Recovery Phase 2
 on:
   push:
     branches:
-      - fix/download-recovery-phase1-ios-pause
+      - fix/download-recovery-phase2-diagnostic-v3
 
 permissions:
   contents: write
@@ -11,11 +11,12 @@ permissions:
 jobs:
   repair-and-verify:
     runs-on: macos-latest
+    timeout-minutes: 70
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: fix/download-recovery-phase1-ios-pause
+          ref: fix/download-recovery-phase2-diagnostic-v3
           fetch-depth: 0
 
       - name: Setup Flutter
@@ -102,4 +103,4 @@ jobs:
           git add -u .github/scripts/fix-download-recovery-phase2.py .github/workflows/fix-download-recovery-phase2.yml
           git diff --cached --check
           git commit -m "Harden multipart Range identity and validator recovery"
-          git push origin HEAD:fix/download-recovery-phase1-ios-pause
+          git push origin HEAD:fix/download-recovery-phase2-diagnostic-v3
