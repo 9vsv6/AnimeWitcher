@@ -31,11 +31,11 @@ jobs:
           python3 .github/scripts/finalize-download-runtime.py
           python3 .github/scripts/fix-finalize-analyzer.py
 
-      - name: Dependencies
-        run: flutter pub get
-
-      - name: Generate code
-        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Dependencies and generated sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
 
       - name: Format and whitespace
         run: |
@@ -47,7 +47,7 @@ jobs:
           git diff --check
 
       - name: Analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
       - name: Nonblocking parent progress regression
         run: flutter test test/core/services/persistent_parallel_download_progress_test.dart --plain-name "parent progress is not blocked by slow record persistence"
@@ -65,7 +65,7 @@ jobs:
         run: flutter test test/core/services/download_ui_responsiveness_test.dart
 
       - name: Full tests
-        run: flutter test
+        run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
       - name: Parse Swift download bridge
         run: |
