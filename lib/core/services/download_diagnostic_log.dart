@@ -23,11 +23,14 @@ class DownloadDiagnosticLog {
   int _rotation = 0;
   int _bytes = 0, _sequence = 0, _pending = 0, _dropped = 0;
   final String _session = '${DateTime.now().microsecondsSinceEpoch}-$pid';
+  static const Duration _highFrequencySampleInterval = Duration(seconds: 1);
+  final Map<String, DateTime> _lastHighFrequencyEventAt = <String, DateTime>{};
 
   Future<void> configure(bool value) async {
     if (enabled && !value) record('logging.disabled');
     enabled = false;
     await flush();
+    _lastHighFrequencyEventAt.clear();
     if (value) {
       final dir = await directory();
       await dir.create(recursive: true);
@@ -43,6 +46,7 @@ class DownloadDiagnosticLog {
 
   void record(String event, [Map<String, Object?> fields = const {}]) {
     if (!enabled) return;
+    if (_suppressHighFrequencyProgress(event, fields)) return;
     if (_pending >= maxPending) {
       _dropped++;
       return;
@@ -128,6 +132,41 @@ class DownloadDiagnosticLog {
         _pending--;
       }
     });
+  }
+
+  bool _suppressHighFrequencyProgress(
+    String event,
+    Map<String, Object?> fields,
+  ) {
+    final highFrequency =
+        event == 'native.progress' ||
+        event == 'chunk.update' ||
+        (event == 'task.update' && fields.containsKey('progress'));
+    if (!highFrequency) return false;
+
+    final taskId = fields['taskId']?.toString() ?? '';
+    if (taskId.isEmpty) return false;
+    final terminal =
+        fields['result'] == true ||
+        fields['status'] != null ||
+        fields['errorType'] != null ||
+        fields['httpStatus'] != null;
+    if (terminal) {
+      _lastHighFrequencyEventAt.removeWhere(
+        (key, _) => key.endsWith(':$taskId'),
+      );
+      return false;
+    }
+
+    final key = '$event:$taskId';
+    final now = DateTime.now();
+    final previous = _lastHighFrequencyEventAt[key];
+    if (previous != null &&
+        now.difference(previous) < _highFrequencySampleInterval) {
+      return true;
+    }
+    _lastHighFrequencyEventAt[key] = now;
+    return false;
   }
 
   Future<void> flush() => _tail;

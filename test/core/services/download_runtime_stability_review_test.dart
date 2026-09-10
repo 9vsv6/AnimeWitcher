@@ -55,6 +55,9 @@ void main() {
       final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
           .readAsStringSync();
       expect(swift, contains('speedWindowInterval: CFTimeInterval = 4.0'));
+      expect(swift, contains('chunkBridgeInterval: CFTimeInterval = 1.0'));
+      expect(swift, contains('taskBridgeInterval: CFTimeInterval = 1.0'));
+      expect(swift, contains('if bridgedToDart && !isAppInForeground()'));
       expect(swift, contains('elapsed >= speedMinimumWindow'));
       expect(swift, contains('speedStaleInterval: CFTimeInterval = 3.0'));
       expect(swift, contains('let hasKnownOutstandingEpisode'));
@@ -71,6 +74,39 @@ void main() {
         contains('Coordinator bookkeeping is not a user-visible pause.'),
       );
       expect(source, contains('DownloadTelemetryEstimator _speedTelemetry'));
+      expect(
+        source,
+        contains('kParallelProgressCoalesceDelay = Duration(seconds: 1)'),
+      );
+      expect(source, contains('kParallelProgressPersistInterval'));
+      expect(source, contains('final nativeBridgeFresh ='));
+      expect(source, contains('_scheduleProgressPersist(session)'));
+    });
+
+    test('multipart parent presentation clock is not serialized behind IO', () {
+      final source = File('lib/core/services/persistent_parallel_download.dart')
+          .readAsStringSync();
+      final start = source.indexOf('void _scheduleAggregateProgress(');
+      final end = source.indexOf('Duration _aggregateTimeRemaining', start);
+      expect(start, greaterThanOrEqualTo(0));
+      expect(end, greaterThan(start));
+      final section = source.substring(start, end);
+      expect(section, isNot(contains('session.serialize(')));
+      expect(section, contains('void _emitAggregateProgress('));
+      expect(section, contains('_writeParentRecord('));
+    });
+
+    test('multipart card uses coordinator speed as the canonical speed', () {
+      final source = File('lib/core/services/download_service.dart')
+          .readAsStringSync();
+      expect(
+        source,
+        contains(
+          'final isAggregateMultipart = update.task is ParallelDownloadTask;',
+        ),
+      );
+      expect(source, contains('final measuredSpeed = isAggregateMultipart'));
+      expect(source, contains('? update.networkSpeed'));
     });
 
     test('continued-processing speed zero explicitly clears stale speed', () {
@@ -78,5 +114,39 @@ void main() {
           .readAsStringSync();
       expect(swift, contains('speedBytesPerSecond >= 0'));
     });
+
+    test(
+      'multipart progress callback cannot feed native ingress back into itself',
+      () {
+        final source = File('lib/core/services/download_service.dart')
+            .readAsStringSync();
+        final start = source.indexOf(
+          'onPartProgress: (parent, child, progress) {',
+        );
+        final end = source.indexOf('onHostPressure:', start);
+        expect(start, greaterThanOrEqualTo(0));
+        expect(end, greaterThan(start));
+        final callback = source.substring(start, end);
+        expect(callback, contains('_publishChunkProgress('));
+        expect(callback, isNot(contains('_handleNativeChunkUpdate(')));
+        expect(source, contains('void _publishChunkProgress({'));
+      },
+    );
+
+    test(
+      'continued-processing metric updates are coalesced to one per second',
+      () {
+        final source = File(
+          'lib/core/services/download_continued_processing_service.dart',
+        ).readAsStringSync();
+        expect(
+          source,
+          contains('_updateSampleInterval = Duration(seconds: 1)'),
+        );
+        expect(source, contains('Future<void> _queueUpdate('));
+        expect(source, contains('_pendingUpdate = arguments'));
+        expect(source, contains('_cancelPendingUpdate();'));
+      },
+    );
   });
 }

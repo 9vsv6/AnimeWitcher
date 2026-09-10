@@ -25,7 +25,7 @@ enum DownloadNativeDiagnosticLog {
       guard enabled else { return }
       let now = Date().timeIntervalSince1970
       if event == "progress" {
-        if let previous = lastProgress[task.taskIdentifier], now - previous < 0.25 { return }
+        if let previous = lastProgress[task.taskIdentifier], now - previous < 1.0 { return }
         lastProgress[task.taskIdentifier] = now
       } else {
         lastProgress.removeValue(forKey: task.taskIdentifier)
@@ -277,8 +277,8 @@ enum DownloadNativeWaitingQueue {
   private static var chunkSpeedWindows: [String: [ThroughputPoint]] = [:]
   private static var lastChunkBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static var lastTaskBridgeTimes: [String: CFAbsoluteTime] = [:]
-  private static let chunkBridgeInterval: CFTimeInterval = 0.25
-  private static let taskBridgeInterval: CFTimeInterval = 0.25
+  private static let chunkBridgeInterval: CFTimeInterval = 1.0
+  private static let taskBridgeInterval: CFTimeInterval = 1.0
   private static let speedWindowInterval: CFTimeInterval = 4.0
   private static let speedMinimumWindow: CFTimeInterval = 0.75
   private static let speedStaleInterval: CFTimeInterval = 3.0
@@ -1102,7 +1102,7 @@ enum DownloadNativeWaitingQueue {
     lock.unlock()
     scheduleNativeSpeedStaleReset(taskId: id, observedAt: now)
 
-    postSingleTaskUpdate(
+    let bridgedToDart = postSingleTaskUpdate(
       taskId: id,
       trackingUrl: metaData.isEmpty ? url : metaData,
       totalWritten: totalWritten,
@@ -1111,14 +1111,20 @@ enum DownloadNativeWaitingQueue {
       now: now
     )
 
-    upsertSessionOverlay(
-      currentTaskId: presentation.currentTaskId,
-      displayName: presentation.displayName,
-      progress: presentation.progress,
-      totalBytes: presentation.totalBytes,
-      transferredBytes: presentation.transferredBytes,
-      speedBytesPerSecond: presentation.speedBytesPerSecond
-    )
+    // While Flutter is foregrounded, Dart owns the single one-second sample
+    // used by both the in-app card and the iOS task. Publishing native overlay
+    // samples in parallel creates two clocks and visibly different speeds. In
+    // background, Dart may be suspended, so native keeps the same task alive.
+    if bridgedToDart && !isAppInForeground() {
+      upsertSessionOverlay(
+        currentTaskId: presentation.currentTaskId,
+        displayName: presentation.displayName,
+        progress: presentation.progress,
+        totalBytes: presentation.totalBytes,
+        transferredBytes: presentation.transferredBytes,
+        speedBytesPerSecond: presentation.speedBytesPerSecond
+      )
+    }
   }
 
 
@@ -1134,12 +1140,12 @@ enum DownloadNativeWaitingQueue {
     totalExpected: Int64,
     speedBytesPerSecond: Double,
     now: CFAbsoluteTime
-  ) {
-    guard !taskId.isEmpty, !trackingUrl.isEmpty, totalWritten >= 0 else { return }
+  ) -> Bool {
+    guard !taskId.isEmpty, !trackingUrl.isEmpty, totalWritten >= 0 else { return false }
     lock.lock()
     if let last = lastTaskBridgeTimes[taskId], now - last < taskBridgeInterval {
       lock.unlock()
-      return
+      return false
     }
     lastTaskBridgeTimes[taskId] = now
     lock.unlock()
@@ -1160,6 +1166,7 @@ enum DownloadNativeWaitingQueue {
       object: nil,
       userInfo: values
     )
+    return true
   }
 
   private static func startLiveActivity(

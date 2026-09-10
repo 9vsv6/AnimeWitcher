@@ -324,12 +324,13 @@ class DownloadService {
         if (!_disposed) _sharedEvents.add(update);
       },
       onPartProgress: (parent, child, progress) {
-        if (!_disposed)
-          _handleNativeChunkUpdate(
+        if (!_disposed) {
+          _publishChunkProgress(
             parentTaskId: parent,
             chunkTaskId: child,
             progress: progress,
           );
+        }
       },
       onHostPressure: (url, ceiling) {
         diagnosticLog.record('parallel.hostPressure', {'count': ceiling});
@@ -485,6 +486,22 @@ class DownloadService {
     } catch (_) {}
   }
 
+  void _publishChunkProgress({
+    required String parentTaskId,
+    required String chunkTaskId,
+    double? progress,
+    int? statusOrdinal,
+  }) {
+    _ref
+        .read(downloadChunkProgressProvider.notifier)
+        .update(
+          parentTaskId: parentTaskId,
+          chunkTaskId: chunkTaskId,
+          progress: progress,
+          statusOrdinal: statusOrdinal,
+        );
+  }
+
   void _handleNativeChunkUpdate({
     required String parentTaskId,
     required String chunkTaskId,
@@ -512,14 +529,12 @@ class DownloadService {
                       expectedBytes > 0)
                   ? writtenBytes / expectedBytes
                   : null));
-    _ref
-        .read(downloadChunkProgressProvider.notifier)
-        .update(
-          parentTaskId: parentTaskId,
-          chunkTaskId: chunkTaskId,
-          progress: derivedProgress,
-          statusOrdinal: completed ? TaskStatus.complete.index : statusOrdinal,
-        );
+    _publishChunkProgress(
+      parentTaskId: parentTaskId,
+      chunkTaskId: chunkTaskId,
+      progress: derivedProgress,
+      statusOrdinal: completed ? TaskStatus.complete.index : statusOrdinal,
+    );
 
     unawaited(
       _parallel.handleNativeChunkUpdate(
@@ -727,6 +742,7 @@ class DownloadService {
             _telemetry.expectedBytesFor(update.task.taskId),
             previous?.totalSize,
           ]);
+          final isAggregateMultipart = update.task is ParallelDownloadTask;
           final fallbackSpeedBytes =
               update.networkSpeed.isFinite && update.networkSpeed > 0
               ? update.networkSpeed * 1000000
@@ -737,15 +753,28 @@ class DownloadService {
             expectedBytes: knownTotal,
             fallbackSpeedBytesPerSecond: fallbackSpeedBytes,
           );
-          final measuredSpeed = telemetry.speedBytesPerSecond;
-          final speed = measuredSpeed > 0
-              ? measuredSpeed / 1000000
-              : (_telemetry.hasRecentBytes(update.task.taskId) ? -1.0 : 0.0);
-          final remaining = telemetry.timeRemaining > Duration.zero
-              ? telemetry.timeRemaining
-              : (update.timeRemaining > Duration.zero
-                    ? update.timeRemaining
-                    : (previous?.timeRemaining ?? Duration.zero));
+          // PersistentParallelDownload already owns the aggregate byte clock
+          // and smoothing window. Re-estimating its synthetic parent here made
+          // the card and iOS continued-processing task use different speeds.
+          final measuredSpeed = isAggregateMultipart
+              ? fallbackSpeedBytes
+              : telemetry.speedBytesPerSecond;
+          final speed = isAggregateMultipart
+              ? (update.networkSpeed.isFinite && update.networkSpeed > 0
+                    ? update.networkSpeed
+                    : 0.0)
+              : (measuredSpeed > 0
+                    ? measuredSpeed / 1000000
+                    : (_telemetry.hasRecentBytes(update.task.taskId)
+                          ? -1.0
+                          : 0.0));
+          final remaining = isAggregateMultipart
+              ? update.timeRemaining
+              : (telemetry.timeRemaining > Duration.zero
+                    ? telemetry.timeRemaining
+                    : (update.timeRemaining > Duration.zero
+                          ? update.timeRemaining
+                          : (previous?.timeRemaining ?? Duration.zero)));
           final progressData = DownloadProgressData(
             taskId: update.task.taskId,
             progress: progress,

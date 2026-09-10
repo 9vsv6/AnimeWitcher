@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -41,6 +42,10 @@ class DownloadContinuedProcessingService {
   final SystemDownloadTaskUpdate? onTaskUpdate;
   final SystemDownloadChunkUpdate? onChunkUpdate;
   bool _handlerInstalled = false;
+  static const Duration _updateSampleInterval = Duration(seconds: 1);
+  Timer? _updateTimer;
+  DateTime? _lastUpdateAt;
+  Map<String, Object>? _pendingUpdate;
 
   DownloadContinuedProcessingService({
     required this.onSystemCancel,
@@ -69,6 +74,8 @@ class DownloadContinuedProcessingService {
     double speedBytesPerSecond = 0,
     int currentIndex = 0,
   }) async {
+    _cancelPendingUpdate();
+    _lastUpdateAt = DateTime.now();
     await _invoke('start', <String, Object>{
       'taskId': taskId,
       'displayName': displayName,
@@ -93,7 +100,7 @@ class DownloadContinuedProcessingService {
     String displayName = '',
     int currentIndex = 0,
   }) async {
-    await _invoke('update', <String, Object>{
+    await _queueUpdate(<String, Object>{
       'taskId': taskId,
       'progress': progress.clamp(0.0, 1.0).toDouble(),
       'totalBytes': totalBytes,
@@ -106,12 +113,45 @@ class DownloadContinuedProcessingService {
     });
   }
 
+  Future<void> _queueUpdate(Map<String, Object> arguments) async {
+    if (!_isAvailable) return;
+    _pendingUpdate = arguments;
+    final now = DateTime.now();
+    final last = _lastUpdateAt;
+    if (last == null || now.difference(last) >= _updateSampleInterval) {
+      _updateTimer?.cancel();
+      _updateTimer = null;
+      final pending = _pendingUpdate;
+      _pendingUpdate = null;
+      _lastUpdateAt = now;
+      if (pending != null) await _invoke('update', pending);
+      return;
+    }
+
+    final delay = _updateSampleInterval - now.difference(last);
+    _updateTimer ??= Timer(delay, () async {
+      _updateTimer = null;
+      final pending = _pendingUpdate;
+      _pendingUpdate = null;
+      if (pending == null || !_isAvailable) return;
+      _lastUpdateAt = DateTime.now();
+      await _invoke('update', pending);
+    });
+  }
+
+  void _cancelPendingUpdate() {
+    _updateTimer?.cancel();
+    _updateTimer = null;
+    _pendingUpdate = null;
+  }
+
   Future<void> finish({
     required String taskId,
     required bool success,
     required String status,
     bool endSession = false,
   }) async {
+    _cancelPendingUpdate();
     await _invoke('finish', <String, Object>{
       'taskId': taskId,
       'success': success,
@@ -121,6 +161,7 @@ class DownloadContinuedProcessingService {
   }
 
   Future<void> stop({required String taskId, bool endSession = false}) async {
+    _cancelPendingUpdate();
     await _invoke('stop', <String, Object>{
       'taskId': taskId,
       'endSession': endSession,
@@ -251,6 +292,7 @@ class DownloadContinuedProcessingService {
   }
 
   Future<void> dispose() async {
+    _cancelPendingUpdate();
     if (_handlerInstalled) {
       _channel.setMethodCallHandler(null);
       _handlerInstalled = false;
