@@ -1774,7 +1774,11 @@ class AnimeWitcherPlayerControlsState
             isTv: _isTv,
           ),
           PlayerChromeAction.resize => PlayerIconButton(
-            icon: LucideIcons.ratio200,
+            // A divided rectangle, which is what an aspect ratio is. The
+            // overlapping squares this replaces read as two of something at
+            // the size this is drawn, and the outward arrows that would also
+            // suit it are the fullscreen button two places along.
+            icon: LucideIcons.proportions200,
             tooltip: l10n.resize,
             onPressed: cycleResize,
             isTv: _isTv,
