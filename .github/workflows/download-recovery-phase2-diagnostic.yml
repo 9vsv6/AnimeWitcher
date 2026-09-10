@@ -1,0 +1,124 @@
+name: Download recovery phase 2 diagnostics
+
+on:
+  push:
+    branches:
+      - fix/download-recovery-phase2-diagnostic-v3
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Reproduce Phase 2 full-suite failure
+        shell: bash
+        run: |
+          set +e
+          : > /tmp/phase2-setup.log
+
+          python3 - <<'PY' >> /tmp/phase2-setup.log 2>&1
+          from pathlib import Path
+          p = Path('.github/scripts/fix-download-recovery-phase2.py')
+          if not p.exists():
+              raise SystemExit('missing .github/scripts/fix-download-recovery-phase2.py')
+          text = p.read_text()
+          text = text.replace(r"\\$')", "$')")
+          p.write_text(text)
+          PY
+          prep_status=$?
+
+          if [ "$prep_status" -eq 0 ]; then
+            python3 .github/scripts/fix-download-recovery-phase2.py >> /tmp/phase2-setup.log 2>&1
+            apply_status=$?
+          else
+            apply_status=99
+          fi
+
+          if [ "$apply_status" -eq 0 ]; then
+            flutter pub get >> /tmp/phase2-setup.log 2>&1
+            pub_status=$?
+          else
+            pub_status=99
+          fi
+
+          if [ "$pub_status" -eq 0 ]; then
+            dart run build_runner build --delete-conflicting-outputs >> /tmp/phase2-setup.log 2>&1
+            gen_status=$?
+          else
+            gen_status=99
+          fi
+
+          if [ "$gen_status" -eq 0 ]; then
+            flutter test --machine --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key > /tmp/phase2-full.jsonl 2>&1
+            test_status=$?
+          else
+            test_status=99
+            : > /tmp/phase2-full.jsonl
+          fi
+
+          PREP_STATUS="$prep_status" APPLY_STATUS="$apply_status" PUB_STATUS="$pub_status" GEN_STATUS="$gen_status" TEST_STATUS="$test_status" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          out = [
+              f"prep_status={os.environ['PREP_STATUS']}",
+              f"apply_status={os.environ['APPLY_STATUS']}",
+              f"pub_status={os.environ['PUB_STATUS']}",
+              f"gen_status={os.environ['GEN_STATUS']}",
+              f"test_status={os.environ['TEST_STATUS']}",
+          ]
+
+          setup = Path('/tmp/phase2-setup.log')
+          if setup.exists():
+              setup_lines = setup.read_text(errors='replace').splitlines()
+              if setup_lines:
+                  out.append('--- setup tail ---')
+                  out.extend(setup_lines[-80:])
+
+          tests = {}
+          failures = []
+          machine = Path('/tmp/phase2-full.jsonl')
+          if machine.exists():
+              for raw in machine.read_text(errors='replace').splitlines():
+                  try:
+                      event = json.loads(raw)
+                  except Exception:
+                      continue
+                  typ = event.get('type')
+                  if typ == 'testStart':
+                      test = event.get('test') or {}
+                      tests[test.get('id')] = test.get('name')
+                  elif typ == 'error':
+                      name = tests.get(event.get('testID'), event.get('testID'))
+                      failures.append(f"ERROR: {name}: {event.get('error')}")
+                      stack = event.get('stackTrace')
+                      if stack:
+                          failures.append(stack)
+                  elif typ == 'testDone' and not event.get('hidden') and event.get('result') not in ('success', 'skipped'):
+                      name = tests.get(event.get('testID'), event.get('testID'))
+                      failures.append(f"FAIL: {name} result={event.get('result')}")
+
+          out.append('--- machine failures ---')
+          out.extend(failures[-160:] if failures else ['No machine-readable failed test was found.'])
+          Path('.ci-phase2-failure.txt').write_text('\n'.join(out) + '\n')
+          PY
+          exit 0
+
+      - name: Publish diagnostic result
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .ci-phase2-failure.txt
+          git commit -m "Record Phase 2 full-suite failure" || exit 0
+          git push
