@@ -38,3 +38,12 @@ if count != 1:
 
 path.write_text(text)
 print('Made unknown-size process-relaunch regression deterministic.')
+
+runtime_path = Path('test/core/services/download_runtime_stability_review_test.dart')
+runtime_text = runtime_path.read_text()
+old_schema_expectation = "expect(source, contains('kParallelManifestSchemaVersion = 3'));"
+new_schema_expectation = "expect(source, contains('kParallelManifestSchemaVersion = 4'));"
+if runtime_text.count(old_schema_expectation) != 1:
+    raise SystemExit('expected exactly one stale schema v3 runtime assertion')
+runtime_path.write_text(runtime_text.replace(old_schema_expectation, new_schema_expectation, 1))
+print('Updated runtime manifest schema assertion to v4.')
