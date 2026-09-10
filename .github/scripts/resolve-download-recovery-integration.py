@@ -116,6 +116,20 @@ def resolve_parallel(path: str) -> None:
         skeleton = skeleton.replace(f"__CONFLICT_{index}__\n", value, 1)
     if "<<<<<<<" in skeleton or ">>>>>>>" in skeleton:
         raise SystemExit("unresolved persistent_parallel marker")
+
+    # Phase 1 introduced schema v2 independently, while Phase 2 advanced the
+    # same manifest to v3. Keep the v3 declaration and remove the obsolete
+    # duplicate block produced by the branch merge.
+    obsolete_schema_block = """/// Multipart recovery checkpoints are versioned snapshots. The sequence is
+/// monotonic so a crash after flushing manifest.json.tmp but before rename
+/// can restore the newer snapshot instead of silently accepting an older
+/// manifest.json.
+const int kParallelManifestSchemaVersion = 2;
+
+"""
+    skeleton = skeleton.replace(obsolete_schema_block, "", 1)
+    if skeleton.count("const int kParallelManifestSchemaVersion") != 1:
+        raise SystemExit("manifest schema declaration is not unique after merge")
     file.write_text(skeleton)
 
 
