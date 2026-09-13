@@ -1,0 +1,94 @@
+name: DM-14 generation provenance GREEN
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm14-generation-provenance-green.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generation-provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Apply generation provenance GREEN
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/core/services/persistent_parallel_download.dart')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  """    required this.schemaVersion,\n    required this.parentTaskId,""",
+                  """    required this.schemaVersion,\n    required this.generation,\n    required this.parentTaskId,""",
+              ),
+              (
+                  """  final int schemaVersion;\n  final String parentTaskId;""",
+                  """  final int schemaVersion;\n  final int generation;\n  final String parentTaskId;""",
+              ),
+              (
+                  """          if (schemaVersion < 1 ||\n              schemaVersion > kParallelManifestSchemaVersion) {\n            continue;\n          }\n          final parentTaskId =""",
+                  """          if (schemaVersion < 1 ||\n              schemaVersion > kParallelManifestSchemaVersion) {\n            continue;\n          }\n          final generation = (snapshot['generation'] as num?)?.toInt() ?? 0;\n          if (generation < 0) continue;\n          final parentTaskId =""",
+              ),
+              (
+                  """            schemaVersion: schemaVersion,\n            parentTaskId: parentTaskId,""",
+                  """            schemaVersion: schemaVersion,\n            generation: generation,\n            parentTaskId: parentTaskId,""",
+              ),
+          ]
+
+          changed = False
+          for old, new in replacements:
+              if new in text:
+                  continue
+              if old not in text:
+                  raise SystemExit(f'missing expected anchor:\n{old}')
+              text = text.replace(old, new, 1)
+              changed = True
+
+          if changed:
+              path.write_text(text)
+          PY
+
+      - name: Verify focused GREEN
+        run: |
+          flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
+            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/core/services/persistent_parallel_download.dart \
+            test/core/services/persistent_parallel_download_manifest_discovery_test.dart
+          git diff --check
+
+      - name: Commit verified production change
+        run: |
+          if git diff --quiet -- lib/core/services/persistent_parallel_download.dart; then
+            echo 'Production GREEN already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/core/services/persistent_parallel_download.dart
+          git commit -m 'fix(downloads): carry manifest generation provenance (DM-14)'
+          git pull --rebase origin plan/download-manager-reliability
+          flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
+            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          git push origin HEAD:plan/download-manager-reliability
