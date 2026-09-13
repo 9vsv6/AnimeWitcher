@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  fix-and-verify:
+  clean-and-verify:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -27,23 +27,103 @@ jobs:
           flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
-      - name: Add regression contracts
-        run: python3 -c "$(echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpQYXRoKCJ0ZXN0L2ZlYXR1cmVzL2xpYnJhcnkvcHJlc2VudGF0aW9uL2Rvd25sb2Fkc19zY3JlZW5fbGF5b3V0X2NvbnRyYWN0X3Rlc3QuZGFydCIpLndyaXRlX3RleHQociIiImltcG9ydCAnZGFydDppbyc7CgppbXBvcnQgJ3BhY2thZ2U6Zmx1dHRlcl90ZXN0L2ZsdXR0ZXJfdGVzdC5kYXJ0JzsKCnZvaWQgbWFpbigpIHsKICB0ZXN0KCdoYW5kc2V0IGRvd25sb2FkcyBsZXRzIHRoZSB0YWJzIG93biB0aGUgdG9wIHNhZmUgYXJlYScsICgpIHsKICAgIGZpbmFsIHNjcmVlbiA9IEZpbGUoCiAgICAgICdsaWIvZmVhdHVyZXMvbGlicmFyeS9wcmVzZW50YXRpb24vZG93bmxvYWRzX3NjcmVlbi5kYXJ0JywKICAgICkucmVhZEFzU3RyaW5nU3luYygpOwoKICAgIGV4cGVjdChzY3JlZW4sIGlzTm90KGNvbnRhaW5zKCdjaGlsZDogQXBwQmFyKCcpKSk7CiAgICBleHBlY3Qoc2NyZWVuLCBjb250YWlucygnYm9keTogU2FmZUFyZWEoJykpOwogICAgZXhwZWN0KHNjcmVlbiwgY29udGFpbnMoJ2NoaWxkOiBjb25zdCBEb3dubG9hZHNUYWIoKScpKTsKICB9KTsKCiAgdGVzdCgnZG93bmxvYWQgdGFicyByZW1haW4gdmlzaWJsZSB3aGVuIHRoZXJlIGFyZSBubyByZWNvcmRzJywgKCkgewogICAgZmluYWwgdGFiID0gRmlsZSgKICAgICAgJ2xpYi9mZWF0dXJlcy9saWJyYXJ5L3ByZXNlbnRhdGlvbi93aWRnZXRzL2Rvd25sb2Fkc190YWIuZGFydCcsCiAgICApLnJlYWRBc1N0cmluZ1N5bmMoKTsKCiAgICBleHBlY3QodGFiLCBpc05vdChjb250YWlucygnaWYgKGRvd25sb2Fkcy5pc0VtcHR5KScpKSk7CiAgICBleHBlY3QodGFiLCBjb250YWlucygnRmlsdGVyU3R5bGVUYWJCYXIoJykpOwogICAgZXhwZWN0KHRhYiwgY29udGFpbnMoJ0ZpbHRlclN0eWxlVGFiKGxhYmVsOiBsMTBuLmRvd25sb2FkcyknKSk7CiAgICBleHBlY3QodGFiLCBjb250YWlucygnRmlsdGVyU3R5bGVUYWIobGFiZWw6IGwxMG4uZG93bmxvYWRzVGFiQ29tcGxldGVkKScpKTsKICB9KTsKfQoiIiIpCgpQYXRoKCJ0ZXN0L2ZlYXR1cmVzL3NldHRpbmdzL3ByZXNlbnRhdGlvbi9wcm9maWxlX2JpcnRoX3llYXJfZWRpdF9jb250cmFjdF90ZXN0LmRhcnQiKS53cml0ZV90ZXh0KHIiIiJpbXBvcnQgJ2RhcnQ6aW8nOwoKaW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXJfdGVzdC9mbHV0dGVyX3Rlc3QuZGFydCc7Cgp2b2lkIG1haW4oKSB7CiAgdGVzdCgnZXhpc3RpbmcgYmlydGggeWVhciBzdGF5cyBlZGl0YWJsZSBhbmQgcHJvZmlsZSBzZXJ2aWNlIGFjY2VwdHMgY2hhbmdlcycsICgpIHsKICAgIGZpbmFsIHNjcmVlbiA9IEZpbGUoCiAgICAgICdsaWIvZmVhdHVyZXMvc2V0dGluZ3MvcHJlc2VudGF0aW9uL2FjY291bnRfbWFuYWdlbWVudF9zY3JlZW5zLmRhcnQnLAogICAgKS5yZWFkQXNTdHJpbmdTeW5jKCk7CiAgICBmaW5hbCBzZXJ2aWNlID0gRmlsZSgKICAgICAgJ2xpYi9jb3JlL2FjY291bnQvYW5pbWV3aXRjaGVyX2FjY291bnRfc2VydmljZS5kYXJ0JywKICAgICkucmVhZEFzU3RyaW5nU3luYygpOwoKICAgIGV4cGVjdChzY3JlZW4sIGlzTm90KGNvbnRhaW5zKCdfYmlydGhZZWFyTG9ja2VkJykpKTsKICAgIGV4cGVjdChzY3JlZW4sIGlzTm90KGNvbnRhaW5zKCdyZWFkT25seTogX2JpcnRoWWVhckxvY2tlZCcpKSk7CiAgICBleHBlY3Qoc2NyZWVuLCBpc05vdChjb250YWlucygnYWxsb3dzIHRoaXMgdG8gYmUgc2V0IG9uY2UnKSkpOwogICAgZXhwZWN0KHNjcmVlbiwgaXNOb3QoY29udGFpbnMoJ9io2K3Zgdi42YfYpyDZhdix2Kkg2YjYp9it2K/YqSDZgdmC2LcnKSkpOwogICAgZXhwZWN0KHNjcmVlbiwgY29udGFpbnMoImVuZ2xpc2g6ICdPcHRpb25hbCDCtyAxOTcw4oCTMjAyMCciKSk7CgogICAgZXhwZWN0KHNlcnZpY2UsIGlzTm90KGNvbnRhaW5zKCInYmlydGgteWVhci1sb2NrZWQnIikpKTsKICAgIGV4cGVjdChzZXJ2aWNlLCBpc05vdChjb250YWlucygnVGhlIGJpcnRoIHllYXIgY2FuIG9ubHkgYmUgc2V0IG9uY2UuJykpKTsKICAgIGV4cGVjdChzZXJ2aWNlLCBjb250YWlucygiJ2JpcnRoX2RhdGUnIikpOwogIH0pOwp9CiIiIikK' | base64 -d)"
-      - name: Apply fixes
-        run: python3 -c "$(echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgojIERvd25sb2FkczogcmVtb3ZlIGR1cGxpY2F0ZWQgaGFuZHNldCB0aXRsZS9BcHBCYXIgYW5kIGxldCB0aGUKIyB0YWIgc3RyaXAgc3RhcnQgYXQgdGhlIHRvcCBzYWZlIGFyZWEuIFdpZGVzY3JlZW4ga2VlcHMgaXRzIHRpdGxlLgpwYXRoID0gUGF0aCgibGliL2ZlYXR1cmVzL2xpYnJhcnkvcHJlc2VudGF0aW9uL2Rvd25sb2Fkc19zY3JlZW4uZGFydCIpCnRleHQgPSBwYXRoLnJlYWRfdGV4dCgpCnRleHQgPSB0ZXh0LnJlcGxhY2UoCiAgICAiaW1wb3J0ICdwYWNrYWdlOmFuaW1ld2l0Y2hlci9zaGFyZWQvd2lkZ2V0cy9hcHBsZV9saXF1aWRfZ2xhc3MuZGFydCc7XG4iLAogICAgIiIsCikKbWFya2VyID0gIiAgICAvLyBBcHBCYXIgY2hyb21lIGlzIExUUiBsaWtlINin2YTZhdmI2KfYs9mFIC8g2KfZhNil2K3Ytdin2KbZitin2KouIFRhYiBzd2lwZSBpcyBSVEw7XG4iCnN0YXJ0ID0gdGV4dC5pbmRleChtYXJrZXIpCnRleHQgPSB0ZXh0WzpzdGFydF0gKyAiIiIgICAgLy8gT24gaGFuZHNldHMgdGhlIHRhYiBzdHJpcCBpcyB0aGUgcGFnZSBoZWFkZXIuIEF2b2lkIHJlcGVhdGluZwogICAgLy8gIkRvd25sb2FkcyIgaW4gYSBzZXBhcmF0ZSBBcHBCYXIgYW5kIGtlZXAgdGhlIHR3byB0YWJzIGltbWVkaWF0ZWx5CiAgICAvLyBiZWxvdyB0aGUgc3lzdGVtIHNhZmUgYXJlYS4KICAgIHJldHVybiBTY2FmZm9sZCgKICAgICAgYm9keTogU2FmZUFyZWEoCiAgICAgICAgYm90dG9tOiBmYWxzZSwKICAgICAgICBjaGlsZDogY29uc3QgRG93bmxvYWRzVGFiKCksCiAgICAgICksCiAgICApOwogIH0KfQoiIiIKcGF0aC53cml0ZV90ZXh0KHRleHQpCgpwYXRoID0gUGF0aCgibGliL2ZlYXR1cmVzL2xpYnJhcnkvcHJlc2VudGF0aW9uL3dpZGdldHMvZG93bmxvYWRzX3RhYi5kYXJ0IikKdGV4dCA9IHBhdGgucmVhZF90ZXh0KCkKb2xkID0gIiIiICAgICAgICBpZiAoZG93bmxvYWRzLmlzRW1wdHkpIHsKICAgICAgICAgIHJldHVybiBfRG93bmxvYWRzRW1wdHlTdGF0ZShtZXNzYWdlOiBsMTBuLm5vRG93bmxvYWRzWWV0KTsKICAgICAgICB9CgoiIiIKYXNzZXJ0IG9sZCBpbiB0ZXh0CnRleHQgPSB0ZXh0LnJlcGxhY2Uob2xkLCAiIiwgMSkKcGF0aC53cml0ZV90ZXh0KHRleHQpCgojIEJpcnRoIHllYXI6IHNlcnZlci1zaWRlIHByb2ZpbGUgZWRpdHMgbm93IHBlcm1pdCB1cGRhdGluZyBpdC4KcGF0aCA9IFBhdGgoImxpYi9mZWF0dXJlcy9zZXR0aW5ncy9wcmVzZW50YXRpb24vYWNjb3VudF9tYW5hZ2VtZW50X3NjcmVlbnMuZGFydCIpCnRleHQgPSBwYXRoLnJlYWRfdGV4dCgpCm9sZCA9ICIiIiAgYm9vbCBnZXQgX2JpcnRoWWVhckxvY2tlZCA9PgogICAgICAod2lkZ2V0LnByb2ZpbGUuYmlydGhZZWFyPy50cmltKCkuaXNOb3RFbXB0eSA/PyBmYWxzZSk7CgoiIiIKYXNzZXJ0IG9sZCBpbiB0ZXh0CnRleHQgPSB0ZXh0LnJlcGxhY2Uob2xkLCAiIiwgMSkKb2xkID0gIiIiICAgICAgICAgICAgICAgIGtleWJvYXJkVHlwZTogVGV4dElucHV0VHlwZS5udW1iZXIsCiAgICAgICAgICAgICAgICByZWFkT25seTogX2JpcnRoWWVhckxvY2tlZCwKICAgICAgICAgICAgICAgIGhlbHBlclRleHQ6IF9iaXJ0aFllYXJMb2NrZWQKICAgICAgICAgICAgICAgICAgICA/IGFwcFRleHQoCiAgICAgICAgICAgICAgICAgICAgICAgIGNvbnRleHQsCiAgICAgICAgICAgICAgICAgICAgICAgIGVuZ2xpc2g6ICdBbmltZVdpdGNoZXIgYWxsb3dzIHRoaXMgdG8gYmUgc2V0IG9uY2UuJywKICAgICAgICAgICAgICAgICAgICAgICAgYXJhYmljOiAn2YrYs9mF2K0gQW5pbWVXaXRjaGVyINio2K3Zgdi42YfYpyDZhdix2Kkg2YjYp9it2K/YqSDZgdmC2LcuJywKICAgICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgICAgICA6IGFwcFRleHQoCiAgICAgICAgICAgICAgICAgICAgICAgIGNvbnRleHQsCiAgICAgICAgICAgICAgICAgICAgICAgIGVuZ2xpc2g6ICdPcHRpb25hbCDCtyAxOTcw4oCTMjAyMCcsCiAgICAgICAgICAgICAgICAgICAgICAgIGFyYWJpYzogJ9in2K7YqtmK2KfYsdmKIMK3IDE5NzDigJMyMDIwJywKICAgICAgICAgICAgICAgICAgICAgICksCiIiIgpuZXcgPSAiIiIgICAgICAgICAgICAgICAga2V5Ym9hcmRUeXBlOiBUZXh0SW5wdXRUeXBlLm51bWJlciwKICAgICAgICAgICAgICAgIGhlbHBlclRleHQ6IGFwcFRleHQoCiAgICAgICAgICAgICAgICAgIGNvbnRleHQsCiAgICAgICAgICAgICAgICAgIGVuZ2xpc2g6ICdPcHRpb25hbCDCtyAxOTcw4oCTMjAyMCcsCiAgICAgICAgICAgICAgICAgIGFyYWJpYzogJ9in2K7YqtmK2KfYsdmKIMK3IDE5NzDigJMyMDIwJywKICAgICAgICAgICAgICAgICksCiIiIgphc3NlcnQgb2xkIGluIHRleHQKdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKcGF0aC53cml0ZV90ZXh0KHRleHQpCgpwYXRoID0gUGF0aCgibGliL2NvcmUvYWNjb3VudC9hbmltZXdpdGNoZXJfYWNjb3VudF9zZXJ2aWNlLmRhcnQiKQp0ZXh0ID0gcGF0aC5yZWFkX3RleHQoKQpvbGQgPSAiIiIgICAgZmluYWwgZXhpc3RpbmdCaXJ0aFllYXIgPSBwcm9maWxlLmJpcnRoWWVhcj8udHJpbSgpID8/ICcnOwogICAgaWYgKGV4aXN0aW5nQmlydGhZZWFyLmlzTm90RW1wdHkgJiYKICAgICAgICBub3JtYWxpemVkQmlydGhZZWFyICE9IGV4aXN0aW5nQmlydGhZZWFyKSB7CiAgICAgIHRocm93IGNvbnN0IEFuaW1lV2l0Y2hlckFjY291bnRFeGNlcHRpb24oCiAgICAgICAgJ2JpcnRoLXllYXItbG9ja2VkJywKICAgICAgICAnVGhlIGJpcnRoIHllYXIgY2FuIG9ubHkgYmUgc2V0IG9uY2UuJywKICAgICAgKTsKICAgIH0KIiIiCmFzc2VydCBvbGQgaW4gdGV4dAp0ZXh0ID0gdGV4dC5yZXBsYWNlKG9sZCwgIiIsIDEpCnBhdGgud3JpdGVfdGV4dCh0ZXh0KQoKIyBSZXBhaXIgc3RhbGUgTGlxdWlkIEdsYXNzIGdlb21ldHJ5IHRlc3QgdG8gbWF0Y2ggdGhlIGNvbXBhY3QsIGljb24tb25seQojIHBlcnNpc3RlbnQgc29ydCBjb250cm9sIHJlcXVpcmVkIGJ5IHRoaXMgUFIncyBhcHByb3ZlZCBwbGFuLgpwYXRoID0gUGF0aCgidGVzdC9mZWF0dXJlcy9jb21tZW50cy9wcmVzZW50YXRpb24vYW5pbWV3aXRjaGVyX3Jldmlld3Nfc2NyZWVuX3Rlc3QuZGFydCIpCnRleHQgPSBwYXRoLnJlYWRfdGV4dCgpCnJlcGxzID0gWwogICAgKCIgICAgICBleHBlY3QoYXJhYmljLnNpbmdsZS53aWR0aCwgMTUwKTsiLAogICAgICIgICAgICBleHBlY3QoYXJhYmljLnNpbmdsZS53aWR0aCwgQW5pbWVXaXRjaGVyQ29tbWVudFNvcnRDb250cm9sLnNpemUpOyIpLAogICAgKCIgICAgICBleHBlY3QoYXJhYmljLnNpbmdsZS50aXRsZSwgJ9in2YTYo9it2K/YqycpOyIsCiAgICAgIiAgICAgIGV4cGVjdChhcmFiaWMuc2luZ2xlLnRpdGxlLCBpc051bGwpOyIpLAogICAgKCIgICAgICBleHBlY3QoZW5nbGlzaC5zaW5nbGUud2lkdGgsIDE0MCk7IiwKICAgICAiICAgICAgZXhwZWN0KGVuZ2xpc2guc2luZ2xlLndpZHRoLCBBbmltZVdpdGNoZXJDb21tZW50U29ydENvbnRyb2wuc2l6ZSk7IiksCiAgICAoIiAgICAgIGV4cGVjdChlbmdsaXNoLnNpbmdsZS50aXRsZSwgJ09sZGVzdCcpOyIsCiAgICAgIiAgICAgIGV4cGVjdChlbmdsaXNoLnNpbmdsZS50aXRsZSwgaXNOdWxsKTsiKSwKXQpmb3Igb2xkLCBuZXcgaW4gcmVwbHM6CiAgICBhc3NlcnQgb2xkIGluIHRleHQsIG9sZAogICAgdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKcGF0aC53cml0ZV90ZXh0KHRleHQpCgojIFdvcmtmbG93IGNsZWFudXAgaW50ZW50aW9uYWxseSByZW1vdmVkIHRoZSBkZWRpY2F0ZWQgQW5pbWU0SyB3b3JrZmxvdy4KcGF0aCA9IFBhdGgoInRlc3QvZmVhdHVyZXMvcGxheWVyL2FuaW1lNGtfcGxhdGZvcm1fY2lfY29udHJhY3RfdGVzdC5kYXJ0IikKdGV4dCA9IHBhdGgucmVhZF90ZXh0KCkKb2xkID0gIiIiICAgIHRlc3QoJ3J1bnMgdGhlIGNvbXBsZXRlIHBsYXRmb3JtIGdhdGUgd2l0aG91dCB0aGUgb2Jzb2xldGUgYnJhbmNoIHRyaWdnZXInLCAoKSB7CiAgICAgIGV4cGVjdCh3b3JrZmxvd0ZpbGUuZXhpc3RzU3luYygpLCBpc1RydWUpOwogICAgICBmaW5hbCB3b3JrZmxvdyA9IHdvcmtmbG93RmlsZS5yZWFkQXNTdHJpbmdTeW5jKCk7CgogICAgICBleHBlY3Qod29ya2Zsb3csIGlzTm90KGNvbnRhaW5zKCdmZWF0L2FuaW1lNGstbW9iaWxlLWdwdScpKSk7CiAgICAgIGV4cGVjdCh3b3JrZmxvdywgY29udGFpbnMoJ2ZsdXR0ZXIgYW5hbHl6ZScpKTsKICAgICAgZXhwZWN0KHdvcmtmbG93LCBjb250YWlucygnZmx1dHRlciB0ZXN0JykpOwogICAgICBleHBlY3Qod29ya2Zsb3csIGNvbnRhaW5zKCdWZXJpZnkgZnVsbCBBbmltZTRLIHY0LjAuMSBNZXRhbCBjb3JwdXMnKSk7CiAgICAgIGV4cGVjdCh3b3JrZmxvdywgY29udGFpbnMoJ1Rlc3QgbmF0aXZlIEFuaW1lNEsgTWV0YWwgcnVudGltZSBjb250cmFjdCcpKTsKICAgICAgZXhwZWN0KHdvcmtmbG93LCBjb250YWlucygnZmx1dHRlciBidWlsZCBhcGsnKSk7CiAgICAgIGV4cGVjdCh3b3JrZmxvdywgY29udGFpbnMoJ2ZsdXR0ZXIgYnVpbGQgaW9zIC0tcmVsZWFzZSAtLW5vLWNvZGVzaWduJykpOwogICAgICBleHBlY3Qod29ya2Zsb3csIGNvbnRhaW5zKCdmbHV0dGVyIGJ1aWxkIG1hY29zIC0tcmVsZWFzZScpKTsKICAgIH0pOwoiIiIKbmV3ID0gIiIiICAgIHRlc3QoJ2RlZGljYXRlZCBBbmltZTRLIHdvcmtmbG93IHN0YXlzIHJlbW92ZWQgYWZ0ZXIgd29ya2Zsb3cgY2xlYW51cCcsICgpIHsKICAgICAgZXhwZWN0KHdvcmtmbG93RmlsZS5leGlzdHNTeW5jKCksIGlzRmFsc2UpOwogICAgfSk7CiIiIgphc3NlcnQgb2xkIGluIHRleHQKdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKcGF0aC53cml0ZV90ZXh0KHRleHQpCg==' | base64 -d)"
+      - name: Reapply fixes without unrelated formatting churn
+        shell: bash
+        run: |
+          impl=$(git log -1 --format=%H --grep='^fix: polish downloads header and editable birth year$')
+          test -n "$impl"
+          base=$(git rev-parse "${impl}^")
+          git checkout "$base" -- \
+            lib/core/account/animewitcher_account_service.dart \
+            lib/features/library/presentation/downloads_screen.dart \
+            lib/features/library/presentation/widgets/downloads_tab.dart \
+            lib/features/settings/presentation/account_management_screens.dart \
+            test/features/comments/presentation/animewitcher_reviews_screen_test.dart \
+            test/features/player/anime4k_platform_ci_contract_test.dart
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/features/library/presentation/downloads_screen.dart')
+          text = path.read_text()
+          text = text.replace(
+              "import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';\n",
+              '',
+          )
+          marker = '    // AppBar chrome is LTR like المواسم / الإحصائيات. Tab swipe is RTL;\n'
+          start = text.index(marker)
+          text = text[:start] + '''    // On handsets the tab strip is the page header. Avoid repeating\n    // "Downloads" in a separate AppBar and keep the two tabs immediately\n    // below the system safe area.\n    return Scaffold(\n      body: SafeArea(\n        bottom: false,\n        child: const DownloadsTab(),\n      ),\n    );\n  }\n}\n'''
+          path.write_text(text)
+
+          path = Path('lib/features/library/presentation/widgets/downloads_tab.dart')
+          text = path.read_text()
+          old = '''        if (downloads.isEmpty) {\n          return _DownloadsEmptyState(message: l10n.noDownloadsYet);\n        }\n\n'''
+          assert old in text
+          path.write_text(text.replace(old, '', 1))
+
+          path = Path('lib/features/settings/presentation/account_management_screens.dart')
+          text = path.read_text()
+          old = '''  bool get _birthYearLocked =>\n      (widget.profile.birthYear?.trim().isNotEmpty ?? false);\n\n'''
+          assert old in text
+          text = text.replace(old, '', 1)
+          old = '''                keyboardType: TextInputType.number,\n                readOnly: _birthYearLocked,\n                helperText: _birthYearLocked\n                    ? appText(\n                        context,\n                        english: 'AnimeWitcher allows this to be set once.',\n                        arabic: 'يسمح AnimeWitcher بحفظها مرة واحدة فقط.',\n                      )\n                    : appText(\n                        context,\n                        english: 'Optional · 1970–2020',\n                        arabic: 'اختياري · 1970–2020',\n                      ),\n'''
+          new = '''                keyboardType: TextInputType.number,\n                helperText: appText(\n                  context,\n                  english: 'Optional · 1970–2020',\n                  arabic: 'اختياري · 1970–2020',\n                ),\n'''
+          assert old in text
+          path.write_text(text.replace(old, new, 1))
+
+          path = Path('lib/core/account/animewitcher_account_service.dart')
+          text = path.read_text()
+          old = '''    final existingBirthYear = profile.birthYear?.trim() ?? '';\n    if (existingBirthYear.isNotEmpty &&\n        normalizedBirthYear != existingBirthYear) {\n      throw const AnimeWitcherAccountException(\n        'birth-year-locked',\n        'The birth year can only be set once.',\n      );\n    }\n'''
+          assert old in text
+          path.write_text(text.replace(old, '', 1))
+
+          path = Path('test/features/comments/presentation/animewitcher_reviews_screen_test.dart')
+          text = path.read_text()
+          replacements = [
+              ('      expect(arabic.single.width, 150);',
+               '      expect(arabic.single.width, AnimeWitcherCommentSortControl.size);'),
+              ("      expect(arabic.single.title, 'الأحدث');",
+               '      expect(arabic.single.title, isNull);'),
+              ('      expect(english.single.width, 140);',
+               '      expect(english.single.width, AnimeWitcherCommentSortControl.size);'),
+              ("      expect(english.single.title, 'Oldest');",
+               '      expect(english.single.title, isNull);'),
+          ]
+          for old, new in replacements:
+              assert old in text, old
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+
+          path = Path('test/features/player/anime4k_platform_ci_contract_test.dart')
+          text = path.read_text()
+          old = '''    test('runs the complete platform gate without the obsolete branch trigger', () {\n      expect(workflowFile.existsSync(), isTrue);\n      final workflow = workflowFile.readAsStringSync();\n\n      expect(workflow, isNot(contains('feat/anime4k-mobile-gpu')));\n      expect(workflow, contains('flutter analyze'));\n      expect(workflow, contains('flutter test'));\n      expect(workflow, contains('Verify full Anime4K v4.0.1 Metal corpus'));\n      expect(workflow, contains('Test native Anime4K Metal runtime contract'));\n      expect(workflow, contains('flutter build apk'));\n      expect(workflow, contains('flutter build ios --release --no-codesign'));\n      expect(workflow, contains('flutter build macos --release'));\n    });\n'''
+          new = '''    test('dedicated Anime4K workflow stays removed after workflow cleanup', () {\n      expect(workflowFile.existsSync(), isFalse);\n    });\n'''
+          assert old in text
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Focused verification
         run: |
-          dart format lib/features/library/presentation/downloads_screen.dart lib/features/library/presentation/widgets/downloads_tab.dart lib/features/settings/presentation/account_management_screens.dart lib/core/account/animewitcher_account_service.dart test/features/comments/presentation/animewitcher_reviews_screen_test.dart test/features/player/anime4k_platform_ci_contract_test.dart test/features/library/presentation/downloads_screen_layout_contract_test.dart test/features/settings/presentation/profile_birth_year_edit_contract_test.dart
-          flutter test test/features/library/presentation/downloads_screen_layout_contract_test.dart test/features/settings/presentation/profile_birth_year_edit_contract_test.dart test/features/comments/presentation/animewitcher_reviews_screen_test.dart test/features/player/anime4k_platform_ci_contract_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test \
+            test/features/library/presentation/downloads_screen_layout_contract_test.dart \
+            test/features/settings/presentation/profile_birth_year_edit_contract_test.dart \
+            test/features/comments/presentation/animewitcher_reviews_screen_test.dart \
+            test/features/player/anime4k_platform_ci_contract_test.dart \
+            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
       - name: Analyze
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
       - name: Full test suite
         run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-      - name: Commit verified fixes to the PR branch
+      - name: Commit clean verified fixes
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/features/library/presentation/downloads_screen.dart lib/features/library/presentation/widgets/downloads_tab.dart lib/features/settings/presentation/account_management_screens.dart lib/core/account/animewitcher_account_service.dart test/features/comments/presentation/animewitcher_reviews_screen_test.dart test/features/player/anime4k_platform_ci_contract_test.dart test/features/library/presentation/downloads_screen_layout_contract_test.dart test/features/settings/presentation/profile_birth_year_edit_contract_test.dart
-          git commit -m 'fix: polish downloads header and editable birth year'
+          git add \
+            lib/core/account/animewitcher_account_service.dart \
+            lib/features/library/presentation/downloads_screen.dart \
+            lib/features/library/presentation/widgets/downloads_tab.dart \
+            lib/features/settings/presentation/account_management_screens.dart \
+            test/features/comments/presentation/animewitcher_reviews_screen_test.dart \
+            test/features/player/anime4k_platform_ci_contract_test.dart
+          git commit -m 'chore: minimize follow-up fix diff'
           git push origin HEAD:fix/liquid-glass-header-motion-alignment
