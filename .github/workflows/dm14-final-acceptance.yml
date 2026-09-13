@@ -1,0 +1,66 @@
+name: DM-14 final acceptance
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm14-final-acceptance.yml
+
+permissions:
+  contents: write
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify canonical containment and orphan preservation
+        run: |
+          flutter test test/core/utils/download_cleanup_canonical_safety_test.dart test/core/utils/download_resume_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify manifest provenance and canceled-generation cleanup
+        run: |
+          flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart test/core/services/download_delete_tombstone_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify generated sources and analyzer
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          flutter analyze --no-fatal-warnings --no-fatal-infos lib/core/utils/download_cleanup.dart lib/core/utils/download_resume.dart lib/core/services/persistent_parallel_download.dart lib/core/services/download_service.dart test/core/utils/download_cleanup_canonical_safety_test.dart test/core/utils/download_resume_test.dart test/core/services/persistent_parallel_download_manifest_discovery_test.dart test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart test/core/services/download_delete_tombstone_guard_test.dart
+          git diff --check
+
+      - name: Rebase and reverify before closing DM-14
+        run: |
+          git reset --hard HEAD
+          git clean -fd
+          git pull --rebase origin plan/download-manager-reliability
+          flutter pub get
+          flutter test test/core/utils/download_cleanup_canonical_safety_test.dart test/core/utils/download_resume_test.dart test/core/services/persistent_parallel_download_manifest_discovery_test.dart test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart test/core/services/download_delete_tombstone_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Mark DM-14 complete
+        run: |
+          if grep -q '^- \[x\] \*\*DM-14' DOWNLOAD_MANAGER_PLAN.md; then
+            echo "DM-14 already complete"
+            exit 0
+          fi
+          sed -i 's/^- \[ \] \*\*DM-14/- [x] **DM-14/' DOWNLOAD_MANAGER_PLAN.md
+          grep -q '^- \[x\] \*\*DM-14' DOWNLOAD_MANAGER_PLAN.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add DOWNLOAD_MANAGER_PLAN.md
+          git commit -m "docs(downloads): mark DM-14 complete after acceptance"
+          git push origin HEAD:plan/download-manager-reliability
