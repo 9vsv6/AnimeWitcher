@@ -19,9 +19,18 @@ replacements = [
 ]
 
 for old, new in replacements:
-    count = text.count(old)
-    if count != 1:
-        raise SystemExit(f'expected exactly one DM-23 anchor, found {count}: {old[:80]!r}')
-    text = text.replace(old, new, 1)
+    old_count = text.count(old)
+    new_count = text.count(new)
+    if old_count == 1 and new_count == 0:
+        text = text.replace(old, new, 1)
+        continue
+    if old_count == 0 and new_count == 1:
+        # The production fix is already materialized; verifier reruns must be
+        # safe and proceed to the behavioral tests instead of failing on anchors.
+        continue
+    raise SystemExit(
+        'DM-23 anchor mismatch: '
+        f'old={old_count}, new={new_count}, anchor={old[:80]!r}'
+    )
 
 path.write_text(text)
