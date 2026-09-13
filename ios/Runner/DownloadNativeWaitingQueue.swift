@@ -1419,15 +1419,131 @@ enum DownloadNativeWaitingQueue {
     else {
       return
     }
+    let taskJson = task.taskDescription?
+      .components(separatedBy: "***<<<|>>>***").first ?? ""
+    postMultipartChunkSample(
+      childId: childId,
+      parentId: parentId,
+      childDirectory: stringFromTaskJson(taskJson, key: "directory"),
+      totalWritten: totalWritten,
+      totalExpected: totalExpected,
+      normalizedProgress: totalExpected > 0
+        ? min(max(Double(totalWritten) / Double(totalExpected), 0), 1)
+        : nil,
+      completed: completed,
+      attemptGeneration: attemptGeneration(from: task)
+    )
+  }
 
-    if totalWritten > 0 || completed {
+  #if canImport(background_downloader)
+  private static func postSupportedMultipartProgress(
+    task: background_downloader.Task,
+    progress: Double
+  ) -> Bool {
+    guard task.group == "chunk" || task.group == "animewitcher_parts",
+          let parentId = parentTaskId(fromPluginTask: task)
+    else { return false }
+
+    let expected = expectedMultipartBytes(forPluginTask: task, parentId: parentId)
+    let written = expected > 0
+      ? Int64((Double(expected) * progress).rounded(.down))
+      : -1
+    postMultipartChunkSample(
+      childId: task.taskId,
+      parentId: parentId,
+      childDirectory: task.directory,
+      totalWritten: written,
+      totalExpected: expected,
+      normalizedProgress: progress,
+      completed: false,
+      attemptGeneration: attemptGeneration(fromPluginTask: task)
+    )
+    return true
+  }
+
+  private static func parentTaskId(
+    fromPluginTask task: background_downloader.Task
+  ) -> String? {
+    if let data = task.metaData.data(using: .utf8),
+       let metadata = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let parent = metadata["parentTaskId"] as? String,
+       !parent.isEmpty {
+      return parent
+    }
+    if let range = task.taskId.range(of: ".part.", options: .backwards) {
+      let parent = String(task.taskId[..<range.lowerBound])
+      return parent.isEmpty ? nil : parent
+    }
+    return nil
+  }
+
+  private static func attemptGeneration(
+    fromPluginTask task: background_downloader.Task
+  ) -> Int? {
+    guard let data = task.metaData.data(using: .utf8),
+          let metadata = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return nil }
+    return (metadata["attemptGeneration"] as? NSNumber)?.intValue
+  }
+
+  private static func expectedMultipartBytes(
+    forPluginTask task: background_downloader.Task,
+    parentId: String
+  ) -> Int64 {
+    if let rangeHeader = task.headers.first(where: {
+      $0.key.caseInsensitiveCompare("Range") == .orderedSame
+    })?.value,
+       let expected = expectedBytesFromRangeHeader(rangeHeader) {
+      return expected
+    }
+
+    lock.lock()
+    defer { lock.unlock() }
+    let state = loadLocked()
+    if let claim = state.multipartClaims.first(where: {
+      $0.parentTaskId == parentId && $0.waiter.taskId == task.taskId
+    }), claim.waiter.savedExpectedBytes > 0 {
+      return claim.waiter.savedExpectedBytes
+    }
+    for plan in state.multipartPlans where plan.parentTaskId == parentId {
+      if let waiter = plan.waiters.first(where: { $0.taskId == task.taskId }),
+         waiter.savedExpectedBytes > 0 {
+        return waiter.savedExpectedBytes
+      }
+    }
+    return -1
+  }
+
+  private static func expectedBytesFromRangeHeader(_ header: String) -> Int64? {
+    let value = header.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard value.lowercased().hasPrefix("bytes=") else { return nil }
+    let range = value.dropFirst("bytes=".count)
+    let parts = range.split(separator: "-", maxSplits: 1).map(String.init)
+    guard parts.count == 2,
+          let start = Int64(parts[0]),
+          let end = Int64(parts[1]),
+          start >= 0,
+          end >= start
+    else { return nil }
+    return end - start + 1
+  }
+  #endif
+
+  private static func postMultipartChunkSample(
+    childId: String,
+    parentId: String,
+    childDirectory: String,
+    totalWritten: Int64,
+    totalExpected: Int64,
+    normalizedProgress: Double?,
+    completed: Bool,
+    attemptGeneration: Int?
+  ) {
+    if totalWritten > 0 || completed || (normalizedProgress ?? 0) > 0 {
       settleMultipartClaim(childTaskId: childId)
     }
 
     let now = CFAbsoluteTimeGetCurrent()
-    let taskJson = task.taskDescription?
-      .components(separatedBy: "***<<<|>>>***").first ?? ""
-    let childDirectory = stringFromTaskJson(taskJson, key: "directory")
     let partsComponent = URL(fileURLWithPath: childDirectory).lastPathComponent
     let inferredParentName = partsComponent.hasSuffix(".parts")
       ? String(partsComponent.dropLast(".parts".count))
@@ -1445,13 +1561,15 @@ enum DownloadNativeWaitingQueue {
     } else {
       lastChunkBridgeTimes[childId] = now
     }
-    let speed = rollingSpeedLocked(
-      windows: &chunkSpeedWindows,
-      taskId: childId,
-      totalWritten: totalWritten,
-      now: now,
-      completed: completed
-    )
+    let speed = totalWritten >= 0
+      ? rollingSpeedLocked(
+          windows: &chunkSpeedWindows,
+          taskId: childId,
+          totalWritten: totalWritten,
+          now: now,
+          completed: completed
+        )
+      : 0
 
     var state = loadLocked()
     var children = multipartChildSamples[parentId] ?? [:]
@@ -1461,10 +1579,12 @@ enum DownloadNativeWaitingQueue {
       speed: 0,
       displayName: inferredParentName
     )
-    // A URLSession retry can reset its local byte counter. Keep native overlay
-    // progress monotonic while the replacement catches up; this sample is UI
-    // lease telemetry only and is never used as durable resume evidence.
-    sample.written = max(sample.written, max(totalWritten, 0))
+    if totalWritten >= 0 {
+      // A URLSession retry can reset its local byte counter. Keep native overlay
+      // progress monotonic while the replacement catches up; this sample is UI
+      // lease telemetry only and is never used as durable resume evidence.
+      sample.written = max(sample.written, totalWritten)
+    }
     if totalExpected > 0 {
       sample.expected = max(sample.expected, totalExpected)
       if completed { sample.written = sample.expected }
@@ -1522,14 +1642,14 @@ enum DownloadNativeWaitingQueue {
     }
     if totalExpected > 0 {
       values["expectedBytes"] = totalExpected
-      values["progress"] = completed
-        ? 1.0
-        : min(max(Double(totalWritten) / Double(totalExpected), 0), 1)
-    } else if completed {
-      values["progress"] = 1.0
     }
-    if let attempt = attemptGeneration(from: task) {
-      values["attemptGeneration"] = attempt
+    if completed {
+      values["progress"] = 1.0
+    } else if let normalizedProgress {
+      values["progress"] = min(max(normalizedProgress, 0), 1)
+    }
+    if let attemptGeneration {
+      values["attemptGeneration"] = attemptGeneration
     }
     if speed > 0 {
       values["speedBytesPerSecond"] = speed
@@ -1542,13 +1662,16 @@ enum DownloadNativeWaitingQueue {
     )
 
     // Dart owns the overlay while foreground. When it is suspended, keep the
-    // same BGContinuedProcessingTask alive from URLSession's native bytes so
-    // iOS sees real progress instead of an apparently stalled long task.
+    // same BGContinuedProcessingTask alive from native plugin progress so iOS
+    // sees real progress instead of an apparently stalled long task.
     if shouldUpdateNativeOverlay && !isAppInForeground() {
+      let overlayProgress = aggregateExpected > 0
+        ? presentation.progress
+        : (normalizedProgress ?? presentation.progress)
       upsertSessionOverlay(
         currentTaskId: presentation.currentTaskId,
         displayName: presentation.displayName,
-        progress: presentation.progress,
+        progress: overlayProgress,
         totalBytes: presentation.totalBytes,
         transferredBytes: presentation.transferredBytes,
         speedBytesPerSecond: presentation.speedBytesPerSecond
@@ -1715,6 +1838,9 @@ enum DownloadNativeWaitingQueue {
     let id = task.taskId
     guard !id.isEmpty else { return }
     noteBackgroundRetryProgress(taskId: id)
+    if postSupportedMultipartProgress(task: task, progress: normalized) {
+      return
+    }
 
     let now = CFAbsoluteTimeGetCurrent()
     let name = task.displayName.isEmpty
