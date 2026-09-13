@@ -69,21 +69,23 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('ios/Runner/DownloadNativeWaitingQueue.swift')
           source = path.read_text()
-          old = '''  private static func clamp(_ value: Int) -> Int {
-            min(max(value, 1), 5)
-          }
-          '''
-          new = '''  private static func clamp(_ value: Int) -> Int {
-            // Keep native background admission aligned with the user-facing
-            // logical download concurrency setting (1...10).
-            min(max(value, 1), 10)
-          }
-          '''
-          if old in source:
-              path.write_text(source.replace(old, new, 1))
+          pattern = re.compile(
+              r'(private static func clamp\(_ value: Int\) -> Int \{\s*)'
+              r'min\(max\(value, 1\), 5\)'
+              r'(\s*\})'
+          )
+          replacement = (
+              r'\1// Keep native background admission aligned with the user-facing\n'
+              r'    // logical download concurrency setting (1...10).\n'
+              r'    min(max(value, 1), 10)\2'
+          )
+          updated, count = pattern.subn(replacement, source, count=1)
+          if count == 1:
+              path.write_text(updated)
           elif 'min(max(value, 1), 10)' not in source:
               raise SystemExit('DM-28 iOS clamp anchor drift')
           PY
