@@ -1,0 +1,43 @@
+name: DM-26 native callback probe
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm26-native-callback-probe.yml
+
+jobs:
+  probe:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+      - name: Resolve background_downloader 9.6.1 temporarily
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('pubspec.yaml')
+          t = p.read_text()
+          t = t.replace('background_downloader: ^9.6.0', 'background_downloader: 9.6.1')
+          p.write_text(t)
+          PY
+          rm -f pubspec.lock
+          flutter pub get
+      - name: Show supported native callback definitions and call sites
+        shell: bash
+        run: |
+          ROOT="$(find "$HOME/.pub-cache" -type d -path '*/background_downloader-9.6.1' | head -1)"
+          test -n "$ROOT"
+          echo "PLUGIN_ROOT=$ROOT"
+          grep -R -n -B 6 -A 12 'onNativeTaskStatusChange\|onNativeTaskProgressChange' "$ROOT/ios" "$ROOT/darwin" 2>/dev/null || true
+          echo '--- UrlSessionDelegate callback context ---'
+          grep -R -n -B 8 -A 20 'onNativeTaskStatusChange\|onNativeTaskProgressChange' "$ROOT" --include='*.swift'
