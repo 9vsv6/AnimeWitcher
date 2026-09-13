@@ -6,6 +6,7 @@ on:
       - plan/download-manager-reliability
     paths:
       - .github/workflows/dm24-current-verifier.yml
+      - test/features/library/presentation/downloads_job_state_authority_test.dart
 
 permissions:
   contents: read
