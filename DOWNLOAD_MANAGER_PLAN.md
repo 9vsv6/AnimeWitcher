@@ -429,7 +429,7 @@
   - **Verification/testing:** `DownloadsBackup` lookalike; `..` traversal; symlink/reparse escape; Windows case/separators; custom desktop root; unknown file inside series folder; missing manifest/DB; stale canceled-generation parts; no external/unknown file deleted.
   - **Dependencies:** DM-04, DM-06, DM-07, DM-11, DM-24.
 
-- [ ] **DM-15 — Make Dart<->iOS queue snapshots versioned, acknowledged, and recoverable**
+- [x] **DM-15 — Make Dart<->iOS queue snapshots versioned, acknowledged, and recoverable**
   - **Problem:** correctness-sensitive queue snapshots use best-effort method-channel semantics and versionless native persistence; stale Dart state can overwrite newer native promotion state.
   - **Root cause:** queue ownership checkpoints share infrastructure with optional presentation updates.
   - **Severity / priority:** **P1 / High.**
