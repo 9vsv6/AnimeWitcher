@@ -2928,7 +2928,13 @@ class DownloadService {
           'parentTaskId': plan.parentTaskId,
           'maxConcurrent': plan.maxConcurrent,
           'waiters': <Map<String, Object>>[
-            for (final child in plan.tasks) nativeWaitingPayload(child),
+            for (final child in plan.candidates)
+              <String, Object>{
+                ...nativeWaitingPayload(child.task),
+                'generation': child.generation,
+                'claimId': child.claimId,
+                'claimLeaseMillis': child.claimLease.inMilliseconds,
+              },
           ],
         });
       }

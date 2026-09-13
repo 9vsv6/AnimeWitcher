@@ -183,7 +183,7 @@
   - **Confirmed root cause:** `_pauseTransfer()` waited for pause/final callbacks but only verified runtime ownership for internal multipart children, so an ordinary single-file task could return success after timeout while its worker remained alive. Startup pause enforcement also ignored the pause result and unconditionally persisted `TaskStatus.paused`.
   - **Verification passed:** pre-fix RED regression; pause-settlement guard; runtime-ownership, JobStore, recovery-reconciliation and lifecycle-checkpoint regression suites; generated-source-aware `flutter analyze --no-fatal-warnings --no-fatal-infos`; `git diff --check`.
 
-- [ ] **DM-22 — Introduce a two-phase Dart<->Swift ownership handoff for iOS multipart promotion**
+- [x] **DM-22 — Introduce a two-phase Dart<->Swift ownership handoff for iOS multipart promotion**
   - **Problem:** Swift can select/start a child from `multipartPlans` while Dart still considers the same generation launchable; stale snapshots can re-add consumed work.
   - **Root cause:** snapshots describe work but do not transfer ownership through a durable claim/ack protocol.
   - **Severity / priority:** **P0 / Critical duplicate-writer risk.**

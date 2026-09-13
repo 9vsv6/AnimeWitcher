@@ -105,6 +105,9 @@ enum DownloadNativeWaitingQueue {
     var resumeDataBase64: String?
     var progress: Double?
     var expectedBytes: Int64?
+    var generation: Int?
+    var claimId: String?
+    var claimLeaseMillis: Int?
 
     var taskDescription: String {
       if let notificationConfigJson, !notificationConfigJson.isEmpty {
@@ -151,7 +154,10 @@ enum DownloadNativeWaitingQueue {
         group: string(arguments["group"]) ?? "FileDownloaderGroup",
         resumeDataBase64: string(arguments["resumeDataBase64"]),
         progress: doubleValue(arguments["progress"]),
-        expectedBytes: int64Value(arguments["expectedBytes"])
+        expectedBytes: int64Value(arguments["expectedBytes"]),
+        generation: intValue(arguments["generation"]),
+        claimId: string(arguments["claimId"]),
+        claimLeaseMillis: intValue(arguments["claimLeaseMillis"])
       )
     }
   }
@@ -172,6 +178,16 @@ enum DownloadNativeWaitingQueue {
         waiters: waiters
       )
     }
+  }
+
+  struct MultipartClaim: Codable, Equatable, Sendable {
+    var parentTaskId: String
+    var maxConcurrent: Int
+    var waiter: Waiter
+    var generation: Int
+    var claimId: String
+    var expiresAtMillis: Int64
+    var launchCommitted: Bool
   }
 
   struct RunningSample: Codable, Equatable {
@@ -200,6 +216,7 @@ enum DownloadNativeWaitingQueue {
     var sessionCurrentIndex: Int
     var runningSamples: [String: RunningSample]
     var multipartPlans: [MultipartPlan]
+    var multipartClaims: [MultipartClaim]
 
     init(
       snapshotVersion: Int = 0,
@@ -219,7 +236,8 @@ enum DownloadNativeWaitingQueue {
       sessionSpeedBytesPerSecond: Double = 0,
       sessionCurrentIndex: Int = 0,
       runningSamples: [String: RunningSample] = [:],
-      multipartPlans: [MultipartPlan] = []
+      multipartPlans: [MultipartPlan] = [],
+      multipartClaims: [MultipartClaim] = []
     ) {
       self.snapshotVersion = snapshotVersion
       self.maxConcurrent = maxConcurrent
@@ -239,6 +257,7 @@ enum DownloadNativeWaitingQueue {
       self.sessionCurrentIndex = sessionCurrentIndex
       self.runningSamples = runningSamples
       self.multipartPlans = multipartPlans
+      self.multipartClaims = multipartClaims
     }
 
     init(from decoder: Decoder) throws {
@@ -261,6 +280,7 @@ enum DownloadNativeWaitingQueue {
       sessionCurrentIndex = try container.decodeIfPresent(Int.self, forKey: .sessionCurrentIndex) ?? 0
       runningSamples = try container.decodeIfPresent([String: RunningSample].self, forKey: .runningSamples) ?? [:]
       multipartPlans = try container.decodeIfPresent([MultipartPlan].self, forKey: .multipartPlans) ?? []
+      multipartClaims = try container.decodeIfPresent([MultipartClaim].self, forKey: .multipartClaims) ?? []
     }
 
     func overlayCurrentIndex(runningTaskId: String? = nil) -> Int {
@@ -348,7 +368,8 @@ enum DownloadNativeWaitingQueue {
   static func persist(from arguments: [String: Any]) -> Int {
     lock.lock()
     defer { lock.unlock() }
-    let current = loadLocked()
+    var current = loadLocked()
+    requeueExpiredMultipartClaimsLocked(&current)
     let snapshotVersion = intValue(arguments["snapshotVersion"])
     if let snapshotVersion, snapshotVersion < current.snapshotVersion {
       return current.snapshotVersion
@@ -366,8 +387,16 @@ enum DownloadNativeWaitingQueue {
     let dartSessionIds = stringArray(arguments["sessionTaskIds"])
     let dartCompletedCount = intValue(arguments["sessionCompletedCount"]) ?? 0
     let dartBatchTotal = intValue(arguments["sessionBatchTotal"]) ?? 0
-    let dartMultipartPlans = dictionaryArray(arguments["multipartPlans"])
+    var dartMultipartPlans = dictionaryArray(arguments["multipartPlans"])
       .compactMap(MultipartPlan.from(arguments:))
+    let claimedChildIds = Set(current.multipartClaims.map { $0.waiter.taskId })
+    if !claimedChildIds.isEmpty {
+      for index in dartMultipartPlans.indices {
+        dartMultipartPlans[index].waiters.removeAll {
+          claimedChildIds.contains($0.taskId)
+        }
+      }
+    }
     let released = Set(stringArray(arguments["queueWaitingTaskIds"]))
 
     let pausedSet = Set(dartPaused)
@@ -493,7 +522,8 @@ enum DownloadNativeWaitingQueue {
           return current.sessionCurrentIndex
         }(),
         runningSamples: current.runningSamples.filter { transferringSet.contains($0.key) },
-        multipartPlans: dartMultipartPlans
+        multipartPlans: dartMultipartPlans,
+        multipartClaims: current.multipartClaims
       )
     )
     return acceptedVersion
@@ -521,6 +551,102 @@ enum DownloadNativeWaitingQueue {
     lastMultipartOverlayTimes.removeAll()
     latestDownloadSession = nil
     multipartPromotionParents.removeAll()
+  }
+
+  private static func nowMillis() -> Int64 {
+    Int64(Date().timeIntervalSince1970 * 1000)
+  }
+
+  private static func requeueExpiredMultipartClaimsLocked(_ state: inout State) {
+    let now = nowMillis()
+    let expired = state.multipartClaims.filter { $0.expiresAtMillis <= now }
+    guard !expired.isEmpty else { return }
+    for claim in expired {
+      if let index = state.multipartPlans.firstIndex(where: {
+        $0.parentTaskId == claim.parentTaskId
+      }) {
+        if !state.multipartPlans[index].waiters.contains(where: {
+          $0.taskId == claim.waiter.taskId
+        }) {
+          state.multipartPlans[index].waiters.insert(claim.waiter, at: 0)
+        }
+      } else {
+        state.multipartPlans.append(
+          MultipartPlan(
+            parentTaskId: claim.parentTaskId,
+            maxConcurrent: claim.maxConcurrent,
+            waiters: [claim.waiter]
+          )
+        )
+      }
+    }
+    let expiredIds = Set(expired.map { $0.claimId })
+    state.multipartClaims.removeAll { expiredIds.contains($0.claimId) }
+  }
+
+  private static func releaseMultipartClaim(_ waiter: Waiter, requeue: Bool) {
+    lock.lock()
+    defer { lock.unlock() }
+    var state = loadLocked()
+    guard let claimId = waiter.claimId,
+          let index = state.multipartClaims.firstIndex(where: {
+            $0.claimId == claimId && $0.waiter.taskId == waiter.taskId
+          })
+    else { return }
+    let claim = state.multipartClaims.remove(at: index)
+    if requeue {
+      if let planIndex = state.multipartPlans.firstIndex(where: {
+        $0.parentTaskId == claim.parentTaskId
+      }) {
+        if !state.multipartPlans[planIndex].waiters.contains(where: {
+          $0.taskId == waiter.taskId
+        }) {
+          state.multipartPlans[planIndex].waiters.insert(waiter, at: 0)
+        }
+      } else {
+        state.multipartPlans.append(
+          MultipartPlan(
+            parentTaskId: claim.parentTaskId,
+            maxConcurrent: claim.maxConcurrent,
+            waiters: [waiter]
+          )
+        )
+      }
+    }
+    saveLocked(state)
+  }
+
+  private static func commitMultipartClaimBeforeResume(_ waiter: Waiter) -> Bool {
+    guard let claimId = waiter.claimId,
+          let generation = waiter.generation
+    else { return false }
+    lock.lock()
+    defer { lock.unlock() }
+    var state = loadLocked()
+    requeueExpiredMultipartClaimsLocked(&state)
+    guard let index = state.multipartClaims.firstIndex(where: {
+      $0.claimId == claimId &&
+        $0.waiter.taskId == waiter.taskId &&
+        $0.generation == generation
+    }) else {
+      saveLocked(state)
+      return false
+    }
+    state.multipartClaims[index].launchCommitted = true
+    state.multipartClaims[index].expiresAtMillis = nowMillis() + 15 * 60 * 1000
+    saveLocked(state)
+    return true
+  }
+
+  private static func settleMultipartClaim(childTaskId: String) {
+    lock.lock()
+    defer { lock.unlock() }
+    var state = loadLocked()
+    let oldCount = state.multipartClaims.count
+    state.multipartClaims.removeAll { $0.waiter.taskId == childTaskId }
+    if state.multipartClaims.count != oldCount {
+      saveLocked(state)
+    }
   }
 
   /// URLSession transport failures that are worth retrying without waking
@@ -1281,6 +1407,10 @@ enum DownloadNativeWaitingQueue {
       return
     }
 
+    if totalWritten > 0 || completed {
+      settleMultipartClaim(childTaskId: childId)
+    }
+
     let now = CFAbsoluteTimeGetCurrent()
     let taskJson = task.taskDescription?
       .components(separatedBy: "***<<<|>>>***").first ?? ""
@@ -1470,17 +1600,45 @@ enum DownloadNativeWaitingQueue {
       let selected: [Waiter]
       lock.lock()
       var state = loadLocked()
+      requeueExpiredMultipartClaimsLocked(&state)
       guard let index = state.multipartPlans.firstIndex(where: { $0.parentTaskId == parentId }) else {
         lock.unlock()
         return
       }
       var plan = state.multipartPlans[index]
       plan.waiters.removeAll { liveChildIds.contains($0.taskId) }
+      let claimedIds = Set(state.multipartClaims.map { $0.waiter.taskId })
+      plan.waiters.removeAll { claimedIds.contains($0.taskId) }
       let available = max(min(plan.maxConcurrent, 16) - liveChildIds.count, 0)
-      selected = Array(plan.waiters.prefix(available))
+      let claimable = plan.waiters.filter {
+        ($0.generation ?? 0) > 0 &&
+          !($0.claimId ?? "").isEmpty &&
+          ($0.claimLeaseMillis ?? 0) > 0
+      }
+      selected = Array(claimable.prefix(available))
       if !selected.isEmpty {
         let selectedIds = Set(selected.map(\.taskId))
         plan.waiters.removeAll { selectedIds.contains($0.taskId) }
+        for claimedWaiter in selected {
+          guard let generation = claimedWaiter.generation,
+                let claimId = claimedWaiter.claimId,
+                let lease = claimedWaiter.claimLeaseMillis
+          else { continue }
+          state.multipartClaims.removeAll {
+            $0.waiter.taskId == claimedWaiter.taskId
+          }
+          state.multipartClaims.append(
+            MultipartClaim(
+              parentTaskId: parentId,
+              maxConcurrent: plan.maxConcurrent,
+              waiter: claimedWaiter,
+              generation: generation,
+              claimId: claimId,
+              expiresAtMillis: nowMillis() + Int64(max(lease, 1)),
+              launchCommitted: false
+            )
+          )
+        }
       }
       state.multipartPlans[index] = plan
       saveLocked(state)
@@ -1496,7 +1654,14 @@ enum DownloadNativeWaitingQueue {
     guard waiter.savedProgress <= 0,
           waiter.resumeDataBase64?.isEmpty ?? true,
           let url = URL(string: waiter.url)
-    else { return }
+    else {
+      releaseMultipartClaim(waiter, requeue: true)
+      return
+    }
+    guard !isAppInForeground() else {
+      releaseMultipartClaim(waiter, requeue: true)
+      return
+    }
     var request = URLRequest(url: url)
     request.httpMethod = waiter.httpRequestMethod.isEmpty ? "GET" : waiter.httpRequestMethod
     for (key, value) in waiter.headers {
@@ -1508,6 +1673,16 @@ enum DownloadNativeWaitingQueue {
     let task = session.downloadTask(with: request)
     task.taskDescription = waiter.taskDescription
     task.priority = URLSessionTask.highPriority
+    guard !isAppInForeground(), commitMultipartClaimBeforeResume(waiter) else {
+      task.cancel()
+      releaseMultipartClaim(waiter, requeue: true)
+      return
+    }
+    guard !isAppInForeground() else {
+      task.cancel()
+      releaseMultipartClaim(waiter, requeue: true)
+      return
+    }
     DownloadNativeDiagnosticLog.record("background.multipart.promote", task: task)
     task.resume()
   }

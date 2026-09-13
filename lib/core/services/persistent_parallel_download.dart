@@ -357,16 +357,32 @@ const Duration kParallelDiskProgressPollInterval = Duration(seconds: 1);
 /// ownership is unknown.
 const Duration kParallelPendingStartLeaseDelay = Duration(seconds: 5);
 
+const Duration kNativeMultipartClaimOfferLease = Duration(minutes: 15);
+
+class NativeParallelBackgroundCandidate {
+  const NativeParallelBackgroundCandidate({
+    required this.task,
+    required this.generation,
+    required this.claimId,
+    required this.claimLease,
+  });
+
+  final DownloadTask task;
+  final int generation;
+  final String claimId;
+  final Duration claimLease;
+}
+
 class NativeParallelBackgroundPlan {
   const NativeParallelBackgroundPlan({
     required this.parentTaskId,
     required this.maxConcurrent,
-    required this.tasks,
+    required this.candidates,
   });
 
   final String parentTaskId;
   final int maxConcurrent;
-  final List<DownloadTask> tasks;
+  final List<NativeParallelBackgroundCandidate> candidates;
 }
 
 /// Native DownloadTasks transfer the parts; this coordinator persists their
@@ -452,6 +468,8 @@ class PersistentParallelDownload {
   final Map<String, _ParallelSession> _sessions = {};
   final Map<String, _ParallelSession> _children = {};
   final Set<String> _activeConnectionIds = {};
+  final Map<String, ({int generation, DateTime expiresAt, String claimId})>
+  _nativeClaimOffers = {};
   final DownloadConnectionGovernor _connectionGovernor =
       DownloadConnectionGovernor();
   final DownloadTelemetryEstimator _speedTelemetry =
@@ -482,30 +500,52 @@ class PersistentParallelDownload {
   List<NativeParallelBackgroundPlan> nativeBackgroundPlans() {
     if (_disposed) return const <NativeParallelBackgroundPlan>[];
     final plans = <NativeParallelBackgroundPlan>[];
+    final now = DateTime.now();
     for (final session in _sessions.values) {
-      if (!session.active || session.pauseRequested || session.deleted)
+      if (!session.active || session.pauseRequested || session.deleted) {
         continue;
+      }
       final provenWidth = _activeConnectionsForSession(session);
       if (provenWidth <= 0) continue;
-      final tasks = session.parts
-          .where(
-            (part) =>
-                !part.complete &&
-                !part.launched &&
-                part.recoveryTimer == null &&
-                part.attemptGeneration > 0 &&
-                !part.sourceValidationRequired &&
-                part.progress <= 0 &&
-                part.credibleProgress <= 0,
-          )
-          .map((part) => part.task)
-          .toList(growable: false);
-      if (tasks.isEmpty) continue;
+      final candidates = <NativeParallelBackgroundCandidate>[];
+      for (final part in session.parts) {
+        if (part.complete ||
+            part.launched ||
+            part.recoveryTimer != null ||
+            part.attemptGeneration <= 0 ||
+            part.sourceValidationRequired ||
+            part.progress > 0 ||
+            part.credibleProgress > 0) {
+          continue;
+        }
+        final existing = _nativeClaimOffers[part.task.taskId];
+        final offer =
+            existing != null &&
+                existing.generation == part.attemptGeneration &&
+                existing.expiresAt.isAfter(now)
+            ? existing
+            : (
+                generation: part.attemptGeneration,
+                expiresAt: now.add(kNativeMultipartClaimOfferLease),
+                claimId:
+                    '${session.task.taskId}:${part.task.taskId}:g${part.attemptGeneration}:o${now.microsecondsSinceEpoch}',
+              );
+        _nativeClaimOffers[part.task.taskId] = offer;
+        candidates.add(
+          NativeParallelBackgroundCandidate(
+            task: part.task,
+            generation: offer.generation,
+            claimId: offer.claimId,
+            claimLease: kNativeMultipartClaimOfferLease,
+          ),
+        );
+      }
+      if (candidates.isEmpty) continue;
       plans.add(
         NativeParallelBackgroundPlan(
           parentTaskId: session.task.taskId,
           maxConcurrent: provenWidth.clamp(1, kDownloadGlobalConnectionBudget),
-          tasks: tasks,
+          candidates: candidates,
         ),
       );
     }
@@ -1206,10 +1246,24 @@ class PersistentParallelDownload {
       )
       .length;
 
+  bool _hasActiveNativeClaimOffer(_DownloadPart part) {
+    final offer = _nativeClaimOffers[part.task.taskId];
+    if (offer == null) return false;
+    if (offer.generation != part.attemptGeneration ||
+        !offer.expiresAt.isAfter(DateTime.now())) {
+      _nativeClaimOffers.remove(part.task.taskId);
+      return false;
+    }
+    return true;
+  }
+
   Iterable<_DownloadPart> _launchableParts(_ParallelSession session) =>
       session.parts.where(
         (part) =>
-            !part.complete && !part.launched && part.recoveryTimer == null,
+            !part.complete &&
+            !part.launched &&
+            part.recoveryTimer == null &&
+            !_hasActiveNativeClaimOffer(part),
       );
 
   int _launchablePartCount(_ParallelSession session) =>
