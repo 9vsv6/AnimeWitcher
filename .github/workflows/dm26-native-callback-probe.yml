@@ -9,12 +9,18 @@ on:
       - ios/Runner/DownloadNativeWaitingQueue.swift
       - test/core/services/ios_native_progress_callback_source_test.dart
 
+permissions:
+  contents: write
+
 jobs:
   verify:
     runs-on: macos-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -26,6 +32,7 @@ jobs:
           flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
+          git reset --hard HEAD
 
       - name: Verify locked plugin callback contract
         shell: bash
@@ -34,6 +41,27 @@ jobs:
           plugin="$HOME/.pub-cache/hosted/pub.dev/background_downloader-9.6.1/ios/background_downloader/Sources/background_downloader/BDPlugin.swift"
           test -f "$plugin"
           grep -Fq 'public static var onNativeTaskProgressChange: ((Task, Double) -> Void)?' "$plugin"
+
+      - name: Apply DM-26 optional expected-bytes compile fix
+        shell: python3 {0}
+        run: |
+          from pathlib import Path
+
+          path = Path('ios/Runner/DownloadNativeWaitingQueue.swift')
+          text = path.read_text()
+          old = '''    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]
+      .first(where: { $0 > 0 }) ?? -1
+'''
+          new = '''    // Some plugin-side byte metadata is optional. Flatten the candidate list
+    // before arithmetic so the supported callback compiles against 9.6.1
+    // without inventing a byte total when none is known.
+    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]
+      .compactMap { $0 }
+      .first(where: { $0 > 0 }) ?? -1
+'''
+          if old not in text:
+              raise SystemExit('DM-26 expected-bytes target not found')
+          path.write_text(text.replace(old, new, 1))
 
       - name: DM-26 supported callback source guard
         run: flutter test test/core/services/ios_native_progress_callback_source_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
@@ -48,7 +76,18 @@ jobs:
         run: flutter test test/core/services/persistent_parallel_download_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
       - name: Diff sanity
-        run: git diff --check
+        run: |
+          git diff --check
+          test "$(git diff --name-only)" = "ios/Runner/DownloadNativeWaitingQueue.swift"
 
       - name: Build iOS without codesigning
         run: flutter build ios --debug --no-codesign --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Commit verified compile fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios/Runner/DownloadNativeWaitingQueue.swift
+          git commit -m "fix(downloads): unwrap DM-26 expected byte candidates"
+          git pull --rebase origin plan/download-manager-reliability
+          git push origin HEAD:plan/download-manager-reliability
