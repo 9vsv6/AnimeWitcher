@@ -1,0 +1,85 @@
+name: DM-26 plugin 9.6.1 GREEN
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm26-plugin-961-green.yml
+
+permissions:
+  contents: write
+
+jobs:
+  green:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+      - name: Upgrade only background_downloader to 9.6.1
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('pubspec.yaml')
+          text = p.read_text()
+          old = 'background_downloader: ^9.6.0'
+          new = 'background_downloader: ^9.6.1'
+          if new not in text:
+            if old not in text:
+              raise SystemExit('background_downloader dependency anchor not found')
+            p.write_text(text.replace(old, new, 1))
+          PY
+          flutter pub upgrade background_downloader
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+          grep -A7 '^  background_downloader:' pubspec.lock
+      - name: Prove 9.6.1 supported native callbacks are present
+        shell: bash
+        run: |
+          ROOT="$(find "$HOME/.pub-cache" -type d -path '*/background_downloader-9.6.1' | head -1)"
+          test -n "$ROOT"
+          grep -R -q 'public static var onNativeTaskStatusChange' "$ROOT/ios"
+          grep -R -q 'public static var onNativeTaskProgressChange' "$ROOT/ios"
+          grep -R -q 'onNativeTaskStatusChange(task, statusUpdate)' "$ROOT/ios"
+          grep -R -q 'onNativeTaskProgressChange(task, progress)' "$ROOT/ios"
+      - name: Run iOS download regression matrix
+        run: >-
+          flutter test
+          test/core/services/ios_native_queue_snapshot_version_guard_test.dart
+          test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart
+          test/core/services/ios_native_queue_snapshot_ack_recovery_test.dart
+          test/core/services/ios_continued_processing_completion_guard_test.dart
+          test/core/services/ios_continued_processing_expiration_test.dart
+          test/core/services/ios_multipart_native_bridge_source_test.dart
+          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+      - name: Analyze download services
+        run: >-
+          flutter analyze --no-fatal-warnings --no-fatal-infos
+          lib/core/services/download_service.dart
+          lib/core/services/download_continued_processing_service.dart
+      - name: Diff sanity
+        run: git diff --check
+      - name: Commit dependency upgrade after GREEN
+        shell: bash
+        run: |
+          # Keep only the dependency files; codegen is verification-only.
+          git checkout -- . ':!pubspec.yaml' ':!pubspec.lock'
+          if git diff --quiet -- pubspec.yaml pubspec.lock; then
+            echo '9.6.1 already committed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pubspec.yaml pubspec.lock
+          git commit -m 'build(downloads): validate background_downloader 9.6.1 (DM-26)'
+          git pull --rebase origin plan/download-manager-reliability
+          git push origin HEAD:plan/download-manager-reliability
