@@ -80,7 +80,8 @@ jobs:
       - name: Diff sanity
         run: |
           git diff --check
-          test "$(git diff --name-only)" = "ios/Runner/DownloadNativeWaitingQueue.swift"
+          git diff --name-only
+          git diff --quiet -- ios/Runner/DownloadNativeWaitingQueue.swift && exit 1 || true
 
       - name: Build iOS without codesigning
         run: flutter build ios --debug --no-codesign --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
