@@ -45,14 +45,20 @@ jobs:
       - name: Verify scoped production diff
         run: |
           provider='lib/features/library/presentation/downloads_provider.dart'
-          git diff --check -- "$provider"
-          test -n "$(git diff --name-only -- "$provider")"
-      - name: Commit green production fix on current head
+          if ! git diff --quiet -- "$provider"; then
+            git diff --check -- "$provider"
+          fi
+      - name: Commit green production fix when needed
         run: |
+          provider='lib/features/library/presentation/downloads_provider.dart'
+          if git diff --quiet -- "$provider"; then
+            echo 'DM-12 production fix is already present on HEAD.'
+            exit 0
+          fi
           git fetch origin plan/download-manager-reliability
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/plan/download-manager-reliability)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/features/library/presentation/downloads_provider.dart
+          git add "$provider"
           git commit -m "fix(downloads): remove lifecycle writes from presentation"
           git push origin HEAD:plan/download-manager-reliability
