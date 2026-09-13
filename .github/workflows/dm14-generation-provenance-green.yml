@@ -96,6 +96,11 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add lib/core/services/persistent_parallel_download.dart
           git commit -m 'fix(downloads): harden manifest artifact provenance (DM-14)'
+          # flutter tooling may leave generated/untracked dirt. The verified
+          # production patch is already committed, so discard only remaining
+          # working-tree changes before rebasing onto a concurrently moved HEAD.
+          git reset --hard HEAD
+          git clean -fd
           git pull --rebase origin plan/download-manager-reliability
           flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
