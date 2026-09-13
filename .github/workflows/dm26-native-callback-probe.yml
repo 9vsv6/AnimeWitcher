@@ -62,9 +62,12 @@ jobs:
               "    ]\n"
               "    let knownExpected: Int64 = expectedCandidates.first(where: { $0 > 0 }) ?? -1\n"
           )
-          if old not in text:
+          if old in text:
+              path.write_text(text.replace(old, new, 1))
+          elif 'let expectedCandidates: [Int64]' in text:
+              print('DM-26 expected-byte typing already applied')
+          else:
               raise SystemExit('DM-26 expected-bytes target not found')
-          path.write_text(text.replace(old, new, 1))
 
       - name: DM-26 supported callback source guard
         run: flutter test test/core/services/ios_native_progress_callback_source_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
@@ -82,16 +85,24 @@ jobs:
         run: |
           git diff --check
           git diff --name-only
-          git diff --quiet -- ios/Runner/DownloadNativeWaitingQueue.swift && exit 1 || true
 
       - name: Build iOS without codesigning
         run: flutter build ios --debug --no-codesign --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
-      - name: Commit verified compile fix
+      - name: Publish verified compile fix if needed
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ios/Runner/DownloadNativeWaitingQueue.swift
-          git commit -m "fix(downloads): type DM-26 expected byte candidates"
-          git pull --rebase origin plan/download-manager-reliability
-          git push origin HEAD:plan/download-manager-reliability
+          if ! git diff --quiet -- ios/Runner/DownloadNativeWaitingQueue.swift; then
+            git add ios/Runner/DownloadNativeWaitingQueue.swift
+            git commit -m "fix(downloads): type DM-26 expected byte candidates"
+            # Flutter generation/build can modify platform registrants. They are
+            # unrelated to DM-26 and must not block rebasing the verified commit.
+            git restore --worktree .
+            git pull --rebase origin plan/download-manager-reliability
+            git push origin HEAD:plan/download-manager-reliability
+          else
+            git restore --worktree .
+            echo "DM-26 compile fix already present; verification-only run."
+          fi
