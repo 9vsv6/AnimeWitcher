@@ -71,6 +71,10 @@ jobs:
               text = text.replace(old, new, 1)
           elif 'startMultipartChild(waiter, on: session)' not in text:
               raise SystemExit('DM-22 source-test ordering anchor drifted')
+          text = text.replace(
+              "contains('claimedChildIds.contains($0.taskId)')",
+              "contains(r'claimedChildIds.contains($0.taskId)')",
+          )
           path.write_text(text)
           PY
 
