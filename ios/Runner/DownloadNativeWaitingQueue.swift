@@ -182,6 +182,7 @@ enum DownloadNativeWaitingQueue {
   }
 
   struct State: Codable {
+    var snapshotVersion: Int
     var maxConcurrent: Int
     var transferringTaskIds: [String]
     var pausedTaskIds: [String]
@@ -201,6 +202,7 @@ enum DownloadNativeWaitingQueue {
     var multipartPlans: [MultipartPlan]
 
     init(
+      snapshotVersion: Int = 0,
       maxConcurrent: Int,
       transferringTaskIds: [String],
       pausedTaskIds: [String],
@@ -219,6 +221,7 @@ enum DownloadNativeWaitingQueue {
       runningSamples: [String: RunningSample] = [:],
       multipartPlans: [MultipartPlan] = []
     ) {
+      self.snapshotVersion = snapshotVersion
       self.maxConcurrent = maxConcurrent
       self.transferringTaskIds = transferringTaskIds
       self.pausedTaskIds = pausedTaskIds
@@ -240,6 +243,7 @@ enum DownloadNativeWaitingQueue {
 
     init(from decoder: Decoder) throws {
       let container = try decoder.container(keyedBy: CodingKeys.self)
+      snapshotVersion = try container.decodeIfPresent(Int.self, forKey: .snapshotVersion) ?? 0
       maxConcurrent = try container.decodeIfPresent(Int.self, forKey: .maxConcurrent) ?? 1
       transferringTaskIds = try container.decodeIfPresent([String].self, forKey: .transferringTaskIds) ?? []
       pausedTaskIds = try container.decodeIfPresent([String].self, forKey: .pausedTaskIds) ?? []
@@ -340,10 +344,21 @@ enum DownloadNativeWaitingQueue {
   /// Dart persist is source of truth for waiters / paused / newly enqueued
   /// transfers, except: waiters already started natively stay transferring, and
   /// tasks native already completed cannot occupy a slot again.
-  static func persist(from arguments: [String: Any]) {
+  @discardableResult
+  static func persist(from arguments: [String: Any]) -> Int {
     lock.lock()
     defer { lock.unlock() }
     let current = loadLocked()
+    let snapshotVersion = intValue(arguments["snapshotVersion"])
+    if let snapshotVersion, snapshotVersion < current.snapshotVersion {
+      return current.snapshotVersion
+    }
+    if let snapshotVersion, snapshotVersion == current.snapshotVersion {
+      return current.snapshotVersion
+    }
+    // Legacy callers receive a native-allocated next version. Updated Dart
+    // always supplies its own monotonic version and receives it back as ack.
+    let acceptedVersion = snapshotVersion ?? (current.snapshotVersion + 1)
     let maxConcurrent = clamp(intValue(arguments["maxConcurrent"]) ?? 1)
     let dartTransferring = stringArray(arguments["transferringTaskIds"])
     let dartPaused = stringArray(arguments["pausedTaskIds"])
@@ -425,6 +440,7 @@ enum DownloadNativeWaitingQueue {
 
     saveLocked(
       State(
+        snapshotVersion: acceptedVersion,
         maxConcurrent: maxConcurrent,
         transferringTaskIds: transferring,
         pausedTaskIds: unique(dartPaused),
@@ -480,6 +496,7 @@ enum DownloadNativeWaitingQueue {
         multipartPlans: dartMultipartPlans
       )
     )
+    return acceptedVersion
   }
 
   static func load() -> State {

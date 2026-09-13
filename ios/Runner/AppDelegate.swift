@@ -205,9 +205,9 @@ import UserNotifications
       }
       if call.method == "persistNativeQueue" || call.method == "persistWaitingQueue" {
         let arguments = call.arguments as? [String: Any] ?? [:]
-        DownloadNativeWaitingQueue.persist(from: arguments)
+        let acceptedVersion = DownloadNativeWaitingQueue.persist(from: arguments)
         DownloadNativeWaitingQueue.promoteMultipartIfPossible()
-        result(true)
+        result(["acceptedVersion": acceptedVersion])
         return
       }
 

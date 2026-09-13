@@ -66,6 +66,7 @@ class DownloadContinuedProcessingService {
   final SystemDownloadChunkUpdate? onChunkUpdate;
   bool _handlerInstalled = false;
   bool _disposed = false;
+  int _nativeQueueSnapshotVersion = 0;
   DownloadGlobalHandlerLease? _handlerLease;
   static const Duration _updateSampleInterval = Duration(seconds: 1);
   Timer? _updateTimer;
@@ -196,7 +197,7 @@ class DownloadContinuedProcessingService {
 
   /// Persist full waiter payloads (url, headers, filename, directory, task JSON)
   /// so iOS can start the next file from Swift without Flutter.
-  Future<void> persistNativeQueue({
+  Future<int?> persistNativeQueue({
     required int maxConcurrent,
     required List<Map<String, Object>> waiters,
     required List<String> transferringTaskIds,
@@ -214,26 +215,61 @@ class DownloadContinuedProcessingService {
     int sessionCurrentIndex = 0,
     List<Map<String, Object>> multipartPlans = const [],
   }) async {
-    await _invoke('persistNativeQueue', <String, Object>{
-      'maxConcurrent': maxConcurrent,
-      'waiters': waiters,
-      'transferringTaskIds': transferringTaskIds,
-      'pausedTaskIds': pausedTaskIds,
-      'queueWaitingTaskIds': queueWaitingTaskIds,
-      'sessionTaskIds': sessionTaskIds,
-      'sessionCompletedCount': sessionCompletedCount,
-      'sessionBatchTotal': sessionBatchTotal,
-      'sessionCurrentTaskId': sessionCurrentTaskId.isEmpty
-          ? kDownloadSessionOverlayTaskId
-          : sessionCurrentTaskId,
-      'sessionDisplayName': sessionDisplayName,
-      'sessionProgress': sessionProgress,
-      'sessionTotalBytes': sessionTotalBytes,
-      'sessionTransferredBytes': sessionTransferredBytes,
-      'sessionSpeedBytesPerSecond': sessionSpeedBytesPerSecond,
-      'sessionCurrentIndex': sessionCurrentIndex,
-      'multipartPlans': multipartPlans,
-    });
+    int nextVersion() {
+      final wallClock = DateTime.now().microsecondsSinceEpoch;
+      final next = _nativeQueueSnapshotVersion + 1;
+      _nativeQueueSnapshotVersion = wallClock > next ? wallClock : next;
+      return _nativeQueueSnapshotVersion;
+    }
+
+    Future<int?> write(int snapshotVersion) async {
+      final ack = await _invokeForResult<Object?>(
+        'persistNativeQueue',
+        <String, Object>{
+          'snapshotVersion': snapshotVersion,
+          'maxConcurrent': maxConcurrent,
+          'waiters': waiters,
+          'transferringTaskIds': transferringTaskIds,
+          'pausedTaskIds': pausedTaskIds,
+          'queueWaitingTaskIds': queueWaitingTaskIds,
+          'sessionTaskIds': sessionTaskIds,
+          'sessionCompletedCount': sessionCompletedCount,
+          'sessionBatchTotal': sessionBatchTotal,
+          'sessionCurrentTaskId': sessionCurrentTaskId.isEmpty
+              ? kDownloadSessionOverlayTaskId
+              : sessionCurrentTaskId,
+          'sessionDisplayName': sessionDisplayName,
+          'sessionProgress': sessionProgress,
+          'sessionTotalBytes': sessionTotalBytes,
+          'sessionTransferredBytes': sessionTransferredBytes,
+          'sessionSpeedBytesPerSecond': sessionSpeedBytesPerSecond,
+          'sessionCurrentIndex': sessionCurrentIndex,
+          'multipartPlans': multipartPlans,
+        },
+      );
+      if (ack is! Map) return null;
+      final rawAcceptedVersion = ack['acceptedVersion'];
+      if (rawAcceptedVersion is! num) return null;
+      return rawAcceptedVersion.toInt();
+    }
+
+    final snapshotVersion = nextVersion();
+    final accepted = await write(snapshotVersion);
+    if (accepted == null) return null;
+    if (accepted > _nativeQueueSnapshotVersion) {
+      _nativeQueueSnapshotVersion = accepted;
+    }
+    if (accepted == snapshotVersion) return accepted;
+
+    // Native persisted a newer snapshot (for example while Flutter slept).
+    // Re-issue this *current* Dart projection above that durable high-water
+    // mark instead of silently treating the stale write as successful.
+    final retryVersion = nextVersion();
+    final retried = await write(retryVersion);
+    if (retried != null && retried > _nativeQueueSnapshotVersion) {
+      _nativeQueueSnapshotVersion = retried;
+    }
+    return retried == retryVersion ? retried : null;
   }
 
   Future<dynamic> _handleNativeCall(MethodCall call) async {
@@ -299,6 +335,32 @@ class DownloadContinuedProcessingService {
 
     await onSystemCancel(taskId);
     return true;
+  }
+
+  Future<T?> _invokeForResult<T>(
+    String method,
+    Map<String, Object> arguments,
+  ) async {
+    if (!_isAvailable || _disposed) return null;
+
+    try {
+      return await _channel.invokeMethod<T>(method, arguments);
+    } on MissingPluginException {
+      return null;
+    } on PlatformException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[DownloadContinuedProcessing] $method failed: '
+          '${error.code} ${error.message}',
+        );
+      }
+      return null;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[DownloadContinuedProcessing] $method failed: $error');
+      }
+      return null;
+    }
   }
 
   Future<void> _invoke(String method, Map<String, Object> arguments) async {
