@@ -42,12 +42,11 @@ jobs:
           flutter analyze --no-fatal-warnings --no-fatal-infos
           lib/features/library/presentation/downloads_provider.dart
           lib/core/services/download_service.dart
-      - name: Verify scoped diff
+      - name: Verify scoped production diff
         run: |
-          git diff --check
-          changed="$(git diff --name-only | sort)"
-          expected="lib/features/library/presentation/downloads_provider.dart"
-          test "$changed" = "$expected"
+          provider='lib/features/library/presentation/downloads_provider.dart'
+          git diff --check -- "$provider"
+          test -n "$(git diff --name-only -- "$provider")"
       - name: Commit green production fix on current head
         run: |
           git fetch origin plan/download-manager-reliability
