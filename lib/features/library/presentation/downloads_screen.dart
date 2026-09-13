@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/device_info_provider.dart';
@@ -47,9 +46,8 @@ class DownloadsScreen extends ConsumerWidget {
                   textDirection: titleDirection,
                   child: Text(
                     title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -60,36 +58,9 @@ class DownloadsScreen extends ConsumerWidget {
       );
     }
 
-    // AppBar chrome is LTR like المواسم / الإحصائيات. Tab swipe is RTL;
-    // card layouts stay LTR (poster left).
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          child: AppBar(
-            leading:
-                !appleUsesPersistentLiquidGlassHeader &&
-                    Navigator.of(context).canPop()
-                ? const AppleLiquidGlassBackButton()
-                : null,
-            centerTitle: false,
-            titleSpacing: 16,
-            title: ApplePersistentGlassHeaderScope(
-              enabled: Navigator.of(context).canPop(),
-              onBack: () => Navigator.of(context).maybePop(),
-              child: Align(
-                alignment: titleAlignment,
-                child: Directionality(
-                  textDirection: titleDirection,
-                  child: Text(title),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      body: const DownloadsTab(),
-    );
+    // On handsets the tab strip is the page header. Avoid repeating
+    // "Downloads" in a separate AppBar and keep the two tabs immediately
+    // below the system safe area.
+    return Scaffold(body: SafeArea(bottom: false, child: const DownloadsTab()));
   }
 }

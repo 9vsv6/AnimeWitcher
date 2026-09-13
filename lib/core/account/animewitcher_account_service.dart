@@ -38,8 +38,7 @@ class AnimeWitcherAccountService {
 
   static const String _sessionKey = 'animewitcher_account_session_v1';
   static const String _profileKey = 'animewitcher_account_profile_v1';
-  static const String _legacyLastSyncKey =
-      'animewitcher_account_last_sync_v1';
+  static const String _legacyLastSyncKey = 'animewitcher_account_last_sync_v1';
   static const String _pendingWatchedKey =
       'animewitcher_account_pending_watched_v1';
   static const String _pendingLibraryDeletesKey =
@@ -48,8 +47,7 @@ class AnimeWitcherAccountService {
       'animewitcher_account_pending_continue_deletes_v1';
   static const String _pendingLastWatchedDeletesKey =
       'animewitcher_account_pending_last_watched_deletes_v1';
-  static const String animeWitcherProvider =
-      'com.fares669.animewitcher.native';
+  static const String animeWitcherProvider = 'com.fares669.animewitcher.native';
 
   final StorageService _storage;
   final SecureTokenStorage _secureStorage;
@@ -68,8 +66,7 @@ class AnimeWitcherAccountService {
   Future<void>? _syncInFlight;
   DateTime? _lastVerificationEmailSentAt;
 
-  final Map<String, Set<String>> _watchedEpisodeCache =
-      <String, Set<String>>{};
+  final Map<String, Set<String>> _watchedEpisodeCache = <String, Set<String>>{};
   final Set<String> _ownedProfileDocumentIds = <String>{};
   final Set<String> _allEpisodesWatchedAnime = <String>{};
   final Set<String> _loadedWatchedAnime = <String>{};
@@ -83,10 +80,8 @@ class AnimeWitcherAccountService {
   Future<void> _pendingStorageWrite = Future<void>.value();
   int _mutationSerial = 0;
 
-  AnimeWitcherAccountSnapshot get snapshot => AnimeWitcherAccountSnapshot(
-    profile: _profile,
-    lastSyncAt: _lastSyncAt,
-  );
+  AnimeWitcherAccountSnapshot get snapshot =>
+      AnimeWitcherAccountSnapshot(profile: _profile, lastSyncAt: _lastSyncAt);
 
   bool get isSignedIn => _session != null && _profile != null;
   String? get accountUid => _profile?.uid;
@@ -256,8 +251,7 @@ class AnimeWitcherAccountService {
     if (sentAt != null) {
       final elapsed = DateTime.now().difference(sentAt);
       if (elapsed < cooldown) {
-        final secondsLeft =
-            ((cooldown - elapsed).inMilliseconds / 1000).ceil();
+        final secondsLeft = ((cooldown - elapsed).inMilliseconds / 1000).ceil();
         throw AnimeWitcherAccountException(
           'verification-cooldown',
           'Request a new verification email after $secondsLeft seconds.',
@@ -322,14 +316,6 @@ class AnimeWitcherAccountService {
           'The birth year must be between 1970 and 2020.',
         );
       }
-    }
-    final existingBirthYear = profile.birthYear?.trim() ?? '';
-    if (existingBirthYear.isNotEmpty &&
-        normalizedBirthYear != existingBirthYear) {
-      throw const AnimeWitcherAccountException(
-        'birth-year-locked',
-        'The birth year can only be set once.',
-      );
     }
     const maximumImageBytes = 10 * 1024 * 1024;
     if ((avatarBytes?.length ?? 0) > maximumImageBytes ||
@@ -478,7 +464,8 @@ class AnimeWitcherAccountService {
       );
     }
 
-    final usesPassword = profile.hasPasswordProvider ||
+    final usesPassword =
+        profile.hasPasswordProvider ||
         (profile.providerIds.isEmpty &&
             profile.signInMethod == AnimeWitcherSignInMethod.email);
     AnimeWitcherSession reauthenticated;
@@ -561,7 +548,8 @@ class AnimeWitcherAccountService {
       );
     }
 
-    final usesPassword = profile.hasPasswordProvider ||
+    final usesPassword =
+        profile.hasPasswordProvider ||
         (profile.providerIds.isEmpty &&
             profile.signInMethod == AnimeWitcherSignInMethod.email);
     AnimeWitcherSession reauthenticated;
@@ -651,7 +639,8 @@ class AnimeWitcherAccountService {
     try {
       session = await _auth.reauthenticateWithGoogleIdToken(googleToken);
     } on AnimeWitcherAccountException catch (error) {
-      if (error.code == 'invalid-session' || error.code == 'account-not-found') {
+      if (error.code == 'invalid-session' ||
+          error.code == 'account-not-found') {
         throw const AnimeWitcherAccountException(
           'wrong-google-account',
           'Choose the same Google account to confirm your identity.',
@@ -772,13 +761,15 @@ class AnimeWitcherAccountService {
       field: 'mal_id',
       values: ids.map((id) => '$id'),
     );
-    return documents.map((document) {
-      final hit = Map<String, dynamic>.from(document.fields);
-      hit.putIfAbsent('objectID', () => document.id);
-      hit.putIfAbsent('anime_id', () => document.id);
-      hit.putIfAbsent('path', () => document.id);
-      return hit;
-    }).toList(growable: false);
+    return documents
+        .map((document) {
+          final hit = Map<String, dynamic>.from(document.fields);
+          hit.putIfAbsent('objectID', () => document.id);
+          hit.putIfAbsent('anime_id', () => document.id);
+          hit.putIfAbsent('path', () => document.id);
+          return hit;
+        })
+        .toList(growable: false);
   }
 
   Future<AnimeWitcherCommentPage> loadComments(
@@ -1017,7 +1008,8 @@ class AnimeWitcherAccountService {
     List<AnimeWitcherComment> comments,
   ) async {
     final profile = _profile;
-    if (comments.isEmpty || profile == null || _session == null) return comments;
+    if (comments.isEmpty || profile == null || _session == null)
+      return comments;
     try {
       return await _authenticated((token) async {
         return Future.wait<AnimeWitcherComment>(
@@ -1253,7 +1245,10 @@ class AnimeWitcherAccountService {
       }
 
       var commentsLimit = 1;
-      final constants = await _firestore.getDocument('Settings/constants', token);
+      final constants = await _firestore.getDocument(
+        'Settings/constants',
+        token,
+      );
       final commentsSettingsRaw = constants?.fields['comments'];
       if (commentsSettingsRaw is Map) {
         final commentsSettings = commentsSettingsRaw.map<String, dynamic>(
@@ -1297,18 +1292,14 @@ class AnimeWitcherAccountService {
         }
       }
 
-      await _firestore.createDocument(
-        target.collectionPath,
-        <String, dynamic>{
-          'comment': comment,
-          'likes': 0,
-          'replies': 0,
-          'user_id': profile.documentId,
-          ...target.publishFields,
-          if (spoiler) 'spoiler': true,
-        },
-        token,
-      );
+      await _firestore.createDocument(target.collectionPath, <String, dynamic>{
+        'comment': comment,
+        'likes': 0,
+        'replies': 0,
+        'user_id': profile.documentId,
+        ...target.publishFields,
+        if (spoiler) 'spoiler': true,
+      }, token);
     });
   }
 
@@ -1595,11 +1586,11 @@ class AnimeWitcherAccountService {
 
     for (final recent in recentDocs) {
       if (!_isCurrentProfile(profile)) return;
-      final animeId =
-          _optionalString(recent.fields['anime_id']) ?? recent.id;
+      final animeId = _optionalString(recent.fields['anime_id']) ?? recent.id;
       if (animeId.isEmpty) continue;
       final watchedAt =
-          _dateValue(recent.fields['date']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          _dateValue(recent.fields['date']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
       final timestamp = watchedAt.millisecondsSinceEpoch;
       final local = localByAnime[animeId];
       if (local != null) {
@@ -1637,9 +1628,7 @@ class AnimeWitcherAccountService {
     }
   }
 
-  Future<void> recordLastWatched({
-    required MultimediaItem item,
-  }) async {
+  Future<void> recordLastWatched({required MultimediaItem item}) async {
     if (!isSignedIn) return;
     final animeId = AnimeWitcherSyncIds.animeIdFromUrl(item.url);
     final profile = _profile;
@@ -1782,8 +1771,7 @@ class AnimeWitcherAccountService {
           'users',
           fields,
           token,
-          documentId:
-              session.signInMethod == AnimeWitcherSignInMethod.email
+          documentId: session.signInMethod == AnimeWitcherSignInMethod.email
               ? session.uid
               : null,
           serverTimestampFields: const <String>{'registration_date'},
@@ -2003,11 +1991,7 @@ class AnimeWitcherAccountService {
       return await operation(session.idToken);
     } on AnimeWitcherAccountException catch (error) {
       if (error.code != 'invalid-session') rethrow;
-      final refreshed = await _refreshSession(
-        session,
-        generation,
-        force: true,
-      );
+      final refreshed = await _refreshSession(session, generation, force: true);
       if (!_isCurrentSession(session, generation)) {
         throw const AnimeWitcherAccountException(
           'session-changed',
@@ -2225,7 +2209,8 @@ class AnimeWitcherAccountService {
       }
 
       final remoteItem =
-          _itemFromCompact(remote.document.fields['animewitcher_item']) ?? local;
+          _itemFromCompact(remote.document.fields['animewitcher_item']) ??
+          local;
       await _storage.addToLibrary(
         remoteItem,
         category: remote.category?.storageKey,
@@ -2282,7 +2267,9 @@ class AnimeWitcherAccountService {
     final animeId = AnimeWitcherSyncIds.animeIdFromUrl(item.url);
     final profile = _profile;
     if (animeId == null || profile == null) return;
-    final primaryCategory = category == LibraryCategory.favorite ? null : category;
+    final primaryCategory = category == LibraryCategory.favorite
+        ? null
+        : category;
     final isFavorite = favorite ?? category == LibraryCategory.favorite;
     await _enqueueLibraryWrite(
       animeId,
@@ -2310,10 +2297,8 @@ class AnimeWitcherAccountService {
 
     if (category == null) {
       await _authenticated(
-        (token) => _firestore.deleteDocument(
-          '$root/user_anime/$animeId',
-          token,
-        ),
+        (token) =>
+            _firestore.deleteDocument('$root/user_anime/$animeId', token),
       );
     } else {
       await _authenticated(
@@ -2344,12 +2329,10 @@ class AnimeWitcherAccountService {
           serverTimestampFields: const <String>{'date'},
         ),
       );
-      final List<FirestoreDocument> legacyFavorites = knownFavorites ??
+      final List<FirestoreDocument> legacyFavorites =
+          knownFavorites ??
           await _authenticated<List<FirestoreDocument>>(
-            (token) => _firestore.listDocuments(
-              '$root/fav_anime',
-              token,
-            ),
+            (token) => _firestore.listDocuments('$root/fav_anime', token),
           );
       for (final document in legacyFavorites) {
         if (document.id == animeId ||
@@ -2413,9 +2396,7 @@ class AnimeWitcherAccountService {
     });
   }
 
-  Future<void> _flushPendingLibraryDeletes(
-    AnimeWitcherProfile profile,
-  ) async {
+  Future<void> _flushPendingLibraryDeletes(AnimeWitcherProfile profile) async {
     final pending = _readPendingMutations(_pendingLibraryDeletesKey);
     for (final entry in pending.entries) {
       if (!_isCurrentProfile(profile)) return;
@@ -2457,7 +2438,8 @@ class AnimeWitcherAccountService {
     List<FirestoreDocument>? known,
   }) async {
     if (!_isCurrentProfile(profile)) return;
-    final List<FirestoreDocument> docs = known ??
+    final List<FirestoreDocument> docs =
+        known ??
         await _authenticated<List<FirestoreDocument>>(
           (token) => _firestore.listDocuments(
             'users/${profile.documentId}/fav_anime',
@@ -2775,7 +2757,8 @@ class AnimeWitcherAccountService {
       remoteExists: remote != null,
       localUpdatedAt: local == null ? 0 : _intValue(local['timestamp']),
       remoteUpdatedAt:
-          _dateValue(remote?.fields['date_updated'])?.millisecondsSinceEpoch ?? 0,
+          _dateValue(remote?.fields['date_updated'])?.millisecondsSinceEpoch ??
+          0,
       syncedAccountUid: _optionalString(local?['animeWitcherSyncedUid']),
       localSyncedAt: _intValue(local?['animeWitcherSyncedAt']),
       currentAccountUid: profile.uid,
@@ -2921,7 +2904,8 @@ class AnimeWitcherAccountService {
               'users/${profile.documentId}/continue_watching/$animeId',
               <String, dynamic>{
                 'episode_id': episodeId ?? '',
-                'episode_name': episodeTitle ??
+                'episode_name':
+                    episodeTitle ??
                     (episodeNumber == null
                         ? ''
                         : formatEpisodeNumberLabel(
@@ -3029,23 +3013,18 @@ class AnimeWitcherAccountService {
     String animeId,
     AnimeWitcherProfile profile,
   ) {
-    return _enqueueProgressWrite(
-      animeId,
-      () {
-        if (!_isCurrentProfile(profile)) return Future<void>.value();
-        return _authenticated(
-          (token) => _firestore.deleteDocument(
-            'users/${profile.documentId}/continue_watching/$animeId',
-            token,
-          ),
-        );
-      },
-    );
+    return _enqueueProgressWrite(animeId, () {
+      if (!_isCurrentProfile(profile)) return Future<void>.value();
+      return _authenticated(
+        (token) => _firestore.deleteDocument(
+          'users/${profile.documentId}/continue_watching/$animeId',
+          token,
+        ),
+      );
+    });
   }
 
-  Future<void> _flushPendingContinueDeletes(
-    AnimeWitcherProfile profile,
-  ) async {
+  Future<void> _flushPendingContinueDeletes(AnimeWitcherProfile profile) async {
     final pending = _readPendingMutations(_pendingContinueDeletesKey);
     for (final entry in pending.entries) {
       if (!_isCurrentProfile(profile)) return;
@@ -3185,12 +3164,15 @@ class AnimeWitcherAccountService {
         break;
       }
     }
-    final sameEpisode = episodeUrl != null &&
+    final sameEpisode =
+        episodeUrl != null &&
         _optionalString(previousLocal?['lastEpisodeUrl']) == episodeUrl;
-    final previousPosition =
-        sameEpisode ? _intValue(previousLocal?['position']) : 0;
-    final previousDuration =
-        sameEpisode ? _intValue(previousLocal?['duration']) : 0;
+    final previousPosition = sameEpisode
+        ? _intValue(previousLocal?['position'])
+        : 0;
+    final previousDuration = sameEpisode
+        ? _intValue(previousLocal?['duration'])
+        : 0;
 
     var stopTimePosition = 0;
     if (episodeId != null) {
@@ -3208,8 +3190,9 @@ class AnimeWitcherAccountService {
     final remoteProgress = _intValue(fields['progress']).clamp(0, 100);
     var duration = _intValue(fields['duration']);
     if (duration <= 0 && position > 0 && remoteProgress > 0) {
-      final watchedForEstimate =
-          stopTimePosition > 0 ? stopTimePosition + 2000 : position;
+      final watchedForEstimate = stopTimePosition > 0
+          ? stopTimePosition + 2000
+          : position;
       if (remoteProgress <= 2 && previousDuration > 0) {
         duration = previousDuration;
       } else if (remoteProgress >= 100) {
@@ -3229,7 +3212,8 @@ class AnimeWitcherAccountService {
       position = previousPosition;
     }
     final syncedAt =
-        remoteDate?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
+        remoteDate?.millisecondsSinceEpoch ??
+        DateTime.now().millisecondsSinceEpoch;
     await _storage.saveContinueWatchingProgress(
       item,
       position,
@@ -3269,7 +3253,8 @@ class AnimeWitcherAccountService {
     final source = document.fields;
     final details = _map(source['details']);
     final poster = _map(source['poster']);
-    final title = _optionalString(source['name']) ??
+    final title =
+        _optionalString(source['name']) ??
         _optionalString(source['english_title']) ??
         animeId;
     final posterUrl = _firstString(<dynamic>[
@@ -3284,18 +3269,20 @@ class AnimeWitcherAccountService {
       source['poster_uri'],
     ]);
     final rawType = _firstString(<dynamic>[source['type'], details['type']]);
-    final isMovie = rawType.toLowerCase().contains('movie') ||
-        rawType.contains('فيلم');
+    final isMovie =
+        rawType.toLowerCase().contains('movie') || rawType.contains('فيلم');
     return MultimediaItem(
       title: title,
       url: AnimeWitcherSyncIds.mainUrl(animeId),
       posterUrl: posterUrl,
       bannerUrl: banner.isEmpty ? posterUrl : banner,
-      description: _optionalString(source['story']) ??
+      description:
+          _optionalString(source['story']) ??
           _optionalString(source['description']) ??
           _optionalString(details['story']),
-      contentType:
-          isMovie ? MultimediaContentType.movie : MultimediaContentType.anime,
+      contentType: isMovie
+          ? MultimediaContentType.movie
+          : MultimediaContentType.anime,
       provider: animeWitcherProvider,
       year: _yearValue(details['year'] ?? source['year']),
       catalogType: rawType.isEmpty ? null : rawType,
@@ -3393,10 +3380,7 @@ class AnimeWitcherAccountService {
         current.uid == profile.uid;
   }
 
-  bool _isCurrentSession(
-    AnimeWitcherSession expected,
-    int generation,
-  ) {
+  bool _isCurrentSession(AnimeWitcherSession expected, int generation) {
     final current = _session;
     return generation == _sessionGeneration &&
         current != null &&
@@ -3504,10 +3488,7 @@ DateTime? _dateValue(dynamic raw) {
 int? _cloudEpisodeNumber(Map<String, dynamic> fields) {
   final explicit = _nullableInt(fields['episode_number']);
   if (explicit != null && explicit > 0) return explicit;
-  for (final raw in <dynamic>[
-    fields['episode_id'],
-    fields['episode_name'],
-  ]) {
+  for (final raw in <dynamic>[fields['episode_id'], fields['episode_name']]) {
     final label = _optionalString(raw);
     if (label == null) continue;
     final normalized = label

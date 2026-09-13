@@ -1,4 +1,5 @@
 import '../../../core/utils/artwork_quality.dart';
+
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -33,9 +34,6 @@ class _AnimeWitcherProfileEditScreenState
   Uint8List? _coverBytes;
   bool _saving = false;
   bool _preparingImage = false;
-
-  bool get _birthYearLocked =>
-      (widget.profile.birthYear?.trim().isNotEmpty ?? false);
 
   @override
   void initState() {
@@ -127,18 +125,11 @@ class _AnimeWitcherProfileEditScreenState
                   arabic: 'سنة الميلاد',
                 ),
                 keyboardType: TextInputType.number,
-                readOnly: _birthYearLocked,
-                helperText: _birthYearLocked
-                    ? appText(
-                        context,
-                        english: 'AnimeWitcher allows this to be set once.',
-                        arabic: 'يسمح AnimeWitcher بحفظها مرة واحدة فقط.',
-                      )
-                    : appText(
-                        context,
-                        english: 'Optional · 1970–2020',
-                        arabic: 'اختياري · 1970–2020',
-                      ),
+                helperText: appText(
+                  context,
+                  english: 'Optional · 1970–2020',
+                  arabic: 'اختياري · 1970–2020',
+                ),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) {
                   if (!busy) _save();
@@ -676,9 +667,8 @@ class _AnimeWitcherChangePasswordScreenState
             english: 'Use at least 6 characters.',
             arabic: 'استخدم 6 أحرف على الأقل.',
           ),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: LayoutConstants.spacingLg),
         FilledButton.icon(

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:background_downloader/background_downloader.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:animewitcher/core/utils/image_fallbacks.dart';
 import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:animewitcher/core/utils/episode_order.dart';
 import 'package:animewitcher/core/providers/episode_sort_provider.dart';
+
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/services/download_service.dart';
 import '../../../../core/services/download_concurrency.dart';
@@ -60,10 +62,6 @@ class _DownloadsTabState extends ConsumerState<DownloadsTab>
 
     return downloadsAsync.when(
       data: (downloads) {
-        if (downloads.isEmpty) {
-          return _DownloadsEmptyState(message: l10n.noDownloadsYet);
-        }
-
         // Collapse leftover complete records for the same episode/file so a
         // re-download cannot render الحلقة 9 twice.
         final visibleDownloads = collapseDuplicateDownloads(downloads).visible;

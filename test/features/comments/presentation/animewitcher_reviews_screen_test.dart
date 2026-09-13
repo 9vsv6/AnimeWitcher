@@ -20,16 +20,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../support/test_fonts.dart';
+
 import 'package:animewitcher/core/utils/window_controls_inset.dart';
+
 import '../../../support/debug_shots.dart';
 
 class _FakeAccountService extends AnimeWitcherAccountService {
-  _FakeAccountService({
-    required this.reviews,
-  }) : super(
-         storage: StorageService(),
-         secureStorage: SecureTokenStorage(StorageService()),
-       );
+  _FakeAccountService({required this.reviews})
+    : super(
+        storage: StorageService(),
+        secureStorage: SecureTokenStorage(StorageService()),
+      );
 
   final List<AnimeWitcherComment> reviews;
   final bool signedIn = true;
@@ -485,16 +486,16 @@ void main() {
       );
 
       expect(arabic, hasLength(1));
-      expect(arabic.single.width, 150);
+      expect(arabic.single.width, AnimeWitcherCommentSortControl.size);
       expect(arabic.single.systemImage, 'clock');
       expect(arabic.single.icon, Icons.schedule_rounded);
-      expect(arabic.single.title, 'الأحدث');
+      expect(arabic.single.title, isNull);
       expect(arabic.single.menuItems, hasLength(3));
 
       expect(english, hasLength(1));
-      expect(english.single.width, 140);
+      expect(english.single.width, AnimeWitcherCommentSortControl.size);
       expect(english.single.systemImage, 'clock.arrow.circlepath');
-      expect(english.single.title, 'Oldest');
+      expect(english.single.title, isNull);
     },
   );
 
@@ -643,9 +644,8 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/$name.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/$name.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
 
@@ -715,9 +715,8 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/account_my_reviews_sort_menu.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/account_my_reviews_sort_menu.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
     });
 
     const iosKey = ValueKey<String>('sort_control_ios_trailing_fallback');
@@ -788,9 +787,8 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/sort_control_ios_trailing_fallback.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/sort_control_ios_trailing_fallback.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
     });
 
     const editShot = ValueKey('review_edit_dialog');
@@ -815,9 +813,8 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/review_edit_dialog.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/review_edit_dialog.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
 }
