@@ -121,15 +121,52 @@ Future<File?> resolveDownloadFileToDelete({
   return pathFile;
 }
 
+bool _downloadPathSegmentEquals(String a, String b) =>
+    Platform.isWindows ? a.toLowerCase() == b.toLowerCase() : a == b;
+
+String _normalizedAbsoluteDownloadPath(String value) =>
+    p.normalize(p.absolute(value));
+
+String? _appDownloadsRootForPath(String value) {
+  final normalized = _normalizedAbsoluteDownloadPath(value);
+  final segments = p.split(normalized);
+  for (var i = 0; i + 1 < segments.length; i++) {
+    if (_downloadPathSegmentEquals(segments[i], 'AnimeWitcher') &&
+        _downloadPathSegmentEquals(segments[i + 1], 'Downloads')) {
+      return p.normalize(p.joinAll(segments.take(i + 2)));
+    }
+  }
+  return null;
+}
+
 bool pathIsInsideAppDownloads(String path) {
-  final normalized = path.replaceAll('\\', '/');
-  return normalized.contains(kAppDownloadsRootMarker);
+  final normalized = _normalizedAbsoluteDownloadPath(path);
+  final root = _appDownloadsRootForPath(normalized);
+  if (root == null) return false;
+  return normalized == root || p.isWithin(root, normalized);
 }
 
 bool pathIsAppDownloadsRoot(String path) {
-  final normalized = path.replaceAll('\\', '/');
-  return normalized.endsWith(kAppDownloadsRootMarker) ||
-      normalized.endsWith('$kAppDownloadsRootMarker/');
+  final normalized = _normalizedAbsoluteDownloadPath(path);
+  final root = _appDownloadsRootForPath(normalized);
+  return root != null && normalized == root;
+}
+
+Future<bool> _resolvesInsideAppDownloads(Directory directory) async {
+  final rootPath = _appDownloadsRootForPath(directory.path);
+  if (rootPath == null) return false;
+  try {
+    final canonicalRoot = p.normalize(
+      await Directory(rootPath).resolveSymbolicLinks(),
+    );
+    final canonicalDirectory = p.normalize(
+      await directory.resolveSymbolicLinks(),
+    );
+    return canonicalDirectory == canonicalRoot ||
+        p.isWithin(canonicalRoot, canonicalDirectory);
+  } catch (_) {
+    return false;
+  }
 }
 
 /// The `<title>` directory under `AnimeWitcher/Downloads`, or null when the
@@ -174,11 +211,11 @@ Future<void> _deleteEmptyAncestorsUpTo(
   Directory stopAt,
 ) async {
   var dir = start;
-  final stop = stopAt.path.replaceAll('\\', '/');
+  final stop = _normalizedAbsoluteDownloadPath(stopAt.path);
   while (true) {
-    final current = dir.path.replaceAll('\\', '/');
+    final current = _normalizedAbsoluteDownloadPath(dir.path);
     if (current == stop) return;
-    if (!current.startsWith(stop)) return;
+    if (!p.isWithin(stop, current)) return;
     if (!await dir.exists()) {
       dir = dir.parent;
       continue;
@@ -191,6 +228,31 @@ Future<void> _deleteEmptyAncestorsUpTo(
   }
 }
 
+bool _isKnownOwnedDownloadArtifact(File file) {
+  final lower = p.basename(file.path).toLowerCase();
+  if (lower == 'manifest.json' || lower == 'manifest.json.tmp') return true;
+  if (lower.endsWith('.assembling')) return true;
+  return kDownloadTempSuffixes.any(lower.endsWith);
+}
+
+Future<bool> _directoryContainsOnlyKnownDownloadArtifacts(
+  Directory directory,
+) async {
+  if (!await directory.exists()) return true;
+  await for (final entity in directory.list(followLinks: false)) {
+    if (entity is Link) return false;
+    if (entity is File) {
+      if (!_isKnownOwnedDownloadArtifact(entity)) return false;
+      continue;
+    }
+    if (entity is Directory &&
+        !await _directoryContainsOnlyKnownDownloadArtifacts(entity)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// After a video is gone: wipe the series folder when no videos remain.
 ///
 /// Leftover `.part` files, thumbs, and empty Season dirs must not keep
@@ -199,12 +261,17 @@ Future<void> deleteSeriesFolderIfNoVideosRemain(File deletedFile) async {
   final seriesDir = seriesFolderForDownloadedFile(deletedFile);
   if (seriesDir == null) return;
   if (!await seriesDir.exists()) return;
+  if (!await _resolvesInsideAppDownloads(seriesDir)) return;
 
   if (await directoryContainsVideoFiles(seriesDir)) {
     await _deleteEmptyAncestorsUpTo(deletedFile.parent, seriesDir);
     return;
   }
 
+  if (!await _directoryContainsOnlyKnownDownloadArtifacts(seriesDir)) {
+    await _deleteEmptyAncestorsUpTo(deletedFile.parent, seriesDir);
+    return;
+  }
   await seriesDir.delete(recursive: true);
 }
 
