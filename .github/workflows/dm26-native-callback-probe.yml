@@ -42,7 +42,7 @@ jobs:
           test -f "$plugin"
           grep -Fq 'public static var onNativeTaskProgressChange: ((Task, Double) -> Void)?' "$plugin"
 
-      - name: Apply DM-26 optional expected-bytes compile fix
+      - name: Apply DM-26 expected-bytes type fix
         shell: python3 {0}
         run: |
           from pathlib import Path
@@ -54,12 +54,13 @@ jobs:
               "      .first(where: { $0 > 0 }) ?? -1\n"
           )
           new = (
-              "    // Some plugin-side byte metadata is optional. Flatten the candidate list\n"
-              "    // before arithmetic so the supported callback compiles against 9.6.1\n"
-              "    // without inventing a byte total when none is known.\n"
-              "    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]\n"
-              "      .compactMap { $0 }\n"
-              "      .first(where: { $0 > 0 }) ?? -1\n"
+              "    // Keep expected-byte candidates concretely typed. Swift otherwise infers\n"
+              "    // an optional element through first(where:) in this callback context,\n"
+              "    // leaking Int64? into all byte arithmetic.\n"
+              "    let expectedCandidates: [Int64] = [\n"
+              "      sample.expected, waiterExpected, multipartExpected, sessionExpected\n"
+              "    ]\n"
+              "    let knownExpected: Int64 = expectedCandidates.first(where: { $0 > 0 }) ?? -1\n"
           )
           if old not in text:
               raise SystemExit('DM-26 expected-bytes target not found')
@@ -91,6 +92,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ios/Runner/DownloadNativeWaitingQueue.swift
-          git commit -m "fix(downloads): unwrap DM-26 expected byte candidates"
+          git commit -m "fix(downloads): type DM-26 expected byte candidates"
           git pull --rebase origin plan/download-manager-reliability
           git push origin HEAD:plan/download-manager-reliability
