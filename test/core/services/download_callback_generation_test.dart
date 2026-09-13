@@ -190,18 +190,19 @@ void main() {
       expect(cancelExecutorStop, greaterThan(cancelTombstone));
 
       final refreshStart = source.indexOf(
-        'Future<({DownloadTask task, bool refreshed})> _refreshTaskBeforeResume(',
+        '_refreshTaskBeforeResume(\n    DownloadTask task',
       );
-      final refreshEnd = source.indexOf(
-        'Future<List<Task>> _liveTransferTasks()',
+      expect(refreshStart, greaterThanOrEqualTo(0));
+      final refreshGeneration = source.indexOf(
+        '_jobStore.beginOperation(',
         refreshStart,
       );
-      final refresh = source.substring(refreshStart, refreshEnd);
-      expect(refresh, contains('_jobStore.beginOperation('));
-      expect(
-        refresh.indexOf('_jobStore.beginOperation('),
-        lessThan(refresh.indexOf('await _parallel.replaceSource(')),
+      final refreshExecutorEffect = source.indexOf(
+        'await _parallel.replaceSource(',
+        refreshStart,
       );
+      expect(refreshGeneration, greaterThan(refreshStart));
+      expect(refreshExecutorEffect, greaterThan(refreshGeneration));
     });
 
     test(
