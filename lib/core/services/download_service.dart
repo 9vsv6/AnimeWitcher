@@ -2933,7 +2933,7 @@ class DownloadService {
         });
       }
     }
-    await _continuedProcessing.persistNativeQueue(
+    final acceptedVersion = await _continuedProcessing.persistNativeQueue(
       maxConcurrent: max,
       waiters: waiters,
       transferringTaskIds: transferring,
@@ -2951,6 +2951,13 @@ class DownloadService {
       sessionCurrentIndex: overlay?.currentIndex ?? 0,
       multipartPlans: multipartPlans,
     );
+    if (acceptedVersion == null) {
+      diagnosticLog.record('nativeQueue.checkpointUnacknowledged', {
+        'waiters': waiters.length,
+        'transferring': transferring.length,
+      });
+      throw StateError('Native waiting queue checkpoint was not acknowledged');
+    }
   }
 
   String? _notificationConfigJson(DownloadTask task) {
