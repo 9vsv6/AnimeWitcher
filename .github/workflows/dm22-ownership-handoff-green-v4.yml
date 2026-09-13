@@ -57,15 +57,20 @@ jobs:
       - name: Format Dart changes
         run: dart format lib/core/services/persistent_parallel_download.dart lib/core/services/download_service.dart test/core/services/ios_multipart_ownership_handoff_source_test.dart
 
-      - name: Run DM-22 focused acceptance
-        run: >-
-          flutter test
-          test/core/services/ios_multipart_ownership_handoff_source_test.dart
-          test/core/services/ios_multipart_native_bridge_source_test.dart
-          test/core/services/persistent_parallel_download_test.dart
-          test/core/services/ios_native_queue_snapshot_version_guard_test.dart
-          test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart
-          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+      - name: DM-22 ownership handoff source acceptance
+        run: flutter test test/core/services/ios_multipart_ownership_handoff_source_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: DM-22 native bridge regression
+        run: flutter test test/core/services/ios_multipart_native_bridge_source_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: DM-22 persistent multipart regression
+        run: flutter test test/core/services/persistent_parallel_download_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: DM-22 native snapshot regression
+        run: flutter test test/core/services/ios_native_queue_snapshot_version_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: DM-22 checkpoint ack regression
+        run: flutter test test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
       - name: Analyze touched Dart code
         run: >-
