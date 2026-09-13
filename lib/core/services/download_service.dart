@@ -2364,6 +2364,18 @@ class DownloadService {
         );
       } catch (_) {}
       final restored = job.restoreTaskSnapshot();
+      if (restored is ParallelDownloadTask) {
+        try {
+          // The canceled tombstone plus notOwned runtime state proves the
+          // logical attempt is obsolete. Let the multipart owner settle its
+          // exact child identities before deleting its manifest/part files.
+          await _parallel.cancel(restored);
+        } catch (_) {
+          // Preserve both the tombstone and artifacts when child ownership
+          // cannot be settled. A later recovery pass can retry safely.
+          continue;
+        }
+      }
       if (restored != null) {
         try {
           final path = await restored.filePath();
