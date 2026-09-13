@@ -1,4 +1,4 @@
-name: DM-26 native callback probe
+name: DM-26 supported callback verifier
 
 on:
   push:
@@ -6,11 +6,13 @@ on:
       - plan/download-manager-reliability
     paths:
       - .github/workflows/dm26-native-callback-probe.yml
+      - ios/Runner/DownloadNativeWaitingQueue.swift
+      - test/core/services/ios_native_progress_callback_source_test.dart
 
 jobs:
-  probe:
+  verify:
     runs-on: macos-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
@@ -18,29 +20,32 @@ jobs:
           channel: stable
           flutter-version: 3.47.1
           cache: true
+
       - name: Resolve locked dependencies
         run: flutter pub get
-      - name: Print supported native callback signatures
+
+      - name: Verify locked plugin callback contract
         shell: bash
         run: |
           set -euo pipefail
-          plugin="$HOME/.pub-cache/hosted/pub.dev/background_downloader-9.6.1"
-          test -d "$plugin"
-          grep -R -n -C 8 \
-            -e 'onNativeTaskStatusChange' \
-            -e 'onNativeTaskProgressChange' \
-            "$plugin/ios" || true
-          echo '--- Task identity fields ---'
-          grep -R -n -C 5 \
-            -e 'struct Task' \
-            -e 'class Task' \
-            -e 'let taskId' \
-            -e 'var taskId' \
-            "$plugin/ios/background_downloader/Sources/background_downloader" | head -n 220 || true
-          echo '--- URLSession access seams ---'
-          grep -R -n -C 5 \
-            -e 'static.*urlSession' \
-            -e 'var urlSession' \
-            -e 'func getTask' \
-            -e 'getAllTasks' \
-            "$plugin/ios/background_downloader/Sources/background_downloader" | head -n 260 || true
+          plugin="$HOME/.pub-cache/hosted/pub.dev/background_downloader-9.6.1/ios/background_downloader/Sources/background_downloader/BDPlugin.swift"
+          test -f "$plugin"
+          grep -Fq 'public static var onNativeTaskProgressChange: ((Task, Double) -> Void)?' "$plugin"
+
+      - name: DM-26 supported callback source guard
+        run: flutter test test/core/services/ios_native_progress_callback_source_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Native queue regression guards
+        run: |
+          flutter test test/core/services/ios_multipart_native_bridge_source_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/ios_native_queue_snapshot_version_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter test test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Persistent multipart regression
+        run: flutter test test/core/services/persistent_parallel_download_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Diff sanity
+        run: git diff --check
+
+      - name: Build iOS without codesigning
+        run: flutter build ios --debug --no-codesign --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
