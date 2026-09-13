@@ -46,15 +46,28 @@ jobs:
           ! grep -q '_directoryContainsOnlyKnownDownloadArtifacts' lib/core/utils/download_cleanup.dart
           grep -q 'resolvesInsideAppDownloads' lib/core/utils/download_cleanup.dart
 
-      - name: Verify DM-14 GREEN slice
+      - name: Verify canonical cleanup safety
         run: |
           flutter test test/core/utils/download_cleanup_canonical_safety_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify resume artifact discovery
+        run: |
           flutter test test/core/utils/download_resume_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify manifest recovery discovery
+        run: |
           flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify delete tombstone ownership
+        run: |
           flutter test test/core/services/download_delete_tombstone_guard_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-          flutter analyze --no-fatal-warnings --no-fatal-infos
-          git diff --check
+
+      - name: Verify analyzer
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Verify clean diff
+        run: git diff --check
