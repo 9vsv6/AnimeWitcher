@@ -1,4 +1,4 @@
-name: DM-14 final acceptance
+name: DM-15 snapshot version GREEN
 
 on:
   push:
@@ -11,9 +11,9 @@ permissions:
   contents: write
 
 jobs:
-  accept:
+  snapshot-version:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with:
@@ -29,38 +29,40 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify canonical containment and orphan preservation
+      - name: Confirm DM-15 RED before production patch
         run: |
-          flutter test test/core/utils/download_cleanup_canonical_safety_test.dart test/core/utils/download_resume_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          if flutter test test/core/services/ios_native_queue_snapshot_version_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key; then
+            echo "DM-15 RED unexpectedly passed before production patch"
+            exit 1
+          fi
+          echo "DM-15 RED reproduced"
 
-      - name: Verify manifest provenance and canceled-generation cleanup
-        run: |
-          flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart test/core/services/download_delete_tombstone_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+      - name: Apply versioned native queue checkpoint patch
+        run: python3 tool/dm15_apply_snapshot_version.py
 
-      - name: Verify generated sources and analyzer
+      - name: Verify DM-15 GREEN contract
         run: |
+          dart format lib/core/services/download_continued_processing_service.dart test/core/services/ios_native_queue_snapshot_version_guard_test.dart
+          flutter test test/core/services/ios_native_queue_snapshot_version_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
           dart run build_runner build --delete-conflicting-outputs
-          flutter analyze --no-fatal-warnings --no-fatal-infos lib/core/utils/download_cleanup.dart lib/core/utils/download_resume.dart lib/core/services/persistent_parallel_download.dart lib/core/services/download_service.dart test/core/utils/download_cleanup_canonical_safety_test.dart test/core/utils/download_resume_test.dart test/core/services/persistent_parallel_download_manifest_discovery_test.dart test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart test/core/services/download_delete_tombstone_guard_test.dart
+          flutter analyze --no-fatal-warnings --no-fatal-infos lib/core/services/download_continued_processing_service.dart test/core/services/ios_native_queue_snapshot_version_guard_test.dart
           git diff --check
 
-      - name: Rebase and reverify before closing DM-14
+      - name: Commit, rebase and reverify version contract
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/core/services/download_continued_processing_service.dart ios/Runner/DownloadNativeWaitingQueue.swift ios/Runner/AppDelegate.swift test/core/services/ios_native_queue_snapshot_version_guard_test.dart
+          if git diff --cached --quiet; then
+            echo "DM-15 snapshot version patch already present"
+            exit 0
+          fi
+          git commit -m "fix(downloads): version and acknowledge iOS queue snapshots (DM-15)"
           git reset --hard HEAD
           git clean -fd
           git pull --rebase origin plan/download-manager-reliability
           flutter pub get
-          flutter test test/core/utils/download_cleanup_canonical_safety_test.dart test/core/utils/download_resume_test.dart test/core/services/persistent_parallel_download_manifest_discovery_test.dart test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart test/core/services/download_delete_tombstone_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-
-      - name: Mark DM-14 complete
-        run: |
-          if grep -q '^- \[x\] \*\*DM-14' DOWNLOAD_MANAGER_PLAN.md; then
-            echo "DM-14 already complete"
-            exit 0
-          fi
-          sed -i 's/^- \[ \] \*\*DM-14/- [x] **DM-14/' DOWNLOAD_MANAGER_PLAN.md
-          grep -q '^- \[x\] \*\*DM-14' DOWNLOAD_MANAGER_PLAN.md
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add DOWNLOAD_MANAGER_PLAN.md
-          git commit -m "docs(downloads): mark DM-14 complete after acceptance"
+          flutter test test/core/services/ios_native_queue_snapshot_version_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          dart run build_runner build --delete-conflicting-outputs
+          flutter analyze --no-fatal-warnings --no-fatal-infos lib/core/services/download_continued_processing_service.dart test/core/services/ios_native_queue_snapshot_version_guard_test.dart
           git push origin HEAD:plan/download-manager-reliability
