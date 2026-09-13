@@ -192,7 +192,7 @@
   - **Verification/testing:** background during selection; foreground before resume; stale snapshot after claim; delayed first byte; duplicate snapshot; suspension; claim expiry/requeue; exactly one writer.
   - **Dependencies:** DM-01, DM-10, DM-15.
 
-- [ ] **DM-23 — Require old-owner settlement before multipart adoption, recycle, assembly, or relaunch**
+- [x] **DM-23 — Require old-owner settlement before multipart adoption, recycle, assembly, or relaunch**
   - **Problem:** exact-size adoption and tail recovery may ignore failed pause/cancel and continue as if ownership ended.
   - **Root cause:** byte-integrity proof and exclusive-ownership proof are conflated.
   - **Severity / priority:** **P0 / Critical.**
@@ -200,6 +200,8 @@
   - **Proposed fix:** track `bytesVerified` separately from `ownerSettled`. Assembly, delete, backup restore and relaunch require settled ownership; otherwise keep a generation-fenced settling state and reconcile.
   - **Verification/testing:** exact-size child + failed pause + live writer; failed tail cancel; old writer writes after recycle attempt; callback lost; process restart while settling; no part reuse/deletion before settlement.
   - **Dependencies:** DM-19, DM-10.
+  - **Implementation notes (2026-09-13):** Multipart exact-size adoption now fails closed when pausing the previous native owner fails; tail recovery keeps the same owner fenced instead of adopting/relaunching, and tail recycle cancels successfully before releasing the child reservation or restoring/reusing its Range.
+  - **Verification passed:** 3 owner-settlement guard cases, 15 multipart/cancel regressions, production-slice analyzer, and the materialization/push verifier all passed before this checklist update.
 
 - [x] **DM-30 — Preserve ownership evidence until cancel is positively settled**
   - **Problem:** single transport detaches Transfer tracking even when `cancel()` returns false; service and multipart cancellation paths can ignore cancel failure and delete DB records anyway; UI may skip cancellation based on status.
