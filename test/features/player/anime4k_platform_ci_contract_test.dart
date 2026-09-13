@@ -49,8 +49,7 @@ void main() {
       expect(
         evidence,
         contains('Do not claim performance completion'),
-        reason:
-            'The template must fail closed until real device evidence exists.',
+        reason: 'The template must fail closed until real device evidence exists.',
       );
     });
 
@@ -61,24 +60,15 @@ void main() {
       expect(plan, contains('Eco/Auto'));
       expect(plan, contains('MetalFX'));
       expect(plan, contains('Performance log'));
-      expect(
-        plan,
-        isNot(contains('Expose a persisted experimental MetalFX toggle')),
-      );
-      expect(
-        plan,
-        isNot(contains('Apple Eco/Auto is a separate Apple-only mode')),
-      );
+      expect(plan, isNot(contains('Expose a persisted experimental MetalFX toggle')));
+      expect(plan, isNot(contains('Apple Eco/Auto is a separate Apple-only mode')));
     });
 
-    test(
-      'temporary one-shot preview workflow is removed before main merge',
-      () {
-        expect(
-          File('.github/workflows/ios-preview-once.yml').existsSync(),
-          isFalse,
-        );
-      },
-    );
+    test('temporary one-shot preview workflow is removed before main merge', () {
+      expect(
+        File('.github/workflows/ios-preview-once.yml').existsSync(),
+        isFalse,
+      );
+    });
   });
 }

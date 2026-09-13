@@ -46,8 +46,9 @@ class DownloadsScreen extends ConsumerWidget {
                   textDirection: titleDirection,
                   child: Text(
                     title,
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -61,6 +62,11 @@ class DownloadsScreen extends ConsumerWidget {
     // On handsets the tab strip is the page header. Avoid repeating
     // "Downloads" in a separate AppBar and keep the two tabs immediately
     // below the system safe area.
-    return Scaffold(body: SafeArea(bottom: false, child: const DownloadsTab()));
+    return Scaffold(
+      body: SafeArea(
+        bottom: false,
+        child: const DownloadsTab(),
+      ),
+    );
   }
 }

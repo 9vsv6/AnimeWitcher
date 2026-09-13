@@ -1,5 +1,4 @@
 import '../../../core/utils/artwork_quality.dart';
-
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -667,8 +666,9 @@ class _AnimeWitcherChangePasswordScreenState
             english: 'Use at least 6 characters.',
             arabic: 'استخدم 6 أحرف على الأقل.',
           ),
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: LayoutConstants.spacingLg),
         FilledButton.icon(
