@@ -31,55 +31,61 @@ void main() {
         .setMockMethodCallHandler(_channel, null);
   });
 
-  test('DM-15 retries a lost acknowledgement with the exact same version', () async {
-    final seenVersions = <int>[];
-    var calls = 0;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_channel, (call) async {
-          if (call.method != 'persistNativeQueue') return null;
-          final args = Map<Object?, Object?>.from(call.arguments as Map);
-          final version = args['snapshotVersion']! as int;
-          seenVersions.add(version);
-          calls++;
-          if (calls == 1) {
-            throw PlatformException(code: 'ACK_LOST');
-          }
-          return <String, Object>{'acceptedVersion': version};
-        });
+  test(
+    'DM-15 retries a lost acknowledgement with the exact same version',
+    () async {
+      final seenVersions = <int>[];
+      var calls = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_channel, (call) async {
+            if (call.method != 'persistNativeQueue') return null;
+            final args = Map<Object?, Object?>.from(call.arguments as Map);
+            final version = args['snapshotVersion']! as int;
+            seenVersions.add(version);
+            calls++;
+            if (calls == 1) {
+              throw PlatformException(code: 'ACK_LOST');
+            }
+            return <String, Object>{'acceptedVersion': version};
+          });
 
-    final service = DownloadContinuedProcessingService(
-      onSystemCancel: (_) async {},
-      forceAvailableForTesting: true,
-    );
-    addTearDown(service.dispose);
+      final service = DownloadContinuedProcessingService(
+        onSystemCancel: (_) async {},
+        forceAvailableForTesting: true,
+      );
+      addTearDown(service.dispose);
 
-    final accepted = await _persist(service);
+      final accepted = await _persist(service);
 
-    expect(accepted, isNotNull);
-    expect(seenVersions, hasLength(2));
-    expect(seenVersions[1], seenVersions[0]);
-  });
+      expect(accepted, isNotNull);
+      expect(seenVersions, hasLength(2));
+      expect(seenVersions[1], seenVersions[0]);
+    },
+  );
 
-  test('DM-15 never upgrades a stale payload above native durable version', () async {
-    final seenVersions = <int>[];
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_channel, (call) async {
-          if (call.method != 'persistNativeQueue') return null;
-          final args = Map<Object?, Object?>.from(call.arguments as Map);
-          final version = args['snapshotVersion']! as int;
-          seenVersions.add(version);
-          return <String, Object>{'acceptedVersion': version + 100};
-        });
+  test(
+    'DM-15 never upgrades a stale payload above native durable version',
+    () async {
+      final seenVersions = <int>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_channel, (call) async {
+            if (call.method != 'persistNativeQueue') return null;
+            final args = Map<Object?, Object?>.from(call.arguments as Map);
+            final version = args['snapshotVersion']! as int;
+            seenVersions.add(version);
+            return <String, Object>{'acceptedVersion': version + 100};
+          });
 
-    final service = DownloadContinuedProcessingService(
-      onSystemCancel: (_) async {},
-      forceAvailableForTesting: true,
-    );
-    addTearDown(service.dispose);
+      final service = DownloadContinuedProcessingService(
+        onSystemCancel: (_) async {},
+        forceAvailableForTesting: true,
+      );
+      addTearDown(service.dispose);
 
-    final accepted = await _persist(service);
+      final accepted = await _persist(service);
 
-    expect(accepted, isNull);
-    expect(seenVersions, hasLength(1));
-  });
+      expect(accepted, isNull);
+      expect(seenVersions, hasLength(1));
+    },
+  );
 }

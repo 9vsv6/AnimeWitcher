@@ -64,6 +64,7 @@ class DownloadContinuedProcessingService {
   final SystemDownloadCancellation onSystemCancel;
   final SystemDownloadTaskUpdate? onTaskUpdate;
   final SystemDownloadChunkUpdate? onChunkUpdate;
+  final bool forceAvailableForTesting;
   bool _handlerInstalled = false;
   bool _disposed = false;
   int _nativeQueueSnapshotVersion = 0;
@@ -77,6 +78,7 @@ class DownloadContinuedProcessingService {
     required this.onSystemCancel,
     this.onTaskUpdate,
     this.onChunkUpdate,
+    @visibleForTesting this.forceAvailableForTesting = false,
   }) {
     if (_isAvailable) {
       _handlerLease = DownloadGlobalHandlerLease.acquire();
@@ -85,7 +87,8 @@ class DownloadContinuedProcessingService {
     }
   }
 
-  bool get _isAvailable => !kIsWeb && Platform.isIOS;
+  bool get _isAvailable =>
+      forceAvailableForTesting || (!kIsWeb && Platform.isIOS);
 
   Future<void> configureDiagnosticLog(bool enabled) =>
       _invoke('configureDiagnosticLog', {'enabled': enabled});
@@ -254,22 +257,25 @@ class DownloadContinuedProcessingService {
     }
 
     final snapshotVersion = nextVersion();
-    final accepted = await write(snapshotVersion);
+    var accepted = await write(snapshotVersion);
+
+    // A lost reply is ambiguous: native may have durably accepted the write.
+    // Retry the exact same version once. Native treats an equal version as an
+    // idempotent acknowledgement, so this cannot advance or duplicate state.
+    if (accepted == null) {
+      accepted = await write(snapshotVersion);
+    }
     if (accepted == null) return null;
+
     if (accepted > _nativeQueueSnapshotVersion) {
       _nativeQueueSnapshotVersion = accepted;
     }
     if (accepted == snapshotVersion) return accepted;
 
-    // Native persisted a newer snapshot (for example while Flutter slept).
-    // Re-issue this *current* Dart projection above that durable high-water
-    // mark instead of silently treating the stale write as successful.
-    final retryVersion = nextVersion();
-    final retried = await write(retryVersion);
-    if (retried != null && retried > _nativeQueueSnapshotVersion) {
-      _nativeQueueSnapshotVersion = retried;
-    }
-    return retried == retryVersion ? retried : null;
+    // Native is durably newer (for example it promoted/completed work while
+    // Flutter slept). Fail closed. Never relabel this stale Dart payload with
+    // a higher version; the caller must rebuild/reconcile a fresh snapshot.
+    return null;
   }
 
   Future<dynamic> _handleNativeCall(MethodCall call) async {
