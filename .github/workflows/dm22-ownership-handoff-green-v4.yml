@@ -6,6 +6,8 @@ on:
       - plan/download-manager-reliability
     paths:
       - .github/workflows/dm22-ownership-handoff-green-v4.yml
+      - .github/scripts/dm22_apply.py
+      - test/core/services/ios_multipart_ownership_handoff_source_test.dart
 
 permissions:
   contents: write
@@ -72,6 +74,29 @@ jobs:
           lib/core/services/download_service.dart
           test/core/services/ios_multipart_ownership_handoff_source_test.dart
 
+      - name: Mark DM-22 complete after verification
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('DOWNLOAD_MANAGER_PLAN.md')
+          text = path.read_text()
+          updated, count = re.subn(
+              r'(?m)^- \[ \] (\*\*DM-22\b)',
+              r'- [x] \1',
+              text,
+              count=1,
+          )
+          if count == 0:
+              if re.search(r'(?m)^- \[x\] \*\*DM-22\b', text):
+                  print('DM-22 already marked complete.')
+              else:
+                  raise SystemExit('Could not locate DM-22 checklist entry.')
+          else:
+              path.write_text(updated)
+          PY
+
       - name: Diff sanity
         run: git diff --check
 
@@ -83,7 +108,8 @@ jobs:
           if git diff --quiet -- \
             lib/core/services/persistent_parallel_download.dart \
             lib/core/services/download_service.dart \
-            ios/Runner/DownloadNativeWaitingQueue.swift; then
+            ios/Runner/DownloadNativeWaitingQueue.swift \
+            DOWNLOAD_MANAGER_PLAN.md; then
             echo 'DM-22 production contract already committed.'
             exit 0
           fi
@@ -92,7 +118,8 @@ jobs:
           git add \
             lib/core/services/persistent_parallel_download.dart \
             lib/core/services/download_service.dart \
-            ios/Runner/DownloadNativeWaitingQueue.swift
+            ios/Runner/DownloadNativeWaitingQueue.swift \
+            DOWNLOAD_MANAGER_PLAN.md
           git commit -m 'fix(downloads): fence iOS multipart ownership handoff (DM-22)'
           git pull --rebase origin plan/download-manager-reliability
           git push origin HEAD:plan/download-manager-reliability
