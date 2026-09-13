@@ -1,0 +1,98 @@
+name: DM-22 ownership handoff GREEN v2
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm22-ownership-handoff-green-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  green:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Recover and run DM-22 RED-to-GREEN patcher
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/dm22-ownership-handoff-green.yml').read_text()
+          start_marker = '          from pathlib import Path\n'
+          end_marker = '\n      - name: Format DM-22 Dart changes\n'
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          block = source[start:end]
+          lines = []
+          for line in block.splitlines():
+              lines.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/dm22_patch.py').write_text('\n'.join(lines) + '\n')
+          PY
+          python3 -m py_compile /tmp/dm22_patch.py
+          python3 /tmp/dm22_patch.py
+
+      - name: Format DM-22 Dart changes
+        run: dart format lib/core/services/persistent_parallel_download.dart lib/core/services/download_service.dart test/core/services/ios_multipart_ownership_handoff_source_test.dart
+
+      - name: Run DM-22 focused acceptance
+        run: >-
+          flutter test
+          test/core/services/ios_multipart_ownership_handoff_source_test.dart
+          test/core/services/ios_multipart_native_bridge_source_test.dart
+          test/core/services/persistent_parallel_download_test.dart
+          test/core/services/ios_native_queue_snapshot_version_guard_test.dart
+          test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart
+          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Analyze touched Dart code
+        run: >-
+          flutter analyze --no-fatal-warnings --no-fatal-infos
+          lib/core/services/persistent_parallel_download.dart
+          lib/core/services/download_service.dart
+          test/core/services/ios_multipart_ownership_handoff_source_test.dart
+
+      - name: Diff sanity
+        run: git diff --check
+
+      - name: Commit GREEN production contract
+        run: |
+          git reset -- build/ 2>/dev/null || true
+          git checkout -- build/ 2>/dev/null || true
+          git clean -fd build/ 2>/dev/null || true
+          if git diff --quiet -- \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/core/services/download_service.dart \
+            ios/Runner/DownloadNativeWaitingQueue.swift \
+            test/core/services/ios_multipart_ownership_handoff_source_test.dart; then
+            echo 'DM-22 production contract already committed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/core/services/download_service.dart \
+            ios/Runner/DownloadNativeWaitingQueue.swift \
+            test/core/services/ios_multipart_ownership_handoff_source_test.dart
+          git commit -m 'fix(downloads): fence iOS multipart ownership handoff (DM-22)'
+          git pull --rebase origin plan/download-manager-reliability
+          git push origin HEAD:plan/download-manager-reliability
