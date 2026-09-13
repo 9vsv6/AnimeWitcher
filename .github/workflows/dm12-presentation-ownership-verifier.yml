@@ -26,10 +26,11 @@ jobs:
           flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
-      - name: Apply minimal DM-12 production fix
+      - name: Apply DM-12 production fixes
         run: |
           python3 .github/scripts/dm12_presentation_ownership_patch.py
-          dart format lib/features/library/presentation/downloads_provider.dart
+          python3 .github/scripts/dm12_snapshot_patch.py
+          dart format lib/features/library/presentation/downloads_provider.dart lib/core/services/download_service.dart
       - name: Verify DM-12 ownership and adjacent lifecycle behavior
         run: >-
           flutter test
@@ -44,14 +45,14 @@ jobs:
           lib/core/services/download_service.dart
       - name: Verify scoped production diff
         run: |
-          provider='lib/features/library/presentation/downloads_provider.dart'
-          if ! git diff --quiet -- "$provider"; then
-            git diff --check -- "$provider"
+          files=(lib/features/library/presentation/downloads_provider.dart lib/core/services/download_service.dart)
+          if ! git diff --quiet -- "${files[@]}"; then
+            git diff --check -- "${files[@]}"
           fi
       - name: Commit green production fix when needed
         run: |
-          provider='lib/features/library/presentation/downloads_provider.dart'
-          if git diff --quiet -- "$provider"; then
+          files=(lib/features/library/presentation/downloads_provider.dart lib/core/services/download_service.dart)
+          if git diff --quiet -- "${files[@]}"; then
             echo 'DM-12 production fix is already present on HEAD.'
             exit 0
           fi
@@ -59,6 +60,6 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/plan/download-manager-reliability)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$provider"
-          git commit -m "fix(downloads): remove lifecycle writes from presentation"
+          git add "${files[@]}"
+          git commit -m "fix(downloads): project service-owned logical snapshots"
           git push origin HEAD:plan/download-manager-reliability
