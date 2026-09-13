@@ -142,6 +142,22 @@ DownloadCommandOutcome resolveCancelCommandOutcome({
   return downloadCommandOutcomeForJobState(state);
 }
 
+class DownloadLogicalSnapshot {
+  const DownloadLogicalSnapshot({
+    required this.task,
+    required this.status,
+    required this.progress,
+    required this.metadata,
+    required this.logicalState,
+  });
+
+  final DownloadTask task;
+  final TaskStatus status;
+  final double progress;
+  final Map<String, dynamic> metadata;
+  final DownloadJobState? logicalState;
+}
+
 class DownloadProgressData {
   final String taskId;
   final double progress;
@@ -540,6 +556,93 @@ class DownloadService {
     final id = taskId.trim();
     if (id.isEmpty) return null;
     return (await _jobStore.get(id))?.state;
+  }
+
+  /// Service-owned projection used by presentation. The plugin database and
+  /// Hive metadata remain executor/persistence replicas and are merged here,
+  /// behind the lifecycle authority, rather than in a UI provider.
+  Future<List<DownloadLogicalSnapshot>> logicalDownloadSnapshots() async {
+    final snapshots = <DownloadLogicalSnapshot>[];
+    final seen = <String>{};
+    final records = await FileDownloader().database.allRecords();
+
+    for (final record in records) {
+      final task = record.task;
+      if (task is! DownloadTask || !seen.add(task.taskId)) continue;
+      final snapshot = await logicalDownloadSnapshotForTask(
+        task,
+        executorStatus: record.status,
+        executorProgress: record.progress,
+      );
+      if (snapshot != null) snapshots.add(snapshot);
+    }
+
+    // A durable waiter can exist before/without a plugin database row. Include
+    // its persisted task descriptor so startup and queue-overflow rows remain
+    // visible without making presentation inspect persistence directly.
+    for (final job in await _jobStore.all()) {
+      if (!seen.add(job.taskId) ||
+          job.state == DownloadJobState.canceled ||
+          job.state == DownloadJobState.orphaned) {
+        continue;
+      }
+      final task = job.restoreTaskSnapshot();
+      if (task == null) continue;
+      final snapshot = await logicalDownloadSnapshotForTask(
+        task,
+        executorStatus: downloadJobDisplayStatus(job.state),
+        executorProgress: job.state == DownloadJobState.completed ? 1.0 : 0.0,
+      );
+      if (snapshot != null) snapshots.add(snapshot);
+    }
+    return snapshots;
+  }
+
+  Future<DownloadLogicalSnapshot?> logicalDownloadSnapshotForTask(
+    Task task, {
+    TaskStatus? executorStatus,
+    double executorProgress = 0.0,
+  }) async {
+    if (task is! DownloadTask) return null;
+    final id = task.taskId.trim();
+    if (id.isEmpty) return null;
+
+    final job = await _jobStore.get(id);
+    final logicalState = job?.state;
+    if (logicalState == DownloadJobState.canceled ||
+        logicalState == DownloadJobState.orphaned) {
+      return null;
+    }
+
+    var status = executorStatus ?? TaskStatus.enqueued;
+    var progress = executorProgress;
+    if (logicalState != null) {
+      status = downloadJobDisplayStatus(logicalState);
+      if (progress < 0 || progress > 1) {
+        progress = logicalState == DownloadJobState.completed ? 1.0 : 0.0;
+      }
+    } else {
+      // Pre-JobStore migration fallback is contained in the service seam.
+      if (status == TaskStatus.canceled) return null;
+      if (status == TaskStatus.failed || status == TaskStatus.notFound) {
+        status = TaskStatus.paused;
+        if (progress < 0 || progress > 1) progress = 0.0;
+      } else if (progress < 0 || progress > 1) {
+        progress = status == TaskStatus.complete ? 1.0 : 0.0;
+      }
+    }
+
+    final metadata = await _ref
+        .read(storageServiceProvider)
+        .getDownloadMetadata(id);
+    if (metadata == null) return null;
+    return DownloadLogicalSnapshot(
+      task: task,
+      status: status,
+      progress: progress.clamp(0.0, 1.0).toDouble(),
+      metadata: metadata,
+      logicalState: logicalState,
+    );
   }
 
   void _handleNativeTaskUpdate({

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:animewitcher/core/storage/storage_service.dart';
 
 import '../../../core/domain/entity/multimedia_item.dart';
 import '../../../core/services/download_concurrency.dart';
@@ -251,58 +250,21 @@ class DownloadsNotifier extends _$DownloadsNotifier {
   }
 
   Future<List<DownloadItem>> _refreshList() async {
-    final records = await FileDownloader().database.allRecords();
-    final storage = ref.read(storageServiceProvider);
     final downloadService = ref.read(downloadServiceProvider);
+    final snapshots = await downloadService.logicalDownloadSnapshots();
+    final items = <DownloadItem>[];
 
-    final List<DownloadItem> items = [];
-
-    for (final record in records) {
-      if (record.task is! DownloadTask) continue;
-      final logicalState = await downloadService.logicalJobStateForTask(
-        record.task.taskId,
-      );
-
-      var status = record.status;
-      var progress = record.progress;
-      if (logicalState != null) {
-        // JobStore is the lifecycle authority. Stale plugin paused/failed/
-        // canceled rows are executor evidence only and cannot redefine intent.
-        if (logicalState == DownloadJobState.canceled ||
-            logicalState == DownloadJobState.orphaned) {
-          continue;
-        }
-        status = downloadJobDisplayStatus(logicalState);
-        if (progress < 0 || progress > 1) {
-          progress = logicalState == DownloadJobState.completed ? 1.0 : 0.0;
-        }
-      } else {
-        // Pre-JobStore migration fallback: legacy rows without a durable job
-        // retain the old plugin-status normalization until they are migrated.
-        if (status == TaskStatus.canceled) continue;
-        if (status == TaskStatus.failed || status == TaskStatus.notFound) {
-          // Legacy executor state is presentation evidence only. Migration and
-          // repair belong to DownloadService reconciliation; never rewrite the
-          // plugin database while building a UI snapshot.
-          status = TaskStatus.paused;
-          if (progress < 0 || progress > 1) progress = 0.0;
-        } else if (progress < 0 || progress > 1) {
-          progress = status == TaskStatus.complete ? 1.0 : 0.0;
-        }
-      }
-
-      final metadata = await storage.getDownloadMetadata(record.task.taskId);
-      if (metadata == null) continue;
+    for (final snapshot in snapshots) {
       final item = downloadItemFromTaskMetadata(
-        task: record.task,
-        status: status,
-        metadata: metadata,
-        logicalState: logicalState,
-        progress: progress,
+        task: snapshot.task,
+        status: snapshot.status,
+        metadata: snapshot.metadata,
+        logicalState: snapshot.logicalState,
+        progress: snapshot.progress,
       );
       if (item == null) continue;
       items.add(item);
-      if (status == TaskStatus.complete) {
+      if (snapshot.status == TaskStatus.complete) {
         unawaited(
           ensureDownloadedEpisodeArtwork(
             taskId: item.id,
@@ -312,15 +274,11 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       }
     }
 
-    // A user-deleted task is a session tombstone until its native cleanup has
-    // fully settled. Never let an unrelated refresh briefly resurrect it.
+    // A user-deleted task is a session tombstone until its service-owned
+    // cleanup has settled. Never let an unrelated refresh resurrect it.
     items.removeWhere((item) => _deletingIds.contains(item.id));
-
-    // FIFO: oldest first.
     items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     final collapsed = collapseDuplicateDownloads(items);
-    // Duplicate repair is lifecycle reconciliation, not presentation cleanup.
-    // The UI collapses duplicate evidence without mutating executor/storage.
     return _orderDownloads(collapsed.visible);
   }
 
@@ -440,16 +398,20 @@ class DownloadsNotifier extends _$DownloadsNotifier {
           update.task is DownloadTask &&
           projectedStatus != null &&
           isActiveDownloadStatus(projectedStatus)) {
-        final metadata = await ref
-            .read(storageServiceProvider)
-            .getDownloadMetadata(update.task.taskId);
-        final incoming = metadata == null
+        final snapshot = await ref
+            .read(downloadServiceProvider)
+            .logicalDownloadSnapshotForTask(
+              update.task,
+              executorStatus: projectedStatus,
+            );
+        final incoming = snapshot == null
             ? null
             : downloadItemFromTaskMetadata(
-                task: update.task,
-                status: projectedStatus,
-                metadata: metadata,
-                logicalState: logicalState,
+                task: snapshot.task,
+                status: snapshot.status,
+                metadata: snapshot.metadata,
+                logicalState: snapshot.logicalState,
+                progress: snapshot.progress,
               );
         if (incoming != null) {
           final collapsed = collapseDuplicateDownloads([
