@@ -105,3 +105,5 @@ jobs:
           flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
           git push origin HEAD:plan/download-manager-reliability
+
+# retriggered after CI confirmed missing generation provenance
