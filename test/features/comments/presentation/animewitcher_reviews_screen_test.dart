@@ -485,16 +485,16 @@ void main() {
       );
 
       expect(arabic, hasLength(1));
-      expect(arabic.single.width, 150);
+      expect(arabic.single.width, AnimeWitcherCommentSortControl.size);
       expect(arabic.single.systemImage, 'clock');
       expect(arabic.single.icon, Icons.schedule_rounded);
-      expect(arabic.single.title, 'الأحدث');
+      expect(arabic.single.title, isNull);
       expect(arabic.single.menuItems, hasLength(3));
 
       expect(english, hasLength(1));
-      expect(english.single.width, 140);
+      expect(english.single.width, AnimeWitcherCommentSortControl.size);
       expect(english.single.systemImage, 'clock.arrow.circlepath');
-      expect(english.single.title, 'Oldest');
+      expect(english.single.title, isNull);
     },
   );
 

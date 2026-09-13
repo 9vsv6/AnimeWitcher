@@ -60,10 +60,6 @@ class _DownloadsTabState extends ConsumerState<DownloadsTab>
 
     return downloadsAsync.when(
       data: (downloads) {
-        if (downloads.isEmpty) {
-          return _DownloadsEmptyState(message: l10n.noDownloadsYet);
-        }
-
         // Collapse leftover complete records for the same episode/file so a
         // re-download cannot render الحلقة 9 twice.
         final visibleDownloads = collapseDuplicateDownloads(downloads).visible;

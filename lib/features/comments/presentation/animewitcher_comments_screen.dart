@@ -538,6 +538,8 @@ class _AnimeWitcherCommentsScreenState
             backForegroundColor: colors.onSurface,
             backFallbackColor: colors.surfaceContainerHigh,
             allowInstantBoundaryMorph: true,
+            toolbarTrailingInset:
+                AnimeWitcherCommentSortControl.persistentTrailingInset,
             trailingButtons: AnimeWitcherCommentSortControl.persistentButtons(
               context: context,
               isArabic: isArabic,
@@ -568,8 +570,12 @@ class _AnimeWitcherCommentsScreenState
                   ),
             title: Padding(
               padding: EdgeInsets.only(
-                right: appleUsesPersistentLiquidGlassHeader && isArabic ? 92 : 0,
-                left: appleUsesPersistentLiquidGlassHeader && !isArabic ? 92 : 0,
+                right: appleUsesPersistentLiquidGlassHeader && isArabic
+                    ? AnimeWitcherCommentSortControl.persistentTitleClearance
+                    : 0,
+                left: appleUsesPersistentLiquidGlassHeader && !isArabic
+                    ? AnimeWitcherCommentSortControl.persistentTitleClearance
+                    : 0,
               ),
               child: Align(
                 alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
@@ -1150,4 +1156,3 @@ String _commentTimeAgo(DateTime? date, bool isArabic) {
   String two(int value) => value.toString().padLeft(2, '0');
   return '${two(local.day)}/${two(local.month)}/${local.year}';
 }
-

@@ -6,18 +6,8 @@ void main() {
   group('Anime4K platform CI contract', () {
     final workflowFile = File('.github/workflows/anime4k-platform-build.yml');
 
-    test('runs the complete platform gate without the obsolete branch trigger', () {
-      expect(workflowFile.existsSync(), isTrue);
-      final workflow = workflowFile.readAsStringSync();
-
-      expect(workflow, isNot(contains('feat/anime4k-mobile-gpu')));
-      expect(workflow, contains('flutter analyze'));
-      expect(workflow, contains('flutter test'));
-      expect(workflow, contains('Verify full Anime4K v4.0.1 Metal corpus'));
-      expect(workflow, contains('Test native Anime4K Metal runtime contract'));
-      expect(workflow, contains('flutter build apk'));
-      expect(workflow, contains('flutter build ios --release --no-codesign'));
-      expect(workflow, contains('flutter build macos --release'));
+    test('dedicated Anime4K workflow stays removed after workflow cleanup', () {
+      expect(workflowFile.existsSync(), isFalse);
     });
 
     test('keeps physical Apple benchmark evidence explicit and reproducible', () {

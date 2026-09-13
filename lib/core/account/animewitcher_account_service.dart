@@ -323,14 +323,6 @@ class AnimeWitcherAccountService {
         );
       }
     }
-    final existingBirthYear = profile.birthYear?.trim() ?? '';
-    if (existingBirthYear.isNotEmpty &&
-        normalizedBirthYear != existingBirthYear) {
-      throw const AnimeWitcherAccountException(
-        'birth-year-locked',
-        'The birth year can only be set once.',
-      );
-    }
     const maximumImageBytes = 10 * 1024 * 1024;
     if ((avatarBytes?.length ?? 0) > maximumImageBytes ||
         (coverBytes?.length ?? 0) > maximumImageBytes) {
