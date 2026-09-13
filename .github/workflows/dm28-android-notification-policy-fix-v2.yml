@@ -1,0 +1,116 @@
+name: DM-28 Android notification policy GREEN v2
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm28-android-notification-policy-fix-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  green:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Prepare Flutter sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Recover DM-28 RED and production patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/dm28-android-notification-policy-fix.yml').read_text()
+          marker = "          python3 - <<'PY'\n"
+          end_marker = "\n          PY"
+          cursor = 0
+          scripts = []
+          while True:
+              start = source.find(marker, cursor)
+              if start < 0:
+                  break
+              start += len(marker)
+              end = source.find(end_marker, start)
+              if end < 0:
+                  raise SystemExit('DM-28 embedded Python end marker missing')
+              block = source[start:end]
+              lines = []
+              in_triple = False
+              for raw in block.splitlines():
+                  line = raw
+                  if not in_triple and line.startswith('          '):
+                      line = line[10:]
+                  lines.append(line)
+                  if line.count("'''") % 2 == 1:
+                      in_triple = not in_triple
+              scripts.append('\n'.join(lines) + '\n')
+              cursor = end + len(end_marker)
+
+          if len(scripts) < 2:
+              raise SystemExit(f'Expected at least two DM-28 patch scripts, found {len(scripts)}')
+          for index, script in enumerate(scripts[:2], start=1):
+              path = Path(f'/tmp/dm28_patch_{index}.py')
+              path.write_text(script)
+          PY
+          python3 -m py_compile /tmp/dm28_patch_1.py /tmp/dm28_patch_2.py
+          python3 /tmp/dm28_patch_1.py
+          python3 /tmp/dm28_patch_2.py
+
+      - name: Format DM-28 Android slice
+        run: dart format lib/core/services/download_transport.dart lib/core/services/download_service.dart test/core/services/download_transport_test.dart
+
+      - name: Run DM-28 Android focused acceptance
+        run: >-
+          flutter test
+          test/core/services/download_transport_test.dart
+          test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart
+          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Analyze touched Dart code
+        run: >-
+          flutter analyze --no-fatal-warnings --no-fatal-infos
+          lib/core/services/download_transport.dart
+          lib/core/services/download_service.dart
+          test/core/services/download_transport_test.dart
+
+      - name: Diff sanity
+        run: git diff --check
+
+      - name: Commit DM-28 Android slice after GREEN
+        run: |
+          git reset -- build/ 2>/dev/null || true
+          git checkout -- build/ 2>/dev/null || true
+          git clean -fd build/ 2>/dev/null || true
+          if git diff --quiet -- \
+            lib/core/services/download_transport.dart \
+            lib/core/services/download_service.dart \
+            test/core/services/download_transport_test.dart; then
+            echo 'DM-28 Android slice already committed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            lib/core/services/download_transport.dart \
+            lib/core/services/download_service.dart \
+            test/core/services/download_transport_test.dart
+          git commit -m 'fix(downloads): align Android execution hints with notifications (DM-28)'
+          git pull --rebase origin plan/download-manager-reliability
+          git push origin HEAD:plan/download-manager-reliability
