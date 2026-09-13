@@ -17,7 +17,13 @@ void main() {
     expect(pathIsAppDownloadsRoot(root), isTrue);
     expect(
       pathIsInsideAppDownloads(
-        p.join(Directory.systemTemp.path, 'scope', 'AnimeWitcher', 'DownloadsBackup', 'ep.mp4'),
+        p.join(
+          Directory.systemTemp.path,
+          'scope',
+          'AnimeWitcher',
+          'DownloadsBackup',
+          'ep.mp4',
+        ),
       ),
       isFalse,
     );
@@ -48,24 +54,54 @@ void main() {
     expect(await series.exists(), isTrue);
   });
 
-  test('series cleanup may remove only known leftover download artifacts', () async {
-    final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-owned-');
+  test(
+    'series cleanup preserves recoverable partial and assembling evidence',
+    () async {
+      final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-owned-');
+      addTearDown(() async {
+        if (await sandbox.exists()) await sandbox.delete(recursive: true);
+      });
+      final series = Directory(
+        p.join(sandbox.path, 'AnimeWitcher', 'Downloads', 'Show'),
+      );
+      final season = Directory(p.join(series.path, 'Season 1'));
+      await season.create(recursive: true);
+      final partial = File(p.join(season.path, 'episode 01.mp4.part'));
+      final assembling = File(p.join(season.path, 'episode 01.mp4.assembling'));
+      final manifest = File(p.join(season.path, 'manifest.json.tmp'));
+      await partial.writeAsBytes([1, 2, 3]);
+      await assembling.writeAsBytes([4, 5, 6]);
+      await manifest.writeAsString('{}');
+
+      await deleteSeriesFolderIfNoVideosRemain(
+        File(p.join(season.path, 'episode 01.mp4')),
+      );
+
+      expect(await partial.exists(), isTrue);
+      expect(await assembling.exists(), isTrue);
+      expect(await manifest.exists(), isTrue);
+      expect(await series.exists(), isTrue);
+    },
+  );
+
+  test('extensionless media-looking content is not treated as temp', () async {
+    final sandbox = await Directory.systemTemp.createTemp('aw-cleanup-plain-');
     addTearDown(() async {
       if (await sandbox.exists()) await sandbox.delete(recursive: true);
     });
     final series = Directory(
       p.join(sandbox.path, 'AnimeWitcher', 'Downloads', 'Show'),
     );
-    final season = Directory(p.join(series.path, 'Season 1'));
-    await season.create(recursive: true);
-    await File(p.join(season.path, 'episode 01.mp4.part')).writeAsBytes([1, 2, 3]);
-    await File(p.join(season.path, 'manifest.json.tmp')).writeAsString('{}');
+    await series.create(recursive: true);
+    final extensionless = File(p.join(series.path, 'episode-final'));
+    await extensionless.writeAsBytes([1, 2, 3, 4]);
 
     await deleteSeriesFolderIfNoVideosRemain(
-      File(p.join(season.path, 'episode 01.mp4')),
+      File(p.join(series.path, 'episode 01.mp4')),
     );
 
-    expect(await series.exists(), isFalse);
+    expect(await extensionless.exists(), isTrue);
+    expect(await series.exists(), isTrue);
   });
 
   test('series cleanup does not traverse a symlink escape', () async {
