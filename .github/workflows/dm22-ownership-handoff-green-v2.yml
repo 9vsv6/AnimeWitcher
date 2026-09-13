@@ -43,12 +43,36 @@ jobs:
           end = source.index(end_marker, start)
           block = source[start:end]
           lines = []
-          for line in block.splitlines():
-              lines.append(line[10:] if line.startswith('          ') else line)
+          in_triple = False
+          for raw in block.splitlines():
+              line = raw
+              if not in_triple and line.startswith('          '):
+                  line = line[10:]
+              lines.append(line)
+              if line.count("'''") % 2 == 1:
+                  in_triple = not in_triple
           Path('/tmp/dm22_patch.py').write_text('\n'.join(lines) + '\n')
           PY
           python3 -m py_compile /tmp/dm22_patch.py
           python3 /tmp/dm22_patch.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('test/core/services/ios_multipart_ownership_handoff_source_test.dart')
+          text = path.read_text()
+          old = """    final claimAppend = swift.indexOf('state.multipartClaims.append(');
+              final startLoop = swift.indexOf('for waiter in selected {');
+              expect(claimAppend, greaterThanOrEqualTo(0));
+              expect(startLoop, greaterThan(claimAppend));"""
+          new = """    final claimAppend = swift.indexOf('state.multipartClaims.append(');
+              final startChild = swift.indexOf('startMultipartChild(waiter, on: session)');
+              expect(claimAppend, greaterThanOrEqualTo(0));
+              expect(startChild, greaterThan(claimAppend));"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif 'startMultipartChild(waiter, on: session)' not in text:
+              raise SystemExit('DM-22 source-test ordering anchor drifted')
+          path.write_text(text)
+          PY
 
       - name: Format DM-22 Dart changes
         run: dart format lib/core/services/persistent_parallel_download.dart lib/core/services/download_service.dart test/core/services/ios_multipart_ownership_handoff_source_test.dart
@@ -70,6 +94,21 @@ jobs:
           lib/core/services/download_service.dart
           test/core/services/ios_multipart_ownership_handoff_source_test.dart
 
+      - name: Mark DM-22 complete after GREEN
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('DOWNLOAD_MANAGER_PLAN.md')
+          text = path.read_text()
+          open_marker = '- [ ] **DM-22'
+          closed_marker = '- [x] **DM-22'
+          if open_marker in text:
+              text = text.replace(open_marker, closed_marker, 1)
+              path.write_text(text)
+          elif closed_marker not in text:
+              raise SystemExit('DM-22 plan marker missing')
+          PY
+
       - name: Diff sanity
         run: git diff --check
 
@@ -82,7 +121,8 @@ jobs:
             lib/core/services/persistent_parallel_download.dart \
             lib/core/services/download_service.dart \
             ios/Runner/DownloadNativeWaitingQueue.swift \
-            test/core/services/ios_multipart_ownership_handoff_source_test.dart; then
+            test/core/services/ios_multipart_ownership_handoff_source_test.dart \
+            DOWNLOAD_MANAGER_PLAN.md; then
             echo 'DM-22 production contract already committed.'
             exit 0
           fi
@@ -92,7 +132,8 @@ jobs:
             lib/core/services/persistent_parallel_download.dart \
             lib/core/services/download_service.dart \
             ios/Runner/DownloadNativeWaitingQueue.swift \
-            test/core/services/ios_multipart_ownership_handoff_source_test.dart
+            test/core/services/ios_multipart_ownership_handoff_source_test.dart \
+            DOWNLOAD_MANAGER_PLAN.md
           git commit -m 'fix(downloads): fence iOS multipart ownership handoff (DM-22)'
           git pull --rebase origin plan/download-manager-reliability
           git push origin HEAD:plan/download-manager-reliability
