@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('DM-05 downloads projection authority', () {
-    test('downloads provider consults durable JobState before plugin status', () {
+    test('downloads provider projects durable JobState snapshots', () {
       final source = File(
         'lib/features/library/presentation/downloads_provider.dart',
       ).readAsStringSync();
@@ -18,10 +18,14 @@ void main() {
       expect(refresh, greaterThanOrEqualTo(0));
       expect(handler, greaterThan(refresh));
       final refreshBody = source.substring(refresh, handler);
-      final stateLookup = refreshBody.indexOf('logicalJobStateForTask');
-      final failedFallback = refreshBody.indexOf('TaskStatus.failed');
-      expect(stateLookup, greaterThanOrEqualTo(0));
-      expect(failedFallback, greaterThan(stateLookup));
+
+      // _refreshList no longer inspects raw FileDownloader records. The service
+      // constructs logical snapshots first, and the provider projects the
+      // durable logical state from that snapshot into the UI row.
+      expect(refreshBody, contains('logicalDownloadSnapshots()'));
+      expect(refreshBody, contains('logicalState: snapshot.logicalState'));
+      expect(refreshBody, isNot(contains('TaskStatus.failed')));
+      expect(refreshBody, isNot(contains('TaskStatus.notFound')));
     });
 
     test('live plugin callbacks are projected through JobState when available', () {
