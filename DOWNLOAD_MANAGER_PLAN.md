@@ -362,7 +362,7 @@
   - **Confirmed root cause:** cancel/restack still depended on 500 ms / 800 ms suppression sets, while several native control operations changed ownership without advancing the durable generation. A callback delayed beyond those windows could therefore cross into a newer operation; canceled/orphaned rows could also be reopened by a newer write.
   - **Verification passed:** RED→GREEN canceled-tombstone reopening, pause→resume stale callback, retry stale failure, source-level removal of the 500 ms/800 ms correctness windows, ownership-acknowledged restack, generation-before-effect guards for pause/cancel/source refresh, verified-completion-before-publication, adjacent pause/cancel/runtime ownership/source-refresh/JobStore regressions, and analyzer.
 
-- [ ] **DM-11 — Define crash-safe write ordering and convergence across all replicas**
+- [x] **DM-11 — Define crash-safe write ordering and convergence across all replicas**
   - **Problem:** JobStore, plugin DB, metadata, refresh descriptor, manifest/files and native queue can be individually valid yet mutually inconsistent after a crash.
   - **Root cause:** no transaction spans these stores; ordering/reconciliation rules are incomplete.
   - **Severity / priority:** **P1 / High.**
