@@ -96,3 +96,5 @@ jobs:
             test/core/services/download_delete_tombstone_guard_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
           git push origin HEAD:plan/download-manager-reliability
+
+# retriggered after manifest provenance GREEN reached branch
