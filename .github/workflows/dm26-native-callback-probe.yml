@@ -21,8 +21,11 @@ jobs:
           flutter-version: 3.47.1
           cache: true
 
-      - name: Resolve locked dependencies
-        run: flutter pub get
+      - name: Resolve dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
 
       - name: Verify locked plugin callback contract
         shell: bash
