@@ -126,5 +126,6 @@ jobs:
             ios/Runner/DownloadNativeWaitingQueue.swift \
             DOWNLOAD_MANAGER_PLAN.md
           git commit -m 'fix(downloads): fence iOS multipart ownership handoff (DM-22)'
+          git reset --hard HEAD
           git pull --rebase origin plan/download-manager-reliability
           git push origin HEAD:plan/download-manager-reliability
