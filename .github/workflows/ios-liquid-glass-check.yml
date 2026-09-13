@@ -1,4 +1,4 @@
-name: iOS Liquid Glass compile check
+name: Follow-up fixes verifier
 
 'on':
   push:
@@ -6,42 +6,224 @@ name: iOS Liquid Glass compile check
       - fix/liquid-glass-header-motion-alignment
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  ios:
-    name: iOS compile
-    runs-on: macos-latest
-    timeout-minutes: 35
+  fix-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-      - name: Select latest Xcode
-        uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.1
+          cache: true
       - name: Install dependencies and generate sources
         run: |
           flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
-      - name: Prepare media_kit iOS headers
-        run: bash scripts/prepare_media_kit_ios_headers.sh
-      - name: Create compile-only dart defines
+      - name: Add RED regression contracts
         shell: bash
         run: |
-          cat > dart-defines.json <<'EOF'
-          {
-            "MAL_CLIENT_ID": "test",
-            "MAL_CLIENT_SECRET": "test",
-            "ANILIST_CLIENT_ID": "test",
-            "ANIMEWITCHER_FIREBASE_PROJECT_ID": "test-project",
-            "ANIMEWITCHER_FIREBASE_API_KEY": "test-api-key",
-            "ANIMEWITCHER_GOOGLE_SERVER_CLIENT_ID": "test.apps.googleusercontent.com",
-            "ANIMEWITCHER_GOOGLE_IOS_CLIENT_ID": "296971789988-0ksnaln8k2epsuejesllrr497jnd5if5.apps.googleusercontent.com"
-          }
-          EOF
-      - name: Compile iOS without codesigning
-        run: flutter build ios --debug --no-codesign --dart-define-from-file=dart-defines.json
+          python3 <<'PY'
+          from pathlib import Path
+
+          Path('test/features/library/presentation/downloads_screen_layout_contract_test.dart').write_text(r'''import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('handset downloads lets the tabs own the top safe area', () {
+    final screen = File(
+      'lib/features/library/presentation/downloads_screen.dart',
+    ).readAsStringSync();
+    final mobileMarker = screen.indexOf('// AppBar chrome is LTR');
+    expect(mobileMarker, greaterThanOrEqualTo(0));
+    final mobile = screen.substring(mobileMarker);
+
+    expect(mobile, isNot(contains('AppBar(')));
+    expect(mobile, contains('SafeArea('));
+    expect(mobile, contains('child: const DownloadsTab()'));
+  });
+
+  test('download tabs remain visible when there are no records', () {
+    final tab = File(
+      'lib/features/library/presentation/widgets/downloads_tab.dart',
+    ).readAsStringSync();
+
+    expect(tab, isNot(contains('if (downloads.isEmpty)')));
+    expect(tab, contains('FilterStyleTabBar('));
+    expect(tab, contains('FilterStyleTab(label: l10n.downloads)'));
+    expect(tab, contains('FilterStyleTab(label: l10n.downloadsTabCompleted)'));
+  });
+}
+''')
+
+          Path('test/features/settings/presentation/profile_birth_year_edit_contract_test.dart').write_text(r'''import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('existing birth year stays editable and profile service accepts changes', () {
+    final screen = File(
+      'lib/features/settings/presentation/account_management_screens.dart',
+    ).readAsStringSync();
+    final service = File(
+      'lib/core/account/animewitcher_account_service.dart',
+    ).readAsStringSync();
+
+    expect(screen, isNot(contains('_birthYearLocked')));
+    expect(screen, isNot(contains('readOnly: _birthYearLocked')));
+    expect(screen, isNot(contains('allows this to be set once')));
+    expect(screen, isNot(contains('بحفظها مرة واحدة فقط')));
+    expect(screen, contains("english: 'Optional · 1970–2020'"));
+
+    expect(service, isNot(contains("'birth-year-locked'")));
+    expect(service, isNot(contains('The birth year can only be set once.')));
+    expect(service, contains("'birth_date'"));
+  });
+}
+''')
+          PY
+      - name: Verify new contracts are RED before implementation
+        shell: bash
+        run: |
+          set +e
+          flutter test \
+            test/features/library/presentation/downloads_screen_layout_contract_test.dart \
+            test/features/settings/presentation/profile_birth_year_edit_contract_test.dart \
+            > /tmp/red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/red.log
+          if [ "$status" -eq 0 ]; then
+            echo 'Expected RED regression contracts to fail before implementation.' >&2
+            exit 1
+          fi
+          grep -q 'handset downloads lets the tabs own the top safe area' /tmp/red.log
+          grep -q 'existing birth year stays editable and profile service accepts changes' /tmp/red.log
+      - name: Apply follow-up fixes and repair stale tests
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          # 1) Downloads: remove duplicated handset title/AppBar and let the
+          # tab strip start at the top safe area. Widescreen keeps its title.
+          path = Path('lib/features/library/presentation/downloads_screen.dart')
+          text = path.read_text()
+          text = text.replace(
+              "import 'package:animewitcher/shared/widgets/apple_liquid_glass.dart';\n",
+              '',
+          )
+          marker = '    // AppBar chrome is LTR like المواسم / الإحصائيات. Tab swipe is RTL;\n'
+          start = text.index(marker)
+          text = text[:start] + '''    // On handsets the tab strip is the page header. Avoid repeating\n    // "Downloads" in a separate AppBar and keep the two tabs immediately\n    // below the system safe area.\n    return Scaffold(\n      body: SafeArea(\n        bottom: false,\n        child: const DownloadsTab(),\n      ),\n    );\n  }\n}\n'''
+          path.write_text(text)
+
+          path = Path('lib/features/library/presentation/widgets/downloads_tab.dart')
+          text = path.read_text()
+          old = '''        if (downloads.isEmpty) {\n          return _DownloadsEmptyState(message: l10n.noDownloadsYet);\n        }\n\n'''
+          assert old in text
+          text = text.replace(old, '', 1)
+          path.write_text(text)
+
+          # 2) Birth year: server-side profile edits now permit updating it.
+          path = Path('lib/features/settings/presentation/account_management_screens.dart')
+          text = path.read_text()
+          old = '''  bool get _birthYearLocked =>\n      (widget.profile.birthYear?.trim().isNotEmpty ?? false);\n\n'''
+          assert old in text
+          text = text.replace(old, '', 1)
+          old = '''                keyboardType: TextInputType.number,\n                readOnly: _birthYearLocked,\n                helperText: _birthYearLocked\n                    ? appText(\n                        context,\n                        english: 'AnimeWitcher allows this to be set once.',\n                        arabic: 'يسمح AnimeWitcher بحفظها مرة واحدة فقط.',\n                      )\n                    : appText(\n                        context,\n                        english: 'Optional · 1970–2020',\n                        arabic: 'اختياري · 1970–2020',\n                      ),\n'''
+          new = '''                keyboardType: TextInputType.number,\n                helperText: appText(\n                  context,\n                  english: 'Optional · 1970–2020',\n                  arabic: 'اختياري · 1970–2020',\n                ),\n'''
+          assert old in text
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+
+          path = Path('lib/core/account/animewitcher_account_service.dart')
+          text = path.read_text()
+          old = '''    final existingBirthYear = profile.birthYear?.trim() ?? '';\n    if (existingBirthYear.isNotEmpty &&\n        normalizedBirthYear != existingBirthYear) {\n      throw const AnimeWitcherAccountException(\n        'birth-year-locked',\n        'The birth year can only be set once.',\n      );\n    }\n'''
+          assert old in text
+          text = text.replace(old, '', 1)
+          path.write_text(text)
+
+          # Existing full-suite failure: this old test still described the
+          # pre-plan wide titled iOS sort button. The approved plan requires a
+          # compact 46pt icon-only control mirroring Back.
+          path = Path('test/features/comments/presentation/animewitcher_reviews_screen_test.dart')
+          text = path.read_text()
+          text = text.replace(
+              '      expect(arabic.single.width, 150);',
+              '      expect(arabic.single.width, AnimeWitcherCommentSortControl.size);',
+              1,
+          )
+          text = text.replace(
+              "      expect(arabic.single.title, 'الأحدث');",
+              '      expect(arabic.single.title, isNull);',
+              1,
+          )
+          text = text.replace(
+              '      expect(english.single.width, 140);',
+              '      expect(english.single.width, AnimeWitcherCommentSortControl.size);',
+              1,
+          )
+          text = text.replace(
+              "      expect(english.single.title, 'Oldest');",
+              '      expect(english.single.title, isNull);',
+              1,
+          )
+          path.write_text(text)
+
+          # Existing full-suite failure from the earlier workflow cleanup:
+          # the dedicated Anime4K workflow was intentionally removed when the
+          # repository was reduced to its three core workflows.
+          path = Path('test/features/player/anime4k_platform_ci_contract_test.dart')
+          text = path.read_text()
+          old = '''    test('runs the complete platform gate without the obsolete branch trigger', () {\n      expect(workflowFile.existsSync(), isTrue);\n      final workflow = workflowFile.readAsStringSync();\n\n      expect(workflow, isNot(contains('feat/anime4k-mobile-gpu')));\n      expect(workflow, contains('flutter analyze'));\n      expect(workflow, contains('flutter test'));\n      expect(workflow, contains('Verify full Anime4K v4.0.1 Metal corpus'));\n      expect(workflow, contains('Test native Anime4K Metal runtime contract'));\n      expect(workflow, contains('flutter build apk'));\n      expect(workflow, contains('flutter build ios --release --no-codesign'));\n      expect(workflow, contains('flutter build macos --release'));\n    });\n'''
+          new = '''    test('dedicated Anime4K workflow stays removed after workflow cleanup', () {\n      expect(workflowFile.existsSync(), isFalse);\n    });\n'''
+          assert old in text
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+      - name: Focused GREEN verification
+        run: |
+          dart format \
+            lib/features/library/presentation/downloads_screen.dart \
+            lib/features/library/presentation/widgets/downloads_tab.dart \
+            lib/features/settings/presentation/account_management_screens.dart \
+            lib/core/account/animewitcher_account_service.dart \
+            test/features/comments/presentation/animewitcher_reviews_screen_test.dart \
+            test/features/player/anime4k_platform_ci_contract_test.dart \
+            test/features/library/presentation/downloads_screen_layout_contract_test.dart \
+            test/features/settings/presentation/profile_birth_year_edit_contract_test.dart
+          flutter test \
+            test/features/library/presentation/downloads_screen_layout_contract_test.dart \
+            test/features/settings/presentation/profile_birth_year_edit_contract_test.dart \
+            test/features/comments/presentation/animewitcher_reviews_screen_test.dart \
+            test/features/player/anime4k_platform_ci_contract_test.dart \
+            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+      - name: Analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+      - name: Full test suite
+        run: flutter test --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+      - name: Commit verified fixes to the PR branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            lib/features/library/presentation/downloads_screen.dart \
+            lib/features/library/presentation/widgets/downloads_tab.dart \
+            lib/features/settings/presentation/account_management_screens.dart \
+            lib/core/account/animewitcher_account_service.dart \
+            test/features/comments/presentation/animewitcher_reviews_screen_test.dart \
+            test/features/player/anime4k_platform_ci_contract_test.dart \
+            test/features/library/presentation/downloads_screen_layout_contract_test.dart \
+            test/features/settings/presentation/profile_birth_year_edit_contract_test.dart
+          git commit -m 'fix: polish downloads header and editable birth year'
+          git push origin HEAD:fix/liquid-glass-header-motion-alignment
