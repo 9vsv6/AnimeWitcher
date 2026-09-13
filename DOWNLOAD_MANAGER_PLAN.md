@@ -420,7 +420,7 @@
   - **Implementation notes (2026-09-12):** Multipart assembly preflights destination-volume capacity for the full staging allocation, re-evaluates the reserved safety margin while writing, and safely handles ENOSPC/EDQUOT races. Storage exhaustion emits typed `ParallelAssemblyFailureReason.insufficientStorage`, removes only incomplete staging, pauses the logical parent, and retains every verified Range for zero-redownload assembly retry. DownloadService exposes the typed failure stream for UI projection.
   - **Verification passed:** Bounded-filesystem behavior was confirmed RED before the fix, then GREEN with verified parts preserved, typed `insufficientStorage`, no premature completion, and successful assembly after space is freed without another Range. Focused multipart regressions and analyzer also passed.
 
-- [ ] **DM-14 — Inventory/recover/clean orphan artifacts with canonical path safety**
+- [x] **DM-14 — Inventory/recover/clean orphan artifacts with canonical path safety**
   - **Problem:** `.parts`, `.assembling`, temp/final files can outlive logical records; current path checks use textual containment/suffix logic and recursive series cleanup can remove unknown non-video content.
   - **Root cause:** recovery/cleanup is target-driven and path ownership is inferred from strings instead of canonical app-root containment + artifact provenance.
   - **Severity / priority:** **P1 / High after final review because a cleanup mistake can cause user data loss.**
