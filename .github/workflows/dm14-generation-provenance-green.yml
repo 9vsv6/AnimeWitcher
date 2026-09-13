@@ -1,4 +1,4 @@
-name: DM-14 generation provenance GREEN
+name: DM-14 provenance and canceled GC GREEN
 
 on:
   push:
@@ -77,7 +77,7 @@ jobs:
               path.write_text(text)
           PY
 
-      - name: Verify focused GREEN
+      - name: Verify manifest provenance GREEN
         run: |
           flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
@@ -86,24 +86,79 @@ jobs:
             test/core/services/persistent_parallel_download_manifest_discovery_test.dart
           git diff --check
 
-      - name: Commit verified production change
+      - name: Commit manifest provenance if needed
         run: |
           if git diff --quiet -- lib/core/services/persistent_parallel_download.dart; then
-            echo 'Production GREEN already present.'
-            exit 0
+            echo 'Manifest provenance GREEN already present.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add lib/core/services/persistent_parallel_download.dart
+            git commit -m 'fix(downloads): harden manifest artifact provenance (DM-14)'
           fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/core/services/persistent_parallel_download.dart
-          git commit -m 'fix(downloads): harden manifest artifact provenance (DM-14)'
-          # flutter tooling may leave generated/untracked dirt. The verified
-          # production patch is already committed, so discard only remaining
-          # working-tree changes before rebasing onto a concurrently moved HEAD.
-          git reset --hard HEAD
+
+      - name: Apply ownership-fenced canceled multipart cleanup
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/core/services/download_service.dart')
+          text = path.read_text()
+          old = """      final restored = job.restoreTaskSnapshot();
+      if (restored != null) {
+        try {
+          final path = await restored.filePath();"""
+          new = """      final restored = job.restoreTaskSnapshot();
+      if (restored is ParallelDownloadTask) {
+        try {
+          // The canceled tombstone plus notOwned runtime state proves the
+          // logical attempt is obsolete. Let the multipart owner settle its
+          // exact child identities before deleting its manifest/part files.
+          await _parallel.cancel(restored);
+        } catch (_) {
+          // Preserve both the tombstone and artifacts when child ownership
+          // cannot be settled. A later recovery pass can retry safely.
+          continue;
+        }
+      }
+      if (restored != null) {
+        try {
+          final path = await restored.filePath();"""
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('missing DM-14 tombstone GC anchor')
+              text = text.replace(old, new, 1)
+              path.write_text(text)
+          PY
+
+      - name: Verify canceled multipart GC GREEN
+        run: |
+          flutter test test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
+            test/core/services/download_delete_tombstone_guard_test.dart \
+            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/core/services/download_service.dart \
+            test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
+            test/core/services/download_delete_tombstone_guard_test.dart
+          git diff --check
+
+      - name: Commit verified DM-14 production changes
+        run: |
+          if ! git diff --quiet -- lib/core/services/download_service.dart; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add lib/core/services/download_service.dart
+            git commit -m 'fix(downloads): clean canceled multipart artifacts safely (DM-14)'
+          fi
+          if git status --porcelain --untracked-files=no | grep -q .; then
+            echo 'Unexpected tracked working-tree changes remain:'
+            git status --short
+            exit 1
+          fi
           git clean -fd
           git pull --rebase origin plan/download-manager-reliability
           flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
+            test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
+            test/core/services/download_delete_tombstone_guard_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
           git push origin HEAD:plan/download-manager-reliability
-
-# retriggered after CI confirmed missing generation provenance
