@@ -6,13 +6,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: plan/download-manager-reliability
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -23,5 +26,34 @@ jobs:
           flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
-      - name: Verify presentation ownership boundary
-        run: flutter test test/core/services/download_presentation_ownership_test.dart
+      - name: Apply minimal DM-12 production fix
+        run: |
+          python3 .github/scripts/dm12_presentation_ownership_patch.py
+          dart format lib/features/library/presentation/downloads_provider.dart
+      - name: Verify DM-12 ownership and adjacent lifecycle behavior
+        run: >-
+          flutter test
+          test/core/services/download_presentation_ownership_test.dart
+          test/core/services/download_delete_tombstone_guard_test.dart
+          test/core/services/download_job_state_authority_test.dart
+          test/core/services/download_logical_identity_test.dart
+      - name: Analyze touched production boundary
+        run: >-
+          flutter analyze --no-fatal-warnings --no-fatal-infos
+          lib/features/library/presentation/downloads_provider.dart
+          lib/core/services/download_service.dart
+      - name: Verify scoped diff
+        run: |
+          git diff --check
+          changed="$(git diff --name-only | sort)"
+          expected="lib/features/library/presentation/downloads_provider.dart"
+          test "$changed" = "$expected"
+      - name: Commit green production fix on current head
+        run: |
+          git fetch origin plan/download-manager-reliability
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/plan/download-manager-reliability)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/features/library/presentation/downloads_provider.dart
+          git commit -m "fix(downloads): remove lifecycle writes from presentation"
+          git push origin HEAD:plan/download-manager-reliability
