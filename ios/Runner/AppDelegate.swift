@@ -634,6 +634,7 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
   private let liquidGlassHiddenScale: CGFloat = 0.88
   private let liquidGlassShowDuration: TimeInterval = 0.34
   private let liquidGlassHideDuration: TimeInterval = 0.20
+  private let toolbarGeometryAnimationDuration: TimeInterval = 0.34
 
   init(
     channel: FlutterMethodChannel,
@@ -691,15 +692,9 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     guard let values = arguments as? [String: Any] else { return }
 
     installedHostView?.bringSubviewToFront(rootView)
-    if let insetNumber = values["toolbarTrailingInset"] as? NSNumber {
-      let trailingConstant = -CGFloat(truncating: insetNumber)
-      if toolbarTrailingConstraint?.constant != trailingConstant {
-        UIView.performWithoutAnimation {
-          toolbarTrailingConstraint?.constant = trailingConstant
-          rootView.layoutIfNeeded()
-        }
-      }
-    }
+    let targetToolbarTrailingConstant =
+      (values["toolbarTrailingInset"] as? NSNumber)
+      .map { -CGFloat(truncating: $0) }
     let visible = values["visible"] as? Bool ?? false
     let showBack = visible && (values["showBack"] as? Bool ?? false)
     let backColor = animeWitcherUIColor(values["backColor"], fallback: .label)
@@ -736,7 +731,8 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
       setToolbarVisible(true, animated: !instantVisibilityChanges)
       applyToolbar(
         actions: actions,
-        animated: wasVisible && animateToolbarChanges
+        animated: wasVisible && animateToolbarChanges,
+        trailingConstant: targetToolbarTrailingConstant
       )
     }
   }
@@ -997,14 +993,61 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     return min(max(contentWidth, 78), 262)
   }
 
-  private func updateToolbarHostWidth(actions: [[String: Any]]) {
-    let width = desiredToolbarHostWidth(actions: actions)
-    guard toolbarWidthConstraint?.constant != width else { return }
-    // This only changes the transparent hit-test host. Do not animate it: the
-    // visible Liquid Glass transition is still owned by UIToolbar.setItems.
+  private func applyToolbarGeometry(
+    width: CGFloat,
+    trailingConstant: CGFloat?,
+    animated: Bool,
+    itemUpdate: () -> Void
+  ) {
+    let trailingChanged = trailingConstant.map {
+      toolbarTrailingConstraint?.constant != $0
+    } ?? false
+    let geometryChanged =
+      toolbarWidthConstraint?.constant != width || trailingChanged
+    let reduceMotion = UIAccessibility.isReduceMotionEnabled
+
+    if animated && geometryChanged && !reduceMotion {
+      // Capture the current presentation before changing the Auto Layout
+      // targets. The same transaction then starts the item morph and moves the
+      // capsule, so neither the 8 <-> 34 pt inset nor its width can jump first.
+      rootView.layoutIfNeeded()
+      toolbarWidthConstraint?.constant = width
+      if let trailingConstant {
+        toolbarTrailingConstraint?.constant = trailingConstant
+      }
+      itemUpdate()
+      UIView.animate(
+        withDuration: toolbarGeometryAnimationDuration,
+        delay: 0,
+        options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]
+      ) {
+        self.rootView.layoutIfNeeded()
+      }
+      return
+    }
+
+    if animated {
+      // Preserve UIKit's item transition when there is no spatial movement (or
+      // Reduce Motion is enabled), but do not manufacture a geometry animation.
+      UIView.performWithoutAnimation {
+        toolbarWidthConstraint?.constant = width
+        if let trailingConstant {
+          toolbarTrailingConstraint?.constant = trailingConstant
+        }
+        rootView.layoutIfNeeded()
+      }
+      itemUpdate()
+      return
+    }
+
     UIView.performWithoutAnimation {
       toolbarWidthConstraint?.constant = width
+      if let trailingConstant {
+        toolbarTrailingConstraint?.constant = trailingConstant
+      }
+      itemUpdate()
       rootView.layoutIfNeeded()
+      toolbar.layoutIfNeeded()
     }
   }
 
@@ -1047,13 +1090,21 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     return [UIBarButtonItem(systemItem: .flexibleSpace)] + actionItems
   }
 
-  private func applyToolbar(actions: [[String: Any]], animated: Bool) {
-    updateToolbarHostWidth(actions: actions)
+  private func applyToolbar(
+    actions: [[String: Any]],
+    animated: Bool,
+    trailingConstant: CGFloat?
+  ) {
+    let width = desiredToolbarHostWidth(actions: actions)
     let actionKinds = actions.map(actionKind)
     if didApplyInitialToolbarState,
        currentActionItems.count == actions.count,
        currentActionKinds == actionKinds {
-      UIView.performWithoutAnimation {
+      applyToolbarGeometry(
+        width: width,
+        trailingConstant: trailingConstant,
+        animated: false
+      ) {
         for (index, action) in actions.enumerated() {
           configureActionItem(
             currentActionItems[index],
@@ -1062,7 +1113,6 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
             actionCount: actions.count
           )
         }
-        toolbar.layoutIfNeeded()
       }
       return
     }
@@ -1070,13 +1120,12 @@ private final class ApplePersistentGlassHeaderNativeController: NSObject {
     let items = makeActionItems(actions: actions)
     currentActionKinds = actionKinds
     let shouldAnimate = didApplyInitialToolbarState && animated
-    if shouldAnimate {
-      toolbar.setItems(items, animated: true)
-    } else {
-      UIView.performWithoutAnimation {
-        toolbar.setItems(items, animated: false)
-        toolbar.layoutIfNeeded()
-      }
+    applyToolbarGeometry(
+      width: width,
+      trailingConstant: trailingConstant,
+      animated: shouldAnimate
+    ) {
+      toolbar.setItems(items, animated: shouldAnimate)
     }
     didApplyInitialToolbarState = true
   }

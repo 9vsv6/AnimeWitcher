@@ -36,4 +36,35 @@ void main() {
       reason: 'the old 35ms disappearance was effectively an abrupt cut',
     );
   });
+
+  test('toolbar geometry morphs together with structural item changes', () {
+    final swiftSource = File('ios/Runner/AppDelegate.swift').readAsStringSync();
+
+    expect(
+      swiftSource,
+      contains('toolbarGeometryAnimationDuration'),
+      reason:
+          'the toolbar capsule needs an explicit geometry animation instead of snapping its constraints before the item morph',
+    );
+    expect(
+      swiftSource,
+      contains('private func applyToolbarGeometry('),
+      reason:
+          'width and trailing inset should be committed by one shared geometry transition',
+    );
+    expect(
+      swiftSource,
+      contains(
+        'options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]',
+      ),
+      reason:
+          'interactive push/pop reversals must continue from the current toolbar position',
+    );
+    expect(
+      swiftSource,
+      contains('trailingConstant: targetToolbarTrailingConstant'),
+      reason:
+          'the 8pt Comments inset and 34pt Anime/Character inset must transition with the same toolbar morph',
+    );
+  });
 }
