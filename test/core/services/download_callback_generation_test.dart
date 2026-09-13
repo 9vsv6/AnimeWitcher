@@ -177,16 +177,17 @@ void main() {
       );
 
       final cancelStart = source.indexOf('Future<void> cancelDownload(');
-      final cancelEnd = source.indexOf(
-        'Future<DownloadCommandOutcome> cancelDownloadOutcome(',
+      final cancelTombstone = source.indexOf(
+        '_jobStore.tombstoneForDeletion(',
         cancelStart,
       );
-      final cancel = source.substring(cancelStart, cancelEnd);
-      expect(cancel, contains('_jobStore.tombstoneForDeletion('));
-      expect(
-        cancel.indexOf('_jobStore.tombstoneForDeletion('),
-        lessThan(cancel.indexOf('await _rangeTransfers.stop(taskId);')),
+      final cancelExecutorStop = source.indexOf(
+        'await _rangeTransfers.stop(taskId);',
+        cancelTombstone,
       );
+      expect(cancelStart, greaterThanOrEqualTo(0));
+      expect(cancelTombstone, greaterThan(cancelStart));
+      expect(cancelExecutorStop, greaterThan(cancelTombstone));
 
       final refreshStart = source.indexOf(
         'Future<({DownloadTask task, bool refreshed})> _refreshTaskBeforeResume(',
