@@ -1,0 +1,79 @@
+name: DM-15 checkpoint ack GREEN
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm15-checkpoint-ack-green.yml
+
+permissions:
+  contents: write
+
+jobs:
+  green:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+      - run: flutter pub get
+      - name: Apply DM-15 missing-ack fail-closed fix
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('lib/core/services/download_service.dart')
+          text = path.read_text()
+          if "nativeQueue.checkpointUnacknowledged" not in text:
+              old = "    await _continuedProcessing.persistNativeQueue(\n"
+              new = "    final acceptedVersion = await _continuedProcessing.persistNativeQueue(\n"
+              if old not in text:
+                  raise SystemExit('persistNativeQueue anchor not found')
+              text = text.replace(old, new, 1)
+              anchor = "      multipartPlans: multipartPlans,\n    );\n"
+              replacement = "      multipartPlans: multipartPlans,\n    );\n    if (acceptedVersion == null) {\n      diagnosticLog.record('nativeQueue.checkpointUnacknowledged', {\n        'waiters': waiters.length,\n        'transferring': transferring.length,\n      });\n      throw StateError('Native waiting queue checkpoint was not acknowledged');\n    }\n"
+              if anchor not in text:
+                  raise SystemExit('persistNativeQueue closing anchor not found')
+              text = text.replace(anchor, replacement, 1)
+              path.write_text(text)
+      - name: Format modified Dart
+        run: dart format lib/core/services/download_service.dart
+      - name: Run DM-15 focused acceptance
+        run: >-
+          flutter test
+          test/core/services/ios_native_queue_snapshot_version_guard_test.dart
+          test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart
+          test/core/services/ios_native_queue_snapshot_ack_recovery_test.dart
+          test/core/services/ios_continued_processing_completion_guard_test.dart
+          test/core/services/ios_continued_processing_expiration_test.dart
+          test/core/services/ios_multipart_native_bridge_source_test.dart
+          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+      - name: Analyze touched services
+        run: >-
+          flutter analyze
+          lib/core/services/download_service.dart
+          lib/core/services/download_continued_processing_service.dart
+          test/core/services/ios_native_queue_snapshot_version_guard_test.dart
+          test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart
+          test/core/services/ios_native_queue_snapshot_ack_recovery_test.dart
+      - name: Diff sanity
+        run: git diff --check
+      - name: Commit verified production fix
+        run: |
+          if git diff --quiet -- lib/core/services/download_service.dart; then
+            echo 'Production fix already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/core/services/download_service.dart
+          git commit -m 'fix(downloads): require native queue checkpoint ack (DM-15)'
+          git pull --rebase origin plan/download-manager-reliability
+          git push origin HEAD:plan/download-manager-reliability
