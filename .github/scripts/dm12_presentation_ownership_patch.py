@@ -6,12 +6,13 @@ source = path.read_text()
 
 def replace_once(old: str, new: str, label: str) -> None:
     global source
-    if new in source:
-        return
     count = source.count(old)
-    if count != 1:
-        raise SystemExit(f'{label} anchor mismatch: {count}')
-    source = source.replace(old, new, 1)
+    if count == 1:
+        source = source.replace(old, new, 1)
+        return
+    if count == 0 and new in source:
+        return
+    raise SystemExit(f'{label} anchor mismatch: {count}')
 
 
 replace_once(
