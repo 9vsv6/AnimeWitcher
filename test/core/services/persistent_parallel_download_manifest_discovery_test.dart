@@ -81,6 +81,30 @@ void main() {
     expect(evidence.single.generation, 7);
   });
 
+  test('rejects a manifest whose child path escapes its owned parts directory', () async {
+    await coordinator.dispose();
+
+    final manifest = await manifestFile();
+    final snapshot =
+        jsonDecode(await manifest.readAsString()) as Map<String, dynamic>;
+    final parts = snapshot['parts'] as List<dynamic>;
+    final firstPart = Map<String, dynamic>.from(parts.first as Map);
+    final firstTask = Map<String, dynamic>.from(firstPart['task'] as Map);
+    // Keep the expected child taskId but point its file at a sibling directory.
+    // A taskId prefix is identity evidence, not filesystem ownership proof.
+    firstTask['directory'] = root.path;
+    firstPart['task'] = firstTask;
+    parts[0] = firstPart;
+    snapshot['parts'] = parts;
+    await manifest.writeAsString(jsonEncode(snapshot), flush: true);
+
+    final evidence = await discoverParallelManifestRecoveryEvidence(<Directory>[
+      root,
+    ]);
+
+    expect(evidence, isEmpty);
+  });
+
   test('legacy manifest remains explicit unresolved evidence, not guessed parent', () async {
     // Freeze the coordinator before rewriting its durable checkpoint. Otherwise
     // an in-flight progress persist may legitimately replace this synthetic v5
