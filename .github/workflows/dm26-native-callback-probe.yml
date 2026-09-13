@@ -26,12 +26,21 @@ jobs:
           set -euo pipefail
           plugin="$HOME/.pub-cache/hosted/pub.dev/background_downloader-9.6.1"
           test -d "$plugin"
-          grep -R -n -C 6 \
+          grep -R -n -C 8 \
             -e 'onNativeTaskStatusChange' \
             -e 'onNativeTaskProgressChange' \
             "$plugin/ios" || true
-          echo '--- invocation sites ---'
-          grep -R -n -C 10 \
-            -e 'onNativeTaskStatusChange?' \
-            -e 'onNativeTaskProgressChange?' \
-            "$plugin/ios" || true
+          echo '--- Task identity fields ---'
+          grep -R -n -C 5 \
+            -e 'struct Task' \
+            -e 'class Task' \
+            -e 'let taskId' \
+            -e 'var taskId' \
+            "$plugin/ios/background_downloader/Sources/background_downloader" | head -n 220 || true
+          echo '--- URLSession access seams ---'
+          grep -R -n -C 5 \
+            -e 'static.*urlSession' \
+            -e 'var urlSession' \
+            -e 'func getTask' \
+            -e 'getAllTasks' \
+            "$plugin/ios/background_downloader/Sources/background_downloader" | head -n 260 || true
