@@ -281,18 +281,11 @@ class DownloadsNotifier extends _$DownloadsNotifier {
         // retain the old plugin-status normalization until they are migrated.
         if (status == TaskStatus.canceled) continue;
         if (status == TaskStatus.failed || status == TaskStatus.notFound) {
+          // Legacy executor state is presentation evidence only. Migration and
+          // repair belong to DownloadService reconciliation; never rewrite the
+          // plugin database while building a UI snapshot.
           status = TaskStatus.paused;
           if (progress < 0 || progress > 1) progress = 0.0;
-          unawaited(
-            FileDownloader().database.updateRecord(
-              TaskRecord(
-                record.task,
-                TaskStatus.paused,
-                progress,
-                record.expectedFileSize,
-              ),
-            ),
-          );
         } else if (progress < 0 || progress > 1) {
           progress = status == TaskStatus.complete ? 1.0 : 0.0;
         }
@@ -326,11 +319,8 @@ class DownloadsNotifier extends _$DownloadsNotifier {
     // FIFO: oldest first.
     items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     final collapsed = collapseDuplicateDownloads(items);
-    for (final extra in collapsed.extraCompleteRecords) {
-      await FileDownloader().database.deleteRecordWithId(extra.task.taskId);
-      await storage.removeDownloadMetadata(extra.task.taskId);
-      await deleteDownloadedEpisodeArtwork(extra.id);
-    }
+    // Duplicate repair is lifecycle reconciliation, not presentation cleanup.
+    // The UI collapses duplicate evidence without mutating executor/storage.
     return _orderDownloads(collapsed.visible);
   }
 
@@ -535,11 +525,6 @@ class DownloadsNotifier extends _$DownloadsNotifier {
       ref.read(activeDownloadsProvider.notifier).remove(trackingUrl);
       ref.read(downloadProgressProvider.notifier).remove(trackingUrl);
       ref.read(downloadChunkProgressProvider.notifier).remove(item.id);
-      // Artwork is presentation cache, not lifecycle authority. DM-12 will
-      // remove the remaining presentation-owned cache mutation separately.
-      try {
-        await deleteDownloadedEpisodeArtwork(item.id);
-      } catch (_) {}
     }
   }
 
