@@ -1874,8 +1874,13 @@ enum DownloadNativeWaitingQueue {
       .first(where: { $0.taskId == id })?
       .savedExpectedBytes ?? -1
     let sessionExpected = state.sessionCurrentTaskId == id ? state.sessionTotalBytes : -1
-    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]
-      .first(where: { $0 > 0 }) ?? -1
+    // Keep expected-byte candidates concretely typed. Swift otherwise infers
+    // an optional element through first(where:) in this callback context,
+    // leaking Int64? into all byte arithmetic.
+    let expectedCandidates: [Int64] = [
+      sample.expected, waiterExpected, multipartExpected, sessionExpected
+    ]
+    let knownExpected: Int64 = expectedCandidates.first(where: { $0 > 0 }) ?? -1
     let totalWritten = knownExpected > 0
       ? Int64((Double(knownExpected) * normalized).rounded(.down))
       : max(sample.written, 0)
