@@ -1,0 +1,237 @@
+name: Temporary comments header morph patcher
+
+on:
+  push:
+    branches:
+      - fix/comments-header-morph-animation
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'ci: add temporary comments header patcher'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/comments-header-morph-animation
+          fetch-depth: 0
+
+      - name: Apply synchronized toolbar geometry patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('ios/Runner/AppDelegate.swift')
+          source = path.read_text()
+
+          def replace_once(old: str, new: str) -> None:
+              global source
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one match, found {count}: {old[:80]!r}')
+              source = source.replace(old, new, 1)
+
+          replace_once(
+          '''  private let liquidGlassHideDuration: TimeInterval = 0.20
+''',
+          '''  private let liquidGlassHideDuration: TimeInterval = 0.20
+  private let toolbarGeometryAnimationDuration: TimeInterval = 0.34
+''')
+
+          replace_once(
+          '''    installedHostView?.bringSubviewToFront(rootView)
+    if let insetNumber = values["toolbarTrailingInset"] as? NSNumber {
+      let trailingConstant = -CGFloat(truncating: insetNumber)
+      if toolbarTrailingConstraint?.constant != trailingConstant {
+        UIView.performWithoutAnimation {
+          toolbarTrailingConstraint?.constant = trailingConstant
+          rootView.layoutIfNeeded()
+        }
+      }
+    }
+    let visible = values["visible"] as? Bool ?? false
+''',
+          '''    installedHostView?.bringSubviewToFront(rootView)
+    let targetToolbarTrailingConstant =
+      (values["toolbarTrailingInset"] as? NSNumber)
+      .map { -CGFloat(truncating: $0) }
+    let visible = values["visible"] as? Bool ?? false
+''')
+
+          replace_once(
+          '''      applyToolbar(
+        actions: actions,
+        animated: wasVisible && animateToolbarChanges
+      )
+''',
+          '''      applyToolbar(
+        actions: actions,
+        animated: wasVisible && animateToolbarChanges,
+        trailingConstant: targetToolbarTrailingConstant
+      )
+''')
+
+          replace_once(
+          '''  private func updateToolbarHostWidth(actions: [[String: Any]]) {
+    let width = desiredToolbarHostWidth(actions: actions)
+    guard toolbarWidthConstraint?.constant != width else { return }
+    // This only changes the transparent hit-test host. Do not animate it: the
+    // visible Liquid Glass transition is still owned by UIToolbar.setItems.
+    UIView.performWithoutAnimation {
+      toolbarWidthConstraint?.constant = width
+      rootView.layoutIfNeeded()
+    }
+  }
+''',
+          '''  private func applyToolbarGeometry(
+    width: CGFloat,
+    trailingConstant: CGFloat?,
+    animated: Bool,
+    itemUpdate: () -> Void
+  ) {
+    let trailingChanged = trailingConstant.map {
+      toolbarTrailingConstraint?.constant != $0
+    } ?? false
+    let geometryChanged =
+      toolbarWidthConstraint?.constant != width || trailingChanged
+    let reduceMotion = UIAccessibility.isReduceMotionEnabled
+
+    if animated && geometryChanged && !reduceMotion {
+      // Capture the current presentation before changing the Auto Layout
+      // targets. The same transaction then starts the item morph and moves the
+      // capsule, so neither the 8 <-> 34 pt inset nor its width can jump first.
+      rootView.layoutIfNeeded()
+      toolbarWidthConstraint?.constant = width
+      if let trailingConstant {
+        toolbarTrailingConstraint?.constant = trailingConstant
+      }
+      itemUpdate()
+      UIView.animate(
+        withDuration: toolbarGeometryAnimationDuration,
+        delay: 0,
+        options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]
+      ) {
+        self.rootView.layoutIfNeeded()
+      }
+      return
+    }
+
+    if animated {
+      // Preserve UIKit's item transition when there is no spatial movement (or
+      // Reduce Motion is enabled), but do not manufacture a geometry animation.
+      UIView.performWithoutAnimation {
+        toolbarWidthConstraint?.constant = width
+        if let trailingConstant {
+          toolbarTrailingConstraint?.constant = trailingConstant
+        }
+        rootView.layoutIfNeeded()
+      }
+      itemUpdate()
+      return
+    }
+
+    UIView.performWithoutAnimation {
+      toolbarWidthConstraint?.constant = width
+      if let trailingConstant {
+        toolbarTrailingConstraint?.constant = trailingConstant
+      }
+      itemUpdate()
+      rootView.layoutIfNeeded()
+      toolbar.layoutIfNeeded()
+    }
+  }
+''')
+
+          replace_once(
+          '''  private func applyToolbar(actions: [[String: Any]], animated: Bool) {
+    updateToolbarHostWidth(actions: actions)
+    let actionKinds = actions.map(actionKind)
+    if didApplyInitialToolbarState,
+       currentActionItems.count == actions.count,
+       currentActionKinds == actionKinds {
+      UIView.performWithoutAnimation {
+        for (index, action) in actions.enumerated() {
+          configureActionItem(
+            currentActionItems[index],
+            actionIndex: index,
+            action: action,
+            actionCount: actions.count
+          )
+        }
+        toolbar.layoutIfNeeded()
+      }
+      return
+    }
+
+    let items = makeActionItems(actions: actions)
+    currentActionKinds = actionKinds
+    let shouldAnimate = didApplyInitialToolbarState && animated
+    if shouldAnimate {
+      toolbar.setItems(items, animated: true)
+    } else {
+      UIView.performWithoutAnimation {
+        toolbar.setItems(items, animated: false)
+        toolbar.layoutIfNeeded()
+      }
+    }
+    didApplyInitialToolbarState = true
+  }
+''',
+          '''  private func applyToolbar(
+    actions: [[String: Any]],
+    animated: Bool,
+    trailingConstant: CGFloat?
+  ) {
+    let width = desiredToolbarHostWidth(actions: actions)
+    let actionKinds = actions.map(actionKind)
+    if didApplyInitialToolbarState,
+       currentActionItems.count == actions.count,
+       currentActionKinds == actionKinds {
+      applyToolbarGeometry(
+        width: width,
+        trailingConstant: trailingConstant,
+        animated: false
+      ) {
+        for (index, action) in actions.enumerated() {
+          configureActionItem(
+            currentActionItems[index],
+            actionIndex: index,
+            action: action,
+            actionCount: actions.count
+          )
+        }
+      }
+      return
+    }
+
+    let items = makeActionItems(actions: actions)
+    currentActionKinds = actionKinds
+    let shouldAnimate = didApplyInitialToolbarState && animated
+    applyToolbarGeometry(
+      width: width,
+      trailingConstant: trailingConstant,
+      animated: shouldAnimate
+    ) {
+      toolbar.setItems(items, animated: shouldAnimate)
+    }
+    didApplyInitialToolbarState = true
+  }
+''')
+
+          path.write_text(source)
+          PY
+
+          git diff --check
+          grep -n "toolbarGeometryAnimationDuration\|applyToolbarGeometry\|targetToolbarTrailingConstant" ios/Runner/AppDelegate.swift
+
+      - name: Commit production fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios/Runner/AppDelegate.swift
+          git commit -m "fix(ios): synchronize comments header morph geometry"
+          git push origin HEAD:fix/comments-header-morph-animation
