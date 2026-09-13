@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: dm14-generation-provenance-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   generation-provenance:
     runs-on: ubuntu-latest
@@ -29,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Apply generation provenance GREEN
+      - name: Apply DM-14 manifest provenance GREEN
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -49,6 +53,10 @@ jobs:
               (
                   """          if (schemaVersion < 1 ||\n              schemaVersion > kParallelManifestSchemaVersion) {\n            continue;\n          }\n          final parentTaskId =""",
                   """          if (schemaVersion < 1 ||\n              schemaVersion > kParallelManifestSchemaVersion) {\n            continue;\n          }\n          final generation = (snapshot['generation'] as num?)?.toInt() ?? 0;\n          if (generation < 0) continue;\n          final parentTaskId =""",
+              ),
+              (
+                  """            if (restored is! DownloadTask ||\n                !restored.taskId.startsWith('$parentTaskId.part.')) {\n              layoutValid = false;\n              break;\n            }\n            final size = to - from + 1;""",
+                  """            if (restored is! DownloadTask ||\n                !restored.taskId.startsWith('$parentTaskId.part.')) {\n              layoutValid = false;\n              break;\n            }\n            final childPath = p.normalize(await restored.filePath());\n            final ownedPartsDirectory = p.normalize(p.dirname(canonicalPath));\n            if (!p.equals(p.dirname(childPath), ownedPartsDirectory)) {\n              layoutValid = false;\n              break;\n            }\n            final size = to - from + 1;""",
               ),
               (
                   """            schemaVersion: schemaVersion,\n            parentTaskId: parentTaskId,""",
@@ -87,7 +95,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add lib/core/services/persistent_parallel_download.dart
-          git commit -m 'fix(downloads): carry manifest generation provenance (DM-14)'
+          git commit -m 'fix(downloads): harden manifest artifact provenance (DM-14)'
           git pull --rebase origin plan/download-manager-reliability
           flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart \
             --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
