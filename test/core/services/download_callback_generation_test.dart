@@ -170,9 +170,9 @@ void main() {
         pauseStart,
       );
       final pause = source.substring(pauseStart, pauseEnd);
-      expect(pause, contains('_jobStore.beginOperation('));
+      expect(pause, contains('_jobStore.beginReplicaTransaction('));
       expect(
-        pause.indexOf('_jobStore.beginOperation('),
+        pause.indexOf('_jobStore.beginReplicaTransaction('),
         lessThan(pause.indexOf('await _rangeTransfers.stop(taskId);')),
       );
 
