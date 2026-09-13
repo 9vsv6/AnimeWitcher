@@ -58,6 +58,7 @@ class ParallelManifestRecoveryEvidence {
   const ParallelManifestRecoveryEvidence({
     required this.manifestFile,
     required this.schemaVersion,
+    required this.generation,
     required this.parentTaskId,
     required this.parentTask,
     required this.childTasks,
@@ -68,6 +69,7 @@ class ParallelManifestRecoveryEvidence {
 
   final File manifestFile;
   final int schemaVersion;
+  final int generation;
   final String parentTaskId;
   final ParallelDownloadTask? parentTask;
   final List<DownloadTask> childTasks;
@@ -127,6 +129,8 @@ discoverParallelManifestRecoveryEvidence(Iterable<Directory> roots) async {
               schemaVersion > kParallelManifestSchemaVersion) {
             continue;
           }
+          final generation = (snapshot['generation'] as num?)?.toInt() ?? 0;
+          if (generation < 0) continue;
           final parentTaskId =
               snapshot['parentTaskId']?.toString().trim() ?? '';
           if (parentTaskId.isEmpty) continue;
@@ -163,6 +167,12 @@ discoverParallelManifestRecoveryEvidence(Iterable<Directory> roots) async {
             );
             if (restored is! DownloadTask ||
                 !restored.taskId.startsWith('$parentTaskId.part.')) {
+              layoutValid = false;
+              break;
+            }
+            final childPath = p.normalize(await restored.filePath());
+            final ownedPartsDirectory = p.normalize(p.dirname(canonicalPath));
+            if (!p.equals(p.dirname(childPath), ownedPartsDirectory)) {
               layoutValid = false;
               break;
             }
@@ -221,6 +231,7 @@ discoverParallelManifestRecoveryEvidence(Iterable<Directory> roots) async {
           final evidence = ParallelManifestRecoveryEvidence(
             manifestFile: File(canonicalPath),
             schemaVersion: schemaVersion,
+            generation: generation,
             parentTaskId: parentTaskId,
             parentTask: parentTask,
             childTasks: List<DownloadTask>.unmodifiable(childTasks),
