@@ -31,7 +31,7 @@ void main() {
     expect(swift, contains('struct MultipartClaim: Codable'));
     expect(swift, contains('var multipartClaims: [MultipartClaim]'));
     expect(swift, contains('requeueExpiredMultipartClaimsLocked(&current)'));
-    expect(swift, contains('claimedChildIds.contains($0.taskId)'));
+    expect(swift, contains(r'claimedChildIds.contains($0.taskId)'));
     expect(swift, contains('commitMultipartClaimBeforeResume(waiter)'));
     expect(swift, contains('guard !isAppInForeground() else'));
     expect(swift, contains('settleMultipartClaim(childTaskId: childId)'));
