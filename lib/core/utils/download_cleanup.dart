@@ -228,35 +228,28 @@ Future<void> _deleteEmptyAncestorsUpTo(
   }
 }
 
-bool _isKnownOwnedDownloadArtifact(File file) {
-  final lower = p.basename(file.path).toLowerCase();
-  if (lower == 'manifest.json' || lower == 'manifest.json.tmp') return true;
-  if (lower.endsWith('.assembling')) return true;
-  return kDownloadTempSuffixes.any(lower.endsWith);
-}
-
-Future<bool> _directoryContainsOnlyKnownDownloadArtifacts(
-  Directory directory,
-) async {
+/// A recursive series-directory delete is safe only when no file evidence is
+/// left at all. A `.part`, `.assembling`, manifest, or other recognized name is
+/// not proof that the artifact is obsolete; it may be the only durable recovery
+/// evidence after process death. Proven obsolete artifacts are deleted by their
+/// owning lifecycle/reconciliation path, not by this filename-only cleanup.
+Future<bool> _directoryContainsOnlyEmptyDirectories(Directory directory) async {
   if (!await directory.exists()) return true;
   await for (final entity in directory.list(followLinks: false)) {
-    if (entity is Link) return false;
-    if (entity is File) {
-      if (!_isKnownOwnedDownloadArtifact(entity)) return false;
-      continue;
-    }
+    if (entity is Link || entity is File) return false;
     if (entity is Directory &&
-        !await _directoryContainsOnlyKnownDownloadArtifacts(entity)) {
+        !await _directoryContainsOnlyEmptyDirectories(entity)) {
       return false;
     }
   }
   return true;
 }
 
-/// After a video is gone: wipe the series folder when no videos remain.
+/// After a video is gone: remove the series folder only when no videos and no
+/// durable recovery/user evidence remain.
 ///
-/// Leftover `.part` files, thumbs, and empty Season dirs must not keep
-/// `AnimeWitcher/Downloads/<AnimeTitle>`. Never deletes the Downloads root.
+/// Temp/resume artifacts are deliberately preserved unless their owning
+/// lifecycle has already proved them obsolete. Never deletes the Downloads root.
 Future<void> deleteSeriesFolderIfNoVideosRemain(File deletedFile) async {
   final seriesDir = seriesFolderForDownloadedFile(deletedFile);
   if (seriesDir == null) return;
@@ -268,7 +261,7 @@ Future<void> deleteSeriesFolderIfNoVideosRemain(File deletedFile) async {
     return;
   }
 
-  if (!await _directoryContainsOnlyKnownDownloadArtifacts(seriesDir)) {
+  if (!await _directoryContainsOnlyEmptyDirectories(seriesDir)) {
     await _deleteEmptyAncestorsUpTo(deletedFile.parent, seriesDir);
     return;
   }
