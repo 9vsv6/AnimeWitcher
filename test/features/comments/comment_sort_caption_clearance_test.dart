@@ -1,3 +1,4 @@
+import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
 import 'package:animewitcher/core/utils/window_controls_inset.dart';
 import 'package:animewitcher/features/comments/presentation/widgets/animewitcher_comment_sort_control.dart';
 import 'package:flutter/material.dart';
@@ -72,4 +73,42 @@ void main() {
 
     expect(windowRight - sort.right, lessThan(24));
   });
+
+  testWidgets(
+    'persistent comment sort is a compact icon aligned with the back button',
+    (tester) async {
+      List<AppleLiquidGlassToolbarButton>? buttons;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              buttons = AnimeWitcherCommentSortControl.persistentButtons(
+                context: context,
+                isArabic: true,
+                tooltip: 'ترتيب التعليقات',
+                sort: AnimeWitcherCommentSort.newest,
+                onSelected: (_) {},
+              );
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+
+      expect(buttons, isNotNull);
+      expect(buttons!.single.width, AnimeWitcherCommentSortControl.size);
+      expect(buttons!.single.title, isNull);
+      expect(
+        AnimeWitcherCommentSortControl.persistentTrailingInset,
+        8,
+        reason: 'the sort control should mirror the 8pt back-button edge inset',
+      );
+      expect(
+        AnimeWitcherCommentSortControl.persistentTitleClearance,
+        lessThan(92),
+        reason: 'the title should move right with the compact sort control',
+      );
+    },
+  );
 }
