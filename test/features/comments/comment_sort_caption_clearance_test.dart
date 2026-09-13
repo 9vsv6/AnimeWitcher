@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:animewitcher/core/account/animewitcher_comment_models.dart';
 import 'package:animewitcher/core/utils/window_controls_inset.dart';
 import 'package:animewitcher/features/comments/presentation/widgets/animewitcher_comment_sort_control.dart';
@@ -103,7 +105,7 @@ void main() {
       expect(
         AnimeWitcherCommentSortControl.persistentTrailingInset,
         8,
-        reason: 'the sort control should mirror the 8pt back-button edge inset',
+        reason: 'the sort button should mirror the 8pt back-button edge inset',
       );
       expect(
         AnimeWitcherCommentSortControl.persistentTitleClearance,
@@ -112,4 +114,20 @@ void main() {
       );
     },
   );
+
+  test('native single-icon toolbar host stays exactly 46pt wide', () {
+    final swiftSource = File('ios/Runner/AppDelegate.swift').readAsStringSync();
+
+    expect(
+      swiftSource,
+      contains('isCompactSingleAction(actions)'),
+      reason:
+          'the native host needs an explicit compact path so its center mirrors Back',
+    );
+    expect(
+      swiftSource,
+      contains('if isCompactSingleAction(actions) { return 46 }'),
+      reason: 'the transparent toolbar host must not keep the old 78pt minimum',
+    );
+  });
 }
