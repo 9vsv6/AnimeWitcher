@@ -396,7 +396,7 @@
   - **Confirmed root cause:** `_schedulePumpAll()` awaited every session serially, so slow `startPart`/storage work in one host prevented later sessions from reaching promotion. Simply parallelizing pumps would have introduced a stale-capacity race because global availability was computed before async record/manifest work; the final pre-reservation recheck closes that race.
   - **Verification passed:** RED→GREEN stalled-host vs fast-host fairness coverage, pending-start lease/global budget regressions, persistent multipart scheduler/auto-recovery regressions, concurrency/governor tests, analyzer, and `git diff --check`.
 
-- [ ] **DM-12 — Remove lifecycle persistence and destructive cleanup from presentation code**
+- [x] **DM-12 — Remove lifecycle persistence and destructive cleanup from presentation code**
   - **Problem:** downloads provider rewrites plugin states and deletes DB/metadata/files while service state evolves concurrently.
   - **Root cause:** UI became a repair/orchestration layer to compensate for transport-state semantics.
   - **Severity / priority:** **P1 / High.**
