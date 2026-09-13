@@ -358,6 +358,14 @@ enum DownloadNativeWaitingQueue {
     lock.lock()
     defer { lock.unlock() }
     guard !hookInstalled else { return }
+    #if canImport(background_downloader)
+    BDPlugin.onNativeTaskProgressChange = { task, progress in
+      DownloadNativeWaitingQueue.handleSupportedPluginProgress(
+        task: task,
+        progress: progress
+      )
+    }
+    #endif
     hookInstalled = DownloadUrlSessionHook.install()
   }
 
@@ -705,6 +713,11 @@ enum DownloadNativeWaitingQueue {
 
   static func noteBackgroundRetryProgress(_ task: URLSessionTask) {
     guard let id = taskId(from: task) else { return }
+    noteBackgroundRetryProgress(taskId: id)
+  }
+
+  private static func noteBackgroundRetryProgress(taskId id: String) {
+    guard !id.isEmpty else { return }
     lock.lock()
     if var retry = backgroundRetryStates[id] {
       retry.sawProgressSinceLastFailure = true
@@ -1687,6 +1700,104 @@ enum DownloadNativeWaitingQueue {
     task.resume()
   }
 
+  #if canImport(background_downloader)
+  /// background_downloader 9.6.1 exposes throttled native progress directly.
+  /// Prefer that supported contract over replacing its didWriteData IMP. When
+  /// native/Dart state already knows the expected byte count, keep the exact
+  /// byte/speed bridge; otherwise preserve normalized progress without
+  /// inventing a total size.
+  private static func handleSupportedPluginProgress(
+    task: background_downloader.Task,
+    progress: Double
+  ) {
+    guard progress.isFinite else { return }
+    let normalized = min(max(progress, 0), 1)
+    let id = task.taskId
+    guard !id.isEmpty else { return }
+    noteBackgroundRetryProgress(taskId: id)
+
+    let now = CFAbsoluteTimeGetCurrent()
+    let name = task.displayName.isEmpty
+      ? (task.filename.isEmpty ? id : task.filename)
+      : task.displayName
+    let logicalKey = episodeKey(
+      taskId: id,
+      trackingUrl: task.metaData,
+      directory: task.directory,
+      filename: task.filename,
+      url: task.url
+    )
+
+    lock.lock()
+    seenTransferringIds.insert(id)
+    activeEpisodeKeysByTaskId[id] = logicalKey
+    startingEpisodeKeys.remove(logicalKey)
+    var state = loadLocked()
+    if !state.transferringTaskIds.contains(id) {
+      state.transferringTaskIds.append(id)
+    }
+    var sample = state.runningSamples[id] ?? RunningSample(
+      written: 0,
+      expected: -1,
+      speed: 0,
+      displayName: name
+    )
+    let waiterExpected = state.waiters.first(where: { $0.taskId == id })?.savedExpectedBytes ?? -1
+    let multipartExpected = state.multipartPlans
+      .flatMap(\.waiters)
+      .first(where: { $0.taskId == id })?
+      .savedExpectedBytes ?? -1
+    let sessionExpected = state.sessionCurrentTaskId == id ? state.sessionTotalBytes : -1
+    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]
+      .first(where: { $0 > 0 }) ?? -1
+    let totalWritten = knownExpected > 0
+      ? Int64((Double(knownExpected) * normalized).rounded(.down))
+      : max(sample.written, 0)
+    if knownExpected > 0 {
+      sample.written = totalWritten
+      sample.expected = knownExpected
+      sample.speed = rollingSpeedLocked(
+        windows: &taskSpeedWindows,
+        taskId: id,
+        totalWritten: totalWritten,
+        now: now
+      )
+    }
+    if sample.displayName.isEmpty { sample.displayName = name }
+    state.runningSamples[id] = sample
+    let transferringSet = Set(state.transferringTaskIds)
+    state.runningSamples = state.runningSamples.filter { transferringSet.contains($0.key) }
+    let presentation = overlayPresentation(from: state, fallbackId: id, fallbackName: name)
+    let stableSpeed = sample.speed
+    saveLocked(state)
+    lock.unlock()
+
+    if knownExpected > 0 {
+      scheduleNativeSpeedStaleReset(taskId: id, observedAt: now)
+      _ = postSingleTaskUpdate(
+        taskId: id,
+        trackingUrl: task.metaData.isEmpty ? task.url : task.metaData,
+        totalWritten: totalWritten,
+        totalExpected: knownExpected,
+        speedBytesPerSecond: stableSpeed,
+        now: now
+      )
+    }
+
+    if !isAppInForeground() {
+      let overlayProgress = knownExpected > 0 ? presentation.progress : normalized
+      upsertSessionOverlay(
+        currentTaskId: presentation.currentTaskId.isEmpty ? id : presentation.currentTaskId,
+        displayName: presentation.displayName.isEmpty ? name : presentation.displayName,
+        progress: overlayProgress,
+        totalBytes: knownExpected > 0 ? presentation.totalBytes : -1,
+        transferredBytes: knownExpected > 0 ? presentation.transferredBytes : totalWritten,
+        speedBytesPerSecond: knownExpected > 0 ? presentation.speedBytesPerSecond : 0
+      )
+    }
+  }
+  #endif
+
   static func handleBytesWritten(
     _ downloadTask: URLSessionDownloadTask,
     session: URLSession? = nil,
@@ -2179,8 +2290,9 @@ enum DownloadNativeWaitingQueue {
   }
 }
 
-/// Swizzles the plugin `UrlSessionDelegate` so promotion runs in the native
-/// completion callback. Flutter method channels are never used to start files.
+/// Keeps only the plugin `UrlSessionDelegate` completion-ordering hooks that
+/// still require the live URLSession. Progress uses the supported 9.6.1 native
+/// callback above, so Flutter method channels are never required to observe it.
 ///
 /// Uses IMP replacement (not Swift `self.hooked()` after `method_exchange`),
 /// because a Swift call to the hooked method is a direct recursive call and
@@ -2195,14 +2307,10 @@ private enum DownloadUrlSessionHook {
   private static let finishEventsSelector = NSSelectorFromString(
     "URLSessionDidFinishEventsForBackgroundURLSession:"
   )
-  private static let writeSelector = NSSelectorFromString(
-    "URLSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:"
-  )
 
   private static var originalComplete: IMP?
   private static var originalFinishDownload: IMP?
   private static var originalFinishEvents: IMP?
-  private static var originalWrite: IMP?
 
   static func install() -> Bool {
     #if canImport(background_downloader)
@@ -2216,8 +2324,7 @@ private enum DownloadUrlSessionHook {
     hookComplete(on: delegateClass)
     hookFinishDownload(on: delegateClass)
     hookFinishEvents(on: delegateClass)
-    hookWrite(on: delegateClass)
-    let hooked = originalComplete != nil || originalFinishDownload != nil || originalFinishEvents != nil || originalWrite != nil
+    let hooked = originalComplete != nil || originalFinishDownload != nil || originalFinishEvents != nil
     if hooked {
       NSLog("[DownloadNativeWaitingQueue] hooked UrlSessionDelegate %@", String(cString: class_getName(delegateClass)))
     } else {
@@ -2299,33 +2406,6 @@ private enum DownloadUrlSessionHook {
         session: session,
         task: downloadTask,
         error: nil
-      )
-    }
-    method_setImplementation(method, imp_implementationWithBlock(block))
-  }
-
-  private static func hookWrite(on cls: AnyClass) {
-    guard let method = class_getInstanceMethod(cls, writeSelector) else { return }
-    originalWrite = method_getImplementation(method)
-    let block: @convention(block) (
-      AnyObject, URLSession, URLSessionDownloadTask, Int64, Int64, Int64
-    ) -> Void = { slf, session, downloadTask, bytesWritten, totalWritten, totalExpected in
-      DownloadNativeDiagnosticLog.record("progress", task: downloadTask)
-      if let original = DownloadUrlSessionHook.originalWrite {
-        let fn = unsafeBitCast(
-          original,
-          to: (@convention(c) (
-            AnyObject, Selector, URLSession, URLSessionDownloadTask, Int64, Int64, Int64
-          ) -> Void).self
-        )
-        fn(slf, writeSelector, session, downloadTask, bytesWritten, totalWritten, totalExpected)
-      }
-      DownloadNativeWaitingQueue.noteBackgroundRetryProgress(downloadTask)
-      DownloadNativeWaitingQueue.handleBytesWritten(
-        downloadTask,
-        session: session,
-        totalWritten: totalWritten,
-        totalExpected: totalExpected
       )
     }
     method_setImplementation(method, imp_implementationWithBlock(block))
