@@ -1,0 +1,98 @@
+name: DM-22 ownership handoff GREEN v4
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm22-ownership-handoff-green-v4.yml
+
+permissions:
+  contents: write
+
+jobs:
+  green:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Prove DM-22 RED
+        run: |
+          set +e
+          flutter test test/core/services/ios_multipart_ownership_handoff_source_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            if grep -q 'NativeParallelBackgroundCandidate' lib/core/services/persistent_parallel_download.dart; then
+              echo 'DM-22 already GREEN on production sources.'
+            else
+              echo 'Expected DM-22 source test to fail before production patch.' >&2
+              exit 1
+            fi
+          else
+            echo 'DM-22 RED reproduced.'
+          fi
+
+      - name: Apply DM-22 production patch
+        run: python3 .github/scripts/dm22_apply.py
+
+      - name: Format Dart changes
+        run: dart format lib/core/services/persistent_parallel_download.dart lib/core/services/download_service.dart test/core/services/ios_multipart_ownership_handoff_source_test.dart
+
+      - name: Run DM-22 focused acceptance
+        run: >-
+          flutter test
+          test/core/services/ios_multipart_ownership_handoff_source_test.dart
+          test/core/services/ios_multipart_native_bridge_source_test.dart
+          test/core/services/persistent_parallel_download_test.dart
+          test/core/services/ios_native_queue_snapshot_version_guard_test.dart
+          test/core/services/ios_native_queue_checkpoint_ack_guard_test.dart
+          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Analyze touched Dart code
+        run: >-
+          flutter analyze --no-fatal-warnings --no-fatal-infos
+          lib/core/services/persistent_parallel_download.dart
+          lib/core/services/download_service.dart
+          test/core/services/ios_multipart_ownership_handoff_source_test.dart
+
+      - name: Diff sanity
+        run: git diff --check
+
+      - name: Commit GREEN production contract
+        run: |
+          git reset -- build/ 2>/dev/null || true
+          git checkout -- build/ 2>/dev/null || true
+          git clean -fd build/ 2>/dev/null || true
+          if git diff --quiet -- \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/core/services/download_service.dart \
+            ios/Runner/DownloadNativeWaitingQueue.swift; then
+            echo 'DM-22 production contract already committed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/core/services/download_service.dart \
+            ios/Runner/DownloadNativeWaitingQueue.swift
+          git commit -m 'fix(downloads): fence iOS multipart ownership handoff (DM-22)'
+          git pull --rebase origin plan/download-manager-reliability
+          git push origin HEAD:plan/download-manager-reliability
