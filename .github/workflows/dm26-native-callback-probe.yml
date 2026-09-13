@@ -49,16 +49,18 @@ jobs:
 
           path = Path('ios/Runner/DownloadNativeWaitingQueue.swift')
           text = path.read_text()
-          old = '''    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]
-      .first(where: { $0 > 0 }) ?? -1
-'''
-          new = '''    // Some plugin-side byte metadata is optional. Flatten the candidate list
-    // before arithmetic so the supported callback compiles against 9.6.1
-    // without inventing a byte total when none is known.
-    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]
-      .compactMap { $0 }
-      .first(where: { $0 > 0 }) ?? -1
-'''
+          old = (
+              "    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]\n"
+              "      .first(where: { $0 > 0 }) ?? -1\n"
+          )
+          new = (
+              "    // Some plugin-side byte metadata is optional. Flatten the candidate list\n"
+              "    // before arithmetic so the supported callback compiles against 9.6.1\n"
+              "    // without inventing a byte total when none is known.\n"
+              "    let knownExpected = [sample.expected, waiterExpected, multipartExpected, sessionExpected]\n"
+              "      .compactMap { $0 }\n"
+              "      .first(where: { $0 > 0 }) ?? -1\n"
+          )
           if old not in text:
               raise SystemExit('DM-26 expected-bytes target not found')
           path.write_text(text.replace(old, new, 1))
