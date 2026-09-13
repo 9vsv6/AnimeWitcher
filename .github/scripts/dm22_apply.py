@@ -415,17 +415,19 @@ new_selection = '''      let selected: [Waiter]
       if !selected.isEmpty {
         let selectedIds = Set(selected.map(\\.taskId))
         plan.waiters.removeAll { selectedIds.contains($0.taskId) }
-        for waiter in selected {
-          guard let generation = waiter.generation,
-                let claimId = waiter.claimId,
-                let lease = waiter.claimLeaseMillis
+        for claimedWaiter in selected {
+          guard let generation = claimedWaiter.generation,
+                let claimId = claimedWaiter.claimId,
+                let lease = claimedWaiter.claimLeaseMillis
           else { continue }
-          state.multipartClaims.removeAll { $0.waiter.taskId == waiter.taskId }
+          state.multipartClaims.removeAll {
+            $0.waiter.taskId == claimedWaiter.taskId
+          }
           state.multipartClaims.append(
             MultipartClaim(
               parentTaskId: parentId,
               maxConcurrent: plan.maxConcurrent,
-              waiter: waiter,
+              waiter: claimedWaiter,
               generation: generation,
               claimId: claimId,
               expiresAtMillis: nowMillis() + Int64(max(lease, 1)),
