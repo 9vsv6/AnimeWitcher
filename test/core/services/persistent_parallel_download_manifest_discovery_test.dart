@@ -62,6 +62,25 @@ void main() {
     expect(found.childTasks, hasLength(2));
   });
 
+  test('recovery evidence exposes persisted generation provenance', () async {
+    // Freeze the coordinator before editing the durable checkpoint so no
+    // in-flight persist can replace this synthetic generation fixture.
+    await coordinator.dispose();
+
+    final manifest = await manifestFile();
+    final snapshot =
+        jsonDecode(await manifest.readAsString()) as Map<String, dynamic>;
+    snapshot['generation'] = 7;
+    await manifest.writeAsString(jsonEncode(snapshot), flush: true);
+
+    final evidence = await discoverParallelManifestRecoveryEvidence(<Directory>[
+      root,
+    ]);
+
+    expect(evidence, hasLength(1));
+    expect(evidence.single.generation, 7);
+  });
+
   test('legacy manifest remains explicit unresolved evidence, not guessed parent', () async {
     // Freeze the coordinator before rewriting its durable checkpoint. Otherwise
     // an in-flight progress persist may legitimately replace this synthetic v5
