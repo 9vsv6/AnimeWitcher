@@ -475,7 +475,7 @@ class _ApplePersistentGlassHeaderOverlayState
       'toolbarTrailingInset':
           config?.toolbarTrailingInset ?? (isInstantRoute ? 34.0 : 18.0),
       'animateToolbarChanges': !involvesInstantRoute,
-      'instantVisibilityChanges': involvesInstantRoute,
+      'instantVisibilityChanges': false,
       'hardCutToolbar': hardCutInstantBoundary,
       'actions': desiredActions,
     };
