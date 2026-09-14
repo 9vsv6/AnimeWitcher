@@ -112,17 +112,28 @@ jobs:
         run: |
           flutter test test/core/services/dm28_android_policy_test.dart test/core/services/download_transport_test.dart
 
-      - name: Verify service uses runtime notification policy for start and resume
+      - name: Verify service wires runtime notification policy into transfer hints
         run: |
           python3 - <<'PY'
           from pathlib import Path
           source = Path('lib/core/services/download_service.dart').read_text()
-          if source.count('shouldUseUserInitiatedDownloadHint(') < 2:
-              raise SystemExit('start/resume do not both use the DM-28 UIDT policy')
-          if source.count('FileDownloader().permissions.status(') < 2:
-              raise SystemExit('start/resume do not both verify notification permission')
-          if source.count('shouldClearDownloadNotificationConfigs(') < 2:
-              raise SystemExit('start/resume do not both respect notification configuration')
+          required = (
+              'shouldUseUserInitiatedDownloadHint(',
+              'FileDownloader().permissions.status(',
+              'shouldClearDownloadNotificationConfigs(',
+              'useUserInitiated:',
+          )
+          missing = [token for token in required if token not in source]
+          if missing:
+              raise SystemExit(f'missing DM-28 runtime policy wiring: {missing}')
+          # Both task-construction paths must feed a resolved runtime policy into
+          # animeDownloadTransferHints. Keep this structural assertion broad
+          # enough to tolerate refactoring the permission/config lookup into a
+          # shared helper; behavior is covered by the tests above.
+          if source.count('transferHints: animeDownloadTransferHints(') < 2:
+              raise SystemExit('start/resume do not both construct policy-aware transfer hints')
+          if source.count('useUserInitiated:') < 2:
+              raise SystemExit('start/resume do not both pass the resolved UIDT decision')
           PY
 
       - name: Build Android debug app and merged manifest
