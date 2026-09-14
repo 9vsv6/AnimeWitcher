@@ -1,5 +1,6 @@
 name: Apply download link and session fix
 
+# Temporary branch-only helper; removed after the implementation commit lands.
 on:
   push:
     branches:
