@@ -37,6 +37,8 @@ jobs:
           dart run build_runner build --delete-conflicting-outputs
           grep -A7 '^  background_downloader:' pubspec.lock
           grep -q 'background_downloader: ^9.6.1' pubspec.yaml
+      - name: Verify generated sources are synchronized
+        run: git diff --exit-code
       - name: Prove 9.6.1 supported native callbacks are present
         shell: bash
         run: |
