@@ -1,9 +1,16 @@
 from pathlib import Path
+import subprocess
+
+
+def base(path: str) -> str:
+    return subprocess.check_output(
+        ['git', 'show', f'origin/main:{path}'], text=True
+    )
 
 
 # 1) Download confirmation: show/copy the exact stream.url.
 p = Path('lib/features/details/presentation/download_launcher.dart')
-s = p.read_text()
+s = base(str(p))
 old = "import 'package:flutter/material.dart';\n"
 new = "import 'package:flutter/material.dart';\nimport 'package:flutter/services.dart';\n"
 assert old in s and "package:flutter/services.dart" not in s
@@ -61,13 +68,12 @@ new = """                Text(l10n.sizeWithParam(metadata.sizeString)),
                 Text(l10n.fileSaveLocationNotification),
 """
 assert old in s
-s = s.replace(old, new, 1)
-p.write_text(s)
+p.write_text(s.replace(old, new, 1))
 
 
 # 2) Account service: split fast local restore from network validation.
 p = Path('lib/core/account/animewitcher_account_service.dart')
-s = p.read_text()
+s = base(str(p))
 start = s.index('  Future<AnimeWitcherAccountSnapshot> restoreSession() async {')
 end = s.index('  Future<AnimeWitcherAccountSnapshot> signInWithEmail({', start)
 replacement = r'''  /// Restores only the locally cached account state.
@@ -206,9 +212,6 @@ replacement = r'''  /// Restores only the locally cached account state.
 
 '''
 s = s[:start] + replacement + s[end:]
-
-# Session invalidation must not fail just because the non-secure settings store
-# is unavailable; secure tokens/profile are the critical data to clear.
 old = """    await _secureStorage.delete(_sessionKey);
     await _secureStorage.delete(_profileKey);
     await _storage.remove(_legacyLastSyncKey);
@@ -226,13 +229,12 @@ new = """    await _secureStorage.delete(_sessionKey);
     }
 """
 assert old in s
-s = s.replace(old, new, 1)
-p.write_text(s)
+p.write_text(s.replace(old, new, 1))
 
 
 # 3) Riverpod controller: publish cache immediately; refresh later.
 p = Path('lib/core/account/account_providers.dart')
-s = p.read_text()
+s = base(str(p))
 old = """  AnimeWitcherAccountService get _service =>
       ref.read(animeWitcherAccountServiceProvider);
 
@@ -296,5 +298,4 @@ new = """  Future<void> _run(
     final previous = state.asData?.value ?? _service.snapshot;
 """
 assert old in s
-s = s.replace(old, new, 1)
-p.write_text(s)
+p.write_text(s.replace(old, new, 1))
