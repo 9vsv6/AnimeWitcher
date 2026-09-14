@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -239,7 +240,51 @@ class DownloadLauncher {
                 Text(l10n.sourceWithParam(stream.source)),
                 const SizedBox(height: 8),
                 Text(l10n.sizeWithParam(metadata.sizeString)),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                Row(
+                  textDirection: TextDirection.rtl,
+                  children: [
+                    IconButton(
+                      tooltip: appText(
+                        ctx,
+                        english: 'Copy link',
+                        arabic: 'نسخ الرابط',
+                      ),
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: stream.url),
+                        );
+                        if (!ctx.mounted) return;
+                        ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              appText(
+                                ctx,
+                                english: 'Link copied',
+                                arabic: 'تم نسخ الرابط',
+                              ),
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          stream.url,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Text(l10n.fileSaveLocationNotification),
               ],
             ),

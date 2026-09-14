@@ -36,9 +36,12 @@ class AnimeWitcherAccountController
   AnimeWitcherAccountService get _service =>
       ref.read(animeWitcherAccountServiceProvider);
 
+  int _operationGeneration = 0;
+
   @override
   Future<AnimeWitcherAccountSnapshot> build() async {
-    final restored = await _service.restoreSession();
+    final startupGeneration = ++_operationGeneration;
+    final restored = await _service.restoreCachedSession();
     if (restored.isSignedIn) {
       unawaited(
         Future<void>.delayed(Duration.zero, () {
@@ -46,6 +49,18 @@ class AnimeWitcherAccountController
         }),
       );
     }
+
+    // Do not block the More screen behind Firebase lookup/profile resolution
+    // and a full sync on every app launch. The cached account is usable now;
+    // validation still runs immediately in the background.
+    unawaited(
+      Future<void>.delayed(Duration.zero, () async {
+        final refreshed = await _service.refreshRestoredSession();
+        if (startupGeneration != _operationGeneration) return;
+        state = AsyncData(refreshed);
+        ref.read(accountDataRevisionProvider.notifier).bump();
+      }),
+    );
     return restored;
   }
 
@@ -168,6 +183,7 @@ class AnimeWitcherAccountController
     Future<AnimeWitcherAccountSnapshot> Function() operation, {
     bool bumpData = true,
   }) async {
+    _operationGeneration++;
     final previous = state.asData?.value ?? _service.snapshot;
     // Keep the authenticated account visible while a manual sync or sign-out
     // is in flight. Replacing a signed-in value with a bare AsyncLoading would
