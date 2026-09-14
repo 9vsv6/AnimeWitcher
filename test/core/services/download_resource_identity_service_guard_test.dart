@@ -53,7 +53,9 @@ void main() {
 
     test('source refresh fences changed validators but permits delivery URL rotation', () {
       final source = File('lib/core/services/download_service.dart').readAsStringSync();
-      final start = source.indexOf('Future<({DownloadTask task, bool refreshed})> _refreshTaskBeforeResume(');
+      final start = source.indexOf(
+        'Future<({DownloadTask task, bool refreshed, bool restartRequired})>',
+      );
       final end = source.indexOf('Future<List<Task>> _liveTransferTasks()', start);
       final body = source.substring(start, end);
 

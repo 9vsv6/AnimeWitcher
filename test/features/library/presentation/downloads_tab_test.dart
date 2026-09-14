@@ -195,7 +195,7 @@ void main() {
   });
 
   testWidgets(
-    'deleting the last episode removes the series folder leftover files and all',
+    'deleting the last episode preserves unknown series-folder evidence',
     (tester) async {
       await tester.runAsync(() async {
         final root = await Directory.systemTemp.createTemp('aw_dl_folder_');
@@ -230,7 +230,14 @@ void main() {
         await deleteDownloadedVideo(video);
 
         expect(await video.exists(), isFalse);
-        expect(await series.exists(), isFalse);
+        expect(await File('${video.path}.part').exists(), isFalse);
+        expect(await File('${video.path}.tmp').exists(), isFalse);
+        expect(await File('${video.path}.download').exists(), isFalse);
+        // DM-14: recursive cleanup may not infer ownership of unrelated files
+        // or empty user directories merely because the selected video is gone.
+        expect(await series.exists(), isTrue);
+        expect(await File(p.join(season.path, 'thumb.jpg')).exists(), isTrue);
+        expect(await Directory(p.join(series.path, 'Season 2')).exists(), isTrue);
         expect(await downloadsRoot.exists(), isTrue);
         expect(await otherSeries.exists(), isTrue);
         expect(await otherVideo.exists(), isTrue);

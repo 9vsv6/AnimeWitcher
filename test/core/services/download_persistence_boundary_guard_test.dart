@@ -7,19 +7,22 @@ void main() {
     final source = File('lib/core/services/download_service.dart')
         .readAsStringSync();
 
-    final startBegin = source.indexOf('Future<bool> startDownload({');
+    final startBegin = source.indexOf(
+      'Future<DownloadCommandOutcome> startDownloadOutcome({',
+    );
     final startEnd = source.indexOf(
       'Future<List<TaskRecord>> _completeRecordsForEpisode(',
       startBegin,
     );
     final start = source.substring(startBegin, startEnd);
-    expect(start, contains('final jobPersisted = await _jobStore.put('));
+    expect(startBegin, greaterThanOrEqualTo(0));
+    expect(start, contains('_jobStore.beginReplicaTransactionFromSeed('));
     expect(
       start,
       contains(r"throw StateError('Failed to persist fresh download intent')"),
     );
     expect(
-      start.indexOf('final jobPersisted = await _jobStore.put('),
+      start.indexOf('_jobStore.beginReplicaTransactionFromSeed('),
       lessThan(start.indexOf('_waitingPayloads[transferTask.taskId]')),
     );
 
@@ -27,7 +30,7 @@ void main() {
       'Future<DownloadAttemptToken?> _beginLogicalRangeAttempt(',
     );
     final rangeEnd = source.indexOf(
-      'Future<({DownloadTask task, bool refreshed})> _refreshTaskBeforeResume(',
+      'Future<({DownloadTask task, bool refreshed, bool restartRequired})>',
       rangeBegin,
     );
     final range = source.substring(rangeBegin, rangeEnd);

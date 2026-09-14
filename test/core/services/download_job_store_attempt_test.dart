@@ -39,7 +39,8 @@ DownloadJobRecord _seed({int generation = 3, int durableBytes = 400}) =>
     );
 
 void main() {
-  test('beginAttempt atomically increments the durable generation', () async {
+  test('beginAttempt atomically increments generation and clears pause intent',
+      () async {
     final store = DownloadJobStore(_MemoryBackend());
     expect(await store.put(_seed()), isTrue);
 
@@ -51,7 +52,9 @@ void main() {
     expect(job?.generation, 4);
     expect(job?.state, DownloadJobState.starting);
     expect(job?.durableBytes, 400);
-    expect(job?.userPaused, isTrue);
+    // User pause intent is derived from the logical state. Starting an attempt
+    // is an explicit resume boundary, so it must not retain pausedByUser.
+    expect(job?.userPaused, isFalse);
   });
 
   test('two concurrent beginAttempt calls cannot reuse a generation', () async {
