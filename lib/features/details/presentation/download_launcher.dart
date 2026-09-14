@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:animewitcher/core/utils/episode_label.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -16,10 +17,12 @@ import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
+
 import 'source_picker.dart';
 part 'download_launcher.g.dart';
 
@@ -239,7 +242,51 @@ class DownloadLauncher {
                 Text(l10n.sourceWithParam(stream.source)),
                 const SizedBox(height: 8),
                 Text(l10n.sizeWithParam(metadata.sizeString)),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                Row(
+                  textDirection: TextDirection.rtl,
+                  children: [
+                    IconButton(
+                      tooltip: appText(
+                        ctx,
+                        english: 'Copy link',
+                        arabic: 'نسخ الرابط',
+                      ),
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: stream.url),
+                        );
+                        if (!ctx.mounted) return;
+                        ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              appText(
+                                ctx,
+                                english: 'Link copied',
+                                arabic: 'تم نسخ الرابط',
+                              ),
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          stream.url,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Text(l10n.fileSaveLocationNotification),
               ],
             ),
@@ -332,8 +379,7 @@ class DownloadLauncher {
                         .showError(
                           appText(
                             finalContext,
-                            english:
-                                'Failed to start download. Check storage permissions.',
+                            english: 'Failed to start download. Check storage permissions.',
                             arabic: 'فشل بدء التنزيل. تحقق من أذونات التخزين.',
                           ),
                         );
