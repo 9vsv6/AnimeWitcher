@@ -34,17 +34,8 @@ jobs:
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
 
-      - name: Apply production changes
+      - name: Rebuild a minimal production diff from main
         run: python3 .github/scripts/apply_download_link_session_fix.py
-
-      - name: Format changed Dart files
-        run: |
-          dart format \
-            lib/features/details/presentation/download_launcher.dart \
-            lib/core/account/animewitcher_account_service.dart \
-            lib/core/account/account_providers.dart \
-            test/features/details/presentation/download_confirmation_link_contract_test.dart \
-            test/core/account/account_startup_restore_test.dart
 
       - name: Run focused regression tests
         run: |
@@ -57,7 +48,7 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
-      - name: Commit implementation
+      - name: Commit minimal implementation
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -66,5 +57,5 @@ jobs:
             lib/core/account/animewitcher_account_service.dart \
             lib/core/account/account_providers.dart
           git diff --cached --check
-          git commit -m "feat: expose download URL and restore account from cache"
+          git commit -m "chore: minimize download and account fix diff"
           git push origin HEAD:feat/download-link-copy-session-restore
