@@ -847,7 +847,17 @@ class DownloadService {
     _disposeFuture ??= _teardownBarrier.run(_disposeResources);
   }
 
+  /// Joins the teardown scheduled by [dispose]. Provider disposal itself is
+  /// synchronous, but explicit lifecycle owners may await this boundary
+  /// before creating a replacement.
+  Future<void> disposeAsync() {
+    dispose();
+    return _disposeFuture ?? Future<void>.value();
+  }
+
   Future<void> _disposeResources() async {
+    final disposeForTesting = disposeResourcesForTesting;
+    if (disposeForTesting != null) await disposeForTesting();
     await _updatesSubscription?.cancel();
     _updatesSubscription = null;
     await _connectivitySubscription?.cancel();
@@ -1009,13 +1019,14 @@ class DownloadService {
     if (_disposed) {
       return Future<void>.error(DownloadServiceUnavailableException.disposed());
     }
-    return _readiness.ensureReady(() async {
-      await _teardownBarrier.wait();
-      if (_disposed) {
-        throw DownloadServiceUnavailableException.disposed();
-      }
-      await _initialize();
-    });
+    return _readiness.ensureReady(
+      () => _teardownBarrier.run(() async {
+        if (_disposed) {
+          throw DownloadServiceUnavailableException.disposed();
+        }
+        await _initialize();
+      }),
+    );
   }
 
   Future<void> _awaitCommandReadiness(String command) async {
@@ -1050,6 +1061,12 @@ class DownloadService {
   Future<void> _initialize() async {
     if (_isInitialized) {
       if (kDebugMode) debugPrint('[DownloadService] Already initialized.');
+      return;
+    }
+    final initializeForTest = initializeForTesting;
+    if (initializeForTest != null) {
+      await initializeForTest();
+      _isInitialized = true;
       return;
     }
     final logging = _ref
@@ -1473,6 +1490,14 @@ class DownloadService {
   @visibleForTesting
   static Future<void> Function(List<(String, dynamic)> globalConfig)?
   configureHoldingQueueForTesting;
+
+  /// Test-only lifecycle gates used to exercise ProviderScope recreation
+  /// without calling the platform downloader.
+  @visibleForTesting
+  static Future<void> Function()? initializeForTesting;
+
+  @visibleForTesting
+  static Future<void> Function()? disposeResourcesForTesting;
 
   /// Persist [maxConcurrent] (clamped 1–5) and reconfigure the native
   /// holding queue. Every episode is OS-enqueued; extras wait as
