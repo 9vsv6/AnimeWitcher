@@ -17,12 +17,10 @@ import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/loading_dialog.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../../../shared/widgets/loading_indicator.dart';
-
 import 'package:animewitcher/l10n/generated/app_localizations.dart';
 
 import 'package:animewitcher/core/utils/localized_text.dart';
 import 'package:animewitcher/core/services/notification_service.dart';
-
 import 'source_picker.dart';
 part 'download_launcher.g.dart';
 
@@ -379,7 +377,8 @@ class DownloadLauncher {
                         .showError(
                           appText(
                             finalContext,
-                            english: 'Failed to start download. Check storage permissions.',
+                            english:
+                                'Failed to start download. Check storage permissions.',
                             arabic: 'فشل بدء التنزيل. تحقق من أذونات التخزين.',
                           ),
                         );

@@ -8,18 +8,16 @@ import '../storage/storage_service.dart';
 import 'animewitcher_account_models.dart';
 import 'animewitcher_account_service.dart';
 
-final animeWitcherAccountServiceProvider = Provider<AnimeWitcherAccountService>(
-  (ref) {
-    return AnimeWitcherAccountService(
-      storage: ref.watch(storageServiceProvider),
-      secureStorage: ref.watch(secureTokenStorageProvider),
-    );
-  },
-);
+final animeWitcherAccountServiceProvider =
+    Provider<AnimeWitcherAccountService>((ref) {
+      return AnimeWitcherAccountService(
+        storage: ref.watch(storageServiceProvider),
+        secureStorage: ref.watch(secureTokenStorageProvider),
+      );
+    });
 
-final accountDataRevisionProvider = NotifierProvider<AccountDataRevision, int>(
-  AccountDataRevision.new,
-);
+final accountDataRevisionProvider =
+    NotifierProvider<AccountDataRevision, int>(AccountDataRevision.new);
 
 class AccountDataRevision extends Notifier<int> {
   @override
@@ -28,11 +26,10 @@ class AccountDataRevision extends Notifier<int> {
   void bump() => state++;
 }
 
-final animeWitcherAccountControllerProvider =
-    AsyncNotifierProvider<
-      AnimeWitcherAccountController,
-      AnimeWitcherAccountSnapshot
-    >(AnimeWitcherAccountController.new);
+final animeWitcherAccountControllerProvider = AsyncNotifierProvider<
+  AnimeWitcherAccountController,
+  AnimeWitcherAccountSnapshot
+>(AnimeWitcherAccountController.new);
 
 class AnimeWitcherAccountController
     extends AsyncNotifier<AnimeWitcherAccountSnapshot> {
@@ -71,9 +68,7 @@ class AnimeWitcherAccountController
     required String email,
     required String password,
   }) async {
-    await _run(
-      () => _service.signInWithEmail(email: email, password: password),
-    );
+    await _run(() => _service.signInWithEmail(email: email, password: password));
   }
 
   Future<void> signInWithGoogle() async {
@@ -100,7 +95,10 @@ class AnimeWitcherAccountController
     required String password,
   }) async {
     await _run(() async {
-      await _service.resendEmailVerification(email: email, password: password);
+      await _service.resendEmailVerification(
+        email: email,
+        password: password,
+      );
       return _service.snapshot;
     }, bumpData: false);
   }
