@@ -6,9 +6,14 @@ on:
       - plan/download-manager-reliability
     paths:
       - .github/workflows/dm26-plugin-961-green.yml
+      - pubspec.yaml
+      - pubspec.lock
+      - ios/Runner/DownloadNativeWaitingQueue.swift
+      - test/core/services/ios_native_progress_callback_source_test.dart
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   green:
@@ -24,24 +29,13 @@ jobs:
           channel: stable
           flutter-version: 3.47.1
           cache: true
-      - name: Upgrade only background_downloader to 9.6.1
-        shell: bash
+      - name: Install locked dependencies and generate sources
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('pubspec.yaml')
-          text = p.read_text()
-          old = 'background_downloader: ^9.6.0'
-          new = 'background_downloader: ^9.6.1'
-          if new not in text:
-            if old not in text:
-              raise SystemExit('background_downloader dependency anchor not found')
-            p.write_text(text.replace(old, new, 1))
-          PY
-          flutter pub upgrade background_downloader
+          flutter pub get
           flutter gen-l10n
           dart run build_runner build --delete-conflicting-outputs
           grep -A7 '^  background_downloader:' pubspec.lock
+          grep -q 'background_downloader: ^9.6.1' pubspec.yaml
       - name: Prove 9.6.1 supported native callbacks are present
         shell: bash
         run: |
@@ -51,6 +45,11 @@ jobs:
           grep -R -q 'public static var onNativeTaskProgressChange' "$ROOT/ios"
           grep -R -q 'onNativeTaskStatusChange(task, statusUpdate)' "$ROOT/ios"
           grep -R -q 'onNativeTaskProgressChange(task, progress)' "$ROOT/ios"
+      - name: Prove AnimeWitcher uses supported progress callback with minimal hooks
+        run: >-
+          flutter test
+          test/core/services/ios_native_progress_callback_source_test.dart
+          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
       - name: Run iOS download regression matrix
         run: >-
           flutter test
@@ -66,20 +65,7 @@ jobs:
           flutter analyze --no-fatal-warnings --no-fatal-infos
           lib/core/services/download_service.dart
           lib/core/services/download_continued_processing_service.dart
+      - name: Compile iOS simulator integration
+        run: flutter build ios --simulator --no-codesign --debug
       - name: Diff sanity
         run: git diff --check
-      - name: Commit dependency upgrade after GREEN
-        shell: bash
-        run: |
-          # Keep only the dependency files; codegen is verification-only.
-          git checkout -- . ':!pubspec.yaml' ':!pubspec.lock'
-          if git diff --quiet -- pubspec.yaml pubspec.lock; then
-            echo '9.6.1 already committed.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add pubspec.yaml pubspec.lock
-          git commit -m 'build(downloads): validate background_downloader 9.6.1 (DM-26)'
-          git pull --rebase origin plan/download-manager-reliability
-          git push origin HEAD:plan/download-manager-reliability
