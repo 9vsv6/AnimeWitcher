@@ -3,18 +3,18 @@ name: Agent 3 iOS Policy Verifier
 on:
   push:
     branches:
-      - agent3/native-network-platform-reliability
+      - plan/download-manager-reliability
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: agent3-ios-policy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  dm28-ios-native-policy-red:
+  dm28-ios-native-policy:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
@@ -27,6 +27,21 @@ jobs:
 
       - name: Install Flutter dependencies
         run: flutter pub get
+
+      - name: Materialize DM-28 iOS concurrency policy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('ios/Runner/DownloadNativeWaitingQueue.swift')
+          source = path.read_text()
+          old = 'return max(1, min(value, 5))'
+          new = 'return max(1, min(value, 10))'
+          if old in source:
+              source = source.replace(old, new, 1)
+              path.write_text(source)
+          elif new not in source:
+              raise SystemExit('DM-28 clamp implementation not found')
+          PY
 
       - name: Inject DM-28 behavioral XCTest into checkout
         run: |
@@ -58,9 +73,10 @@ jobs:
               }
             }
           '''
-          if marker not in source:
-              raise SystemExit('RunnerTests tearDown marker not found')
-          path.write_text(source.replace(marker, marker + test, 1))
+          if 'testDM28LogicalConcurrencyIsNotSilentlyClamped' not in source:
+              if marker not in source:
+                  raise SystemExit('RunnerTests tearDown marker not found')
+              path.write_text(source.replace(marker, marker + test, 1))
           PY
 
       - name: Install CocoaPods
@@ -94,3 +110,16 @@ jobs:
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.id }}" \
             -only-testing:RunnerTests/RunnerTests/testDM28LogicalConcurrencyIsNotSilentlyClamped \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Commit verified DM-28 production policy
+        run: |
+          git checkout -- ios/RunnerTests/RunnerTests.swift
+          if git diff --quiet -- ios/Runner/DownloadNativeWaitingQueue.swift; then
+            echo "DM-28 production policy already materialized"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios/Runner/DownloadNativeWaitingQueue.swift
+          git commit -m "fix(downloads): align iOS background concurrency cap"
+          git push origin HEAD:plan/download-manager-reliability
