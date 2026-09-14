@@ -206,6 +206,27 @@ replacement = r'''  /// Restores only the locally cached account state.
 
 '''
 s = s[:start] + replacement + s[end:]
+
+# Session invalidation must not fail just because the non-secure settings store
+# is unavailable; secure tokens/profile are the critical data to clear.
+old = """    await _secureStorage.delete(_sessionKey);
+    await _secureStorage.delete(_profileKey);
+    await _storage.remove(_legacyLastSyncKey);
+"""
+new = """    await _secureStorage.delete(_sessionKey);
+    await _secureStorage.delete(_profileKey);
+    try {
+      await _storage.remove(_legacyLastSyncKey);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[AnimeWitcherAccount] Failed to clear legacy sync timestamp: $error',
+        );
+      }
+    }
+"""
+assert old in s
+s = s.replace(old, new, 1)
 p.write_text(s)
 
 
