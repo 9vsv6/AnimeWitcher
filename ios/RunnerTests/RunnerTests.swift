@@ -8,6 +8,24 @@ class RunnerTests: XCTestCase {
     super.tearDown()
   }
 
+  func testDM28PersistsRequestedLogicalConcurrencyThroughTen() {
+    for requested in [1, 5, 6, 10] {
+      DownloadNativeWaitingQueue.resetForTests()
+      DownloadNativeWaitingQueue.persist(from: [
+        "maxConcurrent": requested,
+        "transferringTaskIds": [],
+        "pausedTaskIds": [],
+        "waiters": [],
+      ])
+
+      XCTAssertEqual(
+        DownloadNativeWaitingQueue.load().maxConcurrent,
+        requested,
+        "DM-28 must retain requested logical concurrency through 10; platform projection is explicit."
+      )
+    }
+  }
+
   func testNativePartsDoNotOccupyEpisodeSlotsOrCompleteEpisodes() {
     DownloadNativeWaitingQueue.resetForTests()
     DownloadNativeWaitingQueue.persist(from: [

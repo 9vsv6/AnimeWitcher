@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: agent3-ios-policy-${{ github.ref }}
@@ -15,7 +15,9 @@ concurrency:
 
 jobs:
   dm28-ios-native-policy:
-    runs-on: macos-15
+    # device_info_plus 13.2.0 references NSProcessInfo.isiOSAppOnVision,
+    # which is declared by the iOS 26.1 SDK; macos-latest supplies Xcode 26.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
 
@@ -25,65 +27,28 @@ jobs:
           flutter-version: 3.47.1
           cache: true
 
-      - name: Install Flutter dependencies
-        run: flutter pub get
-
-      - name: Materialize DM-28 iOS concurrency policy
+      - name: Install locked Flutter dependencies and generate sources
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('ios/Runner/DownloadNativeWaitingQueue.swift')
-          source = path.read_text()
-          replacements = [
-              ('min(max(value, 1), 5)', 'min(max(value, 1), 10)'),
-              ('max(1, min(value, 5))', 'max(1, min(value, 10))'),
-          ]
-          changed = False
-          for old, new in replacements:
-              if old in source:
-                  source = source.replace(old, new, 1)
-                  changed = True
-                  break
-          if changed:
-              path.write_text(source)
-          elif not any(new in source for _, new in replacements):
-              raise SystemExit('DM-28 clamp implementation not found')
-          PY
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
 
-      - name: Inject DM-28 behavioral XCTest into checkout
+      - name: Verify selected SDK supports locked device_info_plus
+        shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('ios/RunnerTests/RunnerTests.swift')
-          source = path.read_text()
-          marker = '''  override func tearDown() {
-              DownloadNativeWaitingQueue.resetForTests()
-              super.tearDown()
-            }
-          '''
-          test = r'''
-            func testDM28LogicalConcurrencyIsNotSilentlyClamped() {
-              for requested in [1, 5, 6, 10] {
-                DownloadNativeWaitingQueue.resetForTests()
-                DownloadNativeWaitingQueue.persist(from: [
-                  "maxConcurrent": requested,
-                  "transferringTaskIds": [],
-                  "pausedTaskIds": [],
-                  "waiters": [],
-                ])
-                let native = DownloadNativeWaitingQueue.load().maxConcurrent
-                XCTAssertEqual(
-                  native,
-                  requested,
-                  "DM-28: logical concurrency \\(requested) must not silently become \\(native) in native state; platform projection must be explicit"
-                )
-              }
-            }
-          '''
-          if 'testDM28LogicalConcurrencyIsNotSilentlyClamped' not in source:
-              if marker not in source:
-                  raise SystemExit('RunnerTests tearDown marker not found')
-              path.write_text(source.replace(marker, marker + test, 1))
+          set -euo pipefail
+          xcodebuild -version
+          sdk_version="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          python3 - "$sdk_version" <<'PY'
+          import sys
+
+          version = tuple(int(part) for part in sys.argv[1].split('.')[:2])
+          if version < (26, 1):
+              raise SystemExit(
+                  'device_info_plus 13.2.0 requires an iOS 26.1+ SDK for '
+                  f'NSProcessInfo.isiOSAppOnVision; selected simulator SDK is {sys.argv[1]}'
+              )
+          print(f'iOS simulator SDK: {sys.argv[1]}')
           PY
 
       - name: Install CocoaPods
@@ -115,18 +80,5 @@ jobs:
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.id }}" \
-            -only-testing:RunnerTests/RunnerTests/testDM28LogicalConcurrencyIsNotSilentlyClamped \
+            -only-testing:RunnerTests/RunnerTests/testDM28PersistsRequestedLogicalConcurrencyThroughTen \
             CODE_SIGNING_ALLOWED=NO
-
-      - name: Commit verified DM-28 production policy
-        run: |
-          git checkout -- ios/RunnerTests/RunnerTests.swift
-          if git diff --quiet -- ios/Runner/DownloadNativeWaitingQueue.swift; then
-            echo "DM-28 production policy already materialized"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ios/Runner/DownloadNativeWaitingQueue.swift
-          git commit -m "fix(downloads): align iOS background concurrency cap"
-          git push origin HEAD:plan/download-manager-reliability

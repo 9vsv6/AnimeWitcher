@@ -35,8 +35,11 @@ jobs:
         with:
           gradle-version: '8.14'
 
-      - name: Install Flutter dependencies
-        run: flutter pub get
+      - name: Install locked Flutter dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
 
       - name: Merge Android debug manifest
         working-directory: android

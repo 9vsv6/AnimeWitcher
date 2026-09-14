@@ -2246,7 +2246,7 @@ enum DownloadNativeWaitingQueue {
   }
 
   private static func clamp(_ value: Int) -> Int {
-    min(max(value, 1), 5)
+    min(max(value, 1), 10)
   }
 
   static func episodeKey(
