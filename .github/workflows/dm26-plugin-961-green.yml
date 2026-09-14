@@ -44,11 +44,11 @@ jobs:
         run: |
           ROOT="$(find "$HOME/.pub-cache" -type d -path '*/background_downloader-9.6.1' | head -1)"
           test -n "$ROOT"
-          grep -R -q 'public static var onNativeTaskStatusChange' "$ROOT/ios"
-          grep -R -q 'public static var onNativeTaskProgressChange' "$ROOT/ios"
+          grep -R -Fq 'public static var onNativeTaskStatusChange: ((Task, TaskStatusUpdate) -> Void)?' "$ROOT/ios"
+          grep -R -Fq 'public static var onNativeTaskProgressChange: ((Task, Double) -> Void)?' "$ROOT/ios"
           grep -R -q 'onNativeTaskStatusChange(task, statusUpdate)' "$ROOT/ios"
           grep -R -q 'onNativeTaskProgressChange(task, progress)' "$ROOT/ios"
-      - name: Prove AnimeWitcher uses supported progress callback with minimal hooks
+      - name: Prove AnimeWitcher uses supported native callbacks with minimal hooks
         run: >-
           flutter test
           test/core/services/ios_native_progress_callback_source_test.dart

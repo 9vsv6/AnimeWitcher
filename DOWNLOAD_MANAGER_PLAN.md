@@ -446,6 +446,7 @@
   - **Proposed fix:** isolate and behaviorally validate 9.6.1 first. Move status/progress observation to supported native callbacks where equivalent. Retain only the smallest hook still required for promotion/completion ordering, version-gated and behavior-tested.
   - **Verification/testing:** foreground/background bytes/status; completion promotion; retry replacement; suspension; hook unavailable; duplicate callback prevention; device/build-preview integration.
   - **Dependencies:** DM-15, DM-22.
+  - **DM-26 verification gap (2026-09-14):** implementation and the focused static callback/hook guard pass in this checkout, but DM-26 remains unchecked because this Linux host has no `flutter`, `swiftc`, Ruby, or Xcode toolchain. The focused Flutter test, analyzer, iOS queue tests, and simulator build must pass on macOS after this commit; prior CI run 34895709476 was RED before this fix.
 
 - [ ] **DM-28 — Align platform execution-policy and concurrency semantics**
   - **Problem:** Dart allows 1..10 logical episodes while Swift clamps native background queue to 5; Android user-initiated downloads interact with notification-off settings and UIDT/WorkManager rules.

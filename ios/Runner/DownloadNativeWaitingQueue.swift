@@ -343,6 +343,7 @@ enum DownloadNativeWaitingQueue {
   private static var lastChunkBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static var lastTaskBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static var backgroundRetryStates: [String: BackgroundRetryState] = [:]
+  private static var supportedTerminalStatusesByTaskId: [String: Int] = [:]
   private static var multipartChildSamples: [String: [String: RunningSample]] = [:]
   private static var lastMultipartOverlayTimes: [String: CFAbsoluteTime] = [:]
   private static var latestDownloadSession: URLSession?
@@ -359,6 +360,12 @@ enum DownloadNativeWaitingQueue {
     defer { lock.unlock() }
     guard !hookInstalled else { return }
     #if canImport(background_downloader)
+    BDPlugin.onNativeTaskStatusChange = { task, statusUpdate in
+      DownloadNativeWaitingQueue.handleSupportedPluginStatus(
+        task: task,
+        statusUpdate: statusUpdate
+      )
+    }
     BDPlugin.onNativeTaskProgressChange = { task, progress in
       DownloadNativeWaitingQueue.handleSupportedPluginProgress(
         task: task,
@@ -555,6 +562,7 @@ enum DownloadNativeWaitingQueue {
     lastChunkBridgeTimes.removeAll()
     lastTaskBridgeTimes.removeAll()
     backgroundRetryStates.removeAll()
+    supportedTerminalStatusesByTaskId.removeAll()
     multipartChildSamples.removeAll()
     lastMultipartOverlayTimes.removeAll()
     latestDownloadSession = nil
@@ -854,23 +862,35 @@ enum DownloadNativeWaitingQueue {
       promoteMultipartIfPossible(on: session, parentId: parentTaskId(from: task))
       return
     }
-    if let response = task.response as? HTTPURLResponse,
-       !(200...299).contains(response.statusCode) {
-      parkFailedTask(task: task)
-      promoteNext(on: session)
-      refreshSessionOverlay(success: false)
-      return
+    let supportedSuccess = taskId(from: task).flatMap {
+      consumeSupportedTerminalSuccess(taskId: $0)
     }
-    if error != nil {
-      parkFailedTask(task: task)
-    } else {
+    let httpFailed = (task.response as? HTTPURLResponse).map {
+      !(200...299).contains($0.statusCode)
+    } ?? false
+    let succeeded = supportedSuccess ?? (error == nil && !httpFailed)
+    if succeeded {
       markPluginTaskCompleted(task: task)
+    } else {
+      parkFailedTask(task: task)
     }
 
     // Promote / update the SAME overlay before any finish. Finishing the
     // session task here is what suspended the process on ep1 complete.
     promoteNext(on: session)
-    refreshSessionOverlay(success: error == nil)
+    refreshSessionOverlay(success: succeeded)
+  }
+
+  private static func consumeSupportedTerminalSuccess(taskId: String) -> Bool? {
+    lock.lock()
+    let rawStatus = supportedTerminalStatusesByTaskId.removeValue(forKey: taskId)
+    lock.unlock()
+    guard let rawStatus else { return nil }
+    #if canImport(background_downloader)
+    return rawStatus == background_downloader.TaskStatus.complete.rawValue
+    #else
+    return nil
+    #endif
   }
 
   /// Keep a failed episode in the batch as paused and free its slot so the
@@ -1824,6 +1844,27 @@ enum DownloadNativeWaitingQueue {
   }
 
   #if canImport(background_downloader)
+  /// Capture the plugin's supported terminal status before the retained
+  /// URLSession completion seam resumes promotion on that same session. The
+  /// hook consumes this once, so status is not inferred or processed twice.
+  private static func handleSupportedPluginStatus(
+    task: background_downloader.Task,
+    statusUpdate: background_downloader.TaskStatusUpdate
+  ) {
+    guard !task.taskId.isEmpty,
+          task.group != "chunk",
+          task.group != "animewitcher_parts"
+    else { return }
+    switch statusUpdate.taskStatus {
+    case .complete, .notFound, .failed, .canceled, .paused:
+      lock.lock()
+      supportedTerminalStatusesByTaskId[task.taskId] = statusUpdate.taskStatus.rawValue
+      lock.unlock()
+    default:
+      break
+    }
+  }
+
   /// background_downloader 9.6.1 exposes throttled native progress directly.
   /// Prefer that supported contract over replacing its didWriteData IMP. When
   /// native/Dart state already knows the expected byte count, keep the exact
@@ -2429,6 +2470,7 @@ enum DownloadNativeWaitingQueue {
 /// because a Swift call to the hooked method is a direct recursive call and
 /// never hits the original ObjC IMP.
 private enum DownloadUrlSessionHook {
+  private static let compatiblePluginVersion = "9.6.1"
   private static let completeSelector = NSSelectorFromString(
     "URLSession:task:didCompleteWithError:"
   )
@@ -2445,6 +2487,18 @@ private enum DownloadUrlSessionHook {
 
   static func install() -> Bool {
     #if canImport(background_downloader)
+    let pluginBundle = Bundle(for: BDPlugin.self)
+    let pluginVersion = pluginBundle.object(
+      forInfoDictionaryKey: "CFBundleShortVersionString"
+    ) as? String
+    guard pluginVersion == compatiblePluginVersion else {
+      NSLog(
+        "[DownloadNativeWaitingQueue] completion hook disabled for background_downloader %@ (expected %@)",
+        pluginVersion ?? "unknown",
+        compatiblePluginVersion
+      )
+      return false
+    }
     let delegateClass: AnyClass = UrlSessionDelegate.self
     #else
     guard let delegateClass = findUrlSessionDelegateClass() else {
