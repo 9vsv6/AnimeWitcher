@@ -34,12 +34,19 @@ jobs:
           from pathlib import Path
           path = Path('ios/Runner/DownloadNativeWaitingQueue.swift')
           source = path.read_text()
-          old = 'return max(1, min(value, 5))'
-          new = 'return max(1, min(value, 10))'
-          if old in source:
-              source = source.replace(old, new, 1)
+          replacements = [
+              ('min(max(value, 1), 5)', 'min(max(value, 1), 10)'),
+              ('max(1, min(value, 5))', 'max(1, min(value, 10))'),
+          ]
+          changed = False
+          for old, new in replacements:
+              if old in source:
+                  source = source.replace(old, new, 1)
+                  changed = True
+                  break
+          if changed:
               path.write_text(source)
-          elif new not in source:
+          elif not any(new in source for _, new in replacements):
               raise SystemExit('DM-28 clamp implementation not found')
           PY
 
