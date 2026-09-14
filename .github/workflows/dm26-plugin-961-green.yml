@@ -8,6 +8,7 @@ on:
       - .github/workflows/dm26-plugin-961-green.yml
       - pubspec.yaml
       - pubspec.lock
+      - ios/Runner/AppDelegate.swift
       - ios/Runner/DownloadNativeWaitingQueue.swift
       - test/core/services/ios_native_progress_callback_source_test.dart
   workflow_dispatch:
