@@ -38,10 +38,15 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -version
+          xcode_version="$(xcodebuild -version | awk '/^Xcode / {print $2}')"
           sdk_version="$(xcrun --sdk iphonesimulator --show-sdk-version)"
-          python3 - "$sdk_version" <<'PY'
+          python3 - "$sdk_version" "$xcode_version" <<'PY'
           import sys
 
+          xcode = tuple(int(part) for part in sys.argv[2].split('.'))
+          xcode = (xcode + (0, 0, 0))[:3]
+          if xcode < (26, 1, 1):
+              raise SystemExit(f'device_info_plus 13.2.0 requires Xcode 26.1.1+; selected {sys.argv[2]}')
           version = tuple(int(part) for part in sys.argv[1].split('.')[:2])
           if version < (26, 1):
               raise SystemExit(
@@ -55,6 +60,9 @@ jobs:
         run: |
           cd ios
           pod install --repo-update
+
+      - name: Verify setup preserved tracked sources
+        run: git diff --exit-code
 
       - name: Select iOS simulator
         id: sim
