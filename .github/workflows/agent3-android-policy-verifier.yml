@@ -59,7 +59,10 @@ jobs:
                   candidates.extend(root_dir.rglob('AndroidManifest.xml'))
           candidates = [
               p for p in candidates
-              if 'merged_manifests' in p.parts or 'packaged_manifests' in p.parts
+              if any(
+                  part.startswith('merged_manifest') or part.startswith('packaged_manifest')
+                  for part in p.parts
+              )
           ]
           if not candidates:
               searched = ', '.join(str(p) for p in roots)
@@ -70,7 +73,7 @@ jobs:
               return (
                   'debug' in text,
                   'processdebugmainmanifest' in text,
-                  'merged_manifests' in path.parts,
+                  any(part.startswith('merged_manifest') for part in path.parts),
                   path.stat().st_size,
               )
 
