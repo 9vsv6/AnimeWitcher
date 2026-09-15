@@ -145,7 +145,8 @@ jobs:
             -only-testing:RunnerTests/RunnerTests/testDM26DelayedStatusCannotCompleteReusedTaskOrReleaseItsSlot \
             -only-testing:RunnerTests/RunnerTests/testDM26PluginFileMoveFailureCannotBecomeSuccess \
             -only-testing:RunnerTests/RunnerTests/testDM28PersistsRequestedLogicalConcurrencyThroughTen \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=15.6
 
       - name: Diff sanity
         run: git diff --check
