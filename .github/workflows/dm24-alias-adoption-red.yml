@@ -1,0 +1,33 @@
+name: DM-24 alias adoption RED
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm24-alias-adoption-red.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  red:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Prove start/adoption still uses raw logical-id equality
+        run: >-
+          flutter test
+          test/core/services/download_logical_identity_start_test.dart
+          --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
