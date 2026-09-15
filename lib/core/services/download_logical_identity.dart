@@ -9,6 +9,7 @@ class DownloadLogicalIdentity {
   const DownloadLogicalIdentity._({
     required this.key,
     required this.contentKey,
+    required this.contentAliases,
     required this.season,
     required this.episode,
     required this.dubStatus,
@@ -16,6 +17,15 @@ class DownloadLogicalIdentity {
 
   final String key;
   final String contentKey;
+
+  /// Stable catalog aliases known for this media snapshot.
+  ///
+  /// [contentKey] remains the first/legacy preferred alias so persisted v1 keys
+  /// do not churn when this feature lands. Additional aliases let a later,
+  /// richer media snapshot (for example MAL + AniList instead of AniList only)
+  /// adopt the already persisted logical episode instead of starting a second
+  /// execution row.
+  final Set<String> contentAliases;
   final int season;
   final int episode;
   final DubStatus dubStatus;
@@ -24,7 +34,8 @@ class DownloadLogicalIdentity {
     required MultimediaItem item,
     Episode? episode,
   }) {
-    final contentKey = _contentIdentity(item);
+    final aliases = _contentAliases(item);
+    final contentKey = aliases.first;
     final episodeDub = episode?.dubStatus ?? DubStatus.none;
     final dubStatus = episodeDub != DubStatus.none
         ? episodeDub
@@ -42,13 +53,42 @@ class DownloadLogicalIdentity {
     return DownloadLogicalIdentity._(
       key: key,
       contentKey: contentKey,
+      contentAliases: Set<String>.unmodifiable(aliases),
       season: season,
       episode: episodeNumber,
       dubStatus: dubStatus,
     );
   }
 
-  static String _contentIdentity(MultimediaItem item) {
+  /// Returns true when [persistedKey] represents this exact episode and its
+  /// content component is one of the stable aliases in the current snapshot.
+  ///
+  /// This intentionally requires season, episode and dub status to match before
+  /// considering aliases. An enriched metadata snapshot can therefore adopt an
+  /// older AniList/MAL/TMDb/IMDb identity without ever collapsing two episodes.
+  bool matchesPersistedKey(String persistedKey) {
+    final persisted = persistedKey.trim();
+    if (persisted.isEmpty) return false;
+    if (persisted == key) return true;
+
+    final parsed = _ParsedLogicalDownloadKey.tryParse(persisted);
+    if (parsed == null ||
+        parsed.season != season ||
+        parsed.episode != episode ||
+        parsed.dubStatus != dubStatus.name) {
+      return false;
+    }
+    return contentAliases.contains(parsed.contentKey);
+  }
+
+  static List<String> _contentAliases(MultimediaItem item) {
+    final aliases = <String>[];
+    final seen = <String>{};
+
+    void add(String value) {
+      if (value.isNotEmpty && seen.add(value)) aliases.add(value);
+    }
+
     final sync = item.syncData;
     if (sync != null && sync.isNotEmpty) {
       const stableSyncKeys = <String>[
@@ -62,23 +102,26 @@ class DownloadLogicalIdentity {
       for (final key in stableSyncKeys) {
         final value = sync[key]?.trim();
         if (value != null && value.isNotEmpty) {
-          return 'sync:${key.toLowerCase()}:${Uri.encodeComponent(value)}';
+          // Preserve the exact legacy key spelling used by v1 identities.
+          add('sync:${key.toLowerCase()}:${Uri.encodeComponent(value)}');
         }
       }
     }
 
     if (item.tmdbId != null) {
-      return 'tmdb:${item.tmdbId}';
+      add('tmdb:${item.tmdbId}');
     }
     final imdbId = item.imdbId?.trim().toLowerCase();
     if (imdbId != null && imdbId.isNotEmpty) {
-      return 'imdb:${Uri.encodeComponent(imdbId)}';
+      add('imdb:${Uri.encodeComponent(imdbId)}');
     }
 
     final canonicalUrl = _canonicalCatalogUrl(item.url);
     if (canonicalUrl.isNotEmpty) {
-      return 'url:${Uri.encodeComponent(canonicalUrl)}';
+      add('url:${Uri.encodeComponent(canonicalUrl)}');
     }
+
+    if (aliases.isNotEmpty) return aliases;
 
     // Last-resort migration identity for providers that supplied neither a
     // stable external ID nor a catalog URL. This is intentionally namespaced
@@ -88,7 +131,8 @@ class DownloadLogicalIdentity {
         .trim()
         .toLowerCase();
     final title = item.title.trim().toLowerCase();
-    return 'weak:${Uri.encodeComponent(provider)}:${Uri.encodeComponent(title)}';
+    add('weak:${Uri.encodeComponent(provider)}:${Uri.encodeComponent(title)}');
+    return aliases;
   }
 
   static String _canonicalCatalogUrl(String raw) {
@@ -126,6 +170,43 @@ class DownloadLogicalIdentity {
 
   @override
   String toString() => key;
+}
+
+class _ParsedLogicalDownloadKey {
+  const _ParsedLogicalDownloadKey({
+    required this.contentKey,
+    required this.season,
+    required this.episode,
+    required this.dubStatus,
+  });
+
+  final String contentKey;
+  final int season;
+  final int episode;
+  final String dubStatus;
+
+  static _ParsedLogicalDownloadKey? tryParse(String raw) {
+    final parts = raw.split('|');
+    if (parts.length != 5 || parts[0] != 'download:v1') return null;
+    final seasonPart = parts[2];
+    final episodePart = parts[3];
+    final dubPart = parts[4];
+    if (!seasonPart.startsWith('s') ||
+        !episodePart.startsWith('e') ||
+        !dubPart.startsWith('dub:')) {
+      return null;
+    }
+    final season = int.tryParse(seasonPart.substring(1));
+    final episode = int.tryParse(episodePart.substring(1));
+    final dubStatus = dubPart.substring(4);
+    if (season == null || episode == null || dubStatus.isEmpty) return null;
+    return _ParsedLogicalDownloadKey(
+      contentKey: parts[1],
+      season: season,
+      episode: episode,
+      dubStatus: dubStatus,
+    );
+  }
 }
 
 /// Restores the stable logical identity from presentation metadata.
