@@ -1,4 +1,4 @@
-name: DM-24 alias adoption TDD apply
+name: DM-14 cleanup and DM-24 adoption verifier
 
 on:
   push:
@@ -6,13 +6,27 @@ on:
       - plan/download-manager-reliability
     paths:
       - .github/workflows/dm14-canonical-cleanup-safety.yml
+      - lib/core/utils/download_cleanup.dart
+      - lib/core/utils/download_resume.dart
+      - lib/core/services/persistent_parallel_download.dart
+      - lib/core/services/download_logical_identity.dart
+      - lib/core/services/download_service.dart
+      - test/core/utils/download_cleanup_canonical_safety_test.dart
+      - test/core/utils/download_resume_test.dart
+      - test/core/services/persistent_parallel_download_manifest_discovery_test.dart
+      - test/core/services/download_logical_identity_test.dart
+      - test/core/services/download_logical_identity_start_test.dart
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: dm14-dm24-verifier-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  alias-adoption:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -30,110 +44,34 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Prove start and adoption RED
+      - name: Guard configured cleanup ownership
         run: |
-          set +e
-          flutter test test/core/services/download_logical_identity_start_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-          status=$?
-          set -e
-          test "$status" -ne 0
-          echo "Observed expected RED with exit $status"
+          grep -q '_directoryContainsOnlyEmptyDirectories' lib/core/utils/download_cleanup.dart
+          ! grep -q '_directoryContainsOnlyKnownDownloadArtifacts' lib/core/utils/download_cleanup.dart
+          grep -q 'resolvesInsideConfiguredAppDownloads' lib/core/utils/download_cleanup.dart
+          grep -q 'pathIsInsideConfiguredAppDownloads' lib/core/utils/download_cleanup.dart
+          grep -q '_platformConfiguredAppDownloadRoots' lib/core/utils/download_cleanup.dart
 
-      - name: Apply alias-aware adoption patch
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('lib/core/services/download_service.dart')
-          text = path.read_text()
-          replacements = [
-            (
-              """    final logicalId = DownloadLogicalIdentity.fromMedia(
-              item: item,
-              episode: episode,
-            ).key;""",
-              """    final logicalIdentity = DownloadLogicalIdentity.fromMedia(
-              item: item,
-              episode: episode,
-            );
-            final logicalId = logicalIdentity.key;"""
-            ),
-            (
-              """      final logicalJobs = await _jobStore.allForLogicalId(logicalId);""",
-              """      final logicalJobs = (await _jobStore.all())
-              .where((job) {
-                final persisted = job.logicalId;
-                return persisted != null &&
-                    logicalIdentity.matchesPersistedKey(persisted);
-              })
-              .toList(growable: false);"""
-            ),
-            (
-              """          final candidateLogicalId =
-              candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
-          if (candidateLogicalId != logicalId) continue;""",
-              """          final candidateLogicalId =
-              candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
-          if (candidateLogicalId == null ||
-              !logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
-            continue;
-          }"""
-            ),
-            (
-              """          if (candidateLogicalId != null) {
-            if (candidateLogicalId != logicalId) continue;
-            existingLogicalJob = candidateJob;""",
-              """          if (candidateLogicalId != null) {
-            if (!logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
-              continue;
-            }
-            existingLogicalJob = candidateJob;"""
-            ),
-            (
-              """    final storage = _ref.read(storageServiceProvider);
-    final matches = <TaskRecord>[];
-    for (final record in records) {""",
-              """    final storage = _ref.read(storageServiceProvider);
-    final matches = <TaskRecord>[];
-    final logicalIdentity = DownloadLogicalIdentity.fromMedia(
-      item: item,
-      episode: episode,
-    );
-    for (final record in records) {"""
-            ),
-            (
-              """      if (candidateLogicalId != null) {
-        if (candidateLogicalId == logicalId) matches.add(record);
-        continue;
-      }""",
-              """      if (candidateLogicalId != null) {
-        if (candidateLogicalId == logicalId ||
-            logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
-          matches.add(record);
-        }
-        continue;
-      }"""
-            ),
-          ]
-          for old, new in replacements:
-            if new in text:
-              continue
-            if old not in text:
-              raise SystemExit('missing expected DM-24 patch anchor')
-            text = text.replace(old, new, 1)
-          path.write_text(text)
-          PY
+      - name: Verify canonical cleanup safety
+        run: flutter test test/core/utils/download_cleanup_canonical_safety_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
-      - name: Verify DM-24 GREEN
-        run: |
-          flutter test test/core/services/download_logical_identity_test.dart test/core/services/download_logical_identity_start_test.dart test/core/services/download_job_logical_identity_test.dart test/core/services/download_logical_identity_persistence_test.dart test/core/services/download_overlay_logical_identity_test.dart test/features/library/presentation/downloads_logical_identity_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-          flutter analyze --no-fatal-warnings --no-fatal-infos lib/core/services/download_logical_identity.dart lib/core/services/download_service.dart test/core/services/download_logical_identity_test.dart test/core/services/download_logical_identity_start_test.dart
-          git diff --check
+      - name: Verify resume artifact discovery
+        run: flutter test test/core/utils/download_resume_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
 
-      - name: Commit verified production patch
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/core/services/download_service.dart
-          git commit -m 'fix(downloads): adopt enriched logical identity aliases (DM-24)'
-          git pull --rebase origin plan/download-manager-reliability
-          git push origin HEAD:plan/download-manager-reliability
+      - name: Verify manifest recovery discovery
+        run: flutter test test/core/services/persistent_parallel_download_manifest_discovery_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify delete tombstone ownership
+        run: flutter test test/core/services/download_delete_tombstone_guard_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify logical identity aliases
+        run: flutter test test/core/services/download_logical_identity_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify alias-aware start adoption
+        run: flutter test test/core/services/download_logical_identity_start_test.dart --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
+
+      - name: Verify analyzer
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Verify clean diff
+        run: git diff --check
