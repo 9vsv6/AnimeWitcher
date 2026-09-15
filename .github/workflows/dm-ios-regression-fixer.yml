@@ -1,0 +1,105 @@
+name: DM iOS regression fixer
+
+on:
+  push:
+    branches:
+      - plan/download-manager-reliability
+    paths:
+      - .github/workflows/dm-ios-regression-fixer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: plan/download-manager-reliability
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.1
+          channel: stable
+          cache: true
+
+      - name: Apply root-cause fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one anchor, found {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'lib/core/services/download_transport.dart',
+              '''extension DownloadRuntimeOwnershipSafety on DownloadRuntimeOwnership {\n  bool get blocksNewWriter => this != DownloadRuntimeOwnership.notOwned;\n}\n''',
+              '''extension DownloadRuntimeOwnershipSafety on DownloadRuntimeOwnership {\n  bool get blocksNewWriter => this != DownloadRuntimeOwnership.notOwned;\n}\n\n/// A runtime task may reserve a writer only while its executor projection is\n/// in a state that can still own native I/O. `allTasks()` can briefly retain\n/// an iOS task after URLSession has already finished it with -999/paused during\n/// relaunch reconciliation; treating that stale identity as a live writer\n/// deadlocks multipart recovery because no replacement child can launch.\nbool runtimeTaskStatusCanOwnWriter(TaskStatus status) {\n  return switch (status) {\n    TaskStatus.enqueued ||\n    TaskStatus.running ||\n    TaskStatus.waitingToRetry => true,\n    TaskStatus.paused ||\n    TaskStatus.complete ||\n    TaskStatus.canceled ||\n    TaskStatus.failed ||\n    TaskStatus.notFound => false,\n  };\n}\n''',
+          )
+
+          replace_once(
+              'lib/core/services/persistent_parallel_download.dart',
+              '''  int get creditedBytes =>\n      parts.fold<int>(0, (sum, part) => sum + part.durableBytes);\n  double get progress =>\n''',
+              '''  int get creditedBytes =>\n      parts.fold<int>(0, (sum, part) => sum + part.durableBytes);\n\n  /// Bytes credibly observed in-flight for presentation telemetry. These are\n  /// intentionally separate from [creditedBytes]: iOS URLSession can report\n  /// exact bytes while its body is still in an OS-owned temporary file, so the\n  /// bytes are valid for speed/progress but not yet durable recovery evidence.\n  int get observedBytes => parts.fold<int>(0, (sum, part) {\n    final credibleBytes = part.size <= 0\n        ? 0\n        : (part.size * part.credibleProgress)\n              .round()\n              .clamp(0, part.size)\n              .toInt();\n    return sum +\n        (credibleBytes > part.durableBytes ? credibleBytes : part.durableBytes);\n  });\n\n  double get progress =>\n''',
+          )
+
+          replace_once(
+              'lib/core/services/persistent_parallel_download.dart',
+              '''  void _emitAggregateProgress(_ParallelSession session) {\n    if (_disposed || !session.active || session.deleted) return;\n    final task = session.task;\n    final progress = session.progress;\n    final creditedBytes = session.creditedBytes;\n    final expectedBytes = session.size;\n    final telemetry = _speedTelemetry.observe(\n      taskId: task.taskId,\n      transferredBytes: creditedBytes,\n      expectedBytes: expectedBytes,\n''',
+              '''  void _emitAggregateProgress(_ParallelSession session) {\n    if (_disposed || !session.active || session.deleted) return;\n    final task = session.task;\n    final progress = session.progress;\n    final observedBytes = session.observedBytes;\n    final expectedBytes = session.size;\n    final telemetry = _speedTelemetry.observe(\n      taskId: task.taskId,\n      transferredBytes: observedBytes,\n      expectedBytes: expectedBytes,\n''',
+          )
+
+          replace_once(
+              'lib/core/services/download_service.dart',
+              '''  Future<Set<String>> _livePartIds() async => {\n    for (final task in await _liveTransferTasks()) task.taskId,\n    ..._rangeTransfers.activeTaskIds,\n  };\n''',
+              '''  Future<Set<String>> _livePartIds() async {\n    final live = <String>{..._rangeTransfers.activeTaskIds};\n    for (final task in await _liveTransferTasks()) {\n      if (!isInternalDownloaderChunk(task)) {\n        live.add(task.taskId);\n        continue;\n      }\n\n      // `allTasks()` can lag URLSession reconciliation on iOS. A persisted\n      // paused/final child is an explicit negative acknowledgement from the\n      // executor and must not keep the restored multipart connection reserved.\n      // Missing records remain fail-closed: without that negative evidence we\n      // still treat the runtime identity as owned and avoid a duplicate writer.\n      final record = await FileDownloader().database.recordForId(task.taskId);\n      if (record == null || runtimeTaskStatusCanOwnWriter(record.status)) {\n        live.add(task.taskId);\n      } else {\n        diagnosticLog.record('runtime.stalePartExcluded', {\n          'taskId': task.taskId,\n          'status': record.status.name,\n        });\n      }\n    }\n    return live;\n  }\n''',
+          )
+          PY
+
+          dart format \
+            lib/core/services/download_transport.dart \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/core/services/download_service.dart \
+            test/core/services/download_transport_test.dart \
+            test/core/services/persistent_parallel_download_ios_speed_regression_test.dart
+          git diff --check
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run focused regression suite
+        run: |
+          flutter test \
+            test/core/services/download_transport_test.dart \
+            test/core/services/persistent_parallel_download_ios_speed_regression_test.dart \
+            test/core/services/persistent_parallel_download_test.dart \
+            test/core/services/persistent_parallel_download_auto_recovery_test.dart \
+            test/core/services/download_runtime_stability_review_test.dart
+
+      - name: Analyze changed download code
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/core/services/download_transport.dart \
+            lib/core/services/persistent_parallel_download.dart \
+            lib/core/services/download_service.dart \
+            test/core/services/download_transport_test.dart \
+            test/core/services/persistent_parallel_download_ios_speed_regression_test.dart
+
+      - name: Commit fixes and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/dm-ios-regression-fixer.yml
+          git config user.name 'Fares669'
+          git config user.email '108722956+Fares669@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix(downloads): recover iOS multipart telemetry and ownership'
+          git push origin HEAD:plan/download-manager-reliability
