@@ -11,6 +11,13 @@ on:
       - test/core/services/download_*.dart
       - test/core/services/persistent_parallel_download_*.dart
       - test/core/services/ios_*.dart
+      - ios/RunnerTests/RunnerTests.swift
+      - ios/Runner/DownloadNativeWaitingQueue.swift
+      - ios/Runner/DownloadCallbackCompatibility.swift
+      - ios/Runner/AppDelegate.swift
+      - ios/Podfile
+      - ios/downloader_compatibility_version.rb
+      - ios/Runner.xcodeproj/project.pbxproj
   workflow_dispatch:
 
 permissions:
