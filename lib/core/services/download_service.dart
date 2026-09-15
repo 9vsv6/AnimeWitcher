@@ -5599,10 +5599,11 @@ class DownloadService {
     } catch (_) {
       return DownloadCommandOutcome.serviceUnavailable;
     }
-    final logicalId = DownloadLogicalIdentity.fromMedia(
+    final logicalIdentity = DownloadLogicalIdentity.fromMedia(
       item: item,
       episode: episode,
-    ).key;
+    );
+    final logicalId = logicalIdentity.key;
     diagnosticLog.record('command.start', {
       'total': totalBytes,
       'logicalId': logicalId,
@@ -5699,7 +5700,10 @@ class DownloadService {
           );
           final candidateLogicalId =
               candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
-          if (candidateLogicalId != logicalId) continue;
+          if (candidateLogicalId == null ||
+              !logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
+            continue;
+          }
 
           var migratedJob = candidateJob;
           if (candidateJob.logicalId == null) {
@@ -5763,7 +5767,8 @@ class DownloadService {
               candidateJob?.logicalId ??
               logicalDownloadIdFromMetadata(candidateMetadata);
           if (candidateLogicalId != null) {
-            if (candidateLogicalId != logicalId) continue;
+            if (!logicalIdentity.matchesPersistedKey(candidateLogicalId))
+              continue;
             existingLogicalJob = candidateJob;
             existingRecord = candidate;
             break;
@@ -6166,13 +6171,20 @@ class DownloadService {
     required String directory,
   }) async {
     final storage = _ref.read(storageServiceProvider);
+    final logicalIdentity = DownloadLogicalIdentity.fromMedia(
+      item: item,
+      episode: episode,
+    );
     final matches = <TaskRecord>[];
     for (final record in records) {
       if (record.status != TaskStatus.complete) continue;
       final metadata = await storage.getDownloadMetadata(record.task.taskId);
       final candidateLogicalId = logicalDownloadIdFromMetadata(metadata);
       if (candidateLogicalId != null) {
-        if (candidateLogicalId == logicalId) matches.add(record);
+        if (candidateLogicalId == logicalId ||
+            logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
+          matches.add(record);
+        }
         continue;
       }
 
