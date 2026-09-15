@@ -99,7 +99,7 @@ replace_once(
     // while the UI stayed at 0 MB/s until a whole Range finalized.
     final observedBytes = session.parts.fold<int>(0, (sum, part) {
       final credible = part.credibleProgress.clamp(0.0, 1.0).toDouble();
-      final bytes = (part.size * credible).round().clamp(0, part.size);
+      final bytes = (part.size * credible).round().clamp(0, part.size).toInt();
       return sum + bytes;
     });
     final childSpeedBytesPerSecond = session.parts.fold<double>(0, (sum, part) {
