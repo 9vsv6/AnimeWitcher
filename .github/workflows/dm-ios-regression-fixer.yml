@@ -82,7 +82,8 @@ jobs:
             test/core/services/persistent_parallel_download_ios_speed_regression_test.dart \
             test/core/services/persistent_parallel_download_test.dart \
             test/core/services/persistent_parallel_download_auto_recovery_test.dart \
-            test/core/services/download_runtime_stability_review_test.dart
+            test/core/services/download_runtime_stability_review_test.dart \
+            test/core/services/download_continued_processing_start_ack_test.dart
 
       - name: Analyze changed download code
         run: |
@@ -92,7 +93,8 @@ jobs:
             lib/core/services/persistent_parallel_download.dart \
             lib/core/services/download_service.dart \
             test/core/services/download_transport_test.dart \
-            test/core/services/persistent_parallel_download_ios_speed_regression_test.dart
+            test/core/services/persistent_parallel_download_ios_speed_regression_test.dart \
+            test/core/services/download_continued_processing_start_ack_test.dart
 
       - name: Commit fixes and remove temporary workflow
         shell: bash
@@ -103,4 +105,6 @@ jobs:
           git add -A
           git diff --cached --check
           git commit -m 'fix(downloads): recover iOS multipart telemetry and ownership'
+          git fetch origin plan/download-manager-reliability
+          git rebase origin/plan/download-manager-reliability
           git push origin HEAD:plan/download-manager-reliability
