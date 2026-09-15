@@ -22,6 +22,32 @@ void main() {
     expect(isNativeSingleDownloadTask(task), isFalse);
   });
 
+  test('stale paused/final iOS rows cannot reserve a native writer', () {
+    for (final status in <TaskStatus>[
+      TaskStatus.paused,
+      TaskStatus.failed,
+      TaskStatus.canceled,
+      TaskStatus.notFound,
+      TaskStatus.complete,
+    ]) {
+      expect(
+        runtimeTaskStatusCanOwnWriter(status),
+        isFalse,
+        reason: '$status cannot keep a restored multipart child launched',
+      );
+    }
+  });
+
+  test('live executor statuses may still own a native writer', () {
+    for (final status in <TaskStatus>[
+      TaskStatus.enqueued,
+      TaskStatus.running,
+      TaskStatus.waitingToRetry,
+    ]) {
+      expect(runtimeTaskStatusCanOwnWriter(status), isTrue);
+    }
+  });
+
   test('Android notification-off falls back without UIDT', () {
     final useUserInitiated = shouldUseUserInitiatedDownloadHint(
       isAndroid: true,
