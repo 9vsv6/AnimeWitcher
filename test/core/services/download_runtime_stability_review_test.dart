@@ -252,7 +252,7 @@ void main() {
         final start = source.indexOf(
           'Future<void> _recoverPersistedDownloads() async',
         );
-        final end = source.indexOf('int _occupiedSlotCount(', start);
+        final end = source.indexOf('Future<int> _occupiedSlotCount(', start);
         expect(start, greaterThanOrEqualTo(0));
         expect(end, greaterThan(start));
         final recovery = source.substring(start, end);
@@ -266,7 +266,10 @@ void main() {
         expect(canceledFilter, greaterThan(jobRead));
         expect(recovery, contains('planDownloadRecoveryWithJobAuthority('));
         expect(recovery, contains('oldJob?.expectedBytes'));
-        expect(recovery, contains('oldJob?.userPaused == true'));
+        expect(
+          recovery,
+          contains('downloadJobHasUserPauseIntent(oldJob.state)'),
+        );
       },
     );
 
@@ -303,7 +306,7 @@ void main() {
         expect(hook, contains('return'));
         final retryIndex = hook.indexOf('retryBackgroundTransferIfNeeded(');
         final pluginCallbackIndex = hook.indexOf(
-          'if let original = DownloadUrlSessionHook.originalComplete',
+          'guard let original = DownloadUrlSessionHook.originalComplete',
         );
         expect(retryIndex, greaterThanOrEqualTo(0));
         expect(pluginCallbackIndex, greaterThanOrEqualTo(0));

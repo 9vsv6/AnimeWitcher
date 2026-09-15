@@ -2981,10 +2981,25 @@ class PersistentParallelDownload {
     } else if (status == TaskStatus.enqueued || status == TaskStatus.paused) {
       session.parentRunningReported = false;
     }
-    await _writeParentRecord(
-      session,
-      TaskRecord(session.task, status, session.progress, session.size),
+    final record = TaskRecord(
+      session.task,
+      status,
+      session.progress,
+      session.size,
     );
+    if (status == TaskStatus.running) {
+      // Running is liveness/presentation telemetry. Queue persistence on the
+      // ordered parent-record chain without blocking later child progress.
+      onUpdate(TaskStatusUpdate(session.task, status));
+      unawaited(
+        _writeParentRecord(
+          session,
+          record,
+        ).catchError((Object _, StackTrace __) {}),
+      );
+      return;
+    }
+    await _writeParentRecord(session, record);
     onUpdate(TaskStatusUpdate(session.task, status));
   }
 
