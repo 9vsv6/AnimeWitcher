@@ -114,6 +114,7 @@ void main() {
       expect(await coordinator.start(parent, 25), isTrue);
       final acknowledged = <String>{};
       while (starts.length < 5) {
+        final before = starts.length;
         final batch = starts
             .where((task) => acknowledged.add(task.taskId))
             .toList(growable: false);
@@ -121,7 +122,7 @@ void main() {
         for (final task in batch) {
           coordinator.handleUpdate(TaskStatusUpdate(task, TaskStatus.running));
         }
-        await waitUntil(() => starts.length > batch.length || starts.length >= 5);
+        await waitUntil(() => starts.length > before || starts.length >= 5);
       }
       final finalBatch = starts
           .where((task) => acknowledged.add(task.taskId))
@@ -131,7 +132,8 @@ void main() {
       }
       await Future<void>.delayed(Duration.zero);
 
-      liveIds = starts.map((task) => task.taskId).toSet();
+      final originalIds = starts.map((task) => task.taskId).toSet();
+      liveIds = Set<String>.from(originalIds);
       await coordinator.dispose();
 
       starts = <DownloadTask>[];
@@ -146,8 +148,8 @@ void main() {
       liveIds = <String>{};
       await waitUntil(() => starts.isNotEmpty);
       expect(
-        starts.first.taskId,
-        starts.first.taskId,
+        originalIds,
+        contains(starts.first.taskId),
         reason: 'once ownership disappears the same immutable child identity must resume',
       );
     } finally {
