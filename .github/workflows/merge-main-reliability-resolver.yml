@@ -6,6 +6,7 @@ on:
       - plan/download-manager-reliability
     paths:
       - .github/workflows/merge-main-reliability-resolver.yml
+      - .github/scripts/resolve_downloads_tab_main_merge.py
       - .github/merge-main-reliability-trigger
   workflow_dispatch:
 
@@ -32,43 +33,12 @@ jobs:
           flutter-version: 3.47.1
           cache: true
 
-      - name: Fetch main and prove the only semantic test conflict
-        shell: bash
+      - name: Fetch main and prove the semantic conflict
         run: |
-          set -euo pipefail
           git fetch origin main
-          python3 - <<'PY'
-          import re
-          import subprocess
-          from pathlib import Path
+          python3 .github/scripts/resolve_downloads_tab_main_merge.py --mode preflight
 
-          path = 'test/features/library/presentation/downloads_tab_test.dart'
-          ours = Path(path).read_text()
-          theirs = subprocess.check_output(
-              ['git', 'show', f'origin/main:{path}'], text=True
-          )
-          Path('/tmp/feature_downloads_tab_test.dart').write_text(ours)
-          Path('/tmp/main_downloads_tab_test.dart').write_text(theirs)
-
-          pattern = re.compile(r"\b(?:test|testWidgets)\s*\(\s*(['\"])(.*?)\1", re.S)
-          ours_titles = {m.group(2) for m in pattern.finditer(ours)}
-          theirs_titles = {m.group(2) for m in pattern.finditer(theirs)}
-          safe_title = 'deleting the last episode preserves unknown series-folder evidence'
-          unsafe_title = 'deleting the last episode removes the series folder leftover files and all'
-          missing = ours_titles - theirs_titles
-
-          print(f'feature test titles: {len(ours_titles)}')
-          print(f'main test titles: {len(theirs_titles)}')
-          if missing != {safe_title}:
-              raise SystemExit(f'unexpected feature tests missing from main: {sorted(missing)}')
-          if unsafe_title not in theirs_titles:
-              raise SystemExit('expected legacy destructive cleanup test is not present in main')
-          if safe_title in theirs_titles:
-              raise SystemExit('main unexpectedly already contains the DM-14 safe cleanup test')
-          print('proven semantic conflict: main has the legacy destructive cleanup contract only')
-          PY
-
-      - name: Merge main and preserve the DM-14 safe cleanup contract
+      - name: Merge main and resolve only the proven downloads test conflict
         shell: bash
         run: |
           set -euo pipefail
@@ -80,105 +50,15 @@ jobs:
           set -e
           conflicts="$(git diff --name-only --diff-filter=U)"
           expected="test/features/library/presentation/downloads_tab_test.dart"
-          if [ "$rc" -ne 0 ]; then
-            if [ "$conflicts" != "$expected" ]; then
-              echo "Unexpected merge conflicts:"
-              printf '%s\n' "$conflicts"
-              exit 1
-            fi
-            git checkout --theirs -- "$expected"
-          fi
-
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
-
-          path = Path('test/features/library/presentation/downloads_tab_test.dart')
-          merged = path.read_text()
-          ours = Path('/tmp/feature_downloads_tab_test.dart').read_text()
-          theirs = Path('/tmp/main_downloads_tab_test.dart').read_text()
-
-          safe_start_marker = "  testWidgets(\n    'deleting the last episode preserves unknown series-folder evidence'"
-          unsafe_start_marker = "  testWidgets(\n    'deleting the last episode removes the series folder leftover files and all'"
-          next_marker = "\n  testWidgets('delete also removes sibling .part .tmp .download temps'"
-
-          safe_start = ours.find(safe_start_marker)
-          safe_end = ours.find(next_marker, safe_start)
-          unsafe_start = merged.find(unsafe_start_marker)
-          unsafe_end = merged.find(next_marker, unsafe_start)
-          if min(safe_start, safe_end, unsafe_start, unsafe_end) < 0:
-              raise SystemExit('could not isolate the cleanup-contract test blocks')
-
-          safe_block = ours[safe_start:safe_end]
-          merged = merged[:unsafe_start] + safe_block + merged[unsafe_end:]
-
-          # DM-14 made destructive cleanup fail closed unless the caller proves
-          # the configured app Downloads root. These temp-directory tests are
-          # synthetic, so inject their explicit test root instead of weakening
-          # the production ownership boundary.
-          resolved_call = '      await deleteDownloadedVideo(resolved);'
-          rooted_resolved_call = """      await deleteDownloadedVideo(
-            resolved,
-            appDownloadRoots: [
-              p.join(root.path, 'AnimeWitcher', 'Downloads'),
-            ],
-          );"""
-          video_call = '        await deleteDownloadedVideo(video);'
-          rooted_video_call = """        await deleteDownloadedVideo(
-          video,
-          appDownloadRoots: [
-            p.join(root.path, 'AnimeWitcher', 'Downloads'),
-          ],
-        );"""
-          if merged.count(resolved_call) != 1:
-              raise SystemExit(
-                  f'expected exactly one unrooted resolved delete, found {merged.count(resolved_call)}'
-              )
-          if merged.count(video_call) != 1:
-              raise SystemExit(
-                  f'expected exactly one indented unrooted video delete, found {merged.count(video_call)}'
-              )
-          merged = merged.replace(resolved_call, rooted_resolved_call, 1)
-          merged = merged.replace(video_call, rooted_video_call, 1)
-
-          sibling_video_call = '      await deleteDownloadedVideo(video);'
-          sibling_rooted_call = """      await deleteDownloadedVideo(
-        video,
-        appDownloadRoots: [
-          p.join(root.path, 'AnimeWitcher', 'Downloads'),
-        ],
-      );"""
-          if merged.count(sibling_video_call) != 1:
-              raise SystemExit(
-                  f'expected exactly one sibling-temp unrooted delete, found {merged.count(sibling_video_call)}'
-              )
-          merged = merged.replace(sibling_video_call, sibling_rooted_call, 1)
-          path.write_text(merged)
-
-          pattern = re.compile(r"\b(?:test|testWidgets)\s*\(\s*(['\"])(.*?)\1", re.S)
-          ours_titles = {m.group(2) for m in pattern.finditer(ours)}
-          theirs_titles = {m.group(2) for m in pattern.finditer(theirs)}
-          merged_titles = {m.group(2) for m in pattern.finditer(merged)}
-          unsafe_title = 'deleting the last episode removes the series folder leftover files and all'
-          expected_titles = ours_titles | (theirs_titles - {unsafe_title})
-          if merged_titles != expected_titles:
-              missing = sorted(expected_titles - merged_titles)
-              extra = sorted(merged_titles - expected_titles)
-              raise SystemExit(f'merged test-title mismatch; missing={missing}, extra={extra}')
-          if unsafe_title in merged_titles:
-              raise SystemExit('legacy destructive cleanup contract survived resolution')
-          if merged.count('appDownloadRoots: [') < 3:
-              raise SystemExit('trusted-root coverage is incomplete in cleanup tests')
-          print(f'merged presentation tests: {len(merged_titles)} titles; DM-14 safe contract preserved')
-          PY
-
-          dart format "$expected"
-          git add "$expected"
-          if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
-            echo "Unresolved conflicts remain"
-            git diff --name-only --diff-filter=U
+          if [ "$rc" -ne 0 ] && [ "$conflicts" != "$expected" ]; then
+            echo "Unexpected merge conflicts:"
+            printf '%s\n' "$conflicts"
             exit 1
           fi
+          python3 .github/scripts/resolve_downloads_tab_main_merge.py --mode resolve
+          dart format "$expected"
+          git add "$expected"
+          test -z "$(git diff --name-only --diff-filter=U)"
 
       - name: Install merged dependencies and generate sources
         run: |
