@@ -20,13 +20,14 @@ void main() {
       expect(complete, greaterThan(start));
       final body = service.substring(start, complete);
 
-      expect(body, contains('DownloadLogicalIdentity.fromMedia'));
-      expect(body, contains('_jobStore.allForLogicalId(logicalId)'));
+      expect(body, contains('final logicalIdentity = DownloadLogicalIdentity.fromMedia'));
+      expect(body, contains('final logicalId = logicalIdentity.key'));
+      expect(body, contains('logicalIdentity.matchesPersistedKey'));
       expect(body, contains('logicalId: logicalId'));
       expect(body, contains('saveDownloadMetadata('));
     });
 
-    test('logical-id lookup occurs before tracking-url legacy fallback', () {
+    test('alias-aware logical-id lookup occurs before tracking-url legacy fallback', () {
       final service = File(
         'lib/core/services/download_service.dart',
       ).readAsStringSync();
@@ -34,7 +35,7 @@ void main() {
         'Future<DownloadCommandOutcome> startDownloadOutcome({',
       );
       final logicalLookup = service.indexOf(
-        '_jobStore.allForLogicalId(logicalId)',
+        'logicalIdentity.matchesPersistedKey',
         start,
       );
       final legacyComment = service.indexOf(
@@ -46,7 +47,7 @@ void main() {
       expect(legacyComment, greaterThan(logicalLookup));
     });
 
-    test('legacy adoption migrates reconstructable identity before URL fallback', () {
+    test('legacy adoption accepts an enriched stable-id alias before URL fallback', () {
       final service = File(
         'lib/core/services/download_service.dart',
       ).readAsStringSync();
@@ -65,7 +66,10 @@ void main() {
       expect(allJobs, greaterThanOrEqualTo(0));
       expect(reconstructed, greaterThan(allJobs));
       expect(legacyFallback, greaterThan(reconstructed));
-      expect(body, contains('if (candidateLogicalId != logicalId) continue;'));
+      expect(
+        body,
+        contains('!logicalIdentity.matchesPersistedKey(candidateLogicalId)'),
+      );
       expect(body, contains('logicalId: logicalId'));
     });
 
@@ -95,11 +99,11 @@ void main() {
       expect(urlMatch, greaterThan(identityFence));
       expect(
         fallbackBody.substring(identityFence, urlMatch),
-        contains('if (candidateLogicalId != logicalId) continue;'),
+        contains('!logicalIdentity.matchesPersistedKey(candidateLogicalId)'),
       );
     });
 
-    test('complete-record matching prefers canonical identity over filename', () {
+    test('complete-record matching accepts enriched stable-id aliases', () {
       final service = File(
         'lib/core/services/download_service.dart',
       ).readAsStringSync();
@@ -112,7 +116,8 @@ void main() {
       final body = service.substring(method, next);
 
       expect(body, contains('logicalDownloadIdFromMetadata'));
-      expect(body, contains('logicalId'));
+      expect(body, contains('DownloadLogicalIdentity.fromMedia'));
+      expect(body, contains('matchesPersistedKey(candidateLogicalId)'));
       expect(body, contains('Pre-logical-identity migration fallback'));
     });
   });
