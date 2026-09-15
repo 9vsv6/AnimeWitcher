@@ -15,7 +15,9 @@ class _ChaosJobBackend implements DownloadJobBackend {
       <String, Map<String, dynamic>>{};
 
   @override
-  Future<void> delete(String taskId) async => values.remove(taskId);
+  Future<void> delete(String taskId) async {
+    values.remove(taskId);
+  }
 
   @override
   Future<Map<String, dynamic>?> read(String taskId) async {
