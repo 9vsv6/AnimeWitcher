@@ -85,10 +85,10 @@ packages:
     dependency: "direct main"
     description:
       name: background_downloader
-      sha256: "157288c1a4f9a79b93657a35b3b61e1438a7ac71dd98520549079f2a54e19479"
+      sha256: "42daf57fc33453f03c8c9c9af4d0f68cb203e3c20041678f005a4c528c8bed1f"
       url: "https://pub.dev"
     source: hosted
-    version: "9.6.0"
+    version: "9.6.1"
   boolean_selector:
     dependency: transitive
     description:
@@ -361,6 +361,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.1"
+  disk_usage:
+    dependency: "direct main"
+    description:
+      name: disk_usage
+      sha256: "438401304354b7d25a8784ae435f4d730ae99c68d3bbeb02369db5c8af891ea6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   dpad:
     dependency: "direct main"
     description:
@@ -386,7 +394,7 @@ packages:
     source: hosted
     version: "1.3.3"
   ffi:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: ffi
       sha256: "6d7fd89431262d8f3125e81b50d3847a091d846eafcd4fdb88dd06f36d705a45"

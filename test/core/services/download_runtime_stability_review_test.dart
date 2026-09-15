@@ -69,10 +69,8 @@ void main() {
       final source = File('lib/core/services/persistent_parallel_download.dart')
           .readAsStringSync();
       expect(source, contains('void _scheduleCoordinatorRecovery'));
-      expect(
-        source,
-        contains('Coordinator bookkeeping is not a user-visible pause.'),
-      );
+      expect(source, contains('await _restoreNativeOwnership(session);'));
+      expect(source, contains('await _status(session, TaskStatus.running);'));
       expect(source, contains('DownloadTelemetryEstimator _speedTelemetry'));
       expect(
         source,
@@ -164,12 +162,13 @@ void main() {
         final source = File(
           'lib/core/services/persistent_parallel_download.dart',
         ).readAsStringSync();
-        expect(source, contains('kParallelManifestSchemaVersion = 4'));
+        expect(source, contains('kParallelManifestSchemaVersion = 6'));
         expect(
           source,
           contains("'schemaVersion': kParallelManifestSchemaVersion"),
         );
         expect(source, contains("'generation': session.generation"));
+        expect(source, contains("'parentTask': session.task.toJson()"));
         expect(source, contains("'expectedBytes': session.size"));
         expect(
           source,
@@ -251,9 +250,9 @@ void main() {
         final source = File('lib/core/services/download_service.dart')
             .readAsStringSync();
         final start = source.indexOf(
-          'Future<void> _recoverPersistedDownloads()',
+          'Future<void> _recoverPersistedDownloads() async',
         );
-        final end = source.indexOf('int _occupiedSlotCount(', start);
+        final end = source.indexOf('Future<int> _occupiedSlotCount(', start);
         expect(start, greaterThanOrEqualTo(0));
         expect(end, greaterThan(start));
         final recovery = source.substring(start, end);
@@ -267,7 +266,10 @@ void main() {
         expect(canceledFilter, greaterThan(jobRead));
         expect(recovery, contains('planDownloadRecoveryWithJobAuthority('));
         expect(recovery, contains('oldJob?.expectedBytes'));
-        expect(recovery, contains('oldJob?.userPaused == true'));
+        expect(
+          recovery,
+          contains('downloadJobHasUserPauseIntent(oldJob.state)'),
+        );
       },
     );
 
@@ -276,7 +278,7 @@ void main() {
       () {
         final source = File('lib/core/services/download_service.dart')
             .readAsStringSync();
-        expect(source, contains('Future<void> _checkpointLogicalJob('));
+        expect(source, contains('Future<bool> _checkpointLogicalJob('));
         expect(source, contains('state: DownloadJobState.pausing'));
         expect(source, contains('state: DownloadJobState.pausedByUser'));
         expect(source, contains('state: DownloadJobState.starting'));
@@ -304,7 +306,7 @@ void main() {
         expect(hook, contains('return'));
         final retryIndex = hook.indexOf('retryBackgroundTransferIfNeeded(');
         final pluginCallbackIndex = hook.indexOf(
-          'if let original = DownloadUrlSessionHook.originalComplete',
+          'guard let original = DownloadUrlSessionHook.originalComplete',
         );
         expect(retryIndex, greaterThanOrEqualTo(0));
         expect(pluginCallbackIndex, greaterThanOrEqualTo(0));
@@ -359,7 +361,8 @@ void main() {
         ).readAsStringSync();
         expect(parallel, contains('nativeBackgroundPlans()'));
         expect(parallel, contains('maxConcurrent: provenWidth.clamp('));
-        expect(parallel, contains('part.progress <= 0'));
+        expect(parallel, contains('part.progress > 0 ||'));
+        expect(parallel, contains('part.credibleProgress > 0'));
         expect(parallel, contains('!part.sourceValidationRequired'));
         expect(
           parallel,

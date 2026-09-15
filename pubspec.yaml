@@ -28,6 +28,7 @@ dependencies:
   package_info_plus: any
   shared_preferences: ^2.5.4
   path_provider: ^2.1.5
+  disk_usage: ^1.0.0
   wakelock_plus: ^1.4.0
   # background_downloader 9.6 currently depends on connectivity_plus 6.x.
   connectivity_plus: ^6.1.5
@@ -60,7 +61,7 @@ dependencies:
   path: ^1.9.1
   http: ^1.6.0
   html_unescape: ^2.0.0
-  background_downloader: ^9.6.0
+  background_downloader: ^9.6.1
   flutter_hooks: ^0.21.3+1
   talker_flutter: ^5.1.16
   visibility_detector: ^0.4.0+2

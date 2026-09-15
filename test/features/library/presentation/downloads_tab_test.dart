@@ -164,7 +164,11 @@ void main() {
       expect(usedRawPath, isFalse);
       expect(usedLabels, isFalse);
 
-      await deleteDownloadedVideo(resolved);
+      await deleteDownloadedVideo(
+        resolved,
+
+        appDownloadRoots: [p.join(root.path, 'AnimeWitcher', 'Downloads')],
+      );
 
       expect(await taskFile.exists(), isFalse);
       expect(await reconstructed.exists(), isTrue);
@@ -209,7 +213,7 @@ void main() {
   });
 
   testWidgets(
-    'deleting the last episode removes the series folder leftover files and all',
+    'deleting the last episode preserves unknown series-folder evidence',
     (tester) async {
       await tester.runAsync(() async {
         final root = await Directory.systemTemp.createTemp('aw_dl_folder_');
@@ -224,15 +228,12 @@ void main() {
 
         final video = File(p.join(season.path, 'الحلقة 9.mp4'));
         await video.writeAsBytes(List<int>.filled(32, 1));
-        await File(
-          p.join(season.path, '${p.basename(video.path)}.part'),
-        ).writeAsBytes([1]);
-        await File(
-          p.join(season.path, '${p.basename(video.path)}.tmp'),
-        ).writeAsBytes([1]);
-        await File(
-          p.join(season.path, '${p.basename(video.path)}.download'),
-        ).writeAsBytes([1]);
+        await File(p.join(season.path, '${p.basename(video.path)}.part'))
+            .writeAsBytes([1]);
+        await File(p.join(season.path, '${p.basename(video.path)}.tmp'))
+            .writeAsBytes([1]);
+        await File(p.join(season.path, '${p.basename(video.path)}.download'))
+            .writeAsBytes([1]);
         await File(p.join(season.path, 'thumb.jpg')).writeAsBytes([1]);
         await Directory(p.join(series.path, 'Season 2')).create();
 
@@ -241,10 +242,24 @@ void main() {
         final otherVideo = File(p.join(otherSeries.path, 'الحلقة 1.mp4'));
         await otherVideo.writeAsBytes(List<int>.filled(32, 3));
 
-        await deleteDownloadedVideo(video);
+        await deleteDownloadedVideo(
+          video,
+
+          appDownloadRoots: [p.join(root.path, 'AnimeWitcher', 'Downloads')],
+        );
 
         expect(await video.exists(), isFalse);
-        expect(await series.exists(), isFalse);
+        expect(await File('${video.path}.part').exists(), isFalse);
+        expect(await File('${video.path}.tmp').exists(), isFalse);
+        expect(await File('${video.path}.download').exists(), isFalse);
+        // DM-14: recursive cleanup may not infer ownership of unrelated files
+        // or empty user directories merely because the selected video is gone.
+        expect(await series.exists(), isTrue);
+        expect(await File(p.join(season.path, 'thumb.jpg')).exists(), isTrue);
+        expect(
+          await Directory(p.join(series.path, 'Season 2')).exists(),
+          isTrue,
+        );
         expect(await downloadsRoot.exists(), isTrue);
         expect(await otherSeries.exists(), isTrue);
         expect(await otherVideo.exists(), isTrue);
@@ -273,7 +288,11 @@ void main() {
       await tmp.writeAsBytes([1]);
       await download.writeAsBytes([1]);
 
-      await deleteDownloadedVideo(video);
+      await deleteDownloadedVideo(
+        video,
+
+        appDownloadRoots: [p.join(root.path, 'AnimeWitcher', 'Downloads')],
+      );
 
       expect(await video.exists(), isFalse);
       expect(await part.exists(), isFalse);
@@ -302,10 +321,10 @@ void main() {
         hasLength(1),
       );
       expect(
-        collapseDuplicateDownloads([
-          older,
-          newer,
-        ]).extraCompleteRecords.single.id,
+        collapseDuplicateDownloads([older, newer])
+            .extraCompleteRecords
+            .single
+            .id,
         'old-complete',
       );
 
@@ -524,12 +543,10 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/downloads_waiting_in_app.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
-      File(
-        '${artifacts.path}/downloads_no_reorder_handle.png',
-      ).writeAsBytesSync(bytes.buffer.asUint8List());
+      File('${artifacts.path}/downloads_waiting_in_app.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/downloads_no_reorder_handle.png')
+          .writeAsBytesSync(bytes.buffer.asUint8List());
     });
   });
 
@@ -596,9 +613,8 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/downloads_active_ungrouped.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/downloads_active_ungrouped.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
   });
@@ -672,9 +688,8 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/downloads_completed_grouped.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/downloads_completed_grouped.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
   });
@@ -710,10 +725,11 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _downloadsApp(
-        [episode(10, 300), episode(12, 200), episode(11, 100)],
-        episodeSortAscending: false,
-      ),
+      _downloadsApp([
+        episode(10, 300),
+        episode(12, 200),
+        episode(11, 100),
+      ], episodeSortAscending: false),
     );
     await tester.pump();
     await tester.tap(find.text('المكتملة'));
@@ -770,10 +786,10 @@ void main() {
     }
 
     await tester.pumpWidget(
-      _downloadsApp(
-        [episode(20, TaskStatus.running), episode(9, TaskStatus.complete)],
-        shellDirection: TextDirection.ltr,
-      ),
+      _downloadsApp([
+        episode(20, TaskStatus.running),
+        episode(9, TaskStatus.complete),
+      ], shellDirection: TextDirection.ltr),
     );
     await tester.pump();
 
@@ -905,9 +921,8 @@ void main() {
         );
         final image = await boundary.toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File(
-          '${artifacts.path}/downloads_completed_cards_ltr.png',
-        ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File('${artifacts.path}/downloads_completed_cards_ltr.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
   });
@@ -1004,9 +1019,8 @@ void main() {
       );
       final image = await boundary.toImage(pixelRatio: 2);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '${artifacts.path}/downloads_paused_not_running.png',
-      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('${artifacts.path}/downloads_paused_not_running.png')
+          .writeAsBytesSync(bytes!.buffer.asUint8List());
     });
   });
 

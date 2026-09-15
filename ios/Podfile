@@ -34,6 +34,11 @@ target 'Runner' do
   use_frameworks!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  # Flutter has created plugin symlinks; CocoaPods has not enumerated sources.
+  require_relative 'downloader_compatibility_version'
+  write_downloader_compatibility_version(File.expand_path(
+    '.symlinks/plugins/background_downloader', __dir__
+  ))
   target 'RunnerTests' do
     inherit! :search_paths
   end

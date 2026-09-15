@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'download_concurrency.dart';
 
 typedef SystemDownloadCancellation = Future<void> Function(String taskId);
+typedef SystemDownloadSessionLost = void Function();
 typedef SystemDownloadTaskUpdate = void Function({
   required String taskId,
   required String trackingUrl,
@@ -27,6 +28,28 @@ typedef SystemDownloadChunkUpdate = void Function({
   required bool completed,
 });
 
+@visibleForTesting
+class DownloadGlobalHandlerLease {
+  DownloadGlobalHandlerLease._(this.generation);
+
+  static int _nextGeneration = 0;
+  static int? _activeGeneration;
+
+  final int generation;
+
+  static DownloadGlobalHandlerLease acquire() {
+    final lease = DownloadGlobalHandlerLease._(++_nextGeneration);
+    _activeGeneration = lease.generation;
+    return lease;
+  }
+
+  bool releaseIfCurrent() {
+    if (_activeGeneration != generation) return false;
+    _activeGeneration = null;
+    return true;
+  }
+}
+
 /// Bridges AnimeWitcher downloads to iOS 26's system-managed continued
 /// processing task UI. On older iOS versions the native side returns false
 /// and background_downloader continues to work normally.
@@ -40,9 +63,18 @@ class DownloadContinuedProcessingService {
   );
 
   final SystemDownloadCancellation onSystemCancel;
+  final SystemDownloadSessionLost? onSessionLost;
   final SystemDownloadTaskUpdate? onTaskUpdate;
   final SystemDownloadChunkUpdate? onChunkUpdate;
+  final bool forceAvailableForTesting;
   bool _handlerInstalled = false;
+  bool _disposed = false;
+  int _nativeQueueSnapshotVersion = 0;
+
+  /// False means queued work stays with the foreground scheduler. A persisted
+  /// checkpoint is not proof that native background promotion is available.
+  bool nativePromotionAvailable = false;
+  DownloadGlobalHandlerLease? _handlerLease;
   static const Duration _updateSampleInterval = Duration(seconds: 1);
   Timer? _updateTimer;
   DateTime? _lastUpdateAt;
@@ -50,21 +82,25 @@ class DownloadContinuedProcessingService {
 
   DownloadContinuedProcessingService({
     required this.onSystemCancel,
+    this.onSessionLost,
     this.onTaskUpdate,
     this.onChunkUpdate,
+    @visibleForTesting this.forceAvailableForTesting = false,
   }) {
     if (_isAvailable) {
+      _handlerLease = DownloadGlobalHandlerLease.acquire();
       _channel.setMethodCallHandler(_handleNativeCall);
       _handlerInstalled = true;
     }
   }
 
-  bool get _isAvailable => !kIsWeb && Platform.isIOS;
+  bool get _isAvailable =>
+      forceAvailableForTesting || (!kIsWeb && Platform.isIOS);
 
   Future<void> configureDiagnosticLog(bool enabled) =>
       _invoke('configureDiagnosticLog', {'enabled': enabled});
 
-  Future<void> start({
+  Future<bool> start({
     required String taskId,
     required String displayName,
     double progress = 0.0,
@@ -76,8 +112,7 @@ class DownloadContinuedProcessingService {
     int currentIndex = 0,
   }) async {
     _cancelPendingUpdate();
-    _lastUpdateAt = DateTime.now();
-    await _invoke('start', <String, Object>{
+    final result = await _invokeForResult<Object?>('start', <String, Object>{
       'taskId': taskId,
       'displayName': displayName,
       'progress': progress.clamp(0.0, 1.0).toDouble(),
@@ -88,6 +123,13 @@ class DownloadContinuedProcessingService {
       'speedBytesPerSecond': speedBytesPerSecond,
       'currentIndex': currentIndex,
     });
+    final accepted = switch (result) {
+      final String identifier => identifier.trim().isNotEmpty,
+      final bool value => value,
+      _ => false,
+    };
+    if (accepted) _lastUpdateAt = DateTime.now();
+    return accepted;
   }
 
   Future<void> update({
@@ -125,7 +167,7 @@ class DownloadContinuedProcessingService {
       final pending = _pendingUpdate;
       _pendingUpdate = null;
       _lastUpdateAt = now;
-      if (pending != null) await _invoke('update', pending);
+      if (pending != null) await _sendUpdate(pending);
       return;
     }
 
@@ -134,10 +176,17 @@ class DownloadContinuedProcessingService {
       _updateTimer = null;
       final pending = _pendingUpdate;
       _pendingUpdate = null;
-      if (pending == null || !_isAvailable) return;
+      if (pending == null || !_isAvailable || _disposed) return;
       _lastUpdateAt = DateTime.now();
-      await _invoke('update', pending);
+      await _sendUpdate(pending);
     });
+  }
+
+  Future<void> _sendUpdate(Map<String, Object> arguments) async {
+    final accepted = await _invokeForResult<Object?>('update', arguments);
+    if (accepted is bool && !accepted && !_disposed) {
+      onSessionLost?.call();
+    }
   }
 
   void _cancelPendingUpdate() {
@@ -171,7 +220,7 @@ class DownloadContinuedProcessingService {
 
   /// Persist full waiter payloads (url, headers, filename, directory, task JSON)
   /// so iOS can start the next file from Swift without Flutter.
-  Future<void> persistNativeQueue({
+  Future<int?> persistNativeQueue({
     required int maxConcurrent,
     required List<Map<String, Object>> waiters,
     required List<String> transferringTaskIds,
@@ -189,29 +238,69 @@ class DownloadContinuedProcessingService {
     int sessionCurrentIndex = 0,
     List<Map<String, Object>> multipartPlans = const [],
   }) async {
-    await _invoke('persistNativeQueue', <String, Object>{
-      'maxConcurrent': maxConcurrent,
-      'waiters': waiters,
-      'transferringTaskIds': transferringTaskIds,
-      'pausedTaskIds': pausedTaskIds,
-      'queueWaitingTaskIds': queueWaitingTaskIds,
-      'sessionTaskIds': sessionTaskIds,
-      'sessionCompletedCount': sessionCompletedCount,
-      'sessionBatchTotal': sessionBatchTotal,
-      'sessionCurrentTaskId': sessionCurrentTaskId.isEmpty
-          ? kDownloadSessionOverlayTaskId
-          : sessionCurrentTaskId,
-      'sessionDisplayName': sessionDisplayName,
-      'sessionProgress': sessionProgress,
-      'sessionTotalBytes': sessionTotalBytes,
-      'sessionTransferredBytes': sessionTransferredBytes,
-      'sessionSpeedBytesPerSecond': sessionSpeedBytesPerSecond,
-      'sessionCurrentIndex': sessionCurrentIndex,
-      'multipartPlans': multipartPlans,
-    });
+    int nextVersion() {
+      final wallClock = DateTime.now().microsecondsSinceEpoch;
+      final next = _nativeQueueSnapshotVersion + 1;
+      _nativeQueueSnapshotVersion = wallClock > next ? wallClock : next;
+      return _nativeQueueSnapshotVersion;
+    }
+
+    Future<int?> write(int snapshotVersion) async {
+      final ack = await _invokeForResult<Object?>(
+        'persistNativeQueue',
+        <String, Object>{
+          'snapshotVersion': snapshotVersion,
+          'maxConcurrent': maxConcurrent,
+          'waiters': waiters,
+          'transferringTaskIds': transferringTaskIds,
+          'pausedTaskIds': pausedTaskIds,
+          'queueWaitingTaskIds': queueWaitingTaskIds,
+          'sessionTaskIds': sessionTaskIds,
+          'sessionCompletedCount': sessionCompletedCount,
+          'sessionBatchTotal': sessionBatchTotal,
+          'sessionCurrentTaskId': sessionCurrentTaskId.isEmpty
+              ? kDownloadSessionOverlayTaskId
+              : sessionCurrentTaskId,
+          'sessionDisplayName': sessionDisplayName,
+          'sessionProgress': sessionProgress,
+          'sessionTotalBytes': sessionTotalBytes,
+          'sessionTransferredBytes': sessionTransferredBytes,
+          'sessionSpeedBytesPerSecond': sessionSpeedBytesPerSecond,
+          'sessionCurrentIndex': sessionCurrentIndex,
+          'multipartPlans': multipartPlans,
+        },
+      );
+      if (ack is! Map) return null;
+      nativePromotionAvailable = ack['nativePromotionAvailable'] == true;
+      final rawAcceptedVersion = ack['acceptedVersion'];
+      if (rawAcceptedVersion is! num) return null;
+      return rawAcceptedVersion.toInt();
+    }
+
+    final snapshotVersion = nextVersion();
+    var accepted = await write(snapshotVersion);
+
+    // A lost reply is ambiguous: native may have durably accepted the write.
+    // Retry the exact same version once. Native treats an equal version as an
+    // idempotent acknowledgement, so this cannot advance or duplicate state.
+    if (accepted == null) {
+      accepted = await write(snapshotVersion);
+    }
+    if (accepted == null) return null;
+
+    if (accepted > _nativeQueueSnapshotVersion) {
+      _nativeQueueSnapshotVersion = accepted;
+    }
+    if (accepted == snapshotVersion) return accepted;
+
+    // Native is durably newer (for example it promoted/completed work while
+    // Flutter slept). Fail closed. Never relabel this stale Dart payload with
+    // a higher version; the caller must rebuild/reconcile a fresh snapshot.
+    return null;
   }
 
   Future<dynamic> _handleNativeCall(MethodCall call) async {
+    if (_disposed) return false;
     final arguments = call.arguments;
     if (arguments is! Map) return false;
 
@@ -275,8 +364,34 @@ class DownloadContinuedProcessingService {
     return true;
   }
 
+  Future<T?> _invokeForResult<T>(
+    String method,
+    Map<String, Object> arguments,
+  ) async {
+    if (!_isAvailable || _disposed) return null;
+
+    try {
+      return await _channel.invokeMethod<T>(method, arguments);
+    } on MissingPluginException {
+      return null;
+    } on PlatformException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[DownloadContinuedProcessing] $method failed: '
+          '${error.code} ${error.message}',
+        );
+      }
+      return null;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[DownloadContinuedProcessing] $method failed: $error');
+      }
+      return null;
+    }
+  }
+
   Future<void> _invoke(String method, Map<String, Object> arguments) async {
-    if (!_isAvailable) return;
+    if (!_isAvailable || _disposed) return;
 
     try {
       await _channel.invokeMethod<void>(method, arguments);
@@ -297,10 +412,16 @@ class DownloadContinuedProcessingService {
   }
 
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     _cancelPendingUpdate();
     if (_handlerInstalled) {
-      _channel.setMethodCallHandler(null);
+      final ownsHandler = _handlerLease?.releaseIfCurrent() ?? false;
+      if (ownsHandler) {
+        _channel.setMethodCallHandler(null);
+      }
       _handlerInstalled = false;
+      _handlerLease = null;
     }
   }
 }

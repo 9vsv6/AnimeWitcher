@@ -48,34 +48,31 @@ void main() {
     },
   );
 
-  test(
-    'plugin child progress without parent metadata is sampled by inferred parent',
-    () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'animewitcher-download-plugin-log-',
-      );
-      addTearDown(() async {
-        if (await directory.exists()) {
-          await directory.delete(recursive: true);
-        }
-      });
-
-      final log = DownloadDiagnosticLog(() async => directory);
-      await log.configure(true);
-      for (var index = 0; index < 16; index++) {
-        log.record('task.update', {
-          'taskId': 'episode.part.$index',
-          'progress': 0.1,
-        });
+  test('plugin child progress without parent metadata is sampled by inferred parent', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'animewitcher-download-plugin-log-',
+    );
+    addTearDown(() async {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
       }
+    });
 
-      final rows = await _readRows(log);
-      final progressRows = rows
-          .where((row) => row['event'] == 'task.update')
-          .toList(growable: false);
-      expect(progressRows, hasLength(1));
-    },
-  );
+    final log = DownloadDiagnosticLog(() async => directory);
+    await log.configure(true);
+    for (var index = 0; index < 16; index++) {
+      log.record('task.update', {
+        'taskId': 'episode.part.$index',
+        'progress': 0.1,
+      });
+    }
+
+    final rows = await _readRows(log);
+    final progressRows = rows
+        .where((row) => row['event'] == 'task.update')
+        .toList(growable: false);
+    expect(progressRows, hasLength(1));
+  });
 
   test('Dart progress journal does not request fsync on every sample', () {
     final source = File('lib/core/services/download_diagnostic_log.dart')
@@ -105,47 +102,44 @@ void main() {
     );
   });
 
-  test(
-    'multipart background refill probes run on ownership changes, not every byte callback',
-    () {
-      final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
-          .readAsStringSync();
-      final start = swift.indexOf('static func handleBytesWritten(');
-      final end = swift.indexOf('private static func postSingleTaskUpdate(', start);
-      expect(start, greaterThanOrEqualTo(0));
-      expect(end, greaterThan(start));
-      final writeHandler = swift.substring(start, end);
-      final multipartStart = writeHandler.indexOf(
-        'if isDownloadPart(downloadTask) {',
-      );
-      final multipartEnd = writeHandler.indexOf(
-        'guard let id = taskId(from: downloadTask)',
-        multipartStart,
-      );
-      expect(multipartStart, greaterThanOrEqualTo(0));
-      expect(multipartEnd, greaterThan(multipartStart));
-      final multipartProgress = writeHandler.substring(
-        multipartStart,
-        multipartEnd,
-      );
-      expect(
-        multipartProgress,
-        isNot(contains('promoteMultipartIfPossible(')),
-      );
+  test('multipart background refill probes run on ownership changes, not every byte callback', () {
+    final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
+        .readAsStringSync();
+    final start = swift.indexOf('static func handleBytesWritten(');
+    final end = swift.indexOf(
+      'private static func postSingleTaskUpdate(',
+      start,
+    );
+    expect(start, greaterThanOrEqualTo(0));
+    expect(end, greaterThan(start));
+    final writeHandler = swift.substring(start, end);
+    final multipartStart = writeHandler.indexOf(
+      'if isDownloadPart(downloadTask) {',
+    );
+    final multipartEnd = writeHandler.indexOf(
+      'guard let id = taskId(from: downloadTask)',
+      multipartStart,
+    );
+    expect(multipartStart, greaterThanOrEqualTo(0));
+    expect(multipartEnd, greaterThan(multipartStart));
+    final multipartProgress = writeHandler.substring(
+      multipartStart,
+      multipartEnd,
+    );
+    expect(multipartProgress, isNot(contains('promoteMultipartIfPossible(')));
 
-      final completionStart = swift.indexOf(
-        'static func handlePluginTaskCompleted(',
-      );
-      final completionEnd = swift.indexOf(
-        'static func parkFailedTask(',
-        completionStart,
-      );
-      expect(completionStart, greaterThanOrEqualTo(0));
-      expect(completionEnd, greaterThan(completionStart));
-      final completion = swift.substring(completionStart, completionEnd);
-      expect(completion, contains('promoteMultipartIfPossible('));
-    },
-  );
+    final completionStart = swift.indexOf(
+      'static func handlePluginTaskCompleted(',
+    );
+    final completionEnd = swift.indexOf(
+      'static func parkFailedTask(',
+      completionStart,
+    );
+    expect(completionStart, greaterThanOrEqualTo(0));
+    expect(completionEnd, greaterThan(completionStart));
+    final completion = swift.substring(completionStart, completionEnd);
+    expect(completion, contains('promoteMultipartIfPossible('));
+  });
 
   test('native diagnostic progress sampling collapses multipart children', () {
     final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
@@ -162,7 +156,8 @@ void main() {
 
   test('native multipart state persistence is coalesced per parent sample', () {
     final swift = File('ios/Runner/DownloadNativeWaitingQueue.swift')
-        .readAsStringSync();
+        .readAsStringSync()
+        .replaceAll('\r\n', '\n');
     final start = swift.indexOf(
       'private static func postMultipartChunkUpdate(',
     );
@@ -175,8 +170,13 @@ void main() {
     final section = swift.substring(start, end);
     expect(
       section,
-      contains('if shouldUpdateNativeOverlay || completed {\n      saveLocked(state)'),
+      contains(
+        'if shouldUpdateNativeOverlay || completed {\n      saveLocked(state)',
+      ),
     );
-    expect(section, isNot(contains('\n    saveLocked(state)\n    lock.unlock()')));
+    expect(
+      section,
+      isNot(contains('\n    saveLocked(state)\n    lock.unlock()')),
+    );
   });
 }

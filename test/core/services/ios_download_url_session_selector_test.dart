@@ -15,7 +15,6 @@ void main() {
       'URLSession:task:didCompleteWithError:',
       'URLSession:downloadTask:didFinishDownloadingToURL:',
       'URLSessionDidFinishEventsForBackgroundURLSession:',
-      'URLSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:',
     ];
     for (final selector in expectedSelectors) {
       expect(source, contains('"$selector"'));
@@ -25,10 +24,22 @@ void main() {
       '"urlSession:task:didCompleteWithError:"',
       '"urlSession:downloadTask:didFinishDownloadingToURL:"',
       '"urlSessionDidFinishEventsForBackgroundURLSession:"',
-      '"urlSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:"',
     ];
     for (final selector in invalidSelectors) {
       expect(source, isNot(contains(selector)));
     }
+    // DM-26 moves native byte observation onto background_downloader's
+    // supported callback, keeping the remaining IMP surface to completion and
+    // queue promotion only.
+    expect(source, contains('handleSupportedPluginProgress('));
+    expect(source, contains('Prefer that supported contract'));
+    expect(
+      source,
+      isNot(
+        contains(
+          'URLSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:',
+        ),
+      ),
+    );
   });
 }

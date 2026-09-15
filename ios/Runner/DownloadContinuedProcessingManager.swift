@@ -175,12 +175,12 @@ final class DownloadContinuedProcessingManager {
     speedBytesPerSecond: Double = -1,
     displayName: String = "",
     currentIndex: Int = -1
-  ) {
+  ) -> Bool {
     let previousEpisodeTaskId = currentEpisodeTaskId
     if taskId != Self.sessionKey, !taskId.isEmpty {
       currentEpisodeTaskId = taskId
     }
-    guard var snapshot = snapshot else { return }
+    guard var snapshot = snapshot else { return false }
 
     let switched = !previousEpisodeTaskId.isEmpty
       && taskId != Self.sessionKey
@@ -225,6 +225,7 @@ final class DownloadContinuedProcessingManager {
     if let task = activeTask {
       apply(snapshot, to: task)
     }
+    return activeTask != nil || identifier != nil
   }
 
   func finish(taskId: String, success: Bool, status: String, endSession: Bool = false) {

@@ -58,7 +58,7 @@ void main() {
     );
   });
 
-  test('delete hides rows before waiting for native or filesystem cleanup', () {
+  test('delete waits for typed ownership settlement before hiding a row', () {
     final source = File(
       'lib/features/library/presentation/downloads_provider.dart',
     ).readAsStringSync();
@@ -66,13 +66,25 @@ void main() {
       source.indexOf('Future<void> removeDownloads'),
     );
 
-    final optimisticState = method.indexOf('state = AsyncData(');
-    final nativeCancel = method.indexOf('.cancelDownload(');
-    final fileDelete = method.indexOf('.deleteDownloadedFile(file)');
+    final typedDelete = method.indexOf('.deleteDownloadOutcome(');
+    final failClosed = method.indexOf('if (!safeToHide)', typedDelete);
+    final deletingIds = method.indexOf(
+      '_deletingIds.addAll(droppedIds)',
+      failClosed,
+    );
+    final hiddenState = method.indexOf('state = AsyncData(', deletingIds);
 
-    expect(optimisticState, greaterThanOrEqualTo(0));
-    expect(nativeCancel, greaterThan(optimisticState));
-    expect(fileDelete, greaterThan(nativeCancel));
-    expect(method, contains('_deletingIds.addAll(droppedIds)'));
+    expect(typedDelete, greaterThanOrEqualTo(0));
+    expect(failClosed, greaterThan(typedDelete));
+    expect(deletingIds, greaterThan(failClosed));
+    expect(hiddenState, greaterThan(deletingIds));
+    expect(
+      method,
+      contains(
+        'onTimeout: () => DownloadCommandOutcome.settlingOwnership',
+      ),
+    );
+    expect(method, contains('state = AsyncData(await _refreshList());'));
+    expect(method, isNot(contains('.deleteDownloadedFile(')));
   });
 }

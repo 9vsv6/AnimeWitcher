@@ -205,9 +205,16 @@ import UserNotifications
       }
       if call.method == "persistNativeQueue" || call.method == "persistWaitingQueue" {
         let arguments = call.arguments as? [String: Any] ?? [:]
-        DownloadNativeWaitingQueue.persist(from: arguments)
+        // Retry the complete preflight, never a partially installed seam.
+        DownloadNativeWaitingQueue.installUrlSessionHook()
+        let acceptedVersion = DownloadNativeWaitingQueue.persist(from: arguments)
         DownloadNativeWaitingQueue.promoteMultipartIfPossible()
-        result(true)
+        // Persistence is not a native ownership claim. Acknowledge it even
+        // when native promotion is unavailable so Dart's scheduler can run.
+        result([
+          "acceptedVersion": acceptedVersion,
+          "nativePromotionAvailable": DownloadNativeWaitingQueue.nativePromotionAvailable,
+        ])
         return
       }
 
@@ -286,7 +293,7 @@ import UserNotifications
               (arguments["progress"] as? NSNumber)?.doubleValue ?? 0.0
             let totalBytes =
               (arguments["totalBytes"] as? NSNumber)?.int64Value ?? -1
-            manager.update(
+            let active = manager.update(
               taskId: taskId,
               progress: progress,
               totalBytes: totalBytes,
@@ -297,7 +304,7 @@ import UserNotifications
               displayName: arguments["displayName"] as? String ?? "",
               currentIndex: (arguments["currentIndex"] as? NSNumber)?.intValue ?? -1
             )
-            result(true)
+            result(active)
 
           case "finish":
             let success = arguments["success"] as? Bool ?? false
