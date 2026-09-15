@@ -31,7 +31,7 @@ jobs:
           flutter-version: 3.47.1
           cache: true
 
-      - name: Fetch current main and verify presentation-test superset
+      - name: Fetch main and prove the only semantic test conflict
         shell: bash
         run: |
           set -euo pipefail
@@ -46,21 +46,28 @@ jobs:
           theirs = subprocess.check_output(
               ['git', 'show', f'origin/main:{path}'], text=True
           )
+          Path('/tmp/feature_downloads_tab_test.dart').write_text(ours)
+          Path('/tmp/main_downloads_tab_test.dart').write_text(theirs)
+
           pattern = re.compile(r"\b(?:test|testWidgets)\s*\(\s*(['\"])(.*?)\1", re.S)
           ours_titles = {m.group(2) for m in pattern.finditer(ours)}
           theirs_titles = {m.group(2) for m in pattern.finditer(theirs)}
-          missing = sorted(ours_titles - theirs_titles)
+          safe_title = 'deleting the last episode preserves unknown series-folder evidence'
+          unsafe_title = 'deleting the last episode removes the series folder leftover files and all'
+          missing = ours_titles - theirs_titles
+
           print(f'feature test titles: {len(ours_titles)}')
           print(f'main test titles: {len(theirs_titles)}')
-          if missing:
-              print('main is missing feature tests:')
-              for title in missing:
-                  print(f'  - {title}')
-              raise SystemExit(1)
-          print('main contains every feature-branch test title')
+          if missing != {safe_title}:
+              raise SystemExit(f'unexpected feature tests missing from main: {sorted(missing)}')
+          if unsafe_title not in theirs_titles:
+              raise SystemExit('expected legacy destructive cleanup test is not present in main')
+          if safe_title in theirs_titles:
+              raise SystemExit('main unexpectedly already contains the DM-14 safe cleanup test')
+          print('proven semantic conflict: main has the legacy destructive cleanup contract only')
           PY
 
-      - name: Merge main and resolve the single proven presentation-test conflict
+      - name: Merge main and preserve the DM-14 safe cleanup contract
         shell: bash
         run: |
           set -euo pipefail
@@ -79,8 +86,49 @@ jobs:
               exit 1
             fi
             git checkout --theirs -- "$expected"
-            git add "$expected"
           fi
+
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          path = Path('test/features/library/presentation/downloads_tab_test.dart')
+          merged = path.read_text()
+          ours = Path('/tmp/feature_downloads_tab_test.dart').read_text()
+          theirs = Path('/tmp/main_downloads_tab_test.dart').read_text()
+
+          safe_start_marker = "  testWidgets(\n    'deleting the last episode preserves unknown series-folder evidence'"
+          unsafe_start_marker = "  testWidgets(\n    'deleting the last episode removes the series folder leftover files and all'"
+          next_marker = "\n  testWidgets('delete also removes sibling .part .tmp .download temps'"
+
+          safe_start = ours.find(safe_start_marker)
+          safe_end = ours.find(next_marker, safe_start)
+          unsafe_start = merged.find(unsafe_start_marker)
+          unsafe_end = merged.find(next_marker, unsafe_start)
+          if min(safe_start, safe_end, unsafe_start, unsafe_end) < 0:
+              raise SystemExit('could not isolate the cleanup-contract test blocks')
+
+          safe_block = ours[safe_start:safe_end]
+          merged = merged[:unsafe_start] + safe_block + merged[unsafe_end:]
+          path.write_text(merged)
+
+          pattern = re.compile(r"\b(?:test|testWidgets)\s*\(\s*(['\"])(.*?)\1", re.S)
+          ours_titles = {m.group(2) for m in pattern.finditer(ours)}
+          theirs_titles = {m.group(2) for m in pattern.finditer(theirs)}
+          merged_titles = {m.group(2) for m in pattern.finditer(merged)}
+          unsafe_title = 'deleting the last episode removes the series folder leftover files and all'
+          expected_titles = ours_titles | (theirs_titles - {unsafe_title})
+          if merged_titles != expected_titles:
+              missing = sorted(expected_titles - merged_titles)
+              extra = sorted(merged_titles - expected_titles)
+              raise SystemExit(f'merged test-title mismatch; missing={missing}, extra={extra}')
+          if unsafe_title in merged_titles:
+              raise SystemExit('legacy destructive cleanup contract survived resolution')
+          print(f'merged presentation tests: {len(merged_titles)} titles; DM-14 safe contract preserved')
+          PY
+
+          dart format "$expected"
+          git add "$expected"
           if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
             echo "Unresolved conflicts remain"
             git diff --name-only --diff-filter=U
@@ -121,7 +169,7 @@ jobs:
         run: |
           git diff --check
           test -z "$(git diff --name-only --diff-filter=U)"
-          git merge-base --is-ancestor origin/main HEAD || test -f .git/MERGE_HEAD
+          test -f .git/MERGE_HEAD
 
       - name: Commit and push merge to feature branch only
         shell: bash
