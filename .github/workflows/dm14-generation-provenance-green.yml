@@ -1,4 +1,4 @@
-name: DM-24 alias adoption apply
+name: Diagnose full Flutter tests
 
 on:
   push:
@@ -8,21 +8,18 @@ on:
       - .github/workflows/dm14-generation-provenance-green.yml
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: dm24-alias-adoption-apply-${{ github.ref }}
+  group: diagnose-full-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  apply:
-    runs-on: ubuntu-24.04
+  diagnose:
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: plan/download-manager-reliability
-          fetch-depth: 0
 
       - uses: subosito/flutter-action@v2
         with:
@@ -30,137 +27,69 @@ jobs:
           flutter-version: 3.47.1
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
+      - name: Install dependencies and generate sources
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
 
-      - name: Prove DM-24 start/adoption RED before production patch
+      - name: Run suite and capture failures
+        id: tests
         shell: bash
         run: |
           set +e
-          flutter test test/core/services/download_logical_identity_start_test.dart \
-            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-          status=$?
+          flutter test --reporter json --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key 2>&1 | tee /tmp/flutter-test.jsonl
+          test_exit=${PIPESTATUS[0]}
           set -e
-          if [ "$status" -eq 0 ]; then
-            echo 'Expected alias-aware start/adoption regression to be RED before the production patch.'
-            exit 1
-          fi
-          echo "Observed expected RED (exit=$status)."
-
-      - name: Apply alias-aware logical adoption
-        run: |
           python3 - <<'PY'
+          import json
           from pathlib import Path
 
-          path = Path('lib/core/services/download_service.dart')
-          text = path.read_text()
-
-          replacements = [
-              (
-                  """    final logicalId = DownloadLogicalIdentity.fromMedia(
-              item: item,
-              episode: episode,
-            ).key;""",
-                  """    final logicalIdentity = DownloadLogicalIdentity.fromMedia(
-              item: item,
-              episode: episode,
-            );
-            final logicalId = logicalIdentity.key;""",
-              ),
-              (
-                  """      final logicalJobs = await _jobStore.allForLogicalId(logicalId);""",
-                  """      final logicalJobs = (await _jobStore.all())
-              .where((job) {
-                final persisted = job.logicalId;
-                return persisted != null &&
-                    logicalIdentity.matchesPersistedKey(persisted);
-              })
-              .toList(growable: false);""",
-              ),
-              (
-                  """          final candidateLogicalId =
-              candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
-          if (candidateLogicalId != logicalId) continue;""",
-                  """          final candidateLogicalId =
-              candidateJob.logicalId ?? logicalDownloadIdFromMetadata(metadata);
-          if (candidateLogicalId == null ||
-              !logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
-            continue;
-          }""",
-              ),
-              (
-                  """          if (candidateLogicalId != null) {
-            if (candidateLogicalId != logicalId) continue;
-            existingLogicalJob = candidateJob;""",
-                  """          if (candidateLogicalId != null) {
-            if (!logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
-              continue;
-            }
-            existingLogicalJob = candidateJob;""",
-              ),
-              (
-                  """    final storage = _ref.read(storageServiceProvider);
-    final matches = <TaskRecord>[];
-    for (final record in records) {""",
-                  """    final storage = _ref.read(storageServiceProvider);
-    final matches = <TaskRecord>[];
-    final logicalIdentity = DownloadLogicalIdentity.fromMedia(
-      item: item,
-      episode: episode,
-    );
-    for (final record in records) {""",
-              ),
-              (
-                  """      if (candidateLogicalId != null) {
-        if (candidateLogicalId == logicalId) matches.add(record);
-        continue;
-      }""",
-                  """      if (candidateLogicalId != null) {
-        if (candidateLogicalId == logicalId ||
-            logicalIdentity.matchesPersistedKey(candidateLogicalId)) {
-          matches.add(record);
-        }
-        continue;
-      }""",
-              ),
-          ]
-
-          for old, new in replacements:
-              if new in text:
+          tests = {}
+          errors = {}
+          failed = []
+          for line in Path('/tmp/flutter-test.jsonl').read_text(errors='replace').splitlines():
+              try:
+                  event = json.loads(line)
+              except Exception:
                   continue
-              if old not in text:
-                  raise SystemExit(f'missing expected DM-24 anchor:\n{old}')
-              text = text.replace(old, new, 1)
+              kind = event.get('type')
+              if kind == 'testStart':
+                  test = event.get('test') or {}
+                  tests[test.get('id')] = test
+              elif kind == 'error':
+                  test_id = event.get('testID')
+                  errors.setdefault(test_id, []).append({
+                      'error': event.get('error', ''),
+                      'stackTrace': event.get('stackTrace', ''),
+                  })
+              elif kind == 'testDone' and event.get('result') == 'failure':
+                  failed.append(event.get('testID'))
 
-          path.write_text(text)
+          lines = []
+          for test_id in failed:
+              test = tests.get(test_id, {})
+              lines.append(f"TEST: {test.get('name', '<unknown>')}")
+              lines.append(f"URL: {test.get('url', '<unknown>')}")
+              if test.get('line') is not None:
+                  lines.append(f"LINE: {test.get('line')}")
+              for detail in errors.get(test_id, []):
+                  if detail['error']:
+                      lines.append('ERROR: ' + detail['error'])
+                  if detail['stackTrace']:
+                      lines.append('STACK:\n' + detail['stackTrace'])
+              lines.append('---')
+          if not lines:
+              lines = ['No failing testDone events were parsed.']
+          Path('/tmp/failures.txt').write_text('\n'.join(lines))
+          print(Path('/tmp/failures.txt').read_text())
           PY
+          exit "$test_exit"
 
-      - name: Verify DM-24 GREEN
-        run: |
-          flutter test \
-            test/core/services/download_logical_identity_test.dart \
-            test/core/services/download_logical_identity_start_test.dart \
-            test/core/services/download_job_logical_identity_test.dart \
-            test/core/services/download_logical_identity_persistence_test.dart \
-            test/core/services/download_overlay_logical_identity_test.dart \
-            test/features/library/presentation/downloads_logical_identity_test.dart \
-            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-          flutter analyze --no-fatal-warnings --no-fatal-infos \
-            lib/core/services/download_logical_identity.dart \
-            lib/core/services/download_service.dart \
-            test/core/services/download_logical_identity_test.dart \
-            test/core/services/download_logical_identity_start_test.dart
-          git diff --check
-
-      - name: Commit verified production patch
-        run: |
-          if git diff --quiet -- lib/core/services/download_service.dart; then
-            echo 'Alias-aware service adoption already present.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/core/services/download_service.dart
-          git commit -m 'fix(downloads): adopt enriched logical identity aliases (DM-24)'
-          git pull --rebase origin plan/download-manager-reliability
-          git push origin HEAD:plan/download-manager-reliability
+      - name: Upload failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-failures
+          path: /tmp/failures.txt
+          retention-days: 1
