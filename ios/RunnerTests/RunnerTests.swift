@@ -1,8 +1,60 @@
 import Flutter
 import UIKit
 import XCTest
+@testable import Runner
 
 class RunnerTests: XCTestCase {
+  override func setUp() {
+    super.setUp()
+    DownloadNativeWaitingQueue.installUrlSessionHook()
+    XCTAssertTrue(DownloadNativeWaitingQueue.nativePromotionAvailable,
+                  "CocoaPods package-version export and all three selectors must work")
+  }
+
+  func testDM26DelayedStatusCannotCompleteReusedTaskOrReleaseItsSlot() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())
+    let session = URLSession(configuration: .ephemeral)
+    defer { session.invalidateAndCancel() }
+    let replacement = session.downloadTask(with: URL(string: "https://127.0.0.1:1/ep1.mp4")!)
+    replacement.taskDescription = "{\"taskId\":\"ep1\"}"
+    DownloadNativeWaitingQueue.terminalObservation.record(taskId: "ep1", succeeded: true)
+    let terminal = DownloadNativeWaitingQueue.terminalObservation.capture(
+      execution: replacement, taskId: "ep1"
+    ) {}
+    DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+      session: session, task: replacement, error: nil,
+      terminalSuccess: terminal, requiresTerminalObservation: true
+    )
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertEqual(state.transferringTaskIds, ["ep1"])
+    XCTAssertEqual(state.waiters.map(\.taskId), ["ep2"])
+    XCTAssertTrue(state.completedTaskIds.isEmpty)
+    XCTAssertTrue(state.pausedTaskIds.isEmpty)
+  }
+
+  func testDM26PluginFileMoveFailureCannotBecomeSuccess() {
+    DownloadNativeWaitingQueue.resetForTests()
+    DownloadNativeWaitingQueue.persist(from: ep1TransferringEp2Waiting())
+    let session = URLSession(configuration: .ephemeral)
+    defer { session.invalidateAndCancel() }
+    let task = session.downloadTask(with: URL(string: "https://127.0.0.1:1/ep1.mp4")!)
+    task.taskDescription = "{\"taskId\":\"ep1\"}"
+    let terminal = DownloadNativeWaitingQueue.terminalObservation.capture(
+      execution: task, taskId: "ep1"
+    ) {
+      DownloadNativeWaitingQueue.terminalObservation.record(taskId: "ep1", succeeded: false)
+    }
+    DownloadNativeWaitingQueue.handlePluginTaskCompleted(
+      session: session, task: task, error: nil,
+      terminalSuccess: terminal, requiresTerminalObservation: true
+    )
+    let state = DownloadNativeWaitingQueue.load()
+    XCTAssertFalse(state.completedTaskIds.contains("ep1"))
+    XCTAssertTrue(state.pausedTaskIds.contains("ep1"))
+    XCTAssertEqual(state.transferringTaskIds, ["ep2"])
+  }
+
   override func tearDown() {
     DownloadNativeWaitingQueue.resetForTests()
     super.tearDown()

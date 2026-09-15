@@ -205,9 +205,16 @@ import UserNotifications
       }
       if call.method == "persistNativeQueue" || call.method == "persistWaitingQueue" {
         let arguments = call.arguments as? [String: Any] ?? [:]
+        // Retry the complete preflight, never a partially installed seam.
+        DownloadNativeWaitingQueue.installUrlSessionHook()
         let acceptedVersion = DownloadNativeWaitingQueue.persist(from: arguments)
         DownloadNativeWaitingQueue.promoteMultipartIfPossible()
-        result(["acceptedVersion": acceptedVersion])
+        // Persistence is not a native ownership claim. Acknowledge it even
+        // when native promotion is unavailable so Dart's scheduler can run.
+        result([
+          "acceptedVersion": acceptedVersion,
+          "nativePromotionAvailable": DownloadNativeWaitingQueue.nativePromotionAvailable,
+        ])
         return
       }
 

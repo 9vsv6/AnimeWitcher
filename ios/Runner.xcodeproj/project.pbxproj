@@ -16,6 +16,7 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A7E91C10D0AD4B7EA1C0E1F2 /* DownloadNativeWaitingQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E91C10D0AD4B7EA1C0E1F1 /* DownloadNativeWaitingQueue.swift */; };
+		D02600000000000000000002 /* DownloadCallbackCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = D02600000000000000000001 /* DownloadCallbackCompatibility.swift */; };
 		DC4DEFFC40A21AEA7939A514 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3754DA4BE120D28DD1A6BC70 /* Pods_Runner.framework */; };
 		F85CA01598B79F07F93343AA /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 332A326BE9036FFCA2E88ED7 /* Pods_RunnerTests.framework */; };
 /* End PBXBuildFile section */
@@ -67,6 +68,7 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A7E91C10D0AD4B7EA1C0E1F1 /* DownloadNativeWaitingQueue.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DownloadNativeWaitingQueue.swift; sourceTree = "<group>"; };
+		D02600000000000000000001 /* DownloadCallbackCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadCallbackCompatibility.swift; sourceTree = "<group>"; };
 		B1171BAFADAFDA60E1FFE42F /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		FD9E6070D645B7F2F5640934 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -153,6 +155,7 @@
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				238CC6732A745D36D272A0DB /* DownloadContinuedProcessingManager.swift */,
 				A7E91C10D0AD4B7EA1C0E1F1 /* DownloadNativeWaitingQueue.swift */,
+				D02600000000000000000001 /* DownloadCallbackCompatibility.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -404,6 +407,7 @@
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				0C8BFA4849FA30ED7DABADCD /* DownloadContinuedProcessingManager.swift in Sources */,
 				A7E91C10D0AD4B7EA1C0E1F2 /* DownloadNativeWaitingQueue.swift in Sources */,
+				D02600000000000000000002 /* DownloadCallbackCompatibility.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

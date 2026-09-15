@@ -10,6 +10,12 @@ on:
       - pubspec.lock
       - ios/Runner/AppDelegate.swift
       - ios/Runner/DownloadNativeWaitingQueue.swift
+      - ios/Runner/DownloadCallbackCompatibility.swift
+      - ios/RunnerTests/RunnerTests.swift
+      - ios/Podfile
+      - ios/downloader_compatibility_version.rb
+      - test/native/**
+      - lib/core/services/download_continued_processing_service.dart
       - test/core/services/ios_native_progress_callback_source_test.dart
   workflow_dispatch:
 
@@ -37,6 +43,12 @@ jobs:
           dart run build_runner build --delete-conflicting-outputs
           grep -A7 '^  background_downloader:' pubspec.lock
           grep -q 'background_downloader: ^9.6.1' pubspec.yaml
+      - name: Run native compatibility behavior and version-export tests
+        run: |
+          swiftc ios/Runner/DownloadCallbackCompatibility.swift test/native/dm26_compatibility_test.swift -o /tmp/dm26-compatibility-tests
+          /tmp/dm26-compatibility-tests
+          ruby test/native/dm26_version_test.rb
+          python3 test/native/dm26_static_guard.py
       - name: Verify generated sources are synchronized
         run: git diff --exit-code
       - name: Prove 9.6.1 supported native callbacks are present
@@ -70,5 +82,15 @@ jobs:
           lib/core/services/download_continued_processing_service.dart
       - name: Compile iOS simulator integration
         run: flutter build ios --simulator --no-codesign --debug
+      - name: Run DM-26 native queue regression tests
+        shell: bash
+        run: |
+          DM26_SIMULATOR_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for devices in d["devices"].values() for x in devices if x["name"].startswith("iPhone")))')"
+          xcodebuild test -workspace ios/Runner.xcworkspace -scheme Runner -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DM26_SIMULATOR_ID" \
+            -parallel-testing-enabled NO \
+            -only-testing:RunnerTests/RunnerTests/testDM26DelayedStatusCannotCompleteReusedTaskOrReleaseItsSlot \
+            -only-testing:RunnerTests/RunnerTests/testDM26PluginFileMoveFailureCannotBecomeSuccess \
+            CODE_SIGNING_ALLOWED=NO
       - name: Diff sanity
         run: git diff --check

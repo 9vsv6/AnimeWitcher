@@ -45,13 +45,15 @@ void main() {
     expect(swift, contains('completeSelector'));
     expect(swift, contains('finishDownloadSelector'));
     expect(swift, contains('finishEventsSelector'));
-    expect(swift, contains('compatiblePluginVersion = "9.6.1"'));
-    expect(swift, contains('Bundle(for: BDPlugin.self)'));
-    expect(swift, contains('guard pluginVersion == compatiblePluginVersion'));
+    expect(swift, contains('animeWitcherBackgroundDownloaderVersion'));
+    expect(swift, isNot(contains('Bundle(for: BDPlugin.self)')));
+    expect(swift, isNot(contains('supportedTerminalStatusesByTaskId')));
+    expect(swift, contains('terminalObservation.capture('));
+    expect(swift, contains('installation.install('));
+    expect(swift, contains('guard nativePromotionAvailable else { return }'));
 
-    // Hook discovery is a compatibility seam, not a launch precondition. If a
-    // future plugin version removes these internal selectors, install returns
-    // false instead of fabricating a second progress observer or crashing.
+    // Wiring guard only; test/native/dm26_compatibility_test.swift exercises
+    // every partial-selector combination and delayed status isolation.
     expect(swift, contains('guard let delegateClass = findUrlSessionDelegateClass() else'));
     expect(swift, contains('return false'));
   });
@@ -59,13 +61,12 @@ void main() {
   test('AppDelegate installs the compatibility seam at launch and background wake', () {
     final appDelegate = File('ios/Runner/AppDelegate.swift').readAsStringSync();
 
-    // Startup and a background URLSession wake are the only installation sites;
-    // installUrlSessionHook() is internally idempotent.
+    // Startup, background wake and each fresh checkpoint retry installation.
     expect(
       RegExp(r'DownloadNativeWaitingQueue\.installUrlSessionHook\(\)')
           .allMatches(appDelegate)
           .length,
-      2,
+      3,
     );
     expect(appDelegate, contains('didFinishLaunchingWithOptions'));
     expect(appDelegate, contains('handleEventsForBackgroundURLSession'));

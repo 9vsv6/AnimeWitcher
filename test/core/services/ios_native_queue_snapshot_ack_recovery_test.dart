@@ -31,6 +31,33 @@ void main() {
         .setMockMethodCallHandler(_channel, null);
   });
 
+  test('DM-26 unavailable hooks retain checkpoint acknowledgement and recover', () async {
+    var available = false;
+    var calls = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (call) async {
+          if (call.method != 'persistNativeQueue') return null;
+          calls++;
+          return <String, Object>{
+            'acceptedVersion': (call.arguments as Map)['snapshotVersion'] as int,
+            'nativePromotionAvailable': available,
+          };
+        });
+    final service = DownloadContinuedProcessingService(
+      onSystemCancel: (_) async {},
+      forceAvailableForTesting: true,
+    );
+    addTearDown(service.dispose);
+
+    expect(await _persist(service), isNotNull);
+    expect(service.nativePromotionAvailable, isFalse);
+    expect(calls, 1, reason: 'unavailable capability is not a lost durable ACK');
+    available = true;
+    expect(await _persist(service), isNotNull);
+    expect(service.nativePromotionAvailable, isTrue);
+    expect(calls, 2);
+  });
+
   test(
     'DM-15 retries a lost acknowledgement with the exact same version',
     () async {

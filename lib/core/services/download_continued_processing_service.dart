@@ -68,6 +68,9 @@ class DownloadContinuedProcessingService {
   bool _handlerInstalled = false;
   bool _disposed = false;
   int _nativeQueueSnapshotVersion = 0;
+  /// False means queued work stays with the foreground scheduler. A persisted
+  /// checkpoint is not proof that native background promotion is available.
+  bool nativePromotionAvailable = false;
   DownloadGlobalHandlerLease? _handlerLease;
   static const Duration _updateSampleInterval = Duration(seconds: 1);
   Timer? _updateTimer;
@@ -251,6 +254,7 @@ class DownloadContinuedProcessingService {
         },
       );
       if (ack is! Map) return null;
+      nativePromotionAvailable = ack['nativePromotionAvailable'] == true;
       final rawAcceptedVersion = ack['acceptedVersion'];
       if (rawAcceptedVersion is! num) return null;
       return rawAcceptedVersion.toInt();

@@ -328,6 +328,12 @@ enum DownloadNativeWaitingQueue {
   private static let backgroundRetryMaxTotalRetries = 128
   private static let lock = NSLock()
   private static var hookInstalled = false
+
+  static var nativePromotionAvailable: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return hookInstalled
+  }
   /// Task IDs that already have URLSession bytes (plugin HQ or our start).
   /// Do not query plugin-internal HoldingQueue APIs.
   private static var seenTransferringIds = Set<String>()
@@ -343,7 +349,7 @@ enum DownloadNativeWaitingQueue {
   private static var lastChunkBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static var lastTaskBridgeTimes: [String: CFAbsoluteTime] = [:]
   private static var backgroundRetryStates: [String: BackgroundRetryState] = [:]
-  private static var supportedTerminalStatusesByTaskId: [String: Int] = [:]
+  static let terminalObservation = DownloadTerminalObservation()
   private static var multipartChildSamples: [String: [String: RunningSample]] = [:]
   private static var lastMultipartOverlayTimes: [String: CFAbsoluteTime] = [:]
   private static var latestDownloadSession: URLSession?
@@ -562,7 +568,6 @@ enum DownloadNativeWaitingQueue {
     lastChunkBridgeTimes.removeAll()
     lastTaskBridgeTimes.removeAll()
     backgroundRetryStates.removeAll()
-    supportedTerminalStatusesByTaskId.removeAll()
     multipartChildSamples.removeAll()
     lastMultipartOverlayTimes.removeAll()
     latestDownloadSession = nil
@@ -753,6 +758,7 @@ enum DownloadNativeWaitingQueue {
     task: URLSessionTask,
     error: Error
   ) -> Bool {
+    guard nativePromotionAvailable else { return false }
     guard task is URLSessionDownloadTask,
           !isAppInForeground(),
           let taskId = taskId(from: task),
@@ -829,6 +835,7 @@ enum DownloadNativeWaitingQueue {
     replacement.earliestBeginDate = Date().addingTimeInterval(
       backgroundRetryDelay(forConsecutiveFailure: consecutive)
     )
+    DownloadUrlSessionHook.callbacks(for: task).retire()
 
     DownloadNativeDiagnosticLog.record(
       hasResumeData ? "background.retry.resumeData" : "background.retry.rangeRestart",
@@ -845,8 +852,13 @@ enum DownloadNativeWaitingQueue {
   static func handlePluginTaskCompleted(
     session: URLSession,
     task: URLSessionTask,
-    error: Error?
+    error: Error?,
+    terminalSuccess: Bool? = nil,
+    requiresTerminalObservation: Bool = false
   ) {
+    // Silence/interception is unknown ownership, never a successful file move.
+    // Keep the slot until Dart's foreground ownership reconciliation.
+    if requiresTerminalObservation && terminalSuccess == nil { return }
     rememberDownloadSession(session)
     // A native part is not an episode, but its URLSession byte/completion
     // evidence belongs to the Dart multipart parent. didFinishDownloadingTo
@@ -857,18 +869,15 @@ enum DownloadNativeWaitingQueue {
         task,
         totalWritten: task.countOfBytesReceived,
         totalExpected: task.countOfBytesExpectedToReceive,
-        completed: error == nil
+        completed: terminalSuccess ?? (error == nil)
       )
       promoteMultipartIfPossible(on: session, parentId: parentTaskId(from: task))
       return
     }
-    let supportedSuccess = taskId(from: task).flatMap {
-      consumeSupportedTerminalSuccess(taskId: $0)
-    }
     let httpFailed = (task.response as? HTTPURLResponse).map {
       !(200...299).contains($0.statusCode)
     } ?? false
-    let succeeded = supportedSuccess ?? (error == nil && !httpFailed)
+    let succeeded = terminalSuccess ?? (error == nil && !httpFailed)
     if succeeded {
       markPluginTaskCompleted(task: task)
     } else {
@@ -881,17 +890,6 @@ enum DownloadNativeWaitingQueue {
     refreshSessionOverlay(success: succeeded)
   }
 
-  private static func consumeSupportedTerminalSuccess(taskId: String) -> Bool? {
-    lock.lock()
-    let rawStatus = supportedTerminalStatusesByTaskId.removeValue(forKey: taskId)
-    lock.unlock()
-    guard let rawStatus else { return nil }
-    #if canImport(background_downloader)
-    return rawStatus == background_downloader.TaskStatus.complete.rawValue
-    #else
-    return nil
-    #endif
-  }
 
   /// Keep a failed episode in the batch as paused and free its slot so the
   /// next waiter can start. Do not treat it as a successful completion.
@@ -962,6 +960,7 @@ enum DownloadNativeWaitingQueue {
   }
 
   static func promoteNext(on session: URLSession) {
+    guard nativePromotionAvailable else { return }
     // In-app (scene foregroundActive), Dart + plugin HoldingQueue own
     // promotion. Starting a second URLSession task while the user is in
     // the app double-downloads.
@@ -1713,6 +1712,7 @@ enum DownloadNativeWaitingQueue {
     on suppliedSession: URLSession? = nil,
     parentId: String? = nil
   ) {
+    guard nativePromotionAvailable else { return }
     guard !isAppInForeground() else { return }
 
     lock.lock()
@@ -1844,22 +1844,19 @@ enum DownloadNativeWaitingQueue {
   }
 
   #if canImport(background_downloader)
-  /// Capture the plugin's supported terminal status before the retained
-  /// URLSession completion seam resumes promotion on that same session. The
-  /// hook consumes this once, so status is not inferred or processed twice.
+  /// Only the synchronous status emitted by the original delegate invocation
+  /// may classify that execution. Out-of-band/delayed statuses are discarded.
   private static func handleSupportedPluginStatus(
     task: background_downloader.Task,
     statusUpdate: background_downloader.TaskStatusUpdate
   ) {
-    guard !task.taskId.isEmpty,
-          task.group != "chunk",
-          task.group != "animewitcher_parts"
-    else { return }
+    guard !task.taskId.isEmpty else { return }
     switch statusUpdate.taskStatus {
     case .complete, .notFound, .failed, .canceled, .paused:
-      lock.lock()
-      supportedTerminalStatusesByTaskId[task.taskId] = statusUpdate.taskStatus.rawValue
-      lock.unlock()
+      terminalObservation.record(
+        taskId: task.taskId,
+        succeeded: statusUpdate.taskStatus == .complete
+      )
     default:
       break
     }
@@ -1874,7 +1871,7 @@ enum DownloadNativeWaitingQueue {
     task: background_downloader.Task,
     progress: Double
   ) {
-    guard progress.isFinite else { return }
+    guard nativePromotionAvailable, progress.isFinite, progress >= 0 else { return }
     let normalized = min(max(progress, 0), 1)
     let id = task.taskId
     guard !id.isEmpty else { return }
@@ -1887,21 +1884,15 @@ enum DownloadNativeWaitingQueue {
     let name = task.displayName.isEmpty
       ? (task.filename.isEmpty ? id : task.filename)
       : task.displayName
-    let logicalKey = episodeKey(
-      taskId: id,
-      trackingUrl: task.metaData,
-      directory: task.directory,
-      filename: task.filename,
-      url: task.url
-    )
 
     lock.lock()
-    seenTransferringIds.insert(id)
-    activeEpisodeKeysByTaskId[id] = logicalKey
-    startingEpisodeKeys.remove(logicalKey)
     var state = loadLocked()
-    if !state.transferringTaskIds.contains(id) {
-      state.transferringTaskIds.append(id)
+    // This callback has no URLSession execution identity. It may update an
+    // existing sample, but cannot acquire/release ownership or resurrect a
+    // terminal task from a delayed plugin progress callback.
+    guard state.transferringTaskIds.contains(id) else {
+      lock.unlock()
+      return
     }
     var sample = state.runningSamples[id] ?? RunningSample(
       written: 0,
@@ -2470,7 +2461,20 @@ enum DownloadNativeWaitingQueue {
 /// because a Swift call to the hooked method is a direct recursive call and
 /// never hits the original ObjC IMP.
 private enum DownloadUrlSessionHook {
-  private static let compatiblePluginVersion = "9.6.1"
+  private static let installation = DownloadHookInstallation()
+  private static var callbacksKey: UInt8 = 0
+  private static let callbacksLock = NSLock()
+
+  static func callbacks(for task: URLSessionTask) -> DownloadExecutionCallbacks {
+    callbacksLock.lock()
+    defer { callbacksLock.unlock() }
+    if let value = objc_getAssociatedObject(task, &callbacksKey) as? DownloadExecutionCallbacks {
+      return value
+    }
+    let value = DownloadExecutionCallbacks()
+    objc_setAssociatedObject(task, &callbacksKey, value, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    return value
+  }
   private static let completeSelector = NSSelectorFromString(
     "URLSession:task:didCompleteWithError:"
   )
@@ -2487,38 +2491,26 @@ private enum DownloadUrlSessionHook {
 
   static func install() -> Bool {
     #if canImport(background_downloader)
-    let pluginBundle = Bundle(for: BDPlugin.self)
-    let pluginVersion = pluginBundle.object(
-      forInfoDictionaryKey: "CFBundleShortVersionString"
-    ) as? String
-    guard pluginVersion == compatiblePluginVersion else {
-      NSLog(
-        "[DownloadNativeWaitingQueue] completion hook disabled for background_downloader %@ (expected %@)",
-        pluginVersion ?? "unknown",
-        compatiblePluginVersion
-      )
-      return false
-    }
+    // Generated from the installed pubspec by Podfile. The upstream podspec
+    // advertises 0.0.1, so Bundle's framework version is not the pub version.
+    let pluginVersion: String? = animeWitcherBackgroundDownloaderVersion
     let delegateClass: AnyClass = UrlSessionDelegate.self
     #else
-    guard let delegateClass = findUrlSessionDelegateClass() else {
-      NSLog("[DownloadNativeWaitingQueue] UrlSessionDelegate class not found")
-      return false
-    }
+    let pluginVersion: String? = nil
+    guard let delegateClass = findUrlSessionDelegateClass() else { return false }
     #endif
-    hookComplete(on: delegateClass)
-    hookFinishDownload(on: delegateClass)
-    hookFinishEvents(on: delegateClass)
-    let hooked = originalComplete != nil || originalFinishDownload != nil || originalFinishEvents != nil
-    if hooked {
-      NSLog("[DownloadNativeWaitingQueue] hooked UrlSessionDelegate %@", String(cString: class_getName(delegateClass)))
-    } else {
-      NSLog(
-        "[DownloadNativeWaitingQueue] ERROR: no NSURLSession delegate selectors were hooked on %@",
-        String(cString: class_getName(delegateClass))
-      )
+    let available = [completeSelector, finishDownloadSelector, finishEventsSelector].map {
+      class_getInstanceMethod(delegateClass, $0) != nil
     }
-    return hooked
+    let installed = installation.install(version: pluginVersion, available: available) {
+      hookComplete(on: delegateClass)
+      hookFinishDownload(on: delegateClass)
+      hookFinishEvents(on: delegateClass)
+    }
+    if !installed {
+      NSLog("[DownloadNativeWaitingQueue] native promotion unavailable; plugin continues; queued work recovers on foreground reconciliation (package %@)", pluginVersion ?? "unknown")
+    }
+    return installed
   }
 
   private static func findUrlSessionDelegateClass() -> AnyClass? {
@@ -2539,8 +2531,10 @@ private enum DownloadUrlSessionHook {
     guard let method = class_getInstanceMethod(cls, completeSelector) else { return }
     originalComplete = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionTask, Error?) -> Void = { slf, session, task, error in
+      let ownsCompletion = DownloadNativeWaitingQueue.nativePromotionAvailable
+      if ownsCompletion && !callbacks(for: task).beginComplete() { return }
       DownloadNativeDiagnosticLog.record("complete", task: task, error: error)
-      if let error, DownloadNativeWaitingQueue.retryBackgroundTransferIfNeeded(
+      if ownsCompletion, let error, DownloadNativeWaitingQueue.retryBackgroundTransferIfNeeded(
         session: session,
         task: task,
         error: error
@@ -2550,7 +2544,11 @@ private enum DownloadUrlSessionHook {
 
       // Non-transient/exhausted failures and normal success still belong to
       // background_downloader. Only those reach the original callback.
-      if let original = DownloadUrlSessionHook.originalComplete {
+      let terminalSuccess = DownloadNativeWaitingQueue.terminalObservation.capture(
+        execution: task,
+        taskId: DownloadNativeWaitingQueue.taskId(from: task) ?? ""
+      ) {
+        guard let original = DownloadUrlSessionHook.originalComplete else { return }
         let fn = unsafeBitCast(
           original,
           to: (@convention(c) (AnyObject, Selector, URLSession, URLSessionTask, Error?) -> Void).self
@@ -2560,11 +2558,13 @@ private enum DownloadUrlSessionHook {
       // A successful URLSessionDownloadTask already went through
       // didFinishDownloadingTo, where the plugin moved the file and we mark
       // the logical episode complete. Do not process success twice.
-      guard error != nil else { return }
+      guard ownsCompletion, error != nil else { return }
       DownloadNativeWaitingQueue.handlePluginTaskCompleted(
         session: session,
         task: task,
-        error: error
+        error: error,
+        terminalSuccess: terminalSuccess,
+        requiresTerminalObservation: true
       )
     }
     method_setImplementation(method, imp_implementationWithBlock(block))
@@ -2574,11 +2574,17 @@ private enum DownloadUrlSessionHook {
     guard let method = class_getInstanceMethod(cls, finishDownloadSelector) else { return }
     originalFinishDownload = method_getImplementation(method)
     let block: @convention(block) (AnyObject, URLSession, URLSessionDownloadTask, URL) -> Void = { slf, session, downloadTask, location in
+      let ownsCompletion = DownloadNativeWaitingQueue.nativePromotionAvailable
+      if ownsCompletion && !callbacks(for: downloadTask).beginFinish() { return }
       DownloadNativeDiagnosticLog.record("file.received", task: downloadTask)
-      DownloadNativeWaitingQueue.clearBackgroundRetry(downloadTask)
+      if ownsCompletion { DownloadNativeWaitingQueue.clearBackgroundRetry(downloadTask) }
       // Original must run first so the plugin can move the temp file.
       // Then promote like pre-tabs: ep2 must start before the session sleeps.
-      if let original = DownloadUrlSessionHook.originalFinishDownload {
+      let terminalSuccess = DownloadNativeWaitingQueue.terminalObservation.capture(
+        execution: downloadTask,
+        taskId: DownloadNativeWaitingQueue.taskId(from: downloadTask) ?? ""
+      ) {
+        guard let original = DownloadUrlSessionHook.originalFinishDownload else { return }
         let fn = unsafeBitCast(
           original,
           to: (@convention(c) (AnyObject, Selector, URLSession, URLSessionDownloadTask, URL) -> Void).self
@@ -2587,10 +2593,13 @@ private enum DownloadUrlSessionHook {
       }
       // Same as before the Downloads tabs split: promote the next waiter
       // from this callback so ep2 starts before the session goes to sleep.
+      guard ownsCompletion else { return }
       DownloadNativeWaitingQueue.handlePluginTaskCompleted(
         session: session,
         task: downloadTask,
-        error: nil
+        error: nil,
+        terminalSuccess: terminalSuccess,
+        requiresTerminalObservation: true
       )
     }
     method_setImplementation(method, imp_implementationWithBlock(block))
