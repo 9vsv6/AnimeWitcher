@@ -1,4 +1,4 @@
-name: DM-14 canceled multipart GC GREEN
+name: Diagnose full Flutter tests
 
 on:
   push:
@@ -9,21 +9,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: dm14-canceled-parallel-gc-${{ github.ref }}
+  group: diagnose-full-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  canceled-parallel-gc:
+  diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: plan/download-manager-reliability
-          fetch-depth: 0
 
       - uses: subosito/flutter-action@v2
         with:
@@ -31,70 +28,69 @@ jobs:
           flutter-version: 3.47.1
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Apply ownership-fenced canceled multipart cleanup
+      - name: Install dependencies and generate sources
         run: |
+          flutter pub get
+          flutter gen-l10n
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Run suite and capture failures
+        id: tests
+        shell: bash
+        run: |
+          set +e
+          flutter test --reporter json --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key 2>&1 | tee /tmp/flutter-test.jsonl
+          test_exit=${PIPESTATUS[0]}
+          set -e
           python3 - <<'PY'
+          import json
           from pathlib import Path
 
-          path = Path('lib/core/services/download_service.dart')
-          text = path.read_text()
-          old = """      final restored = job.restoreTaskSnapshot();
-      if (restored != null) {
-        try {
-          final path = await restored.filePath();"""
-          new = """      final restored = job.restoreTaskSnapshot();
-      if (restored is ParallelDownloadTask) {
-        try {
-          // The canceled tombstone plus notOwned runtime state proves the
-          // logical attempt is obsolete. Let the multipart owner settle its
-          // exact child identities before deleting its manifest/part files.
-          await _parallel.cancel(restored);
-        } catch (_) {
-          // Preserve both the tombstone and artifacts when child ownership
-          // cannot be settled. A later recovery pass can retry safely.
-          continue;
-        }
-      }
-      if (restored != null) {
-        try {
-          final path = await restored.filePath();"""
-          if new not in text:
-              if old not in text:
-                  raise SystemExit('missing DM-14 tombstone GC anchor')
-              text = text.replace(old, new, 1)
-              path.write_text(text)
+          tests = {}
+          errors = {}
+          failed = []
+          for line in Path('/tmp/flutter-test.jsonl').read_text(errors='replace').splitlines():
+              try:
+                  event = json.loads(line)
+              except Exception:
+                  continue
+              kind = event.get('type')
+              if kind == 'testStart':
+                  test = event.get('test') or {}
+                  tests[test.get('id')] = test
+              elif kind == 'error':
+                  test_id = event.get('testID')
+                  errors.setdefault(test_id, []).append({
+                      'error': event.get('error', ''),
+                      'stackTrace': event.get('stackTrace', ''),
+                  })
+              elif kind == 'testDone' and event.get('result') == 'failure':
+                  failed.append(event.get('testID'))
+
+          lines = []
+          for test_id in failed:
+              test = tests.get(test_id, {})
+              lines.append(f"TEST: {test.get('name', '<unknown>')}")
+              lines.append(f"URL: {test.get('url', '<unknown>')}")
+              if test.get('line') is not None:
+                  lines.append(f"LINE: {test.get('line')}")
+              for detail in errors.get(test_id, []):
+                  if detail['error']:
+                      lines.append('ERROR: ' + detail['error'])
+                  if detail['stackTrace']:
+                      lines.append('STACK:\n' + detail['stackTrace'])
+              lines.append('---')
+          if not lines:
+              lines = ['No failing testDone events were parsed.']
+          Path('/tmp/failures.txt').write_text('\n'.join(lines))
+          print(Path('/tmp/failures.txt').read_text())
           PY
+          exit "$test_exit"
 
-      - name: Verify focused GREEN
-        run: |
-          flutter test test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
-            test/core/services/download_delete_tombstone_guard_test.dart \
-            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-          flutter analyze --no-fatal-warnings --no-fatal-infos \
-            lib/core/services/download_service.dart \
-            test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
-            test/core/services/download_delete_tombstone_guard_test.dart
-          git diff --check
-
-      - name: Commit verified production change
-        run: |
-          if git diff --quiet -- lib/core/services/download_service.dart; then
-            echo 'Production GREEN already present.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/core/services/download_service.dart
-          git commit -m 'fix(downloads): clean canceled multipart artifacts safely (DM-14)'
-          git reset --hard HEAD
-          git clean -fd
-          git pull --rebase origin plan/download-manager-reliability
-          flutter test test/core/services/download_canceled_parallel_artifact_gc_guard_test.dart \
-            test/core/services/download_delete_tombstone_guard_test.dart \
-            --dart-define=ANIMEWITCHER_FIREBASE_API_KEY=test-api-key
-          git push origin HEAD:plan/download-manager-reliability
-
-# retriggered after manifest provenance GREEN reached branch
+      - name: Upload failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-failures
+          path: /tmp/failures.txt
+          retention-days: 1
